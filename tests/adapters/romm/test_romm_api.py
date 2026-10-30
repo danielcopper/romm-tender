@@ -177,6 +177,15 @@ class TestUploadSave:
             method="PUT",
         )
 
+    @pytest.mark.parametrize(("save_id", "url", "method"), [(None, "/api/saves?", "POST"), (5, "/api/saves/5?", "PUT")])
+    def test_the_content_hash_is_sent_on_a_post_and_a_put(self, save_id, url, method):
+        api, client = _make_api()
+        client.upload_multipart.return_value = {"id": 1}
+        api.upload_save(42, "/tmp/save.srm", "retroarch-mgba", save_id, content_hash="0123abcd")
+        client.upload_multipart.assert_called_once_with(
+            f"{url}rom_id=42&emulator=retroarch-mgba&content_hash=0123abcd", "/tmp/save.srm", method=method
+        )
+
     def test_with_device_id(self):
         api, client = _make_api()
         client.upload_multipart.return_value = {"id": 1}
@@ -894,6 +903,14 @@ class TestConfirmDownload:
             {"device_id": "device-abc"},
         )
         assert result == {"ok": True}
+
+    def test_posts_the_content_hash_beside_the_device_id(self):
+        api, client = _make_api()
+        client.post_json.return_value = {"id": 99}
+        api.confirm_download(99, "device-abc", content_hash="0123abcd")
+        client.post_json.assert_called_once_with(
+            "/api/saves/99/downloaded", {"device_id": "device-abc", "content_hash": "0123abcd"}
+        )
 
     def test_propagates_http_error(self):
         """5xx from server propagates as RommServerError."""

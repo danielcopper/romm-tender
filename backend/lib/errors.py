@@ -152,6 +152,22 @@ class RommRateLimitedError(RommServerError):
         super().__init__(message, status_code=429, url=url, method=method)
 
 
+class RommAcknowledgementNotTaken(RommApiError):
+    """RomM answered two acknowledgements of a save and still does not show this device current on it.
+
+    Each request succeeded, so there is no status: RomM answered, and what it
+    recorded is not what was asked.
+    """
+
+    def __init__(self, save_id: int):
+        self.save_id = save_id
+        super().__init__(
+            f"RomM did not record save {save_id} as synced on this device",
+            url=f"/api/saves/{save_id}/downloaded",
+            method="POST",
+        )
+
+
 class RommConnectionError(RommApiError):
     """Network-level failures: connection refused, DNS failure, reset, etc."""
 
@@ -323,6 +339,8 @@ def classify_error(exc):
         return ErrorCode.SERVER_UNREACHABLE.value, _server_error_message(exc)
     if isinstance(exc, RommNotFoundError):
         return ErrorCode.NOT_FOUND.value, "Resource not found on server"
+    if isinstance(exc, RommAcknowledgementNotTaken):
+        return "server_error", "RomM did not record this save as synced on this device"
     if isinstance(exc, RommUnsupportedError):
         return ErrorCode.UNSUPPORTED.value, f"This feature requires RomM {exc.min_version} or newer"
     if isinstance(exc, TokenHostMismatchError | TokenUnsendableError):

@@ -330,6 +330,7 @@ class RommApiAdapter:
         slot: str | None = None,
         overwrite: bool = False,
         autocleanup_limit: int | None = None,
+        content_hash: str | None = None,
     ) -> dict[str, Any]:
         params = f"rom_id={rom_id}&emulator={urllib.parse.quote(emulator, safe='')}"
         if device_id is not None:
@@ -338,6 +339,8 @@ class RommApiAdapter:
             params += f"&slot={urllib.parse.quote(slot, safe='')}"
         if overwrite:
             params += "&overwrite=true"
+        if content_hash is not None:
+            params += f"&content_hash={urllib.parse.quote(content_hash, safe='')}"
         if save_id is not None:
             return self._client.upload_multipart(f"/api/saves/{save_id}?{params}", file_path, method="PUT")
         # POST creates the save entry and is the only path that stacks versions —
@@ -365,11 +368,11 @@ class RommApiAdapter:
             path += f"?device_id={urllib.parse.quote(device_id, safe='')}&optimistic={opt}"
         self._client.download(path, dest_path)
 
-    def confirm_download(self, save_id: int, device_id: str) -> dict[str, Any]:
-        return self._client.post_json(
-            f"/api/saves/{save_id}/downloaded",
-            {"device_id": device_id},
-        )
+    def confirm_download(self, save_id: int, device_id: str, *, content_hash: str | None = None) -> dict[str, Any]:
+        body = {"device_id": device_id}
+        if content_hash is not None:
+            body["content_hash"] = content_hash
+        return self._client.post_json(f"/api/saves/{save_id}/downloaded", body)
 
     def get_save_summary(self, rom_id: int) -> dict[str, Any]:
         return self._client.request(f"/api/saves/summary?rom_id={rom_id}")

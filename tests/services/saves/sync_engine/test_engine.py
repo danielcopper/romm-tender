@@ -2102,7 +2102,7 @@ class TestTheSyncBeforeAStartAcknowledgesOnlyWhatItPlaced:
         fake.set_server_save_content(100, content)
         confirm = fake.confirm_download
 
-        def refused_confirm(_save_id: int, _device_id: str) -> dict[str, Any]:
+        def refused_confirm(_save_id: int, _device_id: str, **_kwargs: object) -> dict[str, Any]:
             raise RommApiError("acknowledgement refused")
 
         monkeypatch.setattr(fake, "confirm_download", refused_confirm)
@@ -2185,7 +2185,7 @@ class TestTheSyncAfterAGameMarksThisDeviceOnlyOnceItPlaced:
         svc, fake = make_service(tmp_path)
         seeded = self._seed_a_newer_head(svc, fake, tmp_path)
 
-        def refused_confirm(_save_id: int, _device_id: str) -> dict[str, Any]:
+        def refused_confirm(_save_id: int, _device_id: str, **_kwargs: object) -> dict[str, Any]:
             raise RommApiError("acknowledgement refused")
 
         monkeypatch.setattr(fake, "confirm_download", refused_confirm)
@@ -2204,6 +2204,71 @@ class TestTheSyncAfterAGameMarksThisDeviceOnlyOnceItPlaced:
         assert not any(c[0] == "download_save_content" for c in fake.call_log)
         assert [c[1] for c in fake.call_log if c[0] == "confirm_download"] == [(101, "device-1")]
         assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == 101
+
+
+class TestADownloadAfterAnotherClientReplacedTheSaveInPlace:
+    """#2664 D4/D6: the download and its acknowledgement leave this device current, a row left without a hash too."""
+
+    _REPLACED = b"replaced in place by another client"
+
+    def _replace_in_place(self, fake, tmp_path, save_id: int) -> None:
+        other = tmp_path / "other-client.srm"
+        other.write_bytes(self._REPLACED)
+        fake.upload_save(42, str(other), "retroarch", save_id)
+        fake.saves[save_id]["content_hash"] = hashlib.md5(self._REPLACED).hexdigest()
+
+    def _is_current(self, fake, save_id: int) -> bool:
+        listed = next(s for s in fake.list_saves(42, device_id="device-1") if s["id"] == save_id)
+        return listed["device_syncs"][0]["is_current"]
+
+    @pytest.mark.asyncio
+    async def test_after_this_device_uploaded_it(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        save_path = _create_save(tmp_path, content=b"uploaded here")
+        await svc.sync_rom_saves(42)
+        (save_id,) = fake.saves
+        self._replace_in_place(fake, tmp_path, save_id)
+
+        result = await svc.sync_rom_saves(42)
+
+        assert result["success"] is True
+        assert save_path.read_bytes() == self._REPLACED
+        assert self._is_current(fake, save_id) is True
+
+    @pytest.mark.asyncio
+    async def test_where_its_row_was_left_without_a_hash(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        save_path = _create_save(tmp_path, content=b"uploaded by an older Tender")
+        uploaded_hash = hashlib.md5(b"uploaded by an older Tender").hexdigest()
+        fake.saves[100] = {**_server_save(save_id=100, slot="default"), "content_hash": uploaded_hash}
+        fake.stage_device_sync(100, "device-1", "2026-02-17T06:00:00Z", last_sync_server_hash=uploaded_hash)
+        _seed_save_state_dict(
+            svc,
+            42,
+            {
+                "active_slot": "default",
+                "slot_confirmed": True,
+                "files": {
+                    "pokemon.srm": {
+                        "last_sync_hash": uploaded_hash,
+                        "last_sync_server_hash": uploaded_hash,
+                        "tracked_save_id": 100,
+                        "last_sync_server_save_id": 100,
+                    }
+                },
+            },
+        )
+        self._replace_in_place(fake, tmp_path, 100)
+
+        result = await svc.sync_rom_saves(42)
+
+        assert result["success"] is True
+        assert save_path.read_bytes() == self._REPLACED
+        assert self._is_current(fake, 100) is True
 
 
 class TestRunRomSyncSession:

@@ -21,6 +21,12 @@ Modeled from RomM 5.3.0's ``backend/endpoints/saves.py``:
   onto a slot whose latest save the calling device has not synced —
   including a device that has NEVER synced a non-empty slot.
 
+From RomM 5.4.1's: every sync row also holds the hash the device named
+(``last_sync_hash``) and the save's own hash when it was recorded
+(``last_sync_server_hash``). An upload records the hash it was sent with, an
+optimistic download none, and ``confirm_download`` follows
+:func:`confirmed_sync_row`.
+
 Not modeled: RomM answers 404 for a device id it has no device for; the fakes
 accept any id, and an entry for it carries ``device_name`` None.
 """
@@ -43,6 +49,32 @@ def compute_is_current(last_synced_at: str | None, save_updated_at: str) -> bool
     if last_synced_at is None:
         return False
     return last_synced_at >= save_updated_at
+
+
+def confirmed_sync_row(
+    row: tuple[str, str | None, str | None] | None,
+    *,
+    content_hash: str | None,
+    save_updated_at: str,
+    save_content_hash: str | None,
+) -> tuple[str, str | None, str | None]:
+    """The sync row ``confirm_download`` leaves: ``(last_synced_at, last_sync_hash, last_sync_server_hash)``.
+
+    Models RomM 5.4.1's ``confirm_download``. A stored *row* that holds a server
+    hash and no device hash — what an optimistic download or an upload without
+    a hash records — keeps its own sync time and server hash, and takes the
+    *content_hash* the request names: the device stays as current as that row
+    was, and the next acknowledgement is judged as below. Otherwise the row is
+    stamped with the save's ``updated_at``, with both hashes where
+    *content_hash* equals the save's own and with neither where it does not.
+    """
+    if row is not None:
+        last_synced_at, last_sync_hash, last_sync_server_hash = row
+        if last_sync_server_hash and not last_sync_hash:
+            return last_synced_at, content_hash, last_sync_server_hash
+    if content_hash != save_content_hash:
+        return save_updated_at, None, None
+    return save_updated_at, content_hash, save_content_hash
 
 
 def device_syncs_answer(

@@ -1,7 +1,7 @@
-"""What RomM's answer to a save upload says beyond the save it names.
+"""What RomM's answer to a save upload or an acknowledgement says beyond the save it names.
 
-Pure reads of the ``add_save`` / ``update_save`` response, made by the save
-transfer before it records the upload.
+Pure reads of the ``add_save`` / ``update_save`` / ``confirm_download``
+response, made by the save transfer before it records the transfer.
 """
 
 from __future__ import annotations
@@ -50,5 +50,21 @@ def upload_response_proves_current(response: dict[str, Any], device_id: str) -> 
         return False
     return any(
         isinstance(ds, dict) and ds.get("device_id") == device_id and ds.get("is_current") is True
+        for ds in device_syncs
+    )
+
+
+def answer_shows_device_not_current(answer: dict[str, Any], device_id: str) -> bool:
+    """Whether *answer* names *device_id* in its ``device_syncs`` with ``is_current`` other than ``True``.
+
+    The read of an acknowledgement's answer. RomM names the calling device in
+    every save answer, with a placeholder where it holds no row, so an answer
+    that does not name it states nothing either way and reads ``False`` here.
+    """
+    device_syncs = answer.get("device_syncs")
+    if not isinstance(device_syncs, list):
+        return False
+    return any(
+        isinstance(ds, dict) and ds.get("device_id") == device_id and ds.get("is_current") is not True
         for ds in device_syncs
     )

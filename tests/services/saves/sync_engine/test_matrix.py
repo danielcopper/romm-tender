@@ -2213,11 +2213,11 @@ class TestAnAdoptOfTheHead:
         attempts = []
         confirm = fake.confirm_download
 
-        def fails_twice(save_id, device_id):
+        def fails_twice(save_id, device_id, **kwargs):
             attempts.append(save_id)
             if len(attempts) < 3:
                 raise RommApiError("upstream 502")
-            return confirm(save_id, device_id)
+            return confirm(save_id, device_id, **kwargs)
 
         monkeypatch.setattr(fake, "confirm_download", fails_twice)
 
@@ -2299,8 +2299,8 @@ class TestAnAdoptOfTheHead:
 
 
 def _raising(fake, exc: Exception):
-    def confirm_download(save_id, device_id):
-        fake.call_log.append(("confirm_download", (save_id, device_id), {}))
+    def confirm_download(save_id, device_id, **kwargs):
+        fake.call_log.append(("confirm_download", (save_id, device_id), kwargs))
         raise exc
 
     return confirm_download

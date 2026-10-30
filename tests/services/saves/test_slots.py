@@ -2441,7 +2441,7 @@ class TestASwitchMarksThisDeviceOnlyOnceItPlaced:
         svc, fake = make_service(tmp_path)
         save_path = self._seed_a_switch(svc, fake, tmp_path)
 
-        def refused_confirm(_save_id: int, _device_id: str) -> dict[str, Any]:
+        def refused_confirm(_save_id: int, _device_id: str, **_kwargs: object) -> dict[str, Any]:
             raise RommApiError("acknowledgement refused")
 
         monkeypatch.setattr(fake, "confirm_download", refused_confirm)

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from fakes._romm_save_semantics import (
     check_add_save_conflict,
     compute_is_current,
+    confirmed_sync_row,
     device_syncs_answer,
     order_sync_rows,
     tag_filename,
@@ -57,6 +58,10 @@ class FakeSaveApi:
         # each save's ``device_syncs`` (and is_current) from it, and the
         # add_save 409 gate reads it. Seed directly via ``stage_device_sync``.
         self._device_sync_ledger: dict[tuple[str, int], str] = {}
+        # The same rows' hashes: (device_id, save_id) -> (last_sync_hash,
+        # last_sync_server_hash), as RomM 5.4 stores them beside the sync time.
+        # ``confirm_download`` reads them; a row staged without them holds none.
+        self._device_sync_hashes: dict[tuple[str, int], tuple[str | None, str | None]] = {}
         # One-shot: arm the next slot POST to model add_save's content-dedup
         # early-return against this save_id (see ``arm_add_save_dedup``).
         self._dedup_next_upload_save_id: int | None = None
@@ -136,7 +141,15 @@ class FakeSaveApi:
         """
         self._save_content[save_id] = content
 
-    def stage_device_sync(self, save_id: int, device_id: str, last_synced_at: str) -> None:
+    def stage_device_sync(
+        self,
+        save_id: int,
+        device_id: str,
+        last_synced_at: str,
+        *,
+        last_sync_hash: str | None = None,
+        last_sync_server_hash: str | None = None,
+    ) -> None:
         """Record that *device_id* last synced *save_id* at *last_synced_at*.
 
         Drives ``list_saves``' per-device ``device_syncs`` / ``is_current`` and
@@ -144,8 +157,12 @@ class FakeSaveApi:
         Model a *stale* device with a ``last_synced_at`` older than the save's
         ``updated_at``. Omitting the call leaves the device without a row, which
         ``list_saves`` answers with RomM's placeholder when that device asks.
+        The two hashes are the row's own; a row an upload or an optimistic
+        download recorded without the device's hash holds only
+        *last_sync_server_hash*.
         """
         self._device_sync_ledger[(device_id, save_id)] = last_synced_at
+        self._device_sync_hashes[(device_id, save_id)] = (last_sync_hash, last_sync_server_hash)
 
     def arm_add_save_dedup(self, save_id: int) -> None:
         """One-shot: model add_save's content-dedup early-return on the next slot POST.
@@ -215,18 +232,29 @@ class FakeSaveApi:
         self.stage_device_sync(save_id, uploaded_by, last_synced_at or updated_at)
         return dict(entry)
 
-    def _record_device_sync(self, save_id: int, device_id: str | None) -> None:
+    def _record_device_sync(
+        self,
+        save_id: int,
+        device_id: str | None,
+        client_hash: str | None = None,
+        server_hash: str | None = None,
+    ) -> None:
         """Record *device_id* as having synced *save_id* at the save's updated_at.
 
-        Mirrors the server writing a DeviceSaveSync row on confirm / optimistic
-        download so a later ``list_saves`` reports ``is_current`` for this
-        device. Falls back to the current time when the save is not tracked.
+        Mirrors the server writing a DeviceSaveSync row on an upload or an
+        optimistic download so a later ``list_saves`` reports ``is_current`` for
+        this device. Falls back to the current time when the save is not
+        tracked. The row holds *client_hash*, the hash the request named, and
+        *server_hash*, the save's own (its stored ``content_hash`` when not given).
         """
         if not device_id:
             return
         entry = self.saves.get(save_id)
         updated_at = entry.get("updated_at") if entry else None
         self._device_sync_ledger[(device_id, save_id)] = updated_at or datetime.now(UTC).isoformat()
+        if server_hash is None and entry is not None:
+            server_hash = entry.get("content_hash")
+        self._device_sync_hashes[(device_id, save_id)] = (client_hash, server_hash)
 
     def _device_syncs_for(self, save: dict[str, Any]) -> list[dict[str, Any]]:
         """Compute a save's ``device_syncs`` list from the sync ledger.
@@ -540,11 +568,30 @@ class FakeSaveApi:
             # so this device becomes is_current on the save.
             self._record_device_sync(save_id, device_id)
 
-    def confirm_download(self, save_id: int, device_id: str) -> dict[str, Any]:
-        self.call_log.append(("confirm_download", (save_id, device_id), {}))
+    def confirm_download(self, save_id: int, device_id: str, *, content_hash: str | None = None) -> dict[str, Any]:
+        """Record the acknowledgement by RomM 5.4.1's rule (:func:`confirmed_sync_row`) and answer the save.
+
+        The answer's ``device_syncs`` are read off the ledger, which this call
+        has just written, even for a save seeded with ``device_syncs`` of its own.
+        """
+        self.call_log.append(("confirm_download", (save_id, device_id), {"content_hash": content_hash}))
         self._check_fail()
-        self._record_device_sync(save_id, device_id)
-        return {"status": "ok"}
+        entry = self.saves.get(save_id) or {"id": save_id, "updated_at": datetime.now(UTC).isoformat()}
+        key = (device_id, save_id)
+        row = None
+        if key in self._device_sync_ledger:
+            row = (self._device_sync_ledger[key], *self._device_sync_hashes.get(key, (None, None)))
+        synced_at, client_hash, server_hash = confirmed_sync_row(
+            row,
+            content_hash=content_hash,
+            save_updated_at=entry.get("updated_at", ""),
+            save_content_hash=entry.get("content_hash"),
+        )
+        self._device_sync_ledger[key] = synced_at
+        self._device_sync_hashes[key] = (client_hash, server_hash)
+        response = dict(entry)
+        response["device_syncs"] = self._device_syncs_answer(entry, self._device_syncs_for(entry), device_id)
+        return response
 
     def get_save_summary(self, rom_id: int) -> dict[str, Any]:
         self.call_log.append(("get_save_summary", (rom_id,), {}))
@@ -607,6 +654,7 @@ class FakeSaveApi:
         slot: str | None = None,
         overwrite: bool = False,
         autocleanup_limit: int | None = None,
+        content_hash: str | None = None,
     ) -> dict[str, Any]:
         self.call_log.append(
             (
@@ -618,6 +666,7 @@ class FakeSaveApi:
                     "slot": slot,
                     "overwrite": overwrite,
                     "autocleanup_limit": autocleanup_limit,
+                    "content_hash": content_hash,
                 },
             )
         )
@@ -637,6 +686,8 @@ class FakeSaveApi:
             entry["file_size_bytes"] = size
             entry["emulator"] = emulator
             self.uploaded_files[save_id] = file_path
+            # ``update_save`` records the device's row with the hash it was sent.
+            self._record_device_sync(save_id, device_id, content_hash, self._server_content_hash(file_path))
             response = dict(entry)
             response["content_hash"] = self._server_content_hash(file_path)
             return response
@@ -716,7 +767,7 @@ class FakeSaveApi:
         # (synced_at = updated_at) and serializes device_syncs into the
         # response — is_current=true for us, so the confirm ack is redundant
         # here and the sync engine skips it (#1458).
-        self._record_device_sync(save_id, device_id)
+        self._record_device_sync(save_id, device_id, content_hash, self._server_content_hash(file_path))
         response = dict(entry)
         response["device_syncs"] = self._device_syncs_answer(entry, self._device_syncs_for(entry), device_id)
         response["content_hash"] = self._server_content_hash(file_path)

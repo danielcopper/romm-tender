@@ -10,7 +10,14 @@ import pytest
 
 from domain.live_device_id import LiveDeviceId
 from domain.rom_save_sync_state import RomSaveSyncState
-from lib.errors import DeviceWriteError, RommApiError, RommConflictError, RommConnectionError, RommTimeoutError
+from lib.errors import (
+    DeviceWriteError,
+    RommAcknowledgementNotTaken,
+    RommApiError,
+    RommConflictError,
+    RommConnectionError,
+    RommTimeoutError,
+)
 from services.saves._sync_stop import SyncStop, SyncStopped
 from tests.services.saves._helpers import (
     _create_save,
@@ -363,7 +370,7 @@ class TestConfirmDownloadAfterSync:
         # Patch confirm_download to raise; the upload itself must still complete.
         original_confirm = fake.confirm_download
 
-        def boom(save_id: int, device_id: str) -> dict[str, Any]:
+        def boom(save_id: int, device_id: str, **_kwargs: Any) -> dict[str, Any]:
             fake.call_log.append(("confirm_download", (save_id, device_id), {}))
             raise RommApiError("HTTP 500: Server Error", url="/api/saves/x/downloaded", method="POST")
 
@@ -395,9 +402,9 @@ class TestConfirmDownloadAfterSync:
         placed_when_acknowledged: list[bool] = []
         confirm = fake.confirm_download
 
-        def recording_confirm(save_id: int, device_id: str) -> dict[str, Any]:
+        def recording_confirm(save_id: int, device_id: str, **kwargs: Any) -> dict[str, Any]:
             placed_when_acknowledged.append(os.path.exists(os.path.join(saves_dir, "pokemon.srm")))
-            return confirm(save_id, device_id)
+            return confirm(save_id, device_id, **kwargs)
 
         monkeypatch.setattr(fake, "confirm_download", recording_confirm)
         svc._save_transfer.download_save_file(
@@ -411,6 +418,138 @@ class TestConfirmDownloadAfterSync:
         assert kwargs["optimistic"] is False
         assert [c[1] for c in fake.call_log if c[0] == "confirm_download"] == [(99, "dev-1")]
         assert placed_when_acknowledged == [True]
+
+
+class TestEveryRequestCarriesTheContentHash:
+    """#2664 D4/D5: uploads, in-place updates and acknowledgements name the hash of the file they are about."""
+
+    def test_a_post_and_an_in_place_put_carry_the_uploaded_file_s_hash(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        save_path = _create_save(tmp_path, content=b"first bytes")
+        _do_upload(svc, 42, str(save_path), "pokemon.srm", "gba")
+        posted = next(iter(fake.saves.values()))
+        save_path.write_bytes(b"second bytes")
+
+        _do_upload(svc, 42, str(save_path), "pokemon.srm", "gba", server_save=posted)
+
+        uploads = [(c[2]["save_id"], c[2]["content_hash"]) for c in fake.call_log if c[0] == "upload_save"]
+        assert uploads == [
+            (None, hashlib.md5(b"first bytes").hexdigest()),
+            (posted["id"], hashlib.md5(b"second bytes").hexdigest()),
+        ]
+
+    def test_the_upload_s_own_acknowledgement_carries_the_uploaded_file_s_hash(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        save_path = _create_save(tmp_path, content=b"put bytes")
+        fake.saves[100] = _server_save(save_id=100, rom_id=42)
+
+        _do_upload(svc, 42, str(save_path), "pokemon.srm", "gba", server_save=fake.saves[100])
+
+        acks = [(c[1], c[2]["content_hash"]) for c in fake.call_log if c[0] == "confirm_download"]
+        assert acks == [((100, "device-1"), hashlib.md5(b"put bytes").hexdigest())]
+
+    def test_a_download_s_acknowledgement_carries_the_placed_file_s_hash(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        fake.saves[100] = _server_save(save_id=100)
+        fake.set_server_save_content(100, b"server bytes")
+
+        svc._save_transfer.download_save_file(
+            fake.saves[100],
+            str(tmp_path / "saves" / "gba"),
+            "pokemon.srm",
+            RomSaveSyncState(),
+            LiveDeviceId("device-1"),
+            "gba",
+        )
+
+        acks = [(c[1], c[2]["content_hash"]) for c in fake.call_log if c[0] == "confirm_download"]
+        assert acks == [((100, "device-1"), hashlib.md5(b"server bytes").hexdigest())]
+
+    def test_an_adopt_s_acknowledgement_carries_the_local_file_s_hash(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        save_path = _create_save(tmp_path, content=b"identical")
+        local_hash = hashlib.md5(b"identical").hexdigest()
+        fake.saves[100] = {**_server_save(save_id=100), "content_hash": local_hash}
+
+        adopted = svc._save_transfer.adopt_server_head(
+            RomSaveSyncState(),
+            "pokemon.srm",
+            fake.saves[100],
+            str(save_path),
+            local_hash,
+            device_id=LiveDeviceId("device-1"),
+            system="gba",
+        )
+
+        assert adopted is True
+        acks = [(c[1], c[2]["content_hash"]) for c in fake.call_log if c[0] == "confirm_download"]
+        assert acks == [((100, "device-1"), local_hash)]
+
+
+class TestAnAcknowledgementRomMDidNotTake:
+    """#2664 D6: an answer still showing this device not current is acknowledged once more, and only once."""
+
+    def _download(self, svc, fake, tmp_path) -> None:
+        svc._save_transfer.download_save_file(
+            fake.saves[100],
+            str(tmp_path / "saves" / "gba"),
+            "pokemon.srm",
+            RomSaveSyncState(),
+            LiveDeviceId("device-1"),
+            "gba",
+        )
+
+    def test_a_row_left_without_a_hash_is_taken_by_the_second_acknowledgement(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        content = b"replaced in place"
+        fake.saves[100] = {
+            **_server_save(save_id=100, updated_at="2026-03-01T00:00:00Z"),
+            "content_hash": hashlib.md5(content).hexdigest(),
+        }
+        fake.set_server_save_content(100, content)
+        fake.stage_device_sync(100, "device-1", "2026-02-01T00:00:00Z", last_sync_server_hash="an-older-hash")
+
+        self._download(svc, fake, tmp_path)
+
+        assert [c[0] for c in fake.call_log if c[0] == "confirm_download"] == ["confirm_download"] * 2
+        (listed,) = fake.list_saves(42, device_id="device-1")
+        assert listed["device_syncs"][0]["is_current"] is True
+
+    def test_one_still_not_taken_after_the_second_fails_with_the_file_in_place_and_nothing_recorded(
+        self, tmp_path, monkeypatch
+    ):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        save_path = _create_save(tmp_path, content=b"local bytes")
+        fake.saves[100] = _server_save(save_id=100)
+        fake.set_server_save_content(100, b"server bytes")
+        acks: list[int] = []
+
+        def not_taken(save_id: int, device_id: str, **_kwargs: Any) -> dict[str, Any]:
+            acks.append(save_id)
+            return {"id": save_id, "device_syncs": [{"device_id": device_id, "is_current": False}]}
+
+        monkeypatch.setattr(fake, "confirm_download", not_taken)
+        state = RomSaveSyncState()
+        download = svc._save_transfer.download_save_file
+        server_save, saves_dir, device_id = fake.saves[100], str(save_path.parent), LiveDeviceId("device-1")
+
+        with pytest.raises(RommAcknowledgementNotTaken):
+            download(server_save, saves_dir, "pokemon.srm", state, device_id, "gba")
+
+        assert acks == [100, 100]
+        assert save_path.read_bytes() == b"server bytes"
+        assert state.files == {}
+
+
+_UPLOADED_HASH = "0123456789abcdef0123456789abcdef"
 
 
 class TestTheUploadsOwnAcknowledgement:
@@ -437,7 +576,7 @@ class TestTheUploadsOwnAcknowledgement:
         transfer, fake = self._transfer_and_fake(tmp_path)
         response = {"id": 500, "device_syncs": [{"device_id": "dev-1", "is_current": True}]}
 
-        transfer._acknowledge_upload(response, LiveDeviceId("dev-1"))
+        transfer._acknowledge_upload(response, LiveDeviceId("dev-1"), _UPLOADED_HASH)
 
         assert self._confirmed(fake) is False
 
@@ -445,36 +584,36 @@ class TestTheUploadsOwnAcknowledgement:
         transfer, fake = self._transfer_and_fake(tmp_path)
         response = {"id": 500, "device_syncs": [{"device_id": "dev-1", "is_current": False}]}
 
-        transfer._acknowledge_upload(response, LiveDeviceId("dev-1"))
+        transfer._acknowledge_upload(response, LiveDeviceId("dev-1"), _UPLOADED_HASH)
 
-        assert fake.call_log[-1] == ("confirm_download", (500, "dev-1"), {})
+        assert fake.call_log[-1] == ("confirm_download", (500, "dev-1"), {"content_hash": _UPLOADED_HASH})
 
     def test_confirms_when_only_a_different_device_is_current(self, tmp_path):
         transfer, fake = self._transfer_and_fake(tmp_path)
         response = {"id": 500, "device_syncs": [{"device_id": "other", "is_current": True}]}
 
-        transfer._acknowledge_upload(response, LiveDeviceId("dev-1"))
+        transfer._acknowledge_upload(response, LiveDeviceId("dev-1"), _UPLOADED_HASH)
 
         assert self._confirmed(fake) is True
 
     def test_confirms_when_device_syncs_missing(self, tmp_path):
         transfer, fake = self._transfer_and_fake(tmp_path)
 
-        transfer._acknowledge_upload({"id": 500}, LiveDeviceId("dev-1"))
+        transfer._acknowledge_upload({"id": 500}, LiveDeviceId("dev-1"), _UPLOADED_HASH)
 
         assert self._confirmed(fake) is True
 
     def test_confirms_when_device_syncs_empty(self, tmp_path):
         transfer, fake = self._transfer_and_fake(tmp_path)
 
-        transfer._acknowledge_upload({"id": 500, "device_syncs": []}, LiveDeviceId("dev-1"))
+        transfer._acknowledge_upload({"id": 500, "device_syncs": []}, LiveDeviceId("dev-1"), _UPLOADED_HASH)
 
         assert self._confirmed(fake) is True
 
     def test_confirms_when_device_syncs_not_a_list(self, tmp_path):
         transfer, fake = self._transfer_and_fake(tmp_path)
 
-        transfer._acknowledge_upload({"id": 500, "device_syncs": "garbage"}, LiveDeviceId("dev-1"))
+        transfer._acknowledge_upload({"id": 500, "device_syncs": "garbage"}, LiveDeviceId("dev-1"), _UPLOADED_HASH)
 
         assert self._confirmed(fake) is True
 
@@ -483,7 +622,7 @@ class TestTheUploadsOwnAcknowledgement:
         # A truthy-but-not-True value is "unexpected shape" → fail open, confirm.
         response = {"id": 500, "device_syncs": [{"device_id": "dev-1", "is_current": "yes"}]}
 
-        transfer._acknowledge_upload(response, LiveDeviceId("dev-1"))
+        transfer._acknowledge_upload(response, LiveDeviceId("dev-1"), _UPLOADED_HASH)
 
         assert self._confirmed(fake) is True
 
@@ -491,7 +630,7 @@ class TestTheUploadsOwnAcknowledgement:
         transfer, fake = self._transfer_and_fake(tmp_path)
         response = {"device_syncs": [{"device_id": "dev-1", "is_current": False}]}
 
-        transfer._acknowledge_upload(response, LiveDeviceId("dev-1"))
+        transfer._acknowledge_upload(response, LiveDeviceId("dev-1"), _UPLOADED_HASH)
 
         assert self._confirmed(fake) is False
 
@@ -765,9 +904,9 @@ class TestADownloadItsStopEnded:
             rename(src, dst)
             steps.append("placed")
 
-        def recording_confirm(save_id: int, device_id: str) -> dict[str, Any]:
+        def recording_confirm(save_id: int, device_id: str, **kwargs: Any) -> dict[str, Any]:
             steps.append("acknowledged")
-            return confirm(save_id, device_id)
+            return confirm(save_id, device_id, **kwargs)
 
         monkeypatch.setattr(svc._save_file_store, "rename", recording_rename)
         monkeypatch.setattr(fake, "confirm_download", recording_confirm)
@@ -796,7 +935,7 @@ class TestADownloadItsStopEnded:
         fake.saves[100] = _server_save(save_id=100)
         failure = RommApiError("acknowledgement refused")
 
-        def failing_confirm(_save_id: int, _device_id: str) -> dict[str, Any]:
+        def failing_confirm(_save_id: int, _device_id: str, **_kwargs: Any) -> dict[str, Any]:
             raise failure
 
         monkeypatch.setattr(fake, "confirm_download", failing_confirm)

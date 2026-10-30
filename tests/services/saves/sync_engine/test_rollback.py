@@ -644,7 +644,7 @@ class TestUseServerMarksThisDeviceOnlyOnceItPlaced:
         save_path = self._seed_a_conflict(svc, fake, tmp_path)
         failure = RommServerError("upstream 502")
 
-        def refused_confirm(_save_id: int, _device_id: str) -> dict[str, object]:
+        def refused_confirm(_save_id: int, _device_id: str, **_kwargs: object) -> dict[str, object]:
             raise failure
 
         monkeypatch.setattr(fake, "confirm_download", refused_confirm)
@@ -1049,7 +1049,7 @@ class TestKeepLocalAdoptAcknowledges:
         earlier = FileSyncState(tracked_save_id=90, last_sync_hash="an-earlier-baseline")
         _seed_save_state(svc, 42, RomSaveSyncState(files={"pokemon.srm": earlier}))
 
-        def confirm_download(save_id, device_id):
+        def confirm_download(save_id, device_id, **_kwargs):
             raise RommServerError("upstream 502")
 
         monkeypatch.setattr(fake, "confirm_download", confirm_download)

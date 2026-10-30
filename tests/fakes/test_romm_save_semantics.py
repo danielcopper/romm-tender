@@ -1,4 +1,4 @@
-"""Both save fakes answer ``device_syncs`` the way RomM 5.3.0 does.
+"""Both save fakes answer ``device_syncs`` the way RomM 5.3.0 does, and acknowledge as RomM 5.4.1 does.
 
 Every case runs against each fake, because each fake has to route its own
 answers through the shared model in ``_romm_save_semantics``.
@@ -164,3 +164,55 @@ class TestTheDedupAnswer:
 
         assert response["id"] != 100
         assert response["slot"] == "default"
+
+
+class TestTheAcknowledgement:
+    """``confirm_download`` follows RomM 5.4.1's rule, and uploads record the hash they were sent with."""
+
+    def test_a_row_recorded_without_the_devices_hash_is_taken_by_the_second_acknowledgement(self, fake) -> None:
+        device_id = _register(fake)
+        _seed_unsynced_save(fake, content_hash="hash-now")
+        fake.stage_device_sync(100, device_id, "2026-02-01T00:00:00Z", last_sync_server_hash="hash-then")
+
+        first = fake.confirm_download(100, device_id, content_hash="hash-now")
+        second = fake.confirm_download(100, device_id, content_hash="hash-now")
+
+        assert first["device_syncs"][0]["is_current"] is False
+        assert first["device_syncs"][0]["last_synced_at"] == "2026-02-01T00:00:00Z"
+        assert second["device_syncs"][0]["is_current"] is True
+        assert _syncs(fake, device_id)[0]["is_current"] is True
+
+    def test_a_row_holding_the_devices_hash_is_taken_at_once(self, fake) -> None:
+        device_id = _register(fake)
+        _seed_unsynced_save(fake, content_hash="hash-now")
+        fake.stage_device_sync(
+            100, device_id, "2026-02-01T00:00:00Z", last_sync_hash="hash-then", last_sync_server_hash="hash-then"
+        )
+
+        answer = fake.confirm_download(100, device_id, content_hash="hash-now")
+
+        assert answer["device_syncs"][0]["is_current"] is True
+        assert fake._device_sync_hashes[(device_id, 100)] == ("hash-now", "hash-now")
+
+    def test_a_hash_unlike_the_saves_own_is_taken_and_recorded_as_unknown(self, fake) -> None:
+        device_id = _register(fake)
+        _seed_unsynced_save(fake, content_hash="hash-now")
+
+        answer = fake.confirm_download(100, device_id, content_hash="another-hash")
+
+        assert answer["device_syncs"][0]["is_current"] is True
+        assert fake._device_sync_hashes[(device_id, 100)] == (None, None)
+
+    def test_an_upload_and_an_in_place_update_record_the_hash_they_were_sent_with(self, fake) -> None:
+        device_id = _register(fake)
+
+        posted = fake.upload_save(
+            ROM_ID, "/saves/game.srm", "retroarch", device_id=device_id, slot="default", content_hash="hash-posted"
+        )
+        recorded_by_the_post = fake._device_sync_hashes[(device_id, posted["id"])][0]
+        fake.upload_save(
+            ROM_ID, "/saves/game.srm", "retroarch", posted["id"], device_id=device_id, content_hash="hash-put"
+        )
+
+        assert recorded_by_the_post == "hash-posted"
+        assert fake._device_sync_hashes[(device_id, posted["id"])][0] == "hash-put"

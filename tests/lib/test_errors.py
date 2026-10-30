@@ -10,6 +10,7 @@ from lib.errors import (
     NamedRefused,
     NotConfigured,
     NotInstalled,
+    RommAcknowledgementNotTaken,
     RommApiError,
     RommAuthError,
     RommConflictError,
@@ -220,6 +221,12 @@ class TestClassifyError:
 
         assert code == "server_error"
         assert msg == f"RomM reported an error (HTTP 500) \u2014 {'x' * 199}\u2026"
+
+    def test_an_acknowledgement_romm_did_not_take_is_romms_answer_not_an_unreachable_server(self):
+        error = RommAcknowledgementNotTaken(100)
+
+        assert classify_error(error) == ("server_error", "RomM did not record this save as synced on this device")
+        assert romm_error_log_level(error) == logging.WARNING
 
     def test_not_found_error(self):
         code, msg = classify_error(RommNotFoundError("missing"))

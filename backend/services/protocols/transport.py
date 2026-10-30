@@ -349,11 +349,14 @@ class RommSaveApi(Protocol):
         slot: str | None = None,
         overwrite: bool = False,
         autocleanup_limit: int | None = None,
+        content_hash: str,
     ) -> dict[str, Any]:
         """Upload (or replace) a save; raises ``RommConflictError`` on 409 unless ``overwrite=True``.
 
         ``autocleanup_limit`` caps the server-retained version count and is honored
         on the POST (create) path only — PUT updates in place and never stacks.
+        ``content_hash`` is the uploaded file's RomM content hash, which RomM
+        records on this device's sync row.
         """
         ...
 
@@ -368,12 +371,13 @@ class RommSaveApi(Protocol):
         """Stream save content; ``optimistic=False`` with ``device_id`` defers the sync ack to ``confirm_download``."""
         ...
 
-    def confirm_download(self, save_id: int, device_id: LiveDeviceId) -> dict[str, Any]:
+    def confirm_download(self, save_id: int, device_id: LiveDeviceId, *, content_hash: str) -> dict[str, Any]:
         """Record this device as synced on ``save_id`` without a transfer (``POST /api/saves/{id}/downloaded``).
 
         Acknowledges a deferred-sync download (paired with ``optimistic=False``)
-        and an adopted head alike. Takes only the id ``SyncEngine.live_device_id``
-        answers.
+        and an adopted head alike, naming the RomM content hash of the file this
+        device holds. Answers the save with its ``device_syncs``. Takes only the
+        id ``SyncEngine.live_device_id`` answers.
         """
         ...
 

@@ -17,9 +17,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from adapters.romm.http import RommHttpAdapter
+from adapters.romm.retry import RetryLadder
 from adapters.romm.romm_api import RommApiAdapter
 from lib.errors import (
     DeviceWriteError,
+    RommAcknowledgementNotTaken,
     RommApiError,
     RommAuthError,
     RommClientError,
@@ -558,3 +560,9 @@ class TestKnownUnreachableFastPath:
         assert not isinstance(raised.value, RommReportedServerError)
         assert classify_error(raised.value)[0] == ErrorCode.SERVER_UNREACHABLE.value
         assert self._next_ladder_attempts(adapter) == 1
+
+
+class TestAnAcknowledgementRommDidNotTake:
+    def test_is_never_retried(self):
+        """RomM answered both acknowledgements; a third request through the ladder would only repeat them."""
+        assert RetryLadder.is_retryable(RommAcknowledgementNotTaken(100)) is False

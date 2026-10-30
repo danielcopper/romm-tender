@@ -21,8 +21,12 @@ from typing import TYPE_CHECKING, Any
 
 from domain.emulator_tag import build_emulator_tag
 from domain.save_backup import BACKUP_RETENTION
-from domain.upload_response import dedup_returned_non_head, upload_response_proves_current
-from lib.errors import DeviceWriteError, RommConflictError
+from domain.upload_response import (
+    answer_shows_device_not_current,
+    dedup_returned_non_head,
+    upload_response_proves_current,
+)
+from lib.errors import DeviceWriteError, RommAcknowledgementNotTaken, RommConflictError
 from services.saves._sync_stop import SyncStopped
 
 if TYPE_CHECKING:
@@ -149,13 +153,13 @@ class SaveTransfer:
         The download streams without RomM's optimistic sync mark, which would
         record this device current on the save at the GET, so a file that is
         not placed leaves RomM's record of this device unchanged. Once the file
-        is in place it is acknowledged (``confirm_download``, under the retry
-        strategy) unless *acknowledge* is false — for a caller whose own upload
-        right after records this device on RomM. An acknowledgement that fails
-        raises its own failure with the file in place, its backup kept and
-        nothing recorded. A stop (*stop* given) asked by the time the content is
-        complete raises :class:`SyncStopped` with nothing moved and nothing
-        recorded.
+        is in place it is acknowledged with its content hash
+        (:meth:`_acknowledge`, under the retry strategy) unless *acknowledge* is
+        false — for a caller whose own upload right after records this device on
+        RomM. An acknowledgement that fails raises its own failure with the file
+        in place, its backup kept and nothing recorded. A stop (*stop* given)
+        asked by the time the content is complete raises :class:`SyncStopped`
+        with nothing moved and nothing recorded.
         """
         local_path = os.path.join(saves_dir, filename)
         self._save_file_store.make_dirs(saves_dir)
@@ -179,7 +183,8 @@ class SaveTransfer:
                 self._save_file_store.remove_file(tmp_path)
             raise
         if acknowledge:
-            self._retry.with_retry(lambda: self._romm_api.confirm_download(int(server_save["id"]), device_id))
+            placed_hash = self._save_file_store.content_hash(local_path)
+            self._retry.with_retry(lambda: self._acknowledge(int(server_save["id"]), device_id, placed_hash))
         self._record_transferred_file(save_state, filename, server_save, local_path, system, default_slot=default_slot)
         self._log_debug(f"Downloaded save: {filename}")
 
@@ -220,11 +225,13 @@ class SaveTransfer:
         acknowledgement write so the same 409 backstop that catches a write-time
         stale-current race surfaces the true state — no false "synced", no
         currency stamped on the non-head response. The upload's own
-        acknowledgement follows the record (:meth:`_acknowledge_upload`).
+        acknowledgement follows the record (:meth:`_acknowledge_upload`). The
+        POST or PUT and that acknowledgement carry *file_path*'s content hash.
         """
         save_id = server_save.get("id") if server_save else None
         emulator = build_emulator_tag(core_so)
         slot = save_state.upload_slot(default_slot)
+        content_hash = self._save_file_store.content_hash(file_path)
 
         result = self._retry.with_retry(
             lambda: self._romm_api.upload_save(
@@ -236,6 +243,7 @@ class SaveTransfer:
                 slot=slot,
                 overwrite=overwrite,
                 autocleanup_limit=autocleanup_limit,
+                content_hash=content_hash,
             )
         )
 
@@ -267,20 +275,21 @@ class SaveTransfer:
         if slot:
             save_state.promote_slot_to_server(slot)
 
-        self._acknowledge_upload(result, device_id)
+        self._acknowledge_upload(result, device_id, content_hash)
 
         self._log_debug(f"Uploaded save: {filename} (emulator={emulator})")
         return result
 
-    def _acknowledge_upload(self, response: dict[str, Any], device_id: LiveDeviceId) -> None:
+    def _acknowledge_upload(self, response: dict[str, Any], device_id: LiveDeviceId, content_hash: str) -> None:
         """Ack the uploaded save on the server's DeviceSaveSync row, unless redundant.
 
         Skipped when *response* already shows this device ``is_current`` (#1458);
-        otherwise sent. When RomM's answers make the ack redundant and when it is
-        the only writer of the row: docs/architecture/save-file-sync-architecture.md,
-        "POST and PUT both upsert the calling device's sync row". Fail-open — any
-        non-current / missing / unexpected response confirms. Non-fatal: a failed
-        ack is debug-logged and swallowed.
+        otherwise sent through :meth:`_acknowledge`. When RomM's answers make the
+        ack redundant and when it is the only writer of the row:
+        docs/architecture/save-file-sync-architecture.md, "POST and PUT both
+        upsert the calling device's sync row". Fail-open — any non-current /
+        missing / unexpected response confirms. Non-fatal: a failed ack is
+        debug-logged and swallowed.
         """
         upload_id = response.get("id")
         if not upload_id:
@@ -289,22 +298,40 @@ class SaveTransfer:
             self._log_debug(f"confirm_download after upload skipped for save {upload_id} (already current)")
             return
         try:
-            self._romm_api.confirm_download(upload_id, device_id)
+            self._acknowledge(int(upload_id), device_id, content_hash)
         except Exception:
             self._log_debug(f"confirm_download after upload failed for save {upload_id} (non-fatal)")
+
+    def _acknowledge(self, save_id: int, device_id: LiveDeviceId, content_hash: str) -> None:
+        """Confirm *save_id* to RomM as held by this device with *content_hash*, once more where RomM did not take it.
+
+        Every acknowledgement Tender sends goes through here. An answer that
+        shows this device not current is answered with exactly one more
+        acknowledgement: RomM 5.4 keeps the old sync time of a row recorded
+        without the device's hash and records the hash, so the second one is
+        taken (docs/architecture/save-file-sync-architecture.md, "A download is
+        acknowledged once placed, never marked at the GET"). Raises
+        :class:`RommAcknowledgementNotTaken` when the second answer still shows it
+        not current; a request's own failure propagates.
+        """
+        for _attempt in range(2):
+            answer = self._romm_api.confirm_download(save_id, device_id, content_hash=content_hash)
+            if not answer_shows_device_not_current(answer, device_id):
+                return
+        raise RommAcknowledgementNotTaken(save_id)
 
     # ------------------------------------------------------------------
     # A head adopted without a transfer
     # ------------------------------------------------------------------
 
-    def acknowledge_server_head(self, head: dict[str, Any], device_id: LiveDeviceId) -> None:
-        """Confirm *head* to RomM as synced by this device, through the retry strategy.
+    def acknowledge_server_head(self, head: dict[str, Any], device_id: LiveDeviceId, content_hash: str) -> None:
+        """Confirm *head* to RomM as synced by this device, holding *content_hash*, through the retry strategy.
 
         For a head adopted without a transfer, where nothing else tells RomM
-        this device is current on it. A failure propagates once the retries are
-        spent.
+        this device is current on it. Sent through :meth:`_acknowledge`. A
+        failure propagates once the retries are spent.
         """
-        self._retry.with_retry(lambda: self._romm_api.confirm_download(int(head["id"]), device_id))
+        self._retry.with_retry(lambda: self._acknowledge(int(head["id"]), device_id, content_hash))
 
     def adopt_server_head(
         self,
@@ -330,7 +357,7 @@ class SaveTransfer:
         measured = self._measure_unchanged(filename, local_path, local_hash)
         if measured is None:
             return False
-        self.acknowledge_server_head(head, device_id)
+        self.acknowledge_server_head(head, device_id, local_hash)
         self._record_adopt(save_state, filename, head, measured, system=system, default_slot=default_slot)
         return True
 
