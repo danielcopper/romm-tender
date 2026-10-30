@@ -307,14 +307,14 @@ class TestReportRemovalResults:
         assert call.args[2]["app_id"] == 1001
 
 
-class TestReportConvergedRemovals:
-    """After the panel removed the shortcuts a sync converged away (#2645 D2)."""
+class TestReportSyncRemovals:
+    """After the panel saw the shortcuts a sync removed gone from Steam (#2645 D2, #2653 D1)."""
 
     @pytest.mark.asyncio
     async def test_resets_steam_input_for_the_removed_app_ids(self, svc, steam_config):
         steam_config.set_steam_input_config = MagicMock()
 
-        result = await svc.report_converged_removals([1001, 1002])
+        result = await svc.report_sync_removals([], [{"rom_id": 10, "app_id": 1001}, {"rom_id": 20, "app_id": 1002}])
 
         assert result["success"] is True
         steam_config.set_steam_input_config.assert_called_once_with([1001, 1002], mode="default")
@@ -326,33 +326,78 @@ class TestReportConvergedRemovals:
         steam_config.set_steam_input_config = MagicMock(side_effect=OSError("VDF write failed"))
         steam_config.grid_dir = lambda: str(tmp_path)
 
-        result = await svc.report_converged_removals([1001])
+        result = await svc.report_sync_removals([], [{"rom_id": 10, "app_id": 1001}])
 
         assert result["success"] is True
         artwork_remover_mock.remove_grid_images.assert_called_once_with(str(tmp_path), 1001)
 
     @pytest.mark.asyncio
-    async def test_unbinds_nothing_and_leaves_the_cover_cache(
+    async def test_unbinds_the_reported_row_and_leaves_the_cover_cache(
         self, svc, uow, steam_config, artwork_remover_mock, tmp_path
     ):
-        """The run's finalize unbound the row already; the per-ROM cover cache stays the ROM's."""
+        """The run's finalize kept the binding; the report clears it. The per-ROM cover cache stays the ROM's."""
         steam_config.set_steam_input_config = MagicMock()
         steam_config.grid_dir = lambda: str(tmp_path)
         _seed_rom(uow, 10, app_id=1001, name="Game A", cover_path="/covers/10.png")
 
-        await svc.report_converged_removals([1001])
+        await svc.report_sync_removals([], [{"rom_id": 10, "app_id": 1001}])
 
         with uow:
-            assert uow.roms.get(10).shortcut_app_id == 1001
+            assert uow.roms.get(10).shortcut_app_id is None
         artwork_remover_mock.remove_artwork_files.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_the_artwork_job_is_stopped_and_asked_for_again(self, svc, steam_config, artwork_job):
         steam_config.set_steam_input_config = MagicMock()
 
-        await svc.report_converged_removals([1001])
+        await svc.report_sync_removals([], [{"rom_id": 10, "app_id": 1001}])
 
         assert (artwork_job.removal_stops, artwork_job.requests) == (1, [False])
+
+    @pytest.mark.asyncio
+    async def test_a_stale_removal_is_unbound_with_no_steam_input_reset_and_no_grid_sweep(
+        self, svc, uow, steam_config, artwork_remover_mock, tmp_path
+    ):
+        steam_config.set_steam_input_config = MagicMock()
+        steam_config.grid_dir = lambda: str(tmp_path)
+        _seed_rom(uow, 10, app_id=1001, name="Game A")
+
+        result = await svc.report_sync_removals([{"rom_id": 10, "app_id": 1001}], [])
+
+        assert result["unbound_count"] == 1
+        with uow:
+            assert uow.roms.get(10).shortcut_app_id is None
+        steam_config.set_steam_input_config.assert_not_called()
+        artwork_remover_mock.remove_grid_images.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_row_bound_to_another_shortcut_since_keeps_it(self, svc, uow, steam_config):
+        """Compare-and-unbind: a later run bound the row to a new shortcut before the report arrived."""
+        steam_config.set_steam_input_config = MagicMock()
+        _seed_rom(uow, 10, app_id=2002, name="Game A")
+        _seed_rom(uow, 20, app_id=None, name="Game B")
+
+        result = await svc.report_sync_removals(
+            [{"rom_id": 10, "app_id": 1001}, {"rom_id": 20, "app_id": 1002}, {"rom_id": 99, "app_id": 9900}], []
+        )
+
+        assert result == {"success": True, "unbound_count": 0, "message": "Unbound 0 removed shortcuts"}
+        with uow:
+            assert (uow.roms.get(10).shortcut_app_id, uow.roms.get(20).shortcut_app_id) == (2002, None)
+
+    @pytest.mark.asyncio
+    async def test_the_report_neither_revokes_a_skip_nor_deletes_a_collection_stamp(self, svc, uow, steam_config):
+        """The run's finalize settled both when it emitted the removal."""
+        steam_config.set_steam_input_config = MagicMock()
+        _seed_rom(uow, 10, app_id=1001, name="Game A", platform_slug="snes")
+        _seed_stamp(uow, "snes")
+        _seed_collection_stamp(uow, "7", "standard", member_rom_ids=(10,))
+
+        await svc.report_sync_removals([{"rom_id": 10, "app_id": 1001}], [])
+
+        assert _skip_revoked(uow, "snes") is False
+        with uow:
+            assert uow.collection_sync_state.get("7", "standard") is not None
 
 
 class TestConvergedRemovalSweepsTheGrid:
@@ -378,7 +423,7 @@ class TestConvergedRemovalSweepsTheGrid:
         steam_config.set_steam_input_config = MagicMock()
 
         svc = _artwork_integration_service(uow, steam_config, tmp_path, logger)
-        await svc.report_converged_removals([100001])
+        await svc.report_sync_removals([], [{"rom_id": 10, "app_id": 100001}])
 
         assert [path.exists() for path in removed] == [False] * len(removed)
         assert kept.exists()

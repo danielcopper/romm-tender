@@ -1,15 +1,17 @@
 """ShortcutRemovalService — Steam-shortcut removal and ROM unbinding.
 
-The home for clearing a ROM's Steam-shortcut binding: both the user-driven
+The home for clearing a ROM's Steam-shortcut binding: the user-driven
 removal flows (the frontend removes shortcuts via SteamClient, this service
-unbinds the rows) and the sync-start reconcile against Steam's live shortcut
+unbinds the rows), the removals a sync made, once the frontend saw their
+shortcuts gone (#2653), and the sync-start reconcile against Steam's live shortcut
 set (a shortcut the user deleted through Steam's own UI is unbound so the next
 sync recreates it — #1046). Unbinding clears ``shortcut_app_id`` and keeps the
-row and its per-ROM children (ADR-0007), never deletes. Every unbind here also
-revokes the skip of the touched platforms' completion stamps (ADR-0023) — and
-deletes any collection stamp whose member set contained a removed ROM (#742) — so
-the next sync's incremental-skip gate can't skip a platform/collection whose
-shortcuts were removed locally and leave the removal never recreated. Why the
+row and its per-ROM children (ADR-0007), never deletes. Every unbind here but a
+sync's removal also revokes the skip of the touched platforms' completion stamps
+(ADR-0023) — and deletes any collection stamp whose member set contained a removed
+ROM (#742) — so the next sync's incremental-skip gate can't skip a platform/collection whose
+shortcuts were removed locally and leave the removal never recreated; for a
+sync's removal the run's finalize did both. Why the
 platform stamp is kept is in docs/architecture/backend-architecture.md,
 "Incremental skip". Reads the synced-shortcut binding from ``uow.roms``; the offline
 ``platform_slug → name`` label comes from the ``kv_config`` cache the
@@ -44,7 +46,7 @@ _REMOVAL_CLAIMS = frozenset(
         "remove_all_shortcuts",
         "remove_platform_shortcuts",
         "report_removal_results",
-        "report_converged_removals",
+        "report_sync_removals",
         "shortcut_removal",
     }
 )
@@ -256,32 +258,50 @@ class ShortcutRemovalService:
             # Outside the hold, so the run it starts does not yield to this call's own claim.
             self._artwork_job.request_run()
 
-    def _report_converged_removals_io(self, removed_app_ids: list[int]) -> None:
-        """Sync helper for report_converged_removals — Steam-Input reset and grid sweep, nothing else."""
-        if removed_app_ids:
+    def _report_sync_removals_io(self, stale: list[tuple[int, int]], converged: list[tuple[int, int]]) -> int:
+        """Sync helper for report_sync_removals — Steam-Input reset and grid sweep of the converged, then the unbind."""
+        converged_app_ids = [app_id for _rom_id, app_id in converged]
+        if converged_app_ids:
             try:
-                self._steam_config.set_steam_input_config(removed_app_ids, mode="default")
+                self._steam_config.set_steam_input_config(converged_app_ids, mode="default")
             except Exception as e:
                 self._logger.error(f"Failed to clean up Steam Input config: {e}")
-        grid = self._steam_config.grid_dir()
-        if grid:
-            for app_id in removed_app_ids:
-                self._artwork_remover.remove_grid_images(grid, app_id)
+            grid = self._steam_config.grid_dir()
+            if grid:
+                for app_id in converged_app_ids:
+                    self._artwork_remover.remove_grid_images(grid, app_id)
+        unbound = 0
+        with self._uow_factory() as uow:
+            for rom_id, app_id in [*stale, *converged]:
+                rom = uow.roms.get(rom_id)
+                # A row a later run bound to another shortcut keeps that one.
+                if rom is None or rom.shortcut_app_id != app_id:
+                    continue
+                rom.unbind_shortcut()
+                uow.roms.save(rom)
+                unbound += 1
+        return unbound
 
-    async def report_converged_removals(self, removed_app_ids: list[int | str]) -> dict[str, Any]:
-        """Called by the frontend after removing the shortcuts a sync converged away (#2645).
+    async def report_sync_removals(
+        self, stale_removals: list[dict[str, Any]], converged_removals: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Called by the frontend with the shortcuts a sync removed that it saw gone from Steam (#2653).
 
-        Resets each removed appId's Steam Input setting and deletes its grid
-        images, as a removal the user starts does. The run's finalize unbound
-        the rows already, and each ROM keeps its cover cache, since its game
-        keeps another shortcut.
+        Each removal is ``{"rom_id", "app_id"}``. Its row is unbound only while it
+        still holds that appId; the run's finalize kept the binding, so a removal
+        never reported is emitted again by the next run, or unbound by its start
+        reconcile where the shortcut is gone. A converged removal also has its
+        Steam Input setting reset and its grid images deleted, as a removal the
+        user starts does; each ROM keeps its cover cache, since its game keeps
+        another shortcut.
         """
-        app_ids = [int(app_id) for app_id in removed_app_ids]
+        stale = [(int(entry["rom_id"]), int(entry["app_id"])) for entry in stale_removals]
+        converged = [(int(entry["rom_id"]), int(entry["app_id"])) for entry in converged_removals]
         try:
-            async with self._rules.hold("report_converged_removals", prune=True):
+            async with self._rules.hold("report_sync_removals", prune=True):
                 await self._artwork_job.stop_for_removal()
-                await self._loop.run_in_executor(None, self._report_converged_removals_io, app_ids)
-                return {"success": True, "message": f"Cleaned up {len(app_ids)} removed shortcuts"}
+                unbound = await self._loop.run_in_executor(None, self._report_sync_removals_io, stale, converged)
+                return {"success": True, "unbound_count": unbound, "message": f"Unbound {unbound} removed shortcuts"}
         finally:
             # Outside the hold, so the run it starts does not yield to this call's own claim.
             self._artwork_job.request_run()
