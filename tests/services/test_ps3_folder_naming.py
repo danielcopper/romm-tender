@@ -385,7 +385,7 @@ class TestALiftStoppedPartWayIsFinishedAtTheNextStart:
         assert f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}" in h.store.files
         assert not h.lifted()
 
-    def test_an_install_folder_that_cannot_be_emptied_keeps_the_game_waiting_for_the_next_start(self, monkeypatch):
+    def test_an_install_folder_that_cannot_be_removed_gets_its_game_folder_back(self, monkeypatch):
         h = _Harness()
         h.install(1, rom_dir="/roms/ps3/MyGame.ps3", file_path=f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}")
         # The folder stays on disk once emptied, which the fake models only as a known directory.
@@ -398,8 +398,60 @@ class TestALiftStoppedPartWayIsFinishedAtTheNextStart:
 
         h.service.name_ps3_folders()
 
-        assert f"/roms/ps3/MyGame.ps3.tender-lift/{_EBOOT}" in h.store.files
+        assert list(h.store.files) == [f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}"]
         assert h.file_path(1) == f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}"
+        assert not h.lifted()
+
+        monkeypatch.undo()
+        h.service.name_ps3_folders()
+
+        assert list(h.store.files) == [f"/roms/ps3/MyGame.ps3/{_EBOOT}"]
+        assert h.file_path(1) == f"/roms/ps3/MyGame.ps3/{_EBOOT}"
+        assert h.lifted()
+
+    def test_something_that_came_into_the_emptied_folder_keeps_the_game_where_it_was(self, monkeypatch):
+        h = _Harness()
+        h.install(1, rom_dir="/roms/ps3/MyGame.ps3", file_path=f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}")
+        h.store.dirs.add("/roms/ps3/MyGame.ps3")
+        remove_empty_dir = h.store.remove_empty_dir
+
+        def something_arrives(path: str) -> None:
+            h.store.files["/roms/ps3/MyGame.ps3/arrived.txt"] = b"new"
+            remove_empty_dir(path)
+
+        monkeypatch.setattr(h.store, "remove_empty_dir", something_arrives)
+
+        h.service.name_ps3_folders()
+        monkeypatch.undo()
+        h.service.name_ps3_folders()
+
+        assert sorted(h.store.files) == [
+            "/roms/ps3/MyGame.ps3/Inner/PS3_GAME/USRDIR/EBOOT.BIN",
+            "/roms/ps3/MyGame.ps3/arrived.txt",
+        ]
+        assert h.file_path(1) == f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}"
+        assert h.lifted()
+
+    def test_a_game_folder_that_cannot_be_moved_back_waits_for_the_next_start(self, monkeypatch):
+        h = _Harness()
+        h.install(1, rom_dir="/roms/ps3/MyGame.ps3", file_path=f"/roms/ps3/MyGame.ps3/Inner/{_EBOOT}")
+        h.store.dirs.add("/roms/ps3/MyGame.ps3")
+        move_dir = h.store.move_dir
+
+        def refuse(path: str) -> None:
+            raise OSError(path)
+
+        def only_out(src: str, dst: str) -> None:
+            if src.endswith(".tender-lift"):
+                raise PermissionError(src)
+            move_dir(src, dst)
+
+        monkeypatch.setattr(h.store, "remove_empty_dir", refuse)
+        monkeypatch.setattr(h.store, "move_dir", only_out)
+
+        h.service.name_ps3_folders()
+
+        assert list(h.store.files) == [f"/roms/ps3/MyGame.ps3.tender-lift/{_EBOOT}"]
         assert not h.lifted()
 
         monkeypatch.undo()

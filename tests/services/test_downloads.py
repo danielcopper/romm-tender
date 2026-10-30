@@ -2526,7 +2526,9 @@ class TestDoDownloadMultiFile:
         assert installed.file_path == str(kept / "PS3_GAME" / "USRDIR" / "EBOOT.BIN")
         assert not (roms_dir / "MyGame.PS3.ps3").exists()
 
-    async def _download_ps3_zip(self, make_downloads, tmp_path, members: dict[str, bytes]):
+    async def _download_ps3_zip(
+        self, make_downloads, tmp_path, members: dict[str, bytes], *, store=None, staging_taken: bool = False
+    ):
         """Download a ps3 zip holding *members* through the real unpack, and answer the roms folder and the install."""
         import zipfile as zf
         from unittest.mock import patch
@@ -2536,10 +2538,13 @@ class TestDoDownloadMultiFile:
                 roms=str(tmp_path / "retrodeck" / "roms"),
                 bios=str(tmp_path / "retrodeck" / "bios"),
             ),
+            download_file_store=store,
         )
         downloads.accepted_extensions = frozenset({".ps3", ".PS3", ".ps3dir", ".PS3DIR"})
         roms_dir = tmp_path / "retrodeck" / "roms" / "ps3"
         roms_dir.mkdir(parents=True)
+        if staging_taken:
+            (roms_dir / "MyGame.tender-lift").mkdir()
         target_path = str(roms_dir / "MyGame.zip")
         zip_content_path = tmp_path / "source_ps3.zip"
         with zf.ZipFile(str(zip_content_path), "w") as z:
@@ -2612,6 +2617,31 @@ class TestDoDownloadMultiFile:
         assert installed.rom_dir == str(placed)
         assert installed.file_path == str(placed / "Inner" / "PS3_GAME" / "USRDIR" / "EBOOT.BIN")
         assert (placed / "readme.txt").read_bytes() == b"kept"
+
+    @pytest.mark.asyncio
+    async def test_a_ps3_game_folder_whose_staging_name_is_taken_is_left_where_it_is(self, make_downloads, tmp_path):
+        """Nothing is moved over another folder (#2195 D39)."""
+        roms_dir, installed = await self._download_ps3_zip(
+            make_downloads, tmp_path, {"Inner/PS3_GAME/USRDIR/EBOOT.BIN": b"\x00" * 100}, staging_taken=True
+        )
+
+        placed = roms_dir / "MyGame.ps3"
+        assert installed is not None
+        assert installed.file_path == str(placed / "Inner" / "PS3_GAME" / "USRDIR" / "EBOOT.BIN")
+        assert list((roms_dir / "MyGame.tender-lift").iterdir()) == []
+
+    @pytest.mark.asyncio
+    async def test_a_ps3_lift_that_fails_part_way_leaves_no_staging_folder_behind(self, make_downloads, tmp_path):
+        class RefusingStore(DownloadFileAdapter):
+            def remove_empty_dir(self, path: str) -> None:
+                raise PermissionError(path)
+
+        roms_dir, installed = await self._download_ps3_zip(
+            make_downloads, tmp_path, {"Inner/PS3_GAME/USRDIR/EBOOT.BIN": b"\x00" * 100}, store=RefusingStore()
+        )
+
+        assert installed is None
+        assert sorted(path.name for path in roms_dir.iterdir()) == []
 
     @pytest.mark.asyncio
     async def test_nested_multi_file_cleanup_targets_identity_dir_not_files_zero(self, make_downloads, tmp_path, emit):

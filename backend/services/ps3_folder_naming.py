@@ -169,17 +169,41 @@ class Ps3FolderNamingService:
         return self._finish_lift(install.rom_id, rom_dir, lift)
 
     def _finish_lift(self, rom_id: int, rom_dir: str, lift: Ps3FolderLift) -> bool:
-        """Remove the emptied *rom_dir*, put the waiting game folder in its place, then move the record after it."""
+        """Remove the emptied *rom_dir*, put the waiting game folder in its place, then move the record after it.
+
+        Where *rom_dir* cannot be removed — something came into it — the game
+        folder goes back inside it, so the files are where the record says
+        and an uninstall meanwhile leaves nothing behind outside the install.
+        """
         store = self._file_store
-        try:
-            if store.exists(rom_dir):
+        if store.exists(rom_dir):
+            try:
                 store.remove_empty_dir(rom_dir)
+            except OSError as e:
+                self._put_back(rom_dir, lift, e)
+                return False
+        try:
             store.move_dir(lift.staging, rom_dir)
         except OSError as e:
             self._logger.warning(f"PS3 folder lift into {rom_dir} failed: {e}; {lift.staging} kept, asked again later")
             return False
         self._logger.info(f"Lifted the PS3 game folder of rom_id={rom_id} into {rom_dir}")
         return self._relocate(rom_id, rom_dir, rom_dir, lift.launch_path)
+
+    def _put_back(self, rom_dir: str, lift: Ps3FolderLift, refusal: OSError) -> None:
+        """Move the waiting game folder back inside *rom_dir*, which could not be removed; asked again later."""
+        try:
+            self._file_store.move_dir(lift.staging, lift.inner)
+        except OSError as e:
+            self._logger.warning(
+                f"PS3 folder lift: {rom_dir} could not be removed ({refusal}), and moving {lift.staging} back "
+                f"failed: {e}; asked again later"
+            )
+            return
+        self._logger.warning(
+            f"PS3 folder lift: {rom_dir} could not be removed ({refusal}); its game folder is back inside it, "
+            "asked again later"
+        )
 
     def _name(self, install: RomInstall, new_rom_dir: str, new_file_path: str) -> bool:
         """Name one install's folder and move its record after it; ``False`` where the next start has to ask again."""
