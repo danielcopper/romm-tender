@@ -314,9 +314,9 @@ class SaveTransfer:
         taken — over bytes another client put there meanwhile as well
         (docs/architecture/save-file-sync-architecture.md, "A download is
         acknowledged once placed, never marked at the GET"). Raises
-        :class:`RommAcknowledgementNotTaken` where the first answer names other
-        bytes or the second still shows this device not current; a request's own
-        failure propagates.
+        :class:`RommAcknowledgementNotTaken` where the first answer shows this
+        device not current and names other bytes, or the second still shows it
+        not current; a request's own failure propagates.
         """
         answer = self._romm_api.confirm_download(save_id, device_id, content_hash=content_hash)
         if not answer_shows_device_not_current(answer, device_id):

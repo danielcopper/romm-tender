@@ -1806,14 +1806,14 @@ counts as not taken; an answer that does not name the device says nothing either
 RomM 5.4.1, after another client replaced a save in place: a download and one acknowledgement with the hash leave this
 device current where its upload carried the hash, and a second acknowledgement is needed where it did not.
 
-An acknowledgement that fails — a RomM error, a first answer that names other bytes, or a second answer that still shows
-this device not current (`RommAcknowledgementNotTaken`, which `classify_error` answers `server_error`) — raises with the
-file in place, its backup kept and nothing recorded ([#2184](https://github.com/danielcopper/romm-tender/issues/2184)
-D8): the sync reports the file as an error, a slot switch counts it among the downloads that failed
-(`switch_incomplete`), and Use Server and Keep Local's adopt count as done where the file holds the head's bytes
-([resolve_sync_conflict endpoint](#resolve_sync_conflict-endpoint)). The next sync finds the file identical to a head
-this device is not current on, and adopts and acknowledges it (rows 11a and 12a); where another client replaced the head
-meanwhile, it decides against that newer head as any sync does.
+An acknowledgement that fails — a RomM error, a first answer that shows this device not current and names other bytes,
+or a second answer that still shows this device not current (`RommAcknowledgementNotTaken`, which `classify_error`
+answers `server_error`) — raises with the file in place, its backup kept and nothing recorded
+([#2184](https://github.com/danielcopper/romm-tender/issues/2184) D8): the sync reports the file as an error, a slot
+switch counts it among the downloads that failed (`switch_incomplete`), and Use Server and Keep Local's adopt count as
+done where the file holds the head's bytes ([resolve_sync_conflict endpoint](#resolve_sync_conflict-endpoint)). The next
+sync finds the file identical to a head this device is not current on, and adopts and acknowledges it (rows 11a and
+12a); where another client replaced the head meanwhile, it decides against that newer head as any sync does.
 
 `download_save(save_id, dest_path)` names no device: it fetches a server copy to compare
 (`SaveTransfer.fetch_server_copy`) and records nothing.

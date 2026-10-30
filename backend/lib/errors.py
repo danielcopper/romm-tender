@@ -153,7 +153,7 @@ class RommRateLimitedError(RommServerError):
 
 
 class RommAcknowledgementNotTaken(RommApiError):
-    """RomM answered two acknowledgements of a save and still does not show this device current on it.
+    """RomM still does not show this device current: after an answer naming other bytes, or two acknowledgements.
 
     Each request succeeded, so there is no status: RomM answered, and what it
     recorded is not what was asked.

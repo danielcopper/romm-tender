@@ -2007,10 +2007,11 @@ Format: **invariant** — tier — enforced by.
   placed, never marked at the GET"). Two callers take it: `MatrixExecutor._dispatch_skip`
   (`services/saves/sync_engine/matrix.py`), which lets a failure reach `_dispatch_sync_action` to be reported as that
   file's error, and `RollbackOrchestrator._resolve_conflict_keep_local` (`sync_engine/rollback.py`), which lets a
-  failure end the resolution. `SaveTransfer.record_server_head` records without confirming, for an adopt the core does
-  not mark; `StatusService._partition_outcomes` (`services/saves/status/service.py`) records only such an adopt, because
-  showing a page never writes to RomM. Enforced by
-  `tests/services/saves/sync_engine/test_matrix.py::TestAnAdoptOfTheHead`,
+  failure end the resolution, but for one while the file holds the head's bytes, which answers success
+  ([#2664](https://github.com/danielcopper/romm-tender/issues/2664) D9). `SaveTransfer.record_server_head` records
+  without confirming, for an adopt the core does not mark; `StatusService._partition_outcomes`
+  (`services/saves/status/service.py`) records only such an adopt, because showing a page never writes to RomM. Enforced
+  by `tests/services/saves/sync_engine/test_matrix.py::TestAnAdoptOfTheHead`,
   `tests/services/saves/sync_engine/test_rollback.py::TestKeepLocalAdoptAcknowledges`,
   `tests/services/saves/sync_engine/test_keep_local.py::TestKeepLocalAdoptsAsTheSyncDoes` and
   `tests/services/saves/test_status.py::TestTheStatusReadAndAnAdopt`. Prompt-only: a new consumer of an adopting `Skip`

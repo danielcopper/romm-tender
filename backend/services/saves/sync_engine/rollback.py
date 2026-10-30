@@ -316,8 +316,9 @@ class RollbackOrchestrator:
         with nothing recorded, but for a RomM error while the local file holds
         *server*'s bytes (:meth:`_holds_server_save`): the resolution is carried
         out on this device, so it is logged as a warning and counts as done, and
-        the next sync adopts and acknowledges the file (#2664 D9). A file that no longer hashes as it did when it
-        was compared is uploaded instead, as a file that differs is.
+        the next sync adopts and acknowledges the file (#2664 D9). A file that no
+        longer hashes as it did when it was compared is uploaded instead, as a
+        file that differs is.
 
         The comparison fetches the server copy (:meth:`SaveTransfer.hash_server_copy`).
         A device write error there is logged as a warning and any other failure
