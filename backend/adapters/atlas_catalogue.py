@@ -212,9 +212,11 @@ _CORE_SO_SUFFIX = ".so"
 # does not hold reads as a program of its own.
 _KINDS = {KIND_LIBRETRO: CORE, KIND_STANDALONE: PROGRAM, KIND_RETROARCH_FOREIGN_CORE: FOREIGN_CORE}
 
-# The launchability verdicts, each in Tender's word. A verdict this map does not
-# hold reads as not established — the resolver's own rule for a value a client
-# does not know, and its ``unknown`` is exactly that.
+# The launchability verdicts, each in Tender's word. The resolver's ``unknown``
+# is "a statement about the look, never about the file, and never collapsed
+# into either 'no'" (``launchable``'s docstring, atlas/installations.py), so it
+# reads as not established; a verdict this map does not hold reads so too,
+# since Tender cannot word it as a yes or a no.
 _LAUNCH_STATES = {
     VERDICT_LAUNCHABLE: STARTS,
     VERDICT_NEEDS_INSTALLATION: NEEDS_INSTALLING,
@@ -225,12 +227,10 @@ _LAUNCH_STATES = {
 # Why a verdict could not be established, in Tender's word, the first code
 # found winning. A label the system's entries do not carry is the caller's own
 # question going wrong, so it is named before what the catalogue says of the
-# system; ``rom-path-undeclared`` beside ``system-unknown`` says the same
-# system is not one the frontend declares.
+# system.
 _NOT_ESTABLISHED_LAUNCH_BECAUSE = (
     (CAVEAT_LAUNCH_COMMAND_LABEL_UNKNOWN, ENTRY_UNKNOWN),
     (CAVEAT_SYSTEM_UNKNOWN, SYSTEM_UNKNOWN),
-    (CAVEAT_ROM_PATH_UNDECLARED, SYSTEM_UNKNOWN),
 )
 
 # Codes a launchability answer carries that change nothing Tender says.
@@ -239,9 +239,17 @@ _NOT_ESTABLISHED_LAUNCH_BECAUSE = (
 # refusal (``core-file-foreign``) is the entry-not-accepted verdict it stands
 # beside, worded as that verdict. ``arrangement-version-drifted`` says the
 # installation's version is not the one the reading is pinned to, on every
-# answer, and is no statement about the file.
+# answer, and is no statement about the file. ``rom-path-undeclared`` says the
+# catalogue states no ROM directory for the system — one it does not declare,
+# or one it declares without a ``<path>`` — which is no statement about whether
+# the file starts.
 _LAUNCH_NOTES_UNWORDED = frozenset(
-    {CAVEAT_ENTRY_FORMAT_UNCLAIMED, CAVEAT_CORE_FILE_FOREIGN, CAVEAT_ARRANGEMENT_VERSION_DRIFTED}
+    {
+        CAVEAT_ENTRY_FORMAT_UNCLAIMED,
+        CAVEAT_CORE_FILE_FOREIGN,
+        CAVEAT_ARRANGEMENT_VERSION_DRIFTED,
+        CAVEAT_ROM_PATH_UNDECLARED,
+    }
 )
 
 

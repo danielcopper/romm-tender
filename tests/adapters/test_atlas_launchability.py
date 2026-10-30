@@ -278,13 +278,25 @@ class TestEachVerdictInTendersWords:
 
         assert (result.state, result.reason) == (NOT_ESTABLISHED, CATALOGUE_UNREAD)
 
-    @pytest.mark.parametrize("code", [CAVEAT_SYSTEM_UNKNOWN, CAVEAT_ROM_PATH_UNDECLARED])
-    def test_each_code_saying_the_system_is_not_declared_is_worded_so(self, code, traces):
+    def test_a_system_the_catalogue_does_not_declare_is_worded_so(self, traces):
         result, _ = _ask(
-            LaunchabilityAnswer(verdict=VERDICT_UNKNOWN, extension=".z64", caveats=(_caveat(code),)), traces
+            LaunchabilityAnswer(verdict=VERDICT_UNKNOWN, extension=".z64", caveats=(_caveat(CAVEAT_SYSTEM_UNKNOWN),)),
+            traces,
         )
 
         assert (result.state, result.reason) == (NOT_ESTABLISHED, SYSTEM_UNKNOWN)
+
+    def test_a_catalogue_stating_no_rom_directory_names_no_reason(self, traces):
+        # rom-path-undeclared also stands for a system declared without a
+        # <path>, so it never says the system is not declared.
+        result, _ = _ask(
+            LaunchabilityAnswer(
+                verdict=VERDICT_UNKNOWN, extension=".z64", caveats=(_caveat(CAVEAT_ROM_PATH_UNDECLARED),)
+            ),
+            traces,
+        )
+
+        assert (result.state, result.reason) == (NOT_ESTABLISHED, None)
 
     def test_an_unknown_verdict_with_no_code_tender_words_names_no_reason(self, traces):
         result, _ = _ask(
