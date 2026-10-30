@@ -257,19 +257,19 @@ export async function ensureTrackingConfiguredBigPicture(romId: number): Promise
  * A call that gets no answer within its limit is not a failure: its
  * `TimeoutError` reaches the gate.
  */
-export async function ensureTrackingConfiguredSilently(romId: number, tag: string): Promise<"proceed"> {
+export async function ensureTrackingConfiguredSilently(romId: number, tag: string): Promise<void> {
   const trackingResult = await boundedOr(isSaveTrackingConfigured(romId), LOCAL_CALL_LIMIT_MS, (e) => {
     logError(`${tag} tracking check failed (assuming configured): ${e}`);
     return { configured: true };
   });
-  if (trackingResult.configured) return "proceed";
+  if (trackingResult.configured) return;
 
   const setupInfo = await boundedOr(getSaveSetupInfo(romId), SERVER_CALL_LIMIT_MS, (e) => {
     // Network/backend failure — never block a start on setup.
     logError(`${tag} save-setup fetch failed (proceeding unconfigured): ${e}`);
     return null;
   });
-  if (setupInfo === null) return "proceed";
+  if (setupInfo === null) return;
 
   // Reuse the shared outcome handler with a no-op saves-tab dispatch and a
   // swallowed toast: the auto_confirm branch fires `confirmSlotChoice`; every
@@ -286,7 +286,6 @@ export async function ensureTrackingConfiguredSilently(romId: number, tag: strin
     rethrowTimeout(e);
     logError(`${tag} auto-adopt slot failed (proceeding): ${e}`);
   });
-  return "proceed";
 }
 
 interface LaunchGateOpsOptions extends PreLaunchSyncOptions {

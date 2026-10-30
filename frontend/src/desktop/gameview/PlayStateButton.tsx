@@ -59,7 +59,7 @@ export const PlayStateButton: FC<PlayStateButtonProps> = ({ pressState, refusal,
       {...(refusal === null ? {} : { title: refusal })}
       onClick={onPlay}
     >
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
         <path d="M3 2L12 7L3 12V2Z" />
       </svg>
       {pressState === null ? "PLAY" : PRESS_LABEL[pressState]}

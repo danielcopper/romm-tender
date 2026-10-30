@@ -163,7 +163,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
             style={stranded ? { ...RESUME_BUTTON_STYLE, borderRadius: "2px" } : RESUME_BUTTON_STYLE}
             onClick={() => detach(handleResumeClick())}
           >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
               <path d="M3 2L12 7L3 12V2Z" />
             </svg>
             RESUME
@@ -178,7 +178,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
               style={SIDE_ACTION_STYLE}
               onClick={() => detach(handleStopClick())}
             >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true">
                 <rect width="10" height="10" rx="1" />
               </svg>
             </button>

@@ -115,7 +115,10 @@ async function runWatcherGate(start: CancelledStart, romId: number, prompts: Lau
     toastSyncResult: false,
     // A start the watcher catches may come from no game page at all: the library
     // grid, a `steam://` link.
-    ensureTrackingConfigured: () => ensureTrackingConfiguredSilently(romId, WATCHER_TAG),
+    ensureTrackingConfigured: async () => {
+      await ensureTrackingConfiguredSilently(romId, WATCHER_TAG);
+      return "proceed";
+    },
     confirmCoreChange: prompts.confirmCoreChange,
     confirmUncheckedStartingSource: prompts.confirmUncheckedSource,
     askSyncWait: prompts.askSyncWait,

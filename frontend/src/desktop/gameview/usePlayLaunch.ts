@@ -137,7 +137,10 @@ export function usePlayLaunch({
         tag: TAG,
         toastSyncResult: true,
         onSyncStart: () => setPressState("syncing"),
-        ensureTrackingConfigured: () => ensureTrackingConfiguredSilently(romId, TAG),
+        ensureTrackingConfigured: async () => {
+          await ensureTrackingConfiguredSilently(romId, TAG);
+          return "proceed";
+        },
         confirmCoreChange: prompts.confirmCoreChange,
         confirmUncheckedStartingSource: prompts.confirmUncheckedSource,
         askSyncWait: prompts.askSyncWait,
