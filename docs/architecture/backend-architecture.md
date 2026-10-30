@@ -456,7 +456,7 @@ calls (`wire_library`, which answers the service and its parts as `LibraryParts`
 | `cover_preparer.py`           | `CoverPreparer` — one unit's covers, readied before its shortcuts are emitted: the `refresh_changed_covers` invalidation pass, the download for the ROMs getting a shortcut, and each emitted entry's `cover_path`. Delegated to `ArtworkService` through the `ArtworkManager` seam, with the run's progress and cancel signals bound in                                                                                                                                                                                                                 |
 | `sync_run_recorder.py`        | `SyncRunRecorder` — the run's own `SyncRun` row: the `running` row opened with the planned counts, and the single terminal transition (`completed` / `cancelled` / `interrupted` / `paused` / `errored`) that closes it, each in its own short write UoW. It writes the outcome; **which** terminal a stopped run earns stays the orchestrator's, and admitting or releasing the in-flight run stays `_state.py`'s                                                                                                                                       |
 | `reporter.py`                 | `SyncReporter` — the apply's ack and each chunk's commit (artwork filenames, the per-unit `roms` upsert with its cached metadata, the completion stamps and the recorded launch commands), and Force Full Sync's reset of those stamps and commands. It emits nothing                                                                                                                                                                                                                                                                                    |
-| `run_finalizer.py`            | `RunFinalizer` — the end of a run: the closing registry write (the stale unbind, the skip revocations, the collection-stamp deletions, the gone-from-RomM marks, the platform-names cache) with the Steam-collection maps built in the same write UoW, and the terminal signals (`sync_complete` and the run's last `sync_progress` frame)                                                                                                                                                                                                               |
+| `run_finalizer.py`            | `RunFinalizer` — the end of a run: the closing registry write (the stale removal's skip revocations, the collection-stamp deletions, the gone-from-RomM marks, the platform-names cache) with the Steam-collection maps built in the same write UoW, and the terminal signals (`sync_complete` and the run's last `sync_progress` frame)                                                                                                                                                                                                                 |
 | `views.py`                    | `LibraryViews` — the façade's reads: the `roms`-derived platform counts, and the `sync_runs` history and the completion stamps behind the last-sync line, the resume offer and the run list. Declared read-only (`scripts/check_read_only_module.py`)                                                                                                                                                                                                                                                                                                    |
 | `session_budget.py`           | `SessionBudgetMonitor` — Steam's per-session renderer-heap budget: the GC-settled RSS measurement, the chunk-boundary pause verdict, the headroom clip that trims a chunk's additive cover work to what that verdict left, the post-preview prognosis, the run-start baseline, the `get_session_budget_status` payload, and whether a reading stands at or above the ceiling, which the shortcut artwork job asks through `LibraryService.renderer_above_ceiling` before each batch                                                                      |
 | `shortcut_launch_resolver.py` | `ShortcutLaunchResolver` — resolves each ROM's launch facts for the shortcut bake: the disc-resolved installed path and the active emulator, both handed to `build_shortcuts_data`                                                                                                                                                                                                                                                                                                                                                                       |
@@ -482,8 +482,10 @@ apply-dispatch, `complete` / `mark_cancelled` / `mark_interrupted` / `mark_pause
 the orchestrator deciding which of those terminals a stopped run earns. The terminal `sync_complete` event (and its
 progress frame) is emitted LAST — `RunFinalizer.emit_sync_complete`, called by the orchestrator only AFTER that terminal
 `SyncRun` status is persisted — so a frontend stats refetch triggered by the event reads the fresh run status instead of
-racing the write (the #39 lag); `RunFinalizer.finalize_per_unit_run` keeps only the stale-unbind + `sync_collections`
-emit and returns the app-id maps. `sync_stats.roms` is a registry-derived bound-shortcut count computed at read time
+racing the write (the #39 lag); `RunFinalizer.finalize_per_unit_run` keeps only the stale removal's stamps +
+`sync_collections` emit and returns the app-id maps. The rows a run removes keep their binding until the panel reports
+their shortcuts gone (`report_sync_removals`, #2653; [Steam Non-Steam Shortcuts](steam-non-steam-shortcuts.md), "A
+removal the panel did not finish"). `sync_stats.roms` is a registry-derived bound-shortcut count computed at read time
 (the ROMs still bound to a shortcut in `roms`, i.e. `shortcut_app_id` not NULL), not a stored scalar. The old JSON
 `shortcut_registry` / `last_sync` / `sync_stats` are gone from this path; all writes go through the `roms` / `sync_runs`
 Repository Protocols behind a narrow Unit of Work (per
@@ -1030,15 +1032,16 @@ game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app
   them and still counts their shortcuts as held, so no shortcut moves onto one in the same run. The run keeps them on
   `LibrarySyncStateBox.run_converged`; the finalize of a run that was not stopped takes them out of the stale scan,
   passes them through `select_stale_removals` (#1036) and sends them in `sync_stale` with `kept_rom_id` / `kept_app_id`,
-  the row its game keeps once the run commits (`with_kept_rows_rebound`), and the run finalizer unbinds them with the
-  stale rows. A stopped run removes nothing. The preview runs the same rule over the listings of the platform units it
-  fetched in full and counts the losers as removals. A collection unit never converges and never sees a loser: it leaves
-  out every member a platform unit synced and every member no listing returns. So two kinds of game keep their shortcuts
-  for good: a game only collections bring in, its platform turned off, and a game on a platform RomM no longer lists —
-  no platform unit reads that platform, so nothing converges it. The panel carries each loser's Steam state over before
-  the removal (`frontend/src/utils/shortcutCarryOver.ts`), then reports the removed appIds through
-  `report_converged_removals`, which resets their Steam Input setting and deletes their grid images, and leaves the
-  per-ROM cover cache.
+  the row its game keeps once the run commits (`with_kept_rows_rebound`); each keeps its binding, as a stale row does,
+  until the panel reports its shortcut gone, and until then the group still counts as holding two shortcuts, so a
+  removal the panel did not finish converges again on the next sync. A stopped run removes nothing. The preview runs the
+  same rule over the listings of the platform units it fetched in full and counts the losers as removals. A collection
+  unit never converges and never sees a loser: it leaves out every member a platform unit synced and every member no
+  listing returns. So two kinds of game keep their shortcuts for good: a game only collections bring in, its platform
+  turned off, and a game on a platform RomM no longer lists — no platform unit reads that platform, so nothing converges
+  it. The panel carries each loser's Steam state over before the removal (`frontend/src/utils/shortcutCarryOver.ts`),
+  then reports the removals Steam no longer lists through `report_sync_removals`, which unbinds each row, resets the
+  Steam Input setting of the removed appId and deletes its grid images, and leaves the per-ROM cover cache.
 - **Downstream group semantics.** The incremental-skip gate compares RomM's whole visible id set — every sibling, bound
   or unbound — with the checksum the completion stamp recorded (#743), so skip parity on platforms with sibling groups
   holds. The **backfill gate reads the stamp's fetch generation**: a NULL `sibling_group_key` forces a full fetch only
@@ -1205,26 +1208,27 @@ the platform skips. The row stays bound and still shows in the removed-game clea
 ([Removed-game cleanup](removed-game-cleanup.md#discovery)), which reads the generations, not the skip.
 
 The stamp's contract is **a stamp may authorise a skip ⟺ the platform's most recent apply attempt ran to completion, and
-neither a local removal nor a stale removal on a run that did not process the platform has unbound one of its rows
-since**, so a stale stamp can never skip a half-mirrored platform. Because unbinding keeps the `roms` row (ADR-0007), a
-platform's persisted rows survive a partial re-apply or a local removal while RomM's id set stays what the stamp
-recorded, so a stamp still able to skip would otherwise let the skip drop the un-recreated games (the #1025 silent gap).
-Two rules keep the contract true. The unit applier **deletes the stamp at a platform unit's apply start** (once the
-fetch succeeded and the apply is about to emit its first chunk) and only the final chunk re-writes it, so an apply
-interrupted by a crash / cancel / heartbeat-timeout before the final chunk leaves none. The local removals and the stale
-removal on an unprocessed platform **revoke the stamp's skip** (`PlatformSyncStateRepository.revoke_skip`, the
-`skip_revoked` column of migration `025`) in the same write UoW as the unbind: the **local destructive flows** — "Remove
-all shortcuts" and per-platform removals (via `report_removal_results`) plus the Steam-UI-deletion reconcile
-(`reconcile_live_shortcuts`) — for every platform they touch, and the run finalizer's server-side **stale removal** for
-every platform the run did not process that it unbinds a row on. A platform the run did not process is one that was not
-among its platform units: its sync is turned off, or RomM no longer lists it. Where an enabled collection keeps one of
-that platform's games bound, a stamp still able to skip would let the platform skip once it is processed again: the
-bound rows keep the zero-bound guard quiet, and RomM's id set still matches the stamp's checksum, so the skip rebuilds
-the unit from the bound rows alone and never re-creates the unbound games' shortcuts. On a platform the run processed,
-skipped or fetched alike, the stale removal leaves the skip, because nothing the skip reads changes: a skipped
-platform's rebuilt rows are all among the rows the run returned, so none of them is stale, and a fetched platform was
-stamped by that run with a generation no stale row carries. Removed-game cleanup's own unbinds leave the skip too; why
-is under [Removed-game cleanup](removed-game-cleanup.md#discovery).
+neither a local removal nor a stale removal on a run that did not process the platform has unbound one of its rows or
+removed its shortcut since**, so a stale stamp can never skip a half-mirrored platform. Because unbinding keeps the
+`roms` row (ADR-0007), a platform's persisted rows survive a partial re-apply or a local removal while RomM's id set
+stays what the stamp recorded, so a stamp still able to skip would otherwise let the skip drop the un-recreated games
+(the #1025 silent gap). Two rules keep the contract true. The unit applier **deletes the stamp at a platform unit's
+apply start** (once the fetch succeeded and the apply is about to emit its first chunk) and only the final chunk
+re-writes it, so an apply interrupted by a crash / cancel / heartbeat-timeout before the final chunk leaves none. The
+local removals and the stale removal on an unprocessed platform **revoke the stamp's skip**
+(`PlatformSyncStateRepository.revoke_skip`, the `skip_revoked` column of migration `025`): the **local destructive
+flows** — "Remove all shortcuts" and per-platform removals (via `report_removal_results`) plus the Steam-UI-deletion
+reconcile (`reconcile_live_shortcuts`) — for every platform they touch, in the same write UoW as the unbind, and the run
+finalizer's server-side **stale removal** for every platform the run did not process that it removes a row's shortcut
+on, in the finalize's write UoW; that row is unbound later, by the panel's report (#2653), which revokes nothing. A
+platform the run did not process is one that was not among its platform units: its sync is turned off, or RomM no longer
+lists it. Where an enabled collection keeps one of that platform's games bound, a stamp still able to skip would let the
+platform skip once it is processed again: the bound rows keep the zero-bound guard quiet, and RomM's id set still
+matches the stamp's checksum, so the skip rebuilds the unit from the bound rows alone and never re-creates the unbound
+games' shortcuts. On a platform the run processed, skipped or fetched alike, the stale removal leaves the skip, because
+nothing the skip reads changes: a skipped platform's rebuilt rows are all among the rows the run returned, so none of
+them is stale, and a fetched platform was stamped by that run with a generation no stale row carries. Removed-game
+cleanup's own unbinds leave the skip too; why is under [Removed-game cleanup](removed-game-cleanup.md#discovery).
 
 **A revoked stamp is kept rather than deleted, because the skip is not its only reader.** Removed-game discovery
 ([Removed-game cleanup](removed-game-cleanup.md#discovery)), its canary ids (`PruneRegistry.canary_rom_ids`) and the
