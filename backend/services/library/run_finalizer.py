@@ -262,8 +262,10 @@ class RunFinalizer:
             removed_rom_ids: set[int] = set()
             unprocessed_slugs_removed: set[str] = set()
             for rid in stale_rom_ids or []:
+                # A report may have unbound the row already, the run's emit and
+                # this write being apart; its stamps are settled all the same.
                 rom = uow.roms.get(rid)
-                if rom is None or rom.shortcut_app_id is None:
+                if rom is None:
                     continue
                 removed_rom_ids.add(rom.rom_id)
                 if rom.platform_slug not in processed_platform_slugs:

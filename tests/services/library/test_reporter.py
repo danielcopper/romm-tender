@@ -2490,7 +2490,7 @@ class TestFinalizePerUnitRun:
             assert {r.rom_id for r in uow.roms.iter_all()} == {1, 2, 3}
 
     @pytest.mark.asyncio
-    async def test_stale_unbind_excludes_them_from_collections(self, library, emit):
+    async def test_a_stale_removal_is_left_out_of_the_collections(self, library, emit):
         """Collections built from uow.roms must skip the rows whose shortcut the run removes."""
 
         library.settings["collection_create_platform_groups"] = True
@@ -2550,7 +2550,7 @@ class TestFinalizePerUnitRun:
             assert json.loads(uow.kv_config.get("platform_names")) == {"n64": "Nintendo 64"}
 
     @pytest.mark.asyncio
-    async def test_stale_unbind_skips_missing_and_already_unbound(self, library, emit):
+    async def test_a_stale_removal_skips_a_missing_row_and_keeps_an_unbound_one_unbound(self, library, emit):
         """A stale_rom_id with no row (missing) or already-unbound row is skipped
         without error; the genuinely-bound stale rows keep their binding until the report."""
 
@@ -2597,7 +2597,7 @@ class TestFinalizePerUnitRun:
             assert uow.roms.get(2).shortcut_app_id == 1002
 
     @pytest.mark.asyncio
-    async def test_stale_unbind_revokes_the_skip_of_a_platform_the_run_did_not_process(self, library, emit):
+    async def test_a_stale_removal_revokes_the_skip_of_a_platform_the_run_did_not_process(self, library, emit):
         uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
@@ -2622,7 +2622,7 @@ class TestFinalizePerUnitRun:
         assert n64.skip_revoked is False
 
     @pytest.mark.asyncio
-    async def test_stale_unbind_leaves_the_skip_of_a_platform_the_run_processed(self, library, emit):
+    async def test_a_stale_removal_leaves_the_skip_of_a_platform_the_run_processed(self, library, emit):
         """A row RomM dropped goes stale on a platform the run fetched and stamped."""
         uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
@@ -2644,7 +2644,9 @@ class TestFinalizePerUnitRun:
         assert (stamp.fetch_id, stamp.skip_revoked) == ("run-1", False)
 
     @pytest.mark.asyncio
-    async def test_a_platform_the_run_did_not_process_keeps_its_skip_when_nothing_on_it_is_unbound(self, library, emit):
+    async def test_an_unprocessed_platform_loses_its_skip_even_for_a_removed_row_a_report_unbound_first(
+        self, library, emit
+    ):
         uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 5, app_id=None, platform_slug="snes", name="Already unbound")
@@ -2666,7 +2668,7 @@ class TestFinalizePerUnitRun:
             gba = uow.platform_sync_state.get("gba")
             assert uow.roms.get(6).shortcut_app_id == 1006
         assert snes is not None
-        assert snes.skip_revoked is False
+        assert snes.skip_revoked is True
         assert gba is not None
         assert gba.skip_revoked is False
 
@@ -2694,7 +2696,7 @@ class TestFinalizePerUnitRun:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("kind", ["standard", "smart"])
-    async def test_stale_unbind_deletes_the_stamp_of_a_collection_holding_an_unbound_game(self, library, emit, kind):
+    async def test_a_stale_removal_deletes_the_stamp_of_a_collection_holding_its_game(self, library, emit, kind):
         uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
@@ -2713,7 +2715,7 @@ class TestFinalizePerUnitRun:
             assert uow.collection_sync_state.get("7", kind) is None
 
     @pytest.mark.asyncio
-    async def test_a_collection_holding_no_game_the_stale_removal_unbinds_keeps_its_stamp(self, library, emit):
+    async def test_a_collection_loses_its_stamp_even_for_a_removed_row_a_report_unbound_first(self, library, emit):
         uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
@@ -2732,7 +2734,7 @@ class TestFinalizePerUnitRun:
         with uow:
             assert uow.roms.get(2).shortcut_app_id == 1002
             assert uow.collection_sync_state.get("7", "standard") is not None
-            assert uow.collection_sync_state.get("8", "smart") is not None
+            assert uow.collection_sync_state.get("8", "smart") is None
 
     @pytest.mark.asyncio
     async def test_get_sync_stats_reflects_unbound_count(self, library, emit):
