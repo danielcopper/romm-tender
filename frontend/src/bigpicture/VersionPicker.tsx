@@ -5,8 +5,8 @@
  * the right of DiscSelector (its structural twin, #865): a single DialogButton
  * that opens an anchored `showContextMenu` list of every version in the group.
  * Each row is
- * marked — the active version (✓ + tint), the default (the version the
- * resolution chain + Preferred-region setting would pick), downloaded versions,
+ * marked — the active version (✓ + tint), the default (the version RomM holds
+ * as the default, and none where RomM holds none), downloaded versions,
  * and versions that exist on the server but aren't synced locally yet. Per-row
  * covers load lazily from the per-ROM cover cache (cache-first fetchCoverBase64,
  * #1346), so each version shows its own art rather than the group's shared grid

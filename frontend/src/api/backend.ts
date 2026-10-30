@@ -1005,8 +1005,9 @@ export const selectDisc = endpoint<[number, string | null], SelectDiscResult>("s
  * version's own region/language/revision/tag attributes. `synced` is false for a
  * version that exists on the server but has no local row yet (selecting it
  * persists one); `installed` marks a downloaded version; `active` is the bound
- * version the Download button fetches; `is_default` marks the version the
- * resolution chain + Preferred-region setting would pick as the default.
+ * version the Download button fetches; `is_default` marks every version RomM
+ * holds as the default (its `is_main_sibling` flag) and nothing else — none
+ * where RomM holds no default.
  * `switchable` is false for a RomM sibling whose metadata match conflicts with
  * this game's — a locally-synced ROM under a different group key (#1359) or a
  * not-yet-synced sibling carrying a different id at the group's canonical source
@@ -1014,8 +1015,8 @@ export const selectDisc = endpoint<[number, string | null], SelectDiscResult>("s
  * reject it; every other row is switchable (#1368). `vanished` is a separate,
  * ephemeral liveness verdict: RomM answered 404 for that exact local id during
  * this list load. The retained row stays visible but cannot be selected.
- * `no_file` marks a version RomM holds no file for: it is never the default,
- * and the row is selectable only when the version is installed here. The
+ * `no_file` marks a version RomM holds no file for: the row is selectable only
+ * when the version is installed here. The
  * backend always sends it; absent reads as having a file. `bound_elsewhere`
  * marks a version another shortcut of this game is on — switch_version refuses
  * it by the same rule — so the row is never selectable; the backend always

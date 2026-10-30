@@ -330,12 +330,13 @@ class VersionSwitchService:
     async def _fetch_stub_details(self, stubs: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
         """Fetch each server-only sibling's full dims concurrently (best-effort).
 
-        The slim ``sibling_roms`` stub carries only its id, its names and its
-        ``is_main_sibling``, so a not-yet-synced sibling's dimensions, its file
-        verdict, its metadata ids for the membership judgment and its own
-        ``rom_user`` flag come from its detail. Groups are small (RomM caps siblings low), so the
-        extra reads fan out on the executor. A failed fetch is skipped rather
-        than failing the whole call.
+        The slim ``sibling_roms`` stub carries only its id, its names and,
+        where RomM states it, its ``is_main_sibling``, so a not-yet-synced
+        sibling's dimensions, its file verdict and its metadata ids for the
+        membership judgment come from its detail, and so does its default flag
+        where the stub states none (the detail's ``rom_user``). Groups are small
+        (RomM caps siblings low), so the extra reads fan out on the executor. A
+        failed fetch is skipped rather than failing the whole call.
         """
         if not stubs:
             return {}
@@ -541,8 +542,10 @@ class VersionSwitchService:
             # positive server statement, so a server-only stub is live.
             "vanished": False,
             "no_file": not has_file_on_romm(detail if detail is not None else stub),
-            # A local stub sits in another group, which the switch refuses as
-            # ``not_in_group`` before it asks whether the stub is bound elsewhere.
+            # Never marked: a stub with a local row in another group is refused
+            # ``not_in_group`` before the bound-elsewhere check. Under a bound row
+            # with no group key, which accepts any target, a stub bound to another
+            # shortcut is offered and the switch refuses it as ``bound_elsewhere``.
             "bound_elsewhere": False,
             "is_default": live_main_flags.get(rom_id, bool(meta.get("is_main_sibling"))),
             "switchable": target_in_sibling_group(

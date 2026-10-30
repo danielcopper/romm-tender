@@ -1812,9 +1812,10 @@ class TestFinalizePerUnitRun:
         shortcut of its smallest bound rom_id, so the filing does not move between runs."""
 
         uow = library.uow
+        # Rom 3 is seeded first, so a first-seen rule would file under 3003.
+        _seed_rom(uow, 3, app_id=3003, platform_slug="n64", name="Game (EU)", group_key="g")
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="Game (USA)", group_key="g")
         _seed_rom(uow, 2, app_id=None, platform_slug="n64", name="Game (JP)", group_key="g")
-        _seed_rom(uow, 3, app_id=3003, platform_slug="n64", name="Game (EU)", group_key="g")
 
         await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={

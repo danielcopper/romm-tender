@@ -393,9 +393,7 @@ downloads the new one — no prompt. **Use Existing Files** ([below](#when-the-g
 the old install the same way, just before it records the files you are using, unless those files are the old install
 itself. This keeps a multi-version game to a single copy on disk. Your **save files are never touched** by this cleanup,
 so switching back and re-downloading the earlier version rejoins its saves. A version another Steam shortcut of the same
-game is on is left untouched; a game keeps a second shortcut only until a sync leaves it one, or for good where only a
-collection brings it in or RomM no longer lists its platform
-([Multiple versions of a game](syncing-your-library.md#multiple-versions-of-a-game)).
+game is on is left untouched ([The Switch-version control](#the-switch-version-control) says when a game has one).
 
 ### When the game is already on your device
 
