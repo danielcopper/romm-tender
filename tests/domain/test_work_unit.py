@@ -61,7 +61,7 @@ class TestToEventPayload:
         assert "new_shortcut_count" not in payload
 
     def test_virtual_type_defaults_to_none_and_stays_off_the_wire(self):
-        """virtual_type is reporter-internal (#1539): defaults None, never in the payload."""
+        """virtual_type is internal to the run finalizer (#1539): defaults None, never in the payload."""
         unit = WorkUnit(type="collection", id="7", name="Faves", slug="", rom_count=4, collection_kind="standard")
         assert unit.virtual_type is None
         assert "virtual_type" not in unit.to_event_payload()

@@ -430,7 +430,7 @@ class TestSyncPreview:
 class TestPreviewCollectionDiff:
     """The preview's collection diffs compare the Steam collections' name-parts on both sides.
 
-    The last completed run records the keys the reporter built, so the preview's
+    The last completed run records the keys the run finalizer built, so the preview's
     current set has to be built the same way — under ``by_label`` a smart or
     virtual collection's key carries its type label — and folded the same way.
     """
@@ -528,7 +528,7 @@ class TestPreviewCollectionDiff:
 
     @pytest.mark.asyncio
     async def test_collections_differing_only_in_case_match_their_one_recorded_name(self, make_library, fake_romm_api):
-        """The reporter merges the two into one Steam collection and records one spelling of it."""
+        """The run finalizer merges the two into one Steam collection and records one spelling of it."""
         library = make_library(romm_api=fake_romm_api)
         for rid in (20, 21):
             fake_romm_api.roms[rid] = {
@@ -2409,7 +2409,7 @@ class TestDoSyncPerUnit:
         dropped from the frontend via ``sync_stale``.
 
         Regression for the inflated ``get_sync_stats`` count: the orchestrator emits
-        ``sync_stale`` so the frontend drops the shortcut, and the reporter unbinds the
+        ``sync_stale`` so the frontend drops the shortcut, and the run finalizer unbinds the
         same rom_ids in ``uow.roms`` (NULL ``shortcut_app_id``, keep the row) so the
         bound-shortcut count matches the still-synced ROMs.
         """

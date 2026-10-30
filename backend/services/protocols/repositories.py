@@ -65,20 +65,23 @@ class RomRepository(Protocol):
     def get_by_app_id(self, app_id: int) -> Rom | None:
         """Return the ROM bound to Steam *app_id*, or ``None``.
 
-        (library/reporter.py app_id reverse lookup, game_detail.py:64)
+        (game_detail.py, running_games.py, version_switch.py, prune/registry.py, migration/service.py)
         """
         ...
 
     def save(self, rom: Rom) -> None:
-        """Upsert *rom*. (library/reporter.py apply_sync upsert)"""
+        """Upsert *rom*. (library/reporter.py per-chunk commit upsert)"""
         ...
 
     def delete(self, rom_id: int) -> None:
-        """Remove the ROM with *rom_id*. Idempotent. (library/reporter.py, shortcut_removal.py)"""
+        """Remove the ROM with *rom_id*. Idempotent. (prune/registry.py)"""
         ...
 
     def iter_all(self) -> Iterator[Rom]:
-        """Iterate every ROM in the registry. (library/reporter.py full scan, startup_healing.py, data_inventory.py)"""
+        """Iterate every ROM in the registry.
+
+        (library/run_finalizer.py and library/views.py full scans, startup_healing.py, data_inventory.py)
+        """
         ...
 
     def iter_by_platform(self, platform_slug: str) -> Iterator[Rom]:
@@ -97,11 +100,11 @@ class RomRepository(Protocol):
         ...
 
     def count(self) -> int:
-        """Return the number of ROMs in the registry. (library/reporter.py len registry, shortcut_removal.py stats)"""
+        """Return the number of ROMs in the registry."""
         ...
 
     def count_bound(self) -> int:
-        """Return the number of ROMs that carry a Steam-shortcut binding. (library/reporter.py sync totals)"""
+        """Return the number of ROMs that carry a Steam-shortcut binding. (library/run_finalizer.py sync totals)"""
         ...
 
     def get_bound_platform_slugs(self) -> set[str]:
@@ -496,11 +499,11 @@ class SyncRunRepository(Protocol):
         ...
 
     def save(self, run: SyncRun) -> None:
-        """Upsert *run*. (library/reporter.py create at start, update at terminal)"""
+        """Upsert *run*. (library/sync_run_recorder.py create at start, update at terminal)"""
         ...
 
     def get_latest_completed(self) -> SyncRun | None:
-        """Return the newest run with status ``completed``, or ``None``. (library/reporter.py last_sync read)"""
+        """Return the newest run with status ``completed``, or ``None``. (library/views.py last_sync read)"""
         ...
 
     def get_latest_terminal(self) -> SyncRun | None:
@@ -509,7 +512,7 @@ class SyncRunRepository(Protocol):
         Terminal = ``completed`` / ``cancelled`` / ``paused`` / ``interrupted`` /
         ``errored``, ordered by ``finished_at``. Backs the "Last sync" last-attempt hint: when
         the newest terminal run did NOT complete, it is surfaced so a cancelled,
-        interrupted, or crash-resumed run reads as an attempt instead of "Never". (library/reporter.py)
+        interrupted, or crash-resumed run reads as an attempt instead of "Never". (library/views.py)
         """
         ...
 
@@ -522,11 +525,11 @@ class SyncRunRepository(Protocol):
 
         Any status includes ``running``, so a run in flight is in the list.
         *limit* is non-negative — the caller passes
-        ``services.library.reporter.SYNC_RUN_HISTORY_LIMIT`` — because the two
+        ``services.library.views.SYNC_RUN_HISTORY_LIMIT`` — because the two
         implementations disagree below zero: SQLite reads ``LIMIT -1`` as every
         row, while the in-memory fake sorts newest first, so its slice drops
         the oldest one.
-        (library/reporter.py run-history read)
+        (library/views.py run-history read)
         """
         ...
 
@@ -561,7 +564,7 @@ class PlatformSyncStateRepository(Protocol):
 
         A no-op when no stamp exists; the next ``save`` for the slug clears it.
         Called by the end-of-run stale removal on a platform the run did not
-        process (library/reporter.py) and by the local destructive flows
+        process (library/run_finalizer.py) and by the local destructive flows
         (services/shortcut_removal.py). ``get`` still returns the stamp, flagged
         ``skip_revoked``, so removed-game discovery keeps its fetch generation.
         """
@@ -576,7 +579,7 @@ class PlatformSyncStateRepository(Protocol):
         carries a recorded launch command (a row predating migration 015). A
         revoked stamp does not count, since the next run full-fetches that
         platform. The run history cannot answer this — Force Full Sync preserves it
-        while clearing every stamp (#1789). (library/reporter.py)
+        while clearing every stamp (#1789). (library/views.py)
         """
         ...
 
@@ -615,7 +618,7 @@ class CollectionSyncStateRepository(Protocol):
         the only way to find the stamps. Called in the write UoW that removes,
         unbinds or deletes those ROMs: the local destructive flows
         (services/shortcut_removal.py), the end-of-run stale removal
-        (library/reporter.py) and removed-game cleanup's row delete
+        (library/run_finalizer.py) and removed-game cleanup's row delete
         (prune/registry.py). There is no single-stamp delete: one would let a
         caller drop one stamp and leave another holding the same ROM.
         """
@@ -631,7 +634,7 @@ class CollectionSyncStateRepository(Protocol):
         The collection sibling of ``PlatformSyncStateRepository.has_any`` and read
         with it: a collection unit is part of a sync's enabled scope exactly as a
         platform unit is, so its surviving stamp answers the resume offer the same
-        way (#1789). (library/reporter.py)
+        way (#1789). (library/views.py)
         """
         ...
 

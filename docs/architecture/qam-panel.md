@@ -1333,25 +1333,25 @@ looking.
 
 What the backend holds for it: the preview answer carries library-wide totals (`SyncPreviewSummary`: new, changed,
 unchanged and removed counts, the platform and collection counts, and more), the names of new and changed games, and the
-added and removed collection names (`collection_diff`), each the name-part of a Steam collection — the key the reporter
-builds ([Collection naming mode](steam-non-steam-shortcuts.md#collection-naming-mode-merge-vs-by_label-1539)). The same
-counts split per platform ride the summary as `platform_breakdown` — one row per platform holding at least one non-zero
-count, ordered by name, each carrying `synced` for whether the platform is in the run's platform list. A `synced: false`
-row is a platform outside it: its toggle went off, RomM stopped listing it, or the only route to it is an enabled
-collection, which is not filtered by platform enablement. The causes compose, so one row can carry removals for the ROMs
-the run no longer fetches and new or changed counts for the ROMs a collection still reaches. Its name is the one the
-preview's platform-collection diff files the platform by, so the row carries the name the apply gives the platform's
-Steam collection: RomM's listed name for every platform the run's listing names, synced or not, else the name the
-backend recorded, and the bare slug where neither answers (#2564). A name carried on a fetched entry is not read. There
-is no collections row there: `collection_diff` on the same summary already carries the added and removed collection
-names. The Steam collections kept one per platform are a third field, `platform_collection_diff` — `has_changes` and an
-added and a removed count, no names, which is why the page's row for them states counts where the collections row states
-names. `get_sync_runs` answers the ten newest `sync_runs` rows of any status, newest first, each verbatim from the
-`SyncRun` aggregate (id, started, finished, status, planned counts, completed platforms and collections, error) — a
-field a run never recorded stays null, and the status is what says why. Skip preview is a user-intent setting in
-`settings.json` written by its owner (`adapters/persistence.py`) and reported by `get_settings`. No backend sync path
-consults it: the choice between asking for a preview and starting the run is made on the frontend, by this page's own
-start button.
+added and removed collection names (`collection_diff`), each the name-part of a Steam collection — the key the run
+finalizer builds ([Collection naming mode](steam-non-steam-shortcuts.md#collection-naming-mode-merge-vs-by_label-1539)).
+The same counts split per platform ride the summary as `platform_breakdown` — one row per platform holding at least one
+non-zero count, ordered by name, each carrying `synced` for whether the platform is in the run's platform list. A
+`synced: false` row is a platform outside it: its toggle went off, RomM stopped listing it, or the only route to it is
+an enabled collection, which is not filtered by platform enablement. The causes compose, so one row can carry removals
+for the ROMs the run no longer fetches and new or changed counts for the ROMs a collection still reaches. Its name is
+the one the preview's platform-collection diff files the platform by, so the row carries the name the apply gives the
+platform's Steam collection: RomM's listed name for every platform the run's listing names, synced or not, else the name
+the backend recorded, and the bare slug where neither answers (#2564). A name carried on a fetched entry is not read.
+There is no collections row there: `collection_diff` on the same summary already carries the added and removed
+collection names. The Steam collections kept one per platform are a third field, `platform_collection_diff` —
+`has_changes` and an added and a removed count, no names, which is why the page's row for them states counts where the
+collections row states names. `get_sync_runs` answers the ten newest `sync_runs` rows of any status, newest first, each
+verbatim from the `SyncRun` aggregate (id, started, finished, status, planned counts, completed platforms and
+collections, error) — a field a run never recorded stays null, and the status is what says why. Skip preview is a
+user-intent setting in `settings.json` written by its owner (`adapters/persistence.py`) and reported by `get_settings`.
+No backend sync path consults it: the choice between asking for a preview and starting the run is made on the frontend,
+by this page's own start button.
 
 ## Library
 

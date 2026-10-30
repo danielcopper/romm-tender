@@ -608,12 +608,12 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   folder joined onto a root under another name, and a caller that puts the question to RetroDECK's handle itself.
   Prompt-only: a new caller that downloads into, removes from or bounds a removal by a RetroDECK folder asks
   `RetroDeckFolders` and raises the refusal it answers with
-- **A module declared read-only calls no repository write — `services/library/local_library_reader.py` to start** —
-  check — `scripts/check_read_only_module.py` (the file's own calls only: a write behind a helper, a write passed as a
-  bound method (`run_in_executor(None, uow.roms.save, …)`), an aliased handle, a `getattr`-reached repository, and a
-  repository name not in its list pass green), with `tests/scripts/test_check_read_only_module.py` pinning its
-  name-shape read/write split for every repository method; "repository writes are named as writes" is unchecked: a write
-  named like a read (`get_or_create`) passes the gate
+- **A module declared read-only calls no repository write — `services/library/local_library_reader.py` and
+  `services/library/views.py`** — check — `scripts/check_read_only_module.py` (the file's own calls only: a write behind
+  a helper, a write passed as a bound method (`run_in_executor(None, uow.roms.save, …)`), an aliased handle, a
+  `getattr`-reached repository, and a repository name not in its list pass green), with
+  `tests/scripts/test_check_read_only_module.py` pinning its name-shape read/write split for every repository method;
+  "repository writes are named as writes" is unchecked: a write named like a read (`get_or_create`) passes the gate
 - **An emitted `sync_progress` frame stops a run (`running: False`) only with a terminal stage, and a terminal stage is
   only ever emitted with the run stopped** — test — `tests/services/library/test_terminal_frame_contract.py` (all of
   `backend/services`, `services/artwork/service.py` included; a helper-assembled frame or an aliased emitter slips past
@@ -758,7 +758,7 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   platform collection its diff counts by the name the names `services/library/_stale_rows.py::with_kept_platform_names`
   answers hold for its slug, else the slug — an emitted entry's and a row left bound's through
   `domain/sync_diff.py::platform_collection_name`, a kept row's by the same lookup in `compute_platform_collection_diff`
-  — which must agree with `SyncReporter._names_with_bound_platforms_kept`; the preview hands that diff every stale row
+  — which must agree with `RunFinalizer._names_with_bound_platforms_kept`; the preview hands that diff every stale row
   `settle_stale_rows` neither removes nor keeps; and the preview and the apply both pick the rebuilt rows they file as
   kept through `domain/sync_diff.py::rebuilt_rows_filed_as_kept`
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every

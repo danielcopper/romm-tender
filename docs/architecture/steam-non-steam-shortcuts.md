@@ -515,8 +515,8 @@ but left Steam's slowdown as it was; a sync over games already filed cost nothin
 
 The `romm_collection_app_ids` wire payload is `name → appIds` **only** — kind/virtual_type are collapsed away before the
 frontend sees them, and the frontend simply wraps each key as `RomM: [<key>] (<hostname>)`. So the Steam-collection name
-is decided **entirely by the reporter's dict key**, which `SyncReporter._resolve_collection_memberships`
-(`services/library/reporter.py`) takes from `domain/collection_label.py::steam_collection_key` under the
+is decided **entirely by the run finalizer's dict key**, which `RunFinalizer._resolve_collection_memberships`
+(`services/library/run_finalizer.py`) takes from `domain/collection_label.py::steam_collection_key` under the
 `collection_naming_mode` setting:
 
 - **`merge`** (default) — the key is the bare collection display name. Same-named RomM collections of any kind union
@@ -541,13 +541,13 @@ they are spelled in these places, and a label change is a change in each:
 - the description of the Steam Library setting that turns the mode on
   (`frontend/src/bigpicture/settings/LibrarySection.tsx`), which gives two as examples;
 - [qam-panel.md](qam-panel.md) § Library, which quotes the three a synced kind gets and the fallback;
-- the format example in `SyncReporter._resolve_collection_memberships`' docstring
-  (`backend/services/library/reporter.py`), and the `virtual_type` comment in `backend/domain/work_unit.py`.
+- the format example in `RunFinalizer._resolve_collection_memberships`' docstring
+  (`backend/services/library/run_finalizer.py`), and the `virtual_type` comment in `backend/domain/work_unit.py`.
 
-`tests/services/library/test_reporter.py` asserts the union keys the reporter builds, so a label change fails there on
-its own. The reporter needs the kind/virtual_type at its union key, so `WorkUnit.virtual_type` and
+`tests/services/library/test_reporter.py` asserts the union keys the run finalizer builds, so a label change fails there
+on its own. The run finalizer needs the kind/virtual_type at its union key, so `WorkUnit.virtual_type` and
 `CollectionMembership.kind` + `CollectionMembership.virtual_type` thread that identity through the fetcher →
-orchestrator → reporter.
+orchestrator → run finalizer.
 
 **Label-format constraint:** the reconcile parses the collection name with `/^RomM: \[([^\]]+)\]/i`
 (`frontend/src/index.tsx`), so a label must contain **no** `]` character — it sits inside the single existing bracket
@@ -556,13 +556,13 @@ produced label is bracket-free (asserted in `tests/domain/test_collection_label.
 
 **No Force Full Sync on a mode flip.** Because the create-name and the reconcile's `activeNames` both derive from the
 same `romm_collection_app_ids` keys, flipping the mode is applied by the ordinary **complete-set reconcile** on the next
-normal sync: the reporter re-emits the complete set of enabled collections under the new keys, `onSyncComplete` creates
-the new-named collections and deletes any old-named collection absent from the new complete set. No skip-state
+normal sync: the run finalizer re-emits the complete set of enabled collections under the new keys, `onSyncComplete`
+creates the new-named collections and deletes any old-named collection absent from the new complete set. No skip-state
 invalidation is involved (same mechanism owner-scope reshaping uses). A change to a label reaches Steam the same way: a
 sync that reaches the collection creates it under its new name, and the first sync that finishes in full (its
 `sync_complete` carries no `cancelled`) deletes the old one — a new Steam collection, not the old one renamed.
 
-**The preview names collections by the same key.** A completed run records the reporter's keys as its
+**The preview names collections by the same key.** A completed run records the run finalizer's keys as its
 `collections_completed`, and the preview's `collection_diff` builds its current set with the same
 `steam_collection_key`, so an unchanged set of Steam collections shows no collection change in either mode, and the
 Added and Removed names the Sync page lists are those keys, the name-part of each Steam collection (`Filter (Smart)`
@@ -585,10 +585,10 @@ dotless `ı` and `i` (measured: CPython 3.13 / Unicode 15.1 against Node 24 / Un
 create/find, joining more is the safe direction: what loses games is a pair Steam holds as one and Tender keeps apart.
 On the delete matchers, joining more means deleting more.
 
-Where the fold applies: the reporter groups both `romm_collection_app_ids` and `platform_app_ids` by the folded key,
-keeping the first-seen original casing for display (which casing wins is irrelevant — every match folds both sides); the
-preview's `collection_diff` and `platform_collection_diff` compare folded names the same way; and the frontend
-create/find (`createOrUpdateCollections` / `createOrUpdateRomMCollections`), the cleanup matchers
+Where the fold applies: the run finalizer groups both `romm_collection_app_ids` and `platform_app_ids` by the folded
+key, keeping the first-seen original casing for display (which casing wins is irrelevant — every match folds both
+sides); the preview's `collection_diff` and `platform_collection_diff` compare folded names the same way; and the
+frontend create/find (`createOrUpdateCollections` / `createOrUpdateRomMCollections`), the cleanup matchers
 (`clearPlatformCollection` / `clearAllRomMCollections`) and the `onSyncComplete` stale-delete (`removeStaleCollections`,
 `frontend/src/index.tsx`) fold the whole name, the `RomM:` prefix and the host suffix included — so a case variant of
 one of this machine's names matches as that name does, while one carrying another machine's suffix does not — a hostname

@@ -418,29 +418,29 @@ Format: **invariant** — tier — enforced by.
   Unseen by the tests: a folder joined onto a root under another name, and a caller that puts the question to
   RetroDECK's handle itself. Prompt-only: a new caller that downloads into, removes from or bounds a removal by a
   RetroDECK folder asks `RetroDeckFolders` and raises the refusal it answers with
-- **A module declared read-only calls no repository write — `services/library/local_library_reader.py` to start** —
-  check — `scripts/check_read_only_module.py` (AST over the declared file's own calls, matching the two-attribute
-  `<...>.<repo>.<method>` shape against the sixteen repositories the UoW exposes). Read or write is decided **by the
-  name's shape** — `get` / `get_*` / `iter_*` / `count` plus the explicitly listed reads — and
+- **A module declared read-only calls no repository write — `services/library/local_library_reader.py` and
+  `services/library/views.py`** — check — `scripts/check_read_only_module.py` (AST over the declared file's own calls,
+  matching the two-attribute `<...>.<repo>.<method>` shape against the sixteen repositories the UoW exposes). Read or
+  write is decided **by the name's shape** — `get` / `get_*` / `iter_*` / `count` plus the explicitly listed reads — and
   `tests/scripts/test_check_read_only_module.py` re-derives every method name from `services/protocols/repositories.py`
   and pins its classification, so a new repository method fails there until it is classified. **The two directions are
   not symmetric.** A read named outside the shapes is called a write: loud, safe. A **write named like a read is called
   a read and passes in silence** — `uow.roms.get_or_create(...)` is green today, which is the very accident class this
   entry is otherwise about, so "repository writes are named as writes" stays a prose rule the gate does not carry. It
   also sees only calls the file itself makes, and only as calls: a write behind a helper it calls, a write **passed as a
-  bound method** (`run_in_executor(None, uow.roms.save, rom)` — an attribute, not a call, and the exact idiom this
-  module's own reads are invoked through), an aliased handle (`repo = uow.roms`), a `getattr`-reached repository, and a
-  repository name not in its list all pass green. What it does catch is the plain `uow.roms.save(...)` dropped into a
-  read module because a UoW was already open there. The declaration earns its keep by making the boundary checkable
-  rather than descriptive: these reads open their own short UoW and are offloaded to an executor at points chosen for
-  cheapness, so a write among them would land at a moment nobody picked. The platform stamp's DELETE sits in
-  `unit_apply.py` on those grounds — it is a write, so a read-only module cannot hold it, and it is cohesive with the
-  half of the apply pipeline that performs it: the DELETE sits with `UnitApplier.apply_unit`, which builds a unit's
-  delta, while the re-stamp went to `ChunkDispatcher._build_final_platform_stamp` with the final chunk whose commit UoW
-  it rides, so the stamp's two ends now sit in two modules and each names the other. **Why the DELETE sits exactly where
-  it sits in that pipeline is a property of its call site, not of its module** — after the fetch, after the artwork,
-  after the cancel guard, before the first chunk (ADR-0023 / #1025) — and that argument lives in full at the call site's
-  own comment, which is the only place a move could not have carried it away from
+  bound method** (`run_in_executor(None, uow.roms.save, rom)` — an attribute, not a call, and the exact idiom
+  `local_library_reader.py`'s reads are invoked through), an aliased handle (`repo = uow.roms`), a `getattr`-reached
+  repository, and a repository name not in its list all pass green. What it does catch is the plain `uow.roms.save(...)`
+  dropped into a read module because a UoW was already open there. The declaration earns its keep by making the boundary
+  checkable rather than descriptive: the reader's reads open their own short UoW and are offloaded to an executor at
+  points chosen for cheapness, so a write among them would land at a moment nobody picked. The platform stamp's DELETE
+  sits in `unit_apply.py` on those grounds — it is a write, so a read-only module cannot hold it, and it is cohesive
+  with the half of the apply pipeline that performs it: the DELETE sits with `UnitApplier.apply_unit`, which builds a
+  unit's delta, while the re-stamp went to `ChunkDispatcher._build_final_platform_stamp` with the final chunk whose
+  commit UoW it rides, so the stamp's two ends now sit in two modules and each names the other. **Why the DELETE sits
+  exactly where it sits in that pipeline is a property of its call site, not of its module** — after the fetch, after
+  the artwork, after the cancel guard, before the first chunk (ADR-0023 / #1025) — and that argument lives in full at
+  the call site's own comment, which is the only place a move could not have carried it away from
 - **An emitted `sync_progress` frame stops a run (`running: False`) only with a terminal stage, and a terminal stage is
   only ever emitted with the run stopped** — test — `tests/services/library/test_terminal_frame_contract.py`
   (structural, AST call sites and dict literals across all of `backend/services` — it covers the error paths a
@@ -680,7 +680,7 @@ Format: **invariant** — tier — enforced by.
   never off the kept ids under `platform_ids`, which a game page's read can widen during the run; which platforms are on
   in Tender is keyed by a RomM id such a platform no longer has, so the route stands in for it. Only a 404 is evidence
   of absence, so every other answer keeps the shortcut. The apply's finalize writes what it established onto the row
-  (`StaleSort.gone_from_romm_marks`, written by `SyncReporter.finalize_per_unit_run`), which is the only evidence the
+  (`StaleSort.gone_from_romm_marks`, written by `RunFinalizer.finalize_per_unit_run`), which is the only evidence the
   removed-game cleanup has for a version reached through a collection or kept on a platform RomM no longer lists, since
   no platform stamp names either; `tests/domain/test_sync_diff.py::TestGoneFromRommMarks` pins which answer writes what,
   and `tests/contract/test_gone_from_romm_mark.py` that the apply marks, a later delivery clears, and a preview writes
@@ -728,7 +728,7 @@ Format: **invariant** — tier — enforced by.
   the preview names every platform collection its diff counts by the name the names
   `services/library/_stale_rows.py::with_kept_platform_names` answers hold for its slug, else the slug — an emitted
   entry's and a row left bound's through `domain/sync_diff.py::platform_collection_name`, a kept row's by the same
-  lookup in `compute_platform_collection_diff` — which must agree with `SyncReporter._names_with_bound_platforms_kept`;
+  lookup in `compute_platform_collection_diff` — which must agree with `RunFinalizer._names_with_bound_platforms_kept`;
   that the preview hands that diff every stale row `settle_stale_rows` neither removes nor keeps; and that both pick the
   rebuilt rows they file as kept through `domain/sync_diff.py::rebuilt_rows_filed_as_kept`. **What breaks without it:**
   a kept row the preview counts as a removal offers Apply on every preview; a game only a collection delivers loses its

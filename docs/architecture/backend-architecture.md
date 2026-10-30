@@ -454,7 +454,9 @@ calls (`wire_library`, which answers the service and its parts as `LibraryParts`
 | `chunk_dispatcher.py`         | `ChunkDispatcher` — one unit's apply as durable chunk round-trips: emit `sync_apply_unit`, wait out the heartbeat clock for the ack, commit the chunk through the reporter, and stash or discard a chunk whose ack never came. It opens no transaction, and the run's `try_begin_run` / `finish_run` stay with the orchestrator and, for a preview, with the preview                                                                                                                                                                                     |
 | `cover_preparer.py`           | `CoverPreparer` — one unit's covers, readied before its shortcuts are emitted: the `refresh_changed_covers` invalidation pass, the download for the ROMs getting a shortcut, and each emitted entry's `cover_path`. Delegated to `ArtworkService` through the `ArtworkManager` seam, with the run's progress and cancel signals bound in                                                                                                                                                                                                                 |
 | `sync_run_recorder.py`        | `SyncRunRecorder` — the run's own `SyncRun` row: the `running` row opened with the planned counts, and the single terminal transition (`completed` / `cancelled` / `interrupted` / `paused` / `errored`) that closes it, each in its own short write UoW. It writes the outcome; **which** terminal a stopped run earns stays the orchestrator's, and admitting or releasing the in-flight run stays `_state.py`'s                                                                                                                                       |
-| `reporter.py`                 | `SyncReporter` — post-apply finalisation (artwork filenames, the per-unit `roms` upsert, the stale unbind and the Steam-collection map) and the `roms`-derived queries, plus the `sync_runs` history reads behind the last-sync line and the run list                                                                                                                                                                                                                                                                                                    |
+| `reporter.py`                 | `SyncReporter` — the apply's ack and each chunk's commit (artwork filenames, the per-unit `roms` upsert with its cached metadata, the completion stamps and the recorded launch commands), and Force Full Sync's reset of those stamps and commands. It emits nothing                                                                                                                                                                                                                                                                                    |
+| `run_finalizer.py`            | `RunFinalizer` — the end of a run: the closing registry write (the stale unbind, the skip revocations, the collection-stamp deletions, the gone-from-RomM marks, the platform-names cache) with the Steam-collection maps built in the same write UoW, and the terminal signals (`sync_complete` and the run's last `sync_progress` frame)                                                                                                                                                                                                               |
+| `views.py`                    | `LibraryViews` — the façade's reads: the `roms`-derived platform counts, and the `sync_runs` history and the completion stamps behind the last-sync line, the resume offer and the run list. Declared read-only (`scripts/check_read_only_module.py`)                                                                                                                                                                                                                                                                                                    |
 | `session_budget.py`           | `SessionBudgetMonitor` — Steam's per-session renderer-heap budget: the GC-settled RSS measurement, the chunk-boundary pause verdict, the headroom clip that trims a chunk's additive cover work to what that verdict left, the post-preview prognosis, the run-start baseline, the `get_session_budget_status` payload, and whether a reading stands at or above the ceiling, which the shortcut artwork job asks through `LibraryService.renderer_above_ceiling` before each batch                                                                      |
 | `shortcut_launch_resolver.py` | `ShortcutLaunchResolver` — resolves each ROM's launch facts for the shortcut bake: the disc-resolved installed path and the active emulator, both handed to `build_shortcuts_data`                                                                                                                                                                                                                                                                                                                                                                       |
 | `_state.py`                   | `LibrarySyncStateBox` — shared mutable in-flight sync state; single source of truth threaded through every sub-service, and the **sole owner** of the run-lifecycle pair (`sync_state` / `current_sync_id`) and of the staged preview snapshot (`pending_delta`, TTL and the run-in-flight withholding included) via its verb methods                                                                                                                                                                                                                    |
@@ -477,11 +479,11 @@ commit) and, in the same write UoW, stamps the ROM's cached `rom_metadata` (`bui
 `metadatum` — Rom row saved first so the `rom_id` FK holds); `SyncRunRecorder` writes the `SyncRun` row (`start` at
 apply-dispatch, `complete` / `mark_cancelled` / `mark_interrupted` / `mark_paused` / `mark_errored` at finalize), with
 the orchestrator deciding which of those terminals a stopped run earns. The terminal `sync_complete` event (and its
-progress frame) is emitted LAST — `reporter.emit_sync_complete`, called by the orchestrator only AFTER that terminal
+progress frame) is emitted LAST — `RunFinalizer.emit_sync_complete`, called by the orchestrator only AFTER that terminal
 `SyncRun` status is persisted — so a frontend stats refetch triggered by the event reads the fresh run status instead of
-racing the write (the #39 lag); `reporter.finalize_per_unit_run` keeps only the stale-unbind + `sync_collections` emit
-and returns the app-id maps. `sync_stats.roms` is a registry-derived bound-shortcut count computed at read time (the
-ROMs still bound to a shortcut in `roms`, i.e. `shortcut_app_id` not NULL), not a stored scalar. The old JSON
+racing the write (the #39 lag); `RunFinalizer.finalize_per_unit_run` keeps only the stale-unbind + `sync_collections`
+emit and returns the app-id maps. `sync_stats.roms` is a registry-derived bound-shortcut count computed at read time
+(the ROMs still bound to a shortcut in `roms`, i.e. `shortcut_app_id` not NULL), not a stored scalar. The old JSON
 `shortcut_registry` / `last_sync` / `sync_stats` are gone from this path; all writes go through the `roms` / `sync_runs`
 Repository Protocols behind a narrow Unit of Work (per
 [ADR-0006](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0006-narrow-unit-of-work-scope.md) the UoW
@@ -982,7 +984,7 @@ game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app
   RomM no longer lists, that collection keeps the name the `platform_names` cache holds; which name names every other
   platform is under [Collection management](steam-non-steam-shortcuts.md#collection-management). Every finalize, a
   stopped run's included, rewrites the cache with the run's listed names and carries forward the name of each platform
-  outside them a bound row is still on (`SyncReporter._names_with_bound_platforms_kept`), so a cancelled or paused run
+  outside them a bound row is still on (`RunFinalizer._names_with_bound_platforms_kept`), so a cancelled or paused run
   in between does not rename the collection to the slug. The preview reads the same name (`do_read_kept_platform_names`,
   through `services/library/_stale_rows.py::with_kept_platform_names`) and counts the collection as kept. A row RomM was
   asked about and did not return keeps its shortcut without being one of the kept rows `settle_stale_rows` answers, and
@@ -1000,7 +1002,7 @@ game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app
   judge a row's game by the group keys of the ROMs the run counts as synced (`domain/sync_diff.py::group_keys_of`): the
   apply reads them off the rows its commits upserted (`do_read_resident_group_keys`), and the preview, which writes
   nothing, lays the keys its fetch stamped over the same read. **Only the apply records what it established**
-  (`StaleSort.gone_from_romm_marks`, written in the finalize's write UoW by `SyncReporter.finalize_per_unit_run`): an
+  (`StaleSort.gone_from_romm_marks`, written in the finalize's write UoW by `RunFinalizer.finalize_per_unit_run`): an
   asked row RomM answered with a proven 404 is marked `roms.gone_from_romm = 'not_found'`, one RomM returned has its
   mark cleared, and an answer that establishes nothing writes nothing; a row kept on a platform RomM no longer lists is
   marked `delisted`. A row kept on a platform the run read whole is not marked, since that platform's stamp already
@@ -1027,13 +1029,13 @@ game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app
   them and still counts their shortcuts as held, so no shortcut moves onto one in the same run. The run keeps them on
   `LibrarySyncStateBox.run_converged`; the finalize of a run that was not stopped takes them out of the stale scan,
   passes them through `select_stale_removals` (#1036) and sends them in `sync_stale` with `kept_rom_id` / `kept_app_id`,
-  the row its game keeps once the run commits (`with_kept_rows_rebound`), and the reporter unbinds them with the stale
-  rows. A stopped run removes nothing. The preview runs the same rule over the listings of the platform units it fetched
-  in full and counts the losers as removals. A collection unit never converges and never sees a loser: it leaves out
-  every member a platform unit synced and every member no listing returns. So two kinds of game keep their shortcuts for
-  good: a game only collections bring in, its platform turned off, and a game on a platform RomM no longer lists — no
-  platform unit reads that platform, so nothing converges it. The panel carries each loser's Steam state over before the
-  removal (`frontend/src/utils/shortcutCarryOver.ts`), then reports the removed appIds through
+  the row its game keeps once the run commits (`with_kept_rows_rebound`), and the run finalizer unbinds them with the
+  stale rows. A stopped run removes nothing. The preview runs the same rule over the listings of the platform units it
+  fetched in full and counts the losers as removals. A collection unit never converges and never sees a loser: it leaves
+  out every member a platform unit synced and every member no listing returns. So two kinds of game keep their shortcuts
+  for good: a game only collections bring in, its platform turned off, and a game on a platform RomM no longer lists —
+  no platform unit reads that platform, so nothing converges it. The panel carries each loser's Steam state over before
+  the removal (`frontend/src/utils/shortcutCarryOver.ts`), then reports the removed appIds through
   `report_converged_removals`, which resets their Steam Input setting and deletes their grid images, and leaves the
   per-ROM cover cache.
 - **Downstream group semantics.** The incremental-skip gate compares RomM's whole visible id set — every sibling, bound
@@ -1057,13 +1059,13 @@ collection, or (multi-user) another account's public collection the list endpoin
 is **by-name** (`RomM: [<name>] (host)`), so both must resolve to the one Steam collection. The finalize accumulator
 (`_state.py` `pending_collection_memberships`) is therefore keyed by a collision-free `(collection_kind, collection_id)`
 identity — the same identity the #742 completion stamp uses — with the display name carried in the
-`CollectionMembership` value; the real-sync and preview write paths share one key builder so they cannot drift. The
-reporter (`_resolve_collection_memberships`) then groups the accumulator's entries by name and **unions** their resolved
-appId sets (order-preserving, de-duplicated across collections; each collection's own resolution already dedups within),
-emitting the unchanged by-name `romm_collection_app_ids: {name → [appId]}` contract — a single-collection name unions a
-set of one and is byte-for-byte the pre-#1503 output. The union runs **after** the owner scope (below): once a foreign
-collection is dropped from the work queue it never reaches the accumulator, so the `own` scope narrows what is unioned
-rather than changing how the union works.
+`CollectionMembership` value; the real-sync and preview write paths share one key builder so they cannot drift. The run
+finalizer (`_resolve_collection_memberships`) then groups the accumulator's entries by name and **unions** their
+resolved appId sets (order-preserving, de-duplicated across collections; each collection's own resolution already dedups
+within), emitting the unchanged by-name `romm_collection_app_ids: {name → [appId]}` contract — a single-collection name
+unions a set of one and is byte-for-byte the pre-#1503 output. The union runs **after** the owner scope (below): once a
+foreign collection is dropped from the work queue it never reaches the accumulator, so the `own` scope narrows what is
+unioned rather than changing how the union works.
 
 **Collection kinds — one `virtual` kind covers RomM's browsable virtual types (#1538).** `get_collections` and
 `build_work_queue` group collections into three internal kinds: `standard`, `smart`, and `virtual`. RomM's own UI calls
@@ -1212,12 +1214,12 @@ interrupted by a crash / cancel / heartbeat-timeout before the final chunk leave
 removal on an unprocessed platform **revoke the stamp's skip** (`PlatformSyncStateRepository.revoke_skip`, the
 `skip_revoked` column of migration `025`) in the same write UoW as the unbind: the **local destructive flows** — "Remove
 all shortcuts" and per-platform removals (via `report_removal_results`) plus the Steam-UI-deletion reconcile
-(`reconcile_live_shortcuts`) — for every platform they touch, and the reporter's server-side **stale removal** for every
-platform the run did not process that it unbinds a row on. A platform the run did not process is one that was not among
-its platform units: its sync is turned off, or RomM no longer lists it. Where an enabled collection keeps one of that
-platform's games bound, a stamp still able to skip would let the platform skip once it is processed again: the bound
-rows keep the zero-bound guard quiet, and RomM's id set still matches the stamp's checksum, so the skip rebuilds the
-unit from the bound rows alone and never re-creates the unbound games' shortcuts. On a platform the run processed,
+(`reconcile_live_shortcuts`) — for every platform they touch, and the run finalizer's server-side **stale removal** for
+every platform the run did not process that it unbinds a row on. A platform the run did not process is one that was not
+among its platform units: its sync is turned off, or RomM no longer lists it. Where an enabled collection keeps one of
+that platform's games bound, a stamp still able to skip would let the platform skip once it is processed again: the
+bound rows keep the zero-bound guard quiet, and RomM's id set still matches the stamp's checksum, so the skip rebuilds
+the unit from the bound rows alone and never re-creates the unbound games' shortcuts. On a platform the run processed,
 skipped or fetched alike, the stale removal leaves the skip, because nothing the skip reads changes: a skipped
 platform's rebuilt rows are all among the rows the run returned, so none of them is stale, and a fetched platform was
 stamped by that run with a generation no stale row carries. Removed-game cleanup's own unbinds leave the skip too; why
@@ -1314,7 +1316,7 @@ stamped, so they are not counted.
 **A collection stamp is deleted, not revoked, when a local removal, the stale removal or removed-game cleanup's row
 delete reaches one of its members.** A skipped collection replays its `CollectionSyncState`'s `member_rom_ids` and
 passes over a member that is no longer bound, so a stamp standing over an unbound member lets the collection skip and
-never re-creates that member's shortcut. The local destructive flows, the reporter's stale removal and removed-game
+never re-creates that member's shortcut. The local destructive flows, the run finalizer's stale removal and removed-game
 cleanup's row delete therefore delete every collection stamp whose member set holds one of the rows they remove, unbind
 or delete, in the same write UoW (`CollectionSyncStateRepository.delete_intersecting`). Removed-game discovery, its
 canary ids and the Library page's `reachable_count` — the readers a platform stamp is kept for — read no collection
@@ -3651,7 +3653,7 @@ Protocol-typed (services never import each other's concrete classes). Selected w
 
 | Service                     | Key injected dependencies                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **LibraryService**          | the parts it calls (`LibrarySyncStateBox`, `LibraryFetcher`, `SyncProgress`, `SessionBudgetMonitor`, `SyncReporter`, `SyncPreview`, `SyncOrchestrator`), `ConflictRules` (the rules its use cases check at their entry), the live settings; its parts, built by `bootstrap/library.py`, take `RommLibraryApi`, `SteamConfigStore`, `ArtworkManager`, `Clock`/`UuidGen`/`Sleeper`, `SettingsPersister`, `UnitOfWorkFactory` (roms / sync_runs / kv_config / rom_metadata), `ConflictRules` (the leases `sync_complete` and `sync_stale` carry), `ShortcutArtworkJob` (the placeholder icon's path, and a run requested at each sync's end)                                                      |
+| **LibraryService**          | the parts it calls (`LibrarySyncStateBox`, `LibraryFetcher`, `SyncProgress`, `SessionBudgetMonitor`, `SyncReporter`, `LibraryViews`, `SyncPreview`, `SyncOrchestrator`), `ConflictRules` (the rules its use cases check at their entry), the live settings; its parts, built by `bootstrap/library.py`, take `RommLibraryApi`, `SteamConfigStore`, `ArtworkManager`, `Clock`/`UuidGen`/`Sleeper`, `SettingsPersister`, `UnitOfWorkFactory` (roms / sync_runs / kv_config / rom_metadata), `ConflictRules` (the leases `sync_complete` and `sync_stale` carry), `ShortcutArtworkJob` (the placeholder icon's path, and a run requested at each sync's end)                                      |
 | **MetadataService**         | `UnitOfWorkFactory` (reads `rom_metadata` / `roms`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **SaveService**             | `RommApi`, `RetryStrategy`, `SaveFileStore`, `UnitOfWorkFactory` (`rom_save_sync_states` / `rom_save_files` / `answered_save_directories`), `Clock`, `RetroDeckFolders`, `SaveLocationReader`, `PlatformSystems`, `ActiveCoreReader`, `UpdateInProgressFn` and `MigrationPendingFn` (the sync engine's own update and RetroDECK migration backstops), `ConflictRules` (the rules its use cases check at their entry), `RunningRomIdsFn` (the games a save path leaves alone while they run)                                                                                                                                                                                                    |
 | **DownloadService**         | its parts (`DownloadsStateBox`, `DownloadQueue`, `DownloadTransfer`, `DownloadUnpacker`), `RommApi`, `DownloadFileStore`, `RetroDeckFolders`, `PlatformSystems`, `UnitOfWorkFactory`, `DownloadTargetGateFn` + `RomRemoverProvider` cross-service seams (the queue takes `Clock`; the transfer and the unpacker take `RomInstallRecorder`), `ConflictRules` (the rules a start and a resume check at their entry and the operation a download's task holds; the transfer takes the lease a bound ROM's `download_complete` carries)                                                                                                                                                            |

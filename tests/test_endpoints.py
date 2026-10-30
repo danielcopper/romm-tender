@@ -99,7 +99,7 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     # RetroDECK state; takes effect on the next sync's work-queue build.
     "set_collection_owner_scope",
     # Collection naming mode (#1539) — a settings.json-only write, never touches
-    # RetroDECK state; takes effect on the next sync's reporter-key build.
+    # RetroDECK state; takes effect on the next sync's run-finalizer key build.
     "set_collection_naming_mode",
     # Quick Access entry position — a settings.json-only write, never touches
     # RetroDECK state; the panel reads it on the next render pass of the menu.

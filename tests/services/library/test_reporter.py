@@ -1,4 +1,4 @@
-"""Tests for SyncReporter — post-apply roms upserts, finalisation, registry queries."""
+"""Tests for SyncReporter, RunFinalizer and LibraryViews — post-apply roms upserts, finalisation, registry queries."""
 
 import json
 import os
@@ -1731,7 +1731,7 @@ class TestGetSyncStatsResumeInputs:
 
 
 class TestFinalizePerUnitRun:
-    """SyncReporter.finalize_per_unit_run (stale unbind + sync_collections) and the
+    """RunFinalizer.finalize_per_unit_run (stale unbind + sync_collections) and the
     separate emit_sync_complete (terminal sync_complete + progress frame, emitted
     LAST by the orchestrator after the SyncRun write, #39)."""
 
