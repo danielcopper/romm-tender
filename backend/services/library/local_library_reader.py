@@ -228,7 +228,7 @@ class LocalLibraryReader:
         """Every ``rom_id`` the sync's collection filing resolves to a shortcut.
 
         :func:`domain.sibling_resolution.reachable_rom_ids` over every row — the
-        same set ``SyncReporter._member_app_id`` answers, member by member. One
+        same set ``RunFinalizer._member_app_id`` answers, member by member. One
         short read UoW.
         """
         with self._uow_factory() as uow:
@@ -264,7 +264,7 @@ class LocalLibraryReader:
         Unbound (stale) rows are skipped — they were already cleared on a
         prior run and carry no Steam shortcut to remove. The ``app_id`` is
         the still-live ``shortcut_app_id`` captured here, before the
-        reporter's finalize unbinds the row; the orchestrator threads it
+        run finalizer unbinds the row; the orchestrator threads it
         into the ``sync_stale`` payload so the frontend removes the Steam
         shortcut without re-resolving rom_id→app_id after the unbind.
 

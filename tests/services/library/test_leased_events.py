@@ -16,7 +16,7 @@ from tests.services.library._helpers import _seed_rom_row
 
 
 async def _emit_sync_complete(library) -> None:
-    await library.sync._reporter.emit_sync_complete(
+    await library.run_finalizer.emit_sync_complete(
         platform_app_ids={},
         romm_collection_app_ids={},
         total_games=0,

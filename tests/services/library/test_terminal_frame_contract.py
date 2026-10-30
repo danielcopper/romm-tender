@@ -17,7 +17,7 @@ three of which exist today:
 
 * a call to ``SyncProgress.emit_progress`` — made directly by the preview and
   the orchestrator, through an injected ``_emit_progress`` by the unit applier
-  and the reporter, through ``_fetch_pages.py``'s page loop by both fetchers, and
+  and the run finalizer, through ``_fetch_pages.py``'s page loop by both fetchers, and
   by ``services/artwork/service.py`` through an ``emit_progress`` callable the
   cover preparer passes in per operation;
 * a direct write of the frame to ``sync_progress``, which the CANCELLED and the
@@ -70,7 +70,7 @@ _KNOWN_PRODUCERS = frozenset(
         "services/library/sync_preview.py",
         "services/library/sync_progress.py",
         "services/library/unit_apply.py",
-        "services/library/reporter.py",
+        "services/library/run_finalizer.py",
         "services/artwork/service.py",
     }
 )

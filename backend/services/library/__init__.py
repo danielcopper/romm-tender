@@ -5,10 +5,10 @@ endpoints call for platform/collection metadata, sync preview/apply,
 post-apply reporting and the ``roms``-derived queries. Its parts — the library
 sync sub-services (:class:`LibraryFetcher`, :class:`CollectionFetcher`,
 :class:`SyncOrchestrator`, :class:`UnitApplier`, :class:`SyncPreview`,
-:class:`SyncProgress`, :class:`SyncReporter`, :class:`SessionBudgetMonitor`,
-:class:`ShortcutLaunchResolver`, :class:`ChunkDispatcher`, :class:`CoverPreparer`,
-:class:`SyncRunRecorder`, :class:`LocalLibraryReader`) over a shared
-:class:`LibrarySyncStateBox` — are built only by the composition root, from
+:class:`SyncProgress`, :class:`SyncReporter`, :class:`RunFinalizer`,
+:class:`SessionBudgetMonitor`, :class:`ShortcutLaunchResolver`,
+:class:`ChunkDispatcher`, :class:`CoverPreparer`, :class:`SyncRunRecorder`,
+:class:`LocalLibraryReader`) over a shared :class:`LibrarySyncStateBox` — are built only by the composition root, from
 the re-exports below, and handed to the parts that hold them. RomM
 communication goes through Protocol-typed adapters.
 """
@@ -20,6 +20,7 @@ from services.library.cover_preparer import CoverPreparer, CoverPreparerConfig
 from services.library.fetcher import LibraryFetcher, LibraryFetcherConfig
 from services.library.local_library_reader import LocalLibraryReader, LocalLibraryReaderConfig
 from services.library.reporter import SyncReporter, SyncReporterConfig
+from services.library.run_finalizer import RunFinalizer, RunFinalizerConfig
 from services.library.service import LibraryService, LibraryServiceConfig
 from services.library.session_budget import SessionBudgetMonitor, SessionBudgetMonitorConfig
 from services.library.shortcut_launch_resolver import ShortcutLaunchResolver, ShortcutLaunchResolverConfig
@@ -43,6 +44,8 @@ __all__ = [
     "LibrarySyncStateBox",
     "LocalLibraryReader",
     "LocalLibraryReaderConfig",
+    "RunFinalizer",
+    "RunFinalizerConfig",
     "SessionBudgetMonitor",
     "SessionBudgetMonitorConfig",
     "ShortcutLaunchResolver",

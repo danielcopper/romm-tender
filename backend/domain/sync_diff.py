@@ -275,7 +275,7 @@ def collapse_sibling_groups(
       that platform unit in the same run; where only collections reach the
       group, the stale removal keeps the binding, since the run delivered a
       member of its group (:func:`sort_stale_rows`). The unbound fetched members
-      still persist via ``pending_all_roms`` and the reporter's collection
+      still persist via ``pending_all_roms`` and the run finalizer's collection
       group-fallback places the group's shortcut in the Steam collection.
 
     Bound rows are grouped by their FETCHED sibling key when the row is in this
@@ -813,12 +813,12 @@ def compute_collection_diff(
     one (RomM permits same-named ones across kinds/users, #1503) collapse to one
     entry, matching the by-name Steam collection they merge into.
     ``last_synced_collections`` is the last completed run's record of the same
-    keys. The reporter records no key for a collection none of whose members
+    keys. The run finalizer records no key for a collection none of whose members
     resolved to a Steam appId, so such a collection reads as added.
 
     Names are compared **case-insensitively**
     (:func:`domain.collection_name.fold_collection_name`), because Steam's
-    collection identity ignores case: the reporter merges keys that differ only in
+    collection identity ignores case: the run finalizer merges keys that differ only in
     case into one Steam collection and records one spelling of it. So a change of
     case alone is no change, and case variants on one side count once. An added
     name is spelled as the current side has it and a removed one as the record

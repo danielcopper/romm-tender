@@ -94,13 +94,13 @@ class TestReachableRomIds:
         assert library.local_library_reader.do_read_reachable_rom_ids() == set()
 
     def test_agrees_with_the_syncs_collection_filing(self, library):
-        """The set is exactly the rom_ids ``SyncReporter._member_app_id`` resolves to a shortcut.
+        """The set is exactly the rom_ids ``RunFinalizer._member_app_id`` resolves to a shortcut.
 
-        Two copies of one rule: the reporter resolves each collection member at
+        Two copies of one rule: the run finalizer resolves each collection member at
         filing time, this reader answers the whole set for the collections
         listing. One mixed table holds every shape either could get wrong.
         """
-        from services.library.reporter import SyncReporter
+        from services.library.run_finalizer import RunFinalizer
 
         _seed_rom_row(library, 1, app_id=100, platform_slug="n64", sibling_group_key=None)
         _seed_rom_row(library, 2, app_id=None, platform_slug="n64", sibling_group_key=None)
@@ -114,13 +114,13 @@ class TestReachableRomIds:
 
         reachable = library.local_library_reader.do_read_reachable_rom_ids()
 
-        reporter = library.sync._reporter
+        run_finalizer = library.run_finalizer
         with library.uow as uow:
-            _platform_app_ids, group_bound = reporter._scan_bound_rows(uow, None, {})
+            _platform_app_ids, group_bound = run_finalizer._scan_bound_rows(uow, None, {})
             filed = {
                 rid
                 for rid in (1, 2, 3, 4, 5, 6, 7, 8, missing)
-                if SyncReporter._member_app_id(uow, rid, group_bound) is not None
+                if RunFinalizer._member_app_id(uow, rid, group_bound) is not None
             }
         assert reachable == filed
         assert reachable == {1, 3, 4, 7, 8}

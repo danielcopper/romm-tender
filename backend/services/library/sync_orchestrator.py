@@ -13,8 +13,9 @@ chunk's emit rather than at run admission. One unit's apply belongs to
 :class:`UnitApplier`; the preview, its staged snapshot and its cancel to
 :class:`SyncPreview`; the ``sync_progress`` frames and the status read to
 :class:`SyncProgress`. Anything that fetches ROMs belongs in
-:class:`LibraryFetcher`; anything that finalises shortcuts after the apply
-completes belongs in :class:`SyncReporter`; Steam's renderer memory belongs in
+:class:`LibraryFetcher`; anything that commits an applied chunk belongs in
+:class:`SyncReporter`, and the run's closing registry write and terminal signals
+in :class:`RunFinalizer`; Steam's renderer memory belongs in
 :class:`SessionBudgetMonitor`; the run's own ``SyncRun`` row — opened at the
 plan, closed once by the status that ended the run — belongs in
 :class:`SyncRunRecorder`; reading the registry and the completion stamps into
@@ -57,7 +58,7 @@ if TYPE_CHECKING:
     from services.library.collection_fetcher import CollectionDelivery
     from services.library.fetcher import LibraryFetcher
     from services.library.local_library_reader import LocalLibraryReader
-    from services.library.reporter import SyncReporter
+    from services.library.run_finalizer import RunFinalizer
     from services.library.shortcut_launch_resolver import ShortcutLaunchResolver
     from services.library.sync_progress import SyncProgress
     from services.library.sync_run_recorder import SyncRunRecorder
@@ -88,7 +89,7 @@ class SyncOrchestratorConfig:
     test seams, the shared :class:`LibrarySyncStateBox`, the
     :class:`LibraryFetcher` peer the orchestrator takes the work queue from and
     asks RomM about a stale row through, and the :class:`UnitApplier` each unit
-    is applied by. The ``reporter`` finalises the run's collections and emits
+    is applied by. The ``run_finalizer`` finalises the run's collections and emits
     ``sync_complete``. The ``shortcut_launch_resolver`` peer is asked for the one
     reading of the emulator sources a run takes. The ``local_library_reader``
     peer answers what the run asks of this device's own record of the library —
@@ -114,7 +115,7 @@ class SyncOrchestratorConfig:
     sync_state_box: LibrarySyncStateBox
     fetcher: LibraryFetcher
     unit_applier: UnitApplier
-    reporter: SyncReporter
+    run_finalizer: RunFinalizer
     shortcut_launch_resolver: ShortcutLaunchResolver
     local_library_reader: LocalLibraryReader
     session_budget: SessionBudgetMonitor
@@ -129,7 +130,7 @@ class SyncOrchestratorConfig:
 class FinalizeOutcome:
     """What ``_finalize_per_unit`` produces for the run's terminal phase.
 
-    Carries the reporter's collection maps (the completed-run ``SyncRun`` write
+    Carries the run finalizer's collection maps (the completed-run ``SyncRun`` write
     needs their keys) plus the two session-budget surfacing values computed at
     finalize (``interrupt_reason`` / ``restart_recommended``), so the orchestrator
     can persist the terminal ``SyncRun`` status FIRST and only THEN emit
@@ -153,7 +154,7 @@ class SyncOrchestrator:
         self._sync_state = config.sync_state_box
         self._fetcher = config.fetcher
         self._unit_applier = config.unit_applier
-        self._reporter = config.reporter
+        self._run_finalizer = config.run_finalizer
         self._shortcut_launch_resolver = config.shortcut_launch_resolver
         self._local_library_reader = config.local_library_reader
         self._session_budget = config.session_budget
@@ -252,7 +253,7 @@ class SyncOrchestrator:
         # Cross-unit accumulators — built up unit-by-unit, consumed by the
         # final phase. ``synced_rom_ids`` is shared with collection units
         # for dedup. ``collection_memberships`` and ``platform_rom_ids``
-        # feed the reporter's ``_build_collection_app_ids`` once every
+        # feed the run finalizer's ``_build_collection_app_ids`` once every
         # unit has been applied. ``total_games_applied`` is the run's
         # processed-ROM count — wholesale skips, delta-skips, and committed
         # applies alike — surfaced as ``total_games`` (the terminal frame's
@@ -399,9 +400,9 @@ class SyncOrchestrator:
 
             # Final phase: stale cleanup + Steam collections + sync_complete.
             # Surface a non-terminal finalizing snapshot before the terminal
-            # done/cancelled emit so the bar stays full while the reporter
+            # done/cancelled emit so the bar stays full while the run finalizer
             # commits collections. Cancelled runs skip it — their next emit
-            # is the terminal cancelled snapshot from the reporter.
+            # is the terminal cancelled snapshot from the run finalizer.
             if not cancelled:
                 await self._progress.emit_progress(
                     SyncStage.FINALIZING,
@@ -425,7 +426,7 @@ class SyncOrchestrator:
             # ``sync_complete`` / the terminal progress frame reads the fresh run
             # status instead of racing the DB write (#39). The error path below never
             # reaches here, so it never double-emits sync_complete.
-            await self._reporter.emit_sync_complete(
+            await self._run_finalizer.emit_sync_complete(
                 platform_app_ids=outcome.platform_app_ids,
                 romm_collection_app_ids=outcome.romm_collection_app_ids,
                 total_games=total_games_applied,
@@ -527,7 +528,7 @@ class SyncOrchestrator:
         """Emit stale-removal + collection mappings; measure the run's memory delta.
 
         Does NOT emit the terminal ``sync_complete`` — that is deferred to the
-        caller's :meth:`SyncReporter.emit_sync_complete` after the terminal SyncRun
+        caller's :meth:`RunFinalizer.emit_sync_complete` after the terminal SyncRun
         write (#39). Returns a :class:`FinalizeOutcome` carrying the collection maps
         (the completed-run write needs their keys) plus the ``interrupt_reason`` /
         ``restart_recommended`` surfacing values the deferred emit needs.
@@ -536,7 +537,7 @@ class SyncOrchestrator:
         # seen by any processed unit. Only meaningful on a non-cancelled run
         # — a partial run can't tell "stale" from "didn't get to it yet".
         # Each entry carries the ROM's ``shortcut_app_id`` as read BEFORE the
-        # reporter's finalize unbinds it (which NULLs the binding); the
+        # run finalizer unbinds it (which NULLs the binding); the
         # frontend removes the Steam shortcut directly by ``app_id`` so it
         # never has to re-resolve rom_id→app_id after the binding is gone.
         # ``committed_app_ids`` (every appId this run bound, across both commit
@@ -625,7 +626,7 @@ class SyncOrchestrator:
             self._logger.debug(f"Session-budget terminal advisory/delta skipped: {e}")
         self._sync_state.last_run_delta_kb = memory_delta_kb
 
-        platform_app_ids, romm_collection_app_ids = await self._reporter.finalize_per_unit_run(
+        platform_app_ids, romm_collection_app_ids = await self._run_finalizer.finalize_per_unit_run(
             pending_collection_memberships=collection_memberships,
             pending_platform_rom_ids=platform_rom_ids,
             platform_names=dict(self._sync_state.run_listed_platform_names),

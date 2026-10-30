@@ -1742,7 +1742,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
         library.settings["collection_create_platform_groups"] = True
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
@@ -1768,7 +1768,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=None, platform_slug="snes", name="B (unbound)")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="Faves", rom_ids=[1, 2], kind="standard")
             },
@@ -1792,7 +1792,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="Game (USA)", group_key="g")
         _seed_rom(uow, 2, app_id=None, platform_slug="n64", name="Game (JP)", group_key="g")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             # the UNBOUND sibling is collected
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="Faves", rom_ids=[2], kind="standard")
@@ -1817,7 +1817,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="Game (USA)", group_key="g")
         _seed_rom(uow, 2, app_id=None, platform_slug="n64", name="Game (JP)", group_key="g")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="Faves", rom_ids=[2], kind="standard")
             },
@@ -1838,7 +1838,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="Game (USA)", group_key="g")
         _seed_rom(uow, 2, app_id=None, platform_slug="n64", name="Game (JP)", group_key="g")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             # BOTH siblings collected
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="Faves", rom_ids=[1, 2], kind="standard")
@@ -1865,7 +1865,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="X", rom_ids=[1], kind="standard"),
                 ("smart", "9"): CollectionMembership(name="X", rom_ids=[2], kind="smart"),
@@ -1887,7 +1887,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="X", rom_ids=[1, 2], kind="standard"),
                 ("smart", "9"): CollectionMembership(name="X", rom_ids=[1], kind="smart"),
@@ -1914,7 +1914,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="Alpha", rom_ids=[1], kind="standard"),
                 ("smart", "9"): CollectionMembership(name="Beta", rom_ids=[2], kind="smart"),
@@ -1929,7 +1929,7 @@ class TestFinalizePerUnitRun:
 
     @pytest.mark.asyncio
     async def test_by_label_keys_a_single_collection_with_its_type_label(self, library, emit):
-        """``by_label`` mode appends the type label to the reporter key.
+        """``by_label`` mode appends the type label to the run finalizer's key.
 
         The key becomes ``"<name> (<Label>)"`` so the frontend builds
         ``RomM: [<name> (Label)]``. Default ``merge`` would key by the bare name.
@@ -1939,7 +1939,7 @@ class TestFinalizePerUnitRun:
         uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={
                 ("virtual", "vc-1"): CollectionMembership(
                     name="coll-a", rom_ids=[1], kind="virtual", virtual_type="franchise"
@@ -1967,7 +1967,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="shared-name", rom_ids=[1], kind="standard"),
                 ("virtual", "vc-9"): CollectionMembership(
@@ -1994,7 +1994,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={
                 ("virtual", "vc-f"): CollectionMembership(
                     name="shared-name", rom_ids=[1], kind="virtual", virtual_type="franchise"
@@ -2027,7 +2027,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="Faves", rom_ids=[1], kind="standard"),
                 ("standard", "8"): CollectionMembership(name="Faves", rom_ids=[2], kind="standard"),
@@ -2049,7 +2049,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="Kids", rom_ids=[1], kind="standard"),
                 ("smart", "9"): CollectionMembership(name="Kids", rom_ids=[2], kind="smart"),
@@ -2077,7 +2077,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="Foo (Smart)", rom_ids=[1], kind="standard"),
                 ("smart", "9"): CollectionMembership(name="Foo", rom_ids=[2], kind="smart"),
@@ -2103,7 +2103,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="shared-name", rom_ids=[1], kind="standard"),
                 ("virtual", "vc-9"): CollectionMembership(
@@ -2123,7 +2123,7 @@ class TestFinalizePerUnitRun:
         """Two names differing ONLY by case union into ONE key under merge (#1569).
 
         The data-loss guard: Steam collapses "7 up" and "7 Up" onto one
-        case-insensitive collection, so the reporter must emit a single key with
+        case-insensitive collection, so the run finalizer must emit a single key with
         BOTH member sets — otherwise the second Steam create overwrites the first
         and its games are lost. First-seen casing wins for display.
         """
@@ -2134,7 +2134,7 @@ class TestFinalizePerUnitRun:
         for rid, aid in [(1, 1001), (2, 1002), (3, 1003), (4, 1004), (5, 1005), (6, 1006), (7, 1007)]:
             _seed_rom(uow, rid, app_id=aid, platform_slug="n64", name=f"g{rid}")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="7 up", rom_ids=[1, 2], kind="standard"),
                 ("virtual", "vc-1"): CollectionMembership(
@@ -2159,7 +2159,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="n64", name="B")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="\u0131x", rom_ids=[1], kind="standard"),
                 ("standard", "8"): CollectionMembership(name="Ix", rom_ids=[2], kind="standard"),
@@ -2181,7 +2181,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="abc", rom_ids=[1], kind="standard"),
                 ("standard", "8"): CollectionMembership(name="ABC", rom_ids=[2], kind="standard"),
@@ -2204,7 +2204,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="abc", rom_ids=[1], kind="standard"),
                 ("virtual", "vc-9"): CollectionMembership(
@@ -2231,7 +2231,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 1, app_id=1001, platform_slug="a", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="b", name="B")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids={1, 2},
             platform_names={"a": "Retro", "b": "retro"},
@@ -2254,7 +2254,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 1, app_id=1001, platform_slug="a", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="b", name="B")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids={1, 2},
             platform_names={"a": "\u0131x", "b": "Ix"},
@@ -2267,7 +2267,7 @@ class TestFinalizePerUnitRun:
 
     @pytest.mark.asyncio
     async def test_emit_sync_complete_terminal(self, library, emit):
-        await library.sync._reporter.emit_sync_complete(
+        await library.run_finalizer.emit_sync_complete(
             platform_app_ids={},
             romm_collection_app_ids={},
             total_games=0,
@@ -2286,7 +2286,7 @@ class TestFinalizePerUnitRun:
 
     @pytest.mark.asyncio
     async def test_emit_sync_complete_carries_restart_recommended_on_clean_run(self, library, emit):
-        await library.sync._reporter.emit_sync_complete(
+        await library.run_finalizer.emit_sync_complete(
             platform_app_ids={},
             romm_collection_app_ids={},
             total_games=0,
@@ -2305,7 +2305,7 @@ class TestFinalizePerUnitRun:
 
         library.sync._box.run_interrupted = False
 
-        await library.sync._reporter.emit_sync_complete(
+        await library.run_finalizer.emit_sync_complete(
             platform_app_ids={},
             romm_collection_app_ids={},
             total_games=3,
@@ -2331,7 +2331,7 @@ class TestFinalizePerUnitRun:
         library.sync._box.run_interrupted = True
         library.sync._box.run_total_items = 10
 
-        await library.sync._reporter.emit_sync_complete(
+        await library.run_finalizer.emit_sync_complete(
             platform_app_ids={},
             romm_collection_app_ids={},
             total_games=3,
@@ -2352,7 +2352,7 @@ class TestFinalizePerUnitRun:
         """A budget-pause interrupt_reason rides the payload AND becomes the terminal
         frame message verbatim (resume-friendly guidance, #1383)."""
 
-        await library.sync._reporter.emit_sync_complete(
+        await library.run_finalizer.emit_sync_complete(
             platform_app_ids={},
             romm_collection_app_ids={},
             total_games=2,
@@ -2381,7 +2381,7 @@ class TestFinalizePerUnitRun:
         box.run_interrupted = True
         assert box.run_total_items is None
 
-        await library.sync._reporter.emit_sync_complete(
+        await library.run_finalizer.emit_sync_complete(
             platform_app_ids={},
             romm_collection_app_ids={},
             total_games=1,
@@ -2404,7 +2404,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 2, app_id=None, platform_slug="n64", name="Game B")
         _seed_rom(uow, 3, app_id=1003, platform_slug="n64", name="Game C")
 
-        await library.sync._reporter.emit_sync_complete(
+        await library.run_finalizer.emit_sync_complete(
             platform_app_ids={"n64": [1001, 1003]},
             romm_collection_app_ids={},
             total_games=2,
@@ -2422,7 +2422,7 @@ class TestFinalizePerUnitRun:
         """finalize_per_unit_run + emit_sync_complete never touch the run lifecycle (#1202).
 
         The IDLE/None reset lives in the orchestrator's single run-scoped
-        ``finally: box.finish_run(run_id)``; the reporter only unbinds/collects and
+        ``finally: box.finish_run(run_id)``; the run finalizer only unbinds/collects and
         emits, leaving ``sync_state`` / ``current_sync_id`` untouched.
         """
 
@@ -2431,7 +2431,7 @@ class TestFinalizePerUnitRun:
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "sync-xyz"
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids=set(),
             platform_names={},
@@ -2450,7 +2450,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
         _seed_rom(uow, 3, app_id=1003, platform_slug="gba", name="C")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
@@ -2475,7 +2475,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
@@ -2497,7 +2497,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="Stale bound")
         _seed_rom(uow, 5, app_id=None, platform_slug="gba", name="Already unbound")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
@@ -2523,7 +2523,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids={1, 2},
             platform_names={},
@@ -2542,7 +2542,7 @@ class TestFinalizePerUnitRun:
         _stamp_fetch(uow, "n64", rom_count=1, fetch_id="run-1", seen=[1])
         _stamp_fetch(uow, "snes", rom_count=1, fetch_id="run-0", seen=[2])
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
@@ -2567,7 +2567,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 2, app_id=1002, platform_slug="n64", name="Dropped")
         _stamp_fetch(uow, "n64", rom_count=1, fetch_id="run-1", seen=[1])
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
@@ -2591,7 +2591,7 @@ class TestFinalizePerUnitRun:
         _stamp_fetch(uow, "snes", rom_count=1, fetch_id="run-0", seen=[5])
         _stamp_fetch(uow, "gba", rom_count=1, fetch_id="run-0", seen=[6])
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
@@ -2617,7 +2617,7 @@ class TestFinalizePerUnitRun:
         _stamp_fetch(uow, "n64", rom_count=1, fetch_id="run-1", seen=[1])
         _stamp_fetch(uow, "snes", rom_count=1, fetch_id="run-0", seen=[2])
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
@@ -2638,7 +2638,7 @@ class TestFinalizePerUnitRun:
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
         _stamp_collection(uow, "7", kind, member_rom_ids=(2, 3))
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
@@ -2659,7 +2659,7 @@ class TestFinalizePerUnitRun:
         _stamp_collection(uow, "7", "standard", member_rom_ids=(1,))
         _stamp_collection(uow, "8", "smart", member_rom_ids=(5,))
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
@@ -2687,7 +2687,7 @@ class TestFinalizePerUnitRun:
         with uow:
             uow.sync_runs.save(run)
 
-        await library.sync._reporter.finalize_per_unit_run(
+        await library.run_finalizer.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},

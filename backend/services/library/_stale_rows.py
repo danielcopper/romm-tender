@@ -104,7 +104,7 @@ async def with_kept_platform_names(
     *platform_slugs* must cover every platform the preview's
     platform-collection diff and per-platform table name. Must answer, for each, the name the apply's
     finalize carries forward
-    (``SyncReporter._names_with_bound_platforms_kept``). *read_kept_names* is
+    (``RunFinalizer._names_with_bound_platforms_kept``). *read_kept_names* is
     asked only when such a platform exists.
     """
     outside = set(platform_slugs) - listed.keys()

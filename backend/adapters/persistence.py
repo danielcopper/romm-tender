@@ -71,7 +71,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "collection_owner_scope": "all",
     # Steam-collection naming mode: ``"merge"`` (default) or ``"by_label"``, as
     # docs/architecture/steam-non-steam-shortcuts.md § Collection naming mode
-    # describes. Applies on the next normal sync via the reporter key +
+    # describes. Applies on the next normal sync via the run finalizer's key +
     # complete-set reconcile.
     "collection_naming_mode": "merge",
     # Where Tender's Quick Access entry sits beside Decky Loader's: ``"above_decky"``

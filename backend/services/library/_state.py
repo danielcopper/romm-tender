@@ -73,14 +73,14 @@ class CollectionMembership:
     whose key is a collision-free ``(collection_kind, collection_id)`` identity so
     two collections that merely SHARE a display name never overwrite each other's
     members in the finalize accumulator. The name rides here in the value because
-    Steam's collection namespace is by-name: the reporter groups same-named
+    Steam's collection namespace is by-name: the run finalizer groups same-named
     memberships and UNIONs their resolved appIds into the one
     ``RomM: [<name>] (host)`` Steam collection (RomM permits same-named collections
     across kinds/users, so Tender merges rather than owner-filters, #1503).
 
     ``kind`` (``"standard"`` / ``"smart"`` / ``"virtual"``) and — for the virtual
     kind — ``virtual_type`` (``"franchise"`` / ``"collection"``) ride here too so
-    the reporter can build the type label under the ``by_label`` naming
+    the run finalizer can build the type label under the ``by_label`` naming
     mode (``domain.collection_label``); in the default ``merge`` mode they are
     unused and same-named collections still union by name.
     """
@@ -173,7 +173,7 @@ class LibrarySyncStateBox:
     # Per-run collection-membership accumulator, keyed by a collision-free
     # ``(collection_kind, collection_id)`` identity (never the display name), so
     # two collections that share a name each keep their own members. The name
-    # travels in the :class:`CollectionMembership` value; the reporter unions
+    # travels in the :class:`CollectionMembership` value; the run finalizer unions
     # same-named memberships when it builds the by-name Steam-collection map
     # (#1503).
     pending_collection_memberships: dict[tuple[str, str], CollectionMembership] = field(default_factory=dict)

@@ -1079,7 +1079,7 @@ class TestCollectionSyncEdgeCases:
         platform_rom_ids = {1}  # Only ROM 1 from platform
 
         with library.uow as uow:
-            platform_app_ids, _ = svc._reporter._build_collection_app_ids(
+            platform_app_ids, _ = library.run_finalizer._build_collection_app_ids(
                 uow,
                 platform_rom_ids,
                 {("standard", "3"): CollectionMembership(name="Favorites", rom_ids=[1, 2], kind="standard")},
@@ -1101,7 +1101,7 @@ class TestCollectionSyncEdgeCases:
         platform_rom_ids = {1}
 
         with library.uow as uow:
-            platform_app_ids, _ = svc._reporter._build_collection_app_ids(uow, platform_rom_ids, {}, names)
+            platform_app_ids, _ = library.run_finalizer._build_collection_app_ids(uow, platform_rom_ids, {}, names)
 
         assert "Game Boy Advance" in platform_app_ids
         assert "PlayStation" in platform_app_ids, "PSX should be included (toggle ON)"
@@ -1125,7 +1125,7 @@ class TestCollectionSyncEdgeCases:
         }
 
         with library.uow as uow:
-            platform_app_ids, romm_collection_app_ids = svc._reporter._build_collection_app_ids(
+            platform_app_ids, romm_collection_app_ids = library.run_finalizer._build_collection_app_ids(
                 uow, platform_rom_ids, collection_memberships, names
             )
 
@@ -1166,26 +1166,24 @@ class TestCollectionSyncEdgeCases:
 
     def test_build_collection_app_ids_empty_when_no_memberships(self, library):
         """romm_collection_app_ids is empty when no collection memberships are set."""
-        svc = library.sync
+        svc = library.run_finalizer
 
         _seed_rom(library.uow, 1, app_id=1001, platform_slug="gba", name="ROM A")
 
         with library.uow as uow:
-            _platform_app_ids, romm_collection_app_ids = svc._reporter._build_collection_app_ids(
-                uow, {1}, {}, {"gba": "GBA"}
-            )
+            _platform_app_ids, romm_collection_app_ids = svc._build_collection_app_ids(uow, {1}, {}, {"gba": "GBA"})
 
         assert romm_collection_app_ids == {}
 
     def test_build_collection_app_ids_excludes_missing_registry_entries(self, library):
         """romm_collection_app_ids skips rom_ids that have no roms row."""
-        svc = library.sync
+        svc = library.run_finalizer
 
         # Only ROM id=1 is in roms; ROM id=99 is referenced in memberships but missing.
         _seed_rom(library.uow, 1, app_id=1001, platform_slug="gba", name="ROM A")
 
         with library.uow as uow:
-            _platform_app_ids, romm_collection_app_ids = svc._reporter._build_collection_app_ids(
+            _platform_app_ids, romm_collection_app_ids = svc._build_collection_app_ids(
                 uow,
                 {1},
                 {("standard", "3"): CollectionMembership(name="Favorites", rom_ids=[1, 99], kind="standard")},

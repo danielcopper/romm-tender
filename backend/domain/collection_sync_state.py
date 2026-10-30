@@ -13,7 +13,7 @@ lives only on the server). So the stamp additionally stores ``member_rom_ids`` â
 the collection's full member set as of completion â€” which a skipped run replays
 into the run's ``synced_rom_ids`` and Steam-collection membership map, resolving
 each id to its shortcut through the registry (the same sibling-group fallback the
-reporter uses at finalize).
+run finalizer uses).
 
 What the skip compares the stamp with is ``domain/collection_skip.py``.
 

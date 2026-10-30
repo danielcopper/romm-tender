@@ -3128,7 +3128,7 @@ class TestDoSyncPerUnit:
     @pytest.mark.asyncio
     async def test_normal_completion_emits_finalizing_running(self, make_library, fake_romm_api, emit):
         """A normal-completion run emits a non-terminal finalizing snapshot
-        after the unit loop, before the reporter's terminal done emit."""
+        after the unit loop, before the run finalizer's terminal done emit."""
 
         library = make_library(romm_api=fake_romm_api)
 
@@ -3166,7 +3166,7 @@ class TestDoSyncPerUnit:
     @pytest.mark.asyncio
     async def test_cancelled_run_does_not_emit_finalizing(self, make_library, fake_romm_api, emit):
         """A cancelled run skips the finalizing snapshot — its terminal emit
-        is the reporter's cancelled snapshot."""
+        is the run finalizer's cancelled snapshot."""
 
         library = make_library(romm_api=fake_romm_api)
 

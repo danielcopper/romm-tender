@@ -40,6 +40,7 @@ from services.library import (
     CoverPreparer,
     LibraryService,
     LocalLibraryReader,
+    RunFinalizer,
     ShortcutLaunchResolver,
     SyncRunRecorder,
     UnitApplier,
@@ -62,6 +63,7 @@ class LibraryHarness:
     local_library_reader: LocalLibraryReader
     collection_fetcher: CollectionFetcher
     shortcut_launch_resolver: ShortcutLaunchResolver
+    run_finalizer: RunFinalizer
     chunk_dispatcher: ChunkDispatcher
     cover_preparer: CoverPreparer
     sync_run_recorder: SyncRunRecorder
@@ -231,6 +233,7 @@ async def make_library(tmp_path, emit, logger, home) -> MakeLibrary:
             local_library_reader=parts.local_library_reader,
             collection_fetcher=parts.collection_fetcher,
             shortcut_launch_resolver=parts.shortcut_launch_resolver,
+            run_finalizer=parts.run_finalizer,
             chunk_dispatcher=parts.chunk_dispatcher,
             cover_preparer=parts.cover_preparer,
             sync_run_recorder=parts.sync_run_recorder,
