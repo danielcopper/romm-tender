@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from services.library.sync_orchestrator import SyncOrchestrator
     from services.library.sync_preview import SyncPreview
     from services.library.sync_progress import SyncProgress
+    from services.library.views import LibraryViews
     from services.protocols import ConflictRules
 
 
@@ -38,6 +39,7 @@ class LibraryServiceConfig:
     progress: SyncProgress
     session_budget: SessionBudgetMonitor
     reporter: SyncReporter
+    views: LibraryViews
     preview: SyncPreview
     orchestrator: SyncOrchestrator
     conflict_rules: ConflictRules
@@ -52,8 +54,9 @@ class LibraryService:
     (a run's lifecycle and control + safety heartbeat), :class:`SyncPreview`
     (the read-only preview, its staged snapshot and its cancel),
     :class:`SyncProgress` (the status read), :class:`SessionBudgetMonitor`
-    (Steam's renderer-heap budget) and :class:`SyncReporter` (the per-unit
-    commit and the ``roms``-derived queries) — over the shared
+    (Steam's renderer-heap budget), :class:`SyncReporter` (the apply's ack and
+    Force Full Sync's reset) and :class:`LibraryViews` (the ``roms``-derived
+    queries and the run history) — over the shared
     :class:`LibrarySyncStateBox`. ``bootstrap/library.py`` builds them and the
     parts they hold; the façade builds none. A use case an endpoint calls
     checks its conflict rules at its entry, under that endpoint's name, and
@@ -68,6 +71,7 @@ class LibraryService:
         self._progress = config.progress
         self._session_budget = config.session_budget
         self._reporter = config.reporter
+        self._views = config.views
         self._preview = config.preview
         self._orchestrator = config.orchestrator
 
@@ -232,14 +236,14 @@ class LibraryService:
 
     # ``roms``-derived queries
     def get_registry_platforms(self):
-        return self._reporter.get_registry_platforms()
+        return self._views.get_registry_platforms()
 
     async def clear_sync_cache(self):
         async with self._rules.hold("clear_sync_cache", update=True, migration=True, prune=True):
             return self._reporter.clear_sync_cache()
 
     def get_sync_stats(self):
-        return self._reporter.get_sync_stats()
+        return self._views.get_sync_stats()
 
     def get_sync_runs(self):
-        return self._reporter.get_sync_runs()
+        return self._views.get_sync_runs()

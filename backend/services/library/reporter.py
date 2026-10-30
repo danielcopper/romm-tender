@@ -1,17 +1,16 @@
-"""Sync result reporter and registry-query sub-service.
+"""Sync result reporter: the apply's ack, each chunk's commit and Force Full Sync's reset.
 
 Owns the post-apply path: the ``report_unit_results`` ack the frontend
 sends (event signal only) and the chunk-dispatcher-driven
 ``commit_unit_results`` that finalises artwork file names and upserts
 each acked ROM into the ``roms`` aggregate, stamping its cached
 ``rom_metadata`` in the same write UoW (Rom row first, then metadata —
-FK-safe). Also owns the registry- and
-run-history-derived query methods (``get_registry_platforms``,
-``get_sync_stats``, ``get_sync_runs``) and the ``clear_sync_cache``
-reset. The end of a run — its closing registry write, the collection maps and
-the terminal signals — belongs in :class:`RunFinalizer`; anything that decides
-"what should this sync do?" belongs in the orchestrator, the preview or the
-unit applier.
+FK-safe). Also owns the ``clear_sync_cache`` reset of the completion stamps and
+the recorded launch commands that commit writes. It emits nothing. The end of a
+run — its closing registry write, the collection maps and the terminal signals —
+belongs in :class:`RunFinalizer`; the façade's reads of the registry and the run
+history in :class:`LibraryViews`; anything that decides "what should this sync
+do?" in the orchestrator, the preview or the unit applier.
 """
 
 from __future__ import annotations
@@ -21,12 +20,9 @@ from typing import TYPE_CHECKING, Any
 
 from domain.artwork_slot import ArtworkSlot
 from domain.artwork_slot_outcome import binding_forgets_cover_record
-from domain.fetch_generation import gone_from_romm_ids
-from domain.platform_names import PLATFORM_NAMES_KEY, decode_platform_names
 from domain.rom import DeliveryRoute, Rom
 from domain.rom_file import has_file_on_romm
 from domain.rom_metadata_mapping import build_rom_metadata
-from domain.sibling_resolution import reachable_rom_ids
 from domain.sync_diff import BIND_ROM_ID_KEY
 from domain.version_metadata import VersionMetadata
 from services.library._followed_keys import record_followed_keys
@@ -37,15 +33,8 @@ if TYPE_CHECKING:
 
     from domain.collection_sync_state import CollectionSyncState
     from domain.platform_sync_state import PlatformSyncState
-    from domain.sync_run import SyncRun
     from services.library._state import LibrarySyncStateBox
     from services.protocols import ArtworkManager, Clock, SteamConfigStore, UnitOfWorkFactory
-
-
-# How many of the newest sync runs ``get_sync_runs`` answers with — the run
-# list is a recent-history panel, not an archive, and its repository offers no
-# delete, so ``sync_runs`` only grows.
-SYNC_RUN_HISTORY_LIMIT = 10
 
 
 @dataclass(frozen=True)
@@ -56,7 +45,7 @@ class SyncReporterConfig:
     lookup and Steam-Input mode application), the live settings dict,
     runtime infrastructure (loop, logger), clock,
     the SQLite Unit-of-Work factory (the transactional seam over the
-    ``roms`` / ``rom_installs`` / ``sync_runs`` / ``kv_config``
+    ``roms`` / ``rom_metadata`` / completion-stamp / artwork-slot
     repositories), the shared ``LibrarySyncStateBox`` (the reporter reads
     the pending-sync dicts staged by :class:`ChunkDispatcher`; the run-lifecycle
     reset is owned by the orchestrator's terminal ``finally``, not here), and
@@ -73,19 +62,8 @@ class SyncReporterConfig:
     artwork: ArtworkManager
 
 
-@dataclass(frozen=True)
-class _SyncStatsReading:
-    """One read of everything ``get_sync_stats`` takes from SQLite."""
-
-    last_sync: str | None
-    last_attempt: dict[str, str] | None
-    rom_count: int
-    resumable_games: int
-    has_completion_stamp: bool
-
-
 class SyncReporter:
-    """Post-apply reporter + the ``roms``-derived queries + cache reset."""
+    """Post-apply reporter: the ack, each chunk's commit, and the cache reset."""
 
     def __init__(self, *, config: SyncReporterConfig) -> None:
         self._steam_config = config.steam_config
@@ -466,65 +444,7 @@ class SyncReporter:
         )
         self._sync_state.committed_app_ids.update(int(aid) for aid in rom_id_to_app_id.values())
 
-    # ── ``roms``-derived queries ─────────────────────────────────
-
-    def _read_platform_name_cache(self, uow) -> dict[str, str]:
-        """Decode the ``platform_slug → name`` cache, ``{}`` when absent/corrupt."""
-        return decode_platform_names(uow.kv_config.get(PLATFORM_NAMES_KEY))
-
-    def get_registry_platforms(self):
-        """Return synced platforms from ``uow.roms`` (works offline, no RomM API call).
-
-        Two counts per platform, and they answer different questions.
-        ``count`` is bound ROMs — how many Steam shortcuts exist, which is
-        what the Remove group acts on. ``reachable_count`` is how many of
-        the platform's ROMs are reachable through one of those shortcuts,
-        less the ones RomM no longer serves (:func:`_reachable_row_count`),
-        which is what the header line states beside RomM's own total.
-        Display names come from the ``platform_names`` cache refreshed each
-        sync, degrading to the slug when a name is absent (RomM never seen
-        for that slug).
-
-        A platform with no bound row is omitted entirely, as it always has
-        been. Nothing is lost with it: no group there holds a binding, so
-        its ``reachable_count`` is 0 by construction, and the frontend
-        reads an absent platform as zero on both counts.
-        """
-        return self._read_registry_platforms_io()
-
-    def _read_registry_platforms_io(self):
-        with self._uow_factory() as uow:
-            names = self._read_platform_name_cache(uow)
-            platforms: dict[str, dict[str, Any]] = {}
-            rows: dict[str, list[Rom]] = {}
-            by_slug: dict[str, list[Rom]] = {}
-            for rom in uow.roms.iter_all():
-                slug = rom.platform_slug
-                display = names.get(slug, slug)
-                rows.setdefault(display, []).append(rom)
-                by_slug.setdefault(slug, []).append(rom)
-                if rom.shortcut_app_id is None:
-                    continue
-                platforms.setdefault(display, {"count": 0, "slug": slug})
-                platforms[display]["count"] += 1
-            dropped = {
-                rom_id
-                for slug, slug_rows in by_slug.items()
-                for rom_id in gone_from_romm_ids(slug_rows, uow.platform_sync_state.get(slug))
-            }
-        return {
-            "platforms": [
-                {
-                    "name": k,
-                    "slug": v["slug"],
-                    "count": v["count"],
-                    "reachable_count": _reachable_row_count(rows[k], dropped),
-                }
-                for k, v in sorted(platforms.items())
-            ],
-        }
-
-    # ── Cache / stats ────────────────────────────────────────────
+    # ── Cache reset ──────────────────────────────────────────────
 
     def clear_sync_cache(self):
         """Force a full re-fetch AND a full re-apply on the next sync.
@@ -555,7 +475,7 @@ class SyncReporter:
         every recorded launch command — and the panel's resume offer reads those,
         never the history, so there is nothing left to continue here. That the two
         are cleared together is what makes the offer's rule hold; see
-        :meth:`_read_sync_stats_io` (#1789).
+        :meth:`LibraryViews._read_sync_stats_io` (#1789).
         """
         with self._uow_factory() as uow:
             uow.platform_sync_state.clear()
@@ -563,154 +483,3 @@ class SyncReporter:
             uow.roms.clear_all_applied_launch_options()
         self._logger.info("Sync cache cleared — next sync will fully re-fetch and re-apply")
         return {"success": True, "message": "Next sync will fully re-fetch and re-apply"}
-
-    def get_sync_stats(self):
-        enabled_platforms = self._settings.get("enabled_platforms", {})
-        enabled_platform_count = sum(1 for v in enabled_platforms.values() if v)
-        enabled_collections = self._settings.get("enabled_collections", {})
-        if isinstance(enabled_collections, dict):
-            enabled_collection_count = sum(
-                1 for bucket in enabled_collections.values() if isinstance(bucket, dict) for v in bucket.values() if v
-            )
-        else:
-            enabled_collection_count = 0
-        stats = self._read_sync_stats_io()
-        return {
-            "last_sync": stats.last_sync,
-            "last_attempt": stats.last_attempt,
-            "platforms": enabled_platform_count,
-            "collections": enabled_collection_count,
-            "roms": stats.rom_count,
-            "total_shortcuts": stats.rom_count,
-            "resumable_games": stats.resumable_games,
-            "has_completion_stamp": stats.has_completion_stamp,
-        }
-
-    def _read_sync_stats_io(self) -> _SyncStatsReading:
-        """Read the run history, the bound-ROM count and the surviving skip authority from SQLite.
-
-        ``last_sync`` is the ``finished_at`` of the latest completed ``SyncRun``;
-        ``last_attempt`` surfaces the newest cancelled/interrupted/paused/errored run when
-        it is newer than that (see :meth:`_last_attempt`); the ROM count is the
-        bound-shortcut count in ``roms``.
-
-        The last two are what makes the panel's resume offer honest, and
-        they are two facts rather than one because Tender keeps **two** kinds
-        of durable progress. A **completion stamp** makes the next run pass over a
-        whole platform or collection at fetch time; a **recorded launch command**
-        makes it pass over one game at apply time. Both survive a stopped run and
-        both are cleared together by Force Full Sync, which is the entire #1789
-        defect: the offer used to be derived from the run history, which Force
-        Full Sync deliberately preserves (#1318), so it outlived the progress it
-        promised to continue.
-
-        Neither fact subsumes the other, so the offer reads both. A run cancelled
-        inside its very first platform unit has written shortcuts and recorded
-        their launch commands but reached no final chunk, so it holds recorded
-        games and no stamp — and it is a genuine resume, because the next run
-        really does less work. In the other direction, a row predating migration
-        015 carries a NULL recorded value while its platform's stamp survives, so
-        an upgraded install can hold stamps with zero recorded games and still
-        skip those platforms wholesale. Counting only one kind declares one of
-        these two a fresh start when it is not.
-
-        Everything here rides in the read UoW that already scans ``roms``: the
-        recorded-game count is one more condition inside that same loop (``iter_all``
-        already selects ``applied_launch_options``), and each stamp probe is a
-        ``SELECT 1 … LIMIT 1`` over a leaf table. The panel mount pays nothing
-        measurable for any of it.
-        """
-        with self._uow_factory() as uow:
-            completed = uow.sync_runs.get_latest_completed()
-            terminal = uow.sync_runs.get_latest_terminal()
-            rom_count = 0
-            resumable_games = 0
-            for rom in uow.roms.iter_all():
-                if rom.shortcut_app_id is None:
-                    continue
-                rom_count += 1
-                # Bound AND recorded, never recorded alone. ``classify_roms``
-                # (``domain/sync_diff.py``) sends an unbound row down the NEW branch
-                # — ``if not reg or not reg.get("app_id")`` — before it ever reads
-                # the recorded value, so a recorded command with no shortcut is not
-                # skip authority: the next run has to mint the shortcut regardless.
-                # Requiring the binding is therefore what makes this count fall to
-                # zero after Data Management's remove-all by construction: unbinding
-                # keeps the row and its recorded command on purpose (ADR-0007), so
-                # a count over all rows would keep offering a resume of shortcuts
-                # that no longer exist. Do not "simplify" this to every row.
-                if rom.applied_launch_options is not None:
-                    resumable_games += 1
-            has_completion_stamp = uow.platform_sync_state.has_any() or uow.collection_sync_state.has_any()
-        return _SyncStatsReading(
-            last_sync=completed.finished_at if completed is not None else None,
-            last_attempt=self._last_attempt(completed, terminal),
-            rom_count=rom_count,
-            resumable_games=resumable_games,
-            has_completion_stamp=has_completion_stamp,
-        )
-
-    @staticmethod
-    def _last_attempt(completed: SyncRun | None, terminal: SyncRun | None) -> dict[str, str] | None:
-        """The newest cancelled/interrupted/paused/errored run, but only when it is newer than the last completed one.
-
-        A run that ended without completing (cancelled, interrupted, paused, or errored)
-        still applied shortcuts; without this the last-completed-only ``last_sync``
-        read reports "Never" even after thousands of games synced. Returns ``None``
-        when the newest terminal run completed cleanly (``last_sync`` already covers
-        it) or when a completed run is at least as recent as the attempt.
-        ``finished_at`` is guaranteed set on a terminal run
-        (mark_cancelled/mark_interrupted/mark_errored stamp it).
-        """
-        if terminal is None or terminal.status == "completed":
-            return None
-        if completed is not None and (terminal.finished_at or "") <= (completed.finished_at or ""):
-            return None
-        return {"finished_at": terminal.finished_at or "", "status": terminal.status}
-
-    def get_sync_runs(self) -> dict[str, Any]:
-        """Return the newest recorded sync runs, newest first.
-
-        At most :data:`SYNC_RUN_HISTORY_LIMIT` runs of any status, each carrying
-        its plan, its outcome and its timestamps verbatim from the ``SyncRun``
-        aggregate. A field the run never recorded stays ``None`` — a run that
-        did not complete has no completed platform/collection lists, and its
-        status is what says so, so an empty list would claim it finished having
-        synced nothing.
-        """
-        return {"success": True, "runs": self._read_sync_runs_io()}
-
-    def _read_sync_runs_io(self) -> list[dict[str, Any]]:
-        with self._uow_factory() as uow:
-            runs = uow.sync_runs.iter_recent(SYNC_RUN_HISTORY_LIMIT)
-        return [
-            {
-                "id": run.id,
-                "started_at": run.started_at,
-                "finished_at": run.finished_at,
-                "status": run.status,
-                "platforms_planned": run.platforms_planned,
-                "roms_planned": run.roms_planned,
-                "platforms_completed": run.platforms_completed,
-                "collections_completed": run.collections_completed,
-                "error": run.error,
-            }
-            for run in runs
-        ]
-
-
-def _reachable_row_count(rows: list[Rom], dropped: set[int]) -> int:
-    """How many of *rows* the platform count states: the reachable ones, less *dropped*.
-
-    What a binding reaches is :func:`domain.sibling_resolution.reachable_rom_ids`.
-    *dropped* is the rows the last completed fetch of their platform did not
-    return, and the rows carrying a gone-from-RomM mark
-    (:func:`domain.fetch_generation.gone_from_romm_ids`) — the same set the
-    removed-game cleanup lists. They stay
-    reachable and are left out because RomM no longer serves them — the rule and
-    its edges are ``docs/architecture/qam-panel.md``'s. They are excluded from
-    the count and not from the GROUPING, because the group's membership and its
-    binding are facts about every row: a group whose binding sits on a dropped
-    row still reaches its surviving versions through that shortcut.
-    """
-    return len(reachable_rom_ids(rows) - dropped)

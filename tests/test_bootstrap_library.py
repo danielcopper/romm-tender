@@ -64,6 +64,7 @@ _HELD = [
     ("service", "_progress", "progress"),
     ("service", "_session_budget", "session_budget"),
     ("service", "_reporter", "reporter"),
+    ("service", "_views", "views"),
     ("service", "_preview", "preview"),
     ("service", "_orchestrator", "orchestrator"),
     ("fetcher", "_local_library_reader", "local_library_reader"),

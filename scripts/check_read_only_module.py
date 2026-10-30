@@ -35,8 +35,8 @@ it cannot see:
 * a write **passed as a bound method rather than called** —
   ``loop.run_in_executor(None, uow.roms.save, rom)`` is an ``ast.Attribute``, not
   an ``ast.Call``, so the scan never sees it. This one is pointed rather than
-  theoretical: every method in the declared module is *invoked* through that
-  exact idiom, so it is the shape a reader of this area reaches for;
+  theoretical: every method in ``local_library_reader.py`` is *invoked* through
+  that exact idiom, so it is the shape a reader of this area reaches for;
 * a **read-shaped write name**, per the asymmetry above;
 * an **aliased repository handle** (``repo = uow.roms`` then ``repo.save(...)``),
   which flattens the two-attribute shape the scan matches on;
@@ -69,6 +69,11 @@ READ_ONLY_MODULES: dict[str, str] = {
     "backend/services/library/local_library_reader.py": (
         "it reads this device's own record of the library — the Rom rows, the completion stamps, "
         "the last finished run — and nothing else; a write belongs with the pipeline that performs it"
+    ),
+    "backend/services/library/views.py": (
+        "it answers the library façade's reads of this device's record of the library — the Rom rows, the "
+        "platform names, the completion stamps, the run history — and nothing else; Force Full Sync's reset of "
+        "what it reads is the reporter's"
     ),
 }
 

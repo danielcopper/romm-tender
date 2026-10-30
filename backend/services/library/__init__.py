@@ -8,7 +8,8 @@ sync sub-services (:class:`LibraryFetcher`, :class:`CollectionFetcher`,
 :class:`SyncProgress`, :class:`SyncReporter`, :class:`RunFinalizer`,
 :class:`SessionBudgetMonitor`, :class:`ShortcutLaunchResolver`,
 :class:`ChunkDispatcher`, :class:`CoverPreparer`, :class:`SyncRunRecorder`,
-:class:`LocalLibraryReader`) over a shared :class:`LibrarySyncStateBox` — are built only by the composition root, from
+:class:`LocalLibraryReader`, :class:`LibraryViews`) over a shared
+:class:`LibrarySyncStateBox` — are built only by the composition root, from
 the re-exports below, and handed to the parts that hold them. RomM
 communication goes through Protocol-typed adapters.
 """
@@ -29,6 +30,7 @@ from services.library.sync_preview import SyncPreview, SyncPreviewConfig
 from services.library.sync_progress import SyncProgress, SyncProgressConfig
 from services.library.sync_run_recorder import SyncRunRecorder, SyncRunRecorderConfig
 from services.library.unit_apply import UnitApplier, UnitApplierConfig
+from services.library.views import LibraryViews, LibraryViewsConfig
 
 __all__ = [
     "ChunkDispatcher",
@@ -42,6 +44,8 @@ __all__ = [
     "LibraryService",
     "LibraryServiceConfig",
     "LibrarySyncStateBox",
+    "LibraryViews",
+    "LibraryViewsConfig",
     "LocalLibraryReader",
     "LocalLibraryReaderConfig",
     "RunFinalizer",

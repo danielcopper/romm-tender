@@ -2764,7 +2764,7 @@ class TestGetSyncRuns:
 
     @pytest.mark.asyncio
     async def test_newest_first_and_capped_at_the_history_limit(self, library):
-        from services.library.reporter import SYNC_RUN_HISTORY_LIMIT
+        from services.library.views import SYNC_RUN_HISTORY_LIMIT
 
         for minute in range(SYNC_RUN_HISTORY_LIMIT + 3):
             self._save(library.uow, self._start(f"run-{minute:02d}", f"2026-01-01T09:{minute:02d}:00"))

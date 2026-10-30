@@ -24,6 +24,8 @@ from services.library import (
     LibraryService,
     LibraryServiceConfig,
     LibrarySyncStateBox,
+    LibraryViews,
+    LibraryViewsConfig,
     LocalLibraryReader,
     LocalLibraryReaderConfig,
     RunFinalizer,
@@ -119,6 +121,7 @@ class LibraryParts:
     session_budget: SessionBudgetMonitor
     reporter: SyncReporter
     run_finalizer: RunFinalizer
+    views: LibraryViews
     chunk_dispatcher: ChunkDispatcher
     cover_preparer: CoverPreparer
     sync_run_recorder: SyncRunRecorder
@@ -205,6 +208,8 @@ def wire_library(wiring: LibraryWiring) -> LibraryParts:
             conflict_rules=wiring.conflict_rules,
         )
     )
+
+    views = LibraryViews(config=LibraryViewsConfig(settings=wiring.settings, uow_factory=wiring.uow_factory))
 
     chunk_dispatcher = ChunkDispatcher(
         config=ChunkDispatcherConfig(
@@ -304,6 +309,7 @@ def wire_library(wiring: LibraryWiring) -> LibraryParts:
             progress=progress,
             session_budget=session_budget,
             reporter=reporter,
+            views=views,
             preview=preview,
             orchestrator=orchestrator,
             conflict_rules=wiring.conflict_rules,
@@ -321,6 +327,7 @@ def wire_library(wiring: LibraryWiring) -> LibraryParts:
         session_budget=session_budget,
         reporter=reporter,
         run_finalizer=run_finalizer,
+        views=views,
         chunk_dispatcher=chunk_dispatcher,
         cover_preparer=cover_preparer,
         sync_run_recorder=sync_run_recorder,
