@@ -423,7 +423,6 @@ vi.mock("@decky/ui", () => {
         createElement("span", { "data-testid": "progress-progress" }, String(p.nProgress)),
         createElement("span", { "data-testid": "progress-indeterminate" }, String(p.indeterminate)),
       ),
-    Spinner: () => createElement("div", { "data-testid": "spinner" }),
     showModal: vi.fn(),
     showContextMenu: vi.fn(),
     Menu: passthrough("div"),

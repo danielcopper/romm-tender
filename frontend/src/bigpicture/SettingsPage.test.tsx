@@ -1935,6 +1935,29 @@ describe("SettingsPage", () => {
       expect(capturedController[capturedController.length - 1]?.steamInputStatus).toBe("Applied");
     });
 
+    it("says nothing on the status line while a run is in flight: the button carries the wait", async () => {
+      let release: ((r: { success: boolean; message: string }) => void) | undefined;
+      vi.mocked(backend.applySteamInputSetting).mockReturnValue(
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+      );
+      renderPage();
+      await flushAsync();
+      await act(async () => {
+        capturedController[capturedController.length - 1]?.onApplyMode();
+        await Promise.resolve();
+      });
+      expect(capturedController[capturedController.length - 1]?.applying).toBe(true);
+      expect(capturedController[capturedController.length - 1]?.steamInputStatus).toBe("");
+
+      await act(async () => {
+        release?.({ success: true, message: "Applied to 3 shortcuts" });
+        await Promise.resolve();
+      });
+      expect(capturedController[capturedController.length - 1]?.steamInputStatus).toBe("Applied to 3 shortcuts");
+    });
+
     it("re-arms the Apply button after a run that threw", async () => {
       vi.mocked(backend.applySteamInputSetting).mockRejectedValue(new Error("boom"));
       renderPage();

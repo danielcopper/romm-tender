@@ -94,6 +94,7 @@ import {
   type PruneLeaseAdmission,
 } from "../utils/pruneLease";
 import { reconfirmLaunchOptions } from "../utils/launchOptionsReconcile";
+import { Throbber, ThrobberLabel } from "../shared/Throbber";
 
 type PlayButtonState =
   | "loading"
@@ -743,13 +744,13 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
 
   // Chevron menu for the running overlay — the single destructive Stop Game
   // action, mirroring the download-state showDownloadActionsMenu shape. While a
-  // stop is in flight the item is disabled and reads "Stopping..." so the
-  // seconds of no visible change don't read as a missed press.
+  // stop is in flight the item is disabled and reads "Stopping..." behind the
+  // throbber, so the seconds of no visible change don't read as a missed press.
   const showRunningActionsMenu = (e: MouseEvent) => {
     showContextMenu(
       <Menu label="Game Actions">
         <MenuItem key="stop" tone="destructive" disabled={stopPending} onClick={() => detach(handleStopGame())}>
-          {stopPending ? "Stopping..." : "Stop Game"}
+          <ThrobberLabel busy={stopPending}>{stopPending ? "Stopping..." : "Stop Game"}</ThrobberLabel>
         </MenuItem>
       </Menu>,
       getEventTarget(e),
@@ -1100,9 +1101,12 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
   // Running overlay (#1313) — top precedence over install/conflict/download. The
   // green Resume button brings the live session to front via `handleResumeGame`;
   // a chevron beside it opens the Stop Game action, which confirms and then has
-  // the backend terminate the emulator. No Uninstall entry here — uninstalling a
-  // running game is a footgun. On a stranded panel the chevron goes: Stop Game is
-  // its only entry, and it could only say that it cannot stop the game.
+  // the backend terminate the emulator; while that stop is in flight the throbber
+  // stands in the chevron's place, as extraction's does, and the button still
+  // opens the menu, whose item says the stop is under way. No Uninstall entry here —
+  // uninstalling a running game is a footgun. On a stranded panel the chevron
+  // goes: Stop Game is its only entry, and it could only say that it cannot stop
+  // the game.
   if (isRunning) {
     return (
       <Focusable
@@ -1140,15 +1144,19 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
             }}
             onClick={(e: MouseEvent) => showRunningActionsMenu(e)}
           >
-            <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M1 1.5L6 6.5L11 1.5"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            {stopPending ? (
+              <Throbber size="22px" />
+            ) : (
+              <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M1 1.5L6 6.5L11 1.5"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            )}
           </DialogButton>
         )}
       </Focusable>
@@ -1270,7 +1278,9 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
             }}
           />
         )}
-        <span className="romm-dl-label">{dlLabel}</span>
+        <span className="romm-dl-label">
+          <ThrobberLabel busy={!downloading && Boolean(actionPending)}>{dlLabel}</ThrobberLabel>
+        </span>
       </DialogButton>
     );
 
@@ -1298,7 +1308,9 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
               onFocus={scrollToTop}
               disabled={forgetPending || isOffline || downloadBlockedByVanished || downloadBlockedByNoFile}
             >
-              <span className="romm-dl-label">{missingMainLabel}</span>
+              <span className="romm-dl-label">
+                <ThrobberLabel busy={forgetPending}>{missingMainLabel}</ThrobberLabel>
+              </span>
             </DialogButton>
             <DialogButton
               className="romm-btn-dropdown"
@@ -1463,9 +1475,11 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
           disabled
         >
           <span className="romm-dl-label">
-            {uninstallProgress
-              ? `Uninstalling ${uninstallProgress.removed}/${uninstallProgress.total}`
-              : "Uninstalling..."}
+            <ThrobberLabel busy>
+              {uninstallProgress
+                ? `Uninstalling ${uninstallProgress.removed}/${uninstallProgress.total}`
+                : "Uninstalling..."}
+            </ThrobberLabel>
           </span>
         </DialogButton>
       </Focusable>

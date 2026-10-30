@@ -23,6 +23,7 @@ import { PanelSection, PanelSectionRow, Field } from "@decky/ui";
 import type { RegisteredDevice } from "../../types";
 import { CELL_CLIP, MUTED, PaneTableHeader, PaneTableRow, SECONDARY_FONT } from "../layout/pane";
 import { formatRelativeTime } from "./helpers";
+import { ThrobberLabel } from "../../shared/Throbber";
 
 // The name is the column with something to say, so it takes what the other two
 // leave.
@@ -108,7 +109,7 @@ export const RegisteredDevicesSection: FC<RegisteredDevicesSectionProps> = ({
     <PanelSection title="Registered Devices">
       {devicesLoading && (
         <PanelSectionRow>
-          <Field label="Loading..." focusable={true} />
+          <Field label={<ThrobberLabel busy>Loading...</ThrobberLabel>} focusable={true} />
         </PanelSectionRow>
       )}
       {!devicesLoading && devicesError && (

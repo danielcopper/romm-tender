@@ -2,6 +2,7 @@ import { FC, useState } from "react";
 import { showToast } from "../utils/toast";
 import { ModalRoot, DialogButton, showModal } from "@decky/ui";
 import type { SyncConflict } from "../types";
+import { ThrobberLabel } from "./Throbber";
 import {
   CONFLICT_EXPLANATION,
   conflictTitle,
@@ -30,7 +31,8 @@ interface SyncConflictModalProps {
  *                                                Conflict re-fires on next sync if state still holds.
  *
  * If `onResolve` throws, the parent should set `errorMessage` and keep the modal
- * mounted so the user can retry. Buttons are disabled while `isLoading` is true.
+ * mounted so the user can retry. Buttons are disabled while `isLoading` is true,
+ * and the one pressed carries the throbber.
  */
 const SyncConflictModal: FC<SyncConflictModalProps> = ({
   conflict,
@@ -39,7 +41,11 @@ const SyncConflictModal: FC<SyncConflictModalProps> = ({
   isLoading = false,
   errorMessage = null,
 }) => {
+  const [pressed, setPressed] = useState<SyncConflictAction | null>(null);
   const handleResolve = (action: SyncConflictAction) => {
+    // A disabled button still reports a press on the device; the throbber stays
+    // on the press that is being resolved.
+    if (!isLoading) setPressed(action);
     onResolve(action).catch(() => {
       // onResolve owns its own error handling; swallow rejections at the
       // event-handler boundary so React doesn't see an unhandled promise.
@@ -88,7 +94,7 @@ const SyncConflictModal: FC<SyncConflictModalProps> = ({
           </div>
           <div style={{ marginTop: "8px" }}>
             <DialogButton onClick={() => handleResolve("keep_local")} disabled={isLoading}>
-              Keep Local
+              <ThrobberLabel busy={isLoading && pressed === "keep_local"}>Keep Local</ThrobberLabel>
             </DialogButton>
           </div>
         </div>
@@ -111,7 +117,7 @@ const SyncConflictModal: FC<SyncConflictModalProps> = ({
           </div>
           <div style={{ marginTop: "8px" }}>
             <DialogButton onClick={() => handleResolve("use_server")} disabled={isLoading}>
-              Use Server
+              <ThrobberLabel busy={isLoading && pressed === "use_server"}>Use Server</ThrobberLabel>
             </DialogButton>
           </div>
         </div>

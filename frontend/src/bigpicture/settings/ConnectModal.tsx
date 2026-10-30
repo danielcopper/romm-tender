@@ -313,6 +313,7 @@ export const ConnectModal: FC<ConnectModalProps> = ({ closeModal, onConnect, onC
       error={error}
       errorTestId="signin-error"
       submitLabel={submitting ? "Signing in…" : "Sign in"}
+      submitting={submitting}
       submitDisabled={!canSubmit || submitting}
       onSubmit={() => {
         void submit();

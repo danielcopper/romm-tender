@@ -99,6 +99,7 @@ export const SgdbApiKeyModal: FC<SgdbApiKeyModalProps> = ({ closeModal, onVerify
       error={error}
       errorTestId="sgdb-key-error"
       submitLabel={submitting ? "Verifying…" : "Save"}
+      submitting={submitting}
       submitDisabled={!canSubmit || submitting}
       onSubmit={() => {
         void submit();

@@ -18,7 +18,7 @@
  */
 
 import { FC, useState, KeyboardEvent } from "react";
-import { ConfirmModal, DialogButton, Focusable, GamepadButton, TextField, Spinner, type GamepadEvent } from "@decky/ui";
+import { ConfirmModal, DialogButton, Focusable, GamepadButton, TextField, type GamepadEvent } from "@decky/ui";
 import { showToast } from "../utils/toast";
 import {
   searchSgdbGames,
@@ -33,6 +33,7 @@ import { GAME_CHANGE_DISCARDS_CHOICES } from "../utils/artworkTabWording";
 import { artworkApplyMessage } from "../utils/artworkApplyMessage";
 import { scrollToTop, scrollFocusedToCenter } from "../utils/scrollHelpers";
 import { detach } from "../utils/detach";
+import { Throbber, ThrobberLabel } from "../shared/Throbber";
 
 export interface SgdbGamePickerModalProps {
   romId: number;
@@ -56,7 +57,9 @@ const Tile: FC<{
   onSelect: () => void;
   onFocus?: (e: { currentTarget: EventTarget | null }) => void;
   disabled?: boolean;
-}> = ({ thumbUrl, title, subtitle, onSelect, onFocus, disabled }) => (
+  /** The tile was chosen and its game is being applied. */
+  busy?: boolean;
+}> = ({ thumbUrl, title, subtitle, onSelect, onFocus, disabled, busy = false }) => (
   <DialogButton
     onClick={onSelect}
     {...(onFocus !== undefined ? { onFocus } : {})}
@@ -95,7 +98,9 @@ const Tile: FC<{
         No preview
       </div>
     )}
-    <div style={{ fontSize: "12px", color: "#fff", textAlign: "center", lineHeight: "1.2" }}>{title}</div>
+    <div style={{ fontSize: "12px", color: "#fff", textAlign: "center", lineHeight: "1.2" }}>
+      <ThrobberLabel busy={busy}>{title}</ThrobberLabel>
+    </div>
     {subtitle ? <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.55)" }}>{subtitle}</div> : null}
   </DialogButton>
 );
@@ -113,6 +118,7 @@ export const SgdbGamePickerModalContent: FC<SgdbGamePickerModalProps> = ({
   const [results, setResults] = useState<SgdbCandidate[]>(candidates ?? []);
   const [searching, setSearching] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [chosenId, setChosenId] = useState<number | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
 
   const runSearch = async () => {
@@ -141,6 +147,7 @@ export const SgdbGamePickerModalContent: FC<SgdbGamePickerModalProps> = ({
   const applySelection = async (selectedId: number) => {
     if (applying) return;
     setApplying(true);
+    setChosenId(selectedId);
     try {
       const result = await applySgdbGameId(romId, selectedId).catch((e): null => {
         detach(debugLog(`SgdbGamePickerModal: applySgdbGameId rejected: ${e}`));
@@ -233,9 +240,7 @@ export const SgdbGamePickerModalContent: FC<SgdbGamePickerModalProps> = ({
 
         {searching ? (
           <div style={{ display: "flex", justifyContent: "center", padding: "16px" }}>
-            <div style={{ width: "32px", height: "32px" }}>
-              <Spinner />
-            </div>
+            <Throbber size="32px" />
           </div>
         ) : null}
 
@@ -263,6 +268,7 @@ export const SgdbGamePickerModalContent: FC<SgdbGamePickerModalProps> = ({
                 }}
                 onFocus={scrollFocusedToCenter}
                 disabled={applying}
+                busy={applying && chosenId === game.id}
               />
             ))}
           </Focusable>

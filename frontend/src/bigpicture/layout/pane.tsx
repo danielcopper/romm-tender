@@ -15,6 +15,7 @@
 
 import { useState, type CSSProperties, type FC, type FocusEvent, type ReactElement, type ReactNode } from "react";
 import { Focusable } from "@decky/ui";
+import { ThrobberLabel } from "../../shared/Throbber";
 
 /** The size every secondary LINE on a pane is set in: a header's counts clause,
  *  the under-row description and note lines, a table cell beside them, the muted
@@ -398,6 +399,8 @@ export interface ScopedStatus<Scope extends string = string> {
   key: string;
   scope: Scope;
   text: string;
+  /** The line says what is under way, so it stands behind the throbber. */
+  busy?: boolean;
 }
 
 /**
@@ -424,7 +427,7 @@ export function GroupStatus<Scope extends string>({
       data-testid={`status-${scope}`}
       style={{ fontSize: "12px", color: "#dcdedf", padding: "0 16px 8px", whiteSpace: "pre-line" }}
     >
-      {status.text}
+      <ThrobberLabel busy={status.busy ?? false}>{status.text}</ThrobberLabel>
     </div>
   ) : null;
 }

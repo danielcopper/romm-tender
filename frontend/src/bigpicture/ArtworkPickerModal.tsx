@@ -14,7 +14,7 @@
  */
 
 import { FC, useCallback, useEffect, useRef, useState } from "react";
-import { DialogButton, Focusable, ModalRoot, Spinner, showModal } from "@decky/ui";
+import { DialogButton, Focusable, ModalRoot, showModal } from "@decky/ui";
 import {
   getArtworkSlotCandidates,
   isEndpointFailure,
@@ -27,6 +27,7 @@ import {
 import { detach } from "../utils/detach";
 import { placeEntryFocus } from "../utils/entryFocus";
 import { scrollFocusedToCenter } from "../utils/scrollHelpers";
+import { Throbber } from "../shared/Throbber";
 import { REPLACE_SET_IN_STEAM, SLOT_NAMES, automaticTileLabel, sizeLabel } from "../utils/artworkTabWording";
 
 /** What the user chose for the slot: automatic again, or one SteamGridDB image. */
@@ -263,9 +264,7 @@ export const ArtworkPickerModal: FC<ArtworkPickerModalProps> = ({
                     style={TILE_STYLE}
                   >
                     {loading ? (
-                      <div style={{ width: "32px", height: "32px" }}>
-                        <Spinner />
-                      </div>
+                      <Throbber size="32px" />
                     ) : (
                       <div style={{ fontSize: "12px", color: "#fff", textAlign: "center" }}>Load more</div>
                     )}
@@ -274,9 +273,7 @@ export const ArtworkPickerModal: FC<ArtworkPickerModalProps> = ({
               </Focusable>
               {loading && candidates.length === 0 && (
                 <div style={{ display: "flex", justifyContent: "center", paddingTop: "8px" }}>
-                  <div style={{ width: "32px", height: "32px" }}>
-                    <Spinner />
-                  </div>
+                  <Throbber size="32px" />
                 </div>
               )}
               {failure && <div style={{ fontSize: "12px", color: "#ff8800" }}>{failure}</div>}

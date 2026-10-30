@@ -4,6 +4,7 @@ import { render, fireEvent } from "@testing-library/react";
 import { createElement } from "react";
 import { InactiveSlotBody, type InactiveSlotBodyProps } from "./InactiveSlotBody";
 import type { SlotSaveFile } from "../../types";
+import { lineWithText, throbberIn } from "../../test-utils/throbber";
 
 // Override the global @decky/ui DialogButton stub so it forwards `disabled` —
 // the global passthrough <button> only wires `onClick` and silently drops
@@ -101,6 +102,25 @@ describe("InactiveSlotBody", () => {
     const { getByText, queryByText } = render(<InactiveSlotBody {...defaultProps({ deleting: true })} />);
     expect(getByText("Deleting...")).toBeInTheDocument();
     expect(queryByText("Delete Slot")).toBeNull();
+  });
+
+  it("puts the throbber beside Loading..., Switching... and Deleting... while each runs, and beside no idle label", () => {
+    const loading = render(<InactiveSlotBody {...defaultProps({ loadingSlot: true })} />);
+    expect(throbberIn(lineWithText(loading.container, "Loading..."))).not.toBeNull();
+    loading.unmount();
+
+    const switching = render(<InactiveSlotBody {...defaultProps({ switching: true })} />);
+    expect(throbberIn(switching.getByText("Switching..."))).not.toBeNull();
+    expect(throbberIn(switching.getByText("Delete Slot"))).toBeNull();
+    switching.unmount();
+
+    const deleting = render(<InactiveSlotBody {...defaultProps({ deleting: true })} />);
+    expect(throbberIn(deleting.getByText("Deleting..."))).not.toBeNull();
+    expect(throbberIn(deleting.getByText("Activate Slot"))).toBeNull();
+    deleting.unmount();
+
+    const idle = render(<InactiveSlotBody {...defaultProps({ slotFiles: [] })} />);
+    expect(idle.queryByTestId("spinner")).toBeNull();
   });
 
   it("disables Activate when switching is true", () => {

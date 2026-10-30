@@ -125,6 +125,16 @@ describe("SaveSyncSection", () => {
       // No toggle when loading.
       expect(toggleCaptured.items).toHaveLength(0);
     });
+
+    it("shows the throbber beside Loading... until the settings arrive", () => {
+      const { getAllByTestId, queryByTestId, rerender } = render(
+        <SaveSyncSection {...defaultProps({ saveSyncSettings: null })} />,
+      );
+      const loading = getAllByTestId("field-label").find((el) => el.textContent === "Loading...");
+      expect(loading?.querySelector('[data-testid="spinner"]')).not.toBeNull();
+      rerender(<SaveSyncSection {...defaultProps()} />);
+      expect(queryByTestId("spinner")).toBeNull();
+    });
   });
 
   describe("master toggle", () => {
@@ -302,6 +312,13 @@ describe("SaveSyncSection", () => {
       const { getByText } = render(<SaveSyncSection {...defaultProps({ syncing: true })} />);
       const btn = getByText("Syncing...");
       expect(btn).toBeDisabled();
+    });
+
+    it("shows the throbber beside Syncing... while the sync runs, and none once it has ended", () => {
+      const { getByText, rerender } = render(<SaveSyncSection {...defaultProps({ syncing: true })} />);
+      expect(getByText("Syncing...").querySelector('[data-testid="spinner"]')).not.toBeNull();
+      rerender(<SaveSyncSection {...defaultProps({ syncing: false })} />);
+      expect(getByText("Sync All Saves Now").querySelector('[data-testid="spinner"]')).toBeNull();
     });
   });
 

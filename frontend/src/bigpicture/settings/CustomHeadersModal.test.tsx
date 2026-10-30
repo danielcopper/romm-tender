@@ -225,4 +225,23 @@ describe("CustomHeadersModal", () => {
     resolveSave?.({ success: true });
     await flushSubmit();
   });
+
+  it("puts the throbber beside Saving… while the save is in flight", async () => {
+    let resolveSave: ((result: { success: boolean }) => void) | undefined;
+    const onSave = vi.fn().mockReturnValue(
+      new Promise<{ success: boolean }>((resolve) => {
+        resolveSave = resolve;
+      }),
+    );
+    const { getByText, queryByTestId } = render(<CustomHeadersModal storedNames={[]} onSave={onSave} />);
+    expect(queryByTestId("spinner")).toBeNull();
+    fireEvent.click(getByText("Save"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(getByText("Saving…").querySelector('[data-testid="spinner"]')).not.toBeNull();
+
+    resolveSave?.({ success: true });
+    await flushSubmit();
+  });
 });

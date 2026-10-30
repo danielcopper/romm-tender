@@ -312,6 +312,29 @@ describe("ConnectModal", () => {
       expect(onConnect).not.toHaveBeenCalled();
     });
 
+    it("puts the throbber beside Signing in… while the sign-in is out", async () => {
+      let answer: ((result: { success: boolean; message: string }) => void) | undefined;
+      const onConnectToken = vi.fn().mockReturnValue(
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+      );
+      const { getByTestId, getByText, queryByTestId } = render(
+        <ConnectModal onConnect={ok()} onConnectToken={onConnectToken} onConnectPairing={ok()} />,
+      );
+      fireEvent.click(getByTestId("mode-token"));
+      fireEvent.change(getByTestId("field-API Token"), { target: { value: "rmm_pasted" } });
+      fireEvent.click(signInButton(getByText));
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(getByText("Signing in…").querySelector('[data-testid="spinner"]')).not.toBeNull();
+
+      answer?.({ success: false, message: "Wrong token" });
+      await flushSubmit();
+      expect(queryByTestId("spinner")).toBeNull();
+    });
+
     it("submits the token on Enter in the API token field and closes on success", async () => {
       const onConnectToken = ok();
       const closeModal = vi.fn();

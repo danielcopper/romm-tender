@@ -14,7 +14,7 @@
  */
 
 import type { CSSProperties, FC } from "react";
-import { ConfirmModal, DialogButton, Focusable, showContextMenu, showModal, Spinner } from "@decky/ui";
+import { ConfirmModal, DialogButton, Focusable, showContextMenu, showModal } from "@decky/ui";
 import { FaMicrochip } from "react-icons/fa";
 import type { FirmwarePlatformExt, SystemCoreInfo } from "../../types";
 import { biosColorForLevel } from "../../utils/biosColor";
@@ -33,6 +33,7 @@ import {
 import { emulatorDataReasonSentence } from "../../utils/emulatorSourceWording";
 import { getEventTarget } from "../../utils/events";
 import { WaitingLine } from "../WaitingLine";
+import { Throbber, ThrobberLabel } from "../../shared/Throbber";
 import { entryForLabel } from "../../utils/emulatorEntries";
 import { pluralize } from "../../utils/pluralize";
 import { SYNC_RUNNING_HINT, useSyncRunning } from "../../utils/syncRunning";
@@ -64,7 +65,7 @@ import type { CoreAnswer, DetailStatus, PlatformRow, PlatformsPageState, StatusS
  *  a line is bound to is the platform slug. The scope type travels with it, so
  *  the literal each `GroupStatus` names is checked against the page's groups. */
 const scopedStatus = (status: DetailStatus | null): ScopedStatus<StatusScope> | null =>
-  status && { key: status.slug, scope: status.scope, text: status.text };
+  status && { key: status.slug, scope: status.scope, text: status.text, busy: status.busy ?? false };
 
 /**
  * The core picker's button in the header line — the game page's icon button, at
@@ -400,7 +401,7 @@ const RemoveSection: FC<{ row: PlatformRow; state: PlatformsPageState }> = ({ ro
           onClick={confirmDeleteSaves}
         >
           <span style={{ color: RED, display: "inline-flex", alignItems: "center", gap: "6px" }}>
-            {saveCount === undefined && <Spinner width={12} height={12} />}
+            {saveCount === undefined && <Throbber size="12px" />}
             {typeof saveCount === "number" ? `Delete ${pluralize(saveCount, "save file")}` : "Delete save files"}
           </span>
         </DialogButton>
@@ -534,7 +535,11 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
         </Muted>
       )}
       {state.removalProgress?.slug === row.slug && (
-        <Muted>{`Removing ${state.removalProgress.removed} of ${state.removalProgress.total}…`}</Muted>
+        <Muted>
+          <ThrobberLabel
+            busy
+          >{`Removing ${state.removalProgress.removed} of ${state.removalProgress.total}…`}</ThrobberLabel>
+        </Muted>
       )}
       <BusyElsewhere
         busyKey={state.busySlug}

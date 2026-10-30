@@ -6,6 +6,7 @@
 
 import { FC } from "react";
 import { PanelSection, PanelSectionRow, ButtonItem, Field, DropdownItem } from "@decky/ui";
+import { ThrobberLabel } from "../../shared/Throbber";
 
 interface ControllerSectionProps {
   steamInputMode: string;
@@ -42,7 +43,9 @@ export const ControllerSection: FC<ControllerSectionProps> = ({
       </PanelSectionRow>
       <PanelSectionRow>
         <ButtonItem layout="below" onClick={onApplyMode} disabled={applying}>
-          {applying ? "Applying to all shortcuts…" : "Apply to All Shortcuts"}
+          <ThrobberLabel busy={applying}>
+            {applying ? "Applying to all shortcuts…" : "Apply to All Shortcuts"}
+          </ThrobberLabel>
         </ButtonItem>
       </PanelSectionRow>
       {steamInputStatus && (

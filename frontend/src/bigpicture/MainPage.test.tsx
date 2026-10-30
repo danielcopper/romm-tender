@@ -218,7 +218,6 @@ vi.mock("@decky/ui", async () => {
         }),
         typeof p.label === "string" ? p.label : null,
       ),
-    Spinner: () => ce("div", { "data-testid": "spinner" }),
     DialogButton: ({ children, onClick, disabled }: AnyProps & { onClick?: () => void; disabled?: boolean }) =>
       ce("button", { "data-testid": "dialog-button", onClick, disabled }, children as never),
     ConfirmModal: (
@@ -2425,6 +2424,35 @@ describe("MainPage", () => {
       expect(buttonByExactText(container, "Cancelling…")).toBeNull();
       // The terminal stage's message is surfaced (not the cancelSync result's).
       expect(fieldLabels(container)).toContain("Sync cancelled");
+    });
+
+    it("puts the throbber beside Cancelling… while the cancel drains, and on no Cancel Sync of the next run", async () => {
+      vi.mocked(backend.getSyncStatus).mockResolvedValue({
+        running: true,
+        stage: "applying",
+        message: "Working",
+        runId: "run-x",
+      });
+      vi.mocked(backend.cancelSync).mockResolvedValue({ success: true, message: "cancelled-msg" });
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      expect(buttonByExactText(container, "Cancel Sync")?.querySelector('[data-testid="spinner"]')).toBeNull();
+      await act(async () => {
+        fireEvent.click(buttonByExactText(container, "Cancel Sync")!);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(buttonByExactText(container, "Cancelling…")?.querySelector('[data-testid="spinner"]')).not.toBeNull();
+
+      await act(async () => {
+        setSyncProgress({ running: false, stage: "cancelled", message: "Sync cancelled" });
+        await Promise.resolve();
+      });
+      await act(async () => {
+        setSyncProgress({ running: true, stage: "fetching", message: "y", runId: "run-two" });
+        await Promise.resolve();
+      });
+      expect(buttonByExactText(container, "Cancel Sync")?.querySelector('[data-testid="spinner"]')).toBeNull();
     });
 
     it("the terminal cancel message stays past 8s and auto-clears after 15s", async () => {

@@ -7,6 +7,7 @@ import { toaster } from "../api/host";
 import * as artwork from "../utils/artwork";
 import { _resetArtworkSlotsForTests, keptArtworkSlot, noteArtworkWritten } from "../utils/artworkSlotsStore";
 import { ArtworkTab } from "./ArtworkTab";
+import { throbberIn } from "../test-utils/throbber";
 import type { ArtworkPickerModalProps } from "./ArtworkPickerModal";
 import type { SgdbGamePickerModalProps } from "./SgdbGamePickerModal";
 
@@ -85,6 +86,19 @@ describe("ArtworkTab", () => {
   });
 
   describe("the game line", () => {
+    it("puts the throbber beside Loading artwork… while the read is out, and none beside a failure", async () => {
+      vi.mocked(backend.getArtworkSlots).mockReturnValue(new Promise(() => {}));
+      const loading = render(<ArtworkTab appId={APP_ID} romId={42} romName="Mario Golf" />);
+      expect(throbberIn(loading.getByText("Loading artwork…"))).not.toBeNull();
+      loading.unmount();
+      _resetArtworkSlotsForTests();
+
+      vi.mocked(backend.getArtworkSlots).mockResolvedValue({ success: false, message: "RomM did not answer" } as never);
+      const failed = render(<ArtworkTab appId={APP_ID} romId={42} romName="Mario Golf" />);
+      await flush();
+      expect(throbberIn(failed.getByText("RomM did not answer"))).toBeNull();
+    });
+
     it("names RomM's game and offers no change", async () => {
       const { container } = await renderTab(answer(FROM_ROMM));
       expect(container.textContent).toContain("SteamGridDB game: Mario Golf (from RomM)");

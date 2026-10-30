@@ -29,6 +29,7 @@ import { clearAllRomMCollections } from "../utils/collections";
 import { setSyncProgress } from "../utils/syncProgress";
 import { beginPruneRun, resetPruneState, setPruneComplete, setPruneProgress } from "../utils/pruneStore";
 import { stubCollectionStore, stubAppStore } from "../test-utils/steamStubs";
+import { lineWithText, throbberIn } from "../test-utils/throbber";
 import type { DataInventory, SyncStats } from "../types";
 
 vi.mock("../utils/scrollHelpers", () => ({
@@ -249,6 +250,32 @@ describe("DataManagementPage", () => {
 
       expect(view.container.textContent).toContain("Reading…");
       expect(view.container.textContent).not.toContain("could not be read");
+    });
+
+    it.each([
+      ["shortcuts", () => vi.mocked(backend.getSyncStats).mockReturnValue(new Promise(() => {}))],
+      ["rom-files", () => vi.mocked(backend.getDataInventory).mockReturnValue(new Promise(() => {}))],
+      ["recovery-bundles", () => vi.mocked(backend.getDataInventory).mockReturnValue(new Promise(() => {}))],
+      [
+        "non-steam",
+        () => {
+          vi.mocked(scanShortcutOwnership).mockReturnValue(new Promise(() => {}));
+          stubCollectionStore([1]);
+          stubAppStore({ 1: { strDisplayName: "Firefox" } });
+        },
+      ],
+    ])("puts the throbber beside Reading… on the %s pane while its read is in flight", async (id, arrange) => {
+      arrange();
+      const view = await pageOn(id);
+
+      expect(throbberIn(lineWithText(view.container, "Reading…"))).not.toBeNull();
+    });
+
+    it("stands an answered figure without the throbber", async () => {
+      const view = await pageOn("rom-files");
+
+      expect(lineWithText(view.container, "Reading…")).toBeUndefined();
+      expect(throbberIn(view.getByText(/installed · ≈/))).toBeNull();
     });
 
     it("ends a rejected inventory read in failed, not in Reading…", async () => {
@@ -904,6 +931,26 @@ describe("DataManagementPage", () => {
       expect(row.textContent).not.toContain("scan");
       expect(row.textContent).not.toContain("—");
       expect(button(view, "Scanning…").disabled).toBe(true);
+    });
+
+    it("puts the throbber beside Scanning… while the Grid images scan runs, and none once it has answered", async () => {
+      let answer: ((result: { success: boolean; candidate_count: number }) => void) | undefined;
+      vi.mocked(backend.cleanupOrphanedGridImages).mockReturnValue(
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+      );
+      const view = await pageOn("grid-images");
+      expect(throbberIn(button(view, "Scan for orphaned images"))).toBeNull();
+
+      await press(button(view, "Scan for orphaned images"));
+      expect(throbberIn(button(view, "Scanning…"))).not.toBeNull();
+
+      await act(async () => {
+        answer?.({ success: true, candidate_count: 0 });
+        await Promise.resolve();
+      });
+      expect(throbberIn(button(view, "Scan for orphaned images"))).toBeNull();
     });
 
     it("shows a dash and the retry line when the Grid images scan rejects", async () => {

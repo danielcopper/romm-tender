@@ -20,6 +20,7 @@ import {
 } from "../../utils/emulatorSourceWording";
 import { ENTRY_FOCUS_DELAY_MS, placeEntryFocus } from "../../utils/entryFocus";
 import { AMBER, GREEN, MUTED, SECONDARY_FONT, SELECTION_ACCENT, TABLE_LINE } from "../layout/pane";
+import { ThrobberLabel } from "../../shared/Throbber";
 
 interface EmulatorSourcesSectionProps {
   /** `undefined` while the read is in flight, `null` where it failed. */
@@ -190,7 +191,14 @@ export const EmulatorSourcesSection: FC<EmulatorSourcesSectionProps> = ({ listin
     return (
       <PanelSection title="Emulator sources">
         <PanelSectionRow>
-          <Field label={<span data-testid="sources-notice">{line}</span>} focusable={true} />
+          <Field
+            label={
+              <span data-testid="sources-notice">
+                <ThrobberLabel busy={listing === undefined}>{line}</ThrobberLabel>
+              </span>
+            }
+            focusable={true}
+          />
         </PanelSectionRow>
       </PanelSection>
     );

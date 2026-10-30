@@ -78,6 +78,8 @@ export interface DetailStatus {
   slug: string;
   scope: StatusScope;
   text: string;
+  /** The line says what is under way rather than how it ended. */
+  busy?: boolean;
 }
 
 /** Where one platform's BIOS answer stands — see {@link BiosReadState}. Every row
@@ -641,7 +643,7 @@ export function usePlatformsPage(): PlatformsPageState {
       const defaultLabel = answer?.emulators.find((e) => e.is_default)?.label;
       const label = pickedLabel === defaultLabel ? "" : pickedLabel;
       setBusySlug(slug);
-      setStatus({ slug, scope: "core", text: `Switching to ${pickedLabel}…` });
+      setStatus({ slug, scope: "core", text: `Switching to ${pickedLabel}…`, busy: true });
       // Captured before the continuation starts, so the catch can tell a
       // cancelled continuation from a failed switch.
       const admission = capturePruneLeaseAdmission(LEASE_OWNER);
@@ -705,7 +707,7 @@ export function usePlatformsPage(): PlatformsPageState {
   const removeShortcuts = useCallback(
     (row: PlatformRow) => {
       setBusySlug(row.slug);
-      setStatus({ slug: row.slug, scope: "remove", text: `Removing ${row.name} shortcuts…` });
+      setStatus({ slug: row.slug, scope: "remove", text: `Removing ${row.name} shortcuts…`, busy: true });
       const admission = capturePruneLeaseAdmission(LEASE_OWNER);
       detach(
         (async () => {
@@ -770,7 +772,7 @@ export function usePlatformsPage(): PlatformsPageState {
   const deleteSaves = useCallback(
     (row: PlatformRow) => {
       setBusySlug(row.slug);
-      setStatus({ slug: row.slug, scope: "remove", text: `Deleting ${row.name} saves…` });
+      setStatus({ slug: row.slug, scope: "remove", text: `Deleting ${row.name} saves…`, busy: true });
       detach(
         (async () => {
           try {

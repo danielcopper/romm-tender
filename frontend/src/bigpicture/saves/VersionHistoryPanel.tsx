@@ -16,6 +16,7 @@ import { formatAttributionSegment, pickLastSyncer } from "../../utils/saveHelper
 import { rollbackFeedback } from "../../utils/saveSlotWording";
 import { renderCopyToSlotButton, type CopyToSlotHandler } from "./CopyToSlotButton";
 import { detach } from "../../utils/detach";
+import { ThrobberLabel } from "../../shared/Throbber";
 
 interface VersionHistoryPanelProps {
   romId: number;
@@ -216,7 +217,7 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
               detach(handleRestore(v));
             }}
           >
-            {isThisRestoring ? "Restoring..." : "Restore"}
+            <ThrobberLabel busy={isThisRestoring}>{isThisRestoring ? "Restoring..." : "Restore"}</ThrobberLabel>
           </DialogButton>
           {/* Copy-to-slot button (source = this slot); disabled offline via the shared helper. */}
           {onCopy ? renderCopyToSlotButton(`copy-ver-${v.id}`, v.id, { onCopy, sourceSlot: slot, isOffline }) : null}
@@ -234,7 +235,11 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
       );
     }
     if (loading) {
-      return <div style={{ fontSize: "11px", color: "#8f98a0" }}>Loading...</div>;
+      return (
+        <div style={{ fontSize: "11px", color: "#8f98a0" }}>
+          <ThrobberLabel busy>Loading...</ThrobberLabel>
+        </div>
+      );
     }
     if (loadError !== null) {
       // Distinct from the empty-list case: surface a retry affordance so

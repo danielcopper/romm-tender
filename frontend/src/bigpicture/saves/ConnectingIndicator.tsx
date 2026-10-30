@@ -4,14 +4,12 @@
  * paying the backend retry+backoff ladder reads as "working" — and, once the
  * `server_retry_progress` store has a value, shows which attempt is in flight
  * ("Connecting to RomM… (attempt 2/3)") instead of a frozen spinner.
- *
- * The throbber reuses the `romm-throbber` class injected by `styleInjector`
- * into the game-detail popup window, so it spins wherever the saves UI renders.
  */
 
 import { FC } from "react";
 import { useServerRetryProgress } from "../../utils/connectionState";
 import { MUTED_COLOR } from "../../utils/saveHelpers";
+import { Throbber } from "../../shared/Throbber";
 
 interface ConnectingIndicatorProps {
   /** Leading label; the retry "(attempt N/M)" suffix is appended when known. */
@@ -23,7 +21,7 @@ export const ConnectingIndicator: FC<ConnectingIndicatorProps> = ({ label = "Con
   const text = progress ? `${label}… (attempt ${progress.attempt}/${progress.maxAttempts})` : `${label}…`;
   return (
     <div className="romm-connecting" style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 0" }}>
-      <span className="romm-throbber" style={{ width: "14px", height: "14px" }} />
+      <Throbber size="14px" />
       <span style={{ fontSize: "13px", color: MUTED_COLOR }}>{text}</span>
     </div>
   );

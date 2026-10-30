@@ -11,6 +11,7 @@ import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { MUTED_COLOR } from "../../utils/saveHelpers";
 import { renderServerSaveRow } from "./ServerSaveRow";
 import type { CopyToSlotRowProps } from "./CopyToSlotButton";
+import { ThrobberLabel } from "../../shared/Throbber";
 
 export interface InactiveSlotBodyProps {
   loadingSlot: boolean;
@@ -48,7 +49,7 @@ export const InactiveSlotBody: FC<InactiveSlotBodyProps> = ({
   if (loadingSlot) {
     children.push(
       <div key="loading" style={{ fontSize: "13px", color: MUTED_COLOR }}>
-        Loading...
+        <ThrobberLabel busy>Loading...</ThrobberLabel>
       </div>,
     );
   } else if (slotFiles && slotFiles.length > 0) {
@@ -82,7 +83,7 @@ export const InactiveSlotBody: FC<InactiveSlotBodyProps> = ({
           disabled={switching || isOffline}
           onClick={handleActivate}
         >
-          {activateLabel}
+          <ThrobberLabel busy={switching}>{activateLabel}</ThrobberLabel>
         </DialogButton>
         <DialogButton
           key="delete-btn"
@@ -92,7 +93,7 @@ export const InactiveSlotBody: FC<InactiveSlotBodyProps> = ({
           disabled={deleting || switching}
           onClick={handleDelete}
         >
-          {deleteLabel}
+          <ThrobberLabel busy={deleting}>{deleteLabel}</ThrobberLabel>
         </DialogButton>
       </Focusable>,
       isOffline ? (

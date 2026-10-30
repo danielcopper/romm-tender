@@ -4,7 +4,7 @@
  *
  * The question is slow for each file (`identify_firmware`), so it is asked one
  * file at a time, and each row reads "Checking…" until its
- * answer arrives. An answer is kept by MD5 for the page that asked, at most
+ * answer arrives; only the row whose question is out shows the throbber. An answer is kept by MD5 for the page that asked, at most
  * thirty minutes, and forgotten when that page is left; the questions still out
  * then are not asked. The answer only labels a row: it decides no verdict and no
  * badge.
@@ -38,14 +38,21 @@ function heldAnswer(md5: string, now: number): Identification | undefined {
   return answer.known ?? "unknown";
 }
 
+export interface Identifications {
+  answers: Record<string, Identification>;
+  /** The checksum whose question is out right now, or `null` between and after them. */
+  asking: string | null;
+}
+
 /**
  * The identification of each of *md5s*, asked one at a time after the first
  * render. A checksum not answered yet reads `"checking"`; one nothing could be
  * asked about, `"unknown"`, which a row words as nothing at all.
  */
-export function useIdentifications(md5s: readonly string[]): Record<string, Identification> {
+export function useIdentifications(md5s: readonly string[]): Identifications {
   const key = md5s.join(",");
   const [answers, setAnswers] = useState<Record<string, Identification>>({});
+  const [asking, setAsking] = useState<string | null>(null);
   useEffect(() => {
     const visit = { alive: true };
     // Asked after each await: the page may have been left while a question was out.
@@ -60,6 +67,7 @@ export function useIdentifications(md5s: readonly string[]): Record<string, Iden
       for (const md5 of wanted) {
         if (left()) return;
         if (initial[md5] !== "checking") continue;
+        setAsking(md5);
         let known: string[] | null = null;
         try {
           const result = await identifyLibraryFirmware(md5);
@@ -71,6 +79,7 @@ export function useIdentifications(md5s: readonly string[]): Record<string, Iden
         held.set(md5, { known, at: Date.now() });
         setAnswers((prev) => ({ ...prev, [md5]: known ?? "unknown" }));
       }
+      if (!left()) setAsking(null);
     };
     detach(ask());
     return () => {
@@ -78,5 +87,5 @@ export function useIdentifications(md5s: readonly string[]): Record<string, Iden
     };
   }, [key]);
   useEffect(() => () => forgetIdentifications(), []);
-  return answers;
+  return { answers, asking };
 }

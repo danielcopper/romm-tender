@@ -43,6 +43,7 @@ import { scrollFocusedToCenter } from "../utils/scrollHelpers";
 import { showToast } from "../utils/toast";
 import { showArtworkPicker, type ArtworkPick } from "./ArtworkPickerModal";
 import { SgdbGamePickerModalContent } from "./SgdbGamePickerModal";
+import { ThrobberLabel } from "../shared/Throbber";
 
 interface ArtworkTabProps {
   appId: number;
@@ -175,7 +176,7 @@ export const ArtworkTab: FC<ArtworkTabProps> = ({ appId, romId, romName }) => {
   if (!slots) {
     return (
       <div className="romm-panel-loading" style={{ padding: "0 0 12px" }}>
-        {held?.failure ?? "Loading artwork…"}
+        <ThrobberLabel busy={!held?.failure}>{held?.failure ?? "Loading artwork…"}</ThrobberLabel>
       </div>
     );
   }

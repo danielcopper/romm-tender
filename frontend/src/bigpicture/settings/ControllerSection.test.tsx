@@ -100,6 +100,13 @@ describe("ControllerSection", () => {
       const { getByText } = render(<ControllerSection {...defaultProps()} />);
       expect(getByText("Apply to All Shortcuts")).not.toBeDisabled();
     });
+
+    it("carries the throbber while the run is in flight, and none once it has ended", () => {
+      const { getByText, rerender } = render(<ControllerSection {...defaultProps({ applying: true })} />);
+      expect(getByText("Applying to all shortcuts…").querySelector('[data-testid="spinner"]')).not.toBeNull();
+      rerender(<ControllerSection {...defaultProps()} />);
+      expect(getByText("Apply to All Shortcuts").querySelector('[data-testid="spinner"]')).toBeNull();
+    });
   });
 
   describe("steamInputStatus field", () => {

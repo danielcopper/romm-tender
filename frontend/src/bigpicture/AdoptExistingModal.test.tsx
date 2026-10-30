@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, fireEvent, act, waitFor } from "@testing-library/react";
 import { AdoptExistingModal } from "./AdoptExistingModal";
 import { emitHostEvent, hostEventListenerCount } from "../test-utils/host-event-bus";
+import { lineWithText, throbberIn } from "../test-utils/throbber";
 import { verifyExistingContent } from "../api/backend";
 import type { TargetOccupiedResult, VerifyContentResult, VerifyProgressEvent } from "../types";
 
@@ -332,6 +333,31 @@ describe("AdoptExistingModal — the content check", () => {
     await act(async () => {
       resolveCheck({ status: "match", message: "ok", differences: [] });
     });
+  });
+
+  it("puts the throbber beside Checking the files… and its percentage until the check answers", async () => {
+    let resolveCheck: (r: VerifyContentResult) => void = () => {};
+    vi.mocked(verifyExistingContent).mockReturnValue(
+      new Promise<VerifyContentResult>((resolve) => {
+        resolveCheck = resolve;
+      }),
+    );
+    const { container } = renderModal();
+    expect(container.querySelector('[data-testid="spinner"]')).toBeNull();
+
+    fireEvent.click(buttonByText(container, "Check Against Server"));
+    await waitFor(() => expect(container.textContent).toContain("Checking the files…"));
+    expect(throbberIn(lineWithText(container, "Checking the files…"))).not.toBeNull();
+
+    act(() => {
+      emitHostEvent<VerifyProgressEvent>("verify_progress", { rom_id: ROM_ID, bytes_done: 50, bytes_total: 200 });
+    });
+    expect(throbberIn(lineWithText(container, "Checking the files… 25%"))).not.toBeNull();
+
+    await act(async () => {
+      resolveCheck({ status: "match", message: "ok", differences: [] });
+    });
+    expect(container.querySelector('[data-testid="spinner"]')).toBeNull();
   });
 
   it("ignores verify_progress frames for another ROM", async () => {

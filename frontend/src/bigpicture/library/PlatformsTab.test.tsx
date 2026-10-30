@@ -39,6 +39,7 @@ import type {
   WireReason,
 } from "../../types";
 import { NOTE_FONT, SECONDARY_FONT } from "../layout/pane";
+import { lineWithText, throbberIn } from "../../test-utils/throbber";
 import {
   coreInfo as coreInfoFixture,
   emulatorStart,
@@ -2457,6 +2458,28 @@ describe("Library › Platforms", () => {
       expect(buttonByText(container, "Download required for mGBA (1)")?.disabled).toBe(false);
       await focusRow(container, "Game Boy Advance");
       expect(container.querySelector('[data-testid="status-core"]')).toBeNull();
+    });
+
+    it("puts the throbber beside the core line while the switch runs, and none beside its refusal", async () => {
+      let finish: (v: Awaited<ReturnType<typeof backend.setSystemCore>>) => void = () => {};
+      vi.mocked(backend.setSystemCore).mockReturnValue(
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      await openCoreMenu(container);
+      await pickFromCoreMenu("VBA Next");
+      expect(throbberIn(within(container).getByTestId("status-core"))).not.toBeNull();
+
+      await act(async () => {
+        finish({ success: false, reason: "save_failed", message: "RetroDECK is not installed" });
+        for (let i = 0; i < 5; i++) await Promise.resolve();
+      });
+      const refused = within(container).getByTestId("status-core");
+      expect(refused.textContent).toBe("RetroDECK is not installed");
+      expect(throbberIn(refused)).toBeNull();
     });
 
     it("takes back a failed switch's line when the next one succeeds", async () => {
@@ -5538,6 +5561,57 @@ describe("Library › Platforms", () => {
     });
   });
 
+  describe("the library rows' identification", () => {
+    const libraryRow = (name: string, md5: string) =>
+      firmwareFile({
+        file_name: name,
+        local_path: `/r/bios/${name}`,
+        declared_by: null,
+        wanted: "not_needed",
+        library: {
+          firmware_id: 1,
+          file_name: name,
+          platform_slug: "gba",
+          matched: "name",
+          md5,
+          size: 16384,
+          no_checksum: false,
+        },
+      });
+    const rowNamed = (container: HTMLElement, name: string) =>
+      [...container.querySelectorAll<HTMLElement>('[data-testid="bios-file-row"]')].find((row) =>
+        row.textContent.includes(name),
+      );
+
+    it("puts the throbber beside Checking… only on the row whose file is being asked about", async () => {
+      mockFirmware([
+        firmwarePlatform({ files: [libraryRow("one.bin", "1".repeat(32)), libraryRow("two.bin", "2".repeat(32))] }),
+      ]);
+      let answerFirst: (v: { success: true; known_as: string[] }) => void = () => {};
+      vi.mocked(backend.identifyLibraryFirmware)
+        .mockReturnValueOnce(
+          new Promise((resolve) => {
+            answerFirst = resolve;
+          }),
+        )
+        .mockReturnValueOnce(new Promise(() => {}));
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(throbberIn(lineWithText(rowNamed(container, "one.bin")!, "Checking…"))).not.toBeNull();
+      expect(lineWithText(rowNamed(container, "two.bin")!, "Checking…")).not.toBeUndefined();
+      expect(throbberIn(rowNamed(container, "two.bin"))).toBeNull();
+
+      await act(async () => {
+        answerFirst({ success: true, known_as: ["gba_bios.bin"] });
+        for (let i = 0; i < 5; i++) await Promise.resolve();
+      });
+
+      expect(throbberIn(rowNamed(container, "one.bin"))).toBeNull();
+      expect(throbberIn(lineWithText(rowNamed(container, "two.bin")!, "Checking…"))).not.toBeNull();
+    });
+  });
+
   describe("Replace… on a row", () => {
     const PLACE = "/r/bios/gba_bios.bin";
     const BACKUP = "/d/backups/bios/2026-10-22_10-00-00/r/bios/gba_bios.bin";
@@ -5834,6 +5908,38 @@ describe("Library › Platforms", () => {
       });
     });
 
+    it("puts the throbber beside the removal's status line and its count while they run, and none beside the result", async () => {
+      let releaseClear: () => void = () => {};
+      vi.mocked(clearPlatformCollection).mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            releaseClear = resolve;
+          }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      await act(async () => {
+        fireEvent.click(buttonByText(container, "Remove 9 shortcuts")!);
+        await Promise.resolve();
+      });
+      await confirmLastModal();
+      await flushAsync();
+
+      const waiting = within(container).getByTestId("status-remove");
+      expect(waiting.textContent).toBe("Removing Game Boy Advance shortcuts…");
+      expect(throbberIn(waiting)).not.toBeNull();
+      expect(throbberIn(lineWithText(container, "Removing 2 of 2…"))).not.toBeNull();
+
+      await act(async () => {
+        releaseClear();
+        for (let i = 0; i < 10; i++) await Promise.resolve();
+      });
+      const done = within(container).getByTestId("status-remove");
+      expect(done.textContent).toMatch(/^Removed /);
+      expect(throbberIn(done)).toBeNull();
+      expect(lineWithText(container, "Removing 2 of 2…")).toBeUndefined();
+    });
+
     it("surfaces the sync_active refusal and removes nothing", async () => {
       vi.mocked(backend.removePlatformShortcuts).mockResolvedValue({
         success: false,
@@ -5914,6 +6020,34 @@ describe("Library › Platforms", () => {
       await flushAsync();
 
       expect(buttonByText(container, "Delete 0 save files")).toBeDisabled();
+    });
+
+    it("puts the throbber beside the delete's status line while it runs, and none beside its result", async () => {
+      let answer: (v: { success: boolean; deleted_count: number; message: string }) => void = () => {};
+      vi.mocked(backend.deletePlatformSaves).mockReturnValue(
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      await act(async () => {
+        fireEvent.click(buttonByText(container, "Delete 3 save files")!);
+        await Promise.resolve();
+      });
+      await confirmLastModal();
+
+      const waiting = within(container).getByTestId("status-remove");
+      expect(waiting.textContent).toBe("Deleting Game Boy Advance saves…");
+      expect(throbberIn(waiting)).not.toBeNull();
+
+      await act(async () => {
+        answer({ success: true, deleted_count: 3, message: "Deleted 3 save files" });
+        for (let i = 0; i < 5; i++) await Promise.resolve();
+      });
+      const done = within(container).getByTestId("status-remove");
+      expect(done.textContent).toBe("Deleted 3 save files");
+      expect(throbberIn(done)).toBeNull();
     });
 
     it("surfaces a save deletion that threw", async () => {

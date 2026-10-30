@@ -203,6 +203,25 @@ describe("SgdbGamePickerModal", () => {
       expect(container.textContent).toContain("Link's Awakening");
     });
 
+    it("shows the throbber while the search is out, and none once it answered", async () => {
+      let answer: (v: { success: true; games: never[] }) => void = () => {};
+      vi.mocked(backend.searchSgdbGames).mockReturnValue(
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+      );
+      const { container } = renderPicker();
+      expect(container.querySelector('[data-testid="spinner"]')).toBeNull();
+      await act(async () => {
+        fireEvent.click(buttonContaining(container, "Search"));
+      });
+      expect(container.querySelector('[data-testid="spinner"]')).not.toBeNull();
+
+      await act(async () => answer({ success: true, games: [] }));
+      await flushAsync();
+      expect(container.querySelector('[data-testid="spinner"]')).toBeNull();
+    });
+
     it("Enter in the search field runs a search (on-screen keyboard)", async () => {
       vi.mocked(backend.searchSgdbGames).mockResolvedValue({
         success: true,
@@ -347,6 +366,38 @@ describe("SgdbGamePickerModal", () => {
       expect(vi.mocked(artwork.applyAutomaticArtwork)).not.toHaveBeenCalled();
       expect(onApplied).not.toHaveBeenCalled();
       expect(closeModal).not.toHaveBeenCalled();
+    });
+
+    it("puts the throbber on the chosen tile while its game is applied, on no other, and takes it away after", async () => {
+      let answer: (v: Awaited<ReturnType<typeof backend.applySgdbGameId>>) => void = () => {};
+      vi.mocked(backend.applySgdbGameId).mockReturnValue(
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+      );
+      const { container } = render(
+        createElement(SgdbGamePickerModalContent, {
+          romId: 88,
+          appId: 6000,
+          romName: "Mario",
+          candidates: [
+            { id: 1, name: "Super Mario", release_year: null, thumb_url: null },
+            { id: 2, name: "Mario Kart", release_year: null, thumb_url: null },
+          ],
+          onApplied: vi.fn(),
+          closeModal: vi.fn(),
+        }),
+      );
+      await act(async () => {
+        fireEvent.click(buttonContaining(container, "Mario Kart"));
+      });
+
+      expect(container.querySelectorAll('[data-testid="spinner"]')).toHaveLength(1);
+      expect(buttonContaining(container, "Mario Kart").querySelector('[data-testid="spinner"]')).not.toBeNull();
+
+      await act(async () => answer({ success: false, reason: "prune_active", message: "busy" }));
+      await flushAsync();
+      expect(container.querySelector('[data-testid="spinner"]')).toBeNull();
     });
 
     it("applySgdbGameId rejection → 'Failed to apply artwork selection' + debugLogs (non-vacuous catch)", async () => {

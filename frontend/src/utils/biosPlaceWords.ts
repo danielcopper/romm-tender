@@ -101,6 +101,9 @@ function linkLines(row: PlaceRow, platformName: (slug: string) => string): strin
   }
 }
 
+/** A library row's line while the resolver's identification of its file is still out. */
+export const IDENTIFYING = "Checking…";
+
 /** What the resolver's identification said about a library file, as the page holds it. */
 export type Identification = "checking" | "unknown" | readonly string[];
 
@@ -111,7 +114,7 @@ export type Identification = "checking" | "unknown" | readonly string[];
  */
 export function libraryRowLines(row: PlaceRow, identification: Identification | undefined): string[] {
   const lines: string[] = [];
-  if (identification === "checking") lines.push("Checking…");
+  if (identification === "checking") lines.push(IDENTIFYING);
   else if (Array.isArray(identification)) {
     lines.push(identification.length > 0 ? `Recognised as ${identification.join(", ")}` : "Not recognised");
   }

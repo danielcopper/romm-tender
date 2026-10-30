@@ -21,6 +21,7 @@ import {
   STAGE_LABELS,
 } from "./RemovedGamesCleanup";
 import { FOCUSED_ROW_FILL, GREEN, NOTE_FONT, RED, SECONDARY_FONT } from "./layout/pane";
+import { lineWithText, throbberIn } from "../test-utils/throbber";
 
 const preview: backend.PrunePreviewResult = {
   success: true,
@@ -2631,6 +2632,162 @@ describe("RemovedGamesCleanup", () => {
     expect(backend.cancelPrune).toHaveBeenCalledTimes(1);
     expect((modal.getByRole("button", { name: "Stopping..." }) as HTMLButtonElement).disabled).toBe(true);
     expect(modal.container.textContent).toContain("finishing the current safe step");
+  });
+
+  it("puts the throbber beside Scanning… while the scan for removed games runs", async () => {
+    vi.mocked(backend.getPrunePreview).mockReturnValue(new Promise(() => {}));
+    const section = render(createElement(RemovedGamesCleanupSection));
+    expect(section.queryByTestId("spinner")).toBeNull();
+
+    fireEvent.click(section.getByRole("button", { name: "Clean Up Removed RomM Games" }));
+    await act(async () => Promise.resolve());
+
+    expect(throbberIn(section.getByRole("button", { name: "Scanning…" }))).not.toBeNull();
+  });
+
+  it("puts the throbber beside Cleanup starting... until the run's first frame brings its bar", () => {
+    const section = render(createElement(RemovedGamesCleanupSection));
+    act(() => {
+      beginPrunePreview("preview-1");
+      beginPruneRun("run-1", "preview-1");
+    });
+    expect(throbberIn(lineWithText(section.container, "Cleanup starting..."))).not.toBeNull();
+
+    act(() => {
+      setPruneProgress({
+        run_id: "run-1",
+        preview_id: "preview-1",
+        current: 1,
+        total: 3,
+        stage: "checking",
+        rom_ids: [7],
+        name: "Removed Game",
+      });
+    });
+    expect(section.container.textContent).not.toContain("Cleanup starting...");
+    expect(section.queryByTestId("spinner")).toBeNull();
+  });
+
+  it("puts the throbber beside the section's Stopping... until the run ends", async () => {
+    vi.mocked(backend.cancelPrune).mockResolvedValue({ success: true, message: "ok", already_cancelling: false });
+    const section = render(createElement(RemovedGamesCleanupSection));
+    act(() => {
+      beginPrunePreview("preview-1");
+      beginPruneRun("run-7", "preview-1");
+      setPruneProgress({
+        run_id: "run-7",
+        preview_id: "preview-1",
+        current: 1,
+        total: 3,
+        stage: "removing",
+        rom_ids: [7],
+        name: "Removed Game",
+      });
+    });
+    expect(throbberIn(section.getByRole("button", { name: "Stop Cleanup" }))).toBeNull();
+
+    fireEvent.click(section.getByRole("button", { name: "Stop Cleanup" }));
+    await act(async () => Promise.resolve());
+    expect(throbberIn(section.getByRole("button", { name: "Stopping..." }))).not.toBeNull();
+
+    act(() => {
+      setPruneComplete({
+        success: true,
+        partial: false,
+        run_id: "run-7",
+        preview_id: "preview-1",
+        removed_rom_ids: [],
+        affected_app_ids: [],
+        results: [],
+      });
+    });
+    expect(section.queryByTestId("spinner")).toBeNull();
+  });
+
+  it("puts the throbber beside the dialog's Starting... and its status line until the run's bar takes over", async () => {
+    let answerStart: ((result: { success: true; run_id: string; status: "running" }) => void) | undefined;
+    vi.mocked(backend.startPrune).mockReturnValue(
+      new Promise((resolve) => {
+        answerStart = resolve;
+      }),
+    );
+    await openRemovedGamesCleanupModal();
+    const modal = render(shownModal());
+    expect(modal.queryByTestId("spinner")).toBeNull();
+
+    fireEvent.click(confirmButton(modal));
+    await waitFor(() => expect(modal.container.textContent).toContain("Starting cleanup..."));
+    expect(throbberIn(modal.getByRole("button", { name: "Starting..." }))).not.toBeNull();
+    expect(throbberIn(lineWithText(modal.container, "Starting cleanup..."))).not.toBeNull();
+
+    await act(async () => {
+      answerStart?.({ success: true, run_id: "run-1", status: "running" });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(modal.container.textContent).toContain("Cleanup running..."));
+    expect(throbberIn(lineWithText(modal.container, "Cleanup running..."))).not.toBeNull();
+
+    act(() => {
+      setPruneProgress({
+        run_id: "run-1",
+        preview_id: "preview-1",
+        current: 1,
+        total: 2,
+        stage: "checking",
+        rom_ids: [7],
+        name: "Removed Game",
+      });
+    });
+    expect(lineWithText(modal.container, "Cleanup running...")).not.toBeUndefined();
+    expect(modal.queryByTestId("spinner")).toBeNull();
+  });
+
+  it("takes the throbber off the dialog's Starting... once a frame of the run brings its bar before the start answers", async () => {
+    vi.mocked(backend.startPrune).mockReturnValue(new Promise(() => {}));
+    await openRemovedGamesCleanupModal();
+    const modal = render(shownModal());
+    fireEvent.click(confirmButton(modal));
+    await waitFor(() => expect(modal.getByRole("button", { name: "Starting..." })).toBeTruthy());
+
+    act(() => {
+      setPruneProgress({
+        run_id: "adopted-run",
+        preview_id: "preview-1",
+        current: 1,
+        total: 2,
+        stage: "checking",
+        rom_ids: [7],
+        name: "Removed Game",
+      });
+    });
+
+    expect(modal.container.textContent).toContain("Checking with RomM — Removed Game");
+    expect(modal.queryByTestId("spinner")).toBeNull();
+  });
+
+  it("puts the throbber beside the dialog's Stopping... while the stop is asked", async () => {
+    vi.mocked(backend.cancelPrune).mockResolvedValue({ success: true, message: "ok", already_cancelling: false });
+    await openRemovedGamesCleanupModal();
+    const modal = render(shownModal());
+    fireEvent.click(confirmButton(modal));
+    await waitFor(() => expect(modal.container.textContent).toContain("Cleanup running..."));
+    act(() => {
+      setPruneProgress({
+        run_id: "run-1",
+        preview_id: "preview-1",
+        current: 1,
+        total: 2,
+        stage: "checking",
+        rom_ids: [7],
+        name: "Removed Game",
+      });
+    });
+    expect(throbberIn(modal.getByRole("button", { name: "Stop Cleanup" }))).toBeNull();
+
+    fireEvent.click(modal.getByRole("button", { name: "Stop Cleanup" }));
+    await act(async () => Promise.resolve());
+
+    expect(throbberIn(modal.getByRole("button", { name: "Stopping..." }))).not.toBeNull();
   });
 
   it("recovers the entry point and warns when a run's result never arrives", async () => {

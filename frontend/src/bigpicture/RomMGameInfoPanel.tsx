@@ -37,6 +37,7 @@ import { useStrandedAnswer } from "../utils/strandedPanelStore";
 import { detach } from "../utils/detach";
 import { refreshBiosStatus } from "../utils/gameDetailStore";
 import { announceBiosChange } from "./bios/useBiosActions";
+import { ThrobberLabel } from "../shared/Throbber";
 
 interface RomMGameInfoPanelProps {
   appId: number;
@@ -188,7 +189,9 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
   if (state.loading) {
     return (
       <div data-romm="true" className="romm-panel-container" style={{ minHeight: "500px" }}>
-        <div className="romm-panel-loading">Loading...</div>
+        <div className="romm-panel-loading">
+          <ThrobberLabel busy>Loading...</ThrobberLabel>
+        </div>
       </div>
     );
   }

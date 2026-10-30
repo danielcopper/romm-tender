@@ -11,6 +11,7 @@
 
 import { FC, ReactNode } from "react";
 import { ModalRoot, DialogButton, Focusable } from "@decky/ui";
+import { ThrobberLabel } from "../../shared/Throbber";
 
 // ModalRoot renders only the shell + a close affordance (unlike ConfirmModal, it
 // has no strTitle / OK button), so the title, body, error line, and footer are
@@ -32,6 +33,8 @@ interface ValidatingModalShellProps {
   errorTestId: string;
   /** Label for the primary button (typically flips to an in-flight variant). */
   submitLabel: string;
+  /** Whether the submit is in flight, which puts the throbber beside its label. */
+  submitting?: boolean;
   /** Whether the primary button is disabled (gate incomplete or in flight). */
   submitDisabled: boolean;
   /** Invoked when the primary button is clicked. */
@@ -59,6 +62,7 @@ export const ValidatingModalShell: FC<ValidatingModalShellProps> = ({
   error,
   errorTestId,
   submitLabel,
+  submitting = false,
   submitDisabled,
   onSubmit,
   dialogOKSubmits = false,
@@ -84,7 +88,7 @@ export const ValidatingModalShell: FC<ValidatingModalShellProps> = ({
           no nav tree, so both spellings render identically. */}
       <Focusable flow-children="horizontal" style={footerStyle}>
         <DialogButton style={footerButtonStyle} disabled={submitDisabled} onClick={onSubmit}>
-          {submitLabel}
+          <ThrobberLabel busy={submitting}>{submitLabel}</ThrobberLabel>
         </DialogButton>
         <DialogButton
           style={footerButtonStyle}

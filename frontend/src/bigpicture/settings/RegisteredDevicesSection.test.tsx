@@ -124,6 +124,16 @@ describe("RegisteredDevicesSection", () => {
       expect(labels).not.toContain("Could not load devices");
     });
 
+    it("shows the throbber beside Loading... until the devices are read", () => {
+      const { getAllByTestId, queryByTestId, rerender } = render(
+        <RegisteredDevicesSection {...defaultProps({ devicesLoading: true })} />,
+      );
+      const loading = getAllByTestId("field-label").find((el) => el.textContent === "Loading...");
+      expect(loading?.querySelector('[data-testid="spinner"]')).not.toBeNull();
+      rerender(<RegisteredDevicesSection {...defaultProps()} />);
+      expect(queryByTestId("spinner")).toBeNull();
+    });
+
     it("draws no column header over a state that has no rows", () => {
       const { queryByTestId } = render(<RegisteredDevicesSection {...defaultProps({ devicesLoading: true })} />);
       expect(queryByTestId("devices-header")).toBeNull();

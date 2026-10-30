@@ -3,6 +3,7 @@ import { act, fireEvent, render } from "@testing-library/react";
 import { showModal } from "@decky/ui";
 import { getUpdateOutput, logError, type UpdateOutput } from "../../api/backend";
 import { AMBER, GREEN, MUTED } from "../layout/pane";
+import { throbberIn } from "../../test-utils/throbber";
 import {
   OUTPUT_GONE,
   OUTPUT_MISSING,
@@ -64,6 +65,18 @@ describe("UpdateOutputModal", () => {
     await act(async () => answer(CHECK_REFUSED));
 
     expect(getByText("What the installer said — 20:58")).toBeTruthy();
+  });
+
+  it("puts the throbber beside the reading line until the answer arrives", async () => {
+    let answer: (output: UpdateOutput) => void = () => {};
+    const read = new Promise<UpdateOutput>((resolve) => {
+      answer = resolve;
+    });
+    const { container } = render(<UpdateOutputModal read={read} attemptedVersion="1.0.52" />);
+    expect(throbberIn(stops(container)[0])).not.toBeNull();
+
+    await act(async () => answer(CHECK_REFUSED));
+    expect(container.querySelector('[data-testid="spinner"]')).toBeNull();
   });
 
   it("titles the window with the time the installer ran, and shows its lines under The installer", async () => {

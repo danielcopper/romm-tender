@@ -45,6 +45,7 @@ import { PREVIEW_COUNTDOWN_TICK_MS } from "../utils/previewState";
 import { ENTRY_FOCUS_DELAY_MS } from "../utils/entryFocus";
 import { regionAround } from "../test-utils/regionAround";
 import { FOCUS_RING_REACH } from "./layout/ScrollRegion";
+import { lineWithText } from "../test-utils/throbber";
 import type {
   Settings,
   SessionBudgetStatus,
@@ -138,7 +139,6 @@ vi.mock("@decky/ui", async () => {
         ce("span", { "data-testid": "progress-progress" }, String(p.nProgress)),
         ce("span", { "data-testid": "progress-indeterminate" }, String(p.indeterminate)),
       ),
-    Spinner: () => ce("div", { "data-testid": "spinner" }),
     // A no-render stub: the modal body is inspected off the showModal mock.
     ConfirmModal: () => null,
     showModal: vi.fn(),
@@ -1639,6 +1639,29 @@ describe("SyncPage", () => {
       expect(buttonByExactText(container, "Cancel Sync")?.disabled).toBe(false);
     });
 
+    it("puts the throbber beside Cancelling… while the cancel drains, and on no Cancel Sync of the next run", async () => {
+      setSyncProgress({ running: true, stage: "applying", step: 1, totalSteps: 2, message: "x", runId: "run-live" });
+      const { container } = await renderPage();
+      expect(buttonByExactText(container, "Cancel Sync")?.querySelector('[data-testid="spinner"]')).toBeNull();
+
+      await act(async () => {
+        fireEvent.click(buttonByExactText(container, "Cancel Sync")!);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(buttonByExactText(container, "Cancelling…")?.querySelector('[data-testid="spinner"]')).not.toBeNull();
+
+      await act(async () => {
+        setSyncProgress({ running: false, stage: "cancelled", message: "Sync cancelled", runId: "run-live" });
+        await Promise.resolve();
+      });
+      await act(async () => {
+        setSyncProgress({ running: true, stage: "fetching", step: 1, totalSteps: 2, message: "y", runId: "run-two" });
+        await Promise.resolve();
+      });
+      expect(buttonByExactText(container, "Cancel Sync")?.querySelector('[data-testid="spinner"]')).toBeNull();
+    });
+
     it("re-arms Cancel for the run after a cancelled PREVIEW, which ends with no terminal stage", async () => {
       // The whole sequence the button has to survive: cancel a preview being
       // worked out, then start another. The preview run stops through the page's
@@ -2124,6 +2147,28 @@ describe("SyncPage", () => {
       expect(container.textContent).toContain("No sync progress is recorded, so there is nothing to forget.");
     });
 
+    it("puts the throbber beside the reading line while the answer is on its way, and none beside the answer", async () => {
+      let finishStats: (s: SyncStats) => void = () => {};
+      vi.mocked(backend.getSyncStats).mockReturnValue(
+        new Promise<SyncStats>((res) => {
+          finishStats = res;
+        }),
+      );
+      const { container } = await renderPage();
+      expect(
+        lineWithText(container, "Reading what has already been synced…")?.querySelector('[data-testid="spinner"]'),
+      ).not.toBeNull();
+
+      await act(async () => {
+        finishStats({ ...defaultStats(), last_sync: null, has_completion_stamp: false });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      const answer = lineWithText(container, "No sync progress is recorded, so there is nothing to forget.");
+      expect(answer).not.toBeUndefined();
+      expect(answer?.querySelector('[data-testid="spinner"]')).toBeNull();
+    });
+
     it("leaves Skip preview live during a run — the setting is read by the next press", async () => {
       setSyncProgress({ running: true, stage: "applying", step: 1, totalSteps: 2, message: "x", runId: "r" });
       const { container } = await renderPage();
@@ -2214,6 +2259,27 @@ describe("SyncPage", () => {
     it("says nothing has run yet rather than showing an empty list", async () => {
       const { container } = await renderPage();
       expect(container.textContent).toContain("No sync has run yet.");
+    });
+
+    it("puts the throbber beside Reading the run history… until the history is read", async () => {
+      let finishRuns: (r: { success: boolean; runs: never[] }) => void = () => {};
+      vi.mocked(backend.getSyncRuns).mockReturnValue(
+        new Promise((res) => {
+          finishRuns = res;
+        }),
+      );
+      const { container } = await renderPage();
+      expect(
+        lineWithText(container, "Reading the run history…")?.querySelector('[data-testid="spinner"]'),
+      ).not.toBeNull();
+
+      await act(async () => {
+        finishRuns({ success: true, runs: [] });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(lineWithText(container, "Reading the run history…")).toBeUndefined();
+      expect(lineWithText(container, "No sync has run yet.")?.querySelector('[data-testid="spinner"]')).toBeNull();
     });
 
     it("a refused read says so", async () => {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useContext, FC, ReactNode } from "react";
-import { PanelSection, PanelSectionRow, ButtonItem, Field, Focusable, ProgressBar, Spinner } from "@decky/ui";
+import { PanelSection, PanelSectionRow, ButtonItem, Field, Focusable, ProgressBar } from "@decky/ui";
 import { FaCheckCircle, FaTimesCircle, FaExclamationTriangle } from "react-icons/fa";
 import { cancelSync, refreshMigrationState, getSyncStatus, getEmulatorSources, logError } from "../api/backend";
 import { ENTRY_STOP_ATTR, EntryPreferenceContext, preferMarkedChild } from "../utils/entryFocus";
@@ -36,6 +36,7 @@ import { WithUpdateDot } from "./UpdateDot";
 import type { SyncPreview, SyncProgress, SyncRunKind, SyncStats, NavTarget } from "../types";
 import { detach } from "../utils/detach";
 import { wrapText } from "../utils/textStyles";
+import { Throbber, ThrobberLabel } from "../shared/Throbber";
 
 interface MainPageProps {
   onNavigate: (target: NavTarget) => void;
@@ -87,7 +88,7 @@ export const ConnectionIndicator: FC<{
   if (connected === null) {
     return (
       <>
-        <Spinner width={14} height={14} />
+        <Throbber size="14px" />
         <span style={{ fontSize: "12px", opacity: 0.7 }}>Checking...</span>
       </>
     );
@@ -689,7 +690,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
                 detach(handleCancel());
               }}
             >
-              {cancelling ? "Cancelling…" : "Cancel Sync"}
+              <ThrobberLabel busy={cancelling}>{cancelling ? "Cancelling…" : "Cancel Sync"}</ThrobberLabel>
             </ButtonItem>
           </PanelSectionRow>
         )}

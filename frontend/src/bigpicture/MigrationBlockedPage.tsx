@@ -7,6 +7,7 @@ import { clearMigration } from "../utils/migrationStore";
 import { MigrationConflictModal } from "./MigrationConflictModal";
 import { scrollToTop } from "../utils/scrollHelpers";
 import { detach } from "../utils/detach";
+import { ThrobberLabel } from "../shared/Throbber";
 
 interface MigrationBlockedPageProps {
   migration: MigrationStatus;
@@ -119,7 +120,7 @@ export const MigrationBlockedPage: FC<MigrationBlockedPageProps> = ({ migration 
           // @ts-expect-error onFocus works at runtime; not in Decky's ButtonItem types
           onFocus={scrollToTop}
         >
-          {migrating ? "Migrating..." : "Migrate Files"}
+          <ThrobberLabel busy={migrating}>{migrating ? "Migrating..." : "Migrate Files"}</ThrobberLabel>
         </ButtonItem>
       </PanelSectionRow>
       <PanelSectionRow>

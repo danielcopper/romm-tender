@@ -7,6 +7,7 @@ import * as backend from "../../api/backend";
 import { toaster } from "../../api/host";
 import { showSyncConflictModal } from "../../shared/SyncConflictModal";
 import type { SaveVersionEntry, RollbackStatus } from "../../types";
+import { lineWithText, throbberIn } from "../../test-utils/throbber";
 
 // Override the global DialogButton stub so it forwards `disabled` and we can
 // assert it. The global stub only wires onClick.
@@ -126,6 +127,23 @@ describe("VersionHistoryPanel", () => {
     expect(container.textContent).toContain("Loading...");
     resolveFetch({ status: "ok", versions: [] });
     await flushAsync();
+  });
+
+  it("puts the throbber beside Loading... while the fetch is in flight, and none once it answered", async () => {
+    let resolveFetch: (v: { status: "ok"; versions: SaveVersionEntry[] }) => void = () => undefined;
+    vi.mocked(backend.savesListFileVersions).mockImplementation(
+      () =>
+        new Promise((res) => {
+          resolveFetch = res;
+        }),
+    );
+    const { getByText, container } = render(<VersionHistoryPanel {...defaultProps()} />);
+    fireEvent.click(getByText("Previous Versions"));
+    await flushAsync();
+    expect(throbberIn(lineWithText(container, "Loading..."))).not.toBeNull();
+    resolveFetch({ status: "ok", versions: [] });
+    await flushAsync();
+    expect(container.querySelector('[data-testid="spinner"]')).toBeNull();
   });
 
   it("shows 'No older versions available' when the list is empty", async () => {
@@ -542,6 +560,29 @@ describe("VersionHistoryPanel", () => {
     expect(getByText("Restoring...")).toBeDisabled();
     resolveRestore({ status: "ok" });
     await flushAsync();
+  });
+});
+
+describe("VersionHistoryPanel — the throbber on Restore", () => {
+  it("stands beside Restoring... while the restore is in flight, and leaves with it", async () => {
+    vi.mocked(backend.savesListFileVersions).mockResolvedValue({ status: "ok", versions: [makeVersion()] });
+    let resolveRestore: (v: RollbackStatus) => void = () => undefined;
+    vi.mocked(backend.savesRollbackToVersion).mockImplementation(
+      () =>
+        new Promise((res) => {
+          resolveRestore = res;
+        }),
+    );
+    const { getByText, container } = render(<VersionHistoryPanel {...defaultProps()} />);
+    fireEvent.click(getByText("Previous Versions"));
+    await flushAsync();
+    expect(throbberIn(getByText("Restore"))).toBeNull();
+    fireEvent.click(getByText("Restore"));
+    await flushAsync();
+    expect(throbberIn(getByText("Restoring..."))).not.toBeNull();
+    resolveRestore({ status: "ok" });
+    await flushAsync();
+    expect(container.querySelector('[data-testid="spinner"]')).toBeNull();
   });
 });
 

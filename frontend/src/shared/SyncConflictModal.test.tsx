@@ -248,6 +248,35 @@ describe("SyncConflictModal", () => {
     });
   });
 
+  describe("SyncConflictModalHost — the throbber on the pressed button", () => {
+    it.each(["Keep Local", "Use Server"])(
+      "stands on %s while it resolves, on no other button, and leaves with a refusal",
+      async (pressed) => {
+        let answer: (v: { success: boolean; message?: string }) => void = () => {};
+        vi.mocked(backend.resolveSyncConflict).mockReturnValue(
+          new Promise((resolve) => {
+            answer = resolve;
+          }),
+        );
+        detach(showSyncConflictModal(makeConflict()));
+        const { container } = render(lastShownElement());
+        expect(container.querySelector('[data-testid="spinner"]')).toBeNull();
+
+        await act(async () => {
+          fireEvent.click(buttonByText(container, pressed));
+        });
+        expect(container.querySelectorAll('[data-testid="spinner"]')).toHaveLength(1);
+        expect(buttonByText(container, pressed).querySelector('[data-testid="spinner"]')).not.toBeNull();
+
+        await act(async () => {
+          answer({ success: false, message: "RomM refused" });
+        });
+        await flushAsync();
+        expect(container.querySelector('[data-testid="spinner"]')).toBeNull();
+      },
+    );
+  });
+
   describe("SyncConflictModalHost — success confirmation toast", () => {
     it("Keep Local: success → toasts the branch-specific kept-local body", async () => {
       vi.mocked(backend.resolveSyncConflict).mockResolvedValue({ success: true });

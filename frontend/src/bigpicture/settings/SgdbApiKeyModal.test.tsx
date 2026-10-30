@@ -121,6 +121,28 @@ describe("SgdbApiKeyModal", () => {
       expect(closeModal).toHaveBeenCalledTimes(1);
       expect(queryByTestId("sgdb-key-error")).toBeNull();
     });
+
+    it("puts the throbber beside Verifying… while the key is checked, and takes it away when the check answers", async () => {
+      let answer: ((result: { success: boolean; message: string }) => void) | undefined;
+      const onVerify = vi.fn().mockReturnValue(
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+      );
+      const { getByTestId, getByText, queryByTestId } = render(
+        <SgdbApiKeyModal onVerify={onVerify} onSave={saveOk()} />,
+      );
+      fireEvent.change(field(getByTestId), { target: { value: "good_key" } });
+      fireEvent.click(getByText("Save"));
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(getByText("Verifying…").querySelector('[data-testid="spinner"]')).not.toBeNull();
+
+      answer?.({ success: false, message: "Invalid key" });
+      await flushSubmit();
+      expect(queryByTestId("spinner")).toBeNull();
+    });
   });
 
   describe("failure path (modal stays open, key not saved)", () => {

@@ -223,6 +223,24 @@ describe("the fallback page's actions", () => {
     expect(checkForUpdateNow).toHaveBeenCalledOnce();
   });
 
+  it("puts the throbber beside Checking… while the check is out, and takes it away when it answers", async () => {
+    let answer: ((notice: typeof NOTICE & { reached: boolean }) => void) | undefined;
+    vi.mocked(checkForUpdateNow).mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    renderOffer();
+    await settle();
+    fireEvent.click(button("Check for updates"));
+    await settle();
+    expect(button("Checking…").querySelector('[data-testid="spinner"]')).not.toBeNull();
+
+    answer?.({ ...NOTICE, reached: true });
+    await settle();
+    expect(button("Check for updates").querySelector('[data-testid="spinner"]')).toBeNull();
+  });
+
   it("holds the install while it waits, and says for what", async () => {
     vi.mocked(getUpdateInstallState).mockResolvedValue({ ...OFFERED, wait_reasons: [{ reason: "library_sync" }] });
     renderOffer();

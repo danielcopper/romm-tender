@@ -15,6 +15,7 @@ const spWindow = { window: { document } } as unknown as Window;
 vi.mock("./deckyUiInternals", () => ({ findSP: vi.fn(() => spWindow) }));
 
 import { hideNativePlaySection, showNativePlaySection } from "./styleInjector";
+import { THROBBER_STYLE_ID } from "./throbberStyle";
 
 /** Every rule block hideNativePlaySection injects, concatenated. */
 function injectedCss(): string {
@@ -62,5 +63,16 @@ describe("styleInjector — vanished-version trash", () => {
     showNativePlaySection();
 
     expect(injectedCss()).not.toContain("romm-vanished-trash");
+  });
+});
+
+describe("styleInjector — the play row's throbbers", () => {
+  beforeEach(() => document.getElementById(THROBBER_STYLE_ID)?.remove());
+  afterEach(() => showNativePlaySection());
+
+  it("brings the throbber's spin into the document the play row draws in", () => {
+    expect(document.getElementById(THROBBER_STYLE_ID)).toBeNull();
+    hideNativePlaySection("native-play");
+    expect(injectedCss()).toMatch(/\.romm-throbber\s*\{[^}]*animation:\s*romm-spin/);
   });
 });

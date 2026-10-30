@@ -277,6 +277,26 @@ describe("MigrationBlockedPage component", () => {
       });
     });
 
+    it("puts the throbber beside Migrating... while the move runs, and takes it away when it ends", async () => {
+      let resolveFn: (v: MigrationResult) => void = () => {};
+      vi.mocked(backend.migrateRetroDeckFiles).mockReturnValue(
+        new Promise<MigrationResult>((res) => {
+          resolveFn = res;
+        }),
+      );
+      const { getByText, queryByTestId } = render(<MigrationBlockedPage migration={defaultMigration} />);
+      expect(queryByTestId("spinner")).toBeNull();
+      await act(async () => {
+        fireEvent.click(getByText("Migrate Files"));
+      });
+      expect(getByText("Migrating...").querySelector('[data-testid="spinner"]')).not.toBeNull();
+      await act(async () => {
+        resolveFn({ success: true, message: "done" });
+        await flushAsync();
+      });
+      expect(queryByTestId("spinner")).toBeNull();
+    });
+
     it("needs_confirmation resets 'Migrating...' label back to 'Migrate Files'", async () => {
       vi.mocked(backend.migrateRetroDeckFiles).mockResolvedValueOnce({
         success: false,

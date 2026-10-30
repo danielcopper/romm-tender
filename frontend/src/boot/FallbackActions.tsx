@@ -51,6 +51,7 @@ import {
 } from "../utils/updateInstallView";
 import { UPDATE_CHECK_FAILED, UPDATE_CHECK_UNREACHABLE } from "../utils/updateAvailableView";
 import { failureFromWire, type RolledBackUpdate } from "../utils/updateOutcomeStore";
+import { ThrobberLabel } from "../shared/Throbber";
 import type { FallbackButtons } from "./fallbackButtons";
 
 /** Above plain buttons, which Steam's navigation does not reach. */
@@ -67,6 +68,8 @@ interface Press {
   /** Stable across the label's changes, so the button keeps its place — and Steam's focus — while it relabels. */
   id: string;
   label: string;
+  /** Work the press started is still under way, which puts the throbber beside the label. */
+  busy?: boolean;
   onClick: () => void;
   disabled: boolean;
 }
@@ -79,7 +82,7 @@ const Presses: FC<{ buttons: FallbackButtons; presses: readonly Press[] }> = ({ 
       <Column>
         {presses.map((press) => (
           <Button key={press.id} onClick={press.onClick} disabled={press.disabled}>
-            {press.label}
+            <ThrobberLabel busy={press.busy ?? false}>{press.label}</ThrobberLabel>
           </Button>
         ))}
       </Column>
@@ -246,6 +249,7 @@ const UpdateOffer: FC<{ buttons: FallbackButtons }> = ({ buttons }) => {
     {
       id: "check",
       label: checking ? "Checking…" : "Check for updates",
+      busy: checking,
       onClick: () => detach(checkNow()),
       disabled: checking || install.underWay,
     },

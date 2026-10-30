@@ -38,6 +38,7 @@ import {
 } from "../utils/adoptWording";
 import type { AdoptChoice } from "../utils/adoptFlow";
 import { detach } from "../utils/detach";
+import { ThrobberLabel } from "../shared/Throbber";
 import type { TargetOccupiedResult, VerifyContentResult, VerifyProgressEvent } from "../types";
 
 interface AdoptExistingModalProps {
@@ -134,7 +135,7 @@ export const AdoptExistingModal: FC<AdoptExistingModalProps> = ({
 
         {verifying && (
           <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.7)", marginBottom: "12px" }}>
-            {verifyProgressLabel(verifyProgress)}
+            <ThrobberLabel busy>{verifyProgressLabel(verifyProgress)}</ThrobberLabel>
           </div>
         )}
         {!verifying && verdict && (

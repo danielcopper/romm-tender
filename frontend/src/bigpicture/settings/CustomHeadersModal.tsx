@@ -137,6 +137,7 @@ export const CustomHeadersModal: FC<CustomHeadersModalProps> = ({ closeModal, st
       error={error}
       errorTestId="custom-headers-error"
       submitLabel={submitting ? "Saving…" : "Save"}
+      submitting={submitting}
       submitDisabled={submitting}
       onSubmit={() => {
         void submit();

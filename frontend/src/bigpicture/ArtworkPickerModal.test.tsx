@@ -112,6 +112,37 @@ describe("ArtworkPickerModal", () => {
     expect(button(container, "920×430").textContent).toContain("Tender's pick today");
   });
 
+  it("shows the throbber while the first page is read, and on Load more while the next one is", async () => {
+    let answerFirst: (page: backend.ArtworkCandidatePage) => void = () => {};
+    let answerNext: (page: backend.ArtworkCandidatePage) => void = () => {};
+    vi.mocked(backend.getArtworkSlotCandidates)
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          answerFirst = resolve;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          answerNext = resolve;
+        }),
+      );
+    const { container } = await open(row());
+    expect(container.querySelector('[data-testid="spinner"]')).not.toBeNull();
+
+    await act(async () => answerFirst(PAGE));
+    expect(container.querySelector('[data-testid="spinner"]')).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(button(container, "Load more"));
+    });
+    const loading = container.querySelectorAll('[data-testid="spinner"]');
+    expect(loading).toHaveLength(1);
+    expect(loading[0]?.closest("button")).not.toBeNull();
+
+    await act(async () => answerNext({ success: true, candidates: [], has_more: false, tenders_pick: null }));
+    expect(container.querySelector('[data-testid="spinner"]')).toBeNull();
+  });
+
   it("answers the selected image on Use this image", async () => {
     const { container, onPick, closeModal } = await open(row());
     fireEvent.click(button(container, "460×215"));

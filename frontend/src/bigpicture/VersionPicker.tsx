@@ -38,6 +38,7 @@ import { showUnsyncedSavesModal } from "./UnsyncedSavesSwitchModal";
 import { getEventTarget } from "../utils/events";
 import { NO_FILE_ON_ROMM_LABEL } from "../utils/noFileOnRommWording";
 import { detach } from "../utils/detach";
+import { Throbber } from "../shared/Throbber";
 import { mountPruneLeaseOwner, releasePruneLeasesByOwner } from "../utils/pruneLease";
 import { loadVersionList, fetchVersionCovers, executeVersionSwitch, isSelectable } from "../utils/versionSwitch";
 import type { RommDataChangedDetail, RommRomUninstalledDetail } from "../types/events";
@@ -377,11 +378,7 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
       style={switching ? { opacity: 0.55 } : {}}
     >
       <FaLayerGroup size={20} color={offDefault ? ACTIVE_ACCENT : NEUTRAL_GREY} />
-      {switching ? (
-        <span className="romm-throbber" style={{ width: "14px", height: "14px" }} />
-      ) : (
-        <FaChevronDown size={10} color="#cfd3d8" />
-      )}
+      {switching ? <Throbber size="14px" /> : <FaChevronDown size={10} color="#cfd3d8" />}
     </DialogButton>
   );
 };

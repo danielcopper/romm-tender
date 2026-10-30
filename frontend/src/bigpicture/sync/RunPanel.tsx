@@ -43,6 +43,7 @@ import { ButtonRow, FLAT_BUTTON, GREEN, MUTED, Muted, SECONDARY_FONT, SectionTit
 import { FOCUS_RING_REACH, ScrollRegion } from "../layout/ScrollRegion";
 import { InlineBar, PaneRow, TableHeader, TableRow } from "./paneTable";
 import type { SyncPageState } from "./useSyncPage";
+import { ThrobberLabel } from "../../shared/Throbber";
 
 /** Unit, what is happening to it, what it produced. */
 const RUN_COLUMNS = "minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr)";
@@ -163,7 +164,7 @@ export const RunPanel: FC<{ state: SyncPageState }> = ({ state }) => {
       </PaneRow>
       <ButtonRow padding="6px 16px 4px">
         <DialogButton style={FLAT_BUTTON} disabled={state.cancelling} onClick={state.cancelRun}>
-          {state.cancelling ? "Cancelling…" : "Cancel Sync"}
+          <ThrobberLabel busy={state.cancelling}>{state.cancelling ? "Cancelling…" : "Cancel Sync"}</ThrobberLabel>
         </DialogButton>
       </ButtonRow>
       {state.units.length === 0 ? (

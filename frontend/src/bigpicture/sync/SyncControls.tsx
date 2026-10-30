@@ -16,6 +16,7 @@ import { pluralize } from "../../utils/pluralize";
 import { formatGb, formatSignedGb, memoryLevelColor } from "../SessionBudgetBanner";
 import { AMBER, GREEN, MUTED, Muted, RED, SECONDARY_FONT, SectionTitle } from "../layout/pane";
 import type { SyncPageState } from "./useSyncPage";
+import { ThrobberLabel } from "../../shared/Throbber";
 
 /** How a run ended, in one word and one colour. `running` is the one in flight;
  *  the five terminals a run reaches exactly once are the rest. */
@@ -143,6 +144,8 @@ function nothingToClear(stats: SyncStats | null, statsFailed: boolean): boolean 
   return !statsFailed;
 }
 
+const READING_STATS = "Reading what has already been synced…";
+
 /**
  * The line under Force Full Sync, which explains the state the button is in
  * rather than describing the press in the abstract.
@@ -154,9 +157,7 @@ function forceFullSyncNote(state: SyncPageState): string {
   if (state.run.running) return "Not while a run is in flight.";
   if (state.fullSyncCleared !== null) return `${state.fullSyncCleared}.`;
   if (state.stats === null) {
-    return state.statsFailed
-      ? "Could not read what has already been synced — this still clears it."
-      : "Reading what has already been synced…";
+    return state.statsFailed ? "Could not read what has already been synced — this still clears it." : READING_STATS;
   }
   if (nothingToClear(state.stats, state.statsFailed))
     return "No sync progress is recorded, so there is nothing to forget.";
@@ -171,6 +172,7 @@ const OptionsSection: FC<{ state: SyncPageState }> = ({ state }) => {
   // (pressing again would forget what is already forgotten), and stats saying
   // there is nothing recorded to forget.
   const disabled = running || state.fullSyncCleared !== null || nothingToClear(state.stats, state.statsFailed);
+  const note = forceFullSyncNote(state);
   return (
     <>
       <SectionTitle title="Options" />
@@ -205,7 +207,9 @@ const OptionsSection: FC<{ state: SyncPageState }> = ({ state }) => {
           Force Full Sync
         </DialogButton>
       </div>
-      <Muted>{forceFullSyncNote(state)}</Muted>
+      <Muted>
+        <ThrobberLabel busy={note === READING_STATS}>{note}</ThrobberLabel>
+      </Muted>
       {state.optionsStatus !== null && <Muted>{state.optionsStatus}</Muted>}
     </>
   );
@@ -251,7 +255,11 @@ const RunsSection: FC<{ state: SyncPageState }> = ({ state }) => (
         held stay: they were true when they were read, and an emptied list would
         read as "no runs". */}
     {state.runsFailed && <Muted>Could not read the run history. Open the page again to try.</Muted>}
-    {state.runsLoading && state.runs.length === 0 && !state.runsFailed && <Muted>Reading the run history…</Muted>}
+    {state.runsLoading && state.runs.length === 0 && !state.runsFailed && (
+      <Muted>
+        <ThrobberLabel busy>Reading the run history…</ThrobberLabel>
+      </Muted>
+    )}
     {!state.runsLoading && !state.runsFailed && state.runs.length === 0 && <Muted>No sync has run yet.</Muted>}
     {state.runs.map((run) => (
       <ControlRow

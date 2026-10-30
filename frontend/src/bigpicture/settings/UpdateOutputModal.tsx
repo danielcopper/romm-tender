@@ -15,6 +15,7 @@ import { getUpdateOutput, logError, type UpdateOutput, type UpdateOutputSection 
 import { detach } from "../../utils/detach";
 import { clockTime } from "../../utils/updateInstallView";
 import { AMBER, GREEN, MUTED } from "../layout/pane";
+import { ThrobberLabel } from "../../shared/Throbber";
 
 const TITLE = "What the installer said";
 
@@ -157,7 +158,13 @@ export const UpdateOutputModal: FC<UpdateOutputModalProps> = ({ read, attemptedV
     <ModalRoot closeModal={closeModal}>
       <div style={{ maxWidth: "720px", maxHeight: "76vh", overflowY: "auto", padding: "16px" }}>
         <div style={{ fontSize: "16px", fontWeight: "bold" }}>{title}</div>
-        {typeof body === "string" ? <Focusable {...TEXT_STOP}>{body}</Focusable> : body}
+        {typeof body === "string" ? (
+          <Focusable {...TEXT_STOP}>
+            <ThrobberLabel busy={output === undefined}>{body}</ThrobberLabel>
+          </Focusable>
+        ) : (
+          body
+        )}
         <DialogButton style={{ marginTop: "16px" }} onClick={() => closeModal?.()}>
           Close
         </DialogButton>

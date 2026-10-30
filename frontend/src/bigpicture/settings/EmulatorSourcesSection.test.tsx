@@ -4,6 +4,7 @@ import { act, render, fireEvent, within } from "@testing-library/react";
 import type { IconBaseProps, IconType } from "react-icons";
 import { FaCheckCircle, FaChevronDown, FaExclamationTriangle, FaInfoCircle } from "react-icons/fa";
 import { EmulatorSourcesSection } from "./EmulatorSourcesSection";
+import { throbberIn } from "../../test-utils/throbber";
 import { SOURCES_READING, SOURCES_UNREAD } from "../../utils/emulatorSourceWording";
 import { ENTRY_FOCUS_DELAY_MS, FOCUS_STOPS } from "../../utils/entryFocus";
 import { AMBER, GREEN, MUTED, SELECTION_ACCENT } from "../layout/pane";
@@ -483,6 +484,13 @@ describe("EmulatorSourcesSection", () => {
 
       expect(document.body).toHaveFocus();
     });
+  });
+
+  it("puts the throbber beside the line while the sources are read, and beside no other notice", () => {
+    const reading = renderSection(undefined);
+    expect(throbberIn(reading.getByTestId("sources-notice"))).not.toBeNull();
+    reading.unmount();
+    expect(throbberIn(renderSection(null).getByTestId("sources-notice"))).toBeNull();
   });
 
   const NOTHING: EmulatorSourcesListing = { sources: [], answering: null };

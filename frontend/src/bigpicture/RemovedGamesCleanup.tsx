@@ -43,6 +43,7 @@ import type { PageRead } from "./data/useDataPage";
 import { CleanupList, formatBytes } from "./CleanupList";
 import { countCleanup, planCleanup, versionsDeletingFiles, type CleanupCounts } from "./cleanupPlan";
 import { ButtonRow, FLAT_BUTTON, MUTED, RED } from "./layout/pane";
+import { ThrobberLabel } from "../shared/Throbber";
 
 const PAGE_SIZE = 50;
 const SELECTION_PAGE_SIZE = 100;
@@ -384,7 +385,7 @@ const CleanupRunProgress: FC<{ progress: PruneProgress; cancelling: boolean; onS
     <div style={{ color: MUTED, fontSize: "12px", marginTop: "4px" }}>{CANCEL_HINT}</div>
     <ButtonRow padding="6px 0 0">
       <DialogButton style={FLAT_BUTTON} disabled={cancelling} onClick={onStop}>
-        {cancelling ? "Stopping..." : "Stop Cleanup"}
+        <ThrobberLabel busy={cancelling}>{cancelling ? "Stopping..." : "Stop Cleanup"}</ThrobberLabel>
       </DialogButton>
     </ButtonRow>
     {cancelling && (
@@ -832,7 +833,11 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
               {runStarted || complete !== null ? "Close" : "Cancel"}
             </DialogButton>
             <DialogButton style={FLAT_BUTTON} disabled={pressBlocked} onClick={() => detach(start())}>
-              <span style={{ color: RED }}>{confirmButtonLabel(starting, progress, counts.versionsRemoved)}</span>
+              <span style={{ color: RED }}>
+                <ThrobberLabel busy={starting && progress === null}>
+                  {confirmButtonLabel(starting, progress, counts.versionsRemoved)}
+                </ThrobberLabel>
+              </span>
             </DialogButton>
           </ButtonRow>
           {pageLoadError !== null && (
@@ -855,7 +860,7 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
           )}
           {status && !complete && (
             <div role="status" aria-live="polite" style={{ marginTop: "10px", color: "#ffcc66" }}>
-              {status}
+              <ThrobberLabel busy={runInFlight && progress === null}>{status}</ThrobberLabel>
             </div>
           )}
           {blockedReason !== null && !runInFlight && (
@@ -968,7 +973,7 @@ export const RemovedGamesCleanupSection: FC<{ onScanRead?: (read: PageRead<numbe
           description={scanButtonDescription(syncRunning, runActive)}
           onClick={() => detach(scan())}
         >
-          {scanning ? "Scanning…" : "Clean Up Removed RomM Games"}
+          <ThrobberLabel busy={scanning}>{scanning ? "Scanning…" : "Clean Up Removed RomM Games"}</ThrobberLabel>
         </ButtonItem>
       </PanelSectionRow>
       {resultLost && (
@@ -982,7 +987,7 @@ export const RemovedGamesCleanupSection: FC<{ onScanRead?: (read: PageRead<numbe
             {progress ? (
               <CleanupProgress progress={progress} />
             ) : (
-              <Field label="Cleanup starting..." description={CANCEL_HINT} />
+              <Field label={<ThrobberLabel busy>Cleanup starting...</ThrobberLabel>} description={CANCEL_HINT} />
             )}
           </PanelSectionRow>
           {progress?.bundle_path && (
@@ -1009,7 +1014,7 @@ export const RemovedGamesCleanupSection: FC<{ onScanRead?: (read: PageRead<numbe
                 )
               }
             >
-              {cancelling ? "Stopping..." : "Stop Cleanup"}
+              <ThrobberLabel busy={cancelling}>{cancelling ? "Stopping..." : "Stop Cleanup"}</ThrobberLabel>
             </ButtonItem>
           </PanelSectionRow>
         </>

@@ -17,6 +17,7 @@ import {
 } from "@decky/ui";
 import type { SaveSyncSettings as SaveSyncSettingsType } from "../../types";
 import { TextInputModal } from "./TextInputModal";
+import { ThrobberLabel } from "../../shared/Throbber";
 
 interface SaveSyncSectionProps {
   saveSyncSettings: SaveSyncSettingsType | null;
@@ -133,7 +134,7 @@ export const SaveSyncSection: FC<SaveSyncSectionProps> = ({
               </PanelSectionRow>
               <PanelSectionRow>
                 <ButtonItem layout="below" onClick={onSyncAll} disabled={syncing}>
-                  {syncing ? "Syncing..." : "Sync All Saves Now"}
+                  <ThrobberLabel busy={syncing}>{syncing ? "Syncing..." : "Sync All Saves Now"}</ThrobberLabel>
                 </ButtonItem>
               </PanelSectionRow>
               {syncStatus && (
@@ -146,7 +147,7 @@ export const SaveSyncSection: FC<SaveSyncSectionProps> = ({
         </>
       ) : (
         <PanelSectionRow>
-          <Field label="Loading..." />
+          <Field label={<ThrobberLabel busy>Loading...</ThrobberLabel>} />
         </PanelSectionRow>
       )}
     </PanelSection>

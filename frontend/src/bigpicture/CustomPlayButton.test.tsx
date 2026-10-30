@@ -169,6 +169,7 @@ import { resetBoundAvailability, setBoundAvailability } from "../utils/vanishedB
 import type { SyncConflict, SaveStatus } from "../types";
 import { executeManualSaveSync } from "../utils/manualSaveSync";
 import { makeConflict } from "../test-utils/saveFixtures";
+import { throbberIn } from "../test-utils/throbber";
 
 function mockCachedDetail(overrides: Partial<CachedGameDetail> = {}): void {
   vi.mocked(getCachedGameDetail).mockResolvedValue({
@@ -534,6 +535,35 @@ describe("CustomPlayButton — cancel X on active download (#1049)", () => {
     const { findByLabelText } = await renderDownloading(42);
     // The icon-only cancel button is identified by its aria-label/title.
     expect(await findByLabelText("Cancel download")).toBeInTheDocument();
+  });
+
+  it("puts the throbber beside Starting... until the first progress frame, and none beside the bytes", async () => {
+    mockCachedDetail({ rom_id: 42, installed: false });
+    const utils = render(<CustomPlayButton appId={100} />);
+    const downloadBtn = await utils.findByText("Download");
+    expect(throbberIn(downloadBtn)).toBeNull();
+
+    await act(async () => {
+      downloadBtn.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(throbberIn(await utils.findByText("Starting..."))).not.toBeNull();
+
+    act(() => {
+      emitHostEvent<DownloadProgressEvent>("download_progress", {
+        rom_id: 42,
+        rom_name: "Test ROM",
+        platform_name: "PSX",
+        file_name: "test.chd",
+        status: "downloading",
+        progress: 0.3,
+        bytes_downloaded: 300,
+        total_bytes: 1000,
+      });
+    });
+    expect(utils.queryByText("Starting...")).toBeNull();
+    expect(utils.queryByTestId("spinner")).toBeNull();
   });
 
   it("does NOT render the cancel X in the idle Download state", async () => {
@@ -1385,6 +1415,22 @@ describe("CustomPlayButton — uninstall is visible and single-shot (#1664)", ()
     });
 
     expect(await findByText("Uninstalling 128/331")).toBeTruthy();
+    await finish();
+  });
+
+  it("puts the throbber beside Uninstalling... and beside its count", async () => {
+    const finish = pendingRemoveRom();
+    mockCachedDetail({ rom_id: 42, installed: true });
+    const { container, findByText } = render(<CustomPlayButton appId={100} />);
+    await findByText("Play");
+    const pressUninstall = await openUninstallMenu(container, 1);
+    await pressUninstall();
+
+    expect(throbberIn(await findByText("Uninstalling..."))).not.toBeNull();
+    act(() => {
+      emitHostEvent("uninstall_progress", { rom_id: 42, files_removed: 128, files_total: 331 });
+    });
+    expect(throbberIn(await findByText("Uninstalling 128/331"))).not.toBeNull();
     await finish();
   });
 
@@ -4586,6 +4632,38 @@ describe("CustomPlayButton — Stop Game", () => {
     expect(await utils.findByText("Play")).toBeInTheDocument();
   });
 
+  it("puts the throbber in the chevron's place and beside Stopping... while the stop runs", async () => {
+    let release: (v: { success: boolean; stopped: number; force_killed: number }) => void = () => {};
+    vi.mocked(backend.stopRunningGame).mockReturnValue(
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+    );
+    const { utils, menu } = await renderRunningWithMenu();
+    const stopItem = await menu.findByText("Stop Game");
+    expect(throbberIn(await utils.findByLabelText("Game actions"))).toBeNull();
+    expect(throbberIn(stopItem)).toBeNull();
+
+    await act(async () => {
+      stopItem.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const chevron = await utils.findByLabelText("Game actions");
+    expect(throbberIn(chevron)).not.toBeNull();
+    expect(chevron.querySelector("svg")).toBeNull();
+    const pendingMenu = openRunningMenu(chevron);
+    expect(throbberIn(await pendingMenu.findByText("Stopping..."))).not.toBeNull();
+
+    await act(async () => {
+      release({ success: true, stopped: 1, force_killed: 0 });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(await utils.findByText("Play")).toBeInTheDocument();
+  });
+
   it("does not fire a second backend stop while one is in flight", async () => {
     // A second stop request to a flushing emulator destroys the save it is
     // writing, so the in-flight press must not reach the backend at all.
@@ -6486,6 +6564,17 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
     await confirm(await chooseForget(container));
 
     expect((await findByText("Forgetting...")).closest("button")).toBeDisabled();
+  });
+
+  it("puts the throbber beside Forgetting... while the forget runs", async () => {
+    vi.mocked(backend.forgetDownload).mockReturnValue(new Promise(() => {}));
+    mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
+    const { container, findByText } = render(<CustomPlayButton appId={100} />);
+    expect(throbberIn(await findByText("Download again"))).toBeNull();
+
+    await confirm(await chooseForget(container));
+
+    expect(throbberIn(await findByText("Forgetting..."))).not.toBeNull();
   });
 
   it("does not bring the note back once the download completed", async () => {

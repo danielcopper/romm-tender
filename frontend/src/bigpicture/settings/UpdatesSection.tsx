@@ -14,6 +14,7 @@ import { GREEN } from "../layout/pane";
 import { INSTALL_STATE_UNREAD } from "../../utils/updateInstallView";
 import type { UpdateNoticeState } from "../../utils/updateNoticeStore";
 import type { UpdateOutcomeState } from "../../utils/updateOutcomeStore";
+import { ThrobberLabel } from "../../shared/Throbber";
 
 /** Shown only to a run from a checkout, which is never offered an install. */
 export const NOT_INSTALLED_PROGRAM = "Development build — install updates with the installer.";
@@ -100,7 +101,7 @@ export const UpdatesSection: FC<UpdatesSectionProps> = ({
           }}
           disabled={checking || install.underWay}
         >
-          {checking ? "Checking…" : "Check now"}
+          <ThrobberLabel busy={checking}>{checking ? "Checking…" : "Check now"}</ThrobberLabel>
         </ButtonItem>
       </PanelSectionRow>
       {result && (

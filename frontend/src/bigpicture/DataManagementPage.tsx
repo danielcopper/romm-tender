@@ -16,10 +16,11 @@
  */
 
 import { useState, type FC } from "react";
-import { Field, Spinner } from "@decky/ui";
+import { Field } from "@decky/ui";
 import { WidePage } from "./layout/WidePage";
 import { ListDetail, type ListDetailItem } from "./layout/ListDetail";
 import { LoadingRow } from "./LoadingRow";
+import { Throbber } from "../shared/Throbber";
 import { MUTED, ROW_MARKER_GAP, ROW_MARKER_WIDTH, SECONDARY_FONT, SELECTION_ACCENT } from "./layout/pane";
 import { DataDetail } from "./data/DataDetail";
 import { DATA_ROWS, asDataRowId, type DataRowId } from "./data/rows";
@@ -80,9 +81,7 @@ const RowLabel: FC<{ label: string; count: string | null; selected: boolean }> =
       {label}
     </span>
     <span style={{ flex: "0 0 auto", fontSize: SECONDARY_FONT, color: MUTED }}>
-      {/* `1em` of the slot's own font: the spinner's SVG fills whatever it is
-          not held to, and the count it stands in for is set in that size. */}
-      {count === null ? <Spinner width="1em" height="1em" /> : count}
+      {count === null ? <Throbber /> : count}
     </span>
   </span>
 );

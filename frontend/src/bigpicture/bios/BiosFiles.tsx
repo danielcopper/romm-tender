@@ -16,14 +16,15 @@
  */
 
 import { useState, type FC, type ReactNode } from "react";
-import { ConfirmModal, DialogButton, showModal, Spinner } from "@decky/ui";
+import { ConfirmModal, DialogButton, showModal } from "@decky/ui";
 import type { BiosFileStatus, EmulatorTab, FirmwarePlatformExt } from "../../types";
 import { downloadName, fetchedAsRequired, isFetchable } from "../../utils/biosFetchable";
 import { biosFileDescription, biosFileNote, contentsWords } from "../../utils/biosFileNote";
 import { needWords, unmetWord } from "../../utils/biosGroup";
-import { DOWNLOAD_DAMAGED, biosPlaceLines, libraryRowLines } from "../../utils/biosPlaceWords";
+import { DOWNLOAD_DAMAGED, IDENTIFYING, biosPlaceLines, libraryRowLines } from "../../utils/biosPlaceWords";
 import { isUnclaimedLibraryRow, selectedTab, tabLabel, tabRows } from "../../utils/biosTabs";
 import { useIdentifications } from "../../utils/firmwareIdentifications";
+import { Throbber, ThrobberLabel } from "../../shared/Throbber";
 import { EmulatorSelector } from "../EmulatorSelector";
 import {
   ButtonRow,
@@ -254,12 +255,12 @@ const BiosTableHeader: FC = () => (
  * rather than in the Contents cell because the cell is 84px and one of these
  * labels is not; the cell counts them instead.
  */
-const BiosRowLines: FC<{ lines: string[] }> = ({ lines }) =>
+const BiosRowLines: FC<{ lines: string[]; busyLine: string | null }> = ({ lines, busyLine }) =>
   lines.length === 0 ? null : (
     <div style={{ display: "flex", flexDirection: "column", marginLeft: "18px" }}>
       {lines.map((line) => (
         <div key={line} style={{ fontSize: NOTE_FONT, lineHeight: 1.2, color: MUTED, whiteSpace: "pre-wrap" }}>
-          {line}
+          <ThrobberLabel busy={line === busyLine}>{line}</ThrobberLabel>
         </div>
       ))}
     </div>
@@ -398,8 +399,10 @@ const BiosFileRow: FC<{
   action: ReactNode;
   emulator: string | null;
   placeLines: string[];
+  /** The one of *placeLines* that says work for this row is under way, if any. */
+  busyLine?: string | null;
   stop: BiosRowStop;
-}> = ({ file, action, emulator, placeLines, stop }) => {
+}> = ({ file, action, emulator, placeLines, busyLine = null, stop }) => {
   const { note, lines, fromLibrary } = biosFileNote(file, emulator);
   // What the resolver's check found at the row's place, in words —
   // `utils/biosFileNote.ts` holds them beside the row's other words.
@@ -486,7 +489,7 @@ const BiosFileRow: FC<{
           thing a reader placing a file by hand needs. Under the row there is a
           whole width for it, on one clipped line. */}
       {description && <div style={UNDER_NAME_LINE}>{description}</div>}
-      <BiosRowLines lines={rowLines} />
+      <BiosRowLines lines={rowLines} busyLine={busyLine} />
     </PaneTableRow>
   );
   if (action || stop === "focusable") return row;
@@ -526,7 +529,7 @@ function redWhileEnabled(text: string, disabled: boolean): ReactNode {
  *  is speaking; *disabled* is that button's own state. */
 function downloadLabel(part: BiosPart, id: string, label: string, size: number, disabled: boolean): ReactNode {
   const showing = downloadState(part, id);
-  if (showing === "spinner") return <Spinner width={size} height={size} />;
+  if (showing === "spinner") return <Throbber size={`${size}px`} />;
   return showing === "failed" ? redWhileEnabled("Failed", disabled) : label;
 }
 
@@ -917,9 +920,10 @@ export const BiosLibraryTable: FC<{ part: BiosPart }> = ({ part }) => {
             action={rowAction(part, file, libraryFetchable, libraryKey(file.file_name))}
             emulator={input.answer.active_core_label ?? null}
             placeLines={[
-              ...libraryRowLines(file, file.library ? identifications[file.library.md5] : undefined),
+              ...libraryRowLines(file, file.library ? identifications.answers[file.library.md5] : undefined),
               ...(input.actions.attemptFor(input.slug, null, downloadName(file)).damaged ? [DOWNLOAD_DAMAGED] : []),
             ]}
+            busyLine={file.library && identifications.asking === file.library.md5 ? IDENTIFYING : null}
             stop={input.stop}
           />
         </div>

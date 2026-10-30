@@ -259,4 +259,25 @@ describe("ValidatingModalShell", () => {
       expect(onSubmit).not.toHaveBeenCalled();
     });
   });
+
+  it("puts the throbber beside the submit label while the submit is in flight, and nowhere else", () => {
+    const shell = (submitting: boolean) => (
+      <ValidatingModalShell
+        title="My Title"
+        error={null}
+        errorTestId="shell-error"
+        submitLabel={submitting ? "Saving…" : "Save"}
+        submitting={submitting}
+        submitDisabled={submitting}
+        onSubmit={vi.fn()}
+      >
+        {child()}
+      </ValidatingModalShell>
+    );
+    const { getByText, getAllByTestId, queryByTestId, rerender } = render(shell(true));
+    expect(getAllByTestId("spinner")).toHaveLength(1);
+    expect(getByText("Saving…").querySelector('[data-testid="spinner"]')).not.toBeNull();
+    rerender(shell(false));
+    expect(queryByTestId("spinner")).toBeNull();
+  });
 });

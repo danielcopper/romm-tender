@@ -15,7 +15,7 @@
  * Management.
  */
 
-import { useState, type FC, type ReactNode } from "react";
+import { useState, type FC } from "react";
 import { ButtonItem, DialogButton, Field, PanelSection, PanelSectionRow, TextField, ToggleField } from "@decky/ui";
 import { detach } from "../../utils/detach";
 import { formatBytes } from "../../utils/formatters";
@@ -23,6 +23,7 @@ import { fuzzyMatch } from "../../utils/fuzzyMatch";
 import { pluralize } from "../../utils/pluralize";
 import { SYNC_RUNNING_HINT, useSyncRunning } from "../../utils/syncRunning";
 import { LoadingRow } from "../LoadingRow";
+import { ThrobberLabel } from "../../shared/Throbber";
 import { RemovedGamesCleanupSection } from "../RemovedGamesCleanup";
 import {
   ButtonRow,
@@ -46,9 +47,11 @@ import type { DataRowId } from "./rows";
  */
 const ALARM = "#ff4444";
 
-/** The line under a pane's sentence that carries its figures. */
-const Figures: FC<{ children: ReactNode }> = ({ children }) => (
-  <div style={{ fontSize: SECONDARY_FONT, color: "#dcdedf", padding: "0 16px 8px" }}>{children}</div>
+/** The line under a pane's sentence that carries its figures, behind the throbber while they are *busy* being read. */
+const Figures: FC<{ busy?: boolean; children: string }> = ({ busy = false, children }) => (
+  <div style={{ fontSize: SECONDARY_FONT, color: "#dcdedf", padding: "0 16px 8px" }}>
+    <ThrobberLabel busy={busy}>{children}</ThrobberLabel>
+  </div>
 );
 
 /**
@@ -111,7 +114,7 @@ const ShortcutsPane: FC<{ state: DataPageState }> = ({ state }) => {
         The Steam entries Tender created for your RomM games. Removing them leaves downloaded ROM files and save files
         where they are; the next sync puts the shortcuts back.
       </Muted>
-      <Figures>
+      <Figures busy={state.shortcutCount.state === "reading"}>
         {figureLine(state.shortcutCount, "The shortcut count", (count) => `${pluralize(count, "shortcut")} in Steam`)}
       </Figures>
       <ButtonRow padding="2px 16px 6px">
@@ -137,7 +140,7 @@ const RomFilesPane: FC<{ state: DataPageState }> = ({ state }) => {
         The ROMs Tender downloaded to your device, one per install — a game you keep two versions of is two of these.
         Removing them keeps every shortcut, so the games stay in your library and can be downloaded again.
       </Muted>
-      <Figures>
+      <Figures busy={inventory.state === "reading"}>
         {figureLine(
           inventory,
           "The installed-ROM figures",
@@ -195,7 +198,7 @@ const GridImagesPane: FC<{ state: DataPageState }> = ({ state }) => {
             disabled={state.busy || syncRunning || scanning}
             onClick={() => detach(state.cleanupGridImages(false))}
           >
-            {scanning ? "Scanning…" : "Scan for orphaned images"}
+            <ThrobberLabel busy={scanning}>{scanning ? "Scanning…" : "Scan for orphaned images"}</ThrobberLabel>
           </DialogButton>
         ) : (
           <ConfirmButton
@@ -357,7 +360,7 @@ const NonSteamPane: FC<{ state: DataPageState }> = ({ state }) => {
         you added by hand. Your RomM games are not counted here; they are counted under Tender&apos;s shortcuts. The
         whitelist below protects what you keep; everything else is what the button removes.
       </Muted>
-      <Figures>{figures()}</Figures>
+      <Figures busy={state.foreignApps.state === "reading"}>{figures()}</Figures>
       {state.unidentifiedCount > 0 && (
         <Muted>
           {state.unidentifiedCount === 1
@@ -471,7 +474,7 @@ const RecoveryBundlesPane: FC<{ state: DataPageState }> = ({ state }) => {
         {answered === null ? "" : `, in ${answered.recovery_root}`}. Nothing is ever read back automatically and nothing
         here removes one — they are yours to keep, move or delete in a file manager.
       </Muted>
-      <Figures>
+      <Figures busy={inventory.state === "reading"}>
         {figureLine(
           inventory,
           "The list of recovery bundles",

@@ -200,6 +200,15 @@ describe("UpdatesSection", () => {
     expect((busy.getByText("Checking…") as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("shows the throbber beside Checking… while a check is in flight, and none on Check now", () => {
+    const busy = renderSection({}, { checking: true });
+    expect(busy.getByText("Checking…").querySelector('[data-testid="spinner"]')).not.toBeNull();
+    busy.unmount();
+
+    const idle = renderSection();
+    expect(idle.getByText("Check now").querySelector('[data-testid="spinner"]')).toBeNull();
+  });
+
   it("shows the last check's result, and nothing where there is none", () => {
     expect(renderSection().queryByTestId("updates-result")).toBeNull();
     const { getByTestId } = renderSection({}, { result: "The check failed." });
