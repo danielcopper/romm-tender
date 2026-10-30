@@ -117,8 +117,9 @@ class RollbackOrchestrator:
         Raises its refusals, ``SyncEngine.live_device_id``'s among them, taken
         before the server's saves are listed; a RomM error from listing them,
         from the transfer or from acknowledging an adopt propagates — but for
-        Use Server's download once its file is in place, which answers success
-        (:meth:`_resolve_conflict_use_server`) — and an ``OSError`` from the
+        an acknowledgement once the local file holds the head's bytes, which
+        answers success (:meth:`_resolve_conflict_use_server`,
+        :meth:`_resolve_conflict_keep_local`) — and an ``OSError`` from the
         local side refuses with ``resolve_failed``.
         """
         rom_id = int(rom_id)
@@ -312,7 +313,10 @@ class RollbackOrchestrator:
         device, through the retry strategy, and records the sync boundary and
         the baseline only once that succeeded — after the user resolved the
         conflict this device must be current on the head. A failure propagates
-        with nothing recorded. A file that no longer hashes as it did when it
+        with nothing recorded, but for a RomM error while the local file holds
+        *server*'s bytes (:meth:`_holds_server_save`): the resolution is carried
+        out on this device, so it is logged as a warning and counts as done, and
+        the next sync adopts and acknowledges the file (#2664 D9). A file that no longer hashes as it did when it
         was compared is uploaded instead, as a file that differs is.
 
         The comparison fetches the server copy (:meth:`SaveTransfer.hash_server_copy`).
@@ -343,21 +347,31 @@ class RollbackOrchestrator:
             server_hash = None
 
         default_slot = resolve_default_slot(self._settings)
-        if (
-            server_hash
-            and local_hash == server_hash
-            and server.get("id") is not None
-            and self._transfer.adopt_server_head(
-                save_state,
-                target,
-                server,
-                local_path,
-                local_hash,
-                device_id=device_id,
-                system=system,
-                default_slot=default_slot,
-            )
-        ):
+        if server_hash and local_hash == server_hash and server.get("id") is not None:
+            try:
+                adopted = self._transfer.adopt_server_head(
+                    save_state,
+                    target,
+                    server,
+                    local_path,
+                    local_hash,
+                    device_id=device_id,
+                    system=system,
+                    default_slot=default_slot,
+                )
+            except RommApiError as e:
+                if not self._holds_server_save(local_path, server):
+                    raise
+                self._logger.warning(
+                    "keep_local: %s is the server save, but RomM did not take its acknowledgement (%s);"
+                    " the next sync adopts it",
+                    target,
+                    e,
+                )
+                return
+        else:
+            adopted = False
+        if adopted:
             # The head's own ``content_hash`` (never the recomputed
             # ``server_hash``, which is parity-derived) is what the adopt stores as
             # ``last_sync_server_hash``, so a later identity check can take the

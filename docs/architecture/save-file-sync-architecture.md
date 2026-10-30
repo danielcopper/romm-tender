@@ -1359,9 +1359,13 @@ endpoint calls. The façade delegates to `SyncEngine.resolve_sync_conflict`, who
      through the retry strategy), then recorded with the sync boundary and without re-uploading — after the user
      resolved the conflict this device must be current on the head. A file that no longer hashes as it did by the time
      the adopt measures it again is uploaded instead, as one that differs is; recording nothing would bring the resolved
-     conflict back. Otherwise the local file is POSTed as a new version with `overwrite=true` — the user's deliberate
-     overwrite bypasses the 409 gate (#1276). The POST's own `device_save_sync` upsert leaves us `is_current=true`, so
-     the redundant `confirm_download` ack is skipped (#1458). The comparison only spares an upload: a server copy this
+     conflict back. Where RomM does not take that acknowledgement but the local file holds the head's bytes (by its
+     `content_hash`, as for Use Server below), the resolution answers success all the same, with a warning logged and
+     nothing recorded: the device already holds the head, and the next sync adopts and acknowledges it
+     ([#2664](https://github.com/danielcopper/romm-tender/issues/2664) D9); a head without a `content_hash` answers the
+     error. Otherwise the local file is POSTed as a new version with `overwrite=true` — the user's deliberate overwrite
+     bypasses the 409 gate (#1276). The POST's own `device_save_sync` upsert leaves us `is_current=true`, so the
+     redundant `confirm_download` ack is skipped (#1458). The comparison only spares an upload: a server copy this
      device cannot write (a full disk) is logged as a warning and any other failure to fetch it passed over, and either
      way the local file is uploaded.
    - `use_server` → `_resolve_conflict_use_server` downloads the picked save, writes it to the local path and
@@ -1379,9 +1383,9 @@ refused before the server is asked anything.
 
 Before it lists, the resolution takes its device id from `SyncEngine.live_device_id` and refuses as it does
 (`device_not_registered` or `server_unreachable`). A RomM error from fetching the list, from the transfer or from an
-acknowledgement answers `classify_error`'s reason and message — but for Use Server's acknowledgement once its file is in
-place, above. An `OSError` on the local side — a local save missing at the canonical path among them — refuses with
-`resolve_failed`. Anything else is a transport error.
+acknowledgement answers `classify_error`'s reason and message — but for Use Server's and Keep Local's acknowledgement
+once the file holds the head's bytes, above. An `OSError` on the local side — a local save missing at the canonical path
+among them — refuses with `resolve_failed`. Anything else is a transport error.
 
 ### Why no defer state
 
@@ -1806,7 +1810,7 @@ An acknowledgement that fails — a RomM error, a first answer that names other 
 this device not current (`RommAcknowledgementNotTaken`, which `classify_error` answers `server_error`) — raises with the
 file in place, its backup kept and nothing recorded ([#2184](https://github.com/danielcopper/romm-tender/issues/2184)
 D8): the sync reports the file as an error, a slot switch counts it among the downloads that failed
-(`switch_incomplete`), and Use Server counts as done
+(`switch_incomplete`), and Use Server and Keep Local's adopt count as done where the file holds the head's bytes
 ([resolve_sync_conflict endpoint](#resolve_sync_conflict-endpoint)). The next sync finds the file identical to a head
 this device is not current on, and adopts and acknowledges it (rows 11a and 12a); where another client replaced the head
 meanwhile, it decides against that newer head as any sync does.
