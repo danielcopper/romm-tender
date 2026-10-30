@@ -636,8 +636,8 @@ nothing is said; otherwise the answer stands under the **Play** button:
 
 - **"This game has to be installed in RPCS3 Game Serial (Standalone) first."** — the file is a package to install in the
   emulator named, before anything starts it. **Play** is off.
-- **"track03.bin is not the file dreamcast starts from; it starts from .cdi, .CDI, .chd, .CHD, …"** — the download holds
-  no file the system starts. **Play** is off.
+- **"track03.bin is not the file dreamcast starts from; it starts from .cdi, .chd, .cue, …"** — the download holds no
+  file the system starts. **Play** is off.
 - **"Azahar (Standalone) does not start .zip; other emulators of this system do. Choose another emulator in the emulator
   menu."** — **Play** is off until you do.
 - **"Whether Game.sfc starts cannot be established: …"** — the emulator source could not answer, with the reason.

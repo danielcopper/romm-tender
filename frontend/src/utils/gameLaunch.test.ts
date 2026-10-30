@@ -71,6 +71,13 @@ describe("each verdict has its own sentence (#2195 D2)", () => {
     );
   });
 
+  it("lists an extension ES-DE spells in both cases once, as the resolver spells it first", () => {
+    const dreamcast = { ...DREAMCAST_TRACK, starts_from: [".cdi", ".CDI", ".chd", ".CHD", ".Cue", ".cue", ".CUE"] };
+    expect(launchRefusal(dreamcast, true)).toBe(
+      "track03.bin is not the file dreamcast starts from; it starts from .cdi, .chd, .Cue.",
+    );
+  });
+
   it("a file one emulator does not take points at the emulator choice", () => {
     expect(launchRefusal(NOT_THIS_EMULATOR, true)).toBe(
       "Mupen64Plus-Next does not start .n64; other emulators of this system do. Choose another emulator in the emulator menu.",

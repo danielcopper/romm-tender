@@ -36,6 +36,24 @@ function notEstablishedBecause(launch: GameLaunch): string {
   }
 }
 
+/**
+ * The extensions a system starts from, as a sentence lists them: extensions
+ * that differ only in case once, in the spelling the resolver names first
+ * (#2195 D34). Display only — whether a file starts is the resolver's
+ * case-exact answer.
+ */
+function listedExtensions(extensions: readonly string[]): string {
+  const seen = new Set<string>();
+  const shown: string[] = [];
+  for (const extension of extensions) {
+    const key = extension.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    shown.push(extension);
+  }
+  return shown.join(", ");
+}
+
 /** Whether this verdict refuses a start. */
 export function launchRefused(launch: GameLaunch | null): boolean {
   return launch !== null && REFUSING.has(launch.state);
@@ -56,7 +74,7 @@ export function launchRefusal(launch: GameLaunch | null, canPick: boolean): stri
         : `This game has to be installed in ${names.join(" or ")} first.`;
     }
     case "not_a_launch_file":
-      return `${launch.file} is not the file ${launch.system} starts from; it starts from ${launch.starts_from.join(", ")}.`;
+      return `${launch.file} is not the file ${launch.system} starts from; it starts from ${listedExtensions(launch.starts_from)}.`;
     case "not_this_emulator": {
       const entry = launch.entry ?? "This emulator";
       if (launch.other_entries.length === 0) return `${entry} does not start ${launch.extension}.`;
