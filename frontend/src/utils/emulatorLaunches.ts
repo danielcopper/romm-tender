@@ -35,7 +35,7 @@ export function askEntryLaunches(
   const listeners = new Set<() => void>();
   const land = (list: readonly GameLaunch[]): void => {
     if (!stillAbout()) return;
-    answers = new Map(list.flatMap((launch) => (launch.entry === null ? [] : [[launch.entry, launch] as const])));
+    answers = new Map(list.map((launch) => [launch.entry, launch] as const));
     for (const listener of listeners) listener();
   };
   read(romId)

@@ -237,6 +237,7 @@ describe("a start's own read of the emulator", () => {
           state: "not_a_launch_file",
           entry: "Flycast",
           system: "dreamcast",
+          platform_name: "Sega Dreamcast",
           file: "track03.bin",
           extension: ".bin",
           starts_from: [".cue", ".gdi"],
@@ -249,7 +250,7 @@ describe("a start's own read of the emulator", () => {
       }),
     );
     expect(await emulatorRefusalForRom(7, "test")).toBe(
-      "track03.bin is not the file dreamcast starts from; it starts from .cue, .gdi.",
+      "track03.bin is not the file Sega Dreamcast starts from; it starts from .cue, .gdi.",
     );
   });
 });

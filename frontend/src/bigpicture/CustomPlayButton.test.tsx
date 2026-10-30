@@ -2460,6 +2460,7 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
             state: "needs_installing",
             entry: "RPCS3 Directory (Standalone)",
             system: "ps3",
+            platform_name: "PlayStation 3",
             file: "Puppeteer.pkg",
             extension: ".pkg",
             starts_from: [],

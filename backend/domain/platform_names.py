@@ -45,6 +45,13 @@ def decode_platform_names(raw: str | None) -> dict[str, str]:
     return decoded if isinstance(decoded, dict) else {}
 
 
+def platform_display_name(raw: str | None, slug: str | None) -> str:
+    """The name a platform is shown under: the cached name for *slug* in *raw*, else the slug; ``""`` without a slug."""
+    if not slug:
+        return ""
+    return decode_platform_names(raw).get(slug, slug)
+
+
 def listed_platform_names(platforms: Iterable[Mapping[str, Any]]) -> dict[str, str]:
     """Every listed platform's ``name``, keyed by its slug; a platform without a slug or a name is left out."""
     return {

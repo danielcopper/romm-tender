@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import json
 import logging
 from typing import Any, ClassVar
 
@@ -1444,6 +1445,16 @@ class TestGetEmulatorLaunches:
 
         assert core_info.launchability_calls == [("psx", "/roms/psx/Game/Game (Disc 2).cue", "SwanStation")]
 
+    def test_every_entry_s_answer_names_the_platform_as_the_game_page_does(self, event_loop, service, active_core, uow):
+        uow.kv_config.set("platform_names", json.dumps({"ps3": "PlayStation 3"}))
+        _seed_rom(uow, rom_id=42, platform_slug="ps3")
+        _seed_install(uow, rom_id=42, file_path="/roms/ps3/Game.iso", platform_slug="ps3")
+        active_core.resolved[42] = _resolved(self._RPCS3_SHORTCUT, self._RPCS3_DIRECTORY)
+
+        result = event_loop.run_until_complete(service.get_emulator_launches(42))
+
+        assert [entry["platform_name"] for entry in result] == ["PlayStation 3", "PlayStation 3"]
+
     def test_a_game_that_is_not_installed_asks_nothing(self, event_loop, service, core_info, active_core, uow):
         _seed_rom(uow, rom_id=42, platform_slug="ps3")
         active_core.resolved[42] = _resolved(self._RPCS3_DIRECTORY)
@@ -1494,6 +1505,26 @@ class TestTheChosenEntrysLaunch:
         ]
         assert result["launch"]["state"] == NEEDS_INSTALLING
         assert result["launch"]["install_in"] == ["RPCS3 Game Serial (Standalone)"]
+
+    def test_the_answer_names_the_platform_as_the_game_page_does(self, event_loop, service, active_core, uow):
+        # The sentences name the platform, never the system short name (#2195 D36).
+        uow.kv_config.set("platform_names", json.dumps({"dc": "Sega Dreamcast"}))
+        _seed_rom(uow, rom_id=42, platform_slug="dc")
+        _seed_install(uow, rom_id=42, file_path="/roms/dreamcast/Game/track03.bin", platform_slug="dc")
+        active_core.resolved[42] = _resolved(self._DIRECTORY, chosen=self._DIRECTORY)
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert result["launch"]["platform_name"] == "Sega Dreamcast"
+
+    def test_a_platform_the_cache_does_not_name_is_named_by_its_slug(self, event_loop, service, active_core, uow):
+        _seed_rom(uow, rom_id=42, platform_slug="dc")
+        _seed_install(uow, rom_id=42, file_path="/roms/dreamcast/Game/track03.bin", platform_slug="dc")
+        active_core.resolved[42] = _resolved(self._DIRECTORY, chosen=self._DIRECTORY)
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert result["launch"]["platform_name"] == "dc"
 
     def test_a_game_with_no_chosen_entry_asks_nothing(self, event_loop, service, core_info, active_core, uow):
         # No default and no pick: the start is refused for that already (#2195 D7).

@@ -31,6 +31,7 @@ from domain.emulator_choice import (
 )
 from domain.emulator_commands import default_option, label_to_invocation, options_to_payload, shipped_default
 from domain.emulator_pick import pick_for, platform_pick, platform_pick_value, source_kind
+from domain.platform_names import PLATFORM_NAMES_KEY, platform_display_name
 from domain.rom_files import folder_boot_root
 from domain.shortcut_data import (
     EmulatorInvocation,
@@ -209,7 +210,8 @@ class CoreService:
         if install is None or resolved is None or resolved.choice.option is None:
             return None
         path = _asked_path(install, rom, self._disc_resolver)
-        return self._core_info.launchability(install.system, path, label=resolved.choice.option.label).payload()
+        verdict = self._core_info.launchability(install.system, path, label=resolved.choice.option.label)
+        return verdict.payload(platform_name=self._platform_name(rom.platform_slug))
 
     async def get_emulator_launches(self, rom_id: int) -> list[dict[str, Any]]:
         """Whether each emulator entry of ``rom_id``'s system starts the game's installed file.
@@ -228,15 +230,20 @@ class CoreService:
         question = self._launch_question(rom_id)
         if question is None:
             return []
-        system, path, resolved = question
+        system, path, resolved, platform_name = question
         reading = self._core_info.sources_reading()
         return [
-            self._core_info.launchability(system, path, label=option.label, reading=reading).payload()
+            self._core_info.launchability(system, path, label=option.label, reading=reading).payload(
+                platform_name=platform_name
+            )
             for option in resolved.options
         ]
 
-    def _launch_question(self, rom_id: int) -> tuple[str, str, ResolvedEmulator] | None:
-        """The system, the path (:func:`_asked_path`) and the emulator resolution ``rom_id``'s question is asked with.
+    def _launch_question(self, rom_id: int) -> tuple[str, str, ResolvedEmulator, str] | None:
+        """What ``rom_id``'s question is asked with, and the platform name its answers carry.
+
+        The system, the path (:func:`_asked_path`), the emulator resolution and
+        the platform's name.
 
         ``None`` for a ROM that is not installed or has no system to ask.
         """
@@ -246,7 +253,12 @@ class CoreService:
         resolved = self._active_core.resolve_rom(rom_id)
         if resolved is None:
             return None
-        return (install.system, _asked_path(install, rom, self._disc_resolver), resolved)
+        return (
+            install.system,
+            _asked_path(install, rom, self._disc_resolver),
+            resolved,
+            self._platform_name(rom.platform_slug),
+        )
 
     async def get_system_core_info(self, platform_slug: str) -> dict[str, Any]:
         """Return the emulators available for *platform_slug* + the active one.
@@ -630,6 +642,11 @@ class CoreService:
         # ROM resolves to its own file_path.
         bake_path = self._disc_resolver.resolve_for_install(install, rom.selected_disc)
         return (build_launch_options(invocation, bake_path), app_id)
+
+    def _platform_name(self, platform_slug: str | None) -> str:
+        """The name the game page shows *platform_slug* under, which a launch answer's sentences name (#2195 D36)."""
+        with self._uow_factory() as uow:
+            return platform_display_name(uow.kv_config.get(PLATFORM_NAMES_KEY), platform_slug)
 
     def _read_rom_and_install(self, rom_id: int) -> tuple[Rom | None, RomInstall | None]:
         with self._uow_factory() as uow:

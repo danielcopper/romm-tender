@@ -5240,6 +5240,7 @@ describe("RomMPlaySection", () => {
       state: "starts",
       entry: "RPCS3 Directory (Standalone)",
       system: "ps3",
+      platform_name: "PlayStation 3",
       file: "Puppeteer.pkg",
       extension: ".pkg",
       starts_from: [],
@@ -5309,11 +5310,14 @@ describe("RomMPlaySection", () => {
 
     it("a verdict not established leaves Play on and says why under the row", async () => {
       const { container } = await mountWith({
-        gameLaunch: { ...LAUNCH, state: "not_established", reason: "no_source" },
+        gameLaunch: { ...LAUNCH, state: "not_established", reason: "catalogue_unread" },
+        emulatorSource: { kind: "retrodeck", starts_games: true },
       });
 
       const note = container.querySelector<HTMLElement>('.romm-play-section-row [data-testid="start-note"]');
-      expect(note?.textContent).toBe("Whether Puppeteer.pkg starts cannot be established: no emulator source answers.");
+      expect(note?.textContent).toBe(
+        "Whether Puppeteer.pkg starts cannot be established: RetroDECK's list of emulators could not be read.",
+      );
       expect(capturedPlayButton[capturedPlayButton.length - 1]!.emulatorRefusal).toBeNull();
     });
 

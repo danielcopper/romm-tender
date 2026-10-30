@@ -50,7 +50,7 @@ class Launchability:
     """
 
     state: str
-    entry: str | None
+    entry: str
     system: str
     file: str
     extension: str
@@ -61,12 +61,17 @@ class Launchability:
     contents_unread: bool = False
     format_unestablished: bool = False
 
-    def payload(self) -> dict[str, Any]:
-        """The verdict as the panel reads it."""
+    def payload(self, *, platform_name: str) -> dict[str, Any]:
+        """The verdict as the panel reads it, with the name the game page shows the game's platform under.
+
+        The sentences name the platform by that name rather than by the system
+        it was asked as (#2195 D36); the resolver knows only the system.
+        """
         return {
             "state": self.state,
             "entry": self.entry,
             "system": self.system,
+            "platform_name": platform_name,
             "file": self.file,
             "extension": self.extension,
             "starts_from": list(self.starts_from),

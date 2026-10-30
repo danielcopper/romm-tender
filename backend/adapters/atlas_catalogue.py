@@ -398,7 +398,7 @@ def _installed_in(installers: Any) -> tuple[str, ...]:
     return tuple(installer.entry.label for installer in installers if installer.entry is not None)
 
 
-def _launchability(answer: Any, *, system: str, content_path: str, label: str | None) -> Launchability:
+def _launchability(answer: Any, *, system: str, content_path: str, label: str) -> Launchability:
     """*answer* in Tender's words."""
     state = _LAUNCH_STATES.get(answer.verdict, LAUNCH_NOT_ESTABLISHED)
     codes = set(_caveat_codes(answer))

@@ -12,6 +12,7 @@ function launch(entry: string, state: GameLaunch["state"] = "starts"): GameLaunc
     state,
     entry,
     system: "ps3",
+    platform_name: "PlayStation 3",
     file: "Game.ps3",
     extension: ".ps3",
     starts_from: [],

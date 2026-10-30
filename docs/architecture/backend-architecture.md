@@ -1986,7 +1986,9 @@ asked about as ES-DE scans it. Two endpoints ask it, each for one game: `CoreSer
 chosen entry's verdict as `launch` — the game page, a core switch and Steam's own Play read it there — and
 `CoreService.get_emulator_launches` answers every entry's for the emulator menu, which opens at once and shows each
 answer as it lands (D22, D31). Nothing asks it for a list of games: an entry's first answer may probe its core, which
-costs seconds (D31).
+costs seconds (D31). Each answer carries the name the game page shows the game's platform under (`platform_name`, read
+through `domain/platform_names.py::platform_display_name` as game detail reads it, the slug where the cache names none),
+and the sentences name the platform by it rather than by the system the resolver was asked as (D36).
 
 **Every installed game gets its launch command.** The install recorder records every download with its files, and every
 bake site — library sync's `installed_paths`, download-complete's re-bake, the core-change re-bake, the startup

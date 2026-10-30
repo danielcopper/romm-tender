@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GameLaunch } from "../types";
+import type { AnsweringSource, GameLaunch } from "../types";
 import { HostTransportError } from "../api/host";
 import { entryLaunchLine, launchNote, launchRefusal, launchRefused, startCheckFailureSentence } from "./gameLaunch";
 import { TimeoutError } from "./withTimeout";
@@ -9,6 +9,7 @@ function launch(overrides: Partial<GameLaunch> = {}): GameLaunch {
     state: "starts",
     entry: "RPCS3 Directory (Standalone)",
     system: "ps3",
+    platform_name: "PlayStation 3",
     file: "Game.ps3",
     extension: ".ps3",
     starts_from: [],
@@ -21,6 +22,9 @@ function launch(overrides: Partial<GameLaunch> = {}): GameLaunch {
   };
 }
 
+const RETRODECK: AnsweringSource = { kind: "retrodeck", starts_games: true };
+const EMUDECK: AnsweringSource = { kind: "emudeck", starts_games: false };
+
 const PS3_PKG = launch({
   state: "needs_installing",
   file: "Puppeteer.pkg",
@@ -31,6 +35,7 @@ const DREAMCAST_TRACK = launch({
   state: "not_a_launch_file",
   entry: "Flycast",
   system: "dreamcast",
+  platform_name: "Sega Dreamcast",
   file: "track03.bin",
   extension: ".bin",
   starts_from: [".chd", ".cue", ".gdi"],
@@ -47,7 +52,8 @@ const NOT_ESTABLISHED = launch({
   state: "not_established",
   file: "Game.sfc",
   reason: "system_unknown",
-  system: "snes",
+  system: "dc",
+  platform_name: "Sega Dreamcast",
 });
 
 describe("each verdict has its own sentence (#2195 D2)", () => {
@@ -68,16 +74,16 @@ describe("each verdict has its own sentence (#2195 D2)", () => {
     expect(launchRefusal(launch({ ...PS3_PKG, install_in: [] }), true)).toBe("This game has to be installed first.");
   });
 
-  it("a single Dreamcast track is not the file the system starts from", () => {
+  it("a single Dreamcast track is not the file the platform starts from, named as the game page names it (D36)", () => {
     expect(launchRefusal(DREAMCAST_TRACK, true)).toBe(
-      "track03.bin is not the file dreamcast starts from; it starts from .chd, .cue, .gdi.",
+      "track03.bin is not the file Sega Dreamcast starts from; it starts from .chd, .cue, .gdi.",
     );
   });
 
   it("lists an extension ES-DE spells in both cases once, as the resolver spells it first", () => {
     const dreamcast = { ...DREAMCAST_TRACK, starts_from: [".cdi", ".CDI", ".chd", ".CHD", ".Cue", ".cue", ".CUE"] };
     expect(launchRefusal(dreamcast, true)).toBe(
-      "track03.bin is not the file dreamcast starts from; it starts from .cdi, .chd, .Cue.",
+      "track03.bin is not the file Sega Dreamcast starts from; it starts from .cdi, .chd, .Cue.",
     );
   });
 
@@ -101,39 +107,51 @@ describe("each verdict has its own sentence (#2195 D2)", () => {
 
   it("an unestablished file says why, and lets the game start", () => {
     expect(launchRefusal(NOT_ESTABLISHED, true)).toBeNull();
-    expect(launchNote(NOT_ESTABLISHED)).toBe(
-      "Whether Game.sfc starts cannot be established: the emulator source does not declare the system snes.",
+    expect(launchNote(NOT_ESTABLISHED, RETRODECK)).toBe(
+      "Whether Game.sfc starts cannot be established: RetroDECK does not list the system Sega Dreamcast.",
     );
   });
 
   it.each([
-    ["entry_unknown", "the emulator source has no entry named RPCS3 Directory (Standalone)"],
-    ["catalogue_unread", "the emulator source's list of emulators could not be read"],
-    ["no_source", "no emulator source answers"],
-    [null, "the emulator source gave no answer"],
-  ] as const)("an unestablished verdict for %s words its reason", (reason, words) => {
-    expect(launchNote(launch({ state: "not_established", reason }))).toBe(
+    ["entry_unknown", "RetroDECK has no emulator named RPCS3 Directory (Standalone)"],
+    ["catalogue_unread", "RetroDECK's list of emulators could not be read"],
+    ["no_source", "no emulator source is installed and switched on"],
+    [null, "RetroDECK gave no answer"],
+  ] as const)("an unestablished verdict for %s names the source as the user knows it (D36)", (reason, words) => {
+    expect(launchNote(launch({ state: "not_established", reason }), RETRODECK)).toBe(
       `Whether Game.ps3 starts cannot be established: ${words}.`,
+    );
+  });
+
+  it("names the source that answered, whichever it is", () => {
+    expect(launchNote(launch({ state: "not_established", reason: "catalogue_unread" }), EMUDECK)).toBe(
+      "Whether Game.ps3 starts cannot be established: EmuDeck's list of emulators could not be read.",
+    );
+  });
+
+  it("with no source named, says the emulator source", () => {
+    expect(launchNote(NOT_ESTABLISHED, null)).toBe(
+      "Whether Game.sfc starts cannot be established: the emulator source does not list the system Sega Dreamcast.",
     );
   });
 
   it("an archive whose contents were not read starts, and says so", () => {
     const archive = launch({ entry: "DeSmuME", file: "Game.zip", extension: ".zip", contents_unread: true });
     expect(launchRefusal(archive, true)).toBeNull();
-    expect(launchNote(archive)).toBe(
+    expect(launchNote(archive, RETRODECK)).toBe(
       "What is inside Game.zip was not read, so whether DeSmuME finds a game in it cannot be established.",
     );
   });
 
   it("a file that starts says nothing", () => {
     expect(launchRefusal(launch(), true)).toBeNull();
-    expect(launchNote(launch())).toBeNull();
-    expect(launchNote(launch({ format_unestablished: true }))).toBeNull();
+    expect(launchNote(launch(), RETRODECK)).toBeNull();
+    expect(launchNote(launch({ format_unestablished: true }), RETRODECK)).toBeNull();
   });
 
   it("nothing asked says nothing", () => {
     expect(launchRefusal(null, true)).toBeNull();
-    expect(launchNote(null)).toBeNull();
+    expect(launchNote(null, RETRODECK)).toBeNull();
   });
 });
 
@@ -144,27 +162,24 @@ describe("launchRefused", () => {
   });
 });
 
-describe("entryLaunchLine — the emulator menu's line per entry (#2195 D22, D29)", () => {
+describe("entryLaunchLine — the emulator menu's line per entry (#2195 D22, D29, D36)", () => {
   it.each([
     [launch(), "can start it"],
     [launch({ format_unestablished: true }), "whether it reads .ps3 is not established"],
     [launch({ file: "Game.zip", contents_unread: true }), "what is inside Game.zip was not read"],
     [PS3_PKG, "cannot start it: the game has to be installed first"],
-    [DREAMCAST_TRACK, "cannot start it: dreamcast does not start .bin"],
-    [NOT_THIS_EMULATOR, "cannot start it: does not start .n64"],
-    [NOT_ESTABLISHED, "whether it starts cannot be established: the emulator source does not declare the system snes"],
+    [DREAMCAST_TRACK, "Sega Dreamcast does not start from .bin"],
+    [NOT_THIS_EMULATOR, "cannot start .n64 files"],
+    [NOT_ESTABLISHED, "whether it starts cannot be established: RetroDECK does not list the system Sega Dreamcast"],
   ])("words %o as %s", (verdict, words) => {
-    expect(entryLaunchLine(verdict)).toBe(words);
+    expect(entryLaunchLine(verdict, RETRODECK)).toBe(words);
   });
 });
 
-describe("startCheckFailureSentence — what went wrong with the page's check (#2195 D32)", () => {
+describe("startCheckFailureSentence — what went wrong with the page's check (#2195 D32, D36)", () => {
   it.each([
-    [new TimeoutError(5000), "its backend gave no answer in time (timed out after 5000ms)"],
-    [
-      new HostTransportError("connection_lost", "socket closed"),
-      "the connection to its backend failed (socket closed)",
-    ],
+    [new TimeoutError(5000), "Tender's backend did not answer in time"],
+    [new HostTransportError("connection_lost", "socket closed"), "the connection to Tender's backend was lost"],
     [new Error("boom"), "boom"],
     ["odd", "odd"],
   ])("words %o", (error, words) => {

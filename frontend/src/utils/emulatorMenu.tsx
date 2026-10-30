@@ -80,7 +80,11 @@ export interface EmulatorMenuConfig {
 const ENTRY_SPINNER_SIZE = 14;
 
 /** The line under an entry saying whether it can start the game: a spinner until the answer lands, then its words. */
-const EntryLaunchLine: FC<{ launches: EntryLaunches; label: string }> = ({ launches, label }) => {
+const EntryLaunchLine: FC<{ launches: EntryLaunches; label: string; source: AnsweringSource | null }> = ({
+  launches,
+  label,
+  source,
+}) => {
   const launch = useSyncExternalStore(launches.subscribe, () => launches.forLabel(label));
   if (launch === undefined) {
     return (
@@ -90,7 +94,7 @@ const EntryLaunchLine: FC<{ launches: EntryLaunches; label: string }> = ({ launc
     );
   }
   if (launch === null) return null;
-  return <div style={{ fontSize: "12px", opacity: 0.7 }}>{entryLaunchLine(launch)}</div>;
+  return <div style={{ fontSize: "12px", opacity: 0.7 }}>{entryLaunchLine(launch, source)}</div>;
 };
 
 /**
@@ -122,7 +126,7 @@ export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
     ) : (
       <div>
         <div>{text}</div>
-        <EntryLaunchLine launches={launches} label={label} />
+        <EntryLaunchLine launches={launches} label={label} source={config.emulatorSource} />
       </div>
     );
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from domain.platform_names import decode_platform_names, listed_platform_names
+from domain.platform_names import decode_platform_names, listed_platform_names, platform_display_name
 
 
 class TestDecodePlatformNames:
@@ -51,3 +51,17 @@ class TestListedPlatformNames:
     )
     def test_a_platform_without_a_slug_or_a_name_is_left_out(self, platform):
         assert listed_platform_names([platform]) == {}
+
+
+class TestPlatformDisplayName:
+    def test_a_cached_platform_is_named_by_its_cached_name(self):
+        assert platform_display_name('{"dc": "Sega Dreamcast"}', "dc") == "Sega Dreamcast"
+
+    def test_a_platform_the_cache_does_not_hold_is_named_by_its_slug(self):
+        assert platform_display_name('{"dc": "Sega Dreamcast"}', "ps3") == "ps3"
+
+    def test_no_cache_names_it_by_its_slug(self):
+        assert platform_display_name(None, "dc") == "dc"
+
+    def test_no_slug_names_nothing(self):
+        assert platform_display_name('{"dc": "Sega Dreamcast"}', None) == ""

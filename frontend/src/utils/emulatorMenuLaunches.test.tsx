@@ -33,6 +33,7 @@ function launch(entry: string, overrides: Partial<GameLaunch> = {}): GameLaunch 
     state: "starts",
     entry,
     system: "ps3",
+    platform_name: "PlayStation 3",
     file: "Game.ps3",
     extension: ".ps3",
     starts_from: [],
@@ -106,8 +107,28 @@ describe("the emulator menu's answer per entry (#2195 D22, D31)", () => {
     ]);
 
     expect(container.querySelector('[data-testid="spinner"]')).toBeNull();
-    expect(row(container, SHORTCUT).textContent).toContain("cannot start it: does not start .ps3");
+    expect(row(container, SHORTCUT).textContent).toContain("cannot start .ps3 files");
     expect(row(container, DIRECTORY).textContent).toContain("whether it reads .ps3 is not established");
+  });
+
+  it("names the source the menu's answer came from where an entry's answer is not established (#2195 D36)", async () => {
+    const read = heldRead();
+    const { container } = render(
+      <>
+        {buildEmulatorMenu(
+          config({
+            emulatorSource: { kind: "emudeck", starts_games: false },
+            launches: askEntryLaunches(42, () => true, read.read),
+          }),
+        )}
+      </>,
+    );
+
+    await read.answer([launch(SHORTCUT, { state: "not_established", reason: "catalogue_unread" })]);
+
+    expect(row(container, SHORTCUT).textContent).toContain(
+      "whether it starts cannot be established: EmuDeck's list of emulators could not be read",
+    );
   });
 
   it("keeps waiting where the answer is about a version the page no longer shows", async () => {
@@ -120,7 +141,7 @@ describe("the emulator menu's answer per entry (#2195 D22, D31)", () => {
     shown = 43;
     await read.answer([launch(SHORTCUT, { state: "not_this_emulator" })]);
 
-    expect(row(container, SHORTCUT).textContent).not.toContain("cannot start it");
+    expect(row(container, SHORTCUT).textContent).not.toContain("cannot start");
   });
 
   it("shows no answer line at all on a menu that asks none", () => {

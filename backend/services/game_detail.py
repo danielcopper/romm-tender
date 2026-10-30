@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, cast
 from domain.achievements import AchievementSummary
 from domain.bios_status import BIOS_LABEL_UNKNOWN, BIOS_LEVEL_UNKNOWN
 from domain.emulator_sources import RETRODECK
-from domain.platform_names import PLATFORM_NAMES_KEY, decode_platform_names
+from domain.platform_names import PLATFORM_NAMES_KEY, platform_display_name
 from domain.retrodeck_folders import FolderRefused
 from domain.save_status import compute_save_sync_display
 from lib.path_safety import PathTraversalError, safe_join
@@ -250,7 +250,7 @@ class GameDetailService:
             install = uow.rom_installs.get(rom_id)
             save_state = uow.rom_save_sync_states.get(rom_id)
             metadata_raw = uow.rom_metadata.get(rom_id)
-            platform_names = decode_platform_names(uow.kv_config.get(PLATFORM_NAMES_KEY))
+            platform_name = platform_display_name(uow.kv_config.get(PLATFORM_NAMES_KEY), rom.platform_slug)
 
         rom_id_str = str(rom_id)
         platform_slug = rom.platform_slug
@@ -280,9 +280,6 @@ class GameDetailService:
             )
 
         metadata = self._project_metadata(metadata_raw)
-
-        # Platform display name from the offline cache, degrading to the slug.
-        platform_name = platform_names.get(platform_slug, platform_slug) if platform_slug else ""
 
         # No BIOS answer rides this payload. What an emulator wants is read off
         # the machine, and an answer read for a previous page open may not stand

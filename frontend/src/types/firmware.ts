@@ -445,7 +445,8 @@ export interface EmulatorStart {
  * Whether one installed game's file starts with one emulator entry, as the
  * resolver answers it (#2195 D2); which states refuse a start is
  * `utils/gameLaunch.ts`'s. `entry` is the label it was asked with, `system` the system it was
- * asked as and `file` the file's name;
+ * asked as, `platform_name` the name the game page shows the game's platform
+ * under, which the sentences name (D36), and `file` the file's name;
  * `starts_from` is the system's extension list (for `not_a_launch_file`),
  * `other_entries` the entries established to start the file (for
  * `not_this_emulator`), and `install_in` the system's entries that install
@@ -458,8 +459,9 @@ export interface EmulatorStart {
  */
 export interface GameLaunch {
   state: "starts" | "needs_installing" | "not_a_launch_file" | "not_this_emulator" | "not_established";
-  entry: string | null;
+  entry: string;
   system: string;
+  platform_name: string;
   file: string;
   extension: string;
   starts_from: string[];

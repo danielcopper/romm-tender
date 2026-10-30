@@ -636,8 +636,8 @@ nothing is said; otherwise the answer stands under the **Play** button:
 
 - **"This game has to be installed in RPCS3 Game Serial (Standalone) first."** — the file is a package to install in the
   emulator named, before anything starts it. **Play** is off.
-- **"track03.bin is not the file dreamcast starts from; it starts from .cdi, .chd, .cue, …"** — the download holds no
-  file the system starts. **Play** is off.
+- **"track03.bin is not the file Sega Dreamcast starts from; it starts from .cdi, .chd, .cue, …"** — the download holds
+  no file the system starts. **Play** is off.
 - **"Azahar (Standalone) does not start .zip; other emulators of this system do. Choose another emulator in the emulator
   menu."** — **Play** is off until you do.
 - **"Whether Game.sfc starts cannot be established: …"** — the emulator source could not answer, with the reason.
@@ -647,10 +647,10 @@ nothing is said; otherwise the answer stands under the **Play** button:
 
 Where **Play** is off, Steam's own **Play** on the game's shortcut is refused with the same words. While the page is
 still asking, **Play** is grey and shows a spinner. Where the question itself goes wrong — Tender's backend does not
-answer in time, or the connection to it fails — a notification says what went wrong, and **Play** stays grey but can be
-pressed: the press asks again, and says what stands in the way if anything does. The emulator menu shows the same answer
-for each of its emulators: it opens at once, each emulator shows a spinner until its answer is in, and then says whether
-it can start the game and, where not, why. Every emulator stays choosable meanwhile.
+answer in time, or the connection to it is lost — a notification says what went wrong, and **Play** stays grey but can
+be pressed: the press asks again, and says what stands in the way if anything does. The emulator menu shows the same
+answer for each of its emulators: it opens at once, each emulator shows a spinner until its answer is in, and then says
+whether it can start the game and, where not, why. Every emulator stays choosable meanwhile.
 
 **Your download is kept.** The files stay on disk where the ROM would normally live, and **Uninstall** works as usual —
 because installing the package by hand in the emulator is exactly what you would do next. See

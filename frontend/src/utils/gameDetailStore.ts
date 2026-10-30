@@ -568,6 +568,7 @@ export async function refreshBiosStatus(appId: number): Promise<void> {
 
 /** Mark the page's check of whether the game can start as failed, and say what went wrong (#2195 D32). */
 function failStartCheck(write: Dispatch<SetStateAction<GameDetailState>>, e: unknown): void {
+  logError(`gameDetailStore: the check of whether the game can start failed: ${e}`);
   const why = startCheckFailureSentence(e);
   write((prev) => ({ ...prev, startCheck: { state: "failed", why } }));
   showToast(why);

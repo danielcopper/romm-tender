@@ -2414,10 +2414,28 @@ describe("gameDetailStore — the page's check of whether the game can start (#2
     await flush();
     await flush();
 
-    const sentence =
-      "Tender could not check whether this game can start: the connection to its backend failed (socket closed).";
+    const sentence = "Tender could not check whether this game can start: the connection to Tender's backend was lost.";
     expect(getGameDetail(nextAppId).startCheck).toEqual({ state: "failed", why: sentence });
     expect(toaster.toast).toHaveBeenCalledWith(expect.objectContaining({ body: sentence }));
+  });
+
+  it("a lost connection's own detail goes to the log, not the notification (#2195 D36)", async () => {
+    const logError = vi.spyOn(backend, "logError").mockImplementation(() => {});
+    try {
+      vi.mocked(backend.getPlatformCoreInfo).mockRejectedValue(
+        new HostTransportError("connection_lost", "socket closed"),
+      );
+      subscribe(nextAppId);
+      await flush();
+      await flush();
+
+      expect(logError).toHaveBeenCalledWith(expect.stringContaining("socket closed"));
+      expect(toaster.toast).not.toHaveBeenCalledWith(
+        expect.objectContaining({ body: expect.stringContaining("socket closed") }),
+      );
+    } finally {
+      logError.mockRestore();
+    }
   });
 
   it("a read that gets no answer in time is failed, and the notification says so", async () => {
@@ -2433,7 +2451,9 @@ describe("gameDetailStore — the page's check of whether the game can start (#2
 
     expect(getGameDetail(nextAppId).startCheck).toMatchObject({ state: "failed" });
     expect(toaster.toast).toHaveBeenCalledWith(
-      expect.objectContaining({ body: expect.stringContaining("its backend gave no answer in time") }),
+      expect.objectContaining({
+        body: "Tender could not check whether this game can start: Tender's backend did not answer in time.",
+      }),
     );
   });
 
@@ -2448,6 +2468,7 @@ describe("gameDetailStore — the page's check of whether the game can start (#2
       state: "needs_installing" as const,
       entry: "RPCS3 Directory (Standalone)",
       system: "ps3",
+      platform_name: "PlayStation 3",
       file: "Puppeteer.pkg",
       extension: ".pkg",
       starts_from: [],

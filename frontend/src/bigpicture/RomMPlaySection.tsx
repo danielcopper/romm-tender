@@ -964,7 +964,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       ? null
       : (emulatorStartRefusal(detail.emulatorStart, "this game", canPick) ?? launchRefusal(gameLaunch, canPick));
   const startNote =
-    stranded || fileMissing || startCheckFailed || emulatorRefusal !== null ? null : launchNote(gameLaunch);
+    stranded || fileMissing || startCheckFailed || emulatorRefusal !== null ? null : launchNote(gameLaunch, detail.emulatorSource);
 
   const warningLine = (testId: string, text: string) => (
     <div

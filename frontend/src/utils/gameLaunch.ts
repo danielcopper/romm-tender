@@ -11,7 +11,8 @@
  */
 
 import { HostTransportError } from "../api/host";
-import type { GameLaunch } from "../types";
+import type { AnsweringSource, GameLaunch } from "../types";
+import { sourceName } from "./emulatorSourceWording";
 import { TimeoutError } from "./withTimeout";
 
 const REFUSING: ReadonlySet<GameLaunch["state"]> = new Set([
@@ -20,19 +21,25 @@ const REFUSING: ReadonlySet<GameLaunch["state"]> = new Set([
   "not_this_emulator",
 ]);
 
-/** Why the verdict could not be established, worded; the reason is Tender's word for the resolver's. */
-function notEstablishedBecause(launch: GameLaunch): string {
+/**
+ * Why the verdict could not be established, worded; the reason is Tender's word
+ * for the resolver's. `source` is the source that answered, named as the user
+ * knows it (#2195 D36). A launch answer with no source behind it is `no_source`:
+ * none detected, or every one detected switched off.
+ */
+function notEstablishedBecause(launch: GameLaunch, source: AnsweringSource | null): string {
+  const named = source === null ? "the emulator source" : sourceName(source.kind);
   switch (launch.reason) {
     case "system_unknown":
-      return `the emulator source does not declare the system ${launch.system}`;
+      return `${named} does not list the system ${launch.platform_name}`;
     case "entry_unknown":
-      return `the emulator source has no entry named ${launch.entry ?? "so"}`;
+      return `${named} has no emulator named ${launch.entry}`;
     case "catalogue_unread":
-      return "the emulator source's list of emulators could not be read";
+      return `${named}'s list of emulators could not be read`;
     case "no_source":
-      return "no emulator source answers";
+      return "no emulator source is installed and switched on";
     default:
-      return "the emulator source gave no answer";
+      return `${named} gave no answer`;
   }
 }
 
@@ -74,12 +81,11 @@ export function launchRefusal(launch: GameLaunch | null, canPick: boolean): stri
         : `This game has to be installed in ${names.join(" or ")} first.`;
     }
     case "not_a_launch_file":
-      return `${launch.file} is not the file ${launch.system} starts from; it starts from ${listedExtensions(launch.starts_from)}.`;
+      return `${launch.file} is not the file ${launch.platform_name} starts from; it starts from ${listedExtensions(launch.starts_from)}.`;
     case "not_this_emulator": {
-      const entry = launch.entry ?? "This emulator";
-      if (launch.other_entries.length === 0) return `${entry} does not start ${launch.extension}.`;
+      if (launch.other_entries.length === 0) return `${launch.entry} does not start ${launch.extension}.`;
       const pointer = canPick ? " Choose another emulator in the emulator menu." : "";
-      return `${entry} does not start ${launch.extension}; other emulators of this system do.${pointer}`;
+      return `${launch.entry} does not start ${launch.extension}; other emulators of this system do.${pointer}`;
     }
     default:
       return null;
@@ -89,30 +95,34 @@ export function launchRefusal(launch: GameLaunch | null, canPick: boolean): stri
 /**
  * What the page says about a verdict that lets the game start, or `null` where
  * there is nothing to say: whether it starts could not be established, or the
- * file is an archive whose contents were not read.
+ * file is an archive whose contents were not read. `source` is the source the
+ * answer came from.
  */
-export function launchNote(launch: GameLaunch | null): string | null {
+export function launchNote(launch: GameLaunch | null, source: AnsweringSource | null): string | null {
   if (launch === null) return null;
   if (launch.state === "not_established") {
-    return `Whether ${launch.file} starts cannot be established: ${notEstablishedBecause(launch)}.`;
+    return `Whether ${launch.file} starts cannot be established: ${notEstablishedBecause(launch, source)}.`;
   }
   if (launch.state === "starts" && launch.contents_unread) {
-    return `What is inside ${launch.file} was not read, so whether ${launch.entry ?? "the emulator"} finds a game in it cannot be established.`;
+    return `What is inside ${launch.file} was not read, so whether ${launch.entry} finds a game in it cannot be established.`;
   }
   return null;
 }
 
-/** The short line the emulator menu shows under an entry for its verdict on the game (#2195 D22, D29). */
-export function entryLaunchLine(launch: GameLaunch): string {
+/**
+ * The short line the emulator menu shows under an entry for its verdict on the
+ * game (#2195 D22, D29, D36). `source` is the source the answer came from.
+ */
+export function entryLaunchLine(launch: GameLaunch, source: AnsweringSource | null): string {
   switch (launch.state) {
     case "needs_installing":
       return "cannot start it: the game has to be installed first";
     case "not_a_launch_file":
-      return `cannot start it: ${launch.system} does not start ${launch.extension}`;
+      return `${launch.platform_name} does not start from ${launch.extension}`;
     case "not_this_emulator":
-      return `cannot start it: does not start ${launch.extension}`;
+      return `cannot start ${launch.extension} files`;
     case "not_established":
-      return `whether it starts cannot be established: ${notEstablishedBecause(launch)}`;
+      return `whether it starts cannot be established: ${notEstablishedBecause(launch, source)}`;
     default:
       if (launch.format_unestablished) return `whether it reads ${launch.extension} is not established`;
       if (launch.contents_unread) return `what is inside ${launch.file} was not read`;
@@ -122,11 +132,12 @@ export function entryLaunchLine(launch: GameLaunch): string {
 
 /**
  * What went wrong where the page's check of whether the game can start failed
- * itself, as the notification says it (#2195 D32).
+ * itself, as the notification says it (#2195 D32, D36). A timeout's and a lost
+ * connection's own detail is for the log, not the sentence.
  */
 export function startCheckFailureSentence(e: unknown): string {
   const lead = "Tender could not check whether this game can start";
-  if (e instanceof TimeoutError) return `${lead}: its backend gave no answer in time (${e.message}).`;
-  if (e instanceof HostTransportError) return `${lead}: the connection to its backend failed (${e.message}).`;
+  if (e instanceof TimeoutError) return `${lead}: Tender's backend did not answer in time.`;
+  if (e instanceof HostTransportError) return `${lead}: the connection to Tender's backend was lost.`;
   return `${lead}: ${e instanceof Error ? e.message : String(e)}.`;
 }
