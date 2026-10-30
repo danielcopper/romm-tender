@@ -54,7 +54,7 @@ export function standaloneEmu(
 
 /** A start answer: the game starts with `entry`, unless the overrides say otherwise. */
 export function emulatorStart(overrides: Partial<EmulatorStart> = {}): EmulatorStart {
-  return { state: "starts", reason: null, entry: null, folder_entry: null, ...overrides };
+  return { state: "starts", reason: null, entry: null, ...overrides };
 }
 
 /** A `get_platform_core_info` answer: an empty, readable list with nothing picked, unless the overrides say otherwise. */

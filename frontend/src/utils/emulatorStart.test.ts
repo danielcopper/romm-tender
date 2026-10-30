@@ -20,7 +20,7 @@ import {
 import { coreInfo } from "../test-utils/coreFixtures";
 
 function start(overrides: Partial<EmulatorStart>): EmulatorStart {
-  return { state: "starts", reason: null, entry: "mGBA", folder_entry: null, ...overrides };
+  return { state: "starts", reason: null, entry: "mGBA", ...overrides };
 }
 
 function row(label: string, overrides: Partial<EmulatorOption> = {}): EmulatorOption {
@@ -67,22 +67,6 @@ describe("why a start is refused", () => {
     );
     expect(words).toBe(
       "RetroDECK's start script cannot start PICO-8 (Standalone), so these games cannot start. Choose another emulator in the emulator menu.",
-    );
-  });
-
-  it("names the entry that starts a folder where the chosen one cannot", () => {
-    const words = emulatorStartRefusal(
-      start({
-        state: "cannot_start",
-        reason: "folder_install",
-        entry: "RPCS3 Shortcut (Standalone)",
-        folder_entry: "RPCS3 Directory (Standalone)",
-      }),
-      "this game",
-      true,
-    );
-    expect(words).toBe(
-      "RPCS3 Shortcut (Standalone) cannot start a game installed as a folder. RPCS3 Directory (Standalone) can — choose it in the emulator menu.",
     );
   });
 

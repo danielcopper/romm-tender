@@ -14,11 +14,32 @@ import os
 from typing import Any
 
 import pytest
+from _vendor import atlas
 from _vendor.atlas import (
     CAVEAT_ARCHIVE_CONTENTS_UNREAD,
     CAVEAT_ARRANGEMENT_VERSION_DRIFTED,
+    CAVEAT_BOOT_CATEGORY_UNESTABLISHED,
+    CAVEAT_BOOT_DISC_DIR_CONFIGURED,
+    CAVEAT_BOOT_DISC_DIR_UNRESOLVED,
+    CAVEAT_BOOT_DISC_KEY_MISSING,
+    CAVEAT_BOOT_DISC_ROOT_MISSING,
+    CAVEAT_BOOT_DRIVE_UNRESOLVED,
+    CAVEAT_BOOT_FILE_UNBOOTABLE,
+    CAVEAT_BOOT_INSIDE_INTERNAL_DRIVE,
+    CAVEAT_BOOT_ISO_ENCRYPTION_UNREAD,
+    CAVEAT_BOOT_ISO_KEY_UNTESTED,
+    CAVEAT_BOOT_ISO_REGIONS_INVALID,
+    CAVEAT_BOOT_KEY_FOLDER_UNRESOLVED,
+    CAVEAT_BOOT_NOTHING_FOUND,
+    CAVEAT_BOOT_PATH_MISSING,
+    CAVEAT_BOOT_PATH_UNESTABLISHED,
+    CAVEAT_BOOT_REGISTRY_UNREAD,
+    CAVEAT_BOOT_SAVESTATE_UNREAD,
     CAVEAT_EMULATOR_CATALOGUE_UNREADABLE,
+    CAVEAT_ENTRY_FORMAT_BUILD_DEPENDENT,
+    CAVEAT_ENTRY_FORMAT_CONTENT_UNREAD,
     CAVEAT_ENTRY_FORMAT_UNESTABLISHED,
+    CAVEAT_ENTRY_TAKES_NO_DIRECTORY,
     CAVEAT_ROM_PATH_UNDECLARED,
     CAVEAT_SYSTEM_UNKNOWN,
     VERDICT_ENTRY_NOT_ACCEPTED,
@@ -33,14 +54,34 @@ from adapters.atlas_catalogue import AtlasCatalogueAdapter
 from adapters.emulator_sources import EmulatorSourcesAdapter
 from domain.launchability import (
     CATALOGUE_UNREAD,
+    CONTENT_MISSING,
+    CONTENT_UNCHECKED,
+    CONTENT_UNREADABLE,
+    DISC_FOLDER_SET,
+    DISC_FOLDER_UNKNOWN,
+    DISC_KEY_MISSING,
+    DISC_NOT_FOUND,
+    EMULATOR_DRIVE_UNKNOWN,
+    ENCRYPTION_UNREAD,
     ENTRY_UNKNOWN,
+    GAME_KIND_UNFOLLOWED,
+    GAME_LIST_UNREAD,
+    IMAGE_LAYOUT_UNREAD,
+    INSIDE_EMULATOR_DRIVE,
+    KEY_FOLDER_UNKNOWN,
+    KEY_UNTESTED,
     NEEDS_INSTALLING,
     NO_SOURCE,
+    NOT_A_GAME_FILE,
     NOT_A_LAUNCH_FILE,
     NOT_ESTABLISHED,
     NOT_THIS_EMULATOR,
+    NOTHING_TO_START,
+    SAVESTATE_UNREAD,
     STARTS,
     SYSTEM_UNKNOWN,
+    TAKES_NO_FOLDER,
+    VERSION_DEPENDENT,
 )
 
 _LINUX_SYSTEMS_SUFFIX = os.path.join(
@@ -158,13 +199,16 @@ class TestTheRealResolverOverARealTree:
 
         assert (answer.state, answer.extension) == (NOT_A_LAUNCH_FILE, ".GBA")
 
-    def test_a_ps3_folder_named_as_es_de_scans_it_starts_its_format_not_established(self, tmp_path, traces):
+    def test_a_ps3_folder_the_resolver_cannot_find_starts_with_a_note_saying_so(self, tmp_path, traces):
         adapter = _real(_seed_retrodeck(tmp_path), traces)
 
         answer = adapter.launchability("ps3", f"{_roms(tmp_path)}/ps3/Game.ps3", label="RPCS3 Directory (Standalone)")
 
-        assert answer.state == STARTS
-        assert answer.format_unestablished is True
+        # The resolver looks as RetroDECK's sandbox sees the path: a folder
+        # under /tmp, the sandbox's own, cannot be read, and one under /var is
+        # missing — and where tmp_path lies is the machine's choice.
+        assert (answer.state, answer.format_unestablished) == (STARTS, False)
+        assert answer.reason in (CONTENT_MISSING, CONTENT_UNREADABLE)
 
     def test_a_label_the_system_does_not_carry_is_not_established_for_that_reason(self, tmp_path, traces):
         adapter = _real(_seed_retrodeck(tmp_path), traces)
@@ -334,3 +378,120 @@ class TestEachVerdictInTendersWords:
 
         assert (result.state, result.reason, result.file) == (NOT_ESTABLISHED, None, "Game.z64")
         assert any("resolver failed on launchable('n64'" in line for line in traces)
+
+
+# Every reason the resolver states on a refusal of its own, and every point its
+# reading of a file the entry starts stopped short of, in Tender's word (#2195 D40).
+_REFUSALS = {
+    CAVEAT_ENTRY_TAKES_NO_DIRECTORY: TAKES_NO_FOLDER,
+    CAVEAT_BOOT_NOTHING_FOUND: NOTHING_TO_START,
+    CAVEAT_BOOT_FILE_UNBOOTABLE: NOT_A_GAME_FILE,
+    CAVEAT_BOOT_DISC_ROOT_MISSING: DISC_NOT_FOUND,
+    CAVEAT_BOOT_DISC_KEY_MISSING: DISC_KEY_MISSING,
+}
+_STOPPED_SHORT = {
+    CAVEAT_BOOT_PATH_MISSING: CONTENT_MISSING,
+    CAVEAT_BOOT_PATH_UNESTABLISHED: CONTENT_UNREADABLE,
+    CAVEAT_BOOT_REGISTRY_UNREAD: GAME_LIST_UNREAD,
+    CAVEAT_BOOT_CATEGORY_UNESTABLISHED: GAME_KIND_UNFOLLOWED,
+    CAVEAT_BOOT_INSIDE_INTERNAL_DRIVE: INSIDE_EMULATOR_DRIVE,
+    CAVEAT_BOOT_DRIVE_UNRESOLVED: EMULATOR_DRIVE_UNKNOWN,
+    CAVEAT_BOOT_SAVESTATE_UNREAD: SAVESTATE_UNREAD,
+    CAVEAT_BOOT_ISO_REGIONS_INVALID: IMAGE_LAYOUT_UNREAD,
+    CAVEAT_BOOT_ISO_ENCRYPTION_UNREAD: ENCRYPTION_UNREAD,
+    CAVEAT_BOOT_ISO_KEY_UNTESTED: KEY_UNTESTED,
+    CAVEAT_BOOT_KEY_FOLDER_UNRESOLVED: KEY_FOLDER_UNKNOWN,
+    CAVEAT_BOOT_DISC_DIR_CONFIGURED: DISC_FOLDER_SET,
+    CAVEAT_BOOT_DISC_DIR_UNRESOLVED: DISC_FOLDER_UNKNOWN,
+    CAVEAT_ENTRY_FORMAT_CONTENT_UNREAD: CONTENT_UNCHECKED,
+    CAVEAT_ENTRY_FORMAT_BUILD_DEPENDENT: VERSION_DEPENDENT,
+}
+
+
+def _ask_ps3(answer: LaunchabilityAnswer, traces: list[str]):
+    installation = _Installation(answer)
+    return _stand_in(installation, traces).launchability(
+        "ps3", "/roms/ps3/Game.ps3", label="RPCS3 Shortcut (Standalone)"
+    )
+
+
+class TestTheResolversOwnReasonsInTendersWords:
+    def test_every_boot_code_the_resolver_states_is_worded(self):
+        boot_codes = {getattr(atlas, name) for name in atlas.__all__ if name.startswith("CAVEAT_BOOT_")}
+
+        assert boot_codes <= set(_REFUSALS) | set(_STOPPED_SHORT)
+
+    @pytest.mark.parametrize(("code", "word"), sorted(_REFUSALS.items()))
+    def test_an_entry_that_refuses_for_a_reason_of_the_resolvers_names_it(self, code, word, traces):
+        result = _ask_ps3(
+            LaunchabilityAnswer(
+                verdict=VERDICT_ENTRY_NOT_ACCEPTED,
+                extension=".ps3",
+                alternatives=("RPCS3 Directory (Standalone)",),
+                caveats=(_caveat(code, entry="RPCS3 Shortcut (Standalone)"),),
+            ),
+            traces,
+        )
+
+        assert (result.state, result.reason, result.other_entries) == (
+            NOT_THIS_EMULATOR,
+            word,
+            ("RPCS3 Directory (Standalone)",),
+        )
+
+    @pytest.mark.parametrize(("code", "word"), sorted(_STOPPED_SHORT.items()))
+    def test_a_file_that_starts_names_what_the_reading_stopped_short_of(self, code, word, traces):
+        result = _ask_ps3(
+            LaunchabilityAnswer(
+                verdict=VERDICT_LAUNCHABLE,
+                extension=".ps3",
+                caveats=(
+                    _caveat(code, entry="RPCS3 Shortcut (Standalone)"),
+                    _caveat(CAVEAT_ARRANGEMENT_VERSION_DRIFTED),
+                ),
+            ),
+            traces,
+        )
+
+        assert (result.state, result.reason, result.format_unestablished) == (STARTS, word, False)
+
+    def test_a_refusal_the_resolver_states_no_reason_for_names_none(self, traces):
+        result = _ask_ps3(LaunchabilityAnswer(verdict=VERDICT_ENTRY_NOT_ACCEPTED, extension=".zip"), traces)
+
+        assert (result.state, result.reason) == (NOT_THIS_EMULATOR, None)
+
+    def test_a_refusal_code_is_never_read_as_a_note_on_a_file_that_starts(self, traces):
+        result = _ask_ps3(
+            LaunchabilityAnswer(
+                verdict=VERDICT_LAUNCHABLE,
+                extension=".ps3",
+                caveats=(_caveat(CAVEAT_ENTRY_TAKES_NO_DIRECTORY),),
+            ),
+            traces,
+        )
+
+        assert (result.state, result.reason) == (STARTS, None)
+
+    def test_a_note_code_is_never_read_as_a_refusal_reason(self, traces):
+        result = _ask_ps3(
+            LaunchabilityAnswer(
+                verdict=VERDICT_ENTRY_NOT_ACCEPTED,
+                extension=".ps3",
+                caveats=(_caveat(CAVEAT_BOOT_REGISTRY_UNREAD),),
+            ),
+            traces,
+        )
+
+        assert (result.state, result.reason) == (NOT_THIS_EMULATOR, None)
+
+    def test_the_payload_carries_the_reason(self, traces):
+        result = _ask_ps3(
+            LaunchabilityAnswer(
+                verdict=VERDICT_ENTRY_NOT_ACCEPTED,
+                extension=".ps3",
+                caveats=(_caveat(CAVEAT_ENTRY_TAKES_NO_DIRECTORY),),
+            ),
+            traces,
+        )
+
+        assert result.payload(platform_name="PlayStation 3")["reason"] == TAKES_NO_FOLDER

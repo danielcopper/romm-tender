@@ -94,7 +94,6 @@ class TestStartPayload:
             "state": STARTS,
             "reason": None,
             "entry": "Shipped",
-            "folder_entry": None,
         }
 
     def test_an_entry_tender_cannot_bake_bakes_nothing_and_is_not_refused(self):
@@ -113,22 +112,12 @@ class TestStartPayload:
             "state": CANNOT_START_STATE,
             "reason": NOT_INSTALLED,
             "entry": "Missing",
-            "folder_entry": None,
         }
 
     def test_an_entry_the_start_script_runs_nothing_for_cannot_start(self):
         nothing = _entry("PICO-8", 0, start_script_runs_nothing=True)
         choice = choose_emulator([nothing], game=None, platform=None)
         assert start_payload(choice, [nothing])["reason"] == "start_script_runs_nothing"
-
-    def test_a_folder_its_entry_cannot_start_names_the_entry_that_can(self):
-        choice = choose_emulator(OPTIONS, game=None, platform=None)
-        assert start_payload(choice, OPTIONS, folder_unstartable=True) == {
-            "state": CANNOT_START_STATE,
-            "reason": "folder_install",
-            "entry": "Shipped",
-            "folder_entry": "RPCS3 Directory (Standalone)",
-        }
 
     def test_a_shipped_default_not_established_asks_for_a_choice_with_its_note(self):
         unseen = _entry("Unseen", 0, installation=NOT_ESTABLISHED_NO_FIND_RULE)
@@ -137,7 +126,6 @@ class TestStartPayload:
             "state": CHOOSE,
             "reason": NOT_ESTABLISHED_NO_FIND_RULE,
             "entry": "Unseen",
-            "folder_entry": None,
         }
 
     def test_no_entry_at_all(self):

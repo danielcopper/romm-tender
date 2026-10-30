@@ -2507,7 +2507,7 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
     it("a press asks again, and says what stands in the way instead of starting", async () => {
       vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(
         coreInfoFixture({
-          start: { state: "starts", reason: null, entry: "RPCS3 Directory (Standalone)", folder_entry: null },
+          start: { state: "starts", reason: null, entry: "RPCS3 Directory (Standalone)" },
           launch: {
             state: "needs_installing",
             entry: "RPCS3 Directory (Standalone)",

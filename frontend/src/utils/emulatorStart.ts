@@ -1,6 +1,6 @@
 /**
  * The words for an emulator a game or a platform cannot start with, and for a
- * stored pick whose label no longer exists (#2195 D5, D7, D21, D23). One home
+ * stored pick whose label no longer exists (#2195 D5, D7, D23). One home
  * for each sentence: the game page, the platform page and a refused start —
  * the Play button's and Steam's own — say the same words.
  */
@@ -43,10 +43,6 @@ export function emulatorStartRefusal(start: EmulatorStart, subject: string, canP
         return `${entry} is not installed, so ${subject} cannot start.${pointer}`;
       case "start_script_runs_nothing":
         return `RetroDECK's start script cannot start ${entry}, so ${subject} cannot start.${pointer}`;
-      case "folder_install":
-        return canPick
-          ? `${entry} cannot start a game installed as a folder. ${start.folder_entry ?? "Another entry"} can — choose it in the emulator menu.`
-          : `${entry} cannot start a game installed as a folder.`;
       default:
         return `${entry} cannot start ${subject}.${pointer}`;
     }

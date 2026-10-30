@@ -189,11 +189,7 @@ class CoreService:
             "active_core_label": option.label if option is not None else None,
             "platform_core_label": stored.label if stored is not None else None,
             "has_game_override": rom.emulator_override is not None,
-            "start": start_payload(
-                choice,
-                resolved.options if resolved is not None else [],
-                folder_unstartable=resolved is not None and resolved.folder_unstartable,
-            ),
+            "start": start_payload(choice, resolved.options if resolved is not None else []),
             "launch": self._chosen_launch(rom, install, resolved),
             "vanished_pick": vanished_payload(choice),
         }

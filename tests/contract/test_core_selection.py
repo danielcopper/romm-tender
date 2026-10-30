@@ -418,7 +418,6 @@ async def test_a_standalone_whose_component_is_absent_stays_the_default_and_cann
         "state": "cannot_start",
         "reason": "not_installed",
         "entry": "Ryubing (Standalone)",
-        "folder_entry": None,
     }
 
 

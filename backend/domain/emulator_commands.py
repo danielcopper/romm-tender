@@ -83,16 +83,10 @@ CORE_UNLOCATED = "core_unlocated"
 START_SCRIPT_RUNS_NOTHING = "start_script_runs_nothing"
 
 # Why the entry a game would start with cannot start it, in Tender's words: the
-# two reasons above that the resolver states about the entry itself, and
-# ``FOLDER_INSTALL`` — a game installed as a folder whose entry starts no
-# folder. A game with such an entry has Play refused with the reason (#2195 D7,
-# D21). The panel words each (``frontend/src/utils/emulatorStart.ts``).
-FOLDER_INSTALL = "folder_install"
+# two reasons above, which the resolver states about the entry itself. A game
+# with such an entry has Play refused with the reason (#2195 D7). The panel
+# words each (``frontend/src/utils/emulatorStart.ts``).
 CANNOT_START = frozenset({NOT_INSTALLED, START_SCRIPT_RUNS_NOTHING})
-
-# The entry named in the sentence a PS3 game kept as a folder gets where its own
-# entry cannot start a folder (#2195 D21). Tender's own rule.
-FOLDER_ENTRY_LABEL = "RPCS3 Directory (Standalone)"
 
 # What an entry launches, as the resolver states it, in Tender's words: a core
 # RetroArch loads on this machine, an emulator program of its own, or a

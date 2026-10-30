@@ -29,7 +29,7 @@ from domain.emulator_choice import DEFAULT, ResolvedEmulator, choose_emulator
 from domain.emulator_commands import option_for_label, option_to_invocation
 from domain.emulator_pick import StoredPick, pick_for, source_kind
 from domain.rom_files import folder_boot_root
-from domain.shortcut_data import DIRECT, RUN_GAME, EmulatorInvocation
+from domain.shortcut_data import RUN_GAME, EmulatorInvocation
 
 if TYPE_CHECKING:
     import logging
@@ -110,8 +110,8 @@ class ActiveCoreResolver:
         a non-folder install, or a program that carries no launcher (which
         launchers the reading hands on is
         ``adapters/atlas_catalogue.py::_sandbox_launcher``'s rule) all leave the
-        invocation unchanged, and a folder-boot install left without the direct
-        form is ``folder_unstartable``.
+        invocation unchanged. Whether the entry takes the folder at all is the
+        launch verdict's, asked on the game's page (#2195 D21, D26).
 
         *reading* is a run's one reading of the emulator sources, handed down so
         a run resolving many ROMs asks each catalogue question once; a call
@@ -147,13 +147,7 @@ class ActiveCoreResolver:
         else:
             emulator = option_to_invocation(choice.option)
         invocation = self._maybe_folder_boot_direct(emulator, install, rom_id)
-        folder = install is not None and folder_boot_root(install.file_path, install.rom_dir) is not None
-        return ResolvedEmulator(
-            choice=choice,
-            options=options,
-            invocation=invocation,
-            folder_unstartable=folder and (invocation is None or invocation.form != DIRECT),
-        )
+        return ResolvedEmulator(choice=choice, options=options, invocation=invocation)
 
     def _warn_vanished(
         self,

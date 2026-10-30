@@ -40,7 +40,7 @@ vi.mock("../api/backend", () => ({
   // The game's emulator, read before the gate; a refused start is the page's own sentence.
   getPlatformCoreInfo: vi.fn(() =>
     Promise.resolve({
-      start: { state: "starts", reason: null, entry: null, folder_entry: null },
+      start: { state: "starts", reason: null, entry: null },
       emulators: [],
       active_core_label: null,
     }),

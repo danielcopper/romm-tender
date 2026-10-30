@@ -5271,7 +5271,7 @@ describe("RomMPlaySection", () => {
         emulators: TWO,
         platformCoreLabel: null,
         hasGameOverride: true,
-        emulatorStart: { state: "starts", reason: null, entry: "RPCS3 Directory (Standalone)", folder_entry: null },
+        emulatorStart: { state: "starts", reason: null, entry: "RPCS3 Directory (Standalone)" },
         vanishedPick: null,
         ...fields,
       });
@@ -5298,7 +5298,6 @@ describe("RomMPlaySection", () => {
           state: "cannot_start",
           reason: "not_installed",
           entry: "RPCS3 Directory (Standalone)",
-          folder_entry: null,
         },
         gameLaunch: { ...LAUNCH, state: "needs_installing", install_in: [] },
       });
@@ -5400,11 +5399,20 @@ describe("RomMPlaySection", () => {
     it("says why the game cannot start under the play row's controls, inside the row, behind the warning sign, and hands Play the same words", async () => {
       const { container } = await mountWith({
         emulators: [standaloneEmu("RPCS3 Shortcut (Standalone)", true), standaloneEmu("RPCS3 Directory (Standalone)")],
-        emulatorStart: {
-          state: "cannot_start",
-          reason: "folder_install",
+        emulatorStart: { state: "starts", reason: null, entry: "RPCS3 Shortcut (Standalone)" },
+        gameLaunch: {
+          state: "not_this_emulator",
           entry: "RPCS3 Shortcut (Standalone)",
-          folder_entry: "RPCS3 Directory (Standalone)",
+          system: "ps3",
+          platform_name: "PlayStation 3",
+          file: "Game.ps3",
+          extension: ".ps3",
+          starts_from: [],
+          other_entries: ["RPCS3 Directory (Standalone)"],
+          install_in: null,
+          reason: "takes_no_folder",
+          contents_unread: false,
+          format_unestablished: false,
         },
       });
       const sentence =
@@ -5425,11 +5433,20 @@ describe("RomMPlaySection", () => {
     it("points at no emulator menu where the page offers none", async () => {
       const { container } = await mountWith({
         emulators: [standaloneEmu("RPCS3 Shortcut (Standalone)", true)],
-        emulatorStart: {
-          state: "cannot_start",
-          reason: "folder_install",
+        emulatorStart: { state: "starts", reason: null, entry: "RPCS3 Shortcut (Standalone)" },
+        gameLaunch: {
+          state: "not_this_emulator",
           entry: "RPCS3 Shortcut (Standalone)",
-          folder_entry: "RPCS3 Directory (Standalone)",
+          system: "ps3",
+          platform_name: "PlayStation 3",
+          file: "Game.ps3",
+          extension: ".ps3",
+          starts_from: [],
+          other_entries: ["RPCS3 Directory (Standalone)"],
+          install_in: null,
+          reason: "takes_no_folder",
+          contents_unread: false,
+          format_unestablished: false,
         },
       });
       const sentence = "RPCS3 Shortcut (Standalone) cannot start a game installed as a folder.";
@@ -5445,7 +5462,7 @@ describe("RomMPlaySection", () => {
           { ...libretroEmu("gearsystem_libretro", "Gearsystem"), chosen_in_frontend: true },
           libretroEmu("genesis_plus_gx_libretro", "Genesis Plus GX", true),
         ],
-        emulatorStart: { state: "starts", reason: null, entry: "Genesis Plus GX", folder_entry: null },
+        emulatorStart: { state: "starts", reason: null, entry: "Genesis Plus GX" },
         vanishedPick: {
           label: "Gone",
           source: "retrodeck",
@@ -5462,7 +5479,7 @@ describe("RomMPlaySection", () => {
 
     it("says nothing and hands Play no refusal where the emulator starts the game", async () => {
       const { container } = await mountWith({
-        emulatorStart: { state: "starts", reason: null, entry: "RPCS3 Shortcut (Standalone)", folder_entry: null },
+        emulatorStart: { state: "starts", reason: null, entry: "RPCS3 Shortcut (Standalone)" },
       });
       expect(container.textContent).not.toContain("cannot start");
       expect(capturedPlayButton[capturedPlayButton.length - 1]!.emulatorRefusal).toBeNull();

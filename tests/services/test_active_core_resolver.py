@@ -630,24 +630,6 @@ _SHORTCUT = standalone_option(
 )
 
 
-def test_a_folder_game_whose_default_cannot_be_baked_is_folder_unstartable() -> None:
-    """The shipped default bakes nothing, so nothing starts the folder; no later entry is taken instead."""
-    uow = FakeUnitOfWork()
-    _seed_rom(uow, rom_id=80, platform_slug="ps3")
-    _seed_install(uow, rom_id=80, file_path=_PS3_EBOOT, rom_dir=_PS3_ROM_DIR)
-    core_info = FakeCoreInfoProvider(
-        options=[_SHORTCUT, standalone_option(_RPCS3_COMMAND, _RPCS3_LABEL, launcher=_RPCS3_LAUNCHER)]
-    )
-    resolver, _ = _make_resolver(uow=uow, core_info=core_info)
-
-    resolved = resolver.resolve_rom(80)
-
-    assert resolved is not None
-    assert resolved.choice.option is not None
-    assert resolved.choice.option.label == "RPCS3 Shortcut (Standalone)"
-    assert (resolved.invocation, resolved.folder_unstartable) == (None, True)
-
-
 def test_a_folder_game_with_rpcs3_directory_picked_starts_it_directly() -> None:
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=81, platform_slug="ps3", emulator_override=_RPCS3_LABEL)
@@ -660,21 +642,7 @@ def test_a_folder_game_with_rpcs3_directory_picked_starts_it_directly() -> None:
     resolved = resolver.resolve_rom(81)
 
     assert resolved is not None
-    assert resolved.folder_unstartable is False
     assert resolved.invocation == EmulatorInvocation.direct(_RPCS3_COMMAND, _RPCS3_LAUNCHER, _RPCS3_LABEL)
-
-
-def test_a_game_not_installed_as_a_folder_is_never_folder_unstartable() -> None:
-    uow = FakeUnitOfWork()
-    _seed_rom(uow, rom_id=82, platform_slug="ps3")
-    _seed_install(uow, rom_id=82, file_path="/roms/ps3/Game.iso", rom_dir="/roms/ps3/Game")
-    core_info = FakeCoreInfoProvider(options=[_SHORTCUT])
-    resolver, _ = _make_resolver(uow=uow, core_info=core_info)
-
-    resolved = resolver.resolve_rom(82)
-
-    assert resolved is not None
-    assert resolved.folder_unstartable is False
 
 
 def test_a_pin_to_an_entry_not_installed_stands() -> None:
