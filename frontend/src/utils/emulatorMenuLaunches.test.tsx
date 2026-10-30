@@ -101,13 +101,13 @@ describe("the emulator menu's answer per entry (#2195 D22, D31)", () => {
     );
 
     await read.answer([
-      launch(SHORTCUT, { state: "not_this_emulator", other_entries: [DIRECTORY] }),
-      launch(DIRECTORY, { format_unestablished: true }),
+      launch(SHORTCUT, { state: "not_this_emulator", other_entries: [DIRECTORY], reason: "takes_no_folder" }),
+      launch(DIRECTORY),
     ]);
 
     expect(container.querySelector(".romm-throbber")).toBeNull();
-    expect(row(container, SHORTCUT).textContent).toContain("cannot start .ps3 files");
-    expect(row(container, DIRECTORY).textContent).toContain("whether it reads .ps3 is not established");
+    expect(row(container, SHORTCUT).textContent).toContain("cannot start a game installed as a folder");
+    expect(row(container, DIRECTORY).textContent).toContain("can start it");
   });
 
   it("names the source the menu's answer came from where an entry's answer is not established (#2195 D36)", async () => {

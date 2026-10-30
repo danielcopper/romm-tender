@@ -275,9 +275,7 @@ class Ps3FolderLift:
 def ps3_folder_lift(rom_dir: str | None, launch_path: str) -> Ps3FolderLift | None:
     """Return the lift of a folder-boot install whose game folder lies exactly one level inside *rom_dir*, or ``None``.
 
-    The game folder is :func:`folder_boot_root`'s. ES-DE, the resolver and
-    RPCS3 all look at the install's folder itself, and find nothing to boot one
-    level above the game (#2195 D39). ``None`` for a game folder that is
+    The game folder is :func:`folder_boot_root`'s (#2195 D39). ``None`` for a game folder that is
     *rom_dir* itself or lies deeper, and for any other layout, so asking twice
     lifts once. Whether the game folder is the only entry of *rom_dir* — the
     one case it is lifted in — is the caller's to read.

@@ -82,8 +82,9 @@ NOT_ESTABLISHED_PATH_UNSEEN = "path_unseen"
 CORE_UNLOCATED = "core_unlocated"
 START_SCRIPT_RUNS_NOTHING = "start_script_runs_nothing"
 
-# Why the entry a game would start with cannot start it, in Tender's words: the
-# two reasons above, which the resolver states about the entry itself. A game
+# Why the entry a game would start with cannot start it, in Tender's words:
+# ``NOT_INSTALLED`` and ``START_SCRIPT_RUNS_NOTHING``, which the resolver states
+# about the entry itself. A game
 # with such an entry has Play refused with the reason (#2195 D7). The panel
 # words each (``frontend/src/utils/emulatorStart.ts``).
 CANNOT_START = frozenset({NOT_INSTALLED, START_SCRIPT_RUNS_NOTHING})

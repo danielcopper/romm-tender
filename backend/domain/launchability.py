@@ -65,20 +65,21 @@ class Launchability:
     """One file's verdict for one entry, with what each state's sentence names.
 
     ``system`` is the system it was asked as, ``file`` the file's name and
-    ``extension`` the token compared, as the resolver states it. ``starts_from`` is the system's accept-list, read for
+    ``extension`` the token compared, as the resolver states it.
+    ``starts_from`` is the system's accept-list, read for
     :data:`NOT_A_LAUNCH_FILE`; ``other_entries`` the labels of the system's
     entries established to start the file, read for :data:`NOT_THIS_EMULATOR`;
     ``install_in`` the labels of the system's entries that install it, ``None``
     on every state but :data:`NEEDS_INSTALLING`, where an empty tuple says the
     system has an entry for none of the emulators known to (#2195 D35).
-    ``reason`` is the resolver's reason in Tender's word, ``None`` where it
+    ``reason`` is the resolver's reason in Tender's words, ``None`` where it
     named none Tender words: why a verdict was :data:`NOT_ESTABLISHED`
     (:data:`SYSTEM_UNKNOWN` …), why the entry does not start the file on
     :data:`NOT_THIS_EMULATOR` (:data:`TAKES_NO_FOLDER` …), and what could not be
     established about a file that :data:`STARTS` (:data:`CONTENT_MISSING` …).
-    ``contents_unread`` says the file
-    is an archive whose contents were not read; ``format_unestablished`` that
-    whether the entry reads this format was not established.
+    ``contents_unread`` says the file is an archive whose contents were not
+    read; ``format_unestablished`` that whether the entry reads this format was
+    not established.
     """
 
     state: str

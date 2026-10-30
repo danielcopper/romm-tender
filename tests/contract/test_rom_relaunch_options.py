@@ -20,7 +20,8 @@ from domain.rom_install import RomInstall
 from ._seed import seed_component_launcher, seed_es_find_rules, seed_es_systems, seed_install, seed_rom
 
 # A ps3 system as RetroDECK ships it: the shortcut form is its default and cannot
-# be baked, and RPCS3 Directory (Standalone) is the entry that starts a folder.
+# be baked, and RPCS3 Directory (Standalone) is the entry whose command hands
+# RPCS3 the game's path.
 _PS3_ES_SYSTEMS_XML = """\
 <?xml version="1.0"?>
 <systemList>

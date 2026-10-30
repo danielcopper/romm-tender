@@ -454,7 +454,7 @@ def _frontend_choice(entries: tuple[Any, ...]) -> Any:
 
 
 def _launch_reason(answer: Any, state: str) -> str | None:
-    """The resolver's reason behind *answer*'s verdict, in Tender's word, or ``None`` where Tender words none.
+    """The resolver's reason behind *answer*'s verdict, in Tender's words, or ``None`` where Tender words none.
 
     Why it could not be established, why the entry does not take the file, or
     what a reading of a file the entry starts stopped short of.

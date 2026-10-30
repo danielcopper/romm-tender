@@ -149,10 +149,15 @@ describe("each verdict has its own sentence (#2195 D2)", () => {
   });
 
   it("a format the entry was not established to read is said under Play, and lets the game start (#2195 D41)", () => {
-    const answer = launch({ format_unestablished: true });
+    const answer = launch({
+      entry: "RPCS3 Shortcut (Standalone)",
+      file: "Game.iso",
+      extension: ".iso",
+      format_unestablished: true,
+    });
     expect(launchRefusal(answer, true)).toBeNull();
     expect(launchNote(answer, RETRODECK)).toBe(
-      "Whether RPCS3 Directory (Standalone) reads .ps3 files is not established.",
+      "Whether RPCS3 Shortcut (Standalone) reads .iso files is not established.",
     );
   });
 

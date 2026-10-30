@@ -1,4 +1,4 @@
-"""The one-time step naming PS3 folder installs as ES-DE scans them (#2195 D11, D27)."""
+"""The one-time steps naming PS3 folder installs as ES-DE scans them, and lifting one's game folder (#2195 D27, D39)."""
 
 from __future__ import annotations
 

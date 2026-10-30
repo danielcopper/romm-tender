@@ -439,14 +439,14 @@ export interface EmulatorStart {
   entry: string | null;
 }
 
-/** Why a launch verdict could not be established, in Tender's word. */
+/** Why a launch verdict could not be established, in Tender's words. */
 export type LaunchNotEstablishedReason = "system_unknown" | "entry_unknown" | "catalogue_unread" | "no_source";
 
-/** Why the entry does not start the file, where the resolver states a reason of its own, in Tender's word. */
+/** Why the entry does not start the file, where the resolver states a reason of its own, in Tender's words. */
 export type LaunchRefusalReason =
   "takes_no_folder" | "nothing_to_start" | "not_a_game_file" | "disc_not_found" | "disc_key_missing";
 
-/** What could not be established about a file the entry starts, in Tender's word. */
+/** What could not be established about a file the entry starts, in Tender's words. */
 export type LaunchStoppedShortReason =
   | "content_missing"
   | "content_unreadable"
@@ -475,7 +475,7 @@ export type LaunchStoppedShortReason =
  * `not_this_emulator`), and `install_in` the system's entries that install
  * it — for `needs_installing` alone, empty where the system has an entry for
  * none of the emulators known to, `null` otherwise.
- * `reason` is the resolver's reason in Tender's word, `null` where it named
+ * `reason` is the resolver's reason in Tender's words, `null` where it named
  * none Tender words: why a verdict was `not_established`, why the entry does not
  * start the file on `not_this_emulator`, and what could not be established
  * about a file that `starts` (#2195 D40). `contents_unread` says the file is an archive whose

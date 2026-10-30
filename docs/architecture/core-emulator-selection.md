@@ -622,16 +622,16 @@ and a PS3 ROM synced before this change self-heals on its next bake. See
 **The folder is named as ES-DE scans it.** A folder-boot download's folder is renamed `<game>.ps3` (`ps3_folder_rename`,
 `domain/rom_files.py`), the name ps3's accept-list carries for a game kept as a folder, and the resolver is asked about
 that folder as about any other game's file: on the game's page with the entry the game starts with, in the emulator menu
-with each entry, never with an entry of Tender's own choosing; the marker run above still decides which directory inside
-it is baked ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D11, D38), though the resolver names the
-folder RPCS3 boots too, until the direct start ([#2221](https://github.com/danielcopper/romm-tender/issues/2221)) reads
-that instead. A folder whose name already ends in a suffix the accept-list carries, compared verbatim as ES-DE compares
-it, keeps its name, and so does one whose new name is taken: nothing is moved over another folder. A download whose game
-folder lies exactly one level inside the folder it was unpacked into has that game folder placed as the folder itself
-(`ps3_folder_lift`), since ES-DE, the resolver and RPCS3 look only at the folder and find nothing to boot one level
-above the game (D39) — only where the game folder is its only entry, so nothing beside it is deleted or left outside the
-install. An older install is renamed and lifted once at start-up (D27, D39; see
-[Launch-target validation](backend-architecture.md#launch-target-validation)).
+with each entry, never with an entry of Tender's own choosing. The resolver also names the folder RPCS3 boots, but the
+marker run above decides which directory inside it is baked until the direct start
+([#2221](https://github.com/danielcopper/romm-tender/issues/2221)) reads the resolver's instead
+([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D11, D38). A folder whose name already ends in a
+suffix the accept-list carries, compared verbatim as ES-DE compares it, keeps its name, and so does one whose new name
+is taken: nothing is moved over another folder. A download whose game folder lies exactly one level inside the folder it
+was unpacked into has that game folder placed as the folder itself (`ps3_folder_lift`), since ES-DE, the resolver and
+RPCS3 look only at the folder and find nothing to boot one level above the game (D39) — only where the game folder is
+its only entry, so nothing beside it is deleted or left outside the install. An older install is renamed and lifted once
+at start-up (D27, D39; see [Launch-target validation](backend-architecture.md#launch-target-validation)).
 
 ### The same three bake sites — disc path composes with the core
 

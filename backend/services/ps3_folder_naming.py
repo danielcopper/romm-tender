@@ -1,4 +1,4 @@
-"""Ps3FolderNamingService — naming the PS3 games already installed as folders as ES-DE scans them.
+"""Ps3FolderNamingService — naming and placing the PS3 games already installed as folders as ES-DE scans them.
 
 A one-time step (#2195 D27): a download names a PS3 game kept as a folder
 ``<game>.ps3`` (D11), and the resolver answers a folder without that name as no
@@ -21,13 +21,12 @@ database put back by the installer's rollback — gets its record moved after
 it.
 
 A second one-time step runs right after it, with its own subject and stamp
-and the same rules (D39): a game folder found exactly one level inside an
-install's folder is placed as that folder itself, since ES-DE, the resolver and
-RPCS3 look at the install's folder and find nothing to boot one level above the
-game. It is moved only where it is the folder's only entry; anything beside it
-keeps the install as it is, so nothing is deleted or left behind. The game
-folder waits in a sibling while the install's folder is emptied, and a pass
-stopped at any point is finished at the next start.
+and the same rules: a game folder found exactly one level inside an install's
+folder is placed as that folder itself (D39). It is moved only where it is the
+folder's only entry; anything beside it keeps the install as it is, so nothing
+is deleted or left behind. The game folder waits in a sibling while the
+install's folder is emptied, and goes back inside it where that folder cannot
+be removed; a pass stopped at any point is finished at the next start.
 """
 
 from __future__ import annotations
@@ -70,7 +69,10 @@ class Ps3FolderNamingServiceConfig:
 
 
 class Ps3FolderNamingService:
-    """Renames the PS3 folder installs not yet named ``<game>.ps3``, once."""
+    """Renames the PS3 folder installs not yet named ``<game>.ps3``, then lifts a game folder one level inside one.
+
+    Each of the two steps runs once.
+    """
 
     def __init__(self, *, config: Ps3FolderNamingServiceConfig) -> None:
         self._uow_factory = config.uow_factory

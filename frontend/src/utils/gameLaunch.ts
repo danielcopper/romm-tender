@@ -180,7 +180,8 @@ export function launchRefusal(launch: GameLaunch | null, canPick: boolean): stri
  * What the page says about a verdict that lets the game start, or `null` where
  * there is nothing to say: whether it starts could not be established, what the
  * reading of the file stopped short of, whether the entry reads its format
- * (#2195 D41), or that the file is an archive whose contents were not read. `source` is the source the answer came from.
+ * (#2195 D41), or that the file is an archive whose contents were not read.
+ * `source` is the source the answer came from.
  */
 export function launchNote(launch: GameLaunch | null, source: AnsweringSource | null): string | null {
   if (launch === null) return null;
