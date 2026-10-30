@@ -1989,11 +1989,12 @@ The Play button's path:
 6. Reachability: `probe_reachability` decides between steps 7 and 8.
 7. Online: `pre_launch_sync` — past its limit, the "Waiting for Save Sync" question above. The button turns into
    "Syncing saves..." only on the backend's `pre_launch_sync_started` event for this ROM, which the sync sends once it
-   has passed "Sync before launch", the refusal of a game whose saves cannot sync and the heartbeat, just before its
-   first request that names the device. With save sync off, "Sync before launch" off or a game whose saves cannot sync,
-   no event comes, and the button goes from "Preparing..." straight to "Launching...". No other sync sends it — not Sync
-   Saves, not Sync All Saves Now, not the sync after a game. The panel listens for it only while its call to
-   `pre_launch_sync` is open, for its own ROM, so an event that arrives after the step answered — Cancel or Play Anyway
+   has passed "Sync before launch", the refusal of a game whose saves cannot sync and its own reachability check
+   (`heartbeat`), just before its first request that names the device. With save sync off, "Sync before launch" off or a
+   game whose saves the sync refuses, no event comes, and the button never reads "Syncing saves...": it goes from
+   "Preparing..." to "Launching...", or, for a missing saves folder, to the "Save Sync Unavailable" question below. No
+   other sync sends it — not Sync Saves, not Sync All Saves Now, not the sync after a game. The panel listens for it,
+   for its own ROM, only until its pre-launch step answers, so an event that arrives after that — Cancel or Play Anyway
    past the limit included — changes nothing. The backend fetches server saves and runs `do_sync_rom_saves`, which
    iterates files and dispatches every `compute_sync_action` outcome. If a `Conflict` was returned for any file, the
    result includes a `conflicts` list, and `actOnGateVerdict` puts each conflict through

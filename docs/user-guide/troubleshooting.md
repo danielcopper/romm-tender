@@ -412,11 +412,11 @@ To find the files, open the game's detail page — the **ROM File** section show
 Steam's own Play or a link — and after a wait a **Save Sync Unavailable** dialog asks "Couldn't check your saves in time
 — launch with local saves?".
 
-**What happened**: Before a game starts, Tender checks its saves, and every step of that check but the save sync itself
-has a time limit — about fifteen seconds for reading how the game's saves are set up on RomM, about five for every other
-step. A step that got no answer in time ends in this dialog, so a start never waits without end. Either Tender's backend
-is not answering, or RomM is slow. A save sync that takes long asks a different question — see
-[Play is waiting for a save sync](#play-is-waiting-for-a-save-sync).
+**What happened**: Before a game starts, Tender checks what the start needs, its saves among them, and every step of
+that check but the save sync itself has a time limit — about fifteen seconds for reading how the game's saves are set up
+on RomM, about five for every other step. A step that got no answer in time ends in this dialog, so a start never waits
+without end. Either Tender's backend is not answering, or RomM is slow. A save sync that takes long asks a different
+question — see [Play is waiting for a save sync](#play-is-waiting-for-a-save-sync).
 
 **Fix**: **Launch Anyway** starts the game on the save already on the device; the sync after the game compares that save
 with the server's; where both changed, it tells you, and you choose which to keep before the next start. **Cancel**

@@ -1,12 +1,9 @@
-"""The sync before a start tells the panel when it begins, and nothing else does.
-
-The panel's Play reads "Syncing saves..." only from the ``pre_launch_sync_started``
-event, so the event goes out once every reason not to sync has passed — save sync
-on, Sync before launch on, a game whose saves can sync, RomM answering — and
-before the sync's first request that names the device. Each absence case is
-parametrized with its control: the same fixture with the one condition flipped
-sends the event, so a test that would pass over an engine sending nothing at all
-turns red instead.
+"""The sync before a start sends ``pre_launch_sync_started`` once save sync, Sync
+before launch, the save answer's refusal and RomM's heartbeat have passed, and
+before its first request that names the device; no other sync sends it. Each
+absence case stands beside its control — parametrized, or a test of its own — in
+which the one condition flipped sends the event, so an engine that sends nothing
+turns a test red.
 """
 
 from __future__ import annotations

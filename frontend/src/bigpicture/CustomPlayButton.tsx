@@ -635,11 +635,10 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
     }
     detach(debugLog(`CustomPlayButton: appId=${appId} not running — running the launch gate [${running.diagnostics}]`));
 
-    // The press shows "checking" until the verdict is acted on, and the backend's
-    // report that the pre-launch sync began flips it to "syncing"; an unexpected
-    // throw while acting on the verdict (from a prompt's modal helper or launch
-    // dispatch) would otherwise leave the button frozen there. The watcher never traps the user's game (bare relaunch);
-    // the Play-button equivalent is to reset the button to "play".
+    // An unexpected throw while acting on the verdict (from a prompt's modal
+    // helper or launch dispatch) would otherwise leave the button on its
+    // throbber. The watcher never traps the user's game (bare relaunch); the
+    // Play-button equivalent is to reset the button to "play".
     setState("checking");
     try {
       // The page could not tell whether the game can start, so the press asks

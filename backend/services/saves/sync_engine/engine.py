@@ -798,8 +798,10 @@ class SyncEngine:
         except (RommConnectionError, RommTimeoutError) as e:
             raise self._server_offline("pre_launch_sync", e) from e
 
-        # Only once every reason not to sync has passed: the panel reads this
-        # event as a sync of the game having begun.
+        # After the reasons not to sync that are known before a request — the
+        # setting, the refusal, the heartbeat — and before the first request
+        # that names the device: the panel reads this event as a sync of the
+        # game having begun.
         await self._emit("pre_launch_sync_started", {"rom_id": rom_id})
         device_id = await self.live_device_id()
 

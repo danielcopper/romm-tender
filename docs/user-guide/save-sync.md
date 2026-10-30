@@ -131,8 +131,7 @@ Open **Save Sync** from the main QAM page to configure sync behavior.
 - **Sync before launch** (default: on) — runs sync before a game starts. If the server is unreachable, the game starts
   with your local save — or asks first, if that save has changed since its last sync. On a game's page, **Play** reads
   **Preparing...** while Tender gets the start ready, and **Syncing saves...** only once this sync has begun. With this
-  setting off, with save sync off, or for a game whose saves Tender cannot sync, it goes from **Preparing...** straight
-  to **Launching...**.
+  setting off, with save sync off, or for a game whose saves Tender cannot sync, it never reads **Syncing saves...**.
 - **Sync after exit** (default: on) — runs sync after closing a game. A toast confirms what moved and which way — "Saves
   uploaded to RomM", "Saves downloaded from RomM", or "Saves synced with RomM (1 up, 2 down)" when a run went both ways;
   a sync that transferred nothing shows no toast. If the sync fails, the toast names the actual cause (see

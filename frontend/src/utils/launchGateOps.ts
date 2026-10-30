@@ -291,7 +291,8 @@ export function makeLaunchGateOps(romId: number, options: LaunchGateOpsOptions):
         try {
           options.onSyncStart?.();
         } catch (e) {
-          // A throwing trigger hook must not abort or bypass the pre-launch sync.
+          // The socket's dispatch only warns on the console; this puts a throwing
+          // hook in the backend's log under the caller's tag.
           logError(`${tag}: onSyncStart threw: ${e}`);
         }
       };
