@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.emulator_commands import (
     CANNOT_START,
+    NOT_BAKEABLE,
     default_option,
     option_for_label,
     shipped_default,
@@ -101,9 +102,10 @@ def start_payload(choice: EmulatorChoice, options: list[EmulatorOption]) -> dict
     ``entry`` is the label of the entry it is about — the chosen one, or for
     :data:`CHOOSE` the shipped default — ``None`` for :data:`NO_ENTRY`.
     ``reason`` is why it cannot start (:data:`domain.emulator_commands.NOT_INSTALLED`,
-    :data:`~domain.emulator_commands.START_SCRIPT_RUNS_NOTHING`), or, for
-    :data:`CHOOSE`, the shipped entry's not-established note; ``None``
-    otherwise. Whether the game's file starts with the entry is the launch
+    :data:`~domain.emulator_commands.START_SCRIPT_RUNS_NOTHING`, and
+    :data:`~domain.emulator_commands.NOT_BAKEABLE` for any other entry Tender
+    cannot bake, #2195 D7, D23), or, for :data:`CHOOSE`, the shipped entry's
+    not-established note; ``None`` otherwise. Whether the game's file starts with the entry is the launch
     verdict's (:mod:`domain.launchability`), a folder the entry does not take
     included (#2195 D21).
     """
@@ -115,6 +117,8 @@ def start_payload(choice: EmulatorChoice, options: list[EmulatorOption]) -> dict
         return {"state": CHOOSE, "reason": shipped.not_established, "entry": shipped.label}
     if option.reason in CANNOT_START:
         return {"state": CANNOT_START_STATE, "reason": option.reason, "entry": option.label}
+    if option.status != "bakeable":
+        return {"state": CANNOT_START_STATE, "reason": NOT_BAKEABLE, "entry": option.label}
     return {"state": STARTS, "reason": None, "entry": option.label}
 
 

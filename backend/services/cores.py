@@ -29,7 +29,14 @@ from domain.emulator_choice import (
     unspoken_start,
     vanished_payload,
 )
-from domain.emulator_commands import default_option, label_to_invocation, options_to_payload, shipped_default
+from domain.emulator_commands import (
+    NOT_INSTALLED,
+    default_option,
+    label_to_invocation,
+    option_for_label,
+    options_to_payload,
+    shipped_default,
+)
 from domain.emulator_pick import pick_for, platform_pick, platform_pick_value, source_kind
 from domain.platform_names import PLATFORM_NAMES_KEY, platform_display_name
 from domain.rom_files import folder_boot_root
@@ -487,14 +494,13 @@ class CoreService:
     async def set_game_core(self, rom_id: int, label: str) -> dict[str, Any]:
         """Pin the per-game emulator override for ``rom_id`` to *label*.
 
-        The picked LABEL is resolved to a bakeable :class:`EmulatorInvocation`
-        FIRST (against the emulators ES-DE lists for the ROM's platform, libretro
-        OR standalone). A label that does not resolve to a bakeable emulator —
-        unknown, ``needs_setup``, or otherwise un-bakeable — or for which no
+        The picked LABEL is checked FIRST against the emulators the ROM's
+        system lists, libretro OR standalone. A label the system does not list,
+        one the resolver states not installed (#2195 D9), or one for which no
         emulator source answers is refused with ``core_unavailable`` and
-        **nothing is written**, so the DB never holds a
-        label no consumer can bake; an unknown ROM is refused with
-        ``not_found``. On success the pin is written via the Unit-of-Work and
+        **nothing is written**; an entry Tender cannot bake is pinned like any
+        other, and the game page then says Tender cannot start it (D23). An
+        unknown ROM is refused with ``not_found``. On success the pin is written via the Unit-of-Work and
         the response carries the freshly-baked ``launch_options`` (the ``-e``
         override form) and ``app_id`` for the frontend to confirm-set on the live
         Steam shortcut. When the ROM is not installed or not bound to a shortcut
@@ -521,11 +527,12 @@ class CoreService:
         # stalls every other writer for its duration.
         options = self._emulator_options(self._platform_systems.rom_system(platform_slug, install))
         source = source_kind(options)
-        invocation = label_to_invocation(options["options"], label)
-        if invocation is None or source is None:
-            # Refuse BEFORE any write — never persist a label that does not
-            # resolve to a bakeable emulator (unknown / needs_setup / un-bakeable).
+        option = option_for_label(options["options"], label)
+        if option is None or option.reason == NOT_INSTALLED or source is None:
+            # Refuse BEFORE any write — never persist a label the system does not
+            # list, or one whose emulator the resolver states not installed.
             raise Refused("core_unavailable", f"Emulator '{label}' is not available for {platform_slug}")
+        invocation = label_to_invocation(options["options"], label)
         with self._uow_factory() as uow:
             # The row is re-read because the label was resolved against a
             # snapshot: a background sync, a finishing download or the

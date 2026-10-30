@@ -171,12 +171,13 @@ which promotion never touches. Where the default cannot be baked, or there is no
 returns `None` and the caller bakes the plain RetroDECK launch.
 
 **What starting comes to.** `domain/emulator_choice.py::start_payload` turns the choice into the `start` the game page
-and the platform page read: `starts`; `cannot_start` with the reason — `not_installed` or `start_script_runs_nothing`;
-`choose` where the shipped default's installation is not established, so there is no default until the user picks one
-(D9); `no_entry` where there is nothing to start with. A `cannot_start` or `choose` answer disables the game page's
-Play, and the launch watcher refuses Steam's own Play on the shortcut with the same sentence
-(`frontend/src/utils/emulatorStart.ts`). Whether the entry starts the game's own file — a game installed as a folder
-included, which RPCS3 Shortcut does not take — is the resolver's launch verdict, not the start's (D21; see
+and the platform page read: `starts`; `cannot_start` with the reason — `not_installed`, `start_script_runs_nothing`, or
+`not_bakeable` for any other entry Tender cannot bake, since RetroDECK's `run_game.sh` without `-e` would start ES-DE's
+own choice rather than that entry (D7, D23); `choose` where the shipped default's installation is not established, so
+there is no default until the user picks one (D9); `no_entry` where there is nothing to start with. A `cannot_start` or
+`choose` answer disables the game page's Play, and the launch watcher refuses Steam's own Play on the shortcut with the
+same sentence (`frontend/src/utils/emulatorStart.ts`). Whether the entry starts the game's own file — a game installed
+as a folder included, which RPCS3 Shortcut does not take — is the resolver's launch verdict, not the start's (D21; see
 [Whether an entry starts the installed game](#whether-an-entry-starts-the-installed-game)). Tender never switches such a
 game to another entry by itself.
 
@@ -336,8 +337,8 @@ applies these rules in order, first match wins:
 7. otherwise `bakeable`.
 
 A system whose first command is the shortcut form (`%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%`, RetroDECK's PS3) keeps
-it as its default, `unbakeable` as it is; a PS3 game installed as a folder cannot start with it (above). A leading
-`env VAR=val …` prefix (the GameCube/Wii Dolphin form) is accepted as an invocation like any other.
+it as its default, `unbakeable` as it is, so its games say Tender cannot start it yet (above). A leading `env VAR=val …`
+prefix (the GameCube/Wii Dolphin form) is accepted as an invocation like any other.
 
 **Whether an entry is installed is the resolver's answer.** RetroDECK lists more emulators in `es_systems.xml` than it
 bundles, so a system's bakeable default could name one that is not on disk (Ryubing on `switch`) — baking it produces a
@@ -391,10 +392,12 @@ declaring itself the whole catalogue gives a complete answer, merely a small one
 empty caveat list — a broken installation states health findings on every answer it gives. `options_to_payload` projects
 the list to the frontend picker shape
 (`{label, kind, core_so, emulator, declared_index, is_default, chosen_in_frontend,
-bakeable, reason}`): bakeable entries
-are clickable, the default and the user's ES-DE choice are marked, and `needs_setup` / `unbakeable` entries are disabled
-with their reason. Asked with `source`, `get_emulator_options` answers for that detected source instead of the answering
-one, which the platform page's per-source defaults read (below).
+bakeable, reason}`): every entry is
+clickable but one the resolver states not installed, which reads "emulator not installed" (D9, D23, D31); the default
+and the user's ES-DE choice are marked; an entry's not-established note comes first in its `reason`, and an entry Tender
+cannot bake reads "Tender cannot start it yet", or the resolver's own line where it states why (`core_unlocated`,
+`start_script_runs_nothing`). Asked with `source`, `get_emulator_options` answers for that detected source instead of
+the answering one, which the platform page's per-source defaults read (below).
 
 **One row per entry.** Every entry is a row of its own, in the resolver's order, two labels that run one command
 included: RetroDECK lists `pcsx2_libretro.so` as `LRPS2` and as `PCSX2`, and ES-DE stores a choice by its label, so
@@ -668,11 +671,11 @@ detail page:
 
 The frontend CPU-button menu on the game detail page drives two backend endpoints:
 
-- **`set_game_core(rom_id, label)`** resolves the LABEL to a **bakeable `EmulatorInvocation` (libretro or standalone)
-  first**, via `label_to_invocation` against the ROM platform's classified command list. A label that does not resolve
-  to a bakeable emulator — unknown, `needs_setup`, or otherwise un-bakeable — is refused with `core_unavailable` and
-  **nothing is written**, so the DB never holds a label no consumer can bake. On success it `pin`s the override, then
-  re-bakes and returns the new `launch_options` (the `-e` override form) + the bound `app_id` for an installed ROM.
+- **`set_game_core(rom_id, label)`** checks the LABEL **first** against the ROM platform's classified command list. A
+  label the list does not carry, or one whose emulator the resolver states not installed, is refused with
+  `core_unavailable` and **nothing is written**; an entry Tender cannot bake is pinned like any other, and its start is
+  then refused (D23). On success it `pin`s the override, then re-bakes and returns the new `launch_options` (the `-e`
+  override form, the plain one for an entry Tender cannot bake) + the bound `app_id` for an installed ROM.
 - **`clear_game_core(rom_id)`** (triggered by picking the **default-marked core** in the menu) `clear`s the override to
   `NULL`, then re-resolves the ROM's **full active core** through `ActiveCoreResolver` and bakes _that_ — the
   per-platform core or the default, in `-e` form, **not** an unconditional plain launch. Because Tender always bakes
@@ -694,7 +697,7 @@ next download/sync.
 ### Per-platform (`CoreService.set_system_core`)
 
 The platform detail's **Change core** button — a `ButtonItem` opening the same context menu as the game-detail picker,
-so standalone emulators and disabled un-bakeable entries render identically (#1210) — calls
+so every entry renders and is chosen as on a game's page (#1210) — calls
 **`set_system_core(platform_slug, core_label)`**:
 
 1. It writes the choice into `settings["platform_cores"]` — storing the LABEL with the kind of the answering source

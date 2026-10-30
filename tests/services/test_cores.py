@@ -524,9 +524,44 @@ class TestSetGameCore:
         assert result["app_id"] is None
         assert uow.roms.get(42).emulator_override == "bsnes"
 
+    def test_an_entry_tender_cannot_bake_is_pinned_and_bakes_the_plain_launch(
+        self, event_loop, service, uow, core_info
+    ):
+        # Pinned like any other (#2195 D23); the game page then refuses Play.
+        core_info.options = [
+            standalone_option(
+                "%EMULATOR_OS-SHELL% %ROM%",
+                "RPCS3 Shortcut (Standalone)",
+                status="unbakeable",
+                reason="shortcut_script",
+            )
+        ]
+        _seed_rom(uow, rom_id=42, platform_slug="ps3", shortcut_app_id=99)
+        _seed_install(uow, rom_id=42, file_path="/roms/ps3/Game.iso", platform_slug="ps3")
+
+        result = event_loop.run_until_complete(service.set_game_core(42, "RPCS3 Shortcut (Standalone)"))
+
+        assert result["success"] is True
+        assert uow.roms.get(42).emulator_override == "RPCS3 Shortcut (Standalone)"
+        assert result["launch_options"] == "flatpak run --nosocket=wayland net.retrodeck.retrodeck '/roms/ps3/Game.iso'"
+
+    def test_an_entry_not_installed_is_refused_and_nothing_written(self, event_loop, service, uow, core_info):
+        core_info.options = [
+            standalone_option(
+                "%EMULATOR_X% %ROM%", "Missing (Standalone)", status="needs_setup", reason="not_installed"
+            )
+        ]
+        _seed_rom(uow, rom_id=42, platform_slug="snes", shortcut_app_id=99)
+        _seed_install(uow, rom_id=42, file_path="/roms/snes/mario.sfc")
+
+        with pytest.raises(Refused) as refused:
+            event_loop.run_until_complete(service.set_game_core(42, "Missing (Standalone)"))
+
+        assert refused.value.reason == "core_unavailable"
+        assert uow.roms.get(42).emulator_override is None
+
     def test_unresolvable_label_fails_and_writes_nothing(self, event_loop, service, uow):
-        # An un-bakeable / unknown label hard-fails BEFORE any write — the DB
-        # must never hold a label no consumer can bake.
+        # A label the system does not list hard-fails BEFORE any write.
         _seed_rom(uow, rom_id=42, platform_slug="snes", shortcut_app_id=99)
         _seed_install(uow, rom_id=42, file_path="/roms/snes/mario.sfc")
         setting = service.set_game_core(42, "Genesis Plus GX")

@@ -696,7 +696,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   const showCoreMenu = (e: Event) => {
     // Both pickers share the builder in utils/emulatorMenu. The game-detail menu
     // carries the "Use System Override" reset item (the only clear path, #211);
-    // every bakeable emulator entry PINS the per-game override. For an
+    // every entry the menu offers PINS the per-game override. For an
     // installed game it also asks, as it opens, whether each entry can start it.
     const romId = detail.romId;
     const launches =

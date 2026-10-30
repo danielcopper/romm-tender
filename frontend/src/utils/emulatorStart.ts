@@ -16,11 +16,19 @@ import { withTimeout } from "./withTimeout";
 const CHOOSE_ANOTHER = " Choose another emulator in the emulator menu.";
 
 /**
+ * Whether the emulator menu offers *entry* as a pick: every entry but one the
+ * resolver states not installed (#2195 D9, D23), whether Tender can bake it or not.
+ */
+export function isChoosable(entry: EmulatorOption): boolean {
+  return entry.reason !== "not_installed";
+}
+
+/**
  * Whether the emulator menu offers an entry to pick other than the one in
  * effect — what a sentence may point the reader at.
  */
 export function canPickAnother(emulators: readonly EmulatorOption[], activeLabel: string | null): boolean {
-  return emulators.some((entry) => entry.bakeable && entry.label !== activeLabel);
+  return emulators.some((entry) => isChoosable(entry) && entry.label !== activeLabel);
 }
 
 /** {@link canPickAnother} for a game's page, whose emulator menu is offered only with more than one emulator. */
@@ -43,6 +51,8 @@ export function emulatorStartRefusal(start: EmulatorStart, subject: string, canP
         return `${entry} is not installed, so ${subject} cannot start.${pointer}`;
       case "start_script_runs_nothing":
         return `RetroDECK's start script cannot start ${entry}, so ${subject} cannot start.${pointer}`;
+      case "not_bakeable":
+        return `Tender cannot start ${entry} yet.${pointer}`;
       default:
         return `${entry} cannot start ${subject}.${pointer}`;
     }

@@ -14,6 +14,7 @@ import {
   frontendChoiceLines,
   frontendChoiceSentence,
   gameCanPickAnother,
+  isChoosable,
   startRefused,
   vanishedPickSentence,
 } from "./emulatorStart";
@@ -100,11 +101,20 @@ describe("why a start is refused", () => {
 });
 
 describe("whether another entry can be pinned", () => {
-  it("is so only for a bakeable entry other than the one in effect", () => {
+  it("is so only for an entry not stated not installed, other than the one in effect", () => {
     expect(canPickAnother([row("A"), row("B")], "A")).toBe(true);
-    expect(canPickAnother([row("A"), row("B", { bakeable: false })], "A")).toBe(false);
+    expect(canPickAnother([row("A"), row("B", { bakeable: false })], "A")).toBe(true);
+    expect(canPickAnother([row("A"), row("B", { bakeable: false, reason: "not_installed" })], "A")).toBe(false);
     expect(canPickAnother([row("A")], "A")).toBe(false);
     expect(canPickAnother([row("A")], null)).toBe(true);
+  });
+
+  it("counts an entry Tender cannot bake, but never one the resolver states not installed (#2195 D9, D23)", () => {
+    expect(isChoosable(row("B", { bakeable: false, reason: "shortcut_script" }))).toBe(true);
+    expect(isChoosable(row("B", { bakeable: false, reason: "start_script_runs_nothing" }))).toBe(true);
+    expect(isChoosable(row("B", { bakeable: false, reason: "not_installed" }))).toBe(false);
+    expect(canPickAnother([row("A"), row("B", { bakeable: false, reason: "inject" })], "A")).toBe(true);
+    expect(canPickAnother([row("A"), row("B", { bakeable: false, reason: "not_installed" })], "A")).toBe(false);
   });
 
   it("is never so on a game's page with one emulator, where the page offers no menu", () => {
@@ -231,5 +241,31 @@ describe("a start's own read of the emulator", () => {
     expect(await emulatorRefusalForRom(7, "test")).toBe(
       "track03.bin is not the file Sega Dreamcast starts from; it starts from .cue, .gdi.",
     );
+  });
+});
+
+describe("an entry Tender cannot bake (#2195 D7, D23)", () => {
+  const answer = start({ state: "cannot_start", reason: "not_bakeable", entry: "RPCS3 Shortcut (Standalone)" });
+
+  it("refuses the start, saying Tender cannot start it yet", () => {
+    expect(startRefused(answer)).toBe(true);
+    expect(emulatorStartRefusal(answer, "this game", false)).toBe(
+      "Tender cannot start RPCS3 Shortcut (Standalone) yet.",
+    );
+  });
+
+  it("points at the emulator menu where it offers another entry", () => {
+    expect(emulatorStartRefusal(answer, "this game", true)).toBe(
+      "Tender cannot start RPCS3 Shortcut (Standalone) yet. Choose another emulator in the emulator menu.",
+    );
+  });
+
+  it("refuses Steam's own Play with the same words", async () => {
+    vi.mocked(getPlatformCoreInfo).mockResolvedValue({
+      start: answer,
+      emulators: [row("RPCS3 Shortcut (Standalone)", { bakeable: false, reason: "shortcut_script" })],
+      active_core_label: "RPCS3 Shortcut (Standalone)",
+    } as Awaited<ReturnType<typeof getPlatformCoreInfo>>);
+    expect(await emulatorRefusalForRom(7, "test")).toBe("Tender cannot start RPCS3 Shortcut (Standalone) yet.");
   });
 });

@@ -231,9 +231,9 @@ class TestAnEntryTheResolverCouldNotEstablish:
         payload = options_to_payload([self._unseen()])
         assert (payload[0]["bakeable"], payload[0]["reason"], payload[0]["is_default"]) == (True, "path_unseen", False)
 
-    def test_an_unbakeable_command_keeps_the_reason_it_cannot_bake(self):
+    def test_an_unbakeable_command_whose_installation_is_not_established_sends_its_note(self):
         option = _classify("Shortcut", PS3_RPCS3_SHORTCUT, installation=NOT_ESTABLISHED)
-        assert options_to_payload([option])[0]["reason"] == "shortcut_script"
+        assert options_to_payload([option])[0]["reason"] == NOT_ESTABLISHED
 
 
 class TestThePanelWordsEveryNotEstablishedNote:
@@ -305,7 +305,7 @@ class TestWhatTheResolverStatesDecidesTheBake:
         )
         assert option_to_invocation(option) is None
         assert default_option(_declared(option)) is None
-        assert options_to_payload([option])[0]["reason"] == CORE_UNLOCATED
+        assert options_to_payload([option])[0]["reason"] == NOT_ESTABLISHED_PATH_UNSEEN
 
     def test_an_entry_the_start_script_runs_nothing_for_is_not_bakeable(self):
         option = classify_command("PICO-8 (Standalone)", PICO8_STANDALONE, kind=PROGRAM, start_script_runs_nothing=True)

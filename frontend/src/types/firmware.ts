@@ -387,13 +387,12 @@ interface FirmwareFile extends FirmwareVerdict {
  * this machine, `core_so` set to its bare name), `"program"` (an emulator program
  * of its own) or `"foreign_core"` (a RetroArch launch naming a core this machine
  * cannot load); `core_so` is null on the last two.
- * `bakeable` is false for the `needs_setup` (`reason: "inject"`, or
- * `"not_installed"` for an emulator the resolver states is not installed —
- * worded by `reasonCopy` in `utils/emulatorMenu.tsx`) and un-bakeable forms;
- * `reason` names why the frontend can't offer it as a clickable pick. A
- * bakeable entry's `reason` is a note instead: where the resolver could not
- * establish whether the emulator is installed, the cause, worded by
- * `utils/emulatorInstallation.ts`, and `null` otherwise.
+ * `bakeable` is false for an entry Tender cannot bake into a shortcut. `reason`
+ * is the entry's not-established note where the resolver could not establish
+ * whether its emulator is installed (worded by `utils/emulatorInstallation.ts`),
+ * else why it cannot be baked (worded by `reasonCopy` in
+ * `utils/emulatorMenu.tsx`), `"not_installed"` among them — the one reason an
+ * entry is not offered as a pick (`isChoosable`) — and `null` otherwise.
  *
  * `emulator` is the resolver's identity for the emulator behind the row and the
  * only field that names one for every kind — `dolphin_libretro.so` for a core

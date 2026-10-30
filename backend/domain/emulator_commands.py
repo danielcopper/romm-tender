@@ -84,10 +84,13 @@ START_SCRIPT_RUNS_NOTHING = "start_script_runs_nothing"
 
 # Why the entry a game would start with cannot start it, in Tender's words:
 # ``NOT_INSTALLED`` and ``START_SCRIPT_RUNS_NOTHING``, which the resolver states
-# about the entry itself. A game
-# with such an entry has Play refused with the reason (#2195 D7). The panel
+# about the entry itself, and ``NOT_BAKEABLE`` — any other entry Tender cannot
+# bake. RetroDECK's ``run_game.sh`` without ``-e`` would start ES-DE's own
+# choice rather than the entry in effect, so Tender does not start it (#2195 D7,
+# D23). A game with such an entry has Play refused with the reason. The panel
 # words each (``frontend/src/utils/emulatorStart.ts``).
 CANNOT_START = frozenset({NOT_INSTALLED, START_SCRIPT_RUNS_NOTHING})
+NOT_BAKEABLE = "not_bakeable"
 
 # What an entry launches, as the resolver states it, in Tender's words: a core
 # RetroArch loads on this machine, an emulator program of its own, or a
@@ -368,7 +371,7 @@ def label_to_invocation(options: list[EmulatorOption], label: str) -> EmulatorIn
     """Resolve a picked *label* to its :class:`EmulatorInvocation`, else ``None``.
 
     ``None`` where no option carries the label or the option it names cannot be
-    baked; a caller validating a new pick refuses both.
+    baked: the plain launch.
     """
     return option_to_invocation(option_for_label(options, label))
 
@@ -394,13 +397,12 @@ def options_to_payload(options: list[EmulatorOption]) -> list[dict[str, Any]]:
     declared_index, is_default, chosen_in_frontend, bakeable, reason}``.
     ``is_default`` marks the option :func:`default_option` takes;
     ``chosen_in_frontend`` the one the user chose inside ES-DE. ``bakeable`` is
-    ``True`` only for a fully bakeable option (``needs_setup`` reads as
-    ``bakeable: False`` with its ``reason`` — ``"inject"`` or
-    ``"not_installed"`` — so the picker can disable it with a distinct message).
-    A bakeable option's ``reason`` carries its ``not_established`` note, where
-    it has one, so a surface can say so beside a pick it still offers; an option
-    that cannot be baked keeps the reason it cannot. The raw ``command`` text is
-    intentionally dropped from the wire payload.
+    ``True`` only for a fully bakeable option. ``reason`` is the option's
+    ``not_established`` note where it has one, so a surface says so beside a
+    pick it offers whether or not it can be baked (#2195 D9), else the reason it
+    cannot be baked — ``"not_installed"`` among them, the one an entry is not
+    offered for. The raw ``command`` text is intentionally dropped from the wire
+    payload.
 
     ``kind`` is Tender's word for what the entry launches (:data:`CORE`,
     :data:`PROGRAM`, :data:`FOREIGN_CORE`). ``emulator`` is the identity, and it
@@ -420,7 +422,7 @@ def options_to_payload(options: list[EmulatorOption]) -> list[dict[str, Any]]:
             "is_default": option is default,
             "chosen_in_frontend": option.chosen_in_frontend,
             "bakeable": option.status == "bakeable",
-            "reason": option.reason if option.reason is not None else option.not_established,
+            "reason": option.not_established if option.not_established is not None else option.reason,
         }
         for option in options
     ]

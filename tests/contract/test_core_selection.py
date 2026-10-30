@@ -142,8 +142,8 @@ async def test_set_system_core_answers_exactly_its_rebake_list_and_lease(harness
     assert result["success"] is True
 
 
-async def test_set_game_core_unbakeable_label_returns_canonical_failure(harness):
-    """A label that does not resolve to a bakeable emulator hard-fails, no write."""
+async def test_set_game_core_unknown_label_returns_canonical_failure(harness):
+    """A label the system does not list hard-fails, no write."""
     seed_es_systems(harness)
     seed_install(harness, 5, system="gba", platform_slug="gba", file_name="c.gba")
 
