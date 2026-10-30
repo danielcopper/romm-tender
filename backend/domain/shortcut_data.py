@@ -39,7 +39,8 @@ _EMULATOR_TOKEN_RE = re.compile(r"%EMULATOR_[A-Z0-9_-]+%")
 
 # How an invocation is baked: through RetroDECK's ``run_game.sh -e``, by
 # running the emulator's launcher directly in the sandbox (ADR-0019), or not at
-# all, for an entry in effect Tender cannot bake (#2195 D43).
+# all, where the entry in effect is one Tender cannot bake or none is in effect
+# though the system lists entries (#2195 D43).
 RUN_GAME = "run_game"
 DIRECT = "direct"
 NOTHING = "nothing"

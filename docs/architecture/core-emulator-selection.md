@@ -141,6 +141,8 @@ resolve_rom(rom_id):
                                                            ── a stored label stands while it names an entry, whatever
                                                            ── its state; a label that is gone gives way, named
   invocation = get_default_emulator(system) if the default layer answered, else the chosen entry rendered
+  if choice is an entry Tender cannot bake, or no entry while options is not empty:
+    invocation = nothing()                                 ── the empty command (#2195 D43); plain launch only with no options
   invocation = folder_boot_direct(invocation, install)     ── PS3 folder games (below)
   return choice, invocation
 
