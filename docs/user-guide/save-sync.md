@@ -114,11 +114,23 @@ standalone emulator's saves as untested. The answers that keep save sync off, st
 among them, are listed under
 [When save sync does nothing, and why](save-sync-support-matrix.md#when-save-sync-does-nothing-and-why).
 
-A game whose saves Tender cannot sync has no save slot to set up: Play starts it without a setup step, and its **Saves**
-tab says why instead of offering slots (a game you set up earlier reads "No saves found"). Where the reason is a saves
-folder that does not exist, Play still asks before starting the game on the saves on the device, while **Sync before
-launch** is on and RomM can be reached. When the emulator's settings change so that its saves can be synced, the slot
-setup appears by itself.
+Each game's **Saves** tab says whether its saves sync:
+
+- **A game whose saves Tender cannot sync** has a warning mark beside the tab's title, so you see it without opening the
+  tab, and the tab says why instead of offering slots. That holds for a game you set up earlier too: it keeps its slots
+  on RomM, and they are there again once its saves can be synced. Play starts such a game without a setup step. Where
+  the reason is a saves folder that does not exist, Play still asks before starting the game on the saves on the device,
+  while **Sync before launch** is on and RomM can be reached.
+- **A game whose saves sync and that has no save yet** reads "No save yet — _emulator_'s saves for this game sync with
+  RomM once it writes one.", naming the emulator entry the game starts with, as the emulator menu shows it.
+- **A game that is not downloaded** says whether its saves will sync once it is: "Not downloaded. Once it is,
+  _emulator_'s saves for this game sync with RomM.", or "Not downloaded. Once it is, its saves will not sync:" and the
+  reason. Tender works that out from where the game would be downloaded to, without asking RomM. Its slot setup stays as
+  it is, and the tab is not marked.
+
+The tab asks when the game's page opens, and again after a version switch, a change of emulator, a download or an
+uninstall. When the emulator's own settings change so that its saves can be synced, the slot setup appears the next time
+the game's page opens.
 
 ## Settings
 
@@ -437,10 +449,11 @@ into a `.romm-backup` folder beside it, and the newer one is kept where RetroArc
 ### Saves written next to the game file
 
 When a game's saves are written beside the game file instead of in the saves folder — usually because RetroArch's
-**Write Saves to Content Directory** is on — save sync stays off for that game. The game still launches, and the game
-page says why its saves are not synced. Turning that setting on moves no save into the game's folder, and turning it
-back off finds the saves where they were. A save the emulator writes into the game file itself (an Amiga `.adf`, an
-Atari ST `.st`) is a different case, and syncing that game by hand says so.
+**Write Saves to Content Directory** is on — save sync stays off for that game. The game still launches, and its
+**Saves** tab is marked and says why its saves are not synced, with RetroArch's setting named under the reason. Turning
+that setting on moves no save into the game's folder, and turning it back off finds the saves where they were. A save
+the emulator writes into the game file itself (an Amiga `.adf`, an Atari ST `.st`) is a different case, and syncing that
+game by hand says so.
 
 ### Updating from a version with the save-sorting migration
 
