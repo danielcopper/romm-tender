@@ -1057,7 +1057,7 @@ class TestSyncUseCaseErrorMessages:
 
         assert result["success"] is False
         # A total failure leads with the bare reason, not "Uploaded 0 save(s)".
-        assert result["message"] == "timeout"
+        assert result["message"] == "Timeout"
 
     @pytest.mark.asyncio
     async def test_post_exit_sync_partial_keeps_count_and_appends_reason(self, tmp_path):
@@ -1090,7 +1090,7 @@ class TestSyncUseCaseErrorMessages:
 
         result = await svc.post_exit_sync(42)
 
-        assert result["message"] == "timeout (+2 more)"
+        assert result["message"] == "Timeout (+2 more)"
 
     @pytest.mark.asyncio
     async def test_sync_rom_saves_promotes_reason_when_nothing_synced(self, tmp_path):
@@ -1232,7 +1232,7 @@ class TestSummarizeSyncResult:
 
     def test_total_failure_counts_the_extra_failures(self):
         msg = _summarize_sync_result("Uploaded 0 save(s)", synced=0, errors=["a: x", "b: y", "c: z"], conflicts=0)
-        assert msg == "x (+2 more)"
+        assert msg == "X (+2 more)"
 
     def test_partial_run_keeps_count_then_appends_reason(self):
         msg = _summarize_sync_result("Uploaded 2 save(s)", synced=2, errors=["a.srm: timeout"], conflicts=0)
@@ -1244,7 +1244,21 @@ class TestSummarizeSyncResult:
 
     def test_conflicts_suffix_after_promoted_reason(self):
         msg = _summarize_sync_result("Uploaded 0 save(s)", synced=0, errors=["a: boom"], conflicts=1)
-        assert msg == "boom, 1 conflict(s)"
+        assert msg == "Boom, 1 conflict(s)"
+
+    def test_a_total_failure_opens_with_the_reason_capitalised(self):
+        reason = "saved on this device, but RomM did not record it yet; the next sync will"
+        one = _summarize_sync_result("Uploaded 0 save(s)", synced=0, errors=[f"a.srm: {reason}"], conflicts=0)
+        two = _summarize_sync_result(
+            "Uploaded 0 save(s)", synced=0, errors=[f"a.srm: {reason}", f"b.srm: {reason}"], conflicts=0
+        )
+        assert one == "Saved on this device, but RomM did not record it yet; the next sync will"
+        assert two == "Saved on this device, but RomM did not record it yet; the next sync will (+1 more)"
+
+    def test_a_partial_run_keeps_the_reason_as_it_is_after_the_count(self):
+        reason = "saved on this device, but RomM did not record it yet; the next sync will"
+        msg = _summarize_sync_result("Uploaded 1 save(s)", synced=1, errors=[f"a.srm: {reason}"], conflicts=0)
+        assert msg == f"Uploaded 1 save(s), 1 error(s) — {reason}"
 
     def test_first_error_reason_strips_the_filename_prefix(self):
         assert _first_error_reason(["pokemon.srm: Access denied — nope"]) == "Access denied — nope"

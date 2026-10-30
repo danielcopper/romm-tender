@@ -33,18 +33,20 @@ def summarize_sync_result(base: str, *, synced: int, errors: list[str], conflict
     """Compose a sync use case's result ``message``, surfacing the failure reason (#1334).
 
     A total failure (``synced == 0`` with errors) leads with the first error's
-    classified reason — never the "Uploaded 0 save(s), 1 error(s)" count summary
-    that buries it in ``errors[0]`` — and appends ``"(+N more)"`` when other files
-    also failed. A partial run (some transferred, some failed) keeps the ``base``
-    count summary and appends the first reason after an em-dash. A clean run
-    returns ``base`` unchanged. A surfaced-conflict count is appended after the
+    classified reason, its first letter capitalised as the message's opening —
+    never the "Uploaded 0 save(s), 1 error(s)" count summary that buries it in
+    ``errors[0]`` — and appends ``"(+N more)"`` when other files also failed. A
+    partial run (some transferred, some failed) keeps the ``base`` count summary
+    and appends the first reason after an em-dash. A clean run returns ``base``
+    unchanged. A surfaced-conflict count is appended after the
     error clause in every case, preserving the pre-#1334 conflict suffix.
     """
     if errors:
         reason = first_error_reason(errors)
         if synced == 0:
             extra = len(errors) - 1
-            msg = f"{reason} (+{extra} more)" if extra else reason
+            opening = reason[:1].upper() + reason[1:]
+            msg = f"{opening} (+{extra} more)" if extra else opening
         else:
             msg = f"{base}, {len(errors)} error(s) — {reason}"
     else:

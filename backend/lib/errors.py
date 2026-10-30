@@ -340,7 +340,7 @@ def classify_error(exc):
     if isinstance(exc, RommNotFoundError):
         return ErrorCode.NOT_FOUND.value, "Resource not found on server"
     if isinstance(exc, RommAcknowledgementNotTaken):
-        return "server_error", "saved on this device, but RomM did not record it yet \u2014 the next sync will"
+        return "server_error", "saved on this device, but RomM did not record it yet; the next sync will"
     if isinstance(exc, RommUnsupportedError):
         return ErrorCode.UNSUPPORTED.value, f"This feature requires RomM {exc.min_version} or newer"
     if isinstance(exc, TokenHostMismatchError | TokenUnsendableError):

@@ -227,7 +227,7 @@ class TestClassifyError:
 
         assert classify_error(error) == (
             "server_error",
-            "saved on this device, but RomM did not record it yet \u2014 the next sync will",
+            "saved on this device, but RomM did not record it yet; the next sync will",
         )
         assert romm_error_log_level(error) == logging.WARNING
 
