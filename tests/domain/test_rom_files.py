@@ -389,30 +389,44 @@ class TestFolderBootRoot:
         assert folder_boot_root(launch, rom_dir) is None
 
 
+# ES-DE's ps3 accept-list as RetroDECK ships it.
+_PS3 = frozenset({".desktop", ".iso", ".ISO", ".ps3", ".PS3", ".ps3dir", ".PS3DIR"})
+
+
 class TestPs3FolderRename:
     """A PS3 game kept as a folder is named ``<game>.ps3``, as ES-DE scans it (#2195 D11)."""
 
+    def test_a_folder_named_with_another_suffix_the_accept_list_carries_is_left_alone(self):
+        assert ps3_folder_rename("/roms/ps3/MyGame.PS3", "/roms/ps3/MyGame.PS3/PS3_GAME/USRDIR/EBOOT.BIN", _PS3) is None
+
+    def test_with_no_accept_list_read_only_the_name_tender_gives_is_left_alone(self):
+        assert ps3_folder_rename(
+            "/roms/ps3/MyGame.PS3", "/roms/ps3/MyGame.PS3/PS3_GAME/USRDIR/EBOOT.BIN", frozenset()
+        ) == ("/roms/ps3/MyGame.PS3.ps3", "/roms/ps3/MyGame.PS3.ps3/PS3_GAME/USRDIR/EBOOT.BIN")
+
     def test_a_folder_boot_install_is_named_with_the_suffix_and_its_launch_file_follows(self):
-        rename = ps3_folder_rename("/roms/ps3/MyGame", "/roms/ps3/MyGame/PS3_GAME/USRDIR/EBOOT.BIN")
+        rename = ps3_folder_rename("/roms/ps3/MyGame", "/roms/ps3/MyGame/PS3_GAME/USRDIR/EBOOT.BIN", _PS3)
 
         assert rename == ("/roms/ps3/MyGame.ps3", "/roms/ps3/MyGame.ps3/PS3_GAME/USRDIR/EBOOT.BIN")
 
     def test_a_dump_one_level_deeper_renames_the_install_folder(self):
-        rename = ps3_folder_rename("/roms/ps3/MyGame", "/roms/ps3/MyGame/Inner/PS3_GAME/USRDIR/EBOOT.BIN")
+        rename = ps3_folder_rename("/roms/ps3/MyGame", "/roms/ps3/MyGame/Inner/PS3_GAME/USRDIR/EBOOT.BIN", _PS3)
 
         assert rename == ("/roms/ps3/MyGame.ps3", "/roms/ps3/MyGame.ps3/Inner/PS3_GAME/USRDIR/EBOOT.BIN")
 
     def test_a_folder_already_named_so_is_left_alone(self):
-        assert ps3_folder_rename("/roms/ps3/MyGame.ps3", "/roms/ps3/MyGame.ps3/PS3_GAME/USRDIR/EBOOT.BIN") is None
+        assert ps3_folder_rename("/roms/ps3/MyGame.ps3", "/roms/ps3/MyGame.ps3/PS3_GAME/USRDIR/EBOOT.BIN", _PS3) is None
 
     def test_a_trailing_separator_does_not_rename_a_folder_named_so(self):
-        assert ps3_folder_rename("/roms/ps3/MyGame.ps3/", "/roms/ps3/MyGame.ps3/PS3_GAME/USRDIR/EBOOT.BIN") is None
+        assert (
+            ps3_folder_rename("/roms/ps3/MyGame.ps3/", "/roms/ps3/MyGame.ps3/PS3_GAME/USRDIR/EBOOT.BIN", _PS3) is None
+        )
 
     def test_a_folder_that_is_no_folder_boot_layout_is_left_alone(self):
-        assert ps3_folder_rename("/roms/ps3/Puppeteer", "/roms/ps3/Puppeteer/Puppeteer.pkg") is None
+        assert ps3_folder_rename("/roms/ps3/Puppeteer", "/roms/ps3/Puppeteer/Puppeteer.pkg", _PS3) is None
 
     def test_a_single_file_install_is_left_alone(self):
-        assert ps3_folder_rename(None, "/roms/ps3/Game.iso") is None
+        assert ps3_folder_rename(None, "/roms/ps3/Game.iso", _PS3) is None
 
 
 class TestFolderBootLayoutRoot:

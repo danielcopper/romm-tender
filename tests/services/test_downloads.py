@@ -185,7 +185,8 @@ class DownloadsHarness:
     command is baked through, so a test can seed ``available_cores``.
     ``m3u_supported`` answers the ``m3u_support`` seam of the unpacker and the
     adoption service; a test that simulates a non-m3u platform (Switch/Xbox
-    360) flips it to False.
+    360) flips it to False. ``accepted_extensions`` answers the unpacker's
+    ``system_extensions`` seam, every system's accept-list alike.
     """
 
     service: DownloadService
@@ -203,6 +204,7 @@ class DownloadsHarness:
     download_file_store: Any
     retrodeck_folders: FakeRetroDeckFolders
     m3u_supported: bool = True
+    accepted_extensions: frozenset[str] = frozenset()
 
 
 class MakeDownloads(Protocol):
@@ -330,6 +332,7 @@ async def make_downloads(emit, logger) -> MakeDownloads:
                 retrodeck_folders=download_folders,
                 install_recorder=install_recorder,
                 m3u_support=lambda system_name: harness.m3u_supported,
+                system_extensions=lambda system_name, reading=None: harness.accepted_extensions,
                 logger=logger,
             ),
         )
@@ -2463,6 +2466,65 @@ class TestDoDownloadMultiFile:
         assert installed.rom_dir == str(extract_dir)
         assert installed.file_path == str(extract_dir / "PS3_GAME" / "USRDIR" / "EBOOT.BIN")
         assert downloads.queue.entries[4778]["status"] == "completed"
+
+    @pytest.mark.asyncio
+    async def test_a_ps3_folder_named_with_a_suffix_the_accept_list_carries_keeps_its_name(
+        self, make_downloads, tmp_path
+    ):
+        """``.PS3`` is on ps3's accept-list beside ``.ps3``, so ES-DE already scans the folder (#2195 D3, D11)."""
+        import zipfile as zf
+        from unittest.mock import patch
+
+        downloads = make_downloads(
+            retrodeck_folders=FakeRetroDeckFolders(
+                roms=str(tmp_path / "retrodeck" / "roms"),
+                bios=str(tmp_path / "retrodeck" / "bios"),
+            ),
+        )
+        downloads.accepted_extensions = frozenset({".ps3", ".PS3", ".ps3dir", ".PS3DIR"})
+        roms_dir = tmp_path / "retrodeck" / "roms" / "ps3"
+        roms_dir.mkdir(parents=True)
+        target_path = str(roms_dir / "MyGame.PS3.zip")
+
+        zip_content_path = tmp_path / "source_ps3.zip"
+        with zf.ZipFile(str(zip_content_path), "w") as z:
+            z.writestr("PS3_GAME/USRDIR/EBOOT.BIN", b"\x00" * 100)
+            z.writestr("PS3_DISC.SFB", b"\x00" * 10)
+        zip_bytes = zip_content_path.read_bytes()
+        rom_detail = {
+            "id": 77,
+            "name": "My Game",
+            "fs_name": "MyGame.PS3.zip",
+            "fs_name_no_ext": "MyGame.PS3",
+            "platform_slug": "ps3",
+            "platform_name": "PlayStation 3",
+            "has_multiple_files": True,
+        }
+
+        def fake_download(_rom_id, _filename, dest, _progress_callback=None, *, resume=False, on_meta=None):
+            with open(dest, "wb") as f:
+                f.write(zip_bytes)
+
+        _seed_rom(downloads.uow, 77, platform_slug="ps3")
+        downloads.queue.enqueue(77, {"rom_id": 77, "status": "downloading", "progress": 0})
+
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.transfer.run(
+                77,
+                rom_detail,
+                target_path,
+                "ps3",
+                "MyGame.PS3.zip",
+                _admitted(downloads, 77),
+                platform_name="PlayStation 3",
+            )
+
+        kept = roms_dir / "MyGame.PS3"
+        installed = downloads.uow.rom_installs.get(77)
+        assert installed is not None
+        assert installed.rom_dir == str(kept)
+        assert installed.file_path == str(kept / "PS3_GAME" / "USRDIR" / "EBOOT.BIN")
+        assert not (roms_dir / "MyGame.PS3.ps3").exists()
 
     @pytest.mark.asyncio
     async def test_nested_multi_file_cleanup_targets_identity_dir_not_files_zero(self, make_downloads, tmp_path, emit):

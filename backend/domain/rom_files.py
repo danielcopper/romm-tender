@@ -229,20 +229,23 @@ def folder_boot_root(launch_path: str, rom_dir: str | None) -> str | None:
 PS3_FOLDER_SUFFIX = ".ps3"
 
 
-def ps3_folder_rename(rom_dir: str | None, launch_path: str) -> tuple[str, str] | None:
+def ps3_folder_rename(rom_dir: str | None, launch_path: str, accepted: frozenset[str]) -> tuple[str, str] | None:
     """Return ``(new_rom_dir, new_launch_path)`` naming a folder-boot install's folder as ES-DE scans it, or ``None``.
 
     Applies to a folder-boot layout (:func:`folder_boot_root` answers for
-    *launch_path* inside *rom_dir*) whose folder is not named with
-    :data:`PS3_FOLDER_SUFFIX` yet; the launch path follows the folder. ``None``
-    for anything else, so asking twice renames once.
+    *launch_path* inside *rom_dir*) whose folder is not named for ES-DE yet:
+    one whose extension is on ps3's accept-list *accepted*, compared exactly
+    as ES-DE compares it, or is :data:`PS3_FOLDER_SUFFIX`, is left as it is.
+    The launch path follows the folder. ``None`` for anything else, so asking
+    twice renames once.
 
     Pure path algebra — the caller moves the folder.
     """
     if rom_dir is None or folder_boot_root(launch_path, rom_dir) is None:
         return None
     rom_dir = os.path.normpath(rom_dir)
-    if rom_dir.endswith(PS3_FOLDER_SUFFIX):
+    extension = os.path.splitext(rom_dir)[1]
+    if extension == PS3_FOLDER_SUFFIX or extension in accepted:
         return None
     new_rom_dir = rom_dir + PS3_FOLDER_SUFFIX
     return (new_rom_dir, os.path.join(new_rom_dir, os.path.relpath(launch_path, rom_dir)))

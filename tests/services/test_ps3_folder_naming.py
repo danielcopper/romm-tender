@@ -9,19 +9,29 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from domain.rom import Rom
 from domain.rom_install import RomInstall
-from services.ps3_folder_naming import KV_PS3_FOLDERS_NAMED, Ps3FolderNamingService, Ps3FolderNamingServiceConfig
+from services.ps3_folder_naming import (
+    KV_PS3_FOLDERS_NAMED,
+    KV_PS3_FOLDERS_TO_NAME,
+    Ps3FolderNamingService,
+    Ps3FolderNamingServiceConfig,
+)
 
 _EBOOT = "PS3_GAME/USRDIR/EBOOT.BIN"
+
+# ES-DE's ps3 accept-list as RetroDECK ships it.
+_PS3_ACCEPTED = frozenset({".desktop", ".iso", ".ISO", ".ps3", ".PS3", ".ps3dir", ".PS3DIR"})
 
 
 class _Harness:
     def __init__(self) -> None:
         self.uow = FakeUnitOfWork()
         self.store = FakeDownloadFileStore()
+        self.accepted: dict[str, frozenset[str]] = {"ps3": _PS3_ACCEPTED}
         self.service = Ps3FolderNamingService(
             config=Ps3FolderNamingServiceConfig(
                 uow_factory=FakeUnitOfWorkFactory(self.uow),
                 file_store=self.store,
+                system_extensions=lambda system_name, reading=None: self.accepted.get(system_name, frozenset()),
                 logger=logging.getLogger("test_ps3_folder_naming"),
             )
         )
@@ -142,3 +152,78 @@ class TestWhatIsLeftForTheNextStart:
 
         assert h.rom_dir(1) == "/roms/ps3/MyGame"
         assert not h.stamped()
+
+    def test_a_folder_moved_whose_record_still_names_its_old_place_gets_its_record_moved(self):
+        # A pass stopped between the move and the record, or a database the
+        # installer's rollback put back: the folder is at its new name already.
+        h = _Harness()
+        h.install(1, rom_dir="/roms/ps3/MyGame", file_path=f"/roms/ps3/MyGame/{_EBOOT}", on_disk=False)
+        h.store.files[f"/roms/ps3/MyGame.ps3/{_EBOOT}"] = b"x"
+
+        h.service.name_ps3_folders()
+
+        install = h.uow.rom_installs.get(1)
+        assert install is not None
+        assert (install.rom_dir, install.file_path) == ("/roms/ps3/MyGame.ps3", f"/roms/ps3/MyGame.ps3/{_EBOOT}")
+        assert h.stamped()
+
+    def test_a_record_that_cannot_be_moved_stops_neither_the_others_nor_the_next_start(self, monkeypatch):
+        h = _Harness()
+        h.install(1, rom_dir="/roms/ps3/First", file_path=f"/roms/ps3/First/{_EBOOT}")
+        h.install(2, rom_dir="/roms/ps3/Second", file_path=f"/roms/ps3/Second/{_EBOOT}")
+        save = h.uow.rom_installs.save
+
+        def refuse_the_first(install: RomInstall) -> None:
+            if install.rom_id == 1:
+                raise RuntimeError("database is locked")
+            save(install)
+
+        monkeypatch.setattr(h.uow.rom_installs, "save", refuse_the_first)
+
+        h.service.name_ps3_folders()
+
+        assert h.rom_dir(1) == "/roms/ps3/First"
+        assert h.rom_dir(2) == "/roms/ps3/Second.ps3"
+        assert not h.stamped()
+
+        monkeypatch.setattr(h.uow.rom_installs, "save", save)
+        h.service.name_ps3_folders()
+
+        assert h.rom_dir(1) == "/roms/ps3/First.ps3"
+        assert h.stamped()
+
+
+class TestTheStepsSubjectIsFixedAtItsFirstPass:
+    def test_a_folder_adopted_after_the_first_pass_is_left_as_it_stands(self):
+        h = _Harness()
+        h.install(1, rom_dir="/roms/ps3/Missing", file_path=f"/roms/ps3/Missing/{_EBOOT}", on_disk=False)
+        h.service.name_ps3_folders()
+        assert not h.stamped()
+
+        h.install(2, rom_dir="/roms/ps3/Adopted", file_path=f"/roms/ps3/Adopted/{_EBOOT}")
+        h.service.name_ps3_folders()
+
+        assert h.rom_dir(2) == "/roms/ps3/Adopted"
+        assert f"/roms/ps3/Adopted/{_EBOOT}" in h.store.files
+
+    def test_the_first_pass_records_which_installs_it_renames(self):
+        h = _Harness()
+        h.install(1, rom_dir="/roms/ps3/MyGame", file_path=f"/roms/ps3/MyGame/{_EBOOT}", on_disk=False)
+        h.install(2, rom_dir="/roms/ps3/Named.ps3", file_path=f"/roms/ps3/Named.ps3/{_EBOOT}")
+
+        h.service.name_ps3_folders()
+
+        assert h.uow.kv_config.get(KV_PS3_FOLDERS_TO_NAME) == "[1]"
+
+
+class TestANameEsDeAlreadyScans:
+    def test_a_folder_named_with_a_suffix_the_accept_list_carries_is_left_alone(self):
+        h = _Harness()
+        h.install(1, rom_dir="/roms/ps3/MyGame.PS3", file_path=f"/roms/ps3/MyGame.PS3/{_EBOOT}")
+        before = dict(h.store.files)
+
+        h.service.name_ps3_folders()
+
+        assert h.store.files == before
+        assert h.rom_dir(1) == "/roms/ps3/MyGame.PS3"
+        assert h.stamped()

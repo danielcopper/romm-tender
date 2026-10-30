@@ -2081,6 +2081,7 @@ def _dispatcher_over_adoption(world: _AdoptionWorld) -> CallDispatcher:
             retrodeck_folders=folders,
             install_recorder=recorder,
             m3u_support=lambda system_name: True,
+            system_extensions=lambda system_name, reading=None: frozenset(),
             logger=LOGGER,
         )
     )

@@ -572,6 +572,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             retrodeck_folders=cfg.callbacks.retrodeck_folders,
             install_recorder=rom_install_recorder,
             m3u_support=cfg.callbacks.m3u_support,
+            system_extensions=cfg.callbacks.system_extensions,
             logger=cfg.runtime.logger,
         ),
     )
@@ -762,6 +763,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         config=Ps3FolderNamingServiceConfig(
             uow_factory=cfg.callbacks.uow_factory,
             file_store=cfg.adapters.download_file_store,
+            system_extensions=cfg.callbacks.system_extensions,
             logger=cfg.runtime.logger,
         ),
     )

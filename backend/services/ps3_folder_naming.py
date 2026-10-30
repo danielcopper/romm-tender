@@ -5,18 +5,25 @@ A one-time step (#2195 D27): a download names a PS3 game kept as a folder
 launch file, so one installed before that name came in is renamed once, with
 its install record following, and keeps starting without a new download. The
 step stays in every later release, so an update that skips releases still
-gets it; it is safe to run again, because a folder already named so is never
-renamed.
+gets it; it is safe to run again, because a folder already named for ES-DE is
+never renamed.
 
-Its completion is stamped in ``kv_config`` only after a pass that left no
-folder it could still rename: a folder that is not there — a drive not
-mounted, a RetroDECK move not yet followed — is asked about again at the next
-start. A folder whose new name is taken keeps its name, and counts as done:
-nothing is moved over another folder.
+Which installs it renames is fixed at its first pass and recorded in
+``kv_config``: a folder adopted later is recorded as it stands and gets the
+resolver's answer for its name (D27), even while the step is still open. Its
+completion is stamped only after a pass that left none of those it could
+still rename: a folder that is not there — a drive not mounted, a RetroDECK
+move not yet followed — or whose move or record failed is asked about again at
+the next start. A folder whose new name is taken keeps its name and counts as
+done: nothing is moved over another folder. A folder already moved whose
+record still names its old place — a pass stopped between the two, or a
+database put back by the installer's rollback — gets its record moved after
+it.
 """
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -25,20 +32,27 @@ from domain.rom_files import ps3_folder_rename
 if TYPE_CHECKING:
     import logging
 
-    from services.protocols import DownloadFileStore, UnitOfWorkFactory
+    from domain.rom_install import RomInstall
+    from services.protocols import DownloadFileStore, SystemSupportedExtensionsFn, UnitOfWorkFactory
 
-# The completion stamp: a derived marker about work this install finished, in
-# ``kv_config`` beside the other cross-run markers (GLOSSARY.md, persistence
-# boundary).
+# The completion stamp and the step's subject: derived markers about work this
+# install does, in ``kv_config`` beside the other cross-run markers
+# (GLOSSARY.md, persistence boundary). The subject is a JSON list of rom_ids.
 KV_PS3_FOLDERS_NAMED = "ps3_folders_named"
+KV_PS3_FOLDERS_TO_NAME = "ps3_folders_to_name"
 
 
 @dataclass(frozen=True)
 class Ps3FolderNamingServiceConfig:
-    """Frozen wiring bundle handed to ``Ps3FolderNamingService.__init__``."""
+    """Frozen wiring bundle handed to ``Ps3FolderNamingService.__init__``.
+
+    ``system_extensions`` is each system's accept-list, which says whether a
+    folder's name already is one ES-DE scans.
+    """
 
     uow_factory: UnitOfWorkFactory
     file_store: DownloadFileStore
+    system_extensions: SystemSupportedExtensionsFn
     logger: logging.Logger
 
 
@@ -48,10 +62,11 @@ class Ps3FolderNamingService:
     def __init__(self, *, config: Ps3FolderNamingServiceConfig) -> None:
         self._uow_factory = config.uow_factory
         self._file_store = config.file_store
+        self._system_extensions = config.system_extensions
         self._logger = config.logger
 
     def name_ps3_folders(self) -> None:
-        """Rename every PS3 folder install not named as ES-DE scans it, and stamp the step done when none is left.
+        """Rename each install of the step's subject not named for ES-DE, and stamp the step done when none is left.
 
         Each folder is moved outside any Unit of Work, and its install record is
         relocated in a short one after the move, only while it still names the
@@ -60,40 +75,66 @@ class Ps3FolderNamingService:
         with self._uow_factory() as uow:
             if uow.kv_config.get(KV_PS3_FOLDERS_NAMED) == "1":
                 return
+            recorded = uow.kv_config.get(KV_PS3_FOLDERS_TO_NAME)
             installs = list(uow.rom_installs.iter_all())
+        accepted: dict[str, frozenset[str]] = {}
+
+        def rename_of(install: RomInstall) -> tuple[str, str] | None:
+            if install.system not in accepted:
+                accepted[install.system] = self._system_extensions(install.system)
+            return ps3_folder_rename(install.rom_dir, install.file_path, accepted[install.system])
+
+        if recorded is None:
+            subject = {install.rom_id for install in installs if rename_of(install) is not None}
+            with self._uow_factory() as uow:
+                uow.kv_config.set(KV_PS3_FOLDERS_TO_NAME, json.dumps(sorted(subject)))
+        else:
+            subject = set(json.loads(recorded))
         left = 0
         for install in installs:
-            rename = ps3_folder_rename(install.rom_dir, install.file_path)
-            if rename is None or install.rom_dir is None:
-                continue
-            new_rom_dir, new_file_path = rename
-            if not self._file_store.exists(install.rom_dir):
-                self._logger.info(
-                    f"PS3 folder of rom_id={install.rom_id} is not at {install.rom_dir}; asked again later"
-                )
+            rename = rename_of(install) if install.rom_id in subject else None
+            if rename is not None and not self._name(install, *rename):
                 left += 1
-                continue
-            if self._file_store.exists(new_rom_dir):
-                self._logger.warning(
-                    f"PS3 folder rename skipped: {new_rom_dir} already exists; keeping {install.rom_dir}"
-                )
-                continue
-            try:
-                self._file_store.move_dir(install.rom_dir, new_rom_dir)
-            except OSError as e:
-                self._logger.warning(f"PS3 folder rename of {install.rom_dir} failed: {e}; asked again later")
-                left += 1
-                continue
-            self._relocate(install.rom_id, install.rom_dir, new_rom_dir, new_file_path)
-            self._logger.info(f"Renamed the PS3 folder of rom_id={install.rom_id} to {new_rom_dir}")
         if left == 0:
             with self._uow_factory() as uow:
                 uow.kv_config.set(KV_PS3_FOLDERS_NAMED, "1")
 
-    def _relocate(self, rom_id: int, old_rom_dir: str, new_rom_dir: str, new_file_path: str) -> None:
-        with self._uow_factory() as uow:
-            install = uow.rom_installs.get(rom_id)
-            if install is None or install.rom_dir != old_rom_dir:
-                return
-            install.relocate(new_rom_dir, new_file_path)
-            uow.rom_installs.save(install)
+    def _name(self, install: RomInstall, new_rom_dir: str, new_file_path: str) -> bool:
+        """Name one install's folder and move its record after it; ``False`` where the next start has to ask again."""
+        old_rom_dir = install.rom_dir
+        if old_rom_dir is None:
+            return True
+        if not self._file_store.exists(old_rom_dir):
+            if self._file_store.exists(new_file_path):
+                return self._relocate(install.rom_id, old_rom_dir, new_rom_dir, new_file_path)
+            self._logger.info(f"PS3 folder of rom_id={install.rom_id} is not at {old_rom_dir}; asked again later")
+            return False
+        if self._file_store.exists(new_rom_dir):
+            self._logger.warning(f"PS3 folder rename skipped: {new_rom_dir} already exists; keeping {old_rom_dir}")
+            return True
+        try:
+            self._file_store.move_dir(old_rom_dir, new_rom_dir)
+        except OSError as e:
+            self._logger.warning(f"PS3 folder rename of {old_rom_dir} failed: {e}; asked again later")
+            return False
+        self._logger.info(f"Renamed the PS3 folder of rom_id={install.rom_id} to {new_rom_dir}")
+        return self._relocate(install.rom_id, old_rom_dir, new_rom_dir, new_file_path)
+
+    def _relocate(self, rom_id: int, old_rom_dir: str, new_rom_dir: str, new_file_path: str) -> bool:
+        """Move the install record after its folder; ``False`` where that failed, for the next start to heal.
+
+        Deliberately broad: whatever the write raised, the other installs of
+        the pass are still renamed, and this one's moved folder is found and its
+        record healed at the next start.
+        """
+        try:
+            with self._uow_factory() as uow:
+                install = uow.rom_installs.get(rom_id)
+                if install is None or install.rom_dir != old_rom_dir:
+                    return True
+                install.relocate(new_rom_dir, new_file_path)
+                uow.rom_installs.save(install)
+        except Exception as e:
+            self._logger.warning(f"Moving the install record of rom_id={rom_id} to {new_rom_dir} failed: {e}")
+            return False
+        return True
