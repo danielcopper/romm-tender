@@ -691,21 +691,19 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   clock each request moves: every unit's start is read before its own probe), `TestWhetherAFreshStampSettlesTheRefusal`
   there and in `tests/domain/test_collection_skip.py`. Prompt-only: the count reading the gate's `restamp_settles`
   answer from the preview's own fetch rather than judging the stamp a second time
-- **Where the library sync or the version picker's default resolves a representative, neither RomM's main-sibling leg
-  nor the ranking picks a member RomM holds no file for (`has_file_on_disk` false) while one with a file remains; the
-  sync's installed and existing-binding legs keep such a member; a bound member without a file that is not installed is
-  rebound only in a complete view, only onto a sibling with a file, no shortcut of its own and an equal non-empty
-  `fs_name_no_ext`; and a bound member gone from RomM is rebound only by that same rule, installed or not, its stem read
-  off its stored `fs_name`, and otherwise keeps its binding — each of these unless its group holds another bound
-  shortcut, where `domain/sync_diff.py::converge_bound_groups` decides which binding stays** — test + prompt-only —
+- **Where the library sync resolves a representative, neither RomM's main-sibling leg nor the ranking picks a member
+  RomM holds no file for (`has_file_on_disk` false) while one with a file remains; the sync's installed and
+  existing-binding legs keep such a member; a bound member without a file that is not installed is rebound only in a
+  complete view, only onto a sibling with a file, no shortcut of its own and an equal non-empty `fs_name_no_ext`; and a
+  bound member gone from RomM is rebound only by that same rule, installed or not, its stem read off its stored
+  `fs_name`, and otherwise keeps its binding — each of these unless its group holds another bound shortcut, where
+  `domain/sync_diff.py::converge_bound_groups` decides which binding stays** — test + prompt-only —
   `tests/domain/test_sibling_resolution.py::TestMembersWithoutAFile`,
   `tests/domain/test_sync_diff.py::TestCollapseMembersWithoutAFile` (the name, shortcut and partial-view cases),
-  `tests/services/test_version_switch.py::test_a_member_without_a_file_is_marked_and_never_the_default`,
   `tests/domain/test_sync_diff.py::TestCollapseSiblingGroups` (a bound member gone from RomM) and
   `tests/contract/test_vanished_version_same_dump.py`. Prompt-only: a new caller of `resolve_group_representative`
-  passes `fileless_rom_ids`, or ranks only members with a file as the version picker's default does; the flag is read
-  off a RomM payload only through `domain/rom_file.py::has_file_on_romm`, and the stored `Rom.has_file_on_disk` is
-  written only from its answer
+  passes `fileless_rom_ids`; the flag is read off a RomM payload only through `domain/rom_file.py::has_file_on_romm`,
+  and the stored `Rom.has_file_on_disk` is written only from its answer
 - **The end-of-run stale removal removes the shortcut only of a game outside what the sync syncs: a bound row missing
   from a platform the run read whole is kept; on a platform the run did not read, a row whose game the run synced —
   another member of its sibling group among the ROMs the run counts as synced, a skipped unit's stamp members included —

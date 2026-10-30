@@ -283,10 +283,11 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
 
   const versions = versionList.versions;
   const active = versions.find((v) => v.active);
-  // Accent the trigger when the bound version isn't the group's natural default
+  // Accent the trigger when RomM holds a default and the bound version isn't it
   // (mirrors DiscSelector's "pinned ≠ default" accent) — an instant "this game is
-  // on a non-default version" read; neutral when it is the default.
-  const activeIsDefault = active?.is_default ?? false;
+  // on a non-default version" read; neutral when it is the default, and where
+  // RomM holds none, since there is no default to differ from.
+  const offDefault = versions.some((v) => v.is_default) && !(active?.is_default ?? false);
 
   const rowCover = (v: VersionInfo): ReactNode => {
     const base64 = covers[v.rom_id];
@@ -375,7 +376,7 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
       title="Version"
       style={switching ? { opacity: 0.55 } : {}}
     >
-      <FaLayerGroup size={20} color={activeIsDefault ? NEUTRAL_GREY : ACTIVE_ACCENT} />
+      <FaLayerGroup size={20} color={offDefault ? ACTIVE_ACCENT : NEUTRAL_GREY} />
       {switching ? (
         <span className="romm-throbber" style={{ width: "14px", height: "14px" }} />
       ) : (

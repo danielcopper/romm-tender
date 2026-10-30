@@ -596,30 +596,28 @@ Format: **invariant** — tier — enforced by.
   `apply_stamps` disagree in one of two directions: a writer looser than the count stamps a collection the count never
   asked for, and a writer stricter than the count leaves the Apply offered with nothing written, so the offer comes back
   on every sync. **What nothing checks**: nothing but review keeps the count on the gate's own answer
-- **Where the library sync or the version picker's default resolves a representative, neither RomM's main-sibling leg
-  nor the ranking picks a member RomM holds no file for (`has_file_on_disk` false) while one with a file remains; the
-  sync's installed and existing-binding legs keep such a member; a bound member without a file that is not installed is
-  rebound only in a complete view, only onto a sibling with a file, no shortcut of its own and an equal non-empty
-  `fs_name_no_ext`; and a bound member gone from RomM is rebound only by that same rule, installed or not, its stem read
-  off its stored `fs_name`, and otherwise keeps its binding — each of these unless its group holds another bound
-  shortcut, where `domain/sync_diff.py::converge_bound_groups` decides which binding stays** — test + prompt-only —
+- **Where the library sync resolves a representative, neither RomM's main-sibling leg nor the ranking picks a member
+  RomM holds no file for (`has_file_on_disk` false) while one with a file remains; the sync's installed and
+  existing-binding legs keep such a member; a bound member without a file that is not installed is rebound only in a
+  complete view, only onto a sibling with a file, no shortcut of its own and an equal non-empty `fs_name_no_ext`; and a
+  bound member gone from RomM is rebound only by that same rule, installed or not, its stem read off its stored
+  `fs_name`, and otherwise keeps its binding — each of these unless its group holds another bound shortcut, where
+  `domain/sync_diff.py::converge_bound_groups` decides which binding stays** — test + prompt-only —
   `tests/domain/test_sibling_resolution.py::TestMembersWithoutAFile` for the chain's legs,
   `tests/domain/test_sync_diff.py::TestCollapseMembersWithoutAFile` for the sync's collapse (the name, shortcut and
-  partial-view cases among it) and
-  `tests/services/test_version_switch.py::test_a_member_without_a_file_is_marked_and_never_the_default` for the version
-  picker's Default badge; `tests/domain/test_sync_diff.py::TestCollapseSiblingGroups` holds the bound member gone from
-  RomM (kept beside siblings under other names, moved onto the same dump whether or not it is installed), and
+  partial-view cases among it); `tests/domain/test_sync_diff.py::TestCollapseSiblingGroups` holds the bound member gone
+  from RomM (kept beside siblings under other names, moved onto the same dump whether or not it is installed), and
   `tests/contract/test_vanished_version_same_dump.py` the move end to end. Why such a member stays in some legs and is
   left out of others, and why a rebind needs an equal `fs_name_no_ext`, are in
   [Steam Non-Steam Shortcuts](steam-non-steam-shortcuts.md#a-bound-rom-romm-holds-no-file-for) and
   [Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "Group-aware sync"; do
-  not restate them here. The rule lives in three places: `domain/sibling_resolution.py::resolve_group_representative`
-  applies it to the legs through `fileless_rom_ids`; `domain/sync_diff.py::collapse_sibling_groups` passes it and
-  rebinds through `_same_dump_with_file`; and `services/version_switch.py::_resolve_default` passes none and ranks only
-  the versions with a file, so where none has one it marks no Default. The removed-game cleanup picks no representative
-  at all: it never moves a shortcut onto another version. **What breaks without the rule:** a chain that ranks a member
-  without a file like any other binds a new shortcut, and the Default badge, to a row whose download is a 404 — after a
-  rescan turns a `.zip` into a folder the two rows tie and the older one wins on `rom_id` — and a new caller that
+  not restate them here. The rule lives in two places: `domain/sibling_resolution.py::resolve_group_representative`
+  applies it to the legs through `fileless_rom_ids`, and `domain/sync_diff.py::collapse_sibling_groups` passes it and
+  rebinds through `_same_dump_with_file`. The version picker resolves no representative: its Default badge is RomM's
+  default-version flag alone, on a version without a file too (`services/version_switch.py`). The removed-game cleanup
+  picks no representative at all: it never moves a shortcut onto another version. **What breaks without the rule:** a
+  chain that ranks a member without a file like any other binds a new shortcut to a row whose download is a 404 — after
+  a rescan turns a `.zip` into a folder the two rows tie and the older one wins on `rom_id` — and a new caller that
   forgets `fileless_rom_ids` brings that back silently. Nothing mechanical sees it. A RomM payload's flag is read only
   by `domain/rom_file.py::has_file_on_romm`, which reads only an explicit `false` as no file; the stored
   `Rom.has_file_on_disk` is written only from its answer, and is read directly by the version picker, the game-detail

@@ -51,10 +51,12 @@ art** (so two regions of the same game are told apart at a glance; a version who
 icon), with markers for:
 
 - **✓ (active)** — the version currently bound to the shortcut. This is exactly what the Download button will fetch.
-- **Default** — the version Tender would pick on its own, following the default version you chose in RomM
-  (`is_main_sibling`) and, failing that, your [Preferred region](configuration.md) setting. It's a suggestion, not a
-  lock. A default version you choose in RomM shows here the next time you open the game's page, without a sync, as long
-  as RomM can be reached.
+- **Default** — the default version you chose in RomM, and nothing else: a game you chose none for in RomM shows no
+  **Default**, and Tender never puts its own pick under that name. It's a label, not a lock, and it stays on that
+  version when the version is gone from RomM, has no file there, is on another shortcut or is dimmed as a conflicting
+  metadata match. A default version you choose in RomM shows here the next time you open the game's page, without a
+  sync, as long as RomM can be reached. The version control's icon is tinted while the shortcut is on a version other
+  than RomM's default, and stays neutral where RomM holds none.
 - **Downloaded** — a version you already have on disk.
 - **not synced** — a version RomM has that isn't in your local library yet. Selecting it records it on the spot — unless
   it's dimmed as a conflicting metadata match (see below).
@@ -78,9 +80,9 @@ switch the other shortcut to another version first.
 A retained local version that RomM has positively confirmed it no longer has is also shown dimmed, with the separate
 label _"No longer available on RomM"_, and it cannot be switched to: selecting it instead opens the cleanup confirmation
 described under [Cleaning up versions removed from RomM](#cleaning-up-versions-removed-from-romm). Its **active** and
-**Downloaded** markers remain visible so it is clear what the shortcut and local files still refer to, but it never
-receives the **Default** badge. If the shortcut is still active on that unavailable id, choose any live alternative in
-the same list to recover the game.
+**Downloaded** markers remain visible so it is clear what the shortcut and local files still refer to, and so does
+**Default** where RomM holds it as the default. If the shortcut is still active on that unavailable id, choose any live
+alternative in the same list to recover the game.
 
 When the version the shortcut is bound to is the one confirmed gone, the **Download** button is greyed out as well — it
 stays visible, like the version row, but downloading it could only ever fail. Pick a live version in the version list to
@@ -116,11 +118,11 @@ get a trustworthy answer. A ROM-specific 404 also does not make the rest of Tend
 A version RomM still lists but has **no file** for carries the label _"No file on RomM"_. That happens when its file has
 left RomM's disk — a rescan that turned `Game (USA).zip` into a folder `Game (USA)` leaves the old entry behind beside
 the new one — and for a physical game, which never had a file. Unlike the check above, for a version already synced this
-is what the last sync stored, not a fresh answer. Such a version never receives the **Default** badge. It is dimmed and
-cannot be selected unless it is downloaded on this device; a downloaded one stays selectable and plays from your local
-copy. It offers no cleanup, because a rescan in RomM can bring a moved file back. When the shortcut is bound to such a
-version and it is not downloaded, the **Download** button reads _"No file on RomM"_ and stays greyed out. If its file
-was moved or renamed, rescan the library in RomM and sync; otherwise pick another version.
+is what the last sync stored, not a fresh answer. It is dimmed and cannot be selected unless it is downloaded on this
+device; a downloaded one stays selectable and plays from your local copy. It offers no cleanup, because a rescan in RomM
+can bring a moved file back. When the shortcut is bound to such a version and it is not downloaded, the **Download**
+button reads _"No file on RomM"_ and stays greyed out. If its file was moved or renamed, rescan the library in RomM and
+sync; otherwise pick another version.
 
 The next sync moves a shortcut off a version without a file by itself only onto **the same file in a new shape**: a
 version whose file name, without its extension, is exactly the same — the folder `Game (USA)` for `Game (USA).zip`. The

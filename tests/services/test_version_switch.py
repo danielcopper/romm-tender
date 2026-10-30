@@ -168,11 +168,6 @@ def romm() -> FakeRommApi:
 
 
 @pytest.fixture
-def settings() -> dict[str, Any]:
-    return {}
-
-
-@pytest.fixture
 def drift_probe() -> _FakeDriftProbe:
     return _FakeDriftProbe()
 
@@ -202,7 +197,6 @@ def service(
     event_loop,
     uow_factory,
     romm,
-    settings,
     drift_probe,
     reachability_probe,
     relaunch_resolver,
@@ -216,7 +210,6 @@ def service(
             clock=FakeClock(),
             uow_factory=uow_factory,
             romm_api=romm,
-            settings=settings,
             drift_probe=drift_probe,
             reachability_probe=reachability_probe,
             relaunch_resolver=relaunch_resolver,
@@ -261,7 +254,7 @@ class TestGetVersionList:
         assert result["bound_vanished"] is False
         assert result["bound_version"]["rom_id"] == 1
         assert result["bound_version"]["active"] is True
-        assert result["bound_version"]["is_default"] is True
+        assert result["bound_version"]["is_default"] is False
 
     def test_null_group_key_is_a_solo_group(self, event_loop, service, uow, romm):
         # An unbackfilled row is its own group, not a bucket every keyless row
@@ -304,6 +297,26 @@ class TestGetVersionList:
 
         assert {rom_id: row["bound_elsewhere"] for rom_id, row in by_id.items()} == {1: False, 2: True, 3: False}
         assert by_id[2]["switchable"] is True
+
+    def test_a_version_on_another_shortcut_carries_the_badge_romm_flags_it_with(self, event_loop, service, uow, romm):
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID)
+        _seed_rom(uow, rom_id=2, app_id=777, is_main_sibling=True)
+        romm.roms[1] = {"id": 1, "sibling_roms": []}
+
+        by_id = {v["rom_id"]: v for v in _run(event_loop, service.get_version_list(_APP_ID))["versions"]}
+
+        assert (by_id[2]["bound_elsewhere"], by_id[2]["is_default"]) == (True, True)
+        assert by_id[1]["is_default"] is False
+
+    def test_every_version_romm_flags_carries_the_badge(self, event_loop, service, uow, romm):
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID)
+        _seed_rom(uow, rom_id=2, app_id=None, is_main_sibling=True)
+        _seed_rom(uow, rom_id=3, app_id=None, is_main_sibling=True)
+        romm.roms[1] = {"id": 1, "sibling_roms": []}
+
+        by_id = {v["rom_id"]: v for v in _run(event_loop, service.get_version_list(_APP_ID))["versions"]}
+
+        assert {rom_id: row["is_default"] for rom_id, row in by_id.items()} == {1: False, 2: True, 3: True}
 
     def test_a_server_only_version_is_never_bound_elsewhere(self, event_loop, service, uow, romm):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
@@ -437,20 +450,20 @@ class TestGetVersionList:
             assert u.roms.get(5).sibling_group_key == _GROUP
             assert u.roms.get(5).shortcut_app_id == _APP_ID
 
-    def test_cross_group_sibling_excluded_from_default(self, event_loop, service, uow, romm):
-        # A cross-group RomM sibling that WOULD rank as the default (is_main_sibling
-        # on the server) must not win the Default badge — it is not a switchable
-        # member of this group, so it is dropped from the default ranking.
+    def test_a_cross_group_sibling_romm_flags_carries_the_badge_and_stays_unswitchable(
+        self, event_loop, service, uow, romm
+    ):
+        # A cross-group RomM sibling RomM flags as its default carries the badge —
+        # the label is RomM's — while it stays non-switchable for this group.
         _seed_rom(uow, rom_id=1, app_id=_APP_ID, group_key=_GROUP, regions=("USA",))
         _seed_rom(uow, rom_id=2, app_id=None, group_key=_GROUP, regions=("Japan",))
         _seed_rom(uow, rom_id=5, app_id=None, group_key="ss:19274:57")
         romm.roms[1] = {"id": 1, "sibling_roms": [{"id": 5, "name": "Lara", "fs_name_no_ext": "Lara"}]}
-        romm.roms[5] = {"id": 5, "platform_id": 57, "is_main_sibling": True}
+        romm.roms[5] = {"id": 5, "platform_id": 57, "rom_user": {"is_main_sibling": True}}
 
         by_id = {v["rom_id"]: v for v in _run(event_loop, service.get_version_list(_APP_ID))["versions"]}
         assert by_id[5]["switchable"] is False
-        assert by_id[5]["is_default"] is False  # excluded despite is_main_sibling
-        assert by_id[1]["is_default"] or by_id[2]["is_default"]  # default stays in-group
+        assert by_id[5]["is_default"] is True
 
     def test_server_unreachable_degrades_to_local_only(self, event_loop, service, uow, romm):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
@@ -593,7 +606,7 @@ class TestGetVersionList:
         assert result["bound_version"]["vanished"] is True
         assert result["bound_version"]["is_default"] is False
 
-    def test_vanished_stale_main_sibling_never_receives_default_badge(self, event_loop, service, uow, romm):
+    def test_a_vanished_version_romm_flagged_carries_the_badge(self, event_loop, service, uow, romm):
         _seed_rom(uow, rom_id=1, app_id=None, is_main_sibling=True)
         _seed_rom(uow, rom_id=10, app_id=_APP_ID)
         romm.roms[10] = {"id": 10, "sibling_roms": []}
@@ -602,10 +615,10 @@ class TestGetVersionList:
         by_id = {v["rom_id"]: v for v in _run(event_loop, service.get_version_list(_APP_ID))["versions"]}
 
         assert by_id[1]["vanished"] is True
-        assert by_id[1]["is_default"] is False
-        assert by_id[10]["is_default"] is True
+        assert by_id[1]["is_default"] is True
+        assert by_id[10]["is_default"] is False
 
-    def test_vanished_lower_id_never_wins_metadata_tie(self, event_loop, service, uow, romm):
+    def test_a_vanished_version_without_a_flag_carries_no_badge(self, event_loop, service, uow, romm):
         _seed_rom(uow, rom_id=1, app_id=None, name="Same", fs_name="same.sfc")
         _seed_rom(uow, rom_id=10, app_id=_APP_ID, name="Same", fs_name="same.sfc")
         romm.roms[10] = {"id": 10, "sibling_roms": []}
@@ -613,10 +626,12 @@ class TestGetVersionList:
 
         by_id = {v["rom_id"]: v for v in _run(event_loop, service.get_version_list(_APP_ID))["versions"]}
 
-        assert by_id[1]["is_default"] is False
-        assert by_id[10]["is_default"] is True
+        assert by_id[1]["vanished"] is True
+        assert (by_id[1]["is_default"], by_id[10]["is_default"]) == (False, False)
 
-    def test_a_member_without_a_file_is_marked_and_never_the_default(self, event_loop, service, uow, romm):
+    def test_a_member_without_a_file_is_marked_and_carries_the_badge_romm_flags_it_with(
+        self, event_loop, service, uow, romm
+    ):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
         _seed_rom(uow, rom_id=2, app_id=None, is_main_sibling=True, has_file_on_disk=False)
         romm.roms[1] = {"id": 1, "sibling_roms": []}
@@ -624,9 +639,11 @@ class TestGetVersionList:
         by_id = {v["rom_id"]: v for v in _run(event_loop, service.get_version_list(_APP_ID))["versions"]}
 
         assert (by_id[1]["no_file"], by_id[2]["no_file"]) == (False, True)
-        assert (by_id[1]["is_default"], by_id[2]["is_default"]) == (True, False)
+        assert (by_id[1]["is_default"], by_id[2]["is_default"]) == (False, True)
 
-    def test_a_server_only_version_without_a_file_is_marked_and_never_the_default(self, event_loop, service, uow, romm):
+    def test_a_server_only_version_without_a_file_is_marked_and_carries_the_badge_romm_flags_it_with(
+        self, event_loop, service, uow, romm
+    ):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
         romm.roms[1] = {"id": 1, "sibling_roms": [{"id": 5, "fs_name_no_ext": "Game (Japan)"}]}
         romm.roms[5] = {
@@ -641,9 +658,9 @@ class TestGetVersionList:
         by_id = {v["rom_id"]: v for v in _run(event_loop, service.get_version_list(_APP_ID))["versions"]}
 
         assert by_id[5]["no_file"] is True
-        assert (by_id[1]["is_default"], by_id[5]["is_default"]) == (True, False)
+        assert (by_id[1]["is_default"], by_id[5]["is_default"]) == (False, True)
 
-    def test_a_single_version_without_a_file_is_not_the_default(self, event_loop, service, uow, romm):
+    def test_a_single_version_without_a_flag_carries_no_badge(self, event_loop, service, uow, romm):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID, has_file_on_disk=False)
         romm.roms[1] = {"id": 1, "sibling_roms": []}
 
@@ -684,17 +701,16 @@ class TestGetVersionList:
         assert result["multi_version"] is True
         assert all(v["vanished"] is False for v in result["versions"])
 
-    def test_preferred_region_heads_default(self, event_loop, service, uow, romm, settings):
-        # No is_main_sibling → the default falls to the 1G1R region ranking, and
-        # preferred_region re-heads it (Japan over the USA that would win by default).
+    def test_without_a_flag_no_version_carries_the_badge(self, event_loop, service, uow, romm):
+        # No is_main_sibling anywhere → RomM holds no default, and no region
+        # ranking stands in for one.
         _seed_rom(uow, rom_id=1, app_id=_APP_ID, regions=("USA",))
         _seed_rom(uow, rom_id=2, app_id=None, regions=("Japan",))
         romm.roms[1] = {"id": 1, "sibling_roms": []}
-        settings["preferred_region"] = "Japan"
 
         result = _run(event_loop, service.get_version_list(_APP_ID))
         by_id = {v["rom_id"]: v for v in result["versions"]}
-        assert by_id[2]["is_default"] is True
+        assert by_id[2]["is_default"] is False
         assert by_id[1]["is_default"] is False
 
 
@@ -705,9 +721,9 @@ def _default_rom_id(result: dict[str, Any]) -> int | None:
 class TestTheDefaultReadsTheLiveMainVersionFlag:
     """The Default badge takes each version's default-version flag from the bound ROM's live answer (#743 D4).
 
-    ``_seed_group`` gives every member one region, so without a flag the
-    ranking orders them by label: rom 1 (``game_1``), rom 3, then rom 2
-    (``game_8``), which the stored flag names.
+    ``_seed_group`` stores the flag on rom 2 alone, so a badge anywhere else
+    can only come from the live answer, and none at all means the live answer
+    took the stored flag back.
     """
 
     @staticmethod
@@ -727,7 +743,7 @@ class TestTheDefaultReadsTheLiveMainVersionFlag:
         assert _default_rom_id(_run(event_loop, service.get_version_list(_APP_ID))) == 3
 
     def test_a_pick_of_the_bound_version_is_read_off_its_own_rom_user(self, event_loop, service, uow, romm):
-        # The bound version sorts last here, so only its own flag can make it the default.
+        # The bound version's own flag is stated only in its rom_user.
         _seed_rom(uow, rom_id=1, app_id=_APP_ID, fs_name="game_9.sfc", regions=("USA",))
         _seed_rom(uow, rom_id=2, app_id=None, fs_name="game_8.sfc", regions=("USA",), is_main_sibling=True)
         _seed_rom(uow, rom_id=3, app_id=None, regions=("USA",))
@@ -739,7 +755,7 @@ class TestTheDefaultReadsTheLiveMainVersionFlag:
 
         assert _default_rom_id(_run(event_loop, service.get_version_list(_APP_ID))) == 1
 
-    def test_a_pick_taken_back_in_romm_leaves_the_ranking_to_decide(self, event_loop, service, uow, romm):
+    def test_a_pick_taken_back_in_romm_leaves_no_default(self, event_loop, service, uow, romm):
         self._seed_group(uow)
         romm.roms[1] = {
             "id": 1,
@@ -747,7 +763,7 @@ class TestTheDefaultReadsTheLiveMainVersionFlag:
             "sibling_roms": [{"id": 2, "is_main_sibling": False}, {"id": 3, "is_main_sibling": False}],
         }
 
-        assert _default_rom_id(_run(event_loop, service.get_version_list(_APP_ID))) == 1
+        assert _default_rom_id(_run(event_loop, service.get_version_list(_APP_ID))) is None
 
     def test_a_stub_without_the_flag_keeps_its_members_stored_flag(self, event_loop, service, uow, romm):
         self._seed_group(uow)

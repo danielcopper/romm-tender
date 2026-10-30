@@ -213,6 +213,38 @@ describe("VersionPicker — menu markers", () => {
   });
 });
 
+describe("VersionPicker — the version control's colour", () => {
+  beforeEach(() => {
+    captured.menu = null;
+    vi.mocked(backend.getVersionList).mockReset();
+    vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: null });
+  });
+
+  async function triggerIconColour(list: VersionList): Promise<string> {
+    vi.mocked(backend.getVersionList).mockResolvedValue(list);
+    const r = render(<VersionPicker appId={APP_ID} />);
+    const button = await r.findByTestId("version-btn");
+    return (button.querySelector("svg") as SVGElement).style.color;
+  }
+
+  function listWithDefault(defaultRomId: number | null): VersionList {
+    const versions = (multiVersionList().versions ?? []).map((v) => ({ ...v, is_default: v.rom_id === defaultRomId }));
+    return multiVersionList({ versions });
+  }
+
+  it("reads not-the-default where another version carries the badge", async () => {
+    expect(await triggerIconColour(listWithDefault(2))).toBe("#59b6ff");
+  });
+
+  it("reads neutral where the active version carries the badge", async () => {
+    expect(await triggerIconColour(listWithDefault(1))).toBe("#dcdedf");
+  });
+
+  it("reads neutral where RomM holds no default", async () => {
+    expect(await triggerIconColour(listWithDefault(null))).toBe("#dcdedf");
+  });
+});
+
 describe("VersionPicker — non-switchable rows (#1359)", () => {
   beforeEach(() => {
     captured.menu = null;

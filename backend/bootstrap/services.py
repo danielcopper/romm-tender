@@ -789,7 +789,6 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             clock=cfg.runtime.clock,
             uow_factory=cfg.callbacks.uow_factory,
             romm_api=cfg.adapters.romm_api,
-            settings=cfg.stores.settings,
             drift_probe=save_sync_service.check_local_drift,
             reachability_probe=connection_service.probe_reachability,
             relaunch_resolver=relaunch_options_resolver,

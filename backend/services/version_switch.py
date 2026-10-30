@@ -42,7 +42,7 @@ from domain.rom_file import NO_FILE_ON_ROMM_MESSAGE, NoFileOnRomm, has_file_on_r
 from domain.save_stranding import STRANDING_NONE
 from domain.shortcut_data import extract_version_metadata
 from domain.sibling_group import compute_sibling_group_key, target_bound_elsewhere, target_in_sibling_group
-from domain.sibling_resolution import AUTO_REGION, fs_name_stem, resolve_group_representative
+from domain.sibling_resolution import fs_name_stem
 from domain.version_metadata import VersionMetadata
 from lib.errors import NamedRefused, Refused, RommNotFoundError
 
@@ -87,9 +87,8 @@ class VersionSwitchServiceConfig:
     """Frozen wiring bundle handed to ``VersionSwitchService.__init__``.
 
     Carries the runtime infrastructure (event loop, logger, clock), the SQLite
-    Unit-of-Work factory (to resolve a sibling group and move its binding), the
-    RomM ROM reader (the live ``sibling_roms`` view + per-sibling detail), and the
-    live settings dict (read for ``preferred_region`` when ranking the default).
+    Unit-of-Work factory (to resolve a sibling group and move its binding) and
+    the RomM ROM reader (the live ``sibling_roms`` view + per-sibling detail).
     ``drift_probe`` reports whether the currently-bound version's local saves
     would be stranded (the save-stranding gate); ``reachability_probe``
     supplies the ``server_reachable`` hint on that refusal; ``relaunch_resolver``
@@ -105,7 +104,6 @@ class VersionSwitchServiceConfig:
     clock: Clock
     uow_factory: UnitOfWorkFactory
     romm_api: RommRomReader
-    settings: dict[str, Any]
     drift_probe: SaveDriftProbeFn
     reachability_probe: ReachabilityProbeFn
     relaunch_resolver: RomRelaunchItemReader
@@ -115,7 +113,7 @@ class VersionSwitchServiceConfig:
 
 @dataclass(frozen=True)
 class _MemberView:
-    """A local sibling row projected to what the picker + the default ranking need."""
+    """A local sibling row projected to what the picker needs."""
 
     rom_id: int
     name: str
@@ -137,7 +135,6 @@ class _LocalGroup:
     bound_rom_id: int
     group_key: str | None
     platform_slug: str
-    preferred_region: str
     members: list[_MemberView] = field(default_factory=list)
 
     @property
@@ -184,7 +181,6 @@ class VersionSwitchService:
         self._clock = config.clock
         self._uow_factory = config.uow_factory
         self._romm_api = config.romm_api
-        self._settings = config.settings
         self._drift_probe = config.drift_probe
         self._reachability_probe = config.reachability_probe
         self._relaunch_resolver = config.relaunch_resolver
@@ -334,10 +330,10 @@ class VersionSwitchService:
     async def _fetch_stub_details(self, stubs: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
         """Fetch each server-only sibling's full dims concurrently (best-effort).
 
-        The picker's default badge ranks over the WHOLE group, so a not-yet-synced
-        sibling needs its ``regions`` / ``revision`` / ``tags`` to rank correctly —
-        the slim ``sibling_roms`` stub carries only its id, its names and its
-        ``is_main_sibling``. Groups are small (RomM caps siblings low), so the
+        The slim ``sibling_roms`` stub carries only its id, its names and its
+        ``is_main_sibling``, so a not-yet-synced sibling's dimensions, its file
+        verdict, its metadata ids for the membership judgment and its own
+        ``rom_user`` flag come from its detail. Groups are small (RomM caps siblings low), so the
         extra reads fan out on the executor. A failed fetch is skipped rather
         than failing the whole call.
         """
@@ -389,7 +385,6 @@ class VersionSwitchService:
                 bound_rom_id=bound.rom_id,
                 group_key=group_key,
                 platform_slug=bound.platform_slug,
-                preferred_region=self._settings.get("preferred_region", AUTO_REGION),
                 members=members,
             )
 
@@ -435,18 +430,29 @@ class VersionSwitchService:
         single authority (:func:`target_in_sibling_group`) that ``switch_version``
         also decides by, so a listed row the switch would reject is rendered
         non-switchable rather than a dead-end. ``vanished`` is independent of
-        membership: retained rows keep their switchable verdict but are excluded
-        from default ranking; the picker refuses a switch to them, and
-        ``switch_version`` refuses one that still 404s (``version_vanished``).
-        ``no_file`` marks a version RomM holds no file for — the stored column for
-        a local row, the fetched detail for a server-only one. It is never the
-        default either, and ``switch_version`` refuses a switch to it unless it is
+        membership: retained rows keep their switchable verdict; the picker
+        refuses a switch to them, and ``switch_version`` refuses one that still
+        404s (``version_vanished``). ``no_file`` marks a version RomM holds no file
+        for — the stored column for a local row, the fetched detail for a
+        server-only one — and ``switch_version`` refuses a switch to it unless it is
         installed (``no_file_on_romm``). ``bound_elsewhere`` marks a version another
         shortcut of the game is on, by :func:`target_bound_elsewhere`, the rule
         ``switch_version`` refuses such a target by; it says nothing about
         membership, so ``switchable`` stays the membership verdict. A
         single-version group renders no picker while preserving its bound/server
         verdicts.
+
+        ``is_default`` is RomM's default-version flag and nothing else: each
+        version's ``is_main_sibling`` as *live_main_flags* states it, else what
+        was known before — a local member's stored flag, a server-only stub's
+        fetched detail. Every version whose flag is set carries it, whether it is
+        gone, has no file, is on another shortcut or sits in another group, and
+        no version does where RomM holds no default; Tender's own ranking never
+        stands in, since a label under RomM's name is RomM's. The live flags are
+        not written back to the stored rows: this read persists nothing it
+        learns, its liveness verdicts included, and leaves each row's flag to
+        whatever writes the row — a library sync, or the persist of a
+        server-only switch target.
         """
         entries: list[dict[str, Any]] = [
             {
@@ -462,6 +468,7 @@ class VersionSwitchService:
                 "vanished": m.rom_id in vanished_ids,
                 "no_file": not m.has_file,
                 "bound_elsewhere": m.bound_elsewhere,
+                "is_default": live_main_flags.get(m.rom_id, m.is_main_sibling),
                 # Members share the bound key by construction (iter_by_group_key),
                 # so they are always switchable — routed through the shared
                 # predicate to keep a single authority.
@@ -475,14 +482,14 @@ class VersionSwitchService:
             for m in local.members
         ]
         entries += [
-            self._server_only_entry(stub, local, detail_by_id, stub_local_group_keys) for stub in server_only_stubs
+            self._server_only_entry(stub, local, detail_by_id, stub_local_group_keys, live_main_flags)
+            for stub in server_only_stubs
         ]
 
         if len(entries) <= 1:
             bound_version = entries[0] if entries and entries[0]["rom_id"] == local.bound_rom_id else None
             if bound_version is not None:
                 bound_version["active"] = True
-                bound_version["is_default"] = not (bound_version["vanished"] or bound_version["no_file"])
             return {
                 "multi_version": False,
                 "server_query_failed": server_query_failed,
@@ -490,15 +497,8 @@ class VersionSwitchService:
                 "bound_version": bound_version,
             }
 
-        default_candidate_ids = {
-            e["rom_id"] for e in entries if e["switchable"] and not e["vanished"] and not e["no_file"]
-        }
-        default_rom_id = self._resolve_default(
-            local, server_only_stubs, detail_by_id, default_candidate_ids, live_main_flags
-        )
         for e in entries:
             e["active"] = e["rom_id"] == local.bound_rom_id
-            e["is_default"] = e["rom_id"] == default_rom_id
         return {
             "multi_version": True,
             "versions": entries,
@@ -512,6 +512,7 @@ class VersionSwitchService:
         local: _LocalGroup,
         detail_by_id: dict[int, dict[str, Any]],
         stub_local_group_keys: dict[int, str | None],
+        live_main_flags: Mapping[int, bool],
     ) -> dict[str, Any]:
         """Build one server-only stub's picker entry (``synced: False`` + switchable verdict).
 
@@ -543,6 +544,7 @@ class VersionSwitchService:
             # A local stub sits in another group, which the switch refuses as
             # ``not_in_group`` before it asks whether the stub is bound elsewhere.
             "bound_elsewhere": False,
+            "is_default": live_main_flags.get(rom_id, bool(meta.get("is_main_sibling"))),
             "switchable": target_in_sibling_group(
                 bound_group_key=local.group_key,
                 target_group_key=stub_local_group_keys.get(rom_id) if target_is_local else None,
@@ -551,71 +553,6 @@ class VersionSwitchService:
                 target_is_server_sibling=True,
             ),
         }
-
-    def _resolve_default(
-        self,
-        local: _LocalGroup,
-        server_only_stubs: list[dict[str, Any]],
-        detail_by_id: dict[int, dict[str, Any]],
-        candidate_ids: set[int],
-        live_main_flags: Mapping[int, bool],
-    ) -> int | None:
-        """The version the resolution chain would pick as the group's default.
-
-        Runs :func:`resolve_group_representative` with EMPTY installed/binding
-        filters, so the badge marks the *natural* default — RomM's
-        ``is_main_sibling`` else the 1G1R + preferred-region ranking — independent
-        of which version is currently bound (marking that would be circular with
-        the ``active`` flag). Ranks only over the caller's candidates: switchable,
-        live versions with a file on RomM. A cross-group RomM sibling, a retained
-        vanished row and a version RomM holds no file for must not win the Default
-        badge. Each version's ``is_main_sibling`` is the one *live_main_flags*
-        states for it; a version it leaves out keeps what was known before — a
-        local member its stored flag, a server-only stub its fetched detail's;
-        a stub with no fetched detail ranks with only its label and the flag the
-        stub states, if any. The live flags are not written back to the stored
-        rows, although that would make them fresher: this read persists nothing
-        it learns, its liveness verdicts included, and leaves each row's flag to
-        whatever writes the row — a library sync, or the persist of a
-        server-only switch target. Returns ``None`` when no candidate remains or
-        the chain cannot decide, so the badge is simply absent rather than the
-        call failing.
-        """
-        ranking: list[dict[str, Any]] = [
-            {
-                "rom_id": m.rom_id,
-                "is_main_sibling": live_main_flags.get(m.rom_id, m.is_main_sibling),
-                "regions": m.regions,
-                "revision": m.revision,
-                "tags": m.tags,
-                "fs_name_no_ext": m.label,
-            }
-            for m in local.members
-            if m.rom_id in candidate_ids
-        ]
-        for stub in server_only_stubs:
-            rom_id = int(stub["id"])
-            if rom_id not in candidate_ids:
-                continue
-            detail = detail_by_id.get(rom_id)
-            meta = extract_version_metadata(detail) if detail is not None else {}
-            ranking.append(
-                {
-                    "rom_id": rom_id,
-                    "is_main_sibling": live_main_flags.get(rom_id, bool(meta.get("is_main_sibling"))),
-                    "regions": list(meta.get("regions") or []),
-                    "revision": str(meta.get("revision") or ""),
-                    "tags": list(meta.get("tags") or []),
-                    "fs_name_no_ext": stub.get("fs_name_no_ext") or stub.get("name") or "",
-                }
-            )
-        try:
-            return resolve_group_representative(
-                ranking, installed_rom_ids=set(), bound_rom_ids=set(), preferred_region=local.preferred_region
-            )
-        except (ValueError, KeyError) as e:
-            self._logger.warning(f"Version list: default resolution failed: {e}")
-            return None
 
     # ── switch_version ───────────────────────────────────────────────────
 
