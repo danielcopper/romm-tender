@@ -13,6 +13,7 @@ import {
   getInstalledRom,
   getArtworkBase64,
   getSaveSlots,
+  getSaveSyncAvailability,
   isSaveTrackingConfigured,
   debugLog,
 } from "../api/backend";
@@ -27,6 +28,7 @@ import type {
   SaveStatus,
   SyncConflict,
   SaveSlotSummary,
+  SaveSyncAvailability,
   LastKnownSlots,
 } from "../types";
 import { applyRefreshSlotResult } from "../utils/slotState";
@@ -62,6 +64,10 @@ export interface PanelState {
   // previous emulator against the new emulator's requirements.
   coreInfo: CoreInfo | null;
   saveSyncEnabled: boolean;
+  // Whether this ROM's saves sync, read without RomM: what the SAVES tab says
+  // of them and whether its title is marked (#2149). `null` while no answer is
+  // held — not read yet, or the read failed — and nothing is said or marked then.
+  saveSyncAnswer: SaveSyncAvailability | null;
   saveStatus: SaveStatus | null;
   conflicts: SyncConflict[];
   // Why there is no detail to show: `failed` for every miss, the game not being
@@ -183,6 +189,8 @@ export interface PanelReadSeqs {
   slots: number;
   /** `is_save_tracking_configured`, from the slot refresh alone. */
   slotTracking: number;
+  /** `get_save_sync_availability`, from {@link refreshSaveSyncAnswer}. */
+  saveSync: number;
   /** `get_bios_status`, from the live re-read every cached-detail fold issues
    *  when the backend marked its BIOS answer stale and from the `bios` event's
    *  re-read — and claimed by the fold itself, see {@link refreshBiosIfStale}. */
@@ -221,6 +229,24 @@ export function refreshSlotState(binding: RomBinding, readSeqs: MutableRefObject
       applyRefreshSlotResult<PanelState>(slotResult, binding.write);
     })
     .catch(() => {});
+}
+
+/** Read whether the ROM's saves sync and fold the answer in. A read that fails
+ *  holds no answer rather than the one from before, which may be about another
+ *  emulator. */
+export async function refreshSaveSyncAnswer(
+  binding: RomBinding,
+  readSeqs: MutableRefObject<PanelReadSeqs>,
+): Promise<void> {
+  const overtaken = takeReadTicket(readSeqs, "saveSync");
+  let answer: SaveSyncAvailability | null = null;
+  try {
+    answer = await getSaveSyncAvailability(binding.romId);
+  } catch (e) {
+    detach(debugLog(`RomMGameInfoPanel: save sync answer error: ${e}`));
+  }
+  if (overtaken()) return;
+  binding.write((prev) => ({ ...prev, saveSyncAnswer: answer }));
 }
 
 /** Fire-and-forget installed-rom fetch. */
@@ -397,6 +423,10 @@ function startBackgroundRefreshes(
     bgPromises.push(refreshPanelCoreInfo(binding));
   }
 
+  if (cached.save_sync_enabled) {
+    bgPromises.push(refreshSaveSyncAnswer(binding, readSeqs));
+  }
+
   return Promise.all(bgPromises);
 }
 
@@ -480,6 +510,7 @@ export async function loadData(
       biosReadFailed: false,
       coreInfo: null, // Will be filled by background fetch (get_platform_core_info)
       saveSyncEnabled: cached.save_sync_enabled ?? false,
+      saveSyncAnswer: null,
       saveStatus,
       conflicts,
       error: false,

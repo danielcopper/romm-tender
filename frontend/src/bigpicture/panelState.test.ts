@@ -4,7 +4,9 @@ import type { MutableRefObject, SetStateAction } from "react";
 import {
   biosFieldsFromCache,
   openingTab,
+  bindRom,
   bindRomInState,
+  refreshSaveSyncAnswer,
   refreshPanelCoreInfo,
   refreshSlotState,
   takeReadTicket,
@@ -17,7 +19,7 @@ import type { BiosAnswer } from "../api/backend";
 import { _resetSharedReadsForTests } from "../api/sharedReads";
 import { refreshCoreInfoInBackground } from "../utils/sectionRefresh";
 import type { CoreInfoFields } from "../utils/playSection";
-import type { CoreInfo, SaveSlotSummary } from "../types";
+import type { CoreInfo, SaveSlotSummary, SaveSyncAvailability } from "../types";
 import { coreInfo as coreInfoFixture } from "../test-utils/coreFixtures";
 
 /** A promise the test resolves by hand, so two reads of the same endpoint can be
@@ -33,7 +35,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 const seqsRef = (): MutableRefObject<PanelReadSeqs> => ({
-  current: { detail: 0, saveStatus: 0, slots: 0, slotTracking: 0, bios: 0 },
+  current: { detail: 0, saveStatus: 0, slots: 0, slotTracking: 0, saveSync: 0, bios: 0 },
 });
 
 const slot = (name: string): SaveSlotSummary => ({
@@ -58,6 +60,7 @@ function basePanelState(): PanelState {
     biosReadFailed: false,
     coreInfo: null,
     saveSyncEnabled: true,
+    saveSyncAnswer: null,
     saveStatus: null,
     conflicts: [],
     error: false,
@@ -284,6 +287,72 @@ describe("refreshSlotState", () => {
     await flush();
 
     expect(state.slotConfirmed).toBe(true);
+  });
+});
+
+describe("refreshSaveSyncAnswer (#2149)", () => {
+  const SYNCS: SaveSyncAvailability = { available: true, installed: true, emulator_label: "mGBA" };
+  const REFUSED: SaveSyncAvailability = { ...SYNCS, available: false, reason: "save_shape_unsupported", message: "m" };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("folds nothing once the panel has been re-bound to another rom", async () => {
+    const read = deferred<SaveSyncAvailability>();
+    vi.mocked(backend.getSaveSyncAvailability).mockReturnValue(read.promise);
+    const romIdRef: MutableRefObject<number | null> = { current: 7 };
+    const setter = vi.fn();
+
+    const pending = refreshSaveSyncAnswer(
+      bindRom(7, romIdRef, () => false, setter),
+      seqsRef(),
+    );
+    romIdRef.current = 8;
+    read.resolve(REFUSED);
+    await pending;
+
+    expect(backend.getSaveSyncAvailability).toHaveBeenCalledWith(7);
+    expect(setter).not.toHaveBeenCalled();
+  });
+
+  it("keeps the newer read's answer when the earlier read answers last", async () => {
+    const earlier = deferred<SaveSyncAvailability>();
+    const later = deferred<SaveSyncAvailability>();
+    vi.mocked(backend.getSaveSyncAvailability).mockReturnValueOnce(earlier.promise).mockReturnValueOnce(later.promise);
+    let state = basePanelState();
+    const binding: RomBinding = {
+      romId: 7,
+      write: (update) => {
+        state = typeof update === "function" ? update(state) : update;
+      },
+    };
+    const seqs = seqsRef();
+
+    const first = refreshSaveSyncAnswer(binding, seqs);
+    const second = refreshSaveSyncAnswer(binding, seqs);
+    later.resolve(SYNCS);
+    await second;
+    earlier.resolve(REFUSED);
+    await first;
+
+    expect(state.saveSyncAnswer).toEqual(SYNCS);
+  });
+
+  it("holds no answer where the read fails, rather than the one from before", async () => {
+    vi.mocked(backend.getSaveSyncAvailability).mockRejectedValue(new Error("down"));
+    let state: PanelState = { ...basePanelState(), saveSyncAnswer: REFUSED };
+    const binding: RomBinding = {
+      romId: 7,
+      write: (update) => {
+        state = typeof update === "function" ? update(state) : update;
+      },
+    };
+
+    await refreshSaveSyncAnswer(binding, seqsRef());
+
+    expect(state.saveSyncAnswer).toBeNull();
+    expect(backend.debugLog).toHaveBeenCalledWith(expect.stringContaining("save sync answer error"));
   });
 });
 
