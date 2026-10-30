@@ -736,11 +736,13 @@ async function handleCoreChange(entry: Entry): Promise<void> {
   //
   // Same user action as refreshCoreAndBios, so the same answer to a BIOS read
   // that failed: the core half still folds, and the shown level stands rather
-  // than the whole fold being lost to the handler's catch (#1693).
-  const [coreInfo, biosResult] = await Promise.all([
-    checkStart(writerForRom(entry, generation, romId), getPlatformCoreInfo(romId)),
-    getBiosStatus(romId).catch(() => UNKNOWN_BIOS_STATUS),
-  ]);
+  // than the whole fold being lost to the handler's catch (#1693). Both reads
+  // are in flight together; they are awaited one after the other rather than
+  // through Promise.all, under which the panel's test environment reports the
+  // core read's rejection as unhandled though the handler's catch takes it.
+  const bios = getBiosStatus(romId).catch(() => UNKNOWN_BIOS_STATUS);
+  const coreInfo = await checkStart(writerForRom(entry, generation, romId), getPlatformCoreInfo(romId));
+  const biosResult = await bios;
   const biosInfo = extractBiosInfo(biosResult);
   writerForRom(
     entry,
