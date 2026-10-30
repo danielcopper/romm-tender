@@ -12,11 +12,11 @@ handed — a `DesktopGamePage` with an optional `gameView` and `playButton` — 
 `gameView` the page's content sections, `playButton` Steam's Play button and the badges beside it. A part left out
 leaves Steam's own in place, and the play bar, the hero and the controls beside them are adapted either way.
 
-Today it hands the `gameView` alone: `GameView` (`frontend/src/desktop/gameview/GameView.tsx`), the page's cards in two
-columns. Its one card so far is About — the cover Steam shows (`steamsCover`, `frontend/src/utils/artworkThumbs.ts`),
-the title, the summary and the rows `metadataRows` answers, under the labels and in the order Big Picture's GAME INFO
-tab shows them. While it is drawn it holds two things `RomMPlaySection` holds on Big Picture's game page: the connection
-heartbeat, and the automatic artwork, whose apply in flight it cancels on leaving.
+It hands both. `GameView` (`frontend/src/desktop/gameview/GameView.tsx`) draws the page's cards in two columns. Its one
+card so far is About — the cover Steam shows (`steamsCover`, `frontend/src/utils/artworkThumbs.ts`), the title, the
+summary and the rows `metadataRows` answers, under the labels and in the order Big Picture's GAME INFO tab shows them.
+While it is drawn it holds two things `RomMPlaySection` holds on Big Picture's game page: the connection heartbeat, and
+the automatic artwork, whose apply in flight it cancels on leaving.
 
 While a RetroDECK migration is pending it draws the migration card
 (`frontend/src/desktop/gameview/MigrationBlockedCard.tsx`) in place of the columns, as the game page's section does on
@@ -24,6 +24,23 @@ Big Picture (`RomMGameInfoPanel`), and goes on holding the heartbeat and the aut
 sentence names Big Picture as where the Tender menu is, because the desktop client has no Quick Access menu. It asks the
 backend for the migration state again for each game page it is drawn for (`useMigrationRefresh`,
 `frontend/src/utils/migrationRefresh.ts`).
+
+`PlayButton` (`frontend/src/desktop/gameview/PlayButton.tsx`) is Tender's Play button in the desktop client. Its presses
+(`frontend/src/desktop/gameview/usePlayLaunch.ts`) are those of Big Picture's `CustomPlayButton`: PLAY starts the game
+through the launch gate ([Pre-launch sync](save-file-sync-architecture.md#pre-launch-sync)), and RESUME, Stop and
+RESOLVE CONFLICT do what they do there, except that a RESUME whose game is no longer running does what a press on PLAY
+would. It asks its questions in the desktop dialogs, which `useDialogHost`
+(`frontend/src/desktop/gameview/dialogs/useDialogHost.tsx`) draws into the body of the document the button is drawn in.
+Its save-tracking step is the one the [Pre-launch sync](save-file-sync-architecture.md#pre-launch-sync) table names for
+it. Where the game cannot be played from the page — not downloaded, downloading, or its downloaded file gone — it draws
+a disabled button that says which, and where the game cannot start — its emulator cannot, or its file does not start
+with it — PLAY is disabled with the sentence `startRefusal` (`frontend/src/utils/emulatorStart.ts`) answers. While the
+page checks whether the game can start, and where that check went wrong, PLAY does what Big Picture's does
+([Launch-target validation](backend-architecture.md#launch-target-validation)), and reads CHECKING... where Big
+Picture's shows its throbber. On a stranded panel it gates as the [invariant register](invariants.md)'s stranded-panel
+entry says. Steam's Play button and the badges beside it are hidden as soon as the button's root has rendered, also
+while it draws nothing — before the page's detail names the ROM, and on a stranded panel with no game running — and the
+button draws no badges in their place.
 
 ## Two windows, two realms
 

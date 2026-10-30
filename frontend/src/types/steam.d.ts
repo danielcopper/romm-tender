@@ -200,3 +200,16 @@ declare module "react-dom/client" {
   }
   export function createRoot(container: Element | DocumentFragment): Root;
 }
+
+/**
+ * The one `react-dom` export this package calls (the desktop dialogs' portal),
+ * declared here for the reason above. `@decky/ui` types `window.SP_REACTDOM` as
+ * `typeof import("react-dom")`, so this is also the whole of that global's type:
+ * a module reached through it needs its export added here.
+ */
+declare module "react-dom" {
+  export function createPortal(
+    children: import("react").ReactNode,
+    container: Element | DocumentFragment,
+  ): import("react").ReactPortal;
+}

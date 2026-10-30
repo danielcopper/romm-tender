@@ -6,10 +6,11 @@
 
 import { logError } from "../api/backend";
 import { GameView } from "./gameview/GameView";
+import { PlayButton } from "./gameview/PlayButton";
 import { offerDesktopLaunchPrompts, withdrawDesktopLaunchPrompts } from "./launchPromptHost";
 import { startDesktopNavigationWatcher, stopDesktopNavigationWatcher, type DesktopGamePage } from "./navigationWatcher";
 
-const GAME_PAGE: DesktopGamePage = { gameView: GameView };
+const GAME_PAGE: DesktopGamePage = { gameView: GameView, playButton: PlayButton };
 
 /**
  * Offer the desktop dialogs to the launch watcher and start the navigation

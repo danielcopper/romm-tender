@@ -1070,25 +1070,29 @@ Format: **invariant** — tier — enforced by.
   Steam's own Play on a RomM shortcut that is not running is refused, and the fallback page drops every button but
   Restart Steam** — test + prompt-only — `frontend/src/index.test.tsx`,
   `frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`, `frontend/src/bigpicture/RomMPlaySection.test.tsx`,
-  `frontend/src/bigpicture/CustomPlayButton.test.tsx`, `frontend/src/utils/launchInterceptor.test.ts` and
-  `frontend/src/boot/FallbackActions.test.tsx`, each in its stranded-panel `describe` block. They pin the six shells
-  that gate today: the Quick Access root (`QAMPanel` in `frontend/src/index.tsx`) renders the card above its page
-  switch, so no page component runs; the game page's section (`RomMGameInfoPanel.tsx`) renders it ahead of every other
-  card and of Loading; the play row (`RomMPlaySection.tsx`) drops its gears, its version and disc pickers and the two
-  badges whose tabs the card replaced, and stays hidden under a version error or a pending migration as it is otherwise;
-  the play button (`CustomPlayButton.tsx`) renders nothing unless its game runs, and then Resume without the chevron
-  whose only entry was Stop Game; the launch interceptor (`frontend/src/utils/launchInterceptor.ts`) refuses a start
-  after its cancel and before the launch gate asks anything; the fallback page's actions
-  (`frontend/src/boot/FallbackActions.tsx`) give way to the answer — every button but Restart Steam, which asks Steam
-  rather than the backend — with the line that an update's result shows after the reload or restart that answer names.
-  **Why**: a stranded panel is never admitted again — it holds the token of a backend process that is gone — so every
-  press that reaches the backend could only fail. Before #2275 each such press failed in a way of its own: some with the
-  answer, some with a bare failure, some with a wrong reason, some with nothing at all, leaving a switch at a value that
-  was never saved; Play on a page opened before the restart started the game without its pre-launch save sync. A gate at
-  the shells covers a press added inside them later without a change of its own, where a message per press would be a
-  rule every new failure path has to remember. **What fails green**: a new surface outside the shells — another element
-  injected into Steam's game page, another hook on Steam's launch — offers presses that can only fail, and nothing
-  notices: `api/host` is stubbed suite-wide, so a test of that surface sees a stranded panel only if it arranges one
+  `frontend/src/bigpicture/CustomPlayButton.test.tsx`, `frontend/src/utils/launchInterceptor.test.ts`,
+  `frontend/src/boot/FallbackActions.test.tsx` and, in the desktop dev build,
+  `frontend/src/desktop/gameview/PlayButton.test.tsx`, each in its stranded-panel `describe` block. They pin the six
+  shells a shipped bundle has that gate today: the Quick Access root (`QAMPanel` in `frontend/src/index.tsx`) renders
+  the card above its page switch, so no page component runs; the game page's section (`RomMGameInfoPanel.tsx`) renders
+  it ahead of every other card and of Loading; the play row (`RomMPlaySection.tsx`) drops its gears, its version and
+  disc pickers and the two badges whose tabs the card replaced, and stays hidden under a version error or a pending
+  migration as it is otherwise; the play button (`CustomPlayButton.tsx`) renders nothing unless its game runs, and then
+  Resume without the chevron whose only entry was Stop Game; the launch interceptor
+  (`frontend/src/utils/launchInterceptor.ts`) refuses a start after its cancel and before the launch gate asks anything;
+  the fallback page's actions (`frontend/src/boot/FallbackActions.tsx`) give way to the answer — every button but
+  Restart Steam, which asks Steam rather than the backend — with the line that an update's result shows after the reload
+  or restart that answer names. In the desktop dev build the desktop client's Play button
+  (`frontend/src/desktop/gameview/PlayButton.tsx`) gates as `CustomPlayButton.tsx` does, pinned by the stranded-panel
+  `describe` block of `frontend/src/desktop/gameview/PlayButton.test.tsx`. **Why**: a stranded panel is never admitted
+  again — it holds the token of a backend process that is gone — so every press that reaches the backend could only
+  fail. Before #2275 each such press failed in a way of its own: some with the answer, some with a bare failure, some
+  with a wrong reason, some with nothing at all, leaving a switch at a value that was never saved; Play on a page opened
+  before the restart started the game without its pre-launch save sync. A gate at the shells covers a press added inside
+  them later without a change of its own, where a message per press would be a rule every new failure path has to
+  remember. **What fails green**: a new surface outside the shells — another element injected into Steam's game page,
+  another hook on Steam's launch — offers presses that can only fail, and nothing notices: `api/host` is stubbed
+  suite-wide, so a test of that surface sees a stranded panel only if it arranges one
   (`frontend/src/test-utils/stranded-panel.ts`). That half is prompt-only: such a surface gates itself on
   `useStrandedAnswer()` in a component or `strandedAnswer()` in a handler. **The exceptions are deliberate**: a Tender
   dialog or menu already open when the panel is stranded stays open and its buttons fail as before (#2275 D6), since

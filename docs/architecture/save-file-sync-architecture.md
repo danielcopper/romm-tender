@@ -1851,13 +1851,15 @@ directional copy (#1481); the offline/failure body it still owns rides a separat
 ### Pre-launch sync
 
 Runs before a RomM game starts (if `sync_before_launch` is enabled), through one of two funnels that share
-`runLaunchGate` (`frontend/src/utils/launchGate.ts`). Tender's Play button runs it from `CustomPlayButton.handlePlay()`
-before it starts the game itself; the launch watcher (`frontend/src/utils/launchInterceptor.ts`) gates the starts that
-do not come through the Play button — Steam's own Play and a `steam://rungameid` link. Pre-launch sync is **not**
-triggered via `RegisterForAppLifetimeNotifications`. A start the gate refuses before the save work — the source that
-would start it switched off ([Which emulator source answers](core-emulator-selection.md#which-emulator-source-answers))
-— runs no sync at all, and nor does a start refused before the gate, where the game's file does not start with its
-emulator ([Launch-target validation](backend-architecture.md#launch-target-validation)).
+`runLaunchGate` (`frontend/src/utils/launchGate.ts`). One is Tender's Play button, which runs it before it starts the
+game itself: Big Picture's from `CustomPlayButton.handlePlay()`, and in the desktop dev build the desktop client's
+(`usePlayLaunch`, `frontend/src/desktop/gameview/usePlayLaunch.ts`). The other is the launch watcher
+(`frontend/src/utils/launchInterceptor.ts`), which gates the starts that do not come through a Play button — Steam's own
+Play and a `steam://rungameid` link. Pre-launch sync is **not** triggered via `RegisterForAppLifetimeNotifications`. A
+start the gate refuses before the save work — the source that would start it switched off
+([Which emulator source answers](core-emulator-selection.md#which-emulator-source-answers)) — runs no sync at all, and
+nor does a start refused before the gate, where the game's file does not start with its emulator
+([Launch-target validation](backend-architecture.md#launch-target-validation)).
 
 Every launch path builds the gate's inputs with `makeLaunchGateOps` (`frontend/src/utils/launchGateOps.ts`) and acts on
 its verdict with `runGateLoop` (`frontend/src/utils/launchVerdict.ts`), which runs the gate, hands the verdict to
@@ -1866,13 +1868,13 @@ parts are the migration check, the starting-source check, a fresh reachability p
 sync itself (`runPreLaunchSync`) and what each verdict means: a switched-off source toasts, resolved conflicts announce
 the save change to the page and then launch. A path supplies only what is its own:
 
-| Supplied by the path               | Play button                                                                                                                      | Launch watcher                                                                     |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Prompts (`LaunchPrompts`)          | `gamepadLaunchPrompts` (`frontend/src/shared/launchPrompts.ts`)                                                                  | chosen once per start (below)                                                      |
-| Tracking setup                     | `ensureTrackingConfiguredBigPicture` — an answer it cannot settle aborts and opens the Saves tab (`applyLaunchGateSetupOutcome`) | `ensureTrackingConfiguredSilently` — adopts a default silently and always proceeds |
-| Toast for a sync that moved saves  | yes                                                                                                                              | no                                                                                 |
-| A start that ends without a launch | the trigger returns to Play, or to Resolve Conflict after a cancelled conflict                                                   | nothing of its own; a pending migration is toasted                                 |
-| Acting on a verdict throws         | the trigger returns to Play                                                                                                      | fails open: the game starts (bare relaunch)                                        |
+| Supplied by the path               | Big Picture's Play button                                                                                                        | Launch watcher                                                                     | Desktop Play button (dev build only)                                                |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Prompts (`LaunchPrompts`)          | `gamepadLaunchPrompts` (`frontend/src/shared/launchPrompts.ts`)                                                                  | chosen once per start (below)                                                      | `desktopLaunchPrompts` (`frontend/src/desktop/gameview/dialogs/desktopDialogs.tsx`) |
+| Tracking setup                     | `ensureTrackingConfiguredBigPicture` — an answer it cannot settle aborts and opens the Saves tab (`applyLaunchGateSetupOutcome`) | `ensureTrackingConfiguredSilently` — adopts a default silently and always proceeds | `ensureTrackingConfiguredSilently`, as the launch watcher's                         |
+| Toast for a sync that moved saves  | yes                                                                                                                              | no                                                                                 | yes                                                                                 |
+| A start that ends without a launch | the trigger returns to Play, or to Resolve Conflict after a cancelled conflict                                                   | nothing of its own; a pending migration is toasted                                 | the button returns to Play, or to Resolve Conflict after a cancelled conflict       |
+| Acting on a verdict throws         | the trigger returns to Play                                                                                                      | fails open: the game starts (bare relaunch)                                        | the button returns to Play                                                          |
 
 The watcher has no surface of its own, so `index.tsx` hands it a function rather than a set of prompts:
 `() => launchPromptsForThisStart(gamepadLaunchPrompts)` (`frontend/src/utils/launchPromptRouter.ts`), which it calls
@@ -2573,15 +2575,17 @@ it can also keep an app listed that has already exited: [Is the game running](#i
 
 ### Is the game running
 
-Six places in the panel ask whether a game is running; the backend's save paths and the removed-game cleanup ask its own
-reading, below. Five ask one predicate in the session manager, `readGameRunning(appId, romId)`: the launch watcher's
-already-running guard, and the Play button's launch guard, its Resume overlay at mount, Resume and Stop. The sixth asks
-differently: the stranded panel's card, in Quick Access and on a game page (`StrandedPanelCard.tsx`), takes every app
-the store lists as running or starting whose status was read, leaves out one whose stop was observed since its last
-start (`isStopObserved`, the session manager's stop record), with no ROM and so without rule 1, and lets its own last
-lifetime notification per app answer first, to tell whether ANY game runs. At the two launch guards a wrong "running"
-skips the whole launch gate — the migration block, the starting source, tracking setup, the core-change confirmation,
-the offline drift check, the pre-launch sync and conflict resolution.
+Several places in the panel ask whether a game is running; the backend's save paths and the removed-game cleanup ask its
+own reading, below. All but one ask one predicate in the session manager, `readGameRunning(appId, romId)`: the launch
+watcher's already-running guard; on each Play button — Big Picture's, and in the desktop dev build the desktop client's
+— its launch guard, its Resume overlay as it is drawn and Resume; and Stop (`executeStopRunningGame`,
+`frontend/src/utils/runningGame.ts`), which both buttons call. The one left asks differently: the stranded panel's card,
+in Quick Access and on a game page (`StrandedPanelCard.tsx`), takes every app the store lists as running or starting
+whose status was read, leaves out one whose stop was observed since its last start (`isStopObserved`, the session
+manager's stop record), with no ROM and so without rule 1, and lets its own last lifetime notification per app answer
+first, to tell whether ANY game runs. At the three launch guards a wrong "running" skips the whole launch gate — the
+migration block, the starting source, tracking setup, the core-change confirmation, the offline drift check, the
+pre-launch sync and conflict resolution.
 
 1. **An active session answers "running"**, whatever the store says: the store has been measured reporting nothing with
    the game still up ([Surviving a JS-context rebuild mid-session](#surviving-a-js-context-rebuild-mid-session)).
@@ -2705,11 +2709,17 @@ Detection is **reactive, not polled**: the overlay is seeded synchronously at mo
 (the interceptor and the `handlePlay` guard) stay in place as **backstops** for the render→click race, where the session
 begins between the button rendering Play and the user pressing it; they ask the same predicate.
 
+In the desktop dev build, the desktop client's Play button (`frontend/src/desktop/gameview/PlayButton.tsx`) shows
+**RESUME** too (`usePlayLaunch`).
+
 #### Stop Game
 
 Beside Resume sits a chevron whose menu holds one destructive action: **Stop Game**. It confirms first (one line: any
 progress since the last in-game save may be lost — Tender promises nothing about the save, because it cannot), then
 calls the `stop_running_game(rom_id)` backend endpoint.
+
+In the desktop dev build, the desktop client's Play button has a Stop button beside RESUME in place of the chevron, and
+asks the same question in a desktop dialog (`DesktopStopGameDialog`).
 
 **Why Tender ends the game itself.** In Gaming Mode, Exit Game in Steam's overlay ends these games. In Desktop Mode the
 emulator runs inside Steam's process tree as well — `reaper`, then `tender-rom-launcher`, then `bwrap`, then the
