@@ -225,7 +225,10 @@ class TestClassifyError:
     def test_an_acknowledgement_romm_did_not_take_is_romms_answer_not_an_unreachable_server(self):
         error = RommAcknowledgementNotTaken(100)
 
-        assert classify_error(error) == ("server_error", "RomM did not record this save as synced on this device")
+        assert classify_error(error) == (
+            "server_error",
+            "saved on this device, but RomM did not record it yet \u2014 the next sync will",
+        )
         assert romm_error_log_level(error) == logging.WARNING
 
     def test_not_found_error(self):
