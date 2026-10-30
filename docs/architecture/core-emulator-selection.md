@@ -448,7 +448,7 @@ game kept as a `<game>.ps3` folder — and an entry that starts it says what the
 establish, where it stopped short (D40). An entry Tender cannot start yet says so on its row and gets no "can start it"
 under it; every other line of the resolver's stays (D42). The menu's answer never moves the pick; a pick of an entry
 that cannot start the game is the user's, and Play is then off with the verdict's sentence — the resolver's refusal of
-the file where it states one, before Tender's own "Tender cannot start <entry> yet." (D42,
+the file where it states one, before Tender's own "Tender cannot start _entry_ yet." (D42,
 `frontend/src/utils/emulatorStart.ts::startRefusal`). What a game's own entry answers, and what each answer does to a
 start, is [Launch-target validation](backend-architecture.md#launch-target-validation).
 
