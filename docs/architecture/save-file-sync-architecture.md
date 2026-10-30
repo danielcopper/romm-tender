@@ -1367,14 +1367,21 @@ endpoint calls. The façade delegates to `SyncEngine.resolve_sync_conflict`, who
    - `use_server` → `_resolve_conflict_use_server` downloads the picked save, writes it to the local path and
      acknowledges it once it is in place
      ([A download is acknowledged once placed, never marked at the GET](#a-download-is-acknowledged-once-placed-never-marked-at-the-get)).
+     Where the file is in place but RomM did not take the acknowledgement, the resolution answers success all the same,
+     with a warning logged and nothing recorded for the file: the choice is carried out on this device, and the next
+     sync adopts and acknowledges the file ([#2664](https://github.com/danielcopper/romm-tender/issues/2664) D7). Kept
+     open with the error, the dialog would offer Keep Local, which would claim to keep and upload a local save the
+     device no longer holds. The file counts as in place when it hashes to the picked save's `content_hash`; a save
+     without one answers the error.
 
 The modal only accepts `keep_local` or `use_server`; `cancel` never reaches the backend. A wrong action string is
 refused before the server is asked anything.
 
 Before it lists, the resolution takes its device id from `SyncEngine.live_device_id` and refuses as it does
 (`device_not_registered` or `server_unreachable`). A RomM error from fetching the list, from the transfer or from an
-acknowledgement answers `classify_error`'s reason and message. An `OSError` on the local side — a local save missing at
-the canonical path among them — refuses with `resolve_failed`. Anything else is a transport error.
+acknowledgement answers `classify_error`'s reason and message — but for Use Server's acknowledgement once its file is in
+place, above. An `OSError` on the local side — a local save missing at the canonical path among them — refuses with
+`resolve_failed`. Anything else is a transport error.
 
 ### Why no defer state
 
@@ -1799,9 +1806,10 @@ An acknowledgement that fails — a RomM error, a first answer that names other 
 this device not current (`RommAcknowledgementNotTaken`, which `classify_error` answers `server_error`) — raises with the
 file in place, its backup kept and nothing recorded ([#2184](https://github.com/danielcopper/romm-tender/issues/2184)
 D8): the sync reports the file as an error, a slot switch counts it among the downloads that failed
-(`switch_incomplete`), and Use Server answers that error. The next sync finds the file identical to a head this device
-is not current on, and adopts and acknowledges it (rows 11a and 12a); where another client replaced the head meanwhile,
-it decides against that newer head as any sync does.
+(`switch_incomplete`), and Use Server counts as done
+([resolve_sync_conflict endpoint](#resolve_sync_conflict-endpoint)). The next sync finds the file identical to a head
+this device is not current on, and adopts and acknowledges it (rows 11a and 12a); where another client replaced the head
+meanwhile, it decides against that newer head as any sync does.
 
 `download_save(save_id, dest_path)` names no device: it fetches a server copy to compare
 (`SaveTransfer.fetch_server_copy`) and records nothing.

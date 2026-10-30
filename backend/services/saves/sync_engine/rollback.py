@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any
 from domain.iso_time import parse_iso_to_epoch
 from domain.save_path import sanitize_save_filename
 from domain.save_slot import filter_saves_to_slot
-from lib.errors import DeviceWriteError, NamedRefused, NotInstalled, Refused
+from lib.errors import DeviceWriteError, NamedRefused, NotInstalled, Refused, RommApiError
 from services.saves._helpers import local_save_target
 from services.saves._refusals import shape_refusal
 from services.saves._save_state import read_save_state_or_new, write_save_state
@@ -116,8 +116,10 @@ class RollbackOrchestrator:
 
         Raises its refusals, ``SyncEngine.live_device_id``'s among them, taken
         before the server's saves are listed; a RomM error from listing them,
-        from the transfer or from acknowledging an adopt propagates, and an
-        ``OSError`` from the local side refuses with ``resolve_failed``.
+        from the transfer or from acknowledging an adopt propagates — but for
+        Use Server's download once its file is in place, which answers success
+        (:meth:`_resolve_conflict_use_server`) — and an ``OSError`` from the
+        local side refuses with ``resolve_failed``.
         """
         rom_id = int(rom_id)
 
@@ -248,10 +250,36 @@ class RollbackOrchestrator:
         path RetroArch reads. Drives state-key consistency too: the baseline
         is recorded under the same target name the file lands at. Mutates
         *save_state* in memory; ``resolve`` owns the write UoW.
+
+        A RomM error once the file is in place — its acknowledgement was not
+        taken — is logged as a warning and the choice counts as carried out,
+        with nothing recorded for the file, so the next sync adopts and
+        acknowledges it (#2664 D7). The file counts as in place when it hashes
+        to *server*'s ``content_hash``; without one the error propagates.
         """
         target = local_save_target(server, rom_name, known_names=save_names)
         default_slot = resolve_default_slot(self._settings)
-        self._transfer.download_save_file(server, saves_dir, target, save_state, device_id, system, default_slot)
+        try:
+            self._transfer.download_save_file(server, saves_dir, target, save_state, device_id, system, default_slot)
+        except RommApiError as e:
+            if not self._holds_server_save(os.path.join(saves_dir, target), server):
+                raise
+            self._logger.warning(
+                "resolve_sync_conflict: %s is the server save now, but RomM did not take its acknowledgement (%s);"
+                " the next sync adopts it",
+                target,
+                e,
+            )
+
+    def _holds_server_save(self, local_path: str, server: dict[str, Any]) -> bool:
+        """Whether *local_path* holds *server*'s bytes, by its ``content_hash``; ``False`` where that cannot be told."""
+        server_hash = server.get("content_hash")
+        if not server_hash or not self._save_file_store.is_file(local_path):
+            return False
+        try:
+            return self._save_file_store.content_hash(local_path) == server_hash
+        except OSError:
+            return False
 
     def _resolve_conflict_keep_local(
         self,
