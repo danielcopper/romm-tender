@@ -196,7 +196,8 @@ class SaveCopyService:
         the (unfiltered) server list:
 
         1. Download the chosen save's content onto the canonical local file
-           (backs the current local file up first, #965). Where this device
+           (backs the current local file up first, #965), without acknowledging
+           it: the POST below records this device on RomM. Where this device
            cannot write it, the copy is ``copy_failed``; a RomM error raises on.
         2. Make the target the ROM's active/confirmed slot
            (:meth:`RomSaveSyncState.confirm_slot`) — the upload resolves its slot
@@ -225,7 +226,7 @@ class SaveCopyService:
         # ``.romm-backup`` first, so nothing that lives only on disk is lost.
         try:
             self._save_transfer.download_save_file(
-                source_save, saves_dir, canonical, save_state, device_id, system, default_slot
+                source_save, saves_dir, canonical, save_state, device_id, system, default_slot, acknowledge=False
             )
         except OSError as e:
             self._logger.error(

@@ -230,8 +230,10 @@ class VersionsService:
 
         1. Download id=save_id content → overwrite local file.
            :meth:`SaveTransfer.download_save_file` updates ``tracked_save_id`` /
-           ``last_sync_hash`` to point at the target version locally. Where
-           this device cannot write it, the switch is ``write_failed``.
+           ``last_sync_hash`` to point at the target version locally, and does
+           not acknowledge the download: the PUT below records this device on
+           RomM. Where this device cannot write it, the switch is
+           ``write_failed``.
         2. PUT id=save_id with the same content. RomM bumps
            ``save.updated_at`` to NOW (the ``onupdate=utc_now`` hook) and
            upserts our DeviceSaveSync row (``synced_at = updated_at``), so
@@ -265,7 +267,7 @@ class VersionsService:
 
         try:
             self._save_transfer.download_save_file(
-                target_save, saves_dir, target_filename, save_state, device_id, system, default_slot
+                target_save, saves_dir, target_filename, save_state, device_id, system, default_slot, acknowledge=False
             )
         except OSError as e:
             self._logger.error(

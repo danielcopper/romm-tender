@@ -974,6 +974,26 @@ class TestRollbackToVersion:
         assert save_path.read_bytes() == b"current bytes"
 
     @pytest.mark.asyncio
+    async def test_the_restore_s_download_sends_no_acknowledgement(self, tmp_path):
+        """#2664 D2: the PUT right after records this device on RomM, so the download is not acknowledged."""
+        svc, fake = make_service(tmp_path)
+        _create_save(tmp_path)
+        local_hash = _file_md5(str(tmp_path / "saves" / "gba" / "pokemon.srm"))
+        self._setup_state(svc, tmp_path, tracked_id=100, last_sync_hash=local_hash)
+        fake.saves[100] = self._tracked_save(100)
+        fake.saves[50] = _server_save(save_id=50, rom_id=42, slot="default", updated_at="2026-02-01T10:00:00Z")
+
+        result = await svc.rollback_to_version(42, "default", 50)
+
+        assert result["status"] == "ok"
+        steps = [
+            (c[0], c[1][0], c[2].get("optimistic"))
+            for c in fake.call_log
+            if c[0] in ("download_save_content", "confirm_download", "upload_save")
+        ]
+        assert steps[:2] == [("download_save_content", 50, False), ("upload_save", 42, None)]
+
+    @pytest.mark.asyncio
     async def test_rollback_ignores_confirm_download_failure(self, tmp_path):
         """confirm_download failure is non-fatal — rollback still reports ok and updates state.
 

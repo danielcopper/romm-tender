@@ -30,7 +30,9 @@ from services.saves.slots.switching import (
 )
 from tests.services.saves._helpers import (
     _create_save,
+    _enable_sync_with_device,
     _fail_renames_from_call,
+    _fail_save_backups,
     _file_md5,
     _get_save_state,
     _install_rom,
@@ -2392,6 +2394,72 @@ class TestSwitchSlot:
         status = result["save_status"]
         surfaced_server_ids = [f.get("server_save_id") for f in status["files"]]
         assert 77 not in surfaced_server_ids
+
+
+class TestASwitchMarksThisDeviceOnlyOnceItPlaced:
+    """#2664 D1/D3: a slot switch downloads without RomM's mark and acknowledges only a placed file."""
+
+    _HEAD = b"desktop head from device B"
+
+    def _seed_a_switch(self, svc, fake, tmp_path):
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        save_path = _create_save(tmp_path, content=b"default slot save")
+        _seed_save_state(svc, 42, TestSwitchSlot()._synced_state(_file_md5(str(save_path))))
+        fake.seed_foreign_save(42, save_id=200, slot="desktop", updated_at="2026-03-01T00:00:00Z", content=self._HEAD)
+        fake.saves[200]["content_hash"] = hashlib.md5(self._HEAD).hexdigest()
+        return save_path
+
+    @pytest.mark.asyncio
+    async def test_a_download_it_could_not_place_leaves_romm_s_record_and_the_next_sync_downloads_the_head(
+        self, tmp_path, monkeypatch
+    ):
+        svc, fake = make_service(tmp_path)
+        save_path = self._seed_a_switch(svc, fake, tmp_path)
+        record_before = dict(fake._device_sync_ledger)
+        _fail_save_backups(svc, monkeypatch)
+
+        result = await svc.switch_slot(42, "desktop")
+
+        assert isinstance(result, SlotSwitchIncomplete)
+        assert [c[2]["optimistic"] for c in fake.call_log if c[0] == "download_save_content"] == [False]
+        assert not any(c[0] == "confirm_download" for c in fake.call_log)
+        assert fake._device_sync_ledger == record_before
+        assert save_path.read_bytes() == b"default slot save"
+
+        monkeypatch.undo()
+        synced = await svc.sync_rom_saves(42)
+
+        assert synced["success"] is True
+        assert save_path.read_bytes() == self._HEAD
+        assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == 200
+
+    @pytest.mark.asyncio
+    async def test_a_placed_file_whose_acknowledgement_failed_is_reported_and_adopted_by_the_next_sync(
+        self, tmp_path, monkeypatch
+    ):
+        svc, fake = make_service(tmp_path)
+        save_path = self._seed_a_switch(svc, fake, tmp_path)
+
+        def refused_confirm(_save_id: int, _device_id: str) -> dict[str, Any]:
+            raise RommApiError("acknowledgement refused")
+
+        monkeypatch.setattr(fake, "confirm_download", refused_confirm)
+
+        result = await svc.switch_slot(42, "desktop")
+
+        assert isinstance(result, SlotSwitchIncomplete)
+        assert save_path.read_bytes() == self._HEAD
+        assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == 100
+
+        monkeypatch.undo()
+        fake.call_log.clear()
+        synced = await svc.sync_rom_saves(42)
+
+        assert synced["conflicts"] == []
+        assert not any(c[0] in ("download_save_content", "upload_save") for c in fake.call_log)
+        assert [c[1] for c in fake.call_log if c[0] == "confirm_download"] == [(200, "device-1")]
+        assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == 200
 
 
 class TestASwitchWhoseBackupFails:

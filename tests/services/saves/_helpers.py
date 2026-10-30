@@ -418,3 +418,12 @@ def _fail_renames_from_call(svc, monkeypatch, failing_call: int) -> None:
         original(src, dst)
 
     monkeypatch.setattr(store, "rename", rename)
+
+
+def _fail_save_backups(svc, monkeypatch) -> None:
+    """Make every save backup raise ``PermissionError``: a download is never put in place and the local file stays."""
+
+    def back_up_save_file(*_args: object, **_kwargs: object) -> bool:
+        raise PermissionError(".romm-backup is read-only")
+
+    monkeypatch.setattr(svc._save_backup, "back_up_save_file", back_up_save_file)

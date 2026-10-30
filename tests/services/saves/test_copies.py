@@ -186,6 +186,27 @@ class TestCopySaveToSlotHappyPaths:
         assert set(fake.saves) - before_ids
 
 
+class TestTheCopysDownloadIsNotAcknowledged:
+    """#2664 D2: the copy's own POST records this device on RomM, so its download sends no acknowledgement."""
+
+    @pytest.mark.asyncio
+    async def test_the_download_of_the_source_save_sends_no_acknowledgement(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _create_save(tmp_path)
+        local_hash = _file_md5(str(tmp_path / "saves" / "gba" / "pokemon.srm"))
+        _setup_configured(svc, tmp_path, active_slot="autosave", tracked_id=100, last_sync_hash=local_hash)
+        fake.saves[100] = _tracked_save(100, slot="autosave")
+        fake.saves[10] = _server_save(save_id=10, rom_id=42, slot=None, updated_at="2026-02-01T10:00:00Z")
+        fake.set_server_save_content(10, b"legacy-save-bytes")
+
+        result = await svc.copy_save_to_slot(42, 10, TARGET)
+
+        assert result == {"status": "ok"}
+        downloads = [c for c in fake.call_log if c[0] == "download_save_content"]
+        assert [(c[1][0], c[2]["optimistic"]) for c in downloads] == [(10, False)]
+        assert not any(c[0] == "confirm_download" and c[1][0] == 10 for c in fake.call_log)
+
+
 class TestAnUploadThatFailsAfterTheDownload:
     """What the next sync does with a copy whose upload failed after the download."""
 

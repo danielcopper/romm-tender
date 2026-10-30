@@ -52,6 +52,7 @@ from tests.services.saves._helpers import (
     _create_save,
     _do_sync,
     _enable_sync_with_device,
+    _fail_save_backups,
     _get_device_id,
     _get_save_state,
     _install_rom,
@@ -2123,6 +2124,86 @@ class TestTheSyncBeforeAStartAcknowledgesOnlyWhatItPlaced:
         assert not any(c[0] == "download_save_content" for c in fake.call_log)
         assert [c[1] for c in fake.call_log if c[0] == "confirm_download"] == [(100, "test-device")]
         assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == 100
+
+
+class TestTheSyncAfterAGameMarksThisDeviceOnlyOnceItPlaced:
+    """#2664 D1/D3: the sync after a game downloads without RomM's mark and acknowledges only a placed file."""
+
+    _NEWER = b"newer from device B"
+
+    def _seed_a_newer_head(self, svc, fake, tmp_path) -> dict[str, Any]:
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        save_path = _create_save(tmp_path, content=b"last synced")
+        local_hash = hashlib.md5(b"last synced").hexdigest()
+        _seed_save_state_dict(
+            svc,
+            42,
+            {
+                "active_slot": "default",
+                "slot_confirmed": True,
+                "files": {
+                    "pokemon.srm": {
+                        "last_sync_hash": local_hash,
+                        "last_sync_server_hash": local_hash,
+                        "tracked_save_id": 90,
+                        "last_sync_server_save_id": 90,
+                    }
+                },
+            },
+        )
+        head = fake.seed_foreign_save(42, save_id=101, updated_at="2026-03-01T00:00:00Z", content=self._NEWER)
+        fake.saves[101]["content_hash"] = hashlib.md5(self._NEWER).hexdigest()
+        return {"head": head, "save_path": save_path}
+
+    @pytest.mark.asyncio
+    async def test_a_download_it_could_not_place_leaves_romm_s_record_and_the_next_sync_downloads_the_head(
+        self, tmp_path, monkeypatch
+    ):
+        svc, fake = make_service(tmp_path)
+        seeded = self._seed_a_newer_head(svc, fake, tmp_path)
+        record_before = dict(fake._device_sync_ledger)
+        _fail_save_backups(svc, monkeypatch)
+
+        first = await svc.post_exit_sync(42)
+
+        assert first["success"] is False
+        assert [c[2]["optimistic"] for c in fake.call_log if c[0] == "download_save_content"] == [False]
+        assert not any(c[0] == "confirm_download" for c in fake.call_log)
+        assert fake._device_sync_ledger == record_before
+        assert seeded["save_path"].read_bytes() == b"last synced"
+
+        monkeypatch.undo()
+        second = await svc.sync_rom_saves(42)
+
+        assert second["success"] is True
+        assert seeded["save_path"].read_bytes() == self._NEWER
+        assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == 101
+
+    @pytest.mark.asyncio
+    async def test_a_placed_file_whose_acknowledgement_failed_is_adopted_by_the_next_sync(self, tmp_path, monkeypatch):
+        svc, fake = make_service(tmp_path)
+        seeded = self._seed_a_newer_head(svc, fake, tmp_path)
+
+        def refused_confirm(_save_id: int, _device_id: str) -> dict[str, Any]:
+            raise RommApiError("acknowledgement refused")
+
+        monkeypatch.setattr(fake, "confirm_download", refused_confirm)
+        first = await svc.post_exit_sync(42)
+
+        assert first["success"] is False
+        assert seeded["save_path"].read_bytes() == self._NEWER
+        assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == 90
+
+        monkeypatch.undo()
+        fake.call_log.clear()
+        second = await svc.sync_rom_saves(42)
+
+        assert second["success"] is True
+        assert second["conflicts"] == []
+        assert not any(c[0] == "download_save_content" for c in fake.call_log)
+        assert [c[1] for c in fake.call_log if c[0] == "confirm_download"] == [(101, "device-1")]
+        assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == 101
 
 
 class TestRunRomSyncSession:

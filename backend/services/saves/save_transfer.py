@@ -135,6 +135,7 @@ class SaveTransfer:
         default_slot: str | None = None,
         *,
         stop: SyncStop | None = None,
+        acknowledge: bool = True,
     ) -> None:
         """Download *server_save* onto *filename* in *saves_dir*, backing up the file it replaces.
 
@@ -145,14 +146,16 @@ class SaveTransfer:
         failure. Then records the sync boundary and *filename*'s baseline on
         *save_state*, in memory; the caller owns the write Unit of Work.
 
-        A download that can be stopped (*stop* given) streams without RomM's
-        optimistic sync mark, which would record this device current on the
-        save at the GET, and acknowledges it (``confirm_download``, under the
-        retry strategy) only once the file is in place: a stop asked by the time
-        the content is complete raises :class:`SyncStopped` with nothing moved,
-        nothing recorded and RomM's record of this device unchanged. An
-        acknowledgement that fails raises its own failure with the file in
-        place, its backup kept and nothing recorded.
+        The download streams without RomM's optimistic sync mark, which would
+        record this device current on the save at the GET, so a file that is
+        not placed leaves RomM's record of this device unchanged. Once the file
+        is in place it is acknowledged (``confirm_download``, under the retry
+        strategy) unless *acknowledge* is false — for a caller whose own upload
+        right after records this device on RomM. An acknowledgement that fails
+        raises its own failure with the file in place, its backup kept and
+        nothing recorded. A stop (*stop* given) asked by the time the content is
+        complete raises :class:`SyncStopped` with nothing moved and nothing
+        recorded.
         """
         local_path = os.path.join(saves_dir, filename)
         self._save_file_store.make_dirs(saves_dir)
@@ -164,7 +167,7 @@ class SaveTransfer:
                     server_save["id"],
                     tmp_path,
                     device_id=device_id,
-                    optimistic=stop is None,
+                    optimistic=False,
                 ),
             )
             if stop is not None and stop.stops_here():
@@ -175,7 +178,7 @@ class SaveTransfer:
             with contextlib.suppress(OSError):
                 self._save_file_store.remove_file(tmp_path)
             raise
-        if stop is not None:
+        if acknowledge:
             self._retry.with_retry(lambda: self._romm_api.confirm_download(int(server_save["id"]), device_id))
         self._record_transferred_file(save_state, filename, server_save, local_path, system, default_slot=default_slot)
         self._log_debug(f"Downloaded save: {filename}")

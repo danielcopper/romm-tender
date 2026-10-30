@@ -285,9 +285,9 @@ class TestConfirmDownloadAfterSync:
     it and the upload's own acknowledgement skips the redundant round-trip (#1458). When
     a content-dedup answer still needs the ack is in
     docs/architecture/save-file-sync-architecture.md, "POST and PUT both upsert
-    the calling device's sync row". For downloads, the
-    optimistic query-param on ``download_save_content`` upserts the row
-    server-side before streaming.
+    the calling device's sync row". A download streams without RomM's
+    optimistic mark and writes the row with ``confirm_download`` once the file
+    is in place.
     """
 
     def test_upload_save_file_post_skips_confirm_when_response_current(self, tmp_path):
@@ -384,17 +384,22 @@ class TestConfirmDownloadAfterSync:
         file_state = state.files["pokemon.srm"]
         assert file_state.tracked_save_id is not None
 
-    def test_download_save_file_passes_device_id_and_optimistic(self, tmp_path):
-        """download_save_content must pass device_id + optimistic=True so the
-        server upserts our DeviceSaveSync row before streaming. This makes a
-        follow-up confirm_download unnecessary for the download path.
-        """
+    def test_download_save_file_streams_unmarked_and_acknowledges_once_placed(self, tmp_path, monkeypatch):
+        """download_save_content names the device with optimistic=False, and
+        confirm_download follows once the file is in place."""
         svc, fake = make_service(tmp_path)
         _set_device_id(svc, "dev-1")
         saves_dir = str(tmp_path / "saves" / "gba")
         os.makedirs(saves_dir, exist_ok=True)
         server_save = _server_save(save_id=99)
+        placed_when_acknowledged: list[bool] = []
+        confirm = fake.confirm_download
 
+        def recording_confirm(save_id: int, device_id: str) -> dict[str, Any]:
+            placed_when_acknowledged.append(os.path.exists(os.path.join(saves_dir, "pokemon.srm")))
+            return confirm(save_id, device_id)
+
+        monkeypatch.setattr(fake, "confirm_download", recording_confirm)
         svc._save_transfer.download_save_file(
             server_save, saves_dir, "pokemon.srm", RomSaveSyncState(), LiveDeviceId("dev-1"), "gba"
         )
@@ -403,7 +408,9 @@ class TestConfirmDownloadAfterSync:
         assert len(dl_calls) == 1
         kwargs = dl_calls[0][2]
         assert kwargs["device_id"] == "dev-1"
-        assert kwargs["optimistic"] is True
+        assert kwargs["optimistic"] is False
+        assert [c[1] for c in fake.call_log if c[0] == "confirm_download"] == [(99, "dev-1")]
+        assert placed_when_acknowledged == [True]
 
 
 class TestTheUploadsOwnAcknowledgement:
