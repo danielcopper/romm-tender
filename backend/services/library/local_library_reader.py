@@ -62,7 +62,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.platform_names import decode_platform_names
+from domain.platform_names import PLATFORM_NAMES_KEY, decode_platform_names
 from domain.platform_skip import restamp_due
 from domain.platform_sync_state import stamp_for_skip
 from domain.sibling_resolution import reachable_rom_ids
@@ -73,12 +73,6 @@ if TYPE_CHECKING:
 
     from domain.work_unit import WorkUnit
     from services.protocols import UnitOfWorkFactory
-
-# kv_config key for the offline ``platform_slug → name`` cache the
-# library sync refreshes every run. Read here so the preview names a delisted
-# platform's Steam collection as the apply does. Mirrors
-# ``library.reporter._PLATFORM_NAMES_KEY``.
-_PLATFORM_NAMES_KEY = "platform_names"
 
 
 @dataclass(frozen=True)
@@ -261,7 +255,7 @@ class LocalLibraryReader:
         One short read UoW.
         """
         with self._uow_factory() as uow:
-            kept = decode_platform_names(uow.kv_config.get(_PLATFORM_NAMES_KEY))
+            kept = decode_platform_names(uow.kv_config.get(PLATFORM_NAMES_KEY))
         return {slug: kept[slug] for slug in platform_slugs if slug in kept}
 
     def do_scan_stale_roms(self, synced_rom_ids: set[int], synced_app_ids: set[int]) -> list[StaleRow]:

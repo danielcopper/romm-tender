@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.platform_names import decode_platform_names
+from domain.platform_names import PLATFORM_NAMES_KEY, decode_platform_names
 
 if TYPE_CHECKING:
     import asyncio
@@ -36,11 +36,6 @@ if TYPE_CHECKING:
         SteamConfigStore,
         UnitOfWorkFactory,
     )
-
-# kv_config key for the offline ``platform_slug → name`` cache the
-# library sync refreshes every run. Read here so a platform's removal can find
-# the platform's Steam collection by the name the sync gave it. Mirrors ``library.reporter._PLATFORM_NAMES_KEY``.
-_PLATFORM_NAMES_KEY = "platform_names"
 
 # The claims a removal holds on the prune conflicts: each removal endpoint's
 # operation, and the lease a removal set holds from its call to its report.
@@ -178,7 +173,7 @@ class ShortcutRemovalService:
 
     def _read_platform_name_cache(self, uow) -> dict[str, str]:
         """Decode the ``platform_slug → name`` cache, ``{}`` when absent/corrupt."""
-        return decode_platform_names(uow.kv_config.get(_PLATFORM_NAMES_KEY))
+        return decode_platform_names(uow.kv_config.get(PLATFORM_NAMES_KEY))
 
     # ── Removal results ────────────────────────────────────────────────────
 

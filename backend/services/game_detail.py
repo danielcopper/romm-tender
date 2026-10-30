@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, cast
 from domain.achievements import AchievementSummary
 from domain.bios_status import BIOS_LABEL_UNKNOWN, BIOS_LEVEL_UNKNOWN
 from domain.emulator_sources import RETRODECK
-from domain.platform_names import decode_platform_names
+from domain.platform_names import PLATFORM_NAMES_KEY, decode_platform_names
 from domain.retrodeck_folders import FolderRefused
 from domain.save_status import compute_save_sync_display
 from lib.path_safety import PathTraversalError, safe_join
@@ -42,12 +42,6 @@ if TYPE_CHECKING:
         RetroDeckFolders,
         UnitOfWorkFactory,
     )
-
-# kv_config key for the offline ``platform_slug → name`` cache the library
-# sync refreshes every run. Read here so the game-detail panel shows "Super
-# Nintendo" rather than the bare "snes" slug. Mirrors
-# ``library.reporter._PLATFORM_NAMES_KEY``.
-_PLATFORM_NAMES_KEY = "platform_names"
 
 METADATA_TTL_SEC = 7 * 24 * 3600  # 7 days
 ACHIEVEMENT_TTL_SEC = 3600  # 1 hour
@@ -256,7 +250,7 @@ class GameDetailService:
             install = uow.rom_installs.get(rom_id)
             save_state = uow.rom_save_sync_states.get(rom_id)
             metadata_raw = uow.rom_metadata.get(rom_id)
-            platform_names = decode_platform_names(uow.kv_config.get(_PLATFORM_NAMES_KEY))
+            platform_names = decode_platform_names(uow.kv_config.get(PLATFORM_NAMES_KEY))
 
         rom_id_str = str(rom_id)
         platform_slug = rom.platform_slug

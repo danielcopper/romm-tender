@@ -29,7 +29,7 @@ from domain.artwork_slot_outcome import binding_forgets_cover_record
 from domain.collection_label import steam_collection_key
 from domain.collection_name import fold_collection_name
 from domain.fetch_generation import gone_from_romm_ids
-from domain.platform_names import decode_platform_names
+from domain.platform_names import PLATFORM_NAMES_KEY, decode_platform_names
 from domain.rom import DeliveryRoute, GoneEvidence, Rom
 from domain.rom_file import has_file_on_romm
 from domain.rom_metadata_mapping import build_rom_metadata
@@ -60,12 +60,6 @@ if TYPE_CHECKING:
 
     EmitProgressFn = Callable[..., Awaitable[None]]
 
-
-# kv_config key for the offline ``platform_slug → name`` cache, refreshed on
-# every sync from the run's platform listing, plus the name already kept for each
-# platform outside it that a bound game is still on. Its readers are listed in
-# ``domain/platform_names.py``'s module docstring.
-_PLATFORM_NAMES_KEY = "platform_names"
 
 # How many of the newest sync runs ``get_sync_runs`` answers with — the run
 # list is a recent-history panel, not an archive, and its repository offers no
@@ -340,7 +334,7 @@ class SyncReporter:
             self._write_gone_marks(uow, gone_marks)
 
             names = self._names_with_bound_platforms_kept(uow, platform_names)
-            uow.kv_config.set(_PLATFORM_NAMES_KEY, json.dumps(names))
+            uow.kv_config.set(PLATFORM_NAMES_KEY, json.dumps(names))
 
             return self._build_collection_app_ids(
                 uow,
@@ -372,7 +366,7 @@ class SyncReporter:
         remove the old one. This runs on every finalize, a stopped run's included,
         since each of them rewrites the cache.
         """
-        kept = decode_platform_names(uow.kv_config.get(_PLATFORM_NAMES_KEY))
+        kept = decode_platform_names(uow.kv_config.get(PLATFORM_NAMES_KEY))
         outside = {
             rom.platform_slug
             for rom in uow.roms.iter_all()
@@ -908,7 +902,7 @@ class SyncReporter:
 
     def _read_platform_name_cache(self, uow) -> dict[str, str]:
         """Decode the ``platform_slug → name`` cache, ``{}`` when absent/corrupt."""
-        return decode_platform_names(uow.kv_config.get(_PLATFORM_NAMES_KEY))
+        return decode_platform_names(uow.kv_config.get(PLATFORM_NAMES_KEY))
 
     def get_registry_platforms(self):
         """Return synced platforms from ``uow.roms`` (works offline, no RomM API call).

@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from domain.platform_names import decode_platform_names
+from domain.platform_names import PLATFORM_NAMES_KEY, decode_platform_names
 from domain.platform_system import (
     FOUND,
     PLATFORM_IDS_KEY,
@@ -34,8 +34,6 @@ if TYPE_CHECKING:
     from domain.emulator_sources import SourcesReading
     from domain.rom_install import RomInstall
     from services.protocols import DebugLogger, RommPlatformReader, SourcePlatformSystems, UnitOfWorkFactory
-
-_PLATFORM_NAMES_KEY = "platform_names"
 
 
 @dataclass(frozen=True)
@@ -125,7 +123,7 @@ class PlatformSystemService:
     def _ids_and_name(self, platform_slug: str, *, ask_romm: bool) -> tuple[PlatformIds, str]:
         with self._uow_factory() as uow:
             kept = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY))
-            names = decode_platform_names(uow.kv_config.get(_PLATFORM_NAMES_KEY))
+            names = decode_platform_names(uow.kv_config.get(PLATFORM_NAMES_KEY))
         if kept is not None and platform_slug in kept:
             ids = kept[platform_slug]
         elif ask_romm:

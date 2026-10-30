@@ -25,6 +25,11 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
+# Where the cache is kept in ``kv_config``. The sync rewrites it each run from the
+# run's platform listing, plus the name already kept for each platform outside it
+# that a bound game is still on.
+PLATFORM_NAMES_KEY = "platform_names"
+
 
 def decode_platform_names(raw: str | None) -> dict[str, str]:
     """Decode the cached ``platform_slug → name`` mapping.
