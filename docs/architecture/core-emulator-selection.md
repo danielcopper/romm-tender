@@ -433,12 +433,12 @@ names the pick that is gone. No consumer ever sees a bogus `.so`.
 The emulator menu on an installed game's page shows, for each entry, whether it can start the game and, where not, why
 ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D22, D29, D31). Each answer is the resolver's
 launchability verdict asked with that entry's label (`CoreService.get_emulator_launches`, read when the menu opens); the
-menu opens at once with every entry choosable, each waiting on a spinner until its answer lands, and an answer that
-lands after the page moved to another version, or after the menu closed, is dropped (`utils/emulatorLaunches.ts`). An
-entry the resolver could not establish to read the file's format says so — for a game kept as a `<game>.ps3` folder,
-every RPCS3 entry does until the resolver states which one refuses a directory. The menu's answer never moves the pick;
-a pick of an entry that cannot start the game is the user's, and Play is then off with the verdict's sentence. What a
-game's own entry answers, and what each answer does to a start, is
+menu opens at once with every entry choosable, each waiting on Play's throbber (`romm-throbber`) until its answer lands,
+and an answer that lands after the page moved to another version, or after the menu closed, is dropped
+(`utils/emulatorLaunches.ts`). An entry the resolver could not establish to read the file's format says so — for a game
+kept as a `<game>.ps3` folder, every RPCS3 entry does until the resolver states which one refuses a directory. The
+menu's answer never moves the pick; a pick of an entry that cannot start the game is the user's, and Play is then off
+with the verdict's sentence. What a game's own entry answers, and what each answer does to a start, is
 [Launch-target validation](backend-architecture.md#launch-target-validation).
 
 ## Application: baking `-e` into `launch_options`

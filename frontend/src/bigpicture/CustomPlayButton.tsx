@@ -22,7 +22,7 @@ import { useState, useEffect, useRef, useCallback, FC, ReactElement } from "reac
 import { addEventListener, removeEventListener, strandedAnswer } from "../api/host";
 import { showToast } from "../utils/toast";
 import { useStrandedAnswer } from "../utils/strandedPanelStore";
-import { Focusable, DialogButton, Menu, MenuItem, MenuSeparator, Spinner, showContextMenu } from "@decky/ui";
+import { Focusable, DialogButton, Menu, MenuItem, MenuSeparator, showContextMenu } from "@decky/ui";
 import { appActionButtonClasses, basicAppDetailsSectionStylerClasses } from "../utils/deckyUiInternals";
 import { hideNativePlaySection, showNativePlaySection } from "../utils/styleInjector";
 import { hasAnySaveConflict } from "../utils/saveStatus";
@@ -136,9 +136,6 @@ interface CustomPlayButtonProps {
    *  it starts, saying in a notification what stands in the way, or what went wrong with the start. */
   startCheckFailed?: boolean;
 }
-
-/** The size of the label beside it; why a spinner is sized at all is `LoadingRow.tsx`'s. */
-const START_CHECK_SPINNER_SIZE = 16;
 
 // S3776 is raised on the declaration line, so its NOSONAR must stay there. prettier-ignore stops
 // Prettier from relocating the trailing comment into the body (which would break the suppression).
@@ -1517,7 +1514,8 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
     );
   }
 
-  // state === "play", while the page's check runs: grey, disabled, spinning.
+  // state === "play", while the page's check runs: grey and disabled, with the
+  // throbber the other checking states show.
   if (startChecking) {
     return (
       <Focusable ref={containerRef} className={appActionButtonClasses?.PlayButtonContainer} style={btnContainerStyle}>
@@ -1537,8 +1535,8 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
           onFocus={scrollToTop}
           disabled
         >
-          <Spinner width={START_CHECK_SPINNER_SIZE} height={START_CHECK_SPINNER_SIZE} />
-          <span>Play</span>
+          <span className={`${appActionButtonClasses?.Throbber || ""} romm-throbber`.trim()} />
+          <span>Checking...</span>
         </DialogButton>
       </Focusable>
     );

@@ -12,7 +12,6 @@ vi.mock("@decky/ui", () => ({
     </button>
   ),
   MenuSeparator: () => <hr />,
-  Spinner: () => <span data-testid="spinner" />,
 }));
 
 vi.mock("../api/backend", () => ({
@@ -82,15 +81,15 @@ function row(container: HTMLElement, label: string): HTMLButtonElement {
 }
 
 describe("the emulator menu's answer per entry (#2195 D22, D31)", () => {
-  it("opens at once, every entry choosable and waiting on a spinner", () => {
+  it("opens at once, every entry choosable and waiting on Play's throbber", () => {
     const read = heldRead();
     const onPick = vi.fn();
     const { container } = render(
       <>{buildEmulatorMenu(config({ onPick, launches: askEntryLaunches(42, () => true, read.read) }))}</>,
     );
 
-    expect(row(container, SHORTCUT).querySelector('[data-testid="spinner"]')).not.toBeNull();
-    expect(row(container, DIRECTORY).querySelector('[data-testid="spinner"]')).not.toBeNull();
+    expect(row(container, SHORTCUT).querySelector(".romm-throbber")).not.toBeNull();
+    expect(row(container, DIRECTORY).querySelector(".romm-throbber")).not.toBeNull();
     row(container, DIRECTORY).click();
     expect(onPick).toHaveBeenCalledWith(DIRECTORY);
   });
@@ -106,7 +105,7 @@ describe("the emulator menu's answer per entry (#2195 D22, D31)", () => {
       launch(DIRECTORY, { format_unestablished: true }),
     ]);
 
-    expect(container.querySelector('[data-testid="spinner"]')).toBeNull();
+    expect(container.querySelector(".romm-throbber")).toBeNull();
     expect(row(container, SHORTCUT).textContent).toContain("cannot start .ps3 files");
     expect(row(container, DIRECTORY).textContent).toContain("whether it reads .ps3 is not established");
   });
@@ -147,7 +146,7 @@ describe("the emulator menu's answer per entry (#2195 D22, D31)", () => {
   it("shows no answer line at all on a menu that asks none", () => {
     const { container } = render(<>{buildEmulatorMenu(config())}</>);
 
-    expect(container.querySelector('[data-testid="spinner"]')).toBeNull();
+    expect(container.querySelector(".romm-throbber")).toBeNull();
     expect(row(container, SHORTCUT).textContent).toBe(`${SHORTCUT} (default) ✓`);
   });
 });

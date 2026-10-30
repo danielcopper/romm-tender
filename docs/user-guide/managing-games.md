@@ -646,11 +646,12 @@ nothing is said; otherwise the answer stands under the **Play** button:
   it starts was not read. **Play** stays on.
 
 Where **Play** is off, Steam's own **Play** on the game's shortcut is refused with the same words. While the page is
-still asking, **Play** is grey and shows a spinner. Where the question itself goes wrong — Tender's backend does not
-answer in time, or the connection to it is lost — a notification says what went wrong, and **Play** stays grey but can
-be pressed: the press asks again, and says what stands in the way if anything does. The emulator menu shows the same
-answer for each of its emulators: it opens at once, each emulator shows a spinner until its answer is in, and then says
-whether it can start the game and, where not, why. Every emulator stays choosable meanwhile.
+still asking, **Play** is grey and reads **Checking...** beside the same spinning circle "Checking saves..." shows.
+Where the question itself goes wrong — Tender's backend does not answer in time, or the connection to it is lost — a
+notification says what went wrong, and **Play** stays grey but can be pressed: the press asks again, and says what
+stands in the way if anything does. The emulator menu shows the same answer for each of its emulators: it opens at once,
+each emulator shows that spinning circle until its answer is in, and then says whether it can start the game and, where
+not, why. Every emulator stays choosable meanwhile.
 
 **Your download is kept.** The files stay on disk where the ROM would normally live, and **Uninstall** works as usual —
 because installing the package by hand in the emulator is exactly what you would do next. See

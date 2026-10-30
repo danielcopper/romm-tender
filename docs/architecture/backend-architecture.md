@@ -2002,14 +2002,15 @@ start go ahead leaves Play on, and its sentence, where it has one, stands under 
 step of its own for it: Tender's Play is never pressed where the page's read refuses the start.
 
 **While the page's check runs, and where it fails** (D32, D33). The core read is the page's check of whether the game
-can start, bounded at the local call limit. While it runs, Play is grey, disabled and spinning; once it answers, Play
-follows the answer. Where the read fails or gets no answer in time, a notification says what went wrong, nothing is said
-under Play, and Play is grey but can be pressed: a press asks again (`recheckStart`, the game page's store). Its answer
-is the page's check succeeding and is shown as one — where something stands in the way, Play turns to the cannot-start
-state with the sentence below it, a notification says it too, and nothing starts; where the start then throws, a
-notification says that; a start that succeeds is left alone. The state is `startCheck` on the game page's store
-(`frontend/src/utils/gameDetailStore.ts`), set back to checking whenever the page reads the game's core again: a load, a
-version switch, an emulator or a source switch.
+can start, bounded at the local call limit. While it runs, Play is grey and disabled and reads "Checking..." beside the
+throbber the other checking states show (`romm-throbber`, `frontend/src/bigpicture/CustomPlayButton.tsx`); once it
+answers, Play follows the answer. Where the read fails or gets no answer in time, a notification says what went wrong,
+nothing is said under Play, and Play is grey but can be pressed: a press asks again (`recheckStart`, the game page's
+store). Its answer is the page's check succeeding and is shown as one — where something stands in the way, Play turns to
+the cannot-start state with the sentence below it, a notification says it too, and nothing starts; where the start then
+throws, a notification says that; a start that succeeds is left alone. The state is `startCheck` on the game page's
+store (`frontend/src/utils/gameDetailStore.ts`), set back to checking whenever the page reads the game's core again: a
+load, a version switch, an emulator or a source switch.
 
 **A PS3 folder installed before its name came in is renamed once at start-up** (D27). What a PS3 folder is named, and
 why, is [Core and Emulator Selection](core-emulator-selection.md#folder-boot-launch-target)'s. `Ps3FolderNamingService`

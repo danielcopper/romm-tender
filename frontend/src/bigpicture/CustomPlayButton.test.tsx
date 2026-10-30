@@ -333,27 +333,27 @@ describe("CustomPlayButton — while the page checks whether the game can start 
     vi.mocked(getCachedGameDetail).mockReset();
   });
 
-  it("is grey, cannot be pressed and spins", async () => {
+  it("is grey, cannot be pressed and shows the throbber the other checking states show", async () => {
     mockCachedDetail({ rom_id: 42, installed: true });
-    const { findByText, getByTestId } = render(<CustomPlayButton appId={100} startChecking={true} />);
-    const play = (await findByText("Play")).closest("button")!;
+    const { findByText } = render(<CustomPlayButton appId={100} startChecking={true} />);
+    const play = (await findByText("Checking...")).closest("button")!;
 
     expect(play.disabled).toBe(true);
     expect(play.className).toContain("romm-start-checking");
-    expect(play.contains(getByTestId("spinner"))).toBe(true);
+    expect(play.querySelector(".romm-throbber")).not.toBeNull();
   });
 
   it("becomes Play once the check answered", async () => {
     mockCachedDetail({ rom_id: 42, installed: true });
-    const { findByText, rerender, queryByTestId } = render(<CustomPlayButton appId={100} startChecking={true} />);
-    await findByText("Play");
+    const { findByText, rerender, container } = render(<CustomPlayButton appId={100} startChecking={true} />);
+    await findByText("Checking...");
 
     rerender(<CustomPlayButton appId={100} startChecking={false} />);
     const play = (await findByText("Play")).closest("button")!;
 
     expect(play.disabled).toBe(false);
     expect(play.className).not.toContain("romm-start-checking");
-    expect(queryByTestId("spinner")).toBeNull();
+    expect(container.querySelector(".romm-throbber")).toBeNull();
   });
 });
 
@@ -2444,12 +2444,12 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
 
     it("Play is grey but can be pressed", async () => {
       mockCachedDetail();
-      const { findByText, queryByTestId } = render(<CustomPlayButton appId={100} startCheckFailed={true} />);
+      const { findByText, container } = render(<CustomPlayButton appId={100} startCheckFailed={true} />);
       const play = (await findByText("Play")).closest("button")!;
 
       expect(play.disabled).toBe(false);
       expect(play.className).toContain("romm-start-check-failed");
-      expect(queryByTestId("spinner")).toBeNull();
+      expect(container.querySelector(".romm-throbber")).toBeNull();
     });
 
     it("a press asks again, and says what stands in the way instead of starting", async () => {

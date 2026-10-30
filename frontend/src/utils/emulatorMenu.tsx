@@ -15,7 +15,7 @@
  */
 
 import { useSyncExternalStore, type FC, type ReactNode } from "react";
-import { Menu, MenuItem, MenuSeparator, Spinner } from "@decky/ui";
+import { Menu, MenuItem, MenuSeparator } from "@decky/ui";
 import type { AnsweringSource, EmulatorDataReason, EmulatorOption, PlatformSystemAnswer } from "../types";
 import { emulatorDataReasonSentence } from "./emulatorSourceWording";
 import { entryForLabel } from "./emulatorEntries";
@@ -76,10 +76,7 @@ export interface EmulatorMenuConfig {
   launches?: EntryLaunches | undefined;
 }
 
-/** The size of a line of menu text beside it; why a spinner is sized at all is `LoadingRow.tsx`'s. */
-const ENTRY_SPINNER_SIZE = 14;
-
-/** The line under an entry saying whether it can start the game: a spinner until the answer lands, then its words. */
+/** The line under an entry saying whether it can start the game: Play's throbber until the answer lands, then its words. */
 const EntryLaunchLine: FC<{ launches: EntryLaunches; label: string; source: AnsweringSource | null }> = ({
   launches,
   label,
@@ -89,7 +86,7 @@ const EntryLaunchLine: FC<{ launches: EntryLaunches; label: string; source: Answ
   if (launch === undefined) {
     return (
       <div>
-        <Spinner width={ENTRY_SPINNER_SIZE} height={ENTRY_SPINNER_SIZE} />
+        <span className="romm-throbber" style={{ width: "14px", height: "14px" }} />
       </div>
     );
   }
