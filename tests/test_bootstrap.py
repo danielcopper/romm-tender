@@ -85,6 +85,7 @@ from services.metadata import MetadataService
 from services.playtime import PlaytimeService
 from services.prune import PruneService
 from services.prune_leases import PruneLeaseService
+from services.ps3_folder_naming import Ps3FolderNamingService
 from services.saves import SaveService
 from services.shortcut_artwork import ShortcutArtworkService
 from services.shortcut_file import ShortcutFileService
@@ -823,9 +824,10 @@ class TestWireServices:
     def test_returns_expected_services(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        assert len(fields(result)) == 37
+        assert len(fields(result)) == 38
         assert all(getattr(result, field.name) is not None for field in fields(result))
         assert isinstance(result.prune_conflicts, PruneConflicts)
+        assert isinstance(result.ps3_folder_naming_service, Ps3FolderNamingService)
         assert isinstance(result.core_service, CoreService)
         assert isinstance(result.emulator_sources_service, EmulatorSourcesService)
         assert isinstance(result.tender_folder_service, TenderFolderService)
