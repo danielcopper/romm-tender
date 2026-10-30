@@ -2551,8 +2551,9 @@ class TestFinalizePerUnitRun:
 
     @pytest.mark.asyncio
     async def test_a_stale_removal_skips_a_missing_row_and_keeps_an_unbound_one_unbound(self, library, emit):
-        """A stale_rom_id with no row (missing) or already-unbound row is skipped
-        without error; the genuinely-bound stale rows keep their binding until the report."""
+        """A stale_rom_id with no row (missing) is skipped without error, an
+        already-unbound row stays unbound, and the genuinely-bound stale rows keep
+        their binding until the report."""
 
         uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="Kept")
@@ -2570,7 +2571,7 @@ class TestFinalizePerUnitRun:
         assert uow.committed is True
         with uow:
             # rom 2 was genuinely stale → still bound until the report; rom 5 stays
-            # unbound (skipped, no error); rom 99 has no row (skipped); rom 1 stays bound.
+            # unbound; rom 99 has no row (skipped, no error); rom 1 stays bound.
             assert uow.roms.get(2).shortcut_app_id == 1002
             assert uow.roms.get(5).shortcut_app_id is None
             assert uow.roms.get(1).shortcut_app_id == 1001

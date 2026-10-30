@@ -515,9 +515,9 @@ Format: **invariant** — tier — enforced by.
   offer "Resume Sync" on the strength of stamps that save the next run nothing. A raw reader moved behind the helper
   blinds removed-game discovery, the canaries a 404 round asks first, or the reachable count on every platform a removal
   touched, and for a platform whose sync stays off it stays blind, since no new complete fetch comes. A stale removal
-  that revoked on a processed platform would take the skip from the stamp that same run just wrote; it unbinds nothing
-  there today — a skipped platform rebuilds every bound row and a row missing from a platform the run read is kept — so
-  the cost would land with the first rule that does; one that skipped an unprocessed platform brings the
+  that revoked on a processed platform would take the skip from the stamp that same run just wrote; it removes no
+  shortcut there today — a skipped platform rebuilds every bound row and a row missing from a platform the run read is
+  kept — so the cost would land with the first rule that does; one that skipped an unprocessed platform brings the
   turned-off-and-back-on gap back. **What nothing checks**: a new skip-side reader calling `platform_sync_state.get` raw
   passes every test above, because each test pins one existing call site; the recovery snapshot's raw read has no test,
   so moving it behind the helper would drop a revoked stamp from a sealed bundle unnoticed; and `has_any`'s
@@ -645,16 +645,16 @@ Format: **invariant** — tier — enforced by.
   never over an appId the run bound, and never while Steam lists one of the group's shortcuts as running, read at the
   platform unit and again before the removal — with the preview counting the same removals unless a game starts or quits
   between the preview and the removal (#2645 D5, D6), and no platform whose rows still hold such a group is skipped. A
-  row whose shortcut either removes keeps its binding until the panel reports the shortcut gone from Steam, and
-  `report_sync_removals` unbinds it only while it still holds the reported appId; a removal never reported is emitted
-  and counted by the preview again while the shortcut is in Steam, and unbound by the next sync's start reconcile where
-  it is gone (#2653 D1). The removed-game cleanup's own proof marks and clears rows too, by its rule in
-  docs/architecture/removed-game-cleanup.md, "Discovery"** — test + prompt-only —
-  `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule (`sort_stale_rows`, `settle_asked_rows`),
-  `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and the
-  preview (a 404 keeps, a found ROM removes, an answer that establishes nothing keeps; a 404 is asked again on the third
-  run, a stopped run leaves the row asked at the next, a row its platform last delivered is removed unasked, and a row
-  with no recorded route is asked only when a collection record lists it),
+  row whose shortcut either removes keeps its binding until the panel reports the shortcut gone from Steam, the finalize
+  settles the row's stamps whatever its binding by then, and `report_sync_removals` unbinds it only while it still holds
+  the reported appId; a removal never reported is emitted and counted by the preview again while the shortcut is in
+  Steam, and unbound by the next sync's start reconcile where it is gone (#2653 D1). The removed-game cleanup's own
+  proof marks and clears rows too, by its rule in docs/architecture/removed-game-cleanup.md, "Discovery"** — test +
+  prompt-only — `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule (`sort_stale_rows`,
+  `settle_asked_rows`), `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection`
+  for the apply and the preview (a 404 keeps, a found ROM removes, an answer that establishes nothing keeps; a 404 is
+  asked again on the third run, a stopped run leaves the row asked at the next, a row its platform last delivered is
+  removed unasked, and a row with no recorded route is asked only when a collection record lists it),
   `TestDoSyncPerUnit::test_a_game_whose_every_version_is_gone_keeps_its_shortcut` and `TestPlatformTurnedOffAndBackOn`
   for the two ends — a game gone from RomM keeps its shortcut, a platform turned off loses its games, and
   `test_a_platform_still_on_that_romm_no_longer_lists_keeps_its_shortcuts` holds a platform gone from RomM's list apart
@@ -731,11 +731,11 @@ Format: **invariant** — tier — enforced by.
   a later run bound again), the next run's stale removal or convergence emits it again while the shortcut is in Steam,
   and the next sync's start reconcile unbinds it where the shortcut is gone and only the report was lost; the preview,
   which runs after that reconcile, counts what the apply then does. The finalize's collection maps, name cache and
-  terminal count treat the row as unbound already, and it settles the row's stamps whatever its binding, since the
-  report can land before it. `TestARemovalThePanelDidNotReport` in `tests/services/library/test_sync_orchestrator.py`
-  pins both ways for a stale and a converged removal, preview included, `TestAReportThatLandsBeforeTheFinalize` there a
-  platform and a collection turned off and back on with the report landing first,
-  `tests/services/test_shortcut_removal.py::TestReportSyncRemovals` the report, and
+  terminal count treat the row as unbound already, and the finalize settles the row's stamps whatever its binding, since
+  the report can land before it. `TestARemovalThePanelDidNotReport` in
+  `tests/services/library/test_sync_orchestrator.py` pins both ways for a stale and a converged removal, preview
+  included, `TestAReportThatLandsBeforeTheFinalize` there a platform and a collection turned off and back on with the
+  report landing first, `tests/services/test_shortcut_removal.py::TestReportSyncRemovals` the report, and
   `frontend/src/utils/syncRemovalReport.test.ts`, `frontend/src/utils/steamShortcuts.test.ts` ("shortcutsGoneFromSteam")
   and `frontend/src/index.test.tsx`'s `sync_stale` listener the panel's side; that the panel reports from the tail's
   `finally`, and only what Steam no longer lists, is prompt-only. The rule spans the domain sort, the reader, the

@@ -241,8 +241,8 @@ class RunFinalizer:
         has already upserted its ROMs into ``uow.roms``, so we only need
         to: (1) revoke the skip of the platforms :meth:`finalize_per_unit_run`
         says to and delete the stamp of every collection whose member set holds
-        a ROM whose shortcut the run removes, whatever its binding now — and (2)
-        and (3) treat such a row as unbound — (2) refresh the offline
+        a ROM whose shortcut the run removes — and (2) and (3) treat such a row as
+        unbound — (2) refresh the offline
         ``platform_slug → name`` cache — the run's listed names plus
         each bound platform's kept name
         (:meth:`_names_with_bound_platforms_kept`) — and

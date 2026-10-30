@@ -346,17 +346,17 @@ removal), so foreign keys are deliberately sparse:
   ROM, so a `DELETE FROM roms WHERE …` cascades it all away in one statement. Per
   [ADR-0007](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0007-rom-retention-identity-anchor.md) this
   cascade is **dormant**: a `roms` row is a permanent identity anchor keyed by RomM's stable `rom_id`. **Auto-stale =
-  unbind** — when the automatic sync finds a ROM gone from RomM (or its shortcut is removed), the row is _unbound_
-  (`Rom.unbind_shortcut()` NULLs `shortcut_app_id`, the row and its per-ROM children stay) so local
-  playtime/saves/metadata survive. **Only a deliberate purge = delete** — the explicit **Clean Up Removed RomM Games**
-  action may delete a row after a fresh exact-ID 404, option checks, save/content guards, any enabled recovery bundle,
-  and required Steam acknowledgement. Its final short UoW revalidates the expected group and binding before repository
-  deletion lets the cascade reap all eight child tables. Installed-content cleanup before that UoW is filesystem-only;
-  `rom_installs` and every other child remain until the parent cascade, so a failed filesystem phase leaves retryable
-  aggregate state. A confirmed shortcut removal is reconciled to an unbound row before finalization, making a later
-  safety refusal an explicit committed partial rather than a stale binding. The automatic sync never `DELETE`s a `roms`
-  row. Collection completion stamps whose `member_rom_ids` intersect a purged id are deleted in that same UoW. The
-  platform completion stamp is deliberately preserved; the reasoning lives in
+  unbind** — once the panel reports the shortcut the sync removed gone from Steam (or Steam's own removal is
+  reconciled), the row is _unbound_ (`Rom.unbind_shortcut()` NULLs `shortcut_app_id`, the row and its per-ROM children
+  stay) so local playtime/saves/metadata survive. **Only a deliberate purge = delete** — the explicit **Clean Up Removed
+  RomM Games** action may delete a row after a fresh exact-ID 404, option checks, save/content guards, any enabled
+  recovery bundle, and required Steam acknowledgement. Its final short UoW revalidates the expected group and binding
+  before repository deletion lets the cascade reap all eight child tables. Installed-content cleanup before that UoW is
+  filesystem-only; `rom_installs` and every other child remain until the parent cascade, so a failed filesystem phase
+  leaves retryable aggregate state. A confirmed shortcut removal is reconciled to an unbound row before finalization,
+  making a later safety refusal an explicit committed partial rather than a stale binding. The automatic sync never
+  `DELETE`s a `roms` row. Collection completion stamps whose `member_rom_ids` intersect a purged id are deleted in that
+  same UoW. The platform completion stamp is deliberately preserved; the reasoning lives in
   [removed-game-cleanup.md](removed-game-cleanup.md#discovery).
   - **Caveat — writes to a cascade parent (`roms`) MUST UPSERT, never `INSERT OR REPLACE`/`REPLACE`.** In SQLite
     `REPLACE` resolves a PK conflict by _delete-then-insert_ of the parent row, and that DELETE fires the

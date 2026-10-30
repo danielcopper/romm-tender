@@ -723,12 +723,12 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   never over an appId the run bound, and never while Steam lists one of the group's shortcuts as running, read at the
   platform unit and again before the removal — with the preview counting the same removals unless a game starts or quits
   between the preview and the removal (#2645 D5, D6), and no platform whose rows still hold such a group is skipped. A
-  row whose shortcut either removes keeps its binding until the panel reports the shortcut gone from Steam, and
-  `report_sync_removals` unbinds it only while it still holds the reported appId; a removal never reported is emitted
-  and counted by the preview again while the shortcut is in Steam, and unbound by the next sync's start reconcile where
-  it is gone (#2653 D1). The removed-game cleanup's own proof marks and clears rows too, by its rule in
-  docs/architecture/removed-game-cleanup.md, "Discovery"** — test + prompt-only —
-  `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule,
+  row whose shortcut either removes keeps its binding until the panel reports the shortcut gone from Steam, the finalize
+  settles the row's stamps whatever its binding by then, and `report_sync_removals` unbinds it only while it still holds
+  the reported appId; a removal never reported is emitted and counted by the preview again while the shortcut is in
+  Steam, and unbound by the next sync's start reconcile where it is gone (#2653 D1). The removed-game cleanup's own
+  proof marks and clears rows too, by its rule in docs/architecture/removed-game-cleanup.md, "Discovery"** — test +
+  prompt-only — `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule,
   `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and the
   preview (among it the third run, the stopped run, the platform route and the fallback),
   `TestDoSyncPerUnit::test_a_game_whose_every_version_is_gone_keeps_its_shortcut` and `TestPlatformTurnedOffAndBackOn`
@@ -753,22 +753,23 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `tests/services/library/test_sync_orchestrator.py::TestAGameWithSeveralShortcutsConverges` and
   `TestAGameASkippedCollectionStillListsConvergesAsThePreviewCounts` for the apply and the preview, and
   `tests/services/library/test_fetcher.py::TestAGroupWithSeveralShortcutsIsFetchedInFull` for the skip;
-  `tests/services/library/test_sync_orchestrator.py::TestARemovalThePanelDidNotReport` and
-  `TestAReportThatLandsBeforeTheFinalize`, `tests/services/test_shortcut_removal.py::TestReportSyncRemovals`,
-  `frontend/src/utils/syncRemovalReport.test.ts`, `frontend/src/utils/steamShortcuts.test.ts` ("shortcutsGoneFromSteam")
-  and `frontend/src/index.test.tsx`'s `sync_stale` listener for a removal the panel did not report. Prompt-only: the
-  panel reports from the `sync_stale` tail's `finally`, and only what Steam no longer lists; a new collapse caller on a
-  complete view hands the collapse the convergence's losers (`converged=`); the collection records are read before the
-  run's first unit (`do_read_collection_listed_rom_ids`); the platform listing is the run's own
-  (`LibrarySyncStateBox.run_listed_platform_slugs`) and never the kept ids; the chunk dispatcher names the unit's kind
-  on every commit; the preview and the apply both sort through `services/library/_stale_rows.py::settle_stale_rows` with
-  the group keys `domain/sync_diff.py::group_keys_of` reads for the run's synced ROMs; the preview names every platform
-  collection its diff counts by the name the names `services/library/_stale_rows.py::with_kept_platform_names` answers
-  hold for its slug, else the slug — an emitted entry's and a row left bound's through
-  `domain/sync_diff.py::platform_collection_name`, a kept row's by the same lookup in `compute_platform_collection_diff`
-  — which must agree with `RunFinalizer._names_with_bound_platforms_kept`; the preview hands that diff every stale row
-  `settle_stale_rows` neither removes nor keeps; and the preview and the apply both pick the rebuilt rows they file as
-  kept through `domain/sync_diff.py::rebuilt_rows_filed_as_kept`
+  `tests/services/library/test_sync_orchestrator.py::TestARemovalThePanelDidNotReport`,
+  `tests/services/test_shortcut_removal.py::TestReportSyncRemovals`, `frontend/src/utils/syncRemovalReport.test.ts`,
+  `frontend/src/utils/steamShortcuts.test.ts` ("shortcutsGoneFromSteam") and `frontend/src/index.test.tsx`'s
+  `sync_stale` listener for a removal the panel did not report, and
+  `tests/services/library/test_sync_orchestrator.py::TestAReportThatLandsBeforeTheFinalize` for a report that lands
+  before the finalize. Prompt-only: the panel reports from the `sync_stale` tail's `finally`, and only what Steam no
+  longer lists; a new collapse caller on a complete view hands the collapse the convergence's losers (`converged=`); the
+  collection records are read before the run's first unit (`do_read_collection_listed_rom_ids`); the platform listing is
+  the run's own (`LibrarySyncStateBox.run_listed_platform_slugs`) and never the kept ids; the chunk dispatcher names the
+  unit's kind on every commit; the preview and the apply both sort through
+  `services/library/_stale_rows.py::settle_stale_rows` with the group keys `domain/sync_diff.py::group_keys_of` reads
+  for the run's synced ROMs; the preview names every platform collection its diff counts by the name the names
+  `services/library/_stale_rows.py::with_kept_platform_names` answers hold for its slug, else the slug — an emitted
+  entry's and a row left bound's through `domain/sync_diff.py::platform_collection_name`, a kept row's by the same
+  lookup in `compute_platform_collection_diff` — which must agree with `RunFinalizer._names_with_bound_platforms_kept`;
+  the preview hands that diff every stale row `settle_stale_rows` neither removes nor keeps; and the preview and the
+  apply both pick the rebuilt rows they file as kept through `domain/sync_diff.py::rebuilt_rows_filed_as_kept`
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py`,
   `tests/domain/test_firmware_wants.py` and `tests/services/test_firmware.py::TestCheckPlatformBiosUnknown` (which pins
