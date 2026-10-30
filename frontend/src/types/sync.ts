@@ -34,7 +34,7 @@ export type CollectionOwnerScope = "own" | "all";
 /**
  * Steam-collection naming mode, described in
  * docs/architecture/steam-non-steam-shortcuts.md § Collection naming mode. The
- * label is computed backend-side at the reporter key — the wire payload is
+ * label is computed backend-side at the run finalizer's key — the wire payload is
  * name→appIds only.
  */
 export type CollectionNamingMode = "merge" | "by_label";

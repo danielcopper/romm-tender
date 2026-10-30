@@ -38,7 +38,7 @@
  * **Only a running frame moves a row**, which is what leaves a stopped run
  * readable: the `sync_complete` frame `index.tsx` merges into the store keeps
  * the step the run stopped on, so without that guard it would mark the
- * interrupted unit `done`. (The reporter's own CANCELLED frame that follows
+ * interrupted unit `done`. (The run finalizer's own CANCELLED frame that follows
  * carries step 0 and would move nothing either way.) The rows instead
  * stand as the last running frame left them. A clean run passes through the
  * FINALIZING frame at the plan's last step first, so its rows all read `done`

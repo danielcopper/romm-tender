@@ -1,14 +1,8 @@
-"""The end of a library sync run: its closing registry write and its terminal signals.
+"""The end of a library sync run: the one write Unit of Work that closes the run's record of the library, the
+Steam-collection maps built inside it, and the terminal signals sent once the run's ``SyncRun`` is persisted.
 
-``finalize_per_unit_run`` makes the run's one closing write to the ``roms``
-registry — the stale unbind, the skip revocations, the collection-stamp
-deletions, the gone-from-RomM marks and the ``platform_slug → name`` cache —
-builds the Steam-collection maps inside the same write UoW, and emits
-``sync_collections``. ``emit_sync_complete`` sends ``sync_complete`` and the
-run's terminal ``sync_progress`` frame once the orchestrator has persisted the
-terminal ``SyncRun``. Each chunk's commit belongs to :class:`SyncReporter`;
-deciding what a run does belongs to the orchestrator, the preview and the unit
-applier.
+Each chunk's commit belongs to :class:`SyncReporter`; deciding what a run does belongs to the orchestrator, the
+preview and the unit applier.
 """
 
 from __future__ import annotations

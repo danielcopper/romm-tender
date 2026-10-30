@@ -437,7 +437,7 @@ groups.
 
 #### LibraryService decomposition (`services/library/`)
 
-The library sync subsystem is a façade over thirteen sub-services that coordinate through a shared
+The library sync subsystem is a façade over the sub-services below, which coordinate through a shared
 `LibrarySyncStateBox`. `bootstrap/library.py` builds the box and every sub-service and hands the façade the ones it
 calls (`wire_library`, which answers the service and its parts as `LibraryParts`), so the façade builds none of them:
 

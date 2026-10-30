@@ -1915,7 +1915,7 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
     panelFactory();
 
     // The live collection is "[Faves]"; the active map keys it as "faves" (the
-    // reporter's folded-first-seen casing). Case-insensitive identity → it is
+    // run finalizer's folded-first-seen casing). Case-insensitive identity → it is
     // ACTIVE and must survive. SNES has no active platform → still stale.
     emitSyncComplete({
       platform_app_ids: { "Nintendo 64": [1] },

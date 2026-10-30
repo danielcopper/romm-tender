@@ -266,9 +266,9 @@ class TestTables:
         assert {name for name in methods if check._is_read(name)} == _EXPECTED_READS
 
     def test_the_library_views_are_declared_read_only(self):
-        # The façade's reads were split out of the reporter so that they could
-        # be held to this gate; ``test_the_real_module_is_clean`` scans only
-        # what the table declares, so dropping the entry would pass in silence.
+        # ``test_the_real_module_is_clean`` scans only what the table declares,
+        # so without this entry views.py would go unchecked and every test
+        # would stay green.
         assert "backend/services/library/views.py" in check.READ_ONLY_MODULES
 
     def test_the_pinned_partition_covers_both_directions(self):

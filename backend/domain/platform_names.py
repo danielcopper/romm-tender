@@ -25,9 +25,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
-# Where the cache is kept in ``kv_config``. The sync rewrites it each run from the
-# run's platform listing, plus the name already kept for each platform outside it
-# that a bound game is still on.
+# The ``kv_config`` key the cache is kept under.
 PLATFORM_NAMES_KEY = "platform_names"
 
 

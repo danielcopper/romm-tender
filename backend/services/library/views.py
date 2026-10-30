@@ -1,11 +1,7 @@
-"""The library façade's reads of this device's record of the library.
+"""The library façade's reads of this device's record of the library, answered from SQLite alone.
 
-Answers ``get_registry_platforms`` (the synced platforms, their bound and
-reachable counts, offline), ``get_sync_stats`` (the last-sync line and the
-resume offer's inputs) and ``get_sync_runs`` (the recent run history) from
-SQLite alone, and writes nothing: every repository call here is a read
-(``scripts/check_read_only_module.py``). Force Full Sync's reset of what they
-read belongs to :class:`SyncReporter`.
+Every repository call here is a read (``scripts/check_read_only_module.py``); a write, Force Full Sync's reset
+included, belongs to the part that performs it.
 """
 
 from __future__ import annotations

@@ -70,7 +70,10 @@ class RomRepository(Protocol):
         ...
 
     def save(self, rom: Rom) -> None:
-        """Upsert *rom*. (library/reporter.py per-chunk commit upsert)"""
+        """Upsert *rom*.
+
+        (library/reporter.py per-chunk commit, library/run_finalizer.py stale unbind and gone marks, and others)
+        """
         ...
 
     def delete(self, rom_id: int) -> None:
@@ -80,7 +83,8 @@ class RomRepository(Protocol):
     def iter_all(self) -> Iterator[Rom]:
         """Iterate every ROM in the registry.
 
-        (library/run_finalizer.py and library/views.py full scans, startup_healing.py, data_inventory.py)
+        (a full scan; library/run_finalizer.py, library/views.py, library/local_library_reader.py, prune/,
+        shortcut_removal.py and others)
         """
         ...
 
