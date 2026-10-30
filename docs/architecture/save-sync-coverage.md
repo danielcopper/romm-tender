@@ -80,14 +80,18 @@ that counts them; when, and how, is
 **Cost.** A live reading is a full read of the machine per ROM, and the first ask about a core also runs that core's
 probe. A single-ROM sync and a status read each take one, whether or not the ROM's slot is confirmed: the sync's entry
 gate reads the answer to decide whether to refuse at all, and hands that same reading both to the matrix and to the
-negotiate session's inventory rather than letting either take a second. "Ask live" is a rule about operations, not about
-layers.
+negotiate session's inventory rather than letting either take a second. The slot setup's setup info and its slot choice
+take one each as well, the setup info handing it to its local probe and the slot choice to its migration, and so does
+the question the SAVES tab asks while it holds RomM as unreachable (`get_save_sync_availability`). "Ask live" is a rule
+about operations, not about layers.
 
-The whole-library sweep is the exception, at **two per ROM**. It posts one device-wide inventory before its per-ROM loop
-begins, and that inventory walks each confirmed ROM's save files — so it reads every answer once before any ROM's run
-exists to hand one to, and each run then takes its own. Reusing the inventory's readings would mean carrying a per-run
-map of them across the loop, which is a cache in everything but name on the one path where nothing is launched
-afterwards; the sweep is a background operation and pays the second reading instead.
+The whole-library sweep is the exception, at **two per confirmed ROM**. It posts one device-wide inventory before its
+per-ROM loop begins, and that inventory walks each confirmed ROM's save files — so it reads every answer once before any
+ROM's run exists to hand one to, and each run then takes its own. Reusing the inventory's readings would mean carrying a
+per-run map of them across the loop, which is a cache in everything but name on the one path where nothing is launched
+afterwards; the sweep is a background operation and pays the second reading instead. A ROM whose slot is not confirmed
+costs one: the sweep reads its answer too, to tell a game not set up from one whose saves cannot be synced, and asks
+RomM nothing about it ([#2151](https://github.com/danielcopper/romm-tender/issues/2151)).
 
 The two per-platform loops — `count_platform_saves` and `delete_platform_saves` — take one per **installed** ROM on that
 platform, so their cost grows with the platform's installed games. Nothing is cached: the correctness rule is that every
@@ -119,15 +123,17 @@ which names no folder.
 for a saves root it read from its settings (its roots answer states that root `read`), the resolver still places a save
 under a folder that does not exist, and a sync would create it — on internal storage while the SD card it belongs on is
 out, where the SD card hides it once it is back. So the answer refuses. The refusal carries the finding and the source's
-kind as a place not read does (below), so the launch dialog and every press in the panel read the sentence Main's notice
-shows for the folder. Only the toast after a game exits shows the backend's own sentence, which names the folder and no
-source, since the table of source names lives only in the panel (`sourceName`): **Save sync is unavailable: the saves
-folder _path_ does not exist.** A saves root the source only assumed — its settings name none, or cannot be read, as
-with a damaged `retrodeck.json` — says nothing about a drive and refuses nothing. Every source that has a saves folder
-is checked, and the emulator is still asked, since asking creates nothing. Unlike the other refusals, it is no benign
-skip: the sync refuses with `saves_root_missing`. A launch asks before starting on the local saves while "Sync before
-launch" is on and RomM can be reached, and a game's exit says in a toast that its saves were not synced while "Sync
-after exit" is on. Folders below an existing saves root are still created as today.
+kind as a place not read does (below), so the launch dialog, every press in the panel and the SAVES tab in place of the
+slot setup read the sentence Main's notice shows for the folder. The backend's own wording, which names the folder and
+no source, since the table of source names lives only in the panel (`sourceName`), stands in two places only: the toast
+after a game exits, **Save sync is unavailable: the saves folder _path_ does not exist.**, and the clause **Sync All
+Saves Now** names the folder with, "_N_ game(s) skipped — the saves folder _path_ does not exist". A saves root the
+source only assumed — its settings name none, or cannot be read, as with a damaged `retrodeck.json` — says nothing about
+a drive and refuses nothing. Every source that has a saves folder is checked, and the emulator is still asked, since
+asking creates nothing. Unlike the other refusals, it is no benign skip: the sync refuses with `saves_root_missing`. A
+launch asks before starting on the local saves while "Sync before launch" is on and RomM can be reached, and a game's
+exit says in a toast that its saves were not synced while "Sync after exit" is on. Folders below an existing saves root
+are still created as today.
 
 **The seventh is about the reading behind the answer.** The resolver names a save's place from the emulator's own
 settings — RetroArch's `retroarch.cfg`, a standalone emulator's own configuration, a libretro core's own file such as
@@ -141,10 +147,11 @@ RetroDECK's and EmuDeck's marker findings alone refuse nothing: their marker nam
 an emulator writes, so under a damaged `retrodeck.json` the saves still sync where the emulators keep them. A source's
 health is not read for this — ES-DE's settings, and EmuDeck's RetroArch beside a standalone emulator, are findings about
 files no save of that emulator is placed by. The refusal is the benign skip, and it carries the finding, the source's
-kind and the emulator's label: the panel words it with the sentence Main's notice shows for that finding, or, for an
-emulator's own settings file, which Main never shows, **_Emulator_'s settings file _file_ is missing, so Tender cannot
-tell where it keeps this game's saves.** (**cannot be read** where it exists). The answer keeps the directory the
-resolver named, so the rename on adoption still carries the game's saves there.
+kind and the emulator's label, on a press and on the SAVES tab's setup answer alike: the panel words it with the
+sentence Main's notice shows for that finding, or, for an emulator's own settings file, which Main never shows,
+**_Emulator_'s settings file _file_ is missing, so Tender cannot tell where it keeps this game's saves.** (**cannot be
+read** where it exists). The answer keeps the directory the resolver named, so the rename on adoption still carries the
+game's saves there.
 
 **Where several apply, the first in this order is named:** a shape Tender never syncs (shared, inside the content), then
 a missing saves root, then a place not read, then what cannot be established yet (a hole, not established).

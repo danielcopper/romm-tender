@@ -1,8 +1,9 @@
 /**
  * Pure decision logic and branch handlers for "what should the caller do with
- * a SaveSetupInfo response?". Two callers consume the same three-way outcome:
- * the wizard (`SlotSetupWizard`) and the launch gate
- * (`ensureTrackingConfiguredBigPicture` in `launchGateOps.ts`). Anything that lives
+ * a SaveSetupInfo response?". Three callers consume the same outcome: the
+ * wizard (`SlotSetupWizard`), the launch gate
+ * (`ensureTrackingConfiguredBigPicture` in `launchGateOps.ts`) and the launch
+ * watcher's cold start (`launchInterceptor.ts`). Anything that lives
  * here can be unit-tested without rendering the component or stubbing React.
  *
  * The "server_unreachable", "not_found", "romm_refused" and
@@ -11,6 +12,12 @@
  * call site MUST NOT treat an empty `server_slots` array as authoritative on any
  * of them or it risks clobbering real server saves on first sync. They hold
  * identically and differ only in copy.
+ *
+ * "sync_unavailable" is a game whose saves no sync carries: nothing is set up
+ * for it on any route. A start goes ahead without a word, because the sync
+ * before it already passes such a game over, or asks first where the saves
+ * folder is missing, and the wizard shows the backend's sentence in place of
+ * the slot choice.
  */
 
 import type { SaveSetupInfo } from "../types";
@@ -20,6 +27,7 @@ export type SaveSetupOutcome =
   | { kind: "not_found" }
   | { kind: "romm_refused"; message: string }
   | { kind: "device_not_registered" }
+  | { kind: "sync_unavailable"; message: string }
   | { kind: "auto_confirm"; slot: string }
   | { kind: "needs_user_choice" };
 
@@ -41,6 +49,9 @@ export function resolveSaveSetupOutcome(info: SaveSetupInfo): SaveSetupOutcome {
   // hold.
   if (info.recommended_action === "device_not_registered") {
     return { kind: "device_not_registered" };
+  }
+  if (info.recommended_action === "sync_unavailable") {
+    return { kind: "sync_unavailable", message: info.message ?? "" };
   }
   // Either the backend marked the response as "auto_confirm_default", or the
   // server is reachable but reports no saves on either side — both are safe
@@ -136,6 +147,9 @@ export async function applyLaunchGateSetupOutcome(
   outcome: SaveSetupOutcome,
   deps: LaunchGateSetupDeps,
 ): Promise<"proceed" | "abort"> {
+  // No slot is set up for a game whose saves no sync carries, and nothing is
+  // asked of the user: the start goes on (#2153 D1).
+  if (outcome.kind === "sync_unavailable") return "proceed";
   if (outcome.kind === "server_unreachable") {
     deps.toast(SERVER_UNREACHABLE_TOAST_BODY);
     deps.dispatchSavesTab();
@@ -194,6 +208,8 @@ export interface WizardSetupDeps {
     useServerOnConflict: boolean,
   ) => Promise<{ success?: boolean; message?: string } | undefined>;
   setError: (message: string | null) => void;
+  /** Shows the sentence a game whose saves no sync carries is refused with, in place of the slot choice. */
+  setUnavailable: (message: string) => void;
   setConfirming: (confirming: boolean) => void;
   setInfo: (info: SaveSetupInfo) => void;
   logError: (message: string) => void;
@@ -203,29 +219,36 @@ export interface WizardSetupDeps {
   isCancelled: () => boolean;
 }
 
+/** The banner a wizard held on a failed server-saves query shows, or `null` for an answer that holds nothing.
+ *  Each of them holds: auto-confirming the default with an unproven server state could overwrite real server saves
+ *  the user already had on the first post-confirmation sync, so the user retries instead. */
+function heldWizardMessage(result: SaveSetupInfo): string | null {
+  switch (result.recommended_action) {
+    case "server_unreachable":
+      return SERVER_UNREACHABLE_WIZARD_MESSAGE;
+    case "not_found":
+      return NOT_FOUND_WIZARD_MESSAGE;
+    case "romm_refused":
+      return rommRefusedWizardMessage(result.message ?? "");
+    case "device_not_registered":
+      return DEVICE_NOT_REGISTERED_WIZARD_MESSAGE;
+    default:
+      return null;
+  }
+}
+
 /** Apply the initial `getSaveSetupInfo` result inside `SlotSetupWizard`'s
  *  fetch effect. Routes server_unreachable to a held-wizard error banner,
  *  auto_confirm_default through a backend confirm, and everything else into
  *  the per-slot picker by calling `setInfo`. */
 export async function applyWizardInitialSetupResult(result: SaveSetupInfo, deps: WizardSetupDeps): Promise<void> {
-  if (result.recommended_action === "server_unreachable") {
-    // Hold the wizard — auto-confirming default with an unknown server state
-    // could overwrite real server saves the user already had on first
-    // post-confirmation sync. Surface the error so the user can retry once
-    // the server is reachable.
-    deps.setError(SERVER_UNREACHABLE_WIZARD_MESSAGE);
+  const held = heldWizardMessage(result);
+  if (held !== null) {
+    deps.setError(held);
     return;
   }
-  if (result.recommended_action === "not_found") {
-    deps.setError(NOT_FOUND_WIZARD_MESSAGE);
-    return;
-  }
-  if (result.recommended_action === "romm_refused") {
-    deps.setError(rommRefusedWizardMessage(result.message ?? ""));
-    return;
-  }
-  if (result.recommended_action === "device_not_registered") {
-    deps.setError(DEVICE_NOT_REGISTERED_WIZARD_MESSAGE);
+  if (result.recommended_action === "sync_unavailable") {
+    deps.setUnavailable(result.message ?? "");
     return;
   }
   if (result.recommended_action === "auto_confirm_default") {
@@ -262,6 +285,7 @@ export async function applyWizardInitialSetupResult(result: SaveSetupInfo, deps:
  *  WizardSetupDeps because retry never auto-confirms. */
 export interface WizardRetryDeps {
   setError: (message: string | null) => void;
+  setUnavailable: (message: string) => void;
   setLoading: (loading: boolean) => void;
   setInfo: (info: SaveSetupInfo) => void;
 }
@@ -271,23 +295,14 @@ export interface WizardRetryDeps {
  *  branch — retry is user-initiated and never auto-fires a destructive
  *  setup. */
 export function applyWizardRetrySetupResult(result: SaveSetupInfo, deps: WizardRetryDeps): void {
-  if (result.recommended_action === "server_unreachable") {
-    deps.setError(SERVER_UNREACHABLE_WIZARD_MESSAGE);
+  const held = heldWizardMessage(result);
+  if (held !== null) {
+    deps.setError(held);
     deps.setLoading(false);
     return;
   }
-  if (result.recommended_action === "not_found") {
-    deps.setError(NOT_FOUND_WIZARD_MESSAGE);
-    deps.setLoading(false);
-    return;
-  }
-  if (result.recommended_action === "romm_refused") {
-    deps.setError(rommRefusedWizardMessage(result.message ?? ""));
-    deps.setLoading(false);
-    return;
-  }
-  if (result.recommended_action === "device_not_registered") {
-    deps.setError(DEVICE_NOT_REGISTERED_WIZARD_MESSAGE);
+  if (result.recommended_action === "sync_unavailable") {
+    deps.setUnavailable(result.message ?? "");
     deps.setLoading(false);
     return;
   }

@@ -206,6 +206,115 @@ describe("SlotSetupWizard", () => {
     });
   });
 
+  describe("a game whose saves no sync carries (#2153 D2)", () => {
+    const message =
+      "Save sync is unavailable: this emulator keeps one save card that all games share. (PCSX2 (Standalone))";
+
+    it("shows the sentence its sync is refused with and no slot buttons, and confirms nothing", async () => {
+      const actual = await vi.importActual<typeof import("../utils/saveSetup")>("../utils/saveSetup");
+      vi.mocked(applyWizardInitialSetupResult).mockImplementation(actual.applyWizardInitialSetupResult);
+      vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(
+        makeSetupInfo({ recommended_action: "sync_unavailable", reason: "save_shape_unsupported", message }),
+      );
+      setRommConnectionState("checking");
+
+      const { container } = render(<SlotSetupWizard {...defaultProps()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain(message);
+      expect(container.querySelectorAll("button")).toHaveLength(0);
+      expect(backend.confirmSlotChoice).not.toHaveBeenCalled();
+      // Nothing was asked of RomM, so the answer says nothing about whether it is reachable.
+      expect(getRommConnectionState()).toBe("checking");
+    });
+  });
+
+  describe("a game whose saves no sync carries, while RomM is held unreachable (#2153 D6, D7)", () => {
+    const message = "Save sync is unavailable: saves are written to the game's content directory.";
+
+    it("shows its reason under 'Save Sync', with no buttons, asking only whether it can sync", async () => {
+      setRommConnectionState("offline");
+      vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue({
+        available: false,
+        reason: "savefiles_in_content_dir",
+        message,
+      });
+
+      const { container } = render(<SlotSetupWizard {...defaultProps({ romId: 8 })} />);
+      await flushAsync();
+
+      expect(vi.mocked(backend.getSaveSyncAvailability)).toHaveBeenCalledWith(8);
+      expect(vi.mocked(backend.getSaveSetupInfo)).not.toHaveBeenCalled();
+      expect(container.textContent).toContain(message);
+      expect(container.querySelector(".romm-panel-section-title")?.textContent).toBe("Save Sync");
+      expect(container.querySelectorAll("button")).toHaveLength(0);
+    });
+
+    it("keeps the unreachable notice and Retry for a game that can sync", async () => {
+      setRommConnectionState("offline");
+      vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue({ available: true });
+
+      const { container, getByText } = render(<SlotSetupWizard {...defaultProps()} />);
+      await flushAsync();
+
+      expect(vi.mocked(backend.getSaveSetupInfo)).not.toHaveBeenCalled();
+      expect(container.textContent).toContain("RomM server is not reachable");
+      expect(getByText("Retry")).not.toBeNull();
+    });
+
+    it("keeps the unreachable notice and Retry where the question itself fails", async () => {
+      setRommConnectionState("offline");
+      vi.mocked(backend.getSaveSyncAvailability).mockRejectedValue(new Error("bridge down"));
+
+      const { container, getByText } = render(<SlotSetupWizard {...defaultProps()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain("RomM server is not reachable");
+      expect(getByText("Retry")).not.toBeNull();
+    });
+
+    it("loads online when RomM comes back while the question is still being answered", async () => {
+      setRommConnectionState("offline");
+      let answerAvailability!: (availability: { available: boolean }) => void;
+      vi.mocked(backend.getSaveSyncAvailability).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            answerAvailability = resolve;
+          }),
+      );
+      vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(makeSetupInfo());
+
+      const { container } = render(<SlotSetupWizard {...defaultProps({ romId: 6 })} />);
+      await flushAsync();
+      await act(async () => {
+        reportServerReachable(true);
+        await Promise.resolve();
+      });
+      await act(async () => {
+        answerAvailability({ available: true });
+        await Promise.resolve();
+      });
+      await flushAsync();
+
+      expect(vi.mocked(backend.getSaveSetupInfo)).toHaveBeenCalledWith(6);
+      expect(container.textContent).not.toContain("RomM server is not reachable");
+    });
+
+    it("reads 'Save Sync' above the reason online too (D7)", async () => {
+      const actual = await vi.importActual<typeof import("../utils/saveSetup")>("../utils/saveSetup");
+      vi.mocked(applyWizardInitialSetupResult).mockImplementation(actual.applyWizardInitialSetupResult);
+      vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(
+        makeSetupInfo({ recommended_action: "sync_unavailable", reason: "savefiles_in_content_dir", message }),
+      );
+
+      const { container } = render(<SlotSetupWizard {...defaultProps()} />);
+      await flushAsync();
+
+      expect(container.querySelector(".romm-panel-section-title")?.textContent).toBe("Save Sync");
+      expect(container.textContent).not.toContain("Save Slot Setup");
+    });
+  });
+
   describe("fetch error path", () => {
     it("renders the error banner + Retry when getSaveSetupInfo rejects", async () => {
       vi.mocked(backend.getSaveSetupInfo).mockRejectedValue(new Error("boom"));

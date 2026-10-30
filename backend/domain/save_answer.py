@@ -393,6 +393,11 @@ _START_FOLDER_MESSAGE = (
 )
 
 
+def saves_folder_missing(path: str | None) -> str:
+    """The clause naming a missing saves root *path*, in every sentence that names one."""
+    return f"the saves folder {path} does not exist"
+
+
 def save_shape_message(answer: SaveAnswer) -> str:
     """The sentence a refusal is reported with, named after the emulator it is about.
 
@@ -400,10 +405,11 @@ def save_shape_message(answer: SaveAnswer) -> str:
     folder instead, and no source: the table of source names lives only in the
     panel (``sourceName``), which words every answer it receives from the
     finding the refusal carries. The sentence stands where nothing rewords it —
-    the toast after a game exits.
+    the toast after a game exits — and Sync All's clause names the folder with
+    the same words (:func:`saves_folder_missing`).
     """
     if answer.state == SAVE_STATE_SAVES_ROOT_MISSING:
-        return f"Save sync is unavailable: the saves folder {answer.missing_saves_root} does not exist."
+        return f"Save sync is unavailable: {saves_folder_missing(answer.missing_saves_root)}."
     if answer.state == SAVE_STATE_HOLE and HOLE_START_FOLDER in answer.needs:
         sentence = _START_FOLDER_MESSAGE
     else:

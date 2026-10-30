@@ -383,17 +383,17 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **Endpoint failures use `{success, reason, message}` (never `error` / `error_code`), and no module but `main.py`
   builds that shape — a service raises its refusal, which `Endpoints` answers — with two known exceptions that compute a
   failing `success` outside it: the save-sync results (a completed sync with per-file errors,
-  `"success": len(errors) == 0`, #2205 D10) and the removed-game cleanup's `prune_complete` event; anything an endpoint
-  raises but a refusal or a `RommApiError` stays a transport error** — check + test + prompt-only —
-  `scripts/check_failure_shape.py --check` (every module under `backend/` but `main.py`, `_vendor/` and `native/`: a
-  dict literal with a literal `False`, `0` or `None` `success`, an `error_response` call or a refusal-helper spread,
-  event payloads included; unseen: a computed `success`, the two exceptions among it, a failure without a `success` key,
-  a failure dict built without a literal), `tests/test_endpoints_translation.py` (on every route, a raised `Refused` /
-  `DomainRefused` answers that shape and any other exception stays `backend_exception`; on one `def` and one `async def`
-  route, a `RommApiError` answers `classify_error`'s reason and a returned `PartialFailure` is serialized into it; every
-  route is the translating wrapper). Prompt-only: no failure beyond those two computes its `success`; the keys `main.py`
-  builds the shape with — no refusal's details carry `error` or `error_code` — and a further type joins
-  `main._TRANSLATED` only by decision
+  `"success": len(errors) == 0`, #2205 D10, and a Sync All that passed a game over for a missing saves folder, #2151 D4)
+  and the removed-game cleanup's `prune_complete` event; anything an endpoint raises but a refusal or a `RommApiError`
+  stays a transport error** — check + test + prompt-only — `scripts/check_failure_shape.py --check` (every module under
+  `backend/` but `main.py`, `_vendor/` and `native/`: a dict literal with a literal `False`, `0` or `None` `success`, an
+  `error_response` call or a refusal-helper spread, event payloads included; unseen: a computed `success`, the two
+  exceptions among it, a failure without a `success` key, a failure dict built without a literal),
+  `tests/test_endpoints_translation.py` (on every route, a raised `Refused` / `DomainRefused` answers that shape and any
+  other exception stays `backend_exception`; on one `def` and one `async def` route, a `RommApiError` answers
+  `classify_error`'s reason and a returned `PartialFailure` is serialized into it; every route is the translating
+  wrapper). Prompt-only: no failure beyond those two computes its `success`; the keys `main.py` builds the shape with —
+  no refusal's details carry `error` or `error_code` — and a further type joins `main._TRANSLATED` only by decision
 - **A definitive 404 is `not_found`, never `server_unreachable` — `classify_error`'s table answers every not-found class
   `not_found`, and a catch-all `except Exception` in `services/` may neither bind a verdict key (`reason` / `status` /
   `recommended_action`) to a hardcoded `SERVER_UNREACHABLE` nor raise `ServerUnreachable` or a refusal whose reason is
@@ -1176,16 +1176,18 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   there. The answered save directory is not sync state: its own table (`answered_save_directories`) may record it for a
   refusing answer. Prompt-only: every per-ROM entry point refuses through `sync_engine/_shape_refusal.py` and every sync
   path crosses the `MatrixExecutor.sync_rom_saves` backstop; the five write paths (`slots/switching.py`, `copies.py`,
-  `versions.py`, `slots/setup.py`, `sync_engine/rollback.py`) each refuse on the answer's `sync_directory`, never on
-  `saves_dir` — `test_save_shape_gate.py` pins those five, not the list; the sync, write, delete, count and status paths
-  that `docs/architecture/save-file-sync-architecture.md` lists call `SyncEngine.follow_save_directory` before they look
-  at local files; configuration-role files are held back through `SaveAnswer.synced_files` by the denial
-  `CONFIGURATION_ROLES`, never an allow-list, a directory move carries `owned_files`, and nothing reads `components`
-  directly; a rendering reads `unestablished`'s shape and `content_installed` beside the state; the question carries the
-  ROM's real content path, and system and path are decided only at `RomInfoService._installed_answer`,
-  `._uninstalled_answer` and `services/rom_adoption/renamer.py`; nothing caches an answer; a refusal for a place not
-  read keeps the resolver's directory for the rename on adoption, so anything else that moves files by
-  `SaveAnswer.directory` checks the state first, as `services/saves/save_directory.py::_followable_directory` does
+  `versions.py`, `slots/setup.py`, `sync_engine/rollback.py`) each refuse on the answer's `sync_directory` (the slot
+  choice through `refuse_unsyncable`, which reads the same), never on `saves_dir` — `test_save_shape_gate.py` pins those
+  five, not the list, and `tests/services/saves/test_slots.py::TestAGameWhoseSavesCannotSync` the slot choice's plain
+  path; the sync, write, delete, count and status paths that `docs/architecture/save-file-sync-architecture.md` lists
+  call `SyncEngine.follow_save_directory` before they look at local files; configuration-role files are held back
+  through `SaveAnswer.synced_files` by the denial `CONFIGURATION_ROLES`, never an allow-list, a directory move carries
+  `owned_files`, and nothing reads `components` directly; a rendering reads `unestablished`'s shape and
+  `content_installed` beside the state; the question carries the ROM's real content path, and system and path are
+  decided only at `RomInfoService._installed_answer`, `._uninstalled_answer` and `services/rom_adoption/renamer.py`;
+  nothing caches an answer; a refusal for a place not read keeps the resolver's directory for the rename on adoption, so
+  anything else that moves files by `SaveAnswer.directory` checks the state first, as
+  `services/saves/save_directory.py::_followable_directory` does
 - **A save place whose directory still holds a resolver template (`<cwd>`, `<region>`, `<save_id>`) is never followed,
   recorded, renamed into or used as a save-state place** — test + prompt-only — `SaveAnswer.concrete_directory`
   (`domain/save_answer.py`) is `None` for such a directory, `_followable_directory` (`services/saves/save_directory.py`)

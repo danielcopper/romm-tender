@@ -712,6 +712,10 @@ class Endpoints:
         return await self._services.save_sync_service.get_save_setup_info(rom_id)
 
     @route
+    async def get_save_sync_availability(self, rom_id):
+        return await self._services.save_sync_service.get_save_sync_availability(rom_id)
+
+    @route
     async def confirm_slot_choice(
         self, rom_id, chosen_slot, migrate=False, migrate_from_slot=None, use_server_on_conflict=False
     ):

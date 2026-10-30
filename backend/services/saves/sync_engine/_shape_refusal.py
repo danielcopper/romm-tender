@@ -5,7 +5,10 @@ of the seven save states (:mod:`domain.save_answer`), and a save the emulator
 writes beside the game's content. The three per-ROM entry points all handle
 them identically: take one live reading of the machine, follow a moved save
 directory with it, and where either holds, raise the refusal instead of
-syncing — a benign skip, except for a missing saves root.
+syncing — a benign skip, except for a missing saves root. The slot setup asks
+the same refusal before it sets a slot up, and the whole-library sweep, which
+passes a refused ROM over rather than raising, counts it by that refusal's
+reason (:class:`SweepTally`).
 
 It lives beside the engine rather than inside it because nothing is added to the
 engine's own module, and because these are the whole refusal: one reading and the
@@ -18,17 +21,29 @@ offline should be told the honest thing rather than "server unreachable".
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from domain.save_answer import SAVE_STATE_SAVES_ROOT_MISSING, save_finding_details, save_shape_message
+from domain.save_answer import (
+    BENIGN_SYNC_SKIP_REASONS,
+    SAVE_STATE_SAVES_ROOT_MISSING,
+    SAVE_SYNC_CONTENT_DIR_REASON,
+    save_finding_details,
+    save_shape_message,
+    saves_folder_missing,
+)
 from lib.errors import Refused
 from services.saves._messages import SAVE_SYNC_IN_CONTENT_DIR
 from services.saves._refusals import SavefilesInContentDir, shape_refusal
 
 if TYPE_CHECKING:
     from domain.save_answer import SaveAnswer
+    from services.saves._sync_stop import SyncStop
     from services.saves.rom_info import RomInfoService
+
+
+# The reason a sync is refused with while its saves root is missing: a failure, not a skip.
+SAVES_ROOT_MISSING_REASON = "saves_root_missing"
 
 
 def live_save_answer(rom_info: RomInfoService, rom_id: int) -> SaveAnswer | None:
@@ -70,32 +85,70 @@ def refuse_unsyncable(answer: SaveAnswer | None) -> None:
     if answer.in_content_directory:
         raise SavefilesInContentDir(SAVE_SYNC_IN_CONTENT_DIR, synced=0)
     if answer.state == SAVE_STATE_SAVES_ROOT_MISSING:
-        raise Refused("saves_root_missing", save_shape_message(answer), **save_finding_details(answer), synced=0)
+        raise Refused(SAVES_ROOT_MISSING_REASON, save_shape_message(answer), **save_finding_details(answer), synced=0)
     if not answer.syncable:
         raise shape_refusal(answer, synced=0)
 
 
 @dataclass
-class ContentDirTally:
-    """What a whole-library sweep saw of saves written beside the content.
+class SweepTally:
+    """What a whole-library sweep compared with RomM, and what it passed over and why.
 
-    The gate is per ROM, so the sweep passes such a ROM over inside its run —
-    and its one result still has to say so, because it is the sentence a user
-    who asked for a full sync reads. ``answered`` counts the ROMs the sweep
-    took a reading for (those whose slot the user confirmed, or the one it asks
-    about when none is), ``beside_content`` how many of them the gate held back.
+    The refusal is per ROM, so the sweep passes a ROM it refuses over inside
+    its run — and its one result still has to say so, because it is the
+    sentence a user who asked for a full sync reads. A ROM is passed over by
+    the reason a sync of it would be refused with, and only a ROM no refusal
+    holds back and whose slot is not confirmed counts as not set up.
+    ``compared`` counts the ROMs whose saves were compared with RomM,
+    ``answered`` the ROMs the sweep took a reading for.
     """
 
+    compared: int = 0
     answered: int = 0
+    not_set_up: int = 0
+    cannot_sync: int = 0
     beside_content: int = 0
+    missing_roots: dict[str | None, int] = field(default_factory=dict)
+    other_failures: int = 0
 
-    def count(self, answer: SaveAnswer | None) -> None:
-        """Record one ROM's reading."""
+    def passes_over(self, answer: SaveAnswer | None) -> bool:
+        """Record one ROM's reading; whether a sync of it would be refused, counted by the refusal's reason."""
         if answer is None:
-            return
+            return False
         self.answered += 1
-        if answer.in_content_directory:
+        try:
+            refuse_unsyncable(answer)
+        except Refused as refusal:
+            self._count_refusal(refusal.reason, answer)
+            return True
+        return False
+
+    def _count_refusal(self, reason: str, answer: SaveAnswer) -> None:
+        """Count one refused ROM by *reason*; a failing reason other than a missing root counts as unsyncable."""
+        if reason == SAVE_SYNC_CONTENT_DIR_REASON:
             self.beside_content += 1
+        elif reason == SAVES_ROOT_MISSING_REASON:
+            root = answer.missing_saves_root
+            self.missing_roots[root] = self.missing_roots.get(root, 0) + 1
+        else:
+            self.cannot_sync += 1
+            if reason not in BENIGN_SYNC_SKIP_REASONS:
+                self.other_failures += 1
+
+    def count_unconfirmed(self, answer: SaveAnswer | None) -> None:
+        """Record a ROM whose slot is not confirmed: by its refusal where it has one, otherwise as not set up."""
+        if answer is not None and not self.passes_over(answer):
+            self.not_set_up += 1
+
+    def count_compared(self, stop: SyncStop | None) -> None:
+        """Record a ROM whose saves were compared with RomM, unless its *stop* ended the comparison."""
+        if stop is None or not stop.stopped_the_sync():
+            self.compared += 1
+
+    @property
+    def failed(self) -> bool:
+        """Whether a ROM was passed over for a reason that fails the sweep, as it fails a single ROM's sync."""
+        return bool(self.missing_roots) or self.other_failures > 0
 
     def refuse_if_all_beside_content(self, *, roms_checked: int) -> None:
         """Raise the content-directory skip when every ROM the sweep read saves beside its content.
@@ -107,7 +160,15 @@ class ContentDirTally:
             raise SavefilesInContentDir(SAVE_SYNC_IN_CONTENT_DIR, synced=0, conflicts=0, roms_checked=roms_checked)
 
     def annotate(self, message: str) -> str:
-        """*message*, with the count of ROMs held back where some were and others synced."""
-        if not self.beside_content:
-            return message
-        return f"{message}; {self.beside_content} game(s) skipped — their saves are written beside the game file"
+        """*message*, with one clause per reason the sweep passed ROMs over for, each with its count."""
+        clauses = []
+        if self.not_set_up:
+            clauses.append(f"{self.not_set_up} game(s) not set up for save sync")
+        if self.cannot_sync:
+            clauses.append(f"{self.cannot_sync} game(s) skipped — their saves cannot be synced")
+        clauses.extend(
+            f"{count} game(s) skipped — {saves_folder_missing(root)}" for root, count in self.missing_roots.items()
+        )
+        if self.beside_content:
+            clauses.append(f"{self.beside_content} game(s) skipped — their saves are written beside the game file")
+        return "; ".join([message, *clauses])

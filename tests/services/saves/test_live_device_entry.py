@@ -295,12 +295,12 @@ class TestTheMigrationAsksLocallyFirst:
         assert [c for c in fake.call_log if c[0] in ("register_device", "update_device")] == []
 
     @pytest.mark.asyncio
-    async def test_a_save_no_sync_carries_confirms_the_slot_without_a_registration_request(self, tmp_path):
+    async def test_a_save_no_sync_carries_is_refused_without_a_registration_request(self, tmp_path):
         svc, fake = _ready(tmp_path)
         _no_save_directory(svc)
 
         with pytest.raises(Refused):
             await svc.confirm_slot_choice(42, "default", True, None)
 
-        assert _require_save_state(svc, 42).active_slot == "default"
+        assert _require_save_state(svc, 42).active_slot == "autosave"
         assert [c for c in fake.call_log if c[0] in ("register_device", "update_device")] == []

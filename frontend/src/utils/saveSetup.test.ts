@@ -205,6 +205,7 @@ function makeWizardDeps(overrides: Partial<WizardSetupDeps> = {}): WizardSetupDe
     romId: 7,
     confirmSlotChoice: vi.fn().mockResolvedValue({ success: true }),
     setError: vi.fn(),
+    setUnavailable: vi.fn(),
     setConfirming: vi.fn(),
     setInfo: vi.fn(),
     logError: vi.fn(),
@@ -345,6 +346,7 @@ describe("applyWizardInitialSetupResult", () => {
 function makeRetryDeps(overrides: Partial<WizardRetryDeps> = {}): WizardRetryDeps {
   return {
     setError: vi.fn(),
+    setUnavailable: vi.fn(),
     setLoading: vi.fn(),
     setInfo: vi.fn(),
     ...overrides,
@@ -555,5 +557,49 @@ describe("a device that could not be registered", () => {
     expect(DEVICE_NOT_REGISTERED_WIZARD_MESSAGE).toBe(
       "This device could not be registered with RomM — setup paused. Retry, or sign in again if it keeps failing.",
     );
+  });
+});
+
+describe("a game whose saves no sync carries (#2153)", () => {
+  const message =
+    "Save sync is unavailable: this emulator keeps one save card that all games share. (PCSX2 (Standalone))";
+  // RomM's own slots are present to show they decide nothing here: such a game
+  // has no slot to set up wherever its saves are.
+  const info = makeInfo({
+    recommended_action: "sync_unavailable",
+    reason: "save_shape_unsupported",
+    message,
+    server_slots: [{ slot: "default", saves: [], count: 1, latest_updated_at: "2026-01-01T00:00:00Z" }],
+  });
+
+  it("resolves to its own outcome carrying the backend's sentence", () => {
+    expect(resolveSaveSetupOutcome(info)).toEqual({ kind: "sync_unavailable", message });
+  });
+
+  it("lets Play start with no setup step, no toast and no saves-tab switch (D1)", async () => {
+    const deps = makeLaunchGateDeps();
+    const result = await applyLaunchGateSetupOutcome(resolveSaveSetupOutcome(info), deps);
+    expect(result).toBe("proceed");
+    expect(deps.confirmSlotChoice).not.toHaveBeenCalled();
+    expect(deps.toast).not.toHaveBeenCalled();
+    expect(deps.dispatchSavesTab).not.toHaveBeenCalled();
+  });
+
+  it("shows the sentence in the wizard instead of the slot choice, confirming nothing (D2)", async () => {
+    const deps = makeWizardDeps();
+    await applyWizardInitialSetupResult(info, deps);
+    expect(deps.setUnavailable).toHaveBeenCalledWith(message);
+    expect(deps.setInfo).not.toHaveBeenCalled();
+    expect(deps.setError).not.toHaveBeenCalled();
+    expect(deps.confirmSlotChoice).not.toHaveBeenCalled();
+  });
+
+  it("shows the sentence after a Retry too", () => {
+    const deps = makeRetryDeps();
+    applyWizardRetrySetupResult(info, deps);
+    expect(deps.setUnavailable).toHaveBeenCalledWith(message);
+    expect(deps.setLoading).toHaveBeenCalledWith(false);
+    expect(deps.setInfo).not.toHaveBeenCalled();
+    expect(deps.setError).not.toHaveBeenCalled();
   });
 });

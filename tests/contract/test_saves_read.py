@@ -463,6 +463,69 @@ async def test_get_save_setup_info_server_failure_carve_out(harness):
     assert result["server_slots"] == []
 
 
+def _missing_saves_root(harness, path: str) -> None:
+    from domain.save_answer import saves_root_missing_answer
+
+    harness.app.services.save_sync_service._rom_info._save_locations.answer_with(
+        "gba", saves_root_missing_answer(path=path, emulator="mGBA", content_installed=True, source="retrodeck")
+    )
+
+
+async def test_get_save_setup_info_sync_unavailable_shape(harness):
+    """A game whose saves no sync carries: the refusal and its finding, with empty listings (#2153)."""
+    enable_save_sync(harness)
+    seed_install(harness, 42)
+    _missing_saves_root(harness, "/run/media/deck/sd/retrodeck/saves")
+
+    result = await harness.endpoints.get_save_setup_info(42)
+
+    assert set(result.keys()) == {
+        "has_local_saves",
+        "local_files",
+        "server_slots",
+        "default_slot",
+        "slot_confirmed",
+        "active_slot",
+        "recommended_action",
+        "server_query_failed",
+        "reason",
+        "message",
+        "finding",
+        "source",
+        "emulator",
+    }
+    assert result["recommended_action"] == "sync_unavailable"
+    assert result["reason"] == "saves_root_missing"
+    assert result["server_slots"] == []
+
+
+# ── get_save_sync_availability ───────────────────────────────────────────
+
+
+async def test_get_save_sync_availability_of_a_game_that_syncs(harness):
+    enable_save_sync(harness)
+    seed_install(harness, 42)
+
+    assert await harness.endpoints.get_save_sync_availability(42) == {"available": True}
+
+
+async def test_get_save_sync_availability_of_a_game_that_cannot_sync(harness):
+    enable_save_sync(harness)
+    seed_install(harness, 42)
+    _missing_saves_root(harness, "/run/media/deck/sd/retrodeck/saves")
+
+    result = await harness.endpoints.get_save_sync_availability(42)
+
+    assert result == {
+        "available": False,
+        "reason": "saves_root_missing",
+        "message": "Save sync is unavailable: the saves folder /run/media/deck/sd/retrodeck/saves does not exist.",
+        "finding": {"code": "saves-root-missing", "data": {"path": "/run/media/deck/sd/retrodeck/saves"}},
+        "source": "retrodeck",
+        "emulator": "mGBA",
+    }
+
+
 # ── get_save_sync_settings ───────────────────────────────────────────────
 
 

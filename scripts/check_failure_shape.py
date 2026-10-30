@@ -35,7 +35,8 @@ What it does not see
 ====================
 
 * A ``success`` that is computed rather than a literal: the save-sync results'
-  ``"success": len(errors) == 0`` and the removed-game cleanup's
+  ``"success": len(errors) == 0`` (Sync All's also false where it passed a
+  game over for a missing saves folder) and the removed-game cleanup's
   ``prune_complete`` event, whose ``success`` is a variable — and
   ``adapters/descriptor_paths.py``'s ``_outcome``, which builds a failed
   ``MutationOutcome`` as a dict from the ``success`` it is passed.

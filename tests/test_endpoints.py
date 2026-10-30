@@ -312,6 +312,7 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "get_slot_delete_info",
     "is_save_tracking_configured",
     "get_save_setup_info",
+    "get_save_sync_availability",
     "get_save_sync_settings",
     "saves_list_file_versions",
     "pre_launch_sync_state",

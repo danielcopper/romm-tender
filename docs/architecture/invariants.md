@@ -13,17 +13,17 @@ Format: **invariant** — tier — enforced by.
 - **Endpoint failures use `{success, reason, message}` (never `error` / `error_code`), and no module but `main.py`
   builds that shape — a service raises its refusal, which `Endpoints` answers — with two known exceptions that compute a
   failing `success` outside it: the save-sync results (a completed sync with per-file errors,
-  `"success": len(errors) == 0`, #2205 D10) and the removed-game cleanup's `prune_complete` event; anything an endpoint
-  raises but a refusal or a `RommApiError` stays a transport error** — check + test + prompt-only —
-  `scripts/check_failure_shape.py --check` (every module under `backend/` but `main.py`, `_vendor/` and `native/`: a
-  dict literal with a literal `False`, `0` or `None` `success`, an `error_response` call or a refusal-helper spread,
-  event payloads included; unseen: a computed `success`, the two exceptions among it, a failure without a `success` key,
-  a failure dict built without a literal), `tests/test_endpoints_translation.py` (on every route, a raised `Refused` /
-  `DomainRefused` answers that shape and any other exception stays `backend_exception`; on one `def` and one `async def`
-  route, a `RommApiError` answers `classify_error`'s reason and a returned `PartialFailure` is serialized into it; every
-  route is the translating wrapper). Prompt-only: no failure beyond those two computes its `success`; the keys `main.py`
-  builds the shape with — no refusal's details carry `error` or `error_code` — and a further type joins
-  `main._TRANSLATED` only by decision
+  `"success": len(errors) == 0`, #2205 D10, and a Sync All that passed a game over for a missing saves folder, #2151 D4)
+  and the removed-game cleanup's `prune_complete` event; anything an endpoint raises but a refusal or a `RommApiError`
+  stays a transport error** — check + test + prompt-only — `scripts/check_failure_shape.py --check` (every module under
+  `backend/` but `main.py`, `_vendor/` and `native/`: a dict literal with a literal `False`, `0` or `None` `success`, an
+  `error_response` call or a refusal-helper spread, event payloads included; unseen: a computed `success`, the two
+  exceptions among it, a failure without a `success` key, a failure dict built without a literal),
+  `tests/test_endpoints_translation.py` (on every route, a raised `Refused` / `DomainRefused` answers that shape and any
+  other exception stays `backend_exception`; on one `def` and one `async def` route, a `RommApiError` answers
+  `classify_error`'s reason and a returned `PartialFailure` is serialized into it; every route is the translating
+  wrapper). Prompt-only: no failure beyond those two computes its `success`; the keys `main.py` builds the shape with —
+  no refusal's details carry `error` or `error_code` — and a further type joins `main._TRANSLATED` only by decision
 - **A definitive 404 is `not_found`, never `server_unreachable` — `classify_error`'s table answers every not-found class
   `not_found`, and a catch-all `except Exception` in `services/` may neither bind a verdict key (`reason` / `status` /
   `recommended_action`) to a hardcoded `SERVER_UNREACHABLE` nor raise `ServerUnreachable` or a refusal whose reason is
@@ -1881,18 +1881,24 @@ Format: **invariant** — tier — enforced by.
   `SyncEngine`'s three per-ROM entry points refuse on it through `sync_engine/_shape_refusal.py`, which holds the
   reading and the refusals it raises, `MatrixExecutor.sync_rom_saves` is the backstop every sync path crosses, and
   `services/saves/status/service.py` puts it on the wire. **Four halves have no mechanical check at all.** (1) The
-  refusal is enforced at four call sites — the three per-ROM entry points, which report the refusal via
-  `sync_engine/_shape_refusal.py`'s `live_save_answer` / `refuse_unsyncable`, and `MatrixExecutor.sync_rom_saves`
-  (reached through `SyncEngine.do_sync_rom_saves`), the backstop that covers the whole-library sweep, whose single
-  result has no room to name the ROM it passed over. A fifth entry point added without either goes green, and its
-  failure is silent because a per-game probe for a shared card finds nothing and reports "no saves". The backstop is
-  pinned by the ABSENCE of a server round-trip, because everything downstream of it is redundantly safe — a refusing
-  answer carries no names, so nothing is probed or grouped even without it. The five write paths refuse for themselves,
-  each on the same answer's `sync_directory` — empty for every answer a sync would not carry, a shared card with a known
-  directory included — and with `save_shape_message` beside the reason: `switch_slot` (`slots/switching.py`),
-  `copy_save_to_slot` (`copies.py`), `rollback_to_version` (`versions.py`), `confirm_slot_choice` with migration
-  (`slots/setup.py`) and `resolve_sync_conflict` (`sync_engine/rollback.py`). `test_save_shape_gate.py` pins those five
-  and nothing pins the list: a sixth write path that keys its refusal on `saves_dir` instead writes into a directory the
+  refusal is enforced at five call sites — the three per-ROM entry points, which report the refusal via
+  `sync_engine/_shape_refusal.py`'s `live_save_answer` / `refuse_unsyncable`, the whole-library sweep, which asks the
+  same refusal of every installed ROM it does not pass over as running through `SweepTally.passes_over` and counts what
+  it passed over by the refusal's reason, and `MatrixExecutor.sync_rom_saves` (reached through
+  `SyncEngine.do_sync_rom_saves`), the backstop behind them all. A sixth entry point added without `refuse_unsyncable`
+  or the backstop goes green, and its failure is silent because a per-game probe for a shared card finds nothing and
+  reports "no saves". The backstop is pinned by the ABSENCE of a server round-trip
+  (`tests/services/saves/test_save_shape_gate.py::TestTheRefusalIsASkipAndNotAFailure::test_the_matrix_backstop_asks_romm_nothing_for_a_refusing_answer`,
+  which calls it directly beside a control), because everything downstream of it is redundantly safe — a refusing answer
+  carries no names, so nothing is probed or grouped even without it. The five write paths refuse for themselves. Four
+  refuse on the same answer's `sync_directory` — empty for every answer a sync would not carry, a shared card with a
+  known directory included — and with `save_shape_message` beside the reason: `switch_slot` (`slots/switching.py`),
+  `copy_save_to_slot` (`copies.py`), `rollback_to_version` (`versions.py`) and `resolve_sync_conflict`
+  (`sync_engine/rollback.py`). `confirm_slot_choice` (`slots/setup.py`) refuses through `refuse_unsyncable` itself, with
+  or without a migration, as a sync of the game does, and `get_save_setup_info` beside it answers `sync_unavailable` off
+  that same refusal. `test_save_shape_gate.py` pins those five, and
+  `tests/services/saves/test_slots.py::TestAGameWhoseSavesCannotSync` the slot choice's plain path and the setup info;
+  nothing pins the list: a sixth write path that keys its refusal on `saves_dir` instead writes into a directory the
   answer never offered a sync. The same holds for following a moved directory first: `SyncEngine.follow_save_directory`
   is called before any local file is looked at by the four sync paths, the five write paths, the two deletes, the two
   counting reads (`count_platform_saves`, `get_save_status`) and the local-save check (`check_local_drift`), and a new
