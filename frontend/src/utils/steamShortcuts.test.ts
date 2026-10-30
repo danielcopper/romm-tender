@@ -7,6 +7,7 @@ import {
   scanShortcutOwnership,
   removeShortcutConfirmedOutcome,
   setLaunchOptionsConfirmed,
+  shortcutsGoneFromSteam,
 } from "./steamShortcuts";
 import type { ShortcutFileReading } from "./shortcutFile";
 import type { SyncAddItem } from "../types";
@@ -937,5 +938,66 @@ describe("addShortcut — overview-readiness poll + empty-launch-options skip", 
     // was polled via RegisterForAppDetails.
     expect(setLaunchOptions).toHaveBeenCalledWith(55, cmd);
     expect(registerForAppDetails).toHaveBeenCalledWith(55, expect.any(Function));
+  });
+});
+
+describe("shortcutsGoneFromSteam (#2653)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("waits for the removed shortcuts to leave the store and answers every asked appId it no longer holds", async () => {
+    vi.useFakeTimers();
+    const apps = new Map<number, object>([
+      [1, {}],
+      [2, {}],
+      [3, {}],
+    ]);
+    vi.stubGlobal("collectionStore", { deckDesktopApps: { apps } });
+
+    const answer = shortcutsGoneFromSteam([1, 2, 3, 4], [1, 2]);
+    await vi.advanceTimersByTimeAsync(100);
+    apps.delete(1);
+    await vi.advanceTimersByTimeAsync(100);
+    apps.delete(2);
+    await vi.advanceTimersByTimeAsync(100);
+
+    // 4 was never listed, so it is gone too; 3 was not removed and is still there.
+    await expect(answer).resolves.toEqual([1, 2, 4]);
+  });
+
+  it("gives up on a removal Steam did not make once its time is out, and answers without it", async () => {
+    vi.useFakeTimers();
+    const apps = new Map<number, object>([
+      [1, {}],
+      [2, {}],
+    ]);
+    vi.stubGlobal("collectionStore", { deckDesktopApps: { apps } });
+    let settled = false;
+
+    const answer = shortcutsGoneFromSteam([1, 2], [1, 2], 3000).then((gone) => {
+      settled = true;
+      return gone;
+    });
+    apps.delete(1);
+    await vi.advanceTimersByTimeAsync(2900);
+    const settledBeforeTheDeadline = settled;
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(settledBeforeTheDeadline).toBe(false);
+    await expect(answer).resolves.toEqual([1]);
+  });
+
+  it("does not wait for a shortcut no removal was tried for", async () => {
+    vi.stubGlobal("collectionStore", { deckDesktopApps: { apps: new Map<number, object>([[3, {}]]) } });
+
+    await expect(shortcutsGoneFromSteam([3, 4], [])).resolves.toEqual([4]);
+  });
+
+  it("answers none when Steam's shortcut store cannot be read", async () => {
+    vi.stubGlobal("collectionStore", { deckDesktopApps: undefined });
+
+    await expect(shortcutsGoneFromSteam([1, 2], [1, 2])).resolves.toEqual([]);
   });
 });

@@ -5,8 +5,8 @@
  * Steam collections and Hidden carry over to it, and so does each image set in Steam in a slot where the kept shortcut
  * has none set in Steam. That Favorites is among `userCollections` and that Hidden is read and set beside them is not
  * measured on a device. Tender's own collections are left alone: the run's collection maps file the kept shortcut
- * there. Every part is best effort, and a part that fails is logged and holds nothing up: the backend unbinds the row
- * whatever the panel does, so a shortcut left behind would belong to no version at all.
+ * there. Every part is best effort, and a part that fails is logged and holds nothing up: what it would have carried
+ * stays behind with the removed shortcut, as its icon and playtime do.
  */
 
 import {

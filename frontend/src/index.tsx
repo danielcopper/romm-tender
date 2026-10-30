@@ -50,7 +50,6 @@ import {
   getUpdateInstallState,
   logError,
   logInfo,
-  reportConvergedRemovals,
 } from "./api/backend";
 import {
   createOrUpdateCollections,
@@ -102,6 +101,7 @@ import type {
 } from "./types";
 import { setLaunchOptionsConfirmed } from "./utils/steamShortcuts";
 import { removeShortcutsPaced } from "./utils/shortcutRemoval";
+import { reportSyncRemovalsGone } from "./utils/syncRemovalReport";
 import { pacedForEach } from "./utils/pacedOps";
 import { carryOverShortcutState, isConvergedRemoval } from "./utils/shortcutCarryOver";
 import { applyShortcutArtwork } from "./utils/shortcutArtwork";
@@ -944,9 +944,9 @@ const tender = definePanel(() => {
   });
 
   // ``sync_stale`` arrives after every unit finishes — remove each stale
-  // shortcut by the ``app_id`` the backend captured BEFORE unbinding the
-  // row. Resolving rom_id→app_id here (via getExistingRomMShortcuts) would
-  // race the backend unbind and find nothing, orphaning the shortcut.
+  // shortcut by the ``app_id`` its row is bound to, and report what Steam no
+  // longer lists from the ``finally`` (docs/architecture/steam-non-steam-shortcuts.md,
+  // "A removal the panel did not finish").
   addEventListener<SyncStaleData>("sync_stale", (data: SyncStaleData) => {
     if (!Array.isArray(data.remove) || data.remove.length === 0) return;
     // Collect the valid app_ids and record the "removed" delta for each UP FRONT —
@@ -975,6 +975,7 @@ const tender = definePanel(() => {
       const abort = () => continuationController.abort();
       if (leaseSignal.aborted) abort();
       else leaseSignal.addEventListener("abort", abort, { once: true });
+      let removedCount = 0;
       try {
         await previousTail;
         const signal = continuationController.signal;
@@ -986,12 +987,22 @@ const tender = definePanel(() => {
           isCancelled: () => isPruneLeaseCancelled(signal),
         });
         if (!carried) return;
-        await removeShortcutsPaced(appIds, undefined, signal);
+        await removeShortcutsPaced(
+          appIds,
+          (removed) => {
+            removedCount = removed;
+          },
+          signal,
+        );
         if (isPruneLeaseCancelled(signal)) return;
         logInfo(`sync_stale: removed ${data.remove.length} stale shortcuts`);
-        if (converged.length > 0) await reportConvergedRemovals(converged.map((removal) => removal.app_id));
       } finally {
         leaseSignal.removeEventListener("abort", abort);
+        // Whatever ended the tail, what Steam no longer lists is reported.
+        await reportSyncRemovalsGone(
+          data.remove.filter((removal) => removal.app_id),
+          appIds.slice(0, removedCount),
+        );
       }
     }).catch((e: unknown) => logError(`sync_stale: stale shortcut removal failed: ${e}`));
   });

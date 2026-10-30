@@ -208,12 +208,13 @@ export function refreshSyncStats(): Promise<void> {
 
 /**
  * Re-read the stats BECAUSE they just changed — a run reaching a terminal stage,
- * which rewrites `last_sync`, `last_attempt` and the counts, and Force Full
- * Sync's clear of the per-platform stamps.
+ * which rewrites `last_sync`, `last_attempt` and the counts, Force Full Sync's
+ * clear of the per-platform stamps, and a report of a sync's removals that
+ * unbound a row (#2653), which lowers the counts.
  *
  * Never joins an open read: this is the case the admission rule in
- * `api/sharedReads.ts` excludes, spelled out in this module's docstring. Both
- * callers are also the last read their path issues — for a completed run the
+ * `api/sharedReads.ts` excludes, spelled out in this module's docstring. Every
+ * caller is also the last read its path issues — for a completed run the
  * poll interval stops on the same tick — so a joined pre-change answer is not
  * merely wrong for a moment, it is the last thing the panel shows.
  */

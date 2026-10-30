@@ -57,9 +57,22 @@ def _ack_every_shortcut(harness) -> None:
 
 
 async def _apply(harness, run_id: str) -> None:
+    """Apply a run, then report what its ``sync_stale`` named as the panel does once it saw the shortcuts gone."""
     sync = harness.app.services.sync_service
     assert sync._box.try_begin_run(run_id, kind=SyncRunKind.APPLY) is True
+    start = len(harness.emit.call_args_list)
     await sync._orchestrator._do_sync_per_unit()
+    removed = [
+        row
+        for call in harness.emit.call_args_list[start:]
+        if call.args and call.args[0] == "sync_stale"
+        for row in call.args[1]["remove"]
+    ]
+    if removed:
+        stale = [{"rom_id": row["rom_id"], "app_id": row["app_id"]} for row in removed if "kept_app_id" not in row]
+        converged = [{"rom_id": row["rom_id"], "app_id": row["app_id"]} for row in removed if "kept_app_id" in row]
+        answer = await harness.endpoints.report_sync_removals(stale, converged)
+        assert answer["success"] is True
 
 
 def _mark(harness, rom_id: int) -> str | None:

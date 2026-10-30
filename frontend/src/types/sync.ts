@@ -564,17 +564,22 @@ export interface ShortcutIconRecord {
   sha256: string;
 }
 
+/** A shortcut a sync removes, by the row bound to it and its appId. */
+export interface SyncRemoval {
+  rom_id: number;
+  app_id: number;
+}
+
 export interface SyncStaleData {
   /**
-   * Bound stale ROMs to remove from Steam. Each entry carries the `app_id`
-   * read on the backend BEFORE the row was unbound, so the handler removes
-   * the shortcut directly without re-resolving rom_id→app_id (which races
-   * the backend unbind). Unbound stale ROMs are excluded — they have no
-   * Steam shortcut to remove. An entry the convergence made (#2645) also
-   * names the shortcut its game keeps (`kept_rom_id`, `kept_app_id`), which
-   * the panel carries the removed one's state over to first.
+   * Bound stale ROMs to remove from Steam, each with the `app_id` its row is
+   * bound to. Unbound stale ROMs are excluded —
+   * they have no Steam shortcut to remove. An entry the convergence made
+   * (#2645) also names the shortcut its game keeps (`kept_rom_id`,
+   * `kept_app_id`), which the panel carries the removed one's state over to
+   * first.
    */
-  remove: { rom_id: number; app_id: number; kept_rom_id?: number; kept_app_id?: number }[];
+  remove: (SyncRemoval & { kept_rom_id?: number; kept_app_id?: number })[];
   prune_lease_token?: string;
 }
 
