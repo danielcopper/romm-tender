@@ -75,9 +75,10 @@ describe("CustomPlayButton with the real session manager and no backend", () => 
     const calls = vi.mocked(SteamClient.GameSessions.RegisterForAppLifetimeNotifications).mock.calls;
     const lifetime = calls[calls.length - 1]![0] as LifetimeCb;
 
-    // From here on nothing the backend is asked answers.
+    // From here on the starting source answers that it is switched on, and nothing else the backend is asked answers.
     vi.mocked(backend.getAppIdRomIdMap).mockReturnValue(never());
-    vi.mocked(backend.getInstalledRom).mockReturnValue(never());
+    vi.mocked(backend.checkStartSource).mockResolvedValue({ switched_off: null });
+    vi.mocked(backend.isSaveTrackingConfigured).mockReturnValue(never());
     vi.mocked(backend.recordSessionStart).mockReturnValue(never());
     vi.mocked(backend.finalizeGameSession).mockReturnValue(never());
 

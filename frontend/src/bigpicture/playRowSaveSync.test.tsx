@@ -44,7 +44,12 @@ vi.mock("../utils/metadataPatches", () => ({ updatePlaytimeDisplay: vi.fn() }));
 // this file observes are the save-status ones it is about.
 vi.mock("../utils/sectionRefresh", () => ({
   refreshBiosInBackground: vi.fn(),
-  refreshCoreInfoInBackground: vi.fn(),
+  // Answers the page's check of whether the game can start (#2195 D32) with no read of its own.
+  refreshCoreInfoInBackground: vi.fn(
+    (_romId: number, _cancelled: () => boolean, setter: (update: (prev: object) => object) => void) => {
+      setter((prev) => ({ ...prev, startCheck: { state: "answered" } }));
+    },
+  ),
   refreshAchievementsInBackground: vi.fn(),
 }));
 // getCachedGameDetail is re-exported through backend.ts but lives in utils —
