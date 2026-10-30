@@ -644,17 +644,20 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
   (Standalone) can — choose one in the emulator menu."** — where the emulator's own reading of the game says why it
   cannot start it, the sentence says so: a folder it does not take, nothing in the folder for it to start, a file that
   is neither a disc image nor a game program, a disc game whose disc cannot be mounted, or an encrypted disc image
-  without its key file. **Play** is off.
+  without its key file. **Play** is off. Where Tender cannot start that emulator yet either, this reason is still the
+  one said.
+- **"Tender cannot start RPCS3 Game Serial (Standalone) yet."** — the emulator in effect is one Tender cannot start from
+  Steam yet, and nothing else stands in the way. **Play** is off; choose another emulator in the emulator menu.
 - **"Whether Game.sfc starts cannot be established: …"** — the emulator source could not answer, with the reason.
   **Play** stays on.
 - **"What is inside Game.zip was not read, …"** — the file is an archive the emulator opens, and whether it holds a game
   it starts was not read. **Play** stays on.
-- **"Whether RPCS3 Game Serial (Standalone) starts this game cannot be established: …"** — nothing is known to stand in
-  the way, but the answer could not follow the start all the way, and the sentence says where it stopped: the emulator's
-  own list of installed games was not read, the folder was not found, whether a disc image is encrypted or its key file
-  fits could not be checked, or the emulator's version decides whether it reads that kind of file. **Play** stays on.
-- **"Whether RPCS3 Shortcut (Standalone) reads .iso files is not established."** — nobody has established which files
-  the emulator reads. **Play** stays on.
+- **"Whether RPCS3 Directory (Standalone) starts this game cannot be established: …"** — nothing is known to stand in
+  the way, but the answer could not follow the start all the way, and the sentence says where it stopped: the folder was
+  not found, whether a disc image is encrypted or its key file fits could not be checked, or the emulator's version
+  decides whether it reads that kind of file. **Play** stays on.
+- **"Whether _emulator_ reads _.ext_ files is not established."** — nobody has established which files the emulator
+  reads. **Play** stays on.
 
 Where **Play** is off, Steam's own **Play** on the game's shortcut is refused with the same words. While the page is
 still asking, **Play** is grey and reads **Checking...** beside the same spinning circle "Preparing..." shows. Where the

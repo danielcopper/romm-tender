@@ -150,3 +150,49 @@ describe("the emulator menu's answer per entry (#2195 D22, D31)", () => {
     expect(row(container, SHORTCUT).textContent).toBe(`${SHORTCUT} (default) ✓`);
   });
 });
+
+describe("an entry Tender cannot start yet (#2195 D42)", () => {
+  it("says no 'can start it' beside its own line, and keeps every line of the resolver's", async () => {
+    const read = heldRead();
+    const serial = "RPCS3 Game Serial (Standalone)";
+    const { container } = render(
+      <>
+        {buildEmulatorMenu(
+          config({
+            emulators: [
+              standaloneEmu(SHORTCUT, true, { bakeable: false, reason: "shortcut_script" }),
+              standaloneEmu(DIRECTORY),
+              standaloneEmu(serial, false, { bakeable: false, reason: "inject" }),
+            ],
+            launches: askEntryLaunches(42, () => true, read.read),
+          }),
+        )}
+      </>,
+    );
+
+    await read.answer([
+      launch(SHORTCUT, { state: "not_this_emulator", other_entries: [DIRECTORY], reason: "takes_no_folder" }),
+      launch(DIRECTORY),
+      launch(serial, { reason: "game_list_unread" }),
+    ]);
+
+    expect(row(container, SHORTCUT).textContent).toContain("cannot start a game installed as a folder");
+    expect(row(container, DIRECTORY).textContent).toContain("can start it");
+    expect(row(container, serial).textContent).toContain("Tender cannot start it yet");
+    expect(row(container, serial).textContent).toContain("the emulator's own list of installed games was not read");
+    const plain = launch(serial);
+    const read2 = heldRead();
+    const second = render(
+      <>
+        {buildEmulatorMenu(
+          config({
+            emulators: [standaloneEmu(serial, true, { bakeable: false, reason: "inject" })],
+            launches: askEntryLaunches(42, () => true, read2.read),
+          }),
+        )}
+      </>,
+    );
+    await read2.answer([plain]);
+    expect(row(second.container, serial).textContent).toBe(`${serial} (default) ✓ — Tender cannot start it yet`);
+  });
+});

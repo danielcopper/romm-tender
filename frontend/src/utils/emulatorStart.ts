@@ -6,7 +6,7 @@
  */
 
 import { getPlatformCoreInfo, logError } from "../api/backend";
-import type { CoreInfo, EmulatorOption, EmulatorStart, SourceDefault, VanishedPick } from "../types";
+import type { CoreInfo, EmulatorOption, EmulatorStart, GameLaunch, SourceDefault, VanishedPick } from "../types";
 import { notEstablishedCause } from "./emulatorInstallation";
 import { launchRefusal } from "./gameLaunch";
 import { sourceName } from "./emulatorSourceWording";
@@ -109,10 +109,22 @@ export function frontendChoiceSentence(
   return `${chosen.label} is chosen in ES-DE; Tender starts this game with the emulator chosen in its emulator menu.`;
 }
 
-/** Why a game cannot start, from its core read: its emulator's refusal first, then its file's (#2195 D2), or `null`. */
+/**
+ * Why a game cannot start, or `null`: its emulator's refusal first, then its
+ * file's (#2195 D2) — except that Tender's own "cannot start it yet" gives way
+ * to the resolver's refusal of the file, which says more (D42). The one
+ * composition the game page and a refused start both say.
+ */
+export function startRefusal(start: EmulatorStart, launch: GameLaunch | null, canPick: boolean): string | null {
+  const emulator = emulatorStartRefusal(start, "this game", canPick);
+  const file = launchRefusal(launch, canPick);
+  return start.reason === "not_bakeable" ? (file ?? emulator) : (emulator ?? file);
+}
+
+/** Why a game cannot start, from its core read ({@link startRefusal}), or `null`. */
 export function gameStartRefusal(info: CoreInfo): string | null {
   const canPick = gameCanPickAnother(info.emulators, info.active_core_label);
-  return emulatorStartRefusal(info.start, "this game", canPick) ?? launchRefusal(info.launch ?? null, canPick);
+  return startRefusal(info.start, info.launch ?? null, canPick);
 }
 
 /**

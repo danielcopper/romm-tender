@@ -1010,12 +1010,13 @@ the next sync).
 **When a game cannot start.** Where the emulator a game starts with is not installed, RetroDECK's start script cannot
 start it, or Tender cannot start it yet ("Tender cannot start RPCS3 Shortcut (Standalone) yet."), **Play** is disabled
 and the play row says why on a line under its buttons, in yellow, behind a warning sign — and to choose another emulator
-in the menu, where the game offers another; starting the game from Steam's library is refused with the same words. A PS3
-game installed as a folder whose emulator cannot start a folder — RPCS3 Shortcut, RetroDECK's default — says so and
-names the emulators that can, such as **RPCS3 Directory**, for you to pick; Tender does not switch it by itself. Where
-whether the default is installed could not be established, the line asks you to choose an emulator, and Play stays
-disabled until you do. A pick you made stands whatever happens to it: only one whose name no longer exists gives way to
-the default, and the line says so.
+in the menu, where the game offers another; starting the game from Steam's library is refused with the same words. Where
+the emulator's own reading of the game also refuses it, that reason is the one said: a PS3 game installed as a folder
+whose emulator cannot start a folder — RPCS3 Shortcut, RetroDECK's default — says so and names the emulators that can,
+such as **RPCS3 Directory**, for you to pick; Tender does not switch it by itself. Where whether the default is
+installed could not be established, the line asks you to choose an emulator, and Play stays disabled until you do. A
+pick you made stands whatever happens to it: only one whose name no longer exists gives way to the default, and the line
+says so.
 
 Per-game cores work for **any ROM filename**. Tender bakes the chosen core directly into the game's launch command, so
 it does not rely on RetroDECK's gamelist lookup (which mishandles parentheses and other special characters in filenames)

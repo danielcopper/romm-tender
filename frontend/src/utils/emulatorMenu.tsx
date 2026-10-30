@@ -86,11 +86,12 @@ export interface EmulatorMenuConfig {
 }
 
 /** The line under an entry saying whether it can start the game: Play's throbber until the answer lands, then its words. */
-const EntryLaunchLine: FC<{ launches: EntryLaunches; label: string; source: AnsweringSource | null }> = ({
-  launches,
-  label,
-  source,
-}) => {
+const EntryLaunchLine: FC<{
+  launches: EntryLaunches;
+  label: string;
+  source: AnsweringSource | null;
+  tenderStarts: boolean;
+}> = ({ launches, label, source, tenderStarts }) => {
   const launch = useSyncExternalStore(launches.subscribe, () => launches.forLabel(label));
   if (launch === undefined) {
     return (
@@ -100,7 +101,8 @@ const EntryLaunchLine: FC<{ launches: EntryLaunches; label: string; source: Answ
     );
   }
   if (launch === null) return null;
-  return <div style={{ fontSize: "12px", opacity: 0.7 }}>{entryLaunchLine(launch, source)}</div>;
+  const line = entryLaunchLine(launch, source, tenderStarts);
+  return line === null ? null : <div style={{ fontSize: "12px", opacity: 0.7 }}>{line}</div>;
 };
 
 /**
@@ -126,13 +128,13 @@ export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
   const entryText = (text: string, isActive: boolean): ReactNode =>
     isActive ? <span style={{ color: activeColor }}>{text}</span> : text;
   const { launches } = config;
-  const withLaunch = (text: ReactNode, label: string): ReactNode =>
+  const withLaunch = (text: ReactNode, e: EmulatorOption): ReactNode =>
     launches === undefined ? (
       text
     ) : (
       <div>
         <div>{text}</div>
-        <EntryLaunchLine launches={launches} label={label} source={config.emulatorSource} />
+        <EntryLaunchLine launches={launches} label={e.label} source={config.emulatorSource} tenderStarts={e.bakeable} />
       </div>
     );
 
@@ -183,7 +185,7 @@ export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
     const isPlatformCore = platformCore === e;
     const text = withLaunch(
       entryText(`${emulatorEntryLabel(e, isActive, isPlatformCore)}${entryNotes(e)}`, isActive),
-      e.label,
+      e,
     );
     children.push(
       isChoosable(e) ? (

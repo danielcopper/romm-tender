@@ -307,3 +307,19 @@ describe("startCheckFailureSentence — what went wrong with the page's check (#
     expect(startCheckFailureSentence(error)).toBe(`Tender could not check whether this game can start: ${words}.`);
   });
 });
+
+describe("entryLaunchLine for an entry Tender cannot start (#2195 D42)", () => {
+  it("says no plain 'can start it'", () => {
+    expect(entryLaunchLine(launch(), RETRODECK, false)).toBeNull();
+    expect(entryLaunchLine(launch(), RETRODECK)).toBe("can start it");
+  });
+
+  it("keeps every line of the resolver's", () => {
+    expect(entryLaunchLine(launch({ format_unestablished: true }), RETRODECK, false)).toBe(
+      "whether it reads .ps3 is not established",
+    );
+    expect(entryLaunchLine(launch({ state: "not_this_emulator", reason: "takes_no_folder" }), RETRODECK, false)).toBe(
+      "cannot start a game installed as a folder",
+    );
+  });
+});

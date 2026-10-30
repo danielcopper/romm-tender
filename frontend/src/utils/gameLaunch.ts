@@ -202,9 +202,16 @@ export function launchNote(launch: GameLaunch | null, source: AnsweringSource | 
 
 /**
  * The short line the emulator menu shows under an entry for its verdict on the
- * game (#2195 D22, D29, D36). `source` is the source the answer came from.
+ * game (#2195 D22, D29, D36), or `null` where there is nothing to say: a plain
+ * "can start it" for an entry Tender cannot start (`tenderStarts` false), which
+ * its row already says it cannot (D42). `source` is the source the answer came
+ * from.
  */
-export function entryLaunchLine(launch: GameLaunch, source: AnsweringSource | null): string {
+export function entryLaunchLine(
+  launch: GameLaunch,
+  source: AnsweringSource | null,
+  tenderStarts = true,
+): string | null {
   switch (launch.state) {
     case "needs_installing":
       return "cannot start it: the game has to be installed first";
@@ -219,7 +226,7 @@ export function entryLaunchLine(launch: GameLaunch, source: AnsweringSource | nu
       if (stoppedShort !== null) return `whether it starts the game is not established: ${stoppedShort}`;
       if (launch.format_unestablished) return `whether it reads ${launch.extension} is not established`;
       if (launch.contents_unread) return `what is inside ${launch.file} was not read`;
-      return "can start it";
+      return tenderStarts ? "can start it" : null;
     }
   }
 }
