@@ -399,7 +399,7 @@ export interface ScopedStatus<Scope extends string = string> {
   key: string;
   scope: Scope;
   text: string;
-  /** The line says what is under way, so it stands behind the throbber. */
+  /** The line carries its operation's throbber. */
   busy?: boolean;
 }
 

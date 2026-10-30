@@ -5908,7 +5908,13 @@ describe("Library › Platforms", () => {
       });
     });
 
-    it("puts the throbber beside the removal's count alone while it runs, never beside its status line", async () => {
+    it("puts the removal's throbber on its status line until the count line appears, then on the count alone", async () => {
+      let answerRemoval: (v: Awaited<ReturnType<typeof backend.removePlatformShortcuts>>) => void = () => {};
+      vi.mocked(backend.removePlatformShortcuts).mockReturnValue(
+        new Promise((resolve) => {
+          answerRemoval = resolve;
+        }),
+      );
       let releaseClear: () => void = () => {};
       vi.mocked(clearPlatformCollection).mockImplementation(
         () =>
@@ -5925,9 +5931,18 @@ describe("Library › Platforms", () => {
       await confirmLastModal();
       await flushAsync();
 
-      const waiting = within(container).getByTestId("status-remove");
-      expect(waiting.textContent).toBe("Removing Game Boy Advance shortcuts…");
-      expect(throbberIn(waiting)).toBeNull();
+      // Before the first shortcut is removed there is no count line yet.
+      const before = within(container).getByTestId("status-remove");
+      expect(before.textContent).toBe("Removing Game Boy Advance shortcuts…");
+      expect(throbberIn(before)).not.toBeNull();
+      expect(container.querySelectorAll('[data-testid="spinner"]')).toHaveLength(1);
+
+      await act(async () => {
+        answerRemoval({ success: true, app_ids: [11, 12], rom_ids: [1, 2], platform_name: "Game Boy Advance" });
+        for (let i = 0; i < 10; i++) await Promise.resolve();
+      });
+
+      expect(throbberIn(within(container).getByTestId("status-remove"))).toBeNull();
       expect(throbberIn(lineWithText(container, "Removing 2 of 2…"))).not.toBeNull();
       expect(container.querySelectorAll('[data-testid="spinner"]')).toHaveLength(1);
 
@@ -5939,6 +5954,40 @@ describe("Library › Platforms", () => {
       expect(done.textContent).toMatch(/^Removed /);
       expect(throbberIn(done)).toBeNull();
       expect(lineWithText(container, "Removing 2 of 2…")).toBeUndefined();
+    });
+
+    it("keeps the removal's throbber on its status line for the whole run when there is no shortcut to count", async () => {
+      vi.mocked(backend.removePlatformShortcuts).mockResolvedValue({
+        success: true,
+        app_ids: [],
+        rom_ids: [1],
+        platform_name: "Game Boy Advance",
+      });
+      let releaseClear: () => void = () => {};
+      vi.mocked(clearPlatformCollection).mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            releaseClear = resolve;
+          }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      await act(async () => {
+        fireEvent.click(buttonByText(container, "Remove 9 shortcuts")!);
+        await Promise.resolve();
+      });
+      await confirmLastModal();
+      await flushAsync();
+
+      expect(container.textContent).not.toMatch(/Removing \d+ of \d+…/);
+      expect(throbberIn(within(container).getByTestId("status-remove"))).not.toBeNull();
+      expect(container.querySelectorAll('[data-testid="spinner"]')).toHaveLength(1);
+
+      await act(async () => {
+        releaseClear();
+        for (let i = 0; i < 10; i++) await Promise.resolve();
+      });
+      expect(container.querySelector('[data-testid="spinner"]')).toBeNull();
     });
 
     it("surfaces the sync_active refusal and removes nothing", async () => {

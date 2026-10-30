@@ -1452,9 +1452,9 @@ only), warning, alert.
 ### Throbber
 
 The spinning ring the panel shows at every wait, left of the label that says what is under way — the ring Play shows
-while it checks saves. Which waits show it and which do not is `docs/architecture/qam-panel.md`'s, "Waiting".
-User-facing docs call it a **spinner**; code and architecture docs say **throbber**, Steam's own name for it. _Avoid_,
-in code: spinner (it named `@decky/ui`'s `Spinner`, which the panel no longer draws), loader.
+while it checks saves. Which waits show it and which do not is `docs/architecture/qam-panel.md`'s, "Waiting". New code
+and architecture prose say **throbber**, Steam's own name for it; older text and the user-facing docs say **spinner**,
+which means the same ring. _Avoid_: loader.
 
 ### Available release / installed program
 

@@ -67,6 +67,12 @@ import type { CoreAnswer, DetailStatus, PlatformRow, PlatformsPageState, StatusS
 const scopedStatus = (status: DetailStatus | null): ScopedStatus<StatusScope> | null =>
   status && { key: status.slug, scope: status.scope, text: status.text, busy: status.busy ?? false };
 
+/** The remove group's line, which gives its throbber to the removal's count line while *slug*'s is shown. */
+const removeGroupStatus = (state: PlatformsPageState, slug: string): ScopedStatus<StatusScope> | null => {
+  const status = scopedStatus(state.status);
+  return status && state.removalProgress?.slug === slug ? { ...status, busy: false } : status;
+};
+
 /**
  * The core picker's button in the header line — the game page's icon button, at
  * this line's scale.
@@ -422,7 +428,7 @@ const RemoveSection: FC<{ row: PlatformRow; state: PlatformsPageState }> = ({ ro
           what a sync blocks, and widening it to make a line true would be the
           tail wagging the dog. */}
       {syncRunning && <Muted>{`Removing shortcuts: ${SYNC_RUNNING_HINT}`}</Muted>}
-      <GroupStatus status={scopedStatus(state.status)} forKey={row.slug} scope="remove" />
+      <GroupStatus status={removeGroupStatus(state, row.slug)} forKey={row.slug} scope="remove" />
     </>
   );
 };

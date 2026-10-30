@@ -863,8 +863,10 @@ Where it does not stand:
 - **Beside a moving bar of the same operation** — an update's Installing…, a cleanup's stages, a download's bytes. Where
   only numbers count up (Removing _n_ of _m_…, Uninstalling _n_/_m_) it does, because a count can stand still on a large
   item.
-- **On a platform's status line while its shortcuts are removed** ("Removing _X_ shortcuts…"): the count line under it
-  (Removing _n_ of _m_…) carries that run's throbber — one per operation, on the line that counts.
+- **On a platform's status line once its shortcut removal counts** ("Removing _X_ shortcuts…"): the count line under it
+  (Removing _n_ of _m_…) takes that run's throbber over — one per operation, on the line that counts. Until the first
+  shortcut is removed, and for the whole run where there is none to remove, the count line is not there and the status
+  line carries it.
 - **On Data Management's pane lines while a removal runs**: the list header above them spins and names the operation.
 - **On a BIOS row whose file is still waiting its turn to be identified**: only the row whose file is being asked about
   shows it, and the others keep their plain "Checking…".

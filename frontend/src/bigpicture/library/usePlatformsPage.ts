@@ -78,7 +78,7 @@ export interface DetailStatus {
   slug: string;
   scope: StatusScope;
   text: string;
-  /** The line says what is under way rather than how it ended. */
+  /** The line carries its operation's throbber. */
   busy?: boolean;
 }
 
@@ -707,8 +707,9 @@ export function usePlatformsPage(): PlatformsPageState {
   const removeShortcuts = useCallback(
     (row: PlatformRow) => {
       setBusySlug(row.slug);
-      // Not busy: the count line under it carries this run's throbber (docs/architecture/qam-panel.md, "Waiting").
-      setStatus({ slug: row.slug, scope: "remove", text: `Removing ${row.name} shortcuts…` });
+      // Busy until the count line appears, which the pane hands the throbber to
+      // (`removeGroupStatus` in PlatformDetail.tsx; docs/architecture/qam-panel.md, "Waiting").
+      setStatus({ slug: row.slug, scope: "remove", text: `Removing ${row.name} shortcuts…`, busy: true });
       const admission = capturePruneLeaseAdmission(LEASE_OWNER);
       detach(
         (async () => {

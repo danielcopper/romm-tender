@@ -1,5 +1,5 @@
 /**
- * The one spinner the panel shows while it waits, alone or beside the label
+ * The one throbber the panel shows while it waits, alone or beside the label
  * that says what is under way. What it draws, which waits show it and which do
  * not, and why it carries no class of Steam's: `docs/architecture/qam-panel.md`,
  * "Waiting".
