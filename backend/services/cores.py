@@ -401,8 +401,9 @@ class CoreService:
         platform default), as are uninstalled or unbound ROMs (no live shortcut to
         rewrite). Each entry's ``launch_options`` is the FULL active core baked by
         the shared resolver — the ``-e`` override form, the empty command for an
-        entry Tender cannot bake (#2195 D43), or the plain launch when the
-        resolver yields ``(None, None)`` — over the disc-resolved bake path,
+        entry Tender cannot bake or none in effect (#2195 D43), or the plain
+        launch where the system lists no entry, no system is found, or the
+        catalogue cannot be read — over the disc-resolved bake path,
         so a multi-disc ROM keeps its persisted ``selected_disc`` rather than
         reverting to disc 1 / the m3u (a single-disc ROM bakes its ``file_path``
         unchanged).
@@ -578,8 +579,9 @@ class CoreService:
         on the live shortcut. Because the resolved default may itself be a
         per-platform core, the recomputed command bakes the ROM's FULL active core
         (the ``-e`` override form, the empty command where the entry in effect is
-        one Tender cannot bake (#2195 D43), or the plain launch where the
-        platform resolves to no entry) — never an unconditional plain launch. Clearing is
+        one Tender cannot bake or none is in effect (#2195 D43), or the plain
+        launch where the system lists no entry, no system is found, or the
+        catalogue cannot be read) — never an unconditional plain launch. Clearing is
         always valid — there is no label to resolve. An unknown ROM is refused
         with ``not_found``; when it is uninstalled or unbound the NULL still
         lands and ``launch_options``/``app_id`` are ``None``. A live update

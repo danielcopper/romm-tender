@@ -71,8 +71,9 @@ class EmulatorInvocation:
       are the standalone command's middle (``%EMULATOR_*%`` and ``%ROM%``
       stripped, e.g. ``--no-gui``); the game folder is appended by
       :func:`build_launch_options`.
-    - :data:`NOTHING` → the entry in effect is one Tender cannot bake, and the
-      shortcut gets the empty start command, so a start Tender does not see
+    - :data:`NOTHING` → the entry in effect is one Tender cannot bake, or none
+      is in effect though the system lists entries, and the shortcut gets the
+      empty start command, so a start Tender does not see
       runs nothing (#2195 D43; why, docs/architecture/core-emulator-selection.md, "What starting comes to"). It names no
       emulator, so a read of the emulator a ROM launches with takes it for
       none, as it did the plain launch.
@@ -124,7 +125,7 @@ class EmulatorInvocation:
 
     @classmethod
     def nothing(cls) -> EmulatorInvocation:
-        """The entry in effect is one Tender cannot bake: the empty start command."""
+        """No entry Tender can bake is in effect though the system lists entries: the empty start command."""
         return cls(form=NOTHING)
 
 
@@ -132,10 +133,11 @@ def resolve_emulator_invocation(rom: dict[str, Any], emulator: EmulatorInvocatio
     """Return the emulator invocation prefix for *rom*.
 
     With *emulator* unset (``None``) the ROM follows the plain RetroDECK flatpak
-    command: a platform with no resolvable emulator. A :data:`NOTHING`
-    invocation is the empty prefix, which :func:`build_launch_options` bakes to
-    the empty command (#2195 D43). A :data:`RUN_GAME` invocation bakes its command into RetroDECK's
-    ``-e`` override: ``flatpak run … -e "<command … %ROM%>"`` (e.g.
+    command: the system lists no entry, no system is found, or the catalogue
+    cannot be read. A :data:`NOTHING` invocation is the empty prefix, which
+    :func:`build_launch_options` bakes to the empty command (#2195 D43). A
+    :data:`RUN_GAME` invocation bakes its command into RetroDECK's ``-e``
+    override: ``flatpak run … -e "<command … %ROM%>"`` (e.g.
     ``%EMULATOR_RPCS3% --no-gui %ROM%``) — RetroDECK resolves ``%EMULATOR_*%``
     and substitutes ``%ROM%`` at launch. *rom* is the per-emulator-branch seam
     and is ignored today.
@@ -175,8 +177,8 @@ def build_launch_options(invocation: str, path: str) -> str:
     """Compose the Steam shortcut launch command from *invocation* and ROM *path*.
 
     An empty *path* means the ROM is **not downloaded**, and an empty
-    *invocation* that its entry in effect is one Tender cannot bake (#2195
-    D43); both yield the empty launch command. Composing one anyway would hand the emulator an empty
+    *invocation* that no entry Tender can bake is in effect (#2195 D43); both
+    yield the empty launch command. Composing one anyway would hand the emulator an empty
     argument — the silent failure this rule exists to prevent. A downloaded ROM
     always has a path, whether or not its file starts: that is asked when its
     page reads it (#2195 D26, D28).
@@ -280,8 +282,8 @@ def build_shortcuts_data(
     the shipped default). Only ROMs that resolved to an emulator appear (the
     caller omits the ``(None, None)`` fallback); a ROM absent from the map follows
     the plain RetroDECK launch, a present ROM bakes its invocation into
-    ``launch_options`` — the ``-e`` form, or the empty command for an entry
-    Tender cannot bake (#2195 D43). Required so a new bake site can never silently skip the
+    ``launch_options`` — the ``-e`` form, or the empty command where no entry
+    Tender can bake is in effect (#2195 D43). Required so a new bake site can never silently skip the
     override.
 
     The sibling-group key (ADR-0021) and RomM's version dimensions (``regions`` /

@@ -68,7 +68,9 @@ class EmulatorChoice:
 class ResolvedEmulator:
     """One ROM's emulator: the choice, the options it was made among, and what it bakes to.
 
-    ``invocation`` is ``None`` for the plain launch.
+    ``invocation`` is ``None`` for the plain launch, and
+    :meth:`~domain.shortcut_data.EmulatorInvocation.nothing` where no entry
+    Tender can bake is in effect (#2195 D43).
     """
 
     choice: EmulatorChoice

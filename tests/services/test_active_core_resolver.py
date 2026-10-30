@@ -671,6 +671,40 @@ def test_a_platform_with_no_entry_keeps_the_plain_launch() -> None:
     assert resolver.active_emulator_for_rom(86) is None
 
 
+def test_a_system_with_entries_but_no_default_established_bakes_the_empty_command() -> None:
+    """D9's choose state: no entry is in effect, so the shortcut gets the empty command (#2195 D43)."""
+    uow = FakeUnitOfWork()
+    _seed_rom(uow, rom_id=87, platform_slug="ps2")
+    unseen = dataclasses.replace(
+        standalone_option("%EMULATOR_PCSX2% -batch %ROM%", "PCSX2 (Standalone)"),
+        declared_index=0,
+        not_established="no_find_rule",
+    )
+    resolver, _ = _make_resolver(uow=uow, core_info=FakeCoreInfoProvider(options=[unseen]))
+
+    resolved = resolver.resolve_rom(87)
+
+    assert resolved is not None
+    assert (resolved.choice.option, resolved.invocation) == (None, EmulatorInvocation.nothing())
+
+
+def test_a_vanished_pick_with_no_default_bakes_the_empty_command() -> None:
+    uow = FakeUnitOfWork()
+    _seed_rom(uow, rom_id=88, platform_slug="ps2", emulator_override="Gone (Standalone)")
+    unseen = dataclasses.replace(
+        standalone_option("%EMULATOR_PCSX2% -batch %ROM%", "PCSX2 (Standalone)"),
+        declared_index=0,
+        not_established="no_find_rule",
+    )
+    resolver, _ = _make_resolver(uow=uow, core_info=FakeCoreInfoProvider(options=[unseen]))
+
+    resolved = resolver.resolve_rom(88)
+
+    assert resolved is not None
+    assert resolved.choice.vanished is not None
+    assert (resolved.choice.option, resolved.invocation) == (None, EmulatorInvocation.nothing())
+
+
 def test_a_pin_to_an_entry_not_installed_stands() -> None:
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=83, platform_slug="gba", emulator_override="Missing")

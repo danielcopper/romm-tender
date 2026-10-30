@@ -1994,9 +1994,9 @@ and the sentences name the platform by it rather than by the system the resolver
 bake site — library sync's `installed_paths`, download-complete's re-bake, the core-change re-bake, the startup
 relaunch-options heal — writes the command whatever the verdict (D28). Asking at each bake would ask for every installed
 game on every sync and preview. An empty launch command means "not downloaded", or that the entry in effect is one
-Tender cannot bake, which bakes the empty command so a start Tender does not see runs nothing (D43; why, Core and
-Emulator Selection, "What starting comes to"). Whether an entry can be baked is the catalogue's statement, never a
-launchability question.
+Tender cannot bake or that none is in effect though the system lists entries, which bakes the empty command so a start
+Tender does not see runs nothing (D43; why, Core and Emulator Selection, "What starting comes to"). Whether an entry can
+be baked is the catalogue's statement, never a launchability question.
 
 **Every code the resolver states on the answer is read** (D40): where the entry does not take the file, the verdict
 carries the resolver's reason in Tender's word (`reason` — a folder the entry takes none of, nothing to boot in it, no
