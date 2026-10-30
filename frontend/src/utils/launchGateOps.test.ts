@@ -18,7 +18,6 @@ vi.mock("../api/backend", () => ({
   checkStartSource: vi.fn(),
   confirmSlotChoice: vi.fn(),
   debugLog: vi.fn(() => Promise.resolve()),
-  getInstalledRom: vi.fn(),
   getSaveSetupInfo: vi.fn(),
   isSaveTrackingConfigured: vi.fn(),
   logError: vi.fn(),
