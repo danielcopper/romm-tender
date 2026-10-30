@@ -1006,17 +1006,32 @@ answers `recommended_action: "sync_unavailable"` with the refusal's `reason` and
 kind and emulator label where it carries them, so the panel words it as it does a press on the same game — and asks RomM
 nothing: no device registration, no listing. A game that syncs answers by the table above, its local probe reading that
 same answer ([#2153](https://github.com/danielcopper/romm-tender/issues/2153)). `get_save_sync_availability` asks the
-same refusal alone, with nothing else read and nothing asked of RomM, and answers `{available: true}` or
-`{available: false}` with those fields: the question the SAVES tab asks while it holds RomM as unreachable.
+same refusal alone, with nothing else read and nothing asked of RomM: `available`, with those fields where it is false;
+`installed`, since a game that is not downloaded is asked about the path it would be downloaded to (the save answer's
+own `content_installed`, `RomInfoService._uninstalled_answer`); and `emulator_label`, the label of the entry the game
+starts with as the emulator menu shows it (`RomInfoService.start_label`, off `ActiveCoreReader.resolve_rom`), `None`
+where the game has no entry — never a name derived from the answer's `emulator`, which is the emulator's identity. It is
+what the SAVES tab says of a game's saves ([#2149](https://github.com/danielcopper/romm-tender/issues/2149)), and the
+setup's question while the panel holds RomM as unreachable. One edge asks RomM after all: the would-be path needs the
+platform's system, and a platform with no ids kept yet — before its first sync — has RomM's platform list read once
+(`PlatformSystems.platform_system`).
 
 ### Where the check happens
 
-- **Game detail page (SAVES tab):** shows wizard instead of save list when `slot_confirmed=false`. For a game whose
-  saves no sync carries it shows the sentence the sync refuses with under the title "Save Sync", and no slot buttons;
-  such an answer asked RomM nothing, so it does not feed the shared connection state either. Where the panel already
-  holds RomM as unreachable, the tab skips the setup info, whose retry ladder would only wait the outage out, and asks
-  `get_save_sync_availability` instead: a game that cannot sync shows its reason the same way, and a game that can keeps
-  the unreachable notice and its Retry.
+- **Game detail page (SAVES tab):** the panel reads `get_save_sync_availability` once per page, bound to the ROM it was
+  read for and ordered by its own read sequence (`refreshSaveSyncAnswer`, `bigpicture/panelState.ts`), and again after a
+  version switch, an emulator change, a download and an uninstall; nothing is shown while it loads. A downloaded game it
+  refuses gets a warning mark beside the tab's title (`renderTabAddon`), and the tab shows the sentence the sync refuses
+  with under the title "Save Sync", and no slot buttons, whether or not its slot is confirmed (`SaveSyncRefusal`); its
+  set-up mark and its slots on RomM stay untouched. For `savefiles_in_content_dir` RetroArch's setting stands under the
+  sentence. Any other game shows the wizard when `slot_confirmed=false`, else the save list, under a line saying whether
+  its saves will sync once it is downloaded where `installed` is false. An active slot with no save reads "No save yet —
+  _label_'s saves for this game sync with RomM once it writes one." where the answer says the downloaded game syncs, and
+  "No save yet." where it does not say so (loading, a failed read, not downloaded). The wizard still takes its own setup
+  info: a refusal there asked RomM nothing, so it does not feed the shared connection state either. Where the panel
+  already holds RomM as unreachable, the wizard skips the setup info, whose retry ladder would only wait the outage out,
+  and asks `get_save_sync_availability` instead: a downloaded game that cannot sync shows its reason the same way, and
+  any other keeps the unreachable notice and its Retry.
 - **Play button:** checks before launch. If not configured and server has saves, redirects to SAVES tab. If no server
   saves, auto-configures with default. A game whose saves no sync carries starts with no setup step and no toast, also
   where RomM holds saves for it: the sync before the start passes it over, or asks first where the saves folder is
@@ -1073,9 +1088,10 @@ no error); the whole-library sweep, which reads every installed ROM's answer whe
 passes such a ROM over inside its run and, where every ROM it read saves beside its content, refuses with the same skip,
 or otherwise counts the ROMs it held back in its message ([Manual sync all](#manual-sync-all)). The secondary write
 endpoints (rollback, slot switch, conflict resolve, the slot choice with or without a migration, copy to slot) refuse
-with the same reason. `get_save_status` carries the additive `savefiles_in_content_dir: true` flag, so the game-detail
-play section shows a banner saying the saves are written beside the game file, and naming RetroArch's setting only as
-the usual cause — only while save sync is enabled, since the banner is about getting save sync to work.
+with the same reason. The game's SAVES tab says so like every other refusal, marked beside its title, and names
+RetroArch's setting under the sentence, only as the usual cause
+([#2149](https://github.com/danielcopper/romm-tender/issues/2149) D2); nothing above the play row says it.
+`get_save_status` still carries the additive `savefiles_in_content_dir` flag, which the panel no longer reads.
 
 **Why this is easy to confuse**: "Write Saves to **Content Directory**" controls the **destination** (next to the ROM vs
 the saves directory), while "Sort Saves **Into Folders by Content Directory**" controls the **layout within** the saves
