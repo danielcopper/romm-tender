@@ -281,6 +281,15 @@ def _server_error_message(exc: RommServerError) -> str:
     return f"Server error ({exc.status_code or 500}) \u2014 check your RomM server logs"
 
 
+def _unreached_message(exc: RommSSLError | RommTimeoutError | RommConnectionError) -> str:
+    """:func:`classify_error`'s message for a request that never reached RomM."""
+    if isinstance(exc, RommSSLError):
+        return "SSL certificate error \u2014 enable 'Allow Insecure SSL' in settings for self-signed certs"
+    if isinstance(exc, RommTimeoutError):
+        return "Request timed out \u2014 server may be overloaded or network is slow"
+    return "Server unreachable \u2014 check your URL and ensure RomM is running"
+
+
 def _is_client_refusal(exc: Exception) -> bool:
     """Whether *exc* is a RomM error carrying a 4xx status."""
     return isinstance(exc, RommApiError) and exc.status_code is not None and 400 <= exc.status_code < 500
@@ -316,21 +325,8 @@ def classify_error(exc):
         return ErrorCode.AUTH_FAILED.value, "Authentication failed \u2014 check your username and password"
     if isinstance(exc, RommForbiddenError):
         return ErrorCode.AUTH_FAILED.value, "Access denied \u2014 your account lacks permissions for this action"
-    if isinstance(exc, RommSSLError):
-        return (
-            ErrorCode.SERVER_UNREACHABLE.value,
-            "SSL certificate error \u2014 enable 'Allow Insecure SSL' in settings for self-signed certs",
-        )
-    if isinstance(exc, RommTimeoutError):
-        return (
-            ErrorCode.SERVER_UNREACHABLE.value,
-            "Request timed out \u2014 server may be overloaded or network is slow",
-        )
-    if isinstance(exc, RommConnectionError):
-        return (
-            ErrorCode.SERVER_UNREACHABLE.value,
-            "Server unreachable \u2014 check your URL and ensure RomM is running",
-        )
+    if isinstance(exc, RommSSLError | RommTimeoutError | RommConnectionError):
+        return ErrorCode.SERVER_UNREACHABLE.value, _unreached_message(exc)
     if isinstance(exc, RommRateLimitedError):
         return "rate_limited", "RomM is rate-limiting requests \u2014 try again in a moment"
     if isinstance(exc, RommReportedServerError):
