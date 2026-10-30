@@ -73,7 +73,7 @@ class EmulatorInvocation:
       :func:`build_launch_options`.
     - :data:`NOTHING` → the entry in effect is one Tender cannot bake, and the
       shortcut gets the empty start command, so a start Tender does not see
-      runs nothing rather than ES-DE's own choice (#2195 D43). It names no
+      runs nothing (#2195 D43; why, docs/architecture/core-emulator-selection.md, "What starting comes to"). It names no
       emulator, so a read of the emulator a ROM launches with takes it for
       none, as it did the plain launch.
 
@@ -279,8 +279,9 @@ def build_shortcuts_data(
     folding the per-game/per-platform override over
     the shipped default). Only ROMs that resolved to an emulator appear (the
     caller omits the ``(None, None)`` fallback); a ROM absent from the map follows
-    the plain RetroDECK launch, a present ROM bakes its ``-e`` form into
-    ``launch_options``. Required so a new bake site can never silently skip the
+    the plain RetroDECK launch, a present ROM bakes its invocation into
+    ``launch_options`` — the ``-e`` form, or the empty command for an entry
+    Tender cannot bake (#2195 D43). Required so a new bake site can never silently skip the
     override.
 
     The sibling-group key (ADR-0021) and RomM's version dimensions (``regions`` /

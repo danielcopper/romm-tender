@@ -150,8 +150,8 @@ class ActiveCoreResolver:
         else:
             emulator = option_to_invocation(choice.option)
         if choice.option is not None and choice.option.status != "bakeable":
-            # The bake writes the empty command rather than RetroDECK's plain
-            # start, which would run ES-DE's own choice (#2195 D43).
+            # The bake writes the empty command (#2195 D43; why,
+            # docs/architecture/core-emulator-selection.md, "What starting comes to").
             emulator = EmulatorInvocation.nothing()
         invocation = self._maybe_folder_boot_direct(emulator, install, rom_id)
         return ResolvedEmulator(choice=choice, options=options, invocation=invocation)

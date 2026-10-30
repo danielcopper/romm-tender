@@ -343,8 +343,9 @@ def option_to_invocation(option: EmulatorOption | None) -> EmulatorInvocation | 
     on Neo Geo CD — keeps all of it. The invocation carries the option's
     ``core_so``, and an emulator program's ``launcher`` for the folder-boot
     fold, which execs a program and never RetroArch with a core. A ``None``
-    option, or one that is not bakeable, resolves to ``None`` (the plain-launch
-    signal).
+    option, or one that is not bakeable, resolves to ``None``; for the entry in
+    effect, the active-core resolver bakes the latter as the empty command
+    (#2195 D43).
     """
     if option is None or option.status != "bakeable" or not option.command:
         return None
@@ -371,7 +372,7 @@ def label_to_invocation(options: list[EmulatorOption], label: str) -> EmulatorIn
     """Resolve a picked *label* to its :class:`EmulatorInvocation`, else ``None``.
 
     ``None`` where no option carries the label or the option it names cannot be
-    baked: the plain launch.
+    baked.
     """
     return option_to_invocation(option_for_label(options, label))
 

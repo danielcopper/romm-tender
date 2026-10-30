@@ -577,8 +577,9 @@ class CoreService:
         an installed+bound ROM so the frontend confirm-sets the now-default launch
         on the live shortcut. Because the resolved default may itself be a
         per-platform core, the recomputed command bakes the ROM's FULL active core
-        (the ``-e`` override form, or the plain launch when the platform resolves
-        to ``(None, None)``) — never an unconditional plain launch. Clearing is
+        (the ``-e`` override form, the empty command where the entry in effect is
+        one Tender cannot bake (#2195 D43), or the plain launch where the
+        platform resolves to no entry) — never an unconditional plain launch. Clearing is
         always valid — there is no label to resolve. An unknown ROM is refused
         with ``not_found``; when it is uninstalled or unbound the NULL still
         lands and ``launch_options``/``app_id`` are ``None``. A live update
@@ -632,8 +633,9 @@ class CoreService:
 
         An installed (``RomInstall`` with a ``file_path``) **and** bound
         (``shortcut_app_id`` set) ROM gets the full launch command — the ``-e``
-        form when *emulator* is set (libretro core or standalone), the plain form
-        when it is ``None`` — over the disc-resolved bake path (the ROM's persisted
+        form for an emulator Tender can bake (libretro core or standalone), the
+        empty command for :meth:`EmulatorInvocation.nothing` (#2195 D43), the
+        plain form for ``None`` — over the disc-resolved bake path (the ROM's persisted
         ``selected_disc`` for a multi-disc ROM, its ``file_path`` unchanged for a
         single-disc ROM), paired with its Steam ``app_id``. An uninstalled or
         unbound ROM has no live shortcut to update, so both are ``None`` and the

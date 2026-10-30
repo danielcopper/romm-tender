@@ -323,9 +323,9 @@ RetroDECK's `run_game.sh` starts it. This rule is Tender's own, and it follows t
 rather than ES-DE's. Ahead of the rules below come three refusals the resolver's statements cause: an entry it states
 not installed (`not_installed`, below), one it states `run_game.sh` would run nothing for (`start_script_runs_nothing`,
 below), and a `core` entry it gives no core path for (`core_unlocated`), since there is then nothing to write where the
-command names its core; the panel words the last two as "RetroDECK's start script finds no emulator for it" and "core
-location not established". A `core` entry's command is judged with its core path written in. `classify_command` then
-applies these rules in order, first match wins:
+command names its core; the panel words the second as "RetroDECK's start script finds no emulator for it", and a core
+entry without its core path carries the not-established note it comes with (below). A `core` entry's command is judged
+with its core path written in. `classify_command` then applies these rules in order, first match wins:
 
 1. contains `%INJECT%` → `needs_setup` (`"inject"`) — the command injects a file's contents, and Tender cannot start a
    command in that form;
