@@ -461,23 +461,20 @@ never stored as a separate boolean ([ADR-0008](docs/adr/0008-rom-install-launch-
 [#129](https://github.com/danielcopper/romm-tender/issues/129); it is an additive 1:N child of `rom_installs` (deferred
 until those land), and `file_path` + `rom_dir` are its forward-compatible projection.
 
-### Launchable install / no launch target
+### Launchability
 
-A downloaded ROM whose recorded **launch file** is something the system cannot act on — a PS3 `.pkg` installer (the game
-is still sealed inside the package), a bare disc track `.bin`. `detect_launch_file` ends in "largest file by size", so a
-download none of its format rules recognise still yields a `file_path`; `RomInstall.launchable` records whether that
-path is a real launch target, decided once at download-complete against the system's live ES-DE accept-list
-([#1652](https://github.com/danielcopper/romm-tender/issues/1652)).
+Whether an installed game's file starts with the entry Tender starts it through — the resolver's answer, asked with that
+entry's label when the game's page, its emulator menu or a press on Steam's own Play reads it, and stored nowhere
+([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D2, D13, D26). It has five states, each with its own
+sentence: it **starts**; it **has to be installed first** in an emulator (a PS3 `.pkg`, a 3DS `.cia`), named where the
+resolver names one; it is **not a launch file** of the system, which starts from other extensions (a single Dreamcast
+track); **this emulator does not start it** though others of the system do; or whether it starts is **not established**,
+with the reason. The middle three refuse a start; the last lets it go ahead, as does a file that starts but is an
+archive whose contents were not read. Extensions are compared case-exactly, as ES-DE compares them (D3).
 
-"No launch target" is a statement about the **launch command**, never about the download. The files stay on disk, the
-install row is written, and uninstall works normally — installing the package by hand in the emulator is the documented
-RetroDECK procedure and a refusal that discarded the download would leave the user worse off. What is withheld is the
-baked `launch_options`: an unlaunchable install resolves to the empty path in the `DiscLaunchResolver` seam, so every
-bake site emits the same empty launch command an **un-downloaded** ROM's shortcut carries.
-
-Unlaunchable is always a **proven** verdict, never the absence of one: an unreadable accept-list, an unknown system, and
-a pre-migration row all read as launchable. The foil is a **folder-boot** install, whose `file_path` extension is
-irrelevant because the baked target is the game directory.
+Launchability is a statement about a start, never about the download. Every installed game is recorded with its files
+and gets its launch command whatever its launchability (D28); installing a package by hand in the emulator is the
+documented RetroDECK procedure, and the files are what it needs.
 
 ### Missing download / forget a download
 

@@ -685,14 +685,8 @@ whether the system can act on the install's `file_path` at all
 so a download none of its format rules recognise still produces a `file_path`, and that path became the shortcut's
 launch command with nothing checking it; the reported case is a PS3 title shipped as `.pkg` + `.rap`, where the PKG is
 an installer and the game is still sealed inside it ([#1582](https://github.com/danielcopper/romm-tender/issues/1582)).
-The verdict is decided once at download-complete and recorded here; the behavior it drives is in
-[Launch-target validation](backend-architecture.md#launch-target-validation).
-
-`NOT NULL DEFAULT 1` — existing rows are launchable **by assumption, not by re-assessment**. They were downloaded under
-the old behaviour and their shortcuts work (or do not) exactly as before; flipping any of them to `0` would need an
-accept-list this DDL cannot consult. A ROM re-downloaded after the migration gets a real verdict. Unlaunchable is always
-a proven verdict, never the absence of one — the same reason the aggregate field and the check's unknown-system branch
-both default to launchable.
+`NOT NULL DEFAULT 1`: existing rows were launchable by assumption, since flipping any of them to `0` would have needed
+an accept-list the DDL could not consult. Rung 040 drops the column.
 
 `024_add_answered_save_directories.sql` (`user_version = 24`) creates `answered_save_directories` — one row per ROM, the
 save directory the resolver last answered for it ([ADR-0041](../adr/0041-the-save-directory-is-the-resolvers-answer.md);
@@ -844,6 +838,13 @@ column to `roms` beside `emulator_override` ([#2195](https://github.com/danielco
 kind of the emulator source a per-game pick was chosen from, so a label that no longer exists there can be named with
 it. No backfill: nothing recorded which source an existing pick came from, and such a pick is read against the source
 the game starts through. Written only with the pick, through `set_emulator_override`.
+
+`040_drop_rom_install_launchable.sql` (`user_version = 40`) drops `rom_installs.launchable` again
+([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D13, D26, D28). Whether an installed game's file
+starts is the resolver's answer, asked with the entry Tender starts the game through, when its page, its emulator menu
+or a press on Steam's own Play reads it; a stored yes or no would go stale with the emulator choice and with the
+resolver's next release. The sync writes the start command for every installed game whatever the answer
+([Launch-target validation](backend-architecture.md#launch-target-validation)).
 
 ## The runtime Unit of Work
 

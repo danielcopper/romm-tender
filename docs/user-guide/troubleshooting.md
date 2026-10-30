@@ -386,21 +386,23 @@ left: it clears the record of the download without touching any file.
 
 ### The download has no launchable file
 
-**Symptom**: The download finished, but pressing Play shows a toast saying the download has no file the emulator can
-launch. The game's detail page repeats it under **ROM File**.
+**Symptom**: The download finished, but **Play** is off and the line under it says the game has to be installed in an
+emulator first, or that the file is not the one the system starts from. Steam's own Play on the shortcut says the same.
 
 **What happened**: Some titles are distributed as an _installer_ rather than as playable content. The clearest case is a
 PS3 game shipped as a `.pkg` (plus a `.rap` licence file): the game is sealed inside the package until an emulator
-installs it, so there is nothing for a shortcut to launch. The same applies to a disc rip that arrived as raw `.bin`
-tracks with no `.cue` or `.gdi` alongside them.
-
-Rather than write a launch command that cannot work, Tender leaves the shortcut without one and says so. **Your download
-is not deleted** — the files are on disk exactly where the ROM would normally live.
+installs it, so there is nothing for a shortcut to start. The same applies to a disc rip that arrived as raw `.bin`
+tracks with no `.cue` or `.gdi` alongside them. Whether a file starts is what the emulator source answers, asked each
+time the game's page opens. **Your download is not deleted** — the files are on disk exactly where the ROM would
+normally live.
 
 **Fix**: Install the content in the emulator yourself. For a PS3 `.pkg`, that is RetroDECK's documented procedure — open
 **RetroDECK › Configurator › Open Emulator › RPCS3**, use **File › Install Packages (PKG)**, point it at the downloaded
 `.pkg`, and install the `.rap` licence the same way. Launching from Steam once a package is installed is not supported
 yet; start it from RPCS3 in the meantime.
+
+Where the line says another emulator of the system starts the file, choose that emulator in the game's emulator menu;
+the menu says, for each emulator, whether it can start the game.
 
 To find the files, open the game's detail page — the **ROM File** section shows the filename the download produced.
 

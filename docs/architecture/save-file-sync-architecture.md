@@ -1854,17 +1854,17 @@ Runs before a RomM game starts (if `sync_before_launch` is enabled), through one
 `runLaunchGate` (`frontend/src/utils/launchGate.ts`). Tender's Play button runs it from `CustomPlayButton.handlePlay()`
 before it starts the game itself; the launch watcher (`frontend/src/utils/launchInterceptor.ts`) gates the starts that
 do not come through the Play button — Steam's own Play and a `steam://rungameid` link. Pre-launch sync is **not**
-triggered via `RegisterForAppLifetimeNotifications`. A start the gate refuses before the save work — a ROM with no
-launch target, or the source that would start it switched off
-([Which emulator source answers](core-emulator-selection.md#which-emulator-source-answers)) — runs no sync at all.
+triggered via `RegisterForAppLifetimeNotifications`. A start the gate refuses before the save work — the source that
+would start it switched off ([Which emulator source answers](core-emulator-selection.md#which-emulator-source-answers))
+— runs no sync at all, and nor does a start refused before the gate, where the game's file does not start with its
+emulator ([Launch-target validation](backend-architecture.md#launch-target-validation)).
 
 Every launch path builds the gate's inputs with `makeLaunchGateOps` (`frontend/src/utils/launchGateOps.ts`) and acts on
 its verdict with `runGateLoop` (`frontend/src/utils/launchVerdict.ts`), which runs the gate, hands the verdict to
 `actOnGateVerdict` and runs the gate again for as long as the user picks Retry on the offline-drift prompt. The shared
-parts are the migration check, the launch-target check, the starting-source check, a fresh reachability probe, the drift
-check, the pre-launch sync itself (`runPreLaunchSync`) and what each verdict means: a missing launch target or a
-switched-off source toasts, resolved conflicts announce the save change to the page and then launch. A path supplies
-only what is its own:
+parts are the migration check, the starting-source check, a fresh reachability probe, the drift check, the pre-launch
+sync itself (`runPreLaunchSync`) and what each verdict means: a switched-off source toasts, resolved conflicts announce
+the save change to the page and then launch. A path supplies only what is its own:
 
 | Supplied by the path               | Play button                                                                                                                      | Launch watcher                                     |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
@@ -2564,8 +2564,8 @@ differently: the stranded panel's card, in Quick Access and on a game page (`Str
 the store lists as running or starting whose status was read, leaves out one whose stop was observed since its last
 start (`isStopObserved`, the session manager's stop record), with no ROM and so without rule 1, and lets its own last
 lifetime notification per app answer first, to tell whether ANY game runs. At the two launch guards a wrong "running"
-skips the whole launch gate — the migration block, the launch target, tracking setup, the core-change confirmation, the
-offline drift check, the pre-launch sync and conflict resolution.
+skips the whole launch gate — the migration block, the starting source, tracking setup, the core-change confirmation,
+the offline drift check, the pre-launch sync and conflict resolution.
 
 1. **An active session answers "running"**, whatever the store says: the store has been measured reporting nothing with
    the game still up ([Surviving a JS-context rebuild mid-session](#surviving-a-js-context-rebuild-mid-session)).

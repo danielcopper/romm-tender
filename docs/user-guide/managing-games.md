@@ -624,19 +624,41 @@ again.
     stays a zip, which an emulator that cannot mount a disc from a zip does not start. The fix only affects new downloads;
     re-download the game to get the single clean ES-DE entry, and an unpacked disc where the zip held one.
 
-### When a download has nothing launchable
+### When a game does not start with its emulator
 
-A few titles are distributed as an **installer** rather than as playable content — most commonly a PS3 game shipped as a
-`.pkg` (plus a `.rap` licence file), where the game stays sealed inside the package until an emulator installs it. A
-disc rip that arrived as raw `.bin` tracks with no `.cue` or `.gdi` alongside them has the same problem.
+Not every download is something an emulator starts as it is. A few titles are distributed as an **installer** — most
+commonly a PS3 game shipped as a `.pkg` (plus a `.rap` licence file), where the game stays sealed inside the package
+until an emulator installs it. A disc rip can arrive as raw `.bin` tracks with no `.cue` or `.gdi` beside them, which is
+not a file the system starts from. And a file one emulator of a system does not take, another may.
 
-Tender checks what the download actually produced against the list of formats the system can open. When nothing in it
-qualifies, the shortcut is left **without a launch command** and the game's **ROM File** section says so, instead of
-writing a command that would fail the first time you press Play. Pressing Play shows the same explanation.
+Whenever a game's page opens, Tender asks whether its file starts with the emulator the game starts with, and says what
+the answer is under the **Play** button:
+
+- **"This game has to be installed in RPCS3 Game Serial (Standalone) first."** — the file is a package to install in the
+  emulator named, before anything starts it. **Play** is off.
+- **"track03.bin is not the file dreamcast starts from; it starts from .cue, .gdi, …"** — the download holds no file the
+  system starts. **Play** is off.
+- **"Mupen64Plus-Next does not start .n64; other emulators of this system do."** — choose another emulator in the
+  emulator menu. **Play** is off until you do.
+- **"Whether Game.sfc starts cannot be established: …"** — the emulator source could not answer, with the reason.
+  **Play** stays on.
+- **"What is inside Game.zip was not read, …"** — the file is an archive the emulator opens, and whether it holds a game
+  it starts was not read. **Play** stays on.
+
+Steam's own **Play** on the game's shortcut is refused with the same words. While the page is still asking, **Play** is
+grey and shows a spinner. Where the question itself goes wrong — Tender's backend does not answer in time, or the
+connection to it fails — a notification says what went wrong, and **Play** stays grey but can be pressed: the press asks
+again, and says what stands in the way if anything does. The emulator menu shows the same answer for each of its
+emulators: it opens at once, each emulator shows a spinner until its answer is in, and then says whether it can start
+the game and, where not, why. Every emulator stays choosable meanwhile.
 
 **Your download is kept.** The files stay on disk where the ROM would normally live, and **Uninstall** works as usual —
 because installing the package by hand in the emulator is exactly what you would do next. See
 [the troubleshooting entry](troubleshooting.md#the-download-has-no-launchable-file) for how.
+
+**A PS3 game downloaded as a folder** is named `<game>.ps3`, the name ES-DE gives a PS3 game kept as a folder. A PS3
+folder downloaded before this version is renamed so once, when Tender next starts; a folder whose new name is already
+taken keeps its name.
 
 ## Picking a Disc for Multi-Disc Games
 

@@ -428,6 +428,19 @@ A pinned per-game or per-platform label that no longer exists (the entry was rem
 fatal**: the resolver logs a WARNING and takes the next layer (the per-platform core, then the default), and the page
 names the pick that is gone. No consumer ever sees a bogus `.so`.
 
+### Whether an entry starts the installed game
+
+The emulator menu on an installed game's page shows, for each entry, whether it can start the game and, where not, why
+([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D22, D29, D31). Each answer is the resolver's
+launchability verdict asked with that entry's label (`CoreService.get_emulator_launches`, read when the menu opens); the
+menu opens at once with every entry choosable, each waiting on a spinner until its answer lands, and an answer that
+lands after the page moved to another version, or after the menu closed, is dropped (`utils/emulatorLaunches.ts`). An
+entry the resolver could not establish to read the file's format says so — for a game kept as a `<game>.ps3` folder,
+every RPCS3 entry does until the resolver states which one refuses a directory. The menu's answer never moves the pick;
+a pick of an entry that cannot start the game is the user's, and Play is then off with the verdict's sentence. What a
+game's own entry answers, and what each answer does to a start, is
+[Launch-target validation](backend-architecture.md#launch-target-validation).
+
 ## Application: baking `-e` into `launch_options`
 
 Per
@@ -530,8 +543,10 @@ Enumerating a ROM's discs needs two different facts kept separate:
   set. The disc unit is the image or the descriptor itself, never a track.
 - **The per-system accept-list is a capability and read live** —
   `AtlasCatalogueAdapter.get_supported_extensions(system)` (`adapters/atlas_catalogue.py`) returns the system's
-  es_systems `<extension>` set, lowercased, threaded into the resolver through the `SystemSupportedExtensionsFn`
-  Protocol, exactly as `system_supports_m3u` is read for the `.m3u` gate
+  es_systems `<extension>` set verbatim, both cases where the file lists both (ES-DE compares case-exactly; disc
+  enumeration still folds case on its side until [#2613](https://github.com/danielcopper/romm-tender/issues/2613)),
+  threaded into the resolver through the `SystemSupportedExtensionsFn` Protocol, exactly as `system_supports_m3u` is
+  read for the `.m3u` gate
   ([ADR-0013](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0013-platform-gated-m3u-via-es-systems.md)).
 
 Enumeration keeps the files whose extension is in **the intersection** of the two, so a disc the emulator cannot launch
@@ -601,6 +616,12 @@ save-path, core, and displayed-filename derivations are untouched. Both override
 below plus the download-complete, core set/clear, and startup-reconcile bakes) inherits them with no call-site edits,
 and a PS3 ROM synced before this change self-heals on its next bake. See
 [ADR-0019](../adr/0019-folder-as-launch-target.md).
+
+**The folder is named as ES-DE scans it.** A folder-boot download's folder is renamed `<game>.ps3`, the name ps3's
+accept-list carries for a game kept as a folder, and the resolver is asked about that folder; the marker run above still
+decides which directory inside it is baked ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D11). An
+older install is renamed once at start-up (D27; see
+[Launch-target validation](backend-architecture.md#launch-target-validation)).
 
 ### The same three bake sites — disc path composes with the core
 
