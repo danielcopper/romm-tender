@@ -52,6 +52,7 @@ function renderMultiFileNote(componentFiles: string[]): ReactElement {
 
 function renderActiveSlotBody(
   saveStatus: SaveStatus | null,
+  noSaveLine: string,
   conflicts: SyncConflict[],
   romId: number,
   slot: string,
@@ -108,9 +109,12 @@ function renderActiveSlotBody(
       );
     });
   }
+  // Where the summary line above says there is no save, the body repeats
+  // nothing (#2149 D3).
+  if (saveStatus && !saveStatus.server_query_failed) return [];
   return [
     <div key="no-files" style={{ fontSize: "13px", color: MUTED_COLOR, fontStyle: "italic" }}>
-      No save files tracked yet
+      {noSaveLine}
     </div>,
   ];
 }
@@ -123,6 +127,8 @@ interface SlotPanelProps {
   // Active slot data (only set when isActive === true)
   saveStatus: SaveStatus | null;
   conflicts: SyncConflict[];
+  /** What the active slot reads while it holds no save (#2149 D3). */
+  noSaveLine: string;
   isOffline: boolean;
   // Callbacks
   onSlotSwitched: (newSlot: string, newStatus: SaveStatus) => void;
@@ -139,6 +145,7 @@ export const SlotPanel: FC<SlotPanelProps> = ({
   defaultExpanded,
   saveStatus,
   conflicts,
+  noSaveLine,
   isOffline,
   onSlotSwitched,
   onVersionRestored,
@@ -228,7 +235,7 @@ export const SlotPanel: FC<SlotPanelProps> = ({
     }
   };
 
-  const { syncSummaryText, syncSummaryColor } = computeSyncSummary(isActive, saveStatus, conflicts);
+  const { syncSummaryText, syncSummaryColor } = computeSyncSummary(isActive, saveStatus, conflicts, noSaveLine);
 
   // Active slot: prefer the server-side save count (SaveSlotSummary.count, kept
   // fresh by the parent's romm_data_changed → getSaveSlots refresh) so the header
@@ -322,9 +329,16 @@ export const SlotPanel: FC<SlotPanelProps> = ({
   if (expanded) {
     bodyEl = isActive ? (
       <div key="body" className="romm-slot-body">
-        {renderActiveSlotBody(saveStatus, conflicts, romId, slotName, isOffline, onVersionRestored, onCopy).filter(
-          Boolean,
-        )}
+        {renderActiveSlotBody(
+          saveStatus,
+          noSaveLine,
+          conflicts,
+          romId,
+          slotName,
+          isOffline,
+          onVersionRestored,
+          onCopy,
+        ).filter(Boolean)}
       </div>
     ) : (
       <InactiveSlotBody

@@ -26,7 +26,14 @@ import { formatBytes } from "../utils/formatters";
 import type { SaveSetupInfo, SaveSyncAvailability, SlotMigrationConflict } from "../types";
 import { detach } from "../utils/detach";
 import { ConnectingIndicator } from "./saves/ConnectingIndicator";
+import { SaveSyncRefusal } from "./saves/SaveSyncRefusal";
 import { displaySlot } from "../utils/saveHelpers";
+
+/** The refusal the wizard shows in place of the slot choice. */
+interface WizardRefusal {
+  message: string;
+  reason: string | undefined;
+}
 
 interface SlotSetupWizardProps {
   romId: number;
@@ -477,7 +484,8 @@ function reachabilityOf(result: SaveSetupInfo): boolean | null {
 }
 
 /** Whether a slot can be set up for the game at all, asked without RomM; `null` where the question failed, which the
- *  caller treats as a game that can sync. */
+ *  caller treats as a game that can sync. A game that is not downloaded is answered about the path it would be
+ *  downloaded to, and its slot setup stays as it is whatever that answer says (#2149 D4). */
 async function readAvailabilityOffline(romId: number): Promise<SaveSyncAvailability | null> {
   try {
     return await getSaveSyncAvailability(romId);
@@ -497,9 +505,9 @@ function useSaveSetupInfo(romId: number, onComplete: () => void) {
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // The sentence a game whose saves no sync carries is refused with; set, it
+  // The refusal a game whose saves no sync carries is refused with; set, it
   // stands in place of the slot choice.
-  const [unavailable, setUnavailable] = useState<string | null>(null);
+  const [unavailable, setUnavailable] = useState<WizardRefusal | null>(null);
   // Bumped to force a re-fetch — the reconnect auto-reload uses it to re-run the
   // load effect once the shared connection store flips back to connected (#1345).
   const [reloadKey, setReloadKey] = useState(0);
@@ -530,8 +538,8 @@ function useSaveSetupInfo(romId: number, onComplete: () => void) {
       offlineHeldRef.current = true;
       const availability = await readAvailabilityOffline(romId);
       if (cancelled) return;
-      if (availability?.available === false) {
-        setUnavailable(availability.message ?? "");
+      if (availability?.available === false && availability.installed) {
+        setUnavailable({ message: availability.message ?? "", reason: availability.reason });
       } else {
         setError(SERVER_UNREACHABLE_WIZARD_MESSAGE);
       }
@@ -574,7 +582,7 @@ function useSaveSetupInfo(romId: number, onComplete: () => void) {
           romId,
           confirmSlotChoice,
           setError,
-          setUnavailable,
+          setUnavailable: (message) => setUnavailable({ message, reason: result.reason }),
           setConfirming,
           setInfo,
           logError,
@@ -635,7 +643,12 @@ function useSaveSetupInfo(romId: number, onComplete: () => void) {
           // re-arms offline and any other result that asked RomM reports the
           // server back.
           feedReachability(result);
-          applyWizardRetrySetupResult(result, { setError, setUnavailable, setLoading, setInfo });
+          applyWizardRetrySetupResult(result, {
+            setError,
+            setUnavailable: (message) => setUnavailable({ message, reason: result.reason }),
+            setLoading,
+            setInfo,
+          });
         },
         (e) => {
           setError(`Failed: ${e}`);
@@ -668,16 +681,7 @@ export const SlotSetupWizard: FC<SlotSetupWizardProps> = ({ romId, onComplete })
   }
 
   // A game whose saves no sync carries: the backend's sentence, and no slot to choose (#2153 D2, D7).
-  if (unavailable !== null) {
-    return (
-      <div style={{ padding: "0 0 12px" }}>
-        <div className="romm-panel-section-title">Save Sync</div>
-        <div className="romm-panel-muted" style={{ fontSize: "12px" }}>
-          {unavailable}
-        </div>
-      </div>
-    );
-  }
+  if (unavailable !== null) return <SaveSyncRefusal message={unavailable.message} reason={unavailable.reason} />;
 
   // Error without data — show retry
   if (error && !info) {

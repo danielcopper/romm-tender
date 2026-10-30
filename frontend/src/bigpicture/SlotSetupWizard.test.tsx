@@ -11,7 +11,7 @@ import {
   type WizardRetryDeps,
   type WizardSetupDeps,
 } from "../utils/saveSetup";
-import type { SaveSetupInfo } from "../types";
+import type { SaveSetupInfo, SaveSyncAvailability } from "../types";
 import { detach } from "../utils/detach";
 import {
   beginServerLoad,
@@ -236,6 +236,8 @@ describe("SlotSetupWizard", () => {
       setRommConnectionState("offline");
       vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue({
         available: false,
+        installed: true,
+        emulator_label: null,
         reason: "savefiles_in_content_dir",
         message,
       });
@@ -252,7 +254,11 @@ describe("SlotSetupWizard", () => {
 
     it("keeps the unreachable notice and Retry for a game that can sync", async () => {
       setRommConnectionState("offline");
-      vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue({ available: true });
+      vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue({
+        available: true,
+        installed: true,
+        emulator_label: null,
+      });
 
       const { container, getByText } = render(<SlotSetupWizard {...defaultProps()} />);
       await flushAsync();
@@ -275,7 +281,7 @@ describe("SlotSetupWizard", () => {
 
     it("loads online when RomM comes back while the question is still being answered", async () => {
       setRommConnectionState("offline");
-      let answerAvailability!: (availability: { available: boolean }) => void;
+      let answerAvailability!: (availability: SaveSyncAvailability) => void;
       vi.mocked(backend.getSaveSyncAvailability).mockImplementation(
         () =>
           new Promise((resolve) => {
@@ -291,7 +297,7 @@ describe("SlotSetupWizard", () => {
         await Promise.resolve();
       });
       await act(async () => {
-        answerAvailability({ available: true });
+        answerAvailability({ available: true, installed: true, emulator_label: null });
         await Promise.resolve();
       });
       await flushAsync();
@@ -312,6 +318,53 @@ describe("SlotSetupWizard", () => {
 
       expect(container.querySelector(".romm-panel-section-title")?.textContent).toBe("Save Sync");
       expect(container.textContent).not.toContain("Save Slot Setup");
+    });
+
+    it("stands RetroArch's setting under the sentence online (#2149 D2)", async () => {
+      const actual = await vi.importActual<typeof import("../utils/saveSetup")>("../utils/saveSetup");
+      vi.mocked(applyWizardInitialSetupResult).mockImplementation(actual.applyWizardInitialSetupResult);
+      vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(
+        makeSetupInfo({ recommended_action: "sync_unavailable", reason: "savefiles_in_content_dir", message }),
+      );
+
+      const { getByTestId } = render(<SlotSetupWizard {...defaultProps()} />);
+      await flushAsync();
+
+      expect(getByTestId("save-sync-refusal-hint").textContent).toContain("Write Saves to Content Directory");
+    });
+
+    it("stands RetroArch's setting under the sentence while RomM is held unreachable (#2149 D2)", async () => {
+      setRommConnectionState("offline");
+      vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue({
+        available: false,
+        installed: true,
+        emulator_label: null,
+        reason: "savefiles_in_content_dir",
+        message,
+      });
+
+      const { getByTestId } = render(<SlotSetupWizard {...defaultProps()} />);
+      await flushAsync();
+
+      expect(getByTestId("save-sync-refusal-hint").textContent).toContain("Write Saves to Content Directory");
+    });
+
+    it("keeps the setup as it is for a game not downloaded, whatever its would-be saves (#2149 D4)", async () => {
+      setRommConnectionState("offline");
+      vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue({
+        available: false,
+        installed: false,
+        emulator_label: null,
+        reason: "save_shape_unsupported",
+        message,
+      });
+
+      const { container, getByText } = render(<SlotSetupWizard {...defaultProps()} />);
+      await flushAsync();
+
+      expect(container.textContent).not.toContain(message);
+      expect(container.textContent).toContain("RomM server is not reachable");
+      expect(getByText("Retry")).not.toBeNull();
     });
   });
 

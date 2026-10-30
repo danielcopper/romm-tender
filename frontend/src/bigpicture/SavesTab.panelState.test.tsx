@@ -75,6 +75,7 @@ function props(overrides: Partial<ComponentProps<typeof SavesTab>> = {}): Compon
     availableSlots: SLOTS,
     lastKnownSlots: null,
     slotsLoading: false,
+    noSaveLine: "No save yet.",
     onSlotSwitched: vi.fn(),
     ...overrides,
   };

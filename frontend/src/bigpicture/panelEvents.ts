@@ -32,6 +32,7 @@ import {
   foldBiosRead,
   refreshBiosIfStale,
   refreshPanelCoreInfo,
+  refreshSaveSyncAnswer,
   refreshCoverArtInBackground,
   refreshInstalledRomInBackground,
   refreshSlotState,
@@ -101,6 +102,11 @@ async function handleSaveSyncSettingsChange(
   const romId = ctx.romIdRef.current;
   if (!romId) return;
   const binding = bindCurrentRom(ctx, romId);
+  await Promise.all([refreshSaveSyncAnswer(binding, ctx.readSeqs), foldSaveStatusRead(ctx, binding)]);
+}
+
+/** Read the ROM's save status and fold it in, unless a later read has been issued since. */
+async function foldSaveStatusRead(ctx: PanelEventContext, binding: RomBinding): Promise<void> {
   const overtaken = takeReadTicket(ctx.readSeqs, "saveStatus");
   const result = await getSaveStatus(binding.romId).catch(() => null);
   if (result && isEndpointFailure(result)) return;
@@ -221,12 +227,15 @@ async function handleCoreChange(ctx: PanelEventContext): Promise<void> {
   // the read below answers.
   const biosFields = biosFieldsFromCache(cached);
   binding.write((prev) => ({ ...prev, ...biosFields, coreInfo: coreInfo ?? prev.coreInfo }));
+  // Whose saves they are, and whether they sync, is the emulator's answer, so
+  // it is asked again for the emulator now chosen.
+  const saveSync = cached.save_sync_enabled ? refreshSaveSyncAnswer(binding, ctx.readSeqs) : undefined;
   // The core the requirement is computed against just changed, so a re-read that
   // could not answer leaves the PREVIOUS core's requirement on the page. Going
   // back for it is what keeps that from standing until the next page open
   // (#1752). Read directly: this handler runs because the requirement may have
   // just changed, so it must not join a read issued before the change.
-  await refreshBiosIfStale(cached, binding, ctx.readSeqs, getBiosStatus);
+  await Promise.all([refreshBiosIfStale(cached, binding, ctx.readSeqs, getBiosStatus), saveSync]);
 }
 
 /** A switch or a move of an emulator source can change which source answers for
@@ -302,6 +311,7 @@ async function handleVersionSwitched(
       languages: cached.languages ?? [],
       // Re-key per-rom tab state so nothing lingers from the previous version.
       saveSyncEnabled,
+      saveSyncAnswer: null,
       saveStatus,
       conflicts: cached.save_status?.conflicts ?? [],
       raId: cached.ra_id ?? null,
@@ -346,6 +356,7 @@ async function handleVersionSwitched(
     // mount load — the ROM File row and its launch-target note are hidden
     // either way, and an uninstalled version has no record to fetch.
     if (cached.installed) reads.push(refreshInstalledRomInBackground(binding));
+    if (saveSyncEnabled) reads.push(refreshSaveSyncAnswer(binding, ctx.readSeqs));
     await Promise.all(reads);
   }
 }
@@ -407,6 +418,15 @@ function dispatchDataChanged(ctx: PanelEventContext, detail: RommDataChangedDeta
   }
 }
 
+/** Ask again whether the ROM's saves sync once it was downloaded or uninstalled:
+ *  a game that is not downloaded is answered about the path it would occupy, so
+ *  the answer says which (#2149 D4). Asked only while save sync is on, as the
+ *  cached detail says, which the SAVES tab is shown for. */
+async function rereadSaveSyncAnswer(ctx: PanelEventContext, romId: number): Promise<void> {
+  const cached = await getCachedGameDetail(ctx.appId).catch(() => null);
+  if (cached?.found && cached.save_sync_enabled) await refreshSaveSyncAnswer(bindCurrentRom(ctx, romId), ctx.readSeqs);
+}
+
 /** Subscribe the panel's event listeners; the returned teardown unsubscribes
  *  them all. */
 export function wirePanelEvents(ctx: PanelEventContext): () => void {
@@ -415,6 +435,7 @@ export function wirePanelEvents(ctx: PanelEventContext): () => void {
     const detail = (e as CustomEvent).detail;
     if (detail?.rom_id === ctx.romIdRef.current) {
       ctx.setState((prev) => ({ ...prev, installed: false, installedRom: null }));
+      detach(rereadSaveSyncAnswer(ctx, detail.rom_id));
     }
   };
   globalThis.addEventListener("romm_rom_uninstalled", onUninstall);
@@ -433,6 +454,7 @@ export function wirePanelEvents(ctx: PanelEventContext): () => void {
       invalidateCachedGameDetail(ctx.appId);
       ctx.setState((prev) => ({ ...prev, installed: true }));
       detach(refreshInstalledRomInBackground(bindCurrentRom(ctx, evt.rom_id)));
+      detach(rereadSaveSyncAnswer(ctx, evt.rom_id));
     },
   );
 

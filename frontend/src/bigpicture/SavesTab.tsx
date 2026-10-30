@@ -41,6 +41,8 @@ interface SavesTabProps {
    *  landed — read-only, and never a source for `activeSlot` (#1755). */
   lastKnownSlots: LastKnownSlots | null;
   slotsLoading: boolean;
+  /** What the active slot reads while it holds no save (#2149 D3). */
+  noSaveLine: string;
   onSlotSwitched: (newSlot: string, newStatus: SaveStatus) => void;
 }
 
@@ -54,6 +56,7 @@ export const SavesTab: FC<SavesTabProps> = ({
   availableSlots,
   lastKnownSlots,
   slotsLoading,
+  noSaveLine,
   onSlotSwitched,
 }) => {
   const [newSlotError, setNewSlotError] = useState<string | null>(null);
@@ -218,7 +221,7 @@ export const SavesTab: FC<SavesTabProps> = ({
     } else {
       unslottedFilesSection = (
         <div key="no-files" style={{ fontSize: "13px", color: MUTED_COLOR, fontStyle: "italic", marginBottom: "12px" }}>
-          No save files tracked yet
+          {noSaveLine}
         </div>
       );
     }
@@ -250,6 +253,7 @@ export const SavesTab: FC<SavesTabProps> = ({
             defaultExpanded={isActive}
             saveStatus={isActive ? saveStatus : null}
             conflicts={isActive ? conflicts : []}
+            noSaveLine={noSaveLine}
             isOffline={isOffline}
             onSlotSwitched={onSlotSwitched}
             onVersionRestored={handleVersionRestored}
