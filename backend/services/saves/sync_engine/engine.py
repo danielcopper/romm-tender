@@ -617,9 +617,10 @@ class SyncEngine:
         the bulk run completes that session once after the loop.
 
         *on_sync_begins* is awaited once the sync's first request that RomM can
-        refuse for this device has passed without that refusal: right after the
-        ``negotiate`` session is opened, whatever it answered, and where this
-        call opens none, just before the matrix runs. A ``negotiate`` that
+        refuse for this device has passed without that refusal: once the
+        ``negotiate`` request has answered without RomM refusing the sync,
+        whether or not it opened a session, and where this call sends none,
+        just before the matrix runs. A ``negotiate`` that
         raises :class:`RommSyncDisabledError` never reaches it, and neither does
         a ROM not installed or passed over. Only the sync before a start passes
         it.

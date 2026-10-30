@@ -96,6 +96,26 @@ class TestASyncThatProceedsIsAnnounced:
         assert any(call[0] == "list_saves" for call in fake.call_log)
 
     @pytest.mark.asyncio
+    async def test_a_session_that_could_not_be_opened_is_announced_before_the_sync_it_goes_on_without(
+        self, tmp_path, monkeypatch
+    ):
+        svc, fake, heard = _service(tmp_path)
+
+        def negotiate_fails(*_args: object, **_kwargs: object) -> dict[str, Any]:
+            fake.call_log.append(("negotiate_sync", (), {}))
+            raise RommConnectionError("Connection reset")
+
+        monkeypatch.setattr(fake, "negotiate_sync", negotiate_fails)
+
+        await svc.pre_launch_sync(42)
+
+        assert heard.started() == [_STARTED]
+        [before] = heard.calls_before
+        assert "negotiate_sync" in before
+        assert "list_saves" not in before
+        assert any(call[0] == "list_saves" for call in fake.call_log)
+
+    @pytest.mark.asyncio
     async def test_a_slot_not_confirmed_opens_no_session_and_is_announced_before_the_sync(self, tmp_path):
         svc, fake, heard = _service(tmp_path)
         _seed_save_state_dict(svc, 42, {"active_slot": "default", "slot_confirmed": False})
