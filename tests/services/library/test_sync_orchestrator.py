@@ -106,6 +106,28 @@ def _seed_completed_run(library, *, at, platforms=None, collections=None, run_id
         library.uow.sync_runs.save(run)
 
 
+def _removals_since(emit, start):
+    """Every removal the ``sync_stale`` events emitted from call *start* on named."""
+    return [
+        row
+        for call in emit.call_args_list[start:]
+        if call.args and call.args[0] == "sync_stale"
+        for row in call.args[1]["remove"]
+    ]
+
+
+async def _the_panel_reports(library, removals):
+    """Play the panel after a run: every removal it was sent is gone from Steam, and it reports them (#2653)."""
+
+    def pair(row):
+        return {"rom_id": row["rom_id"], "app_id": row["app_id"]}
+
+    await library.shortcut_removal.report_sync_removals(
+        [pair(row) for row in removals if "kept_app_id" not in row],
+        [pair(row) for row in removals if "kept_app_id" in row],
+    )
+
+
 def _seed_platform_stamp(library, slug, *, at, rom_count, fetch_id=None, rom_ids=(), fetch_started_at=None):
     """Persist a per-platform completion stamp (ADR-0023) into the shared UoW.
 
@@ -2403,15 +2425,10 @@ class TestDoSyncPerUnit:
         assert collection_events[0]["platform_app_ids"] == {"N64": [1010]}
 
     @pytest.mark.asyncio
-    async def test_stale_entries_unbound_but_rows_kept_after_finalize(self, make_library, fake_romm_api, emit):
-        """End-to-end: a stale ROM (disabled platform) is unbound during finalize —
-        its ``shortcut_app_id`` is NULLed while the row survives (ADR-0007), not just
-        dropped from the frontend via ``sync_stale``.
-
-        Regression for the inflated ``get_sync_stats`` count: the orchestrator emits
-        ``sync_stale`` so the frontend drops the shortcut, and the run finalizer unbinds the
-        same rom_ids in ``uow.roms`` (NULL ``shortcut_app_id``, keep the row) so the
-        bound-shortcut count matches the still-synced ROMs.
+    async def test_stale_entries_stay_bound_until_reported_and_rows_kept(self, make_library, fake_romm_api, emit):
+        """End-to-end: a stale ROM (disabled platform) keeps its binding through the
+        finalize and is unbound once the panel reports the shortcut gone (#2653); the
+        row survives either way (ADR-0007).
         """
 
         library = make_library(romm_api=fake_romm_api)
@@ -2438,13 +2455,17 @@ class TestDoSyncPerUnit:
 
         await library.sync._orchestrator._do_sync_per_unit()
 
-        # Frontend was told to remove rom_id 99, carrying its bound app_id
-        # captured before the finalize unbind NULLed the binding.
+        # Frontend was told to remove rom_id 99, carrying its bound app_id.
         stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
         assert stale_events == [{"remove": [{"rom_id": 99, "app_id": 9900}], "prune_lease_token": "sync_stale:1"}]
+        with library.uow as uow:
+            bound_after_the_run = uow.roms.get(99).shortcut_app_id
 
-        # rom 99 was unbound (NULL app_id) but its row survives; only the
-        # synced ROM is still bound.
+        await _the_panel_reports(library, stale_events[0]["remove"])
+
+        # rom 99 was unbound (NULL app_id) by the report but its row survives;
+        # only the synced ROM is still bound.
+        assert bound_after_the_run == 9900
         with library.uow as uow:
             assert uow.roms.get(99).shortcut_app_id is None
             assert uow.roms.get(10).shortcut_app_id == 1000
@@ -5394,14 +5415,14 @@ class TestCollectionTurnedOffAndBackOn:
     """A collection whose sync is turned off and back on gets its shortcuts back (#2106).
 
     Its games sit on a platform whose own sync is off, so while the collection is
-    off the stale-removal scan unbinds them. Were the collection's completion stamp
+    off the stale-removal scan removes their shortcuts. Were the collection's completion stamp
     left able to skip, nothing the skip reads would have moved: RomM's
     ``updated_at`` and count are the same and no member changed since the stamp,
     and the skip's reconstruction passes over an unbound member.
     """
 
     @pytest.mark.asyncio
-    async def test_the_games_unbound_while_it_was_off_are_bound_again(self, make_library, fake_romm_api):
+    async def test_the_games_unbound_while_it_was_off_are_bound_again(self, make_library, fake_romm_api, emit):
         library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]
@@ -5423,7 +5444,9 @@ class TestCollectionTurnedOffAndBackOn:
         async def complete_a_run(run_id):
             box.sync_state = SyncState.RUNNING
             box.current_sync_id = run_id
+            start = len(emit.call_args_list)
             await library.sync._orchestrator._do_sync_per_unit()
+            await _the_panel_reports(library, _removals_since(emit, start))
 
         def bindings():
             with library.uow as uow:
@@ -5452,7 +5475,7 @@ class TestCollectionTurnedOffAndBackOn:
 
     @pytest.mark.asyncio
     async def test_a_collection_the_run_processed_keeps_its_stamp_when_a_game_it_does_not_hold_is_unbound(
-        self, make_library, fake_romm_api
+        self, make_library, fake_romm_api, emit
     ):
         library = make_library(romm_api=fake_romm_api)
         _seed_platform(
@@ -5478,7 +5501,9 @@ class TestCollectionTurnedOffAndBackOn:
         async def complete_a_run(run_id):
             box.sync_state = SyncState.RUNNING
             box.current_sync_id = run_id
+            start = len(emit.call_args_list)
             await library.sync._orchestrator._do_sync_per_unit()
+            await _the_panel_reports(library, _removals_since(emit, start))
 
         def bindings():
             with library.uow as uow:
@@ -5489,7 +5514,7 @@ class TestCollectionTurnedOffAndBackOn:
         await complete_a_run("run-1")
         assert bindings() == {1: 5001, 2: 5002, 3: 5003}
 
-        # Run 2: N64 is off; the stale removal unbinds the two games the collection does not hold.
+        # Run 2: N64 is off; the stale removal removes the shortcuts of the two games the collection does not hold.
         library.settings["enabled_platforms"] = {"1": False}
         await complete_a_run("run-2")
         assert bindings() == {1: 5001, 2: None, 3: None}
@@ -5500,7 +5525,7 @@ class TestCollectionTurnedOffAndBackOn:
 
     @pytest.mark.asyncio
     async def test_a_collection_the_run_full_fetched_keeps_its_fresh_stamp_when_a_game_it_does_not_hold_is_unbound(
-        self, make_library, fake_romm_api
+        self, make_library, fake_romm_api, emit
     ):
         library = make_library(romm_api=fake_romm_api)
         _seed_platform(
@@ -5526,7 +5551,9 @@ class TestCollectionTurnedOffAndBackOn:
         async def complete_a_run(run_id):
             box.sync_state = SyncState.RUNNING
             box.current_sync_id = run_id
+            start = len(emit.call_args_list)
             await library.sync._orchestrator._do_sync_per_unit()
+            await _the_panel_reports(library, _removals_since(emit, start))
 
         def bindings():
             with library.uow as uow:
@@ -5554,7 +5581,7 @@ class TestFailedCollectionListing:
     The games sit on a platform whose own sync is off, so no platform unit covers
     them. When RomM cannot be reached for the listing, the run has no unit for the
     collection; that must not read as "the collection holds nothing", which the
-    end-of-run stale removal would act on by unbinding its games and the frontend
+    end-of-run stale removal would act on by removing its games' shortcuts and the frontend
     by deleting the Steam collection.
     """
 
@@ -5674,8 +5701,8 @@ class TestPlatformListingThatIsNotAList:
     """A platform listing that answers with something but a list stops the run before it changes anything.
 
     Read as "no platforms" instead, a run with a collection enabled would still
-    complete, and the end-of-run stale removal would unbind every game only a
-    platform brings in.
+    complete, and the end-of-run stale removal would remove the shortcut of every
+    game only a platform brings in.
     """
 
     @pytest.mark.asyncio
@@ -6191,8 +6218,8 @@ class TestOnlyAFreshCollectionStampRestoresTheSkip:
 class TestPlatformTurnedOffAndBackOn:
     """A platform whose sync is turned off and back on gets all its shortcuts back (#2094).
 
-    While the platform is off, the stale-removal scan unbinds its games except the
-    ones an enabled collection lists. Were its completion stamp left able to skip,
+    While the platform is off, the stale-removal scan removes its games' shortcuts
+    except the ones an enabled collection lists. Were its completion stamp left able to skip,
     the game the collection held would stay bound, which keeps the zero-bound guard
     quiet, and the unbound ones would still carry the stamp's generation, so every
     count the skip reads would match. The stamp itself stays, because removed-game
@@ -6200,7 +6227,7 @@ class TestPlatformTurnedOffAndBackOn:
     """
 
     @pytest.mark.asyncio
-    async def test_the_games_unbound_while_it_was_off_are_bound_again(self, make_library, fake_romm_api):
+    async def test_the_games_unbound_while_it_was_off_are_bound_again(self, make_library, fake_romm_api, emit):
         library = make_library(romm_api=fake_romm_api)
         _seed_platform(
             fake_romm_api,
@@ -6224,7 +6251,9 @@ class TestPlatformTurnedOffAndBackOn:
         async def complete_a_run(run_id):
             box.sync_state = SyncState.RUNNING
             box.current_sync_id = run_id
+            start = len(emit.call_args_list)
             await library.sync._orchestrator._do_sync_per_unit()
+            await _the_panel_reports(library, _removals_since(emit, start))
 
         def bindings():
             with library.uow as uow:
@@ -6527,6 +6556,7 @@ class TestAVersionReachedOnlyThroughACollection:
         run_2_starts_at = len(emit.call_args_list)
         await library.sync._orchestrator._do_sync_per_unit()
         stale = [c.args[1] for c in emit.call_args_list[run_2_starts_at:] if c.args and c.args[0] == "sync_stale"]
+        await _the_panel_reports(library, _removals_since(emit, run_2_starts_at))
         with library.uow as uow:
             binding = uow.roms.get(21).shortcut_app_id
         return [event["remove"] for event in stale], binding
@@ -6706,6 +6736,7 @@ class TestAVersionSwitchedOffTheCollectionsMember:
         run_2_starts_at = len(emit.call_args_list)
         await library.sync._orchestrator._do_sync_per_unit()
         stale = [c.args[1] for c in emit.call_args_list[run_2_starts_at:] if c.args and c.args[0] == "sync_stale"]
+        await _the_panel_reports(library, _removals_since(emit, run_2_starts_at))
         with library.uow as uow:
             binding = uow.roms.get(22).shortcut_app_id
         return [event["remove"] for event in stale], binding
@@ -7147,6 +7178,7 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
             for shortcut in payload[0]["shortcuts"]
         ]
         removed = [rom["rom_id"] for name, *payload in frames if name == "sync_stale" for rom in payload[0]["remove"]]
+        await _the_panel_reports(library, _removals_since(emit, run_2_starts_at))
         (platform_collections,) = [
             set(payload[0]["platform_app_ids"]) for name, *payload in frames if name == "sync_collections"
         ]
@@ -7999,6 +8031,7 @@ class TestAPlatformUnitIsKeyedAsThePreviewKeysIt:
         assert box.try_begin_run(run_id, kind=SyncRunKind.APPLY) is True
         start = len(emit.call_args_list)
         await library.sync._orchestrator._do_sync_per_unit()
+        await _the_panel_reports(library, _removals_since(emit, start))
         frames = [call.args for call in emit.call_args_list[start:] if call.args]
         sent = [
             shortcut["rom_id"]
@@ -8415,8 +8448,11 @@ class TestAGameWithSeveralShortcutsConverges:
         }
 
     @staticmethod
-    async def _apply(library, emit, run_id, *, cancel=False):
-        """Run an apply; answer the rom ids it sent and its ``sync_stale`` entries."""
+    async def _apply(library, emit, run_id, *, cancel=False, report=True):
+        """Run an apply; answer the rom ids it sent and its ``sync_stale`` entries.
+
+        With *report* the panel then reports every removal gone from Steam.
+        """
         box = library.sync._box
         box.discard_preview()
         assert box.try_begin_run(run_id, kind=SyncRunKind.APPLY) is True
@@ -8428,6 +8464,8 @@ class TestAGameWithSeveralShortcutsConverges:
             library.chunk_dispatcher._wait_for_unit_complete = cancel_inside_the_unit
         start = len(emit.call_args_list)
         await library.sync._orchestrator._do_sync_per_unit()
+        if report:
+            await _the_panel_reports(library, _removals_since(emit, start))
         frames = [call.args for call in emit.call_args_list[start:] if call.args]
         sent = [
             shortcut["rom_id"]
@@ -8799,6 +8837,258 @@ class TestAGameWithSeveralShortcutsConverges:
         stale = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
         assert stale == [{"remove": []}]
         assert self._bindings(library) == {30: 6030, 31: 6031}
+
+
+class TestARemovalThePanelDidNotReport:
+    """A shortcut the sync removes keeps its row's binding until the panel reports it gone (#2653 D1).
+
+    Seen from here, a removal the next run's start cut short, one no panel
+    received and one Steam did not make look alike: no report arrives. Where
+    the shortcut is still in Steam the next run removes it again, and the
+    preview counts that; where it is gone, the next run's start reconcile
+    unbinds the row and nothing is removed.
+    """
+
+    _two_bound = TestAGameWithSeveralShortcutsConverges._two_bound
+    _apply = staticmethod(TestAGameWithSeveralShortcutsConverges._apply)
+    _bindings = staticmethod(TestAGameWithSeveralShortcutsConverges._bindings)
+    _list_calls = staticmethod(TestAGameWithSeveralShortcutsConverges._list_calls)
+    _golf = staticmethod(TestAGameWithSeveralShortcutsConverges._golf)
+
+    @staticmethod
+    def _a_game_on_a_platform_turned_off(library, fake_romm_api):
+        _seed_completed_run(library, at="2025-01-01T00:00:00Z")
+        _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00Z", rom_count=1)
+        _seed_rom_row(library, 10, app_id=1000, platform_slug="n64", name="A", fs_name="a.z64")
+        _seed_rom_row(
+            library, 99, app_id=9900, platform_slug="gba", name="Z", fs_name="z.gba", sibling_group_key="romm:seed:99"
+        )
+        fake_romm_api.platforms = [
+            {"id": 1, "name": "N64", "slug": "n64", "rom_count": 1},
+            {"id": 2, "name": "GBA", "slug": "gba", "rom_count": 0},
+        ]
+        library.settings["enabled_platforms"] = {"1": True, "2": False}
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = AsyncMock(return_value={})
+
+    @staticmethod
+    async def _apply_unreported(library, emit, run_id):
+        box = library.sync._box
+        box.discard_preview()
+        assert box.try_begin_run(run_id, kind=SyncRunKind.APPLY) is True
+        start = len(emit.call_args_list)
+        await library.sync._orchestrator._do_sync_per_unit()
+        return _removals_since(emit, start)
+
+    @pytest.mark.asyncio
+    async def test_a_stale_removal_never_reported_is_counted_and_made_again_until_it_is(
+        self, make_library, fake_romm_api, emit
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        self._a_game_on_a_platform_turned_off(library, fake_romm_api)
+
+        first = await self._apply_unreported(library, emit, "run-1")
+        bound_after_the_first = self._bindings(library)[99]
+        summary = (await library.sync.sync_preview())["summary"]
+        again = await self._apply_unreported(library, emit, "run-2")
+        await _the_panel_reports(library, again)
+        summary_after_the_report = (await library.sync.sync_preview())["summary"]
+        after_the_report = await self._apply_unreported(library, emit, "run-3")
+
+        assert first == again == [{"rom_id": 99, "app_id": 9900}]
+        assert bound_after_the_first == 9900
+        assert summary["remove_count"] == 1
+        assert (summary_after_the_report["remove_count"], after_the_report) == (0, [])
+        assert self._bindings(library) == {10: 1000, 99: None}
+
+    @pytest.mark.asyncio
+    async def test_the_terminal_frame_counts_a_removal_not_yet_reported_as_gone(
+        self, make_library, fake_romm_api, emit
+    ):
+        """#2653 D2: 99 stays bound until the report, and the run's "N games" leaves it out."""
+        library = make_library(romm_api=fake_romm_api)
+        self._a_game_on_a_platform_turned_off(library, fake_romm_api)
+
+        await self._apply_unreported(library, emit, "run-1")
+
+        (done,) = [
+            c.args[1]
+            for c in emit.call_args_list
+            if c.args and c.args[0] == "sync_progress" and c.args[1].get("stage") == "done"
+        ]
+        assert self._bindings(library)[99] == 9900
+        assert done["total"] == 1
+        assert done["message"].startswith("Sync complete: 1 games")
+
+    @pytest.mark.asyncio
+    async def test_a_stale_removal_whose_report_was_lost_is_unbound_by_the_start_reconcile(
+        self, make_library, fake_romm_api, emit
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        self._a_game_on_a_platform_turned_off(library, fake_romm_api)
+        await self._apply_unreported(library, emit, "run-1")
+
+        await library.shortcut_removal.reconcile_live_shortcuts([1000])
+        summary = (await library.sync.sync_preview())["summary"]
+        removed = await self._apply_unreported(library, emit, "run-2")
+
+        assert (summary["remove_count"], removed) == (0, [])
+        assert self._bindings(library) == {10: 1000, 99: None}
+
+    @pytest.mark.asyncio
+    async def test_a_convergence_never_reported_converges_again_with_its_carry_over(
+        self, make_library, fake_romm_api, emit, tmp_path
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, emit, tmp_path)
+        _sent, first = await self._apply(library, emit, "run-2", report=False)
+        bindings_after_the_first = self._bindings(library)
+
+        summary = (await library.sync.sync_preview())["summary"]
+        fake_romm_api.call_log.clear()
+        _sent, again = await self._apply(library, emit, "run-3")
+        fetched_in_full = bool(self._list_calls(fake_romm_api))
+        fake_romm_api.call_log.clear()
+        _sent, after_the_report = await self._apply(library, emit, "run-4")
+
+        converged = {"rom_id": 31, "app_id": 6031, "kept_rom_id": 30, "kept_app_id": 6030}
+        assert first == again == [converged]
+        assert bindings_after_the_first == {30: 6030, 31: 6031}
+        assert summary["remove_count"] == 1
+        assert fetched_in_full, "the platform is fetched in full while the game has two shortcuts"
+        assert after_the_report == []
+        assert self._list_calls(fake_romm_api) == []
+        assert self._bindings(library) == {30: 6030, 31: None}
+
+    @pytest.mark.asyncio
+    async def test_a_convergence_whose_report_was_lost_is_unbound_by_the_start_reconcile(
+        self, make_library, fake_romm_api, emit, tmp_path
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, emit, tmp_path)
+        await self._apply(library, emit, "run-2", report=False)
+
+        await library.shortcut_removal.reconcile_live_shortcuts([6030])
+        summary = (await library.sync.sync_preview())["summary"]
+        _sent, removed = await self._apply(library, emit, "run-3", report=False)
+
+        assert (summary["remove_count"], removed) == (0, [])
+        assert self._bindings(library) == {30: 6030, 31: None}
+
+
+class TestAReportThatLandsBeforeTheFinalize:
+    """The panel's report can unbind a removed row before the run's finalize writes (#2653).
+
+    The orchestrator emits ``sync_stale`` and then measures the run's memory
+    before the finalize, and the report holds no rule the run holds, so it can
+    land in between. The finalize then still settles the row's stamps: a platform
+    or a collection turned off and back on gets its games' shortcuts back.
+    """
+
+    @staticmethod
+    def _report_while_the_memory_is_measured(library, emit):
+        """The panel reports what the run's ``sync_stale`` named while the orchestrator measures memory."""
+        budget = library.sync._orchestrator._session_budget
+        measure_rss = budget.measure_rss
+        run_start = {"at": 0}
+
+        async def report_then_measure():
+            await _the_panel_reports(library, _removals_since(emit, run_start["at"]))
+            return await measure_rss()
+
+        budget.measure_rss = report_then_measure
+        return run_start
+
+    @pytest.mark.asyncio
+    async def test_a_platform_turned_off_and_back_on_gets_its_games_back(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
+        _seed_platform(
+            fake_romm_api,
+            platform_id=1,
+            name="N64",
+            slug="n64",
+            roms=[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}, {"id": 3, "name": "C"}],
+        )
+        _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[1])
+        library.settings["enabled_collections"] = {"standard": {"7": True}}
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_every_n64_game(unit, event):
+            event.set()
+            return {"1": 5001, "2": 5002, "3": 5003} if unit.slug == "n64" else {}
+
+        library.chunk_dispatcher._wait_for_unit_complete = bind_every_n64_game
+        run_start = self._report_while_the_memory_is_measured(library, emit)
+
+        async def complete_a_run(run_id):
+            box.sync_state = SyncState.RUNNING
+            box.current_sync_id = run_id
+            run_start["at"] = len(emit.call_args_list)
+            await library.sync._orchestrator._do_sync_per_unit()
+
+        def bindings():
+            with library.uow as uow:
+                return {rom_id: uow.roms.get(rom_id).shortcut_app_id for rom_id in (1, 2, 3)}
+
+        library.settings["enabled_platforms"] = {"1": True}
+        await complete_a_run("run-1")
+        library.settings["enabled_platforms"] = {"1": False}
+        await complete_a_run("run-2")
+        bindings_while_off = bindings()
+        with library.uow as uow:
+            stamp = uow.platform_sync_state.get("n64")
+        library.settings["enabled_platforms"] = {"1": True}
+        await complete_a_run("run-3")
+
+        assert bindings_while_off == {1: 5001, 2: None, 3: None}
+        assert stamp is not None
+        assert stamp.skip_revoked is True
+        assert bindings() == {1: 5001, 2: 5002, 3: 5003}
+
+    @pytest.mark.asyncio
+    async def test_a_collection_turned_off_and_back_on_gets_its_games_back(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
+        _seed_platform(
+            fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]
+        )
+        _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
+        _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[1, 2])
+        fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00+00:00"
+        library.settings["enabled_platforms"] = {"1": False, "2": True}
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_every_game(unit, event):
+            event.set()
+            return {"collection": {"1": 5001, "2": 5002}, "platform": {"4": 5004}}[unit.type]
+
+        library.chunk_dispatcher._wait_for_unit_complete = bind_every_game
+        run_start = self._report_while_the_memory_is_measured(library, emit)
+
+        async def complete_a_run(run_id):
+            box.sync_state = SyncState.RUNNING
+            box.current_sync_id = run_id
+            run_start["at"] = len(emit.call_args_list)
+            await library.sync._orchestrator._do_sync_per_unit()
+
+        def bindings():
+            with library.uow as uow:
+                return {rom_id: uow.roms.get(rom_id).shortcut_app_id for rom_id in (1, 2)}
+
+        library.settings["enabled_collections"] = {"standard": {"7": True}}
+        await complete_a_run("run-1")
+        library.settings["enabled_collections"] = {"standard": {"7": False}}
+        await complete_a_run("run-2")
+        bindings_while_off = bindings()
+        with library.uow as uow:
+            stamp_while_off = uow.collection_sync_state.get("7", "standard")
+        library.settings["enabled_collections"] = {"standard": {"7": True}}
+        await complete_a_run("run-3")
+
+        assert bindings_while_off == {1: None, 2: None}
+        assert stamp_while_off is None
+        assert bindings() == {1: 5001, 2: 5002}
 
 
 class TestDeltaRestrictedApply:

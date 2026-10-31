@@ -261,12 +261,10 @@ class LocalLibraryReader:
     def do_scan_stale_roms(self, synced_rom_ids: set[int], synced_app_ids: set[int]) -> list[StaleRow]:
         """Return a :class:`StaleRow` for every bound ROM not synced this run.
 
-        Unbound (stale) rows are skipped — they were already cleared on a
-        prior run and carry no Steam shortcut to remove. The ``app_id`` is
-        the still-live ``shortcut_app_id`` captured here, before the
-        run finalizer unbinds the row; the orchestrator threads it
-        into the ``sync_stale`` payload so the frontend removes the Steam
-        shortcut without re-resolving rom_id→app_id after the unbind.
+        Unbound rows are skipped — they carry no Steam shortcut to remove.
+        The ``app_id`` is the row's ``shortcut_app_id``; the orchestrator
+        threads it into the ``sync_stale`` payload, and the frontend removes
+        the shortcut by it.
 
         Any candidate whose ``app_id`` is in *synced_app_ids* — an appId this
         run bound to a freshly-synced ROM — is excluded by

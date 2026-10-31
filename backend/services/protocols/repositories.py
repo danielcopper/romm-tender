@@ -72,7 +72,8 @@ class RomRepository(Protocol):
     def save(self, rom: Rom) -> None:
         """Upsert *rom*.
 
-        (library/reporter.py per-chunk commit, library/run_finalizer.py stale unbind and gone marks, and others)
+        (library/reporter.py per-chunk commit, library/run_finalizer.py gone marks, shortcut_removal.py unbinds,
+        and others)
         """
         ...
 

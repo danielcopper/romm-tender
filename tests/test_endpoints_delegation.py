@@ -443,6 +443,15 @@ class TestShortcutRemovalEndpointDelegation:
         services.shortcut_removal_service.report_removal_results.assert_awaited_once_with([1, 2], "shortcut_removal:1")
         assert result == {"ok": True}
 
+    @pytest.mark.asyncio
+    async def test_report_sync_removals_delegates(self, endpoints, services):
+        services.shortcut_removal_service.report_sync_removals = AsyncMock(return_value={"ok": True})
+        stale = [{"rom_id": 1, "app_id": 100}]
+        converged = [{"rom_id": 2, "app_id": 200}]
+        result = await endpoints.report_sync_removals(stale, converged)
+        services.shortcut_removal_service.report_sync_removals.assert_awaited_once_with(stale, converged)
+        assert result == {"ok": True}
+
 
 class TestArtworkEndpointDelegation:
     @pytest.mark.asyncio

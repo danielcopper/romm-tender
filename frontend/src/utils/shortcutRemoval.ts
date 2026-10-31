@@ -19,8 +19,8 @@ const REMOVAL_CHUNK_DELAY_MS = 50;
  * Library › Platforms, and the sync-run stale-shortcut cleanup (``sync_stale``).
  *
  * *onProgress* (optional) is called after each removal with ``(removed, total)``
- * so a caller can drive a live progress counter; omit it (as ``sync_stale`` does)
- * for no counter and unchanged behavior.
+ * so a caller can drive a live progress counter or count the removals it tried
+ * (as ``sync_stale`` does); omit it for no counter and unchanged behavior.
  */
 export async function removeShortcutsPaced(
   appIds: number[],

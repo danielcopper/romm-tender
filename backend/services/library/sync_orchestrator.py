@@ -131,7 +131,8 @@ class FinalizeOutcome:
     """What ``_finalize_per_unit`` produces for the run's terminal phase.
 
     Carries the run finalizer's collection maps (the completed-run ``SyncRun`` write
-    needs their keys) plus the two session-budget surfacing values computed at
+    needs their keys), the rows whose shortcut the run removes (the terminal
+    frame counts them as gone) and the two session-budget surfacing values computed at
     finalize (``interrupt_reason`` / ``restart_recommended``), so the orchestrator
     can persist the terminal ``SyncRun`` status FIRST and only THEN emit
     ``sync_complete`` from these — the "emit last" ordering that closes the
@@ -140,6 +141,7 @@ class FinalizeOutcome:
 
     platform_app_ids: dict[str, list[int]]
     romm_collection_app_ids: dict[str, list[int]]
+    removed_rom_ids: frozenset[int]
     interrupt_reason: str | None
     restart_recommended: bool
 
@@ -429,6 +431,7 @@ class SyncOrchestrator:
             await self._run_finalizer.emit_sync_complete(
                 platform_app_ids=outcome.platform_app_ids,
                 romm_collection_app_ids=outcome.romm_collection_app_ids,
+                removed_rom_ids=outcome.removed_rom_ids,
                 total_games=total_games_applied,
                 cancelled=cancelled,
                 interrupt_reason=outcome.interrupt_reason,
@@ -536,10 +539,9 @@ class SyncOrchestrator:
         # Stale ROMs: any bound ROM in the registry whose rom_id wasn't
         # seen by any processed unit. Only meaningful on a non-cancelled run
         # — a partial run can't tell "stale" from "didn't get to it yet".
-        # Each entry carries the ROM's ``shortcut_app_id`` as read BEFORE the
-        # run finalizer unbinds it (which NULLs the binding); the
-        # frontend removes the Steam shortcut directly by ``app_id`` so it
-        # never has to re-resolve rom_id→app_id after the binding is gone.
+        # Each entry carries the ROM's ``shortcut_app_id``, which the row keeps
+        # until the panel's report (docs/architecture/steam-non-steam-shortcuts.md,
+        # "A removal the panel did not finish").
         # ``committed_app_ids`` (every appId this run bound, across both commit
         # paths) is excluded so a new rom_id reusing an old appId is never
         # wrongly removed (#1036). Of the rest, only a game outside what the
@@ -626,17 +628,19 @@ class SyncOrchestrator:
             self._logger.debug(f"Session-budget terminal advisory/delta skipped: {e}")
         self._sync_state.last_run_delta_kb = memory_delta_kb
 
+        removed_rom_ids = [row.rom_id for row in stale] + [binding.rom_id for binding in converged]
         platform_app_ids, romm_collection_app_ids = await self._run_finalizer.finalize_per_unit_run(
             pending_collection_memberships=collection_memberships,
             pending_platform_rom_ids=platform_rom_ids,
             platform_names=dict(self._sync_state.run_listed_platform_names),
             processed_platform_slugs=processed_platform_slugs,
-            stale_rom_ids=[row.rom_id for row in stale] + [binding.rom_id for binding in converged],
+            stale_rom_ids=removed_rom_ids,
             gone_marks=gone_marks,
         )
         return FinalizeOutcome(
             platform_app_ids=platform_app_ids,
             romm_collection_app_ids=romm_collection_app_ids,
+            removed_rom_ids=frozenset(removed_rom_ids),
             interrupt_reason=interrupt_reason,
             restart_recommended=restart_recommended,
         )

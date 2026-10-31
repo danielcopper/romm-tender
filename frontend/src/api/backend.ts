@@ -76,6 +76,7 @@ import type {
   AdoptResult,
   VerifyContentResult,
   CustomHeaderEntry,
+  SyncRemoval,
 } from "../types";
 
 export type { EndpointFailure };
@@ -764,10 +765,14 @@ export const reportRemovalResults = endpoint<
   [(string | number)[], string | null],
   { success: boolean; message: string }
 >("report_removal_results");
-/** After the panel removed the shortcuts a sync converged away: reset their Steam Input setting, delete their grid images. */
-export const reportConvergedRemovals = endpoint<[number[]], { success: boolean; message: string }>(
-  "report_converged_removals",
-);
+/**
+ * The shortcuts a sync removed that the panel saw gone from Steam, stale and converged apart: their rows are
+ * unbound, and a converged one's Steam Input setting is reset and its grid images deleted.
+ */
+export const reportSyncRemovals = endpoint<
+  [SyncRemoval[], SyncRemoval[]],
+  { success: boolean; message: string; unbound_count?: number }
+>("report_sync_removals");
 /** Disown leases stranded by a previous frontend context; called once per JS context, at panel start. */
 export const releaseOrphanedPruneLeases = endpoint<[], { success: boolean; released: number }>(
   "release_orphaned_prune_leases",

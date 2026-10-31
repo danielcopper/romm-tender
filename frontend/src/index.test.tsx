@@ -153,9 +153,12 @@ vi.mock("./utils/collections", () => ({
 // Observe the launch-options confirm-poll.
 const setLaunchOptionsConfirmed = vi.fn().mockResolvedValue(true);
 const removeShortcut = vi.fn();
+// What Steam no longer lists after a sync's removals (#2653); by default every shortcut asked about is gone.
+const shortcutsGoneFromSteam = vi.fn((appIds: number[], _removed: number[]) => Promise.resolve(appIds));
 vi.mock("./utils/steamShortcuts", () => ({
   removeShortcut: (...args: unknown[]) => removeShortcut(...args),
   setLaunchOptionsConfirmed: (...args: unknown[]) => setLaunchOptionsConfirmed(...args),
+  shortcutsGoneFromSteam: (appIds: number[], removed: number[]) => shortcutsGoneFromSteam(appIds, removed),
 }));
 
 // Steam's globals the update announcement waits on are not stubbed here, so
@@ -174,7 +177,7 @@ vi.mock("./utils/shortcutCarryOver", async () => {
 
 // Observe the surfaced error message (post-catch side effect).
 const logError = vi.fn();
-const reportConvergedRemovals = vi.fn().mockResolvedValue({ success: true, message: "" });
+const reportSyncRemovals = vi.fn().mockResolvedValue({ success: true, message: "" });
 vi.mock("./api/backend", async () => {
   const actual = await vi.importActual<typeof import("./api/backend")>("./api/backend");
   return {
@@ -182,7 +185,7 @@ vi.mock("./api/backend", async () => {
     invalidateCachedGameDetail: vi.fn(),
     logError: (...args: unknown[]) => logError(...args),
     logInfo: vi.fn(),
-    reportConvergedRemovals: (...args: unknown[]) => reportConvergedRemovals(...args),
+    reportSyncRemovals: (...args: unknown[]) => reportSyncRemovals(...args),
   };
 });
 
@@ -855,29 +858,31 @@ describe("index.tsx — sync_stale listener", () => {
     await flush();
     removeShortcut.mockClear();
     carryOverShortcutState.mockClear();
-    reportConvergedRemovals.mockClear();
+    reportSyncRemovals.mockClear();
     const converged = { rom_id: 31, app_id: 6031, kept_rom_id: 30, kept_app_id: 6030 };
 
     act(() => {
       emitHostEvent<SyncStaleData>("sync_stale", { remove: [{ rom_id: 99, app_id: 9900 }, converged] });
     });
-    await vi.waitFor(() => expect(reportConvergedRemovals).toHaveBeenCalledWith([6031]));
+    await vi.waitFor(() =>
+      expect(reportSyncRemovals).toHaveBeenCalledWith([{ rom_id: 99, app_id: 9900 }], [{ rom_id: 31, app_id: 6031 }]),
+    );
 
     expect(carryOverShortcutState).toHaveBeenCalledTimes(1);
     expect(carryOverShortcutState).toHaveBeenCalledWith(converged);
     const [carried] = carryOverShortcutState.mock.invocationCallOrder;
     const removed = removeShortcut.mock.invocationCallOrder;
-    const [reported] = reportConvergedRemovals.mock.invocationCallOrder;
+    const [reported] = reportSyncRemovals.mock.invocationCallOrder;
     expect(removed).toHaveLength(2);
     expect(Math.max(...removed)).toBeLessThan(reported ?? 0);
     expect(carried).toBeLessThan(Math.min(...removed));
   });
 
-  it("carries nothing over and reports nothing for plain stale removals", async () => {
+  it("carries nothing over for plain stale removals, and reports them as stale ones (#2653)", async () => {
     panelFactory();
     await flush();
     carryOverShortcutState.mockClear();
-    reportConvergedRemovals.mockClear();
+    reportSyncRemovals.mockClear();
     removeShortcut.mockClear();
 
     act(() => {
@@ -887,7 +892,110 @@ describe("index.tsx — sync_stale listener", () => {
     await flush();
 
     expect(carryOverShortcutState).not.toHaveBeenCalled();
-    expect(reportConvergedRemovals).not.toHaveBeenCalled();
+    expect(reportSyncRemovals).toHaveBeenCalledWith([{ rom_id: 99, app_id: 9900 }], []);
+  });
+
+  it("reports, when the next sync's plan cuts the removal short, what it removed and nothing it did not (#2653)", async () => {
+    panelFactory();
+    await flush();
+    removeShortcut.mockClear();
+    reportSyncRemovals.mockClear();
+    shortcutsGoneFromSteam.mockClear();
+    // Steam no longer lists exactly the shortcuts a removal was tried for.
+    shortcutsGoneFromSteam.mockImplementationOnce((_appIds, removed) => Promise.resolve(removed));
+    const remove = Array.from({ length: 26 }, (_, i) => ({ rom_id: i + 1, app_id: 4000 + i }));
+
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        emitHostEvent<SyncStaleData>("sync_stale", { remove, prune_lease_token: "cut-stale-lease" });
+      });
+      await act(async () => {
+        for (let i = 0; i < 40; i++) await Promise.resolve();
+      });
+      expect(removeShortcut).toHaveBeenCalledTimes(25);
+      act(() => {
+        emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-next", units: [], total_units: 1, total_roms: 1 });
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    await vi.waitFor(() => expect(reportSyncRemovals).toHaveBeenCalledTimes(1));
+
+    const first25 = remove.slice(0, 25);
+    expect(removeShortcut).toHaveBeenCalledTimes(25);
+    expect(shortcutsGoneFromSteam).toHaveBeenCalledWith(
+      remove.map((removal) => removal.app_id),
+      first25.map((removal) => removal.app_id),
+    );
+    expect(reportSyncRemovals).toHaveBeenCalledWith(first25, []);
+  });
+
+  it("does not report a removal Steam still lists (#2653)", async () => {
+    panelFactory();
+    await flush();
+    reportSyncRemovals.mockClear();
+    shortcutsGoneFromSteam.mockClear();
+    shortcutsGoneFromSteam.mockImplementationOnce(() => Promise.resolve([7700]));
+
+    act(() => {
+      emitHostEvent<SyncStaleData>("sync_stale", {
+        remove: [
+          { rom_id: 99, app_id: 9900 },
+          { rom_id: 77, app_id: 7700 },
+        ],
+      });
+    });
+    await vi.waitFor(() => expect(shortcutsGoneFromSteam).toHaveBeenCalledTimes(1));
+    await flush();
+
+    expect(reportSyncRemovals).toHaveBeenCalledWith([{ rom_id: 77, app_id: 7700 }], []);
+  });
+
+  it("reports what it removed when its lease's renewal is refused mid-removal (#2653)", async () => {
+    panelFactory();
+    await flush();
+    removeShortcut.mockClear();
+    reportSyncRemovals.mockClear();
+    shortcutsGoneFromSteam.mockClear();
+    shortcutsGoneFromSteam.mockImplementationOnce((_appIds, removed) => Promise.resolve(removed));
+    vi.mocked(renewPruneConflictLease).mockResolvedValueOnce({ success: false, message: "stale" });
+    let finishSecond!: () => void;
+    removeShortcut.mockImplementationOnce(() => undefined);
+    removeShortcut.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSecond = resolve;
+        }),
+    );
+    const remove = [
+      { rom_id: 1, app_id: 5000 },
+      { rom_id: 2, app_id: 5001 },
+      { rom_id: 3, app_id: 5002 },
+    ];
+
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        emitHostEvent<SyncStaleData>("sync_stale", { remove, prune_lease_token: "refused-stale-lease" });
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      finishSecond();
+      await act(async () => {
+        for (let i = 0; i < 20; i++) await Promise.resolve();
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    await vi.waitFor(() => expect(reportSyncRemovals).toHaveBeenCalledTimes(1));
+
+    expect(removeShortcut).toHaveBeenCalledTimes(2);
+    expect(reportSyncRemovals).toHaveBeenCalledWith(remove.slice(0, 2), []);
   });
 
   it("ignores an empty remove array", async () => {
@@ -1305,6 +1413,61 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
 
     finishCollections?.();
     await vi.waitFor(() => expect(releasePruneConflictLease).toHaveBeenCalledWith("sync-complete-lease"));
+  });
+
+  it("reads the bound rows for the after-sync passes only once the removal has reported, and files collections at once (#2653 D3)", async () => {
+    panelFactory();
+    await flush();
+    vi.mocked(getInstalledRelaunchOptions).mockClear();
+    vi.mocked(getAllPlaytime).mockClear();
+    vi.mocked(getAppIdRomIdMap).mockClear();
+    createOrUpdateCollections.mockClear();
+    let finishReport!: () => void;
+    reportSyncRemovals.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishReport = () => resolve({ success: true, message: "", unbound_count: 1 });
+        }),
+    );
+
+    act(() => {
+      emitHostEvent<SyncStaleData>("sync_stale", { remove: [{ rom_id: 99, app_id: 9900 }] });
+      emitHostEvent<SyncCompletePayload>("sync_complete", { platform_app_ids: { SNES: [100] }, total_games: 1 });
+    });
+    await vi.waitFor(() => expect(reportSyncRemovals).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() =>
+      expect(createOrUpdateCollections).toHaveBeenCalledWith({ SNES: [100] }, undefined, expect.any(AbortSignal)),
+    );
+    await flush();
+    const readBeforeTheReport = [getInstalledRelaunchOptions, getAllPlaytime, getAppIdRomIdMap].map(
+      (read) => vi.mocked(read).mock.calls.length,
+    );
+
+    finishReport();
+    await vi.waitFor(() => expect(getInstalledRelaunchOptions).toHaveBeenCalled());
+    await vi.waitFor(() => expect(getAllPlaytime).toHaveBeenCalled());
+
+    expect(readBeforeTheReport).toEqual([0, 0, 0]);
+    expect(getAppIdRomIdMap).toHaveBeenCalled();
+  });
+
+  it("runs the after-sync passes when the removal's report fails (#2653 D3)", async () => {
+    panelFactory();
+    await flush();
+    vi.mocked(getInstalledRelaunchOptions).mockClear();
+    vi.mocked(getAllPlaytime).mockClear();
+    reportSyncRemovals.mockRejectedValueOnce(new Error("report lost"));
+
+    act(() => {
+      emitHostEvent<SyncStaleData>("sync_stale", { remove: [{ rom_id: 99, app_id: 9900 }] });
+      emitHostEvent<SyncCompletePayload>("sync_complete", { platform_app_ids: {}, total_games: 0 });
+    });
+
+    await vi.waitFor(() =>
+      expect(logError).toHaveBeenCalledWith(expect.stringContaining("stale shortcut removal failed")),
+    );
+    await vi.waitFor(() => expect(getInstalledRelaunchOptions).toHaveBeenCalled());
+    await vi.waitFor(() => expect(getAllPlaytime).toHaveBeenCalled());
   });
 
   it("holds the sync event lease until the paced sync_stale tail settles", async () => {
