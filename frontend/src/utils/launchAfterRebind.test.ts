@@ -8,6 +8,7 @@ import { ADOPTION_POLL_MAX_MS, initSessionManager } from "./sessionManager";
 import { registerLaunchInterceptor } from "./launchInterceptor";
 import type { LaunchPrompts } from "./launchVerdict";
 import { applyCommittedVersionSwitch } from "./versionSwitchApplication";
+import { capturePruneLeaseAdmission, mountPruneLeaseOwner } from "./pruneLease";
 
 // The real interceptor over the real session manager and the real launch gate:
 // only the backend's answers and Steam's shortcut write are stubbed, so the ROM
@@ -86,20 +87,28 @@ const syncRunEnded = (stage: "done" | "cancelled" | "error") => async () => {
   emitHostEvent("sync_progress", { running: false, stage, current: 0, total: 0, message: "" });
 };
 
+/** The owner a version switch below runs under, as a picker would hand it. */
+const SWITCH_OWNER = `version-picker:${APP_ID}`;
+
 /** The ways a binding moves in the running session (D10), each as the panel learns of it. */
 const BINDING_MOVES = {
   "a library sync that completed": syncRunEnded("done"),
   "a library sync that was cancelled or paused": syncRunEnded("cancelled"),
   "a library sync that stopped with an error": syncRunEnded("error"),
   "a version switch": async () => {
-    await applyCommittedVersionSwitch({
-      success: true,
-      app_id: APP_ID,
-      rom_id: NEW_ROM,
-      target_installed: true,
-      launch_options: "new-command",
-      prune_lease_token: "",
-    });
+    mountPruneLeaseOwner(SWITCH_OWNER);
+    await applyCommittedVersionSwitch(
+      {
+        success: true,
+        app_id: APP_ID,
+        rom_id: NEW_ROM,
+        target_installed: true,
+        launch_options: "new-command",
+        prune_lease_token: "",
+      },
+      undefined,
+      capturePruneLeaseAdmission(SWITCH_OWNER),
+    );
   },
 } as const;
 

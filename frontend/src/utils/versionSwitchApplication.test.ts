@@ -1,12 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import * as backend from "../api/backend";
 import { artworkThumbToken } from "./artworkSlotsStore";
-import { publishCommittedVersionSwitch } from "./versionSwitchApplication";
+import { applyCommittedVersionSwitch, publishCommittedVersionSwitch } from "./versionSwitchApplication";
+import { capturePruneLeaseAdmission, mountPruneLeaseOwner, releasePruneLeasesByOwner } from "./pruneLease";
+import { setLaunchOptionsConfirmed } from "./steamShortcuts";
 
 vi.mock("../api/backend", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api/backend")>()),
   logWarn: vi.fn(),
 }));
+
+vi.mock("./steamShortcuts", () => ({ setLaunchOptionsConfirmed: vi.fn() }));
+vi.mock("./sessionManager", () => ({ refreshAppIdMap: vi.fn().mockResolvedValue(undefined) }));
 
 describe("publishCommittedVersionSwitch's cover (#2381 D16)", () => {
   beforeEach(() => {
@@ -115,5 +120,49 @@ describe("publishCommittedVersionSwitch's cover (#2381 D16)", () => {
     await publishCommittedVersionSwitch(5000, 42);
 
     expect(artworkThumbToken(5000, "cover")).not.toBe(before);
+  });
+});
+
+describe("applyCommittedVersionSwitch's lease", () => {
+  const result = {
+    success: true as const,
+    app_id: 5000,
+    rom_id: 42,
+    target_installed: true,
+    launch_options: "cmd",
+    prune_lease_token: "switch-lease",
+  };
+
+  /** Run the switch's Steam writes under *owner*, tearing *tornDown* down while the launch-options write is open. */
+  const switchWhileTearingDown = async (owner: string, tornDown: string): Promise<boolean> => {
+    let confirm!: (ok: boolean) => void;
+    vi.mocked(setLaunchOptionsConfirmed).mockReturnValue(new Promise((resolve) => (confirm = resolve)));
+    const broadcasts: unknown[] = [];
+    const onChanged = (e: Event) => broadcasts.push((e as CustomEvent).detail);
+    globalThis.addEventListener("romm_data_changed", onChanged);
+    mountPruneLeaseOwner(owner);
+    const applied = applyCommittedVersionSwitch(result, undefined, capturePruneLeaseAdmission(owner));
+    await vi.waitFor(() => expect(setLaunchOptionsConfirmed).toHaveBeenCalled());
+    const teardown = releasePruneLeasesByOwner(tornDown);
+    confirm(true);
+    await applied.catch(() => undefined);
+    await teardown;
+    globalThis.removeEventListener("romm_data_changed", onChanged);
+    await releasePruneLeasesByOwner(owner);
+    return broadcasts.length > 0;
+  };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false, chosen: false });
+    vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: null });
+  });
+
+  it("is held under the caller's owner, so that owner's teardown cancels the writes", async () => {
+    expect(await switchWhileTearingDown("desktop-version-picker:5000", "desktop-version-picker:5000")).toBe(false);
+  });
+
+  it("is not cancelled by another owner's teardown for the same game", async () => {
+    expect(await switchWhileTearingDown("desktop-version-picker:5000", "version-picker:5000")).toBe(true);
   });
 });
