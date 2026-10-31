@@ -13,11 +13,18 @@ import { render, waitFor, act, fireEvent, within } from "@testing-library/react"
 import { createElement, type ReactNode } from "react";
 import { toaster } from "../api/host";
 import { VersionPicker } from "./VersionPicker";
+import * as versionApp from "../utils/versionSwitchApplication";
 import * as backend from "../api/backend";
-import type { VersionList, VersionInfo } from "../api/backend";
+import type {
+  VersionList,
+  VersionInfo,
+  SwitchVersionFailure,
+  SwitchVersionSuccess,
+  SwitchVersionResult,
+} from "../api/backend";
 import { getRommConnectionState, setRommConnectionState } from "../utils/connectionState";
 import { emitHostEvent } from "../test-utils/host-event-bus";
-import type { DownloadCompleteEvent } from "../types";
+import type { DownloadCompleteEvent, DownloadFailedEvent, SyncProgress } from "../types";
 import {
   installDomEventListenerSpy,
   uninstallDomEventListenerSpy,
@@ -2012,12 +2019,25 @@ describe("VersionPicker — in-flight switch guard (#1345 / E)", () => {
     captured.menu = null;
     vi.mocked(backend.getVersionList).mockReset();
     vi.mocked(backend.switchVersion).mockReset();
+    vi.mocked(backend.syncRomSaves).mockReset();
+    vi.mocked(backend.refreshSaveStatus).mockReset().mockResolvedValue({ success: true });
     vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: null });
     vi.mocked(invalidateCachedGameDetail).mockReset();
     vi.mocked(setLaunchOptionsConfirmed).mockReset().mockResolvedValue(true);
     vi.mocked(showUnsyncedSavesModal).mockReset();
     vi.mocked(toaster.toast).mockReset();
   });
+
+  // Active version is the default (neutral trigger face); `landedMark` moves the
+  // default to the other version so a test can see a competing read render by
+  // waiting for the trigger face to turn to the accent (#59b6ff).
+  const defaultActiveList = (): VersionList =>
+    multiVersionList({
+      versions: (multiVersionList().versions ?? []).map((v) => ({ ...v, is_default: v.rom_id === 1 })),
+    });
+  const landedMark = multiVersionList();
+  const faceColour = (r: ReturnType<typeof render>): string | undefined =>
+    (r.getByTestId("version-btn").querySelector("svg") as SVGElement | null)?.style.color;
 
   it("disables the trigger (throbber) and blocks the menu while the post-switch reload is pending", async () => {
     // The switch succeeds but the version_switched reload stays pending — this is
@@ -2085,6 +2105,492 @@ describe("VersionPicker — in-flight switch guard (#1345 / E)", () => {
     });
     expect(captured.menu).not.toBeNull();
   });
+
+  it("keeps the trigger disabled when a sync run ends while the switch is under way", async () => {
+    let answerSwitch!: (v: Awaited<ReturnType<typeof backend.switchVersion>>) => void;
+    vi.mocked(backend.getVersionList).mockResolvedValue(defaultActiveList());
+    vi.mocked(backend.switchVersion).mockReturnValue(new Promise((res) => (answerSwitch = res)));
+
+    const { r, menu } = await renderAndOpen();
+    await clickRow(menu.container, "Game (Japan)");
+    expect(r.container.querySelector(".romm-throbber")).not.toBeNull();
+
+    vi.mocked(backend.getVersionList).mockResolvedValueOnce(landedMark);
+    await act(async () => {
+      emitHostEvent<SyncProgress>("sync_progress", { running: false, stage: "done" });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(faceColour(r)).toBe("#59b6ff"));
+    expect(r.container.querySelector(".romm-throbber")).not.toBeNull();
+
+    await act(async () => {
+      answerSwitch({ success: true, rom_id: 2, target_installed: true, launch_options: "", app_id: APP_ID });
+      for (let i = 0; i < 12; i++) await Promise.resolve();
+    });
+    await waitFor(() => expect(r.container.querySelector(".romm-throbber")).toBeNull());
+  });
+
+  it("re-enables the trigger when a read issued after the broadcast supersedes the broadcast's own", async () => {
+    let resolveBroadcastReload!: (v: VersionList) => void;
+    vi.mocked(backend.getVersionList)
+      .mockResolvedValueOnce(multiVersionList())
+      .mockReturnValueOnce(new Promise<VersionList>((res) => (resolveBroadcastReload = res)))
+      .mockResolvedValue(multiVersionList());
+    vi.mocked(backend.switchVersion).mockResolvedValue({
+      success: true,
+      rom_id: 2,
+      target_installed: true,
+      launch_options: "",
+      app_id: APP_ID,
+    });
+
+    const { r, menu } = await renderAndOpen();
+    await clickRow(menu.container, "Game (Japan)");
+    await waitFor(() => expect(backend.getVersionList).toHaveBeenCalledTimes(2));
+    expect(r.container.querySelector(".romm-throbber")).not.toBeNull();
+
+    await act(async () => {
+      emitHostEvent<SyncProgress>("sync_progress", { running: false, stage: "done" });
+      for (let i = 0; i < 6; i++) await Promise.resolve();
+    });
+    expect(r.container.querySelector(".romm-throbber")).toBeNull();
+
+    await act(async () => {
+      resolveBroadcastReload(multiVersionList());
+      for (let i = 0; i < 6; i++) await Promise.resolve();
+    });
+  });
+
+  it("keeps the trigger disabled when a prune of this game lands while the switch is under way", async () => {
+    vi.mocked(backend.getVersionList).mockResolvedValue(defaultActiveList());
+    vi.mocked(backend.switchVersion).mockReturnValue(new Promise(() => undefined));
+
+    const { r, menu } = await renderAndOpen();
+    await clickRow(menu.container, "Game (Japan)");
+    expect(r.container.querySelector(".romm-throbber")).not.toBeNull();
+
+    vi.mocked(backend.getVersionList).mockResolvedValueOnce(landedMark);
+    await act(async () => {
+      globalThis.dispatchEvent(
+        new CustomEvent("romm_data_changed", { detail: { type: "rom_pruned", app_ids: [APP_ID], rom_ids: [] } }),
+      );
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(faceColour(r)).toBe("#59b6ff"));
+
+    expect(r.container.querySelector(".romm-throbber")).not.toBeNull();
+  });
+
+  it("does not let an earlier switch's broadcast clear a later switch", async () => {
+    vi.mocked(backend.getVersionList).mockResolvedValue(defaultActiveList());
+    vi.mocked(backend.switchVersion)
+      .mockResolvedValueOnce({ success: true, rom_id: 2, target_installed: true, launch_options: "", app_id: APP_ID })
+      .mockReturnValueOnce(new Promise(() => undefined));
+
+    const { r, menu } = await renderAndOpen();
+    await clickRow(menu.container, "Game (Japan)");
+    await waitFor(() => expect(r.container.querySelector(".romm-throbber")).toBeNull());
+
+    captured.menu = null;
+    await act(async () => {
+      fireEvent.click(r.getByTestId("version-btn"));
+      await Promise.resolve();
+    });
+    const again = render(<>{captured.menu}</>);
+    await clickRow(again.container, "Game (Japan)");
+    expect(r.container.querySelector(".romm-throbber")).not.toBeNull();
+
+    vi.mocked(backend.getVersionList).mockResolvedValueOnce(landedMark);
+    await act(async () => {
+      emitHostEvent<SyncProgress>("sync_progress", { running: false, stage: "done" });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(faceColour(r)).toBe("#59b6ff"));
+
+    expect(r.container.querySelector(".romm-throbber")).not.toBeNull();
+  });
+
+  const SWITCHED = { success: true, rom_id: 2, target_installed: true, launch_options: "", app_id: APP_ID } as const;
+  const settle = () =>
+    act(async () => {
+      for (let i = 0; i < 12; i++) await Promise.resolve();
+    });
+  const dataChanged = (detail: unknown) =>
+    act(async () => {
+      globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail }));
+      for (let i = 0; i < 6; i++) await Promise.resolve();
+    });
+  const throbber = (r: ReturnType<typeof render>) => r.container.querySelector(".romm-throbber");
+
+  it("re-enables the trigger when the read after the broadcast fails", async () => {
+    vi.mocked(backend.getVersionList)
+      .mockResolvedValueOnce(multiVersionList())
+      .mockRejectedValueOnce(new Error("down"));
+    vi.mocked(backend.switchVersion).mockResolvedValue(SWITCHED);
+
+    const { r, menu } = await renderAndOpen();
+    await clickRow(menu.container, "Game (Japan)");
+    await settle();
+
+    expect(backend.getVersionList).toHaveBeenCalledTimes(2);
+    expect(throbber(r)).toBeNull();
+  });
+
+  it("keeps the trigger disabled when the broadcast's own read lands after a newer read was issued", async () => {
+    let resolveBroadcastRead!: (v: VersionList) => void;
+    let resolveNewerRead!: (v: VersionList) => void;
+    vi.mocked(backend.getVersionList)
+      .mockResolvedValueOnce(multiVersionList())
+      .mockReturnValueOnce(new Promise<VersionList>((res) => (resolveBroadcastRead = res)))
+      .mockReturnValueOnce(new Promise<VersionList>((res) => (resolveNewerRead = res)));
+    vi.mocked(backend.switchVersion).mockResolvedValue(SWITCHED);
+
+    const { r, menu } = await renderAndOpen();
+    await clickRow(menu.container, "Game (Japan)");
+    await waitFor(() => expect(backend.getVersionList).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      emitHostEvent<SyncProgress>("sync_progress", { running: false, stage: "done" });
+      await Promise.resolve();
+    });
+    await act(async () => {
+      resolveBroadcastRead(multiVersionList());
+      for (let i = 0; i < 6; i++) await Promise.resolve();
+    });
+    expect(throbber(r)).not.toBeNull();
+
+    await act(async () => {
+      resolveNewerRead(multiVersionList());
+      for (let i = 0; i < 6; i++) await Promise.resolve();
+    });
+    expect(throbber(r)).toBeNull();
+  });
+
+  it.each([
+    [
+      "a member's download completing",
+      () => emitHostEvent<DownloadCompleteEvent>("download_complete", { rom_id: 2 } as DownloadCompleteEvent),
+    ],
+    ["a member's download failing", () => emitHostEvent("download_failed", { rom_id: 2 } as DownloadFailedEvent)],
+    [
+      "a member's uninstall",
+      () => globalThis.dispatchEvent(new CustomEvent("romm_rom_uninstalled", { detail: { rom_id: 2 } })),
+    ],
+  ])("keeps the trigger disabled when %s lands while the switch is under way", async (_label, happen) => {
+    vi.mocked(backend.getVersionList).mockResolvedValue(defaultActiveList());
+    vi.mocked(backend.switchVersion).mockReturnValue(new Promise(() => undefined));
+
+    const { r, menu } = await renderAndOpen();
+    await clickRow(menu.container, "Game (Japan)");
+    expect(throbber(r)).not.toBeNull();
+
+    vi.mocked(backend.getVersionList).mockResolvedValueOnce(landedMark);
+    await act(async () => {
+      happen();
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(faceColour(r)).toBe("#59b6ff"));
+
+    expect(throbber(r)).not.toBeNull();
+  });
+
+  it("does not count another game's broadcast", async () => {
+    vi.mocked(backend.getVersionList).mockResolvedValue(defaultActiveList());
+    vi.mocked(backend.switchVersion).mockReturnValue(new Promise(() => undefined));
+
+    const { r, menu } = await renderAndOpen();
+    await clickRow(menu.container, "Game (Japan)");
+    expect(throbber(r)).not.toBeNull();
+
+    await dataChanged({ type: "version_switched", app_id: APP_ID + 1, rom_id: 9 });
+    vi.mocked(backend.getVersionList).mockResolvedValueOnce(landedMark);
+    await act(async () => {
+      emitHostEvent<SyncProgress>("sync_progress", { running: false, stage: "done" });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(faceColour(r)).toBe("#59b6ff"));
+
+    expect(throbber(r)).not.toBeNull();
+  });
+
+  it("does not count a broadcast that arrived before the switch began", async () => {
+    let resolveEarlierRead!: (v: VersionList) => void;
+    vi.mocked(backend.getVersionList)
+      .mockResolvedValueOnce(defaultActiveList())
+      .mockReturnValueOnce(new Promise<VersionList>((res) => (resolveEarlierRead = res)))
+      .mockResolvedValueOnce(landedMark);
+    vi.mocked(backend.switchVersion).mockReturnValue(new Promise(() => undefined));
+
+    const { r, menu } = await renderAndOpen();
+    await dataChanged({ type: "version_switched", app_id: APP_ID, rom_id: 1 });
+    await clickRow(menu.container, "Game (Japan)");
+    expect(throbber(r)).not.toBeNull();
+
+    await act(async () => {
+      emitHostEvent<SyncProgress>("sync_progress", { running: false, stage: "done" });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(faceColour(r)).toBe("#59b6ff"));
+    expect(throbber(r)).not.toBeNull();
+
+    await act(async () => {
+      resolveEarlierRead(defaultActiveList());
+      for (let i = 0; i < 6; i++) await Promise.resolve();
+    });
+  });
+
+  it("reads the list again, and only then re-enables, when a committed switch was stopped short of its broadcast", async () => {
+    let resolveReread!: (v: VersionList) => void;
+    vi.mocked(backend.getVersionList)
+      .mockResolvedValueOnce(multiVersionList())
+      .mockReturnValueOnce(new Promise<VersionList>((res) => (resolveReread = res)));
+    vi.mocked(backend.switchVersion).mockResolvedValue(SWITCHED);
+    const apply = vi
+      .spyOn(versionApp, "applyCommittedVersionSwitch")
+      .mockResolvedValueOnce({ confirmed: true, broadcast: false });
+
+    try {
+      const { r, menu } = await renderAndOpen();
+      await clickRow(menu.container, "Game (Japan)");
+      await waitFor(() => expect(backend.getVersionList).toHaveBeenCalledTimes(2));
+      expect(throbber(r)).not.toBeNull();
+
+      await act(async () => {
+        resolveReread(multiVersionList());
+        for (let i = 0; i < 6; i++) await Promise.resolve();
+      });
+      expect(throbber(r)).toBeNull();
+    } finally {
+      apply.mockRestore();
+    }
+  });
+
+  it.each([
+    ["while the switch is unanswered", "unanswered"],
+    ["while the broadcast's read is out", "reading"],
+  ] as const)("re-enables the trigger for the next game when the game changes %s", async (_label, when) => {
+    vi.mocked(backend.getVersionList).mockResolvedValue(multiVersionList());
+    if (when === "unanswered") {
+      vi.mocked(backend.switchVersion).mockReturnValue(new Promise(() => undefined));
+    } else {
+      vi.mocked(backend.switchVersion).mockResolvedValue(SWITCHED);
+      vi.mocked(backend.getVersionList)
+        .mockResolvedValueOnce(multiVersionList())
+        .mockReturnValueOnce(new Promise<VersionList>(() => undefined))
+        .mockResolvedValue(multiVersionList());
+    }
+
+    const { r, menu } = await renderAndOpen();
+    await clickRow(menu.container, "Game (Japan)");
+    expect(throbber(r)).not.toBeNull();
+
+    r.rerender(<VersionPicker appId={APP_ID + 1} />);
+    await settle();
+
+    expect(throbber(r)).toBeNull();
+  });
+
+  it("does not clear the guard or toast when a previous game's switch comes back refused", async () => {
+    let refuseGameA!: (v: SwitchVersionFailure) => void;
+    let answerGameB!: (v: SwitchVersionSuccess) => void;
+    vi.mocked(backend.getVersionList).mockResolvedValue(multiVersionList());
+    vi.mocked(backend.switchVersion)
+      .mockReturnValueOnce(new Promise((res) => (refuseGameA = res)))
+      .mockReturnValueOnce(new Promise((res) => (answerGameB = res)));
+
+    const { r, menu } = await renderAndOpen();
+    await clickRow(menu.container, "Game (Japan)");
+    expect(throbber(r)).not.toBeNull();
+
+    r.rerender(<VersionPicker appId={APP_ID + 1} />);
+    await settle();
+    expect(throbber(r)).toBeNull();
+
+    captured.menu = null;
+    await act(async () => {
+      fireEvent.click(r.getByTestId("version-btn"));
+      await Promise.resolve();
+    });
+    const menuB = render(<>{captured.menu}</>);
+    await clickRow(menuB.container, "Game (Japan)");
+    expect(throbber(r)).not.toBeNull();
+
+    await act(async () => {
+      refuseGameA({ success: false, reason: "server_unreachable", message: "Host down" });
+      for (let i = 0; i < 6; i++) await Promise.resolve();
+    });
+
+    expect(getRommConnectionState()).toBe("offline");
+    expect(throbber(r)).not.toBeNull();
+    expect(toaster.toast).not.toHaveBeenCalled();
+
+    await act(async () => {
+      answerGameB({ success: true, rom_id: 2, target_installed: true, launch_options: "", app_id: APP_ID + 1 });
+      for (let i = 0; i < 12; i++) await Promise.resolve();
+    });
+    await waitFor(() => expect(throbber(r)).toBeNull());
+  });
+
+  it("does not clear the guard or toast when a previous game's switch throws after a game change", async () => {
+    let rejectGameA!: (err: Error) => void;
+    let answerGameB!: (v: SwitchVersionSuccess) => void;
+    vi.mocked(backend.getVersionList).mockResolvedValue(multiVersionList());
+    vi.mocked(backend.switchVersion)
+      .mockReturnValueOnce(new Promise((_, rej) => (rejectGameA = rej)))
+      .mockReturnValueOnce(new Promise((res) => (answerGameB = res)));
+
+    const { r, menu } = await renderAndOpen();
+    await clickRow(menu.container, "Game (Japan)");
+    expect(throbber(r)).not.toBeNull();
+
+    r.rerender(<VersionPicker appId={APP_ID + 1} />);
+    await settle();
+    expect(throbber(r)).toBeNull();
+
+    captured.menu = null;
+    await act(async () => {
+      fireEvent.click(r.getByTestId("version-btn"));
+      await Promise.resolve();
+    });
+    const menuB = render(<>{captured.menu}</>);
+    await clickRow(menuB.container, "Game (Japan)");
+    expect(throbber(r)).not.toBeNull();
+
+    await act(async () => {
+      rejectGameA(new Error("network down"));
+      for (let i = 0; i < 6; i++) await Promise.resolve();
+    });
+
+    expect(throbber(r)).not.toBeNull();
+    expect(toaster.toast).not.toHaveBeenCalled();
+
+    await act(async () => {
+      answerGameB({ success: true, rom_id: 2, target_installed: true, launch_options: "", app_id: APP_ID + 1 });
+      for (let i = 0; i < 12; i++) await Promise.resolve();
+    });
+    await waitFor(() => expect(throbber(r)).toBeNull());
+  });
+
+  it("does not prompt the unsynced-saves modal when a previous game's switch returns unsynced_saves after a game change", async () => {
+    let answerUnsyncedA!: (v: SwitchVersionResult) => void;
+    let answerGameB!: (v: SwitchVersionSuccess) => void;
+    vi.mocked(backend.getVersionList).mockResolvedValue(multiVersionList());
+    vi.mocked(backend.switchVersion)
+      .mockReturnValueOnce(new Promise((res) => (answerUnsyncedA = res)))
+      .mockReturnValueOnce(new Promise((res) => (answerGameB = res)));
+
+    const { r, menu } = await renderAndOpen();
+    await clickRow(menu.container, "Game (Japan)");
+    expect(throbber(r)).not.toBeNull();
+
+    r.rerender(<VersionPicker appId={APP_ID + 1} />);
+    await settle();
+    expect(throbber(r)).toBeNull();
+
+    captured.menu = null;
+    await act(async () => {
+      fireEvent.click(r.getByTestId("version-btn"));
+      await Promise.resolve();
+    });
+    const menuB = render(<>{captured.menu}</>);
+    await clickRow(menuB.container, "Game (Japan)");
+    expect(throbber(r)).not.toBeNull();
+
+    await act(async () => {
+      answerUnsyncedA({
+        success: false,
+        reason: "unsynced_saves",
+        message: "Unsynced saves",
+        server_reachable: false,
+        stranding: "unsynced",
+        unsynced_rom_id: 1,
+        unsynced_version_name: "Game (USA)",
+      });
+      for (let i = 0; i < 6; i++) await Promise.resolve();
+    });
+
+    expect(getRommConnectionState()).toBe("offline");
+    expect(showUnsyncedSavesModal).not.toHaveBeenCalled();
+    expect(throbber(r)).not.toBeNull();
+
+    await act(async () => {
+      answerGameB({ success: true, rom_id: 2, target_installed: true, launch_options: "", app_id: APP_ID + 1 });
+      for (let i = 0; i < 12; i++) await Promise.resolve();
+    });
+    await waitFor(() => expect(throbber(r)).toBeNull());
+  });
+
+  it.each([
+    [
+      "unsynced_saves",
+      {
+        success: false,
+        reason: "unsynced_saves",
+        message: "Unsynced saves",
+        server_reachable: true,
+        stranding: "unsynced",
+        unsynced_rom_id: 1,
+        unsynced_version_name: "Game (USA)",
+      } satisfies SwitchVersionResult,
+    ],
+    [
+      "a refusal",
+      { success: false, reason: "prune_active", message: "A cleanup is running" } satisfies SwitchVersionResult,
+    ],
+  ])(
+    "does not clear the guard, toast, or refresh save status when a previous game's sync-then-switch retry answers %s after a game change",
+    async (_label, retryAnswer) => {
+      let answerRetryA!: (v: SwitchVersionResult) => void;
+      let answerGameB!: (v: SwitchVersionSuccess) => void;
+      vi.mocked(backend.getVersionList).mockResolvedValue(multiVersionList());
+      vi.mocked(showUnsyncedSavesModal).mockResolvedValue("sync_and_switch");
+      vi.mocked(backend.syncRomSaves).mockResolvedValue({ success: true, message: "", synced: 1 });
+      vi.mocked(backend.switchVersion)
+        .mockResolvedValueOnce({
+          success: false,
+          reason: "unsynced_saves",
+          message: "Unsynced saves",
+          server_reachable: true,
+          stranding: "unsynced",
+          unsynced_rom_id: 1,
+          unsynced_version_name: "Game (USA)",
+        })
+        .mockReturnValueOnce(new Promise((res) => (answerRetryA = res)))
+        .mockReturnValueOnce(new Promise((res) => (answerGameB = res)));
+
+      const { r, menu } = await renderAndOpen();
+      await clickRow(menu.container, "Game (Japan)");
+      await waitFor(() => expect(backend.switchVersion).toHaveBeenCalledTimes(2));
+      expect(throbber(r)).not.toBeNull();
+
+      r.rerender(<VersionPicker appId={APP_ID + 1} />);
+      await settle();
+      expect(throbber(r)).toBeNull();
+
+      captured.menu = null;
+      await act(async () => {
+        fireEvent.click(r.getByTestId("version-btn"));
+        await Promise.resolve();
+      });
+      const menuB = render(<>{captured.menu}</>);
+      await clickRow(menuB.container, "Game (Japan)");
+      expect(throbber(r)).not.toBeNull();
+
+      await act(async () => {
+        answerRetryA(retryAnswer);
+        for (let i = 0; i < 6; i++) await Promise.resolve();
+      });
+
+      expect(throbber(r)).not.toBeNull();
+      expect(toaster.toast).not.toHaveBeenCalled();
+      expect(backend.refreshSaveStatus).not.toHaveBeenCalled();
+
+      await act(async () => {
+        answerGameB({ success: true, rom_id: 2, target_installed: true, launch_options: "", app_id: APP_ID + 1 });
+        for (let i = 0; i < 12; i++) await Promise.resolve();
+      });
+      await waitFor(() => expect(throbber(r)).toBeNull());
+    },
+  );
 
   it("re-enables the trigger after a rejected switch (guard never sticks)", async () => {
     vi.mocked(backend.getVersionList).mockResolvedValue(multiVersionList());

@@ -12,11 +12,17 @@ import { isPruneLeaseCancelled, withPruneLease, type PruneLeaseAdmission } from 
 import { refreshAppIdMap } from "./sessionManager";
 import { detach } from "./detach";
 
+/** Whether a committed switch's launch command was confirmed on the shortcut, and whether it was broadcast. */
+interface CommittedSwitchOutcome {
+  confirmed: boolean;
+  broadcast: boolean;
+}
+
 export async function applyCommittedVersionSwitch(
   result: SwitchVersionSuccess,
   onCover?: (romId: number, cover: string) => void,
   admission?: PruneLeaseAdmission,
-): Promise<boolean> {
+): Promise<CommittedSwitchOutcome> {
   // The binding moved when the backend answered; Steam's Play must not wait on
   // the Steam writes below to be judged by it.
   detach(refreshAppIdMap());
@@ -25,7 +31,7 @@ export async function applyCommittedVersionSwitch(
     "Version switch",
     async (signal) => {
       let confirmed = false;
-      if (isPruneLeaseCancelled(signal)) return confirmed;
+      if (isPruneLeaseCancelled(signal)) return { confirmed, broadcast: false };
       try {
         confirmed = await setLaunchOptionsConfirmed(result.app_id, result.launch_options);
       } catch (e) {
@@ -36,22 +42,23 @@ export async function applyCommittedVersionSwitch(
       if (!confirmed) {
         logError(`Version switch: could not confirm launch options for rom ${result.rom_id} (appId ${result.app_id})`);
       }
-      if (!isPruneLeaseCancelled(signal)) {
-        await publishCommittedVersionSwitch(result.app_id, result.rom_id, onCover, signal);
-      }
-      return confirmed;
+      const broadcast =
+        !isPruneLeaseCancelled(signal) &&
+        (await publishCommittedVersionSwitch(result.app_id, result.rom_id, onCover, signal));
+      return { confirmed, broadcast };
     },
     `version-picker:${result.app_id}`,
     admission,
   );
 }
 
+/** Answers whether it broadcast `version_switched`; an aborted *signal* stops it short of that. */
 export async function publishCommittedVersionSwitch(
   appId: number,
   romId: number,
   onCover?: (romId: number, cover: string) => void,
   signal?: AbortSignal,
-): Promise<void> {
+): Promise<boolean> {
   try {
     // A cover the user chose for this version is its cover; RomM's only where there is none (#2381 D16).
     const chosen = await setChosenCover(romId, appId, (base64) => onCover?.(romId, base64));
@@ -64,7 +71,7 @@ export async function publishCommittedVersionSwitch(
       );
     }
     const cover = chosen.kind === "none" ? await fetchCoverBase64(romId) : null;
-    if (signal?.aborted) return;
+    if (signal?.aborted) return false;
     if (cover?.base64) {
       onCover?.(romId, cover.base64);
       const base64 = cover.base64;
@@ -76,11 +83,12 @@ export async function publishCommittedVersionSwitch(
   } catch (e) {
     logWarn(`Version switch: cover apply after switch failed for rom ${romId}: ${e}`);
   }
-  if (signal?.aborted) return;
+  if (signal?.aborted) return false;
   invalidateCachedGameDetail(appId);
   globalThis.dispatchEvent(
     new CustomEvent("romm_data_changed", {
       detail: { type: "version_switched", app_id: appId, rom_id: romId },
     }),
   );
+  return true;
 }
