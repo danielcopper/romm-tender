@@ -291,7 +291,12 @@ describe("refreshSlotState", () => {
 });
 
 describe("refreshSaveSyncAnswer (#2149)", () => {
-  const SYNCS: SaveSyncAvailability = { available: true, installed: true, emulator_label: "mGBA" };
+  const SYNCS: SaveSyncAvailability = {
+    available: true,
+    installed: true,
+    established: true,
+    emulator_label: "mGBA",
+  };
   const REFUSED: SaveSyncAvailability = { ...SYNCS, available: false, reason: "save_shape_unsupported", message: "m" };
 
   beforeEach(() => {

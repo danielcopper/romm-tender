@@ -13,6 +13,7 @@ import { getRommConnectionState, onRommConnectionChange } from "../utils/connect
 import type { SaveStatus, SyncConflict, SaveSlotSummary, LastKnownSlots } from "../types";
 import { scrollFocusedToCenter } from "../utils/scrollHelpers";
 import { MUTED_COLOR, sortSaveSlots, filterSaveSlotsForDisplay } from "../utils/saveHelpers";
+import { emptySlotLine } from "../utils/saveSyncStatement";
 import { renderLastKnownSlots } from "./saves/LastKnownSlotList";
 import { NewSlotModal } from "./saves/NewSlotModal";
 import { SlotPanel } from "./saves/SlotPanel";
@@ -219,11 +220,16 @@ export const SavesTab: FC<SavesTabProps> = ({
         </div>
       );
     } else {
-      unslottedFilesSection = (
-        <div key="no-files" style={{ fontSize: "13px", color: MUTED_COLOR, fontStyle: "italic", marginBottom: "12px" }}>
-          {noSaveLine}
-        </div>
-      );
+      const line = emptySlotLine(saveStatus, noSaveLine);
+      unslottedFilesSection =
+        line === null ? null : (
+          <div
+            key="no-files"
+            style={{ fontSize: "13px", color: MUTED_COLOR, fontStyle: "italic", marginBottom: "12px" }}
+          >
+            {line}
+          </div>
+        );
     }
   }
 

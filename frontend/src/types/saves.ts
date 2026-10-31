@@ -170,11 +170,14 @@ export type SyncRefusalReason = WireReasonSubset<
   "save_shape_unsupported" | "savefiles_in_content_dir" | "saves_root_missing"
 >;
 
-/** Whether a game's saves sync, asked without RomM (backend `get_save_sync_availability`). */
+/** Whether a game's saves sync, with no device registration and no save listing (backend `get_save_sync_availability`). */
 export interface SaveSyncAvailability {
   available: boolean;
   // Whether the game is downloaded; a game that is not is asked about the path it would be downloaded to.
   installed: boolean;
+  // False where the reading established nothing about the saves (no path could be formed, or the emulator's answer
+  // could not be established), so a refusal there says nothing of whether they would sync.
+  established: boolean;
   // The label of the entry the game starts with, as the emulator menu shows it; `null` where it has none.
   emulator_label: string | null;
   // Present only where `available` is false: the refusal the game's sync is refused with.

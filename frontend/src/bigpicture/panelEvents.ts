@@ -427,6 +427,15 @@ async function rereadSaveSyncAnswer(ctx: PanelEventContext, romId: number): Prom
   if (cached?.found && cached.save_sync_enabled) await refreshSaveSyncAnswer(bindCurrentRom(ctx, romId), ctx.readSeqs);
 }
 
+/** Ask again whether the ROM's saves sync as the SAVES tab opens: the emulator's
+ *  settings may have changed since the last answer, which stays shown until this
+ *  one lands (#2149 D8). */
+export function rereadSaveSyncOnTabOpen(ctx: PanelEventContext): Promise<void> {
+  const romId = ctx.romIdRef.current;
+  if (!romId) return Promise.resolve();
+  return refreshSaveSyncAnswer(bindCurrentRom(ctx, romId), ctx.readSeqs);
+}
+
 /** Subscribe the panel's event listeners; the returned teardown unsubscribes
  *  them all. */
 export function wirePanelEvents(ctx: PanelEventContext): () => void {

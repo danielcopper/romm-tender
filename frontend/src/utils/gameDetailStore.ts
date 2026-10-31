@@ -679,7 +679,6 @@ async function handleSaveSyncSettingsChange(
   detail: Extract<RommDataChangedDetail, { type: "save_sync_settings" }>,
 ): Promise<void> {
   if (!detail.save_sync_enabled) {
-    // Only the sync-derived display is cleared.
     writerFor(
       entry,
       entry.generation,
