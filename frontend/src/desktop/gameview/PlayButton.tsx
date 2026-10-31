@@ -16,6 +16,7 @@ import type { SaveStatus } from "../../types";
 import type { AskDialog } from "./dialogs/askDialog";
 import { useDialogHost } from "./dialogs/useDialogHost";
 import { CONTAINER_STYLE, BUTTON_GROUP_STYLE, BUTTON_BASE_STYLE } from "./styles";
+import { DiscSelector } from "./DiscSelector";
 import { PlayStateButton } from "./PlayStateButton";
 import { usePlayLaunch, type PressState } from "./usePlayLaunch";
 
@@ -231,6 +232,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
   return (
     <div className="tender-desktop-play-btn-container" style={CONTAINER_STYLE}>
       {renderButtonGroup()}
+      <DiscSelector appId={appId} ask={ask} fileMissing={detail.fileMissingAt !== null} />
     </div>
   );
 };

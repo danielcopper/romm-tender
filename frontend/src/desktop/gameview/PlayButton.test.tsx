@@ -2,6 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act, within } from "@testing-library/react";
 import { PlayButton } from "./PlayButton";
+import { DiscSelector } from "./DiscSelector";
 import * as gameDetailStore from "../../utils/gameDetailStore";
 import * as downloadStore from "../../utils/downloadStore";
 import * as sessionManager from "../../utils/sessionManager";
@@ -19,6 +20,21 @@ vi.mock("../../utils/gameDetailStore", () => ({
   refreshSaveStatus: vi.fn(),
   recheckStart: vi.fn(),
 }));
+
+/** How many times the selector stand-in below has mounted. */
+const selectorMounts = vi.hoisted(() => ({ count: 0 }));
+
+vi.mock("./DiscSelector", async () => {
+  const { useEffect } = await import("react");
+  return {
+    DiscSelector: vi.fn(() => {
+      useEffect(() => {
+        selectorMounts.count += 1;
+      }, []);
+      return <div data-testid="disc-selector" />;
+    }),
+  };
+});
 
 vi.mock("../../utils/downloadStore", () => ({
   useDownloads: vi.fn(),
@@ -824,6 +840,55 @@ describe("PlayButton", () => {
       vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ fileMissingAt: "/roms/snes/smw.sfc" }));
       render(<PlayButton appId={APP_ID} />);
       expect(placeholder(/^FILE MISSING$/)).toHaveAttribute("title", "/roms/snes/smw.sfc");
+    });
+  });
+
+  describe("the disc and version selector", () => {
+    const selectorProps = () => vi.mocked(DiscSelector).mock.lastCall?.[0];
+
+    it("sits beside PLAY, asking through the button's dialogs", () => {
+      render(<PlayButton appId={APP_ID} />);
+
+      const container = screen.getByRole("button", { name: /^PLAY/ }).closest(".tender-desktop-play-btn-container");
+      expect(within(container as HTMLElement).getByTestId("disc-selector")).toBeInTheDocument();
+      expect(selectorProps()).toEqual({ appId: APP_ID, ask: expect.any(Function), fileMissing: false });
+    });
+
+    it("sits beside STOP while the game runs", () => {
+      vi.mocked(sessionManager.isSessionActive).mockReturnValue(true);
+      render(<PlayButton appId={APP_ID} />);
+
+      expect(screen.getByRole("button", { name: /^STOP/ })).toBeInTheDocument();
+      expect(screen.getByTestId("disc-selector")).toBeInTheDocument();
+    });
+
+    it("asks its questions in the button's dialog host", () => {
+      render(<PlayButton appId={APP_ID} />);
+      const ask = selectorProps()!.ask;
+
+      act(() => {
+        void ask("dismissed", () => <div role="dialog" aria-label="from the selector" />);
+      });
+
+      expect(screen.getByRole("dialog", { name: "from the selector" })).toBeInTheDocument();
+    });
+
+    it("stays mounted while the button moves from PLAY to STOP", () => {
+      selectorMounts.count = 0;
+      render(<PlayButton appId={APP_ID} />);
+      expect(screen.getByRole("button", { name: /^PLAY/ })).toBeInTheDocument();
+
+      sessionChanged(true, 100);
+
+      expect(screen.getByRole("button", { name: /^STOP/ })).toBeInTheDocument();
+      expect(selectorMounts.count).toBe(1);
+    });
+
+    it("is told the file is missing", () => {
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ fileMissingAt: "/roms/snes/smw.sfc" }));
+      render(<PlayButton appId={APP_ID} />);
+
+      expect(selectorProps()?.fileMissing).toBe(true);
     });
   });
 

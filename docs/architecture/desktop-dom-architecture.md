@@ -44,6 +44,18 @@ entry says. Steam's Play button and the badges beside it are hidden as soon as t
 while it draws nothing — before the page's detail names the ROM, and on a stranded panel — and the button draws no
 badges in their place.
 
+`DiscSelector` (`frontend/src/desktop/gameview/DiscSelector.tsx`) sits beside the Play button, one control where Big
+Picture has two beside `CustomPlayButton`, `frontend/src/bigpicture/DiscSelector.tsx` and
+`frontend/src/bigpicture/VersionPicker.tsx`: its menu lists a multi-disc game's discs, then the versions of the game's
+group. What it reads and what a pick does are theirs (`frontend/src/utils/discSelection.ts`,
+`frontend/src/utils/versionSwitch.ts`), and a version's row says what Big Picture's says
+(`frontend/src/utils/versionPickerWording.ts`). A version gone from RomM is listed and offers nothing: Big Picture's way
+to its removed-game cleanup from the picker has no desktop counterpart. A switch that would leave unsynced saves behind
+asks in a desktop dialog. The selector draws nothing where the button draws nothing, and leaves the discs out while the
+bound version's file is missing. While a switch is under way its trigger is disabled and dimmed, with no throbber
+([qam-panel.md](qam-panel.md#waiting) lists the waits that show none, and why), and like the Play button it adds no
+stylesheet to Steam's document, so nothing changes on hover.
+
 ## Two windows, two realms
 
 The panel runs in Steam's **SharedJSContext**, where the backend loads it
