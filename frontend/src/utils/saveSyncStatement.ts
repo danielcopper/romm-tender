@@ -4,11 +4,14 @@
  * that says why a game's saves do not sync is the backend's `message`, passed through.
  */
 
-import type { SaveSyncAvailability } from "../types";
+import type { SaveStatus, SaveSyncAvailability } from "../types";
 import { SAVEFILES_IN_CONTENT_DIR_REASON } from "./launchGate";
 
 /** The empty active slot's line where the answer cannot say that the game's saves sync. */
 export const NO_SAVE_YET = "No save yet.";
+
+/** An empty slot's line where this device was read and RomM could not be asked (D10). */
+export const NO_SAVE_ON_DEVICE = "No save on this device.";
 
 /** RetroArch's setting, the usual cause of saves written beside the game file, and the way back (D2). */
 export const CONTENT_DIR_HINT =
@@ -33,12 +36,22 @@ export function noSaveLine(answer: SaveSyncAvailability | null): string {
   return `No save yet — ${answer.emulator_label}'s saves for this game sync with RomM once it writes one.`;
 }
 
+/** The line a slot showing no save file reads (D10): *noSaveLine* only where this device and RomM were both read, the
+ *  device's own line where RomM could not be asked, and none while no status is held. */
+export function emptySlotLine(saveStatus: SaveStatus | null, noSaveLine: string): string | null {
+  if (!saveStatus) return null;
+  return saveStatus.server_query_failed ? NO_SAVE_ON_DEVICE : noSaveLine;
+}
+
 /** What a game that is not downloaded reads above its slots (D4): a line, and the refusal's sentence where its saves
  *  would not sync; `null` for a game that is downloaded or no answer. */
 export function notDownloadedStatement(
   answer: SaveSyncAvailability | null,
 ): { line: string; refusal: string | null } | null {
   if (!answer || answer.installed) return null;
+  if (!answer.available && !answer.established) {
+    return { line: "Not downloaded. Whether its saves will sync could not be established.", refusal: null };
+  }
   if (!answer.available) {
     return { line: "Not downloaded. Once it is, its saves will not sync:", refusal: answer.message ?? "" };
   }

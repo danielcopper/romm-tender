@@ -22,7 +22,13 @@ import { useAchievements } from "../utils/achievements";
 import { useBiosTab } from "./BiosTab";
 import { GamePageTabs } from "./GamePageTabs";
 import { bindRomInState, loadData, openingTab, type PanelReadSeqs, type PanelState } from "./panelState";
-import { announceOwnBiosChange, rereadBiosAnswer, wirePanelEvents, type PanelEventContext } from "./panelEvents";
+import {
+  announceOwnBiosChange,
+  rereadBiosAnswer,
+  rereadSaveSyncOnTabOpen,
+  wirePanelEvents,
+  type PanelEventContext,
+} from "./panelEvents";
 import { useSaveSlotsLoad } from "./panelSlotsLoad";
 import { buildPanelTabs } from "./panelTabContent";
 import { useMigrationStatus } from "../utils/migrationStore";
@@ -136,6 +142,11 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
   }, [appId]);
 
   useSaveSlotsLoad(state, slotsLoadedRef, readSeqs, setState);
+  const savesShown = state.activeTab === "saves" && state.saveSyncEnabled;
+  useEffect(() => {
+    const ctx = eventContext.current;
+    if (savesShown && ctx !== null) detach(rereadSaveSyncOnTabOpen(ctx));
+  }, [savesShown]);
   const achievements = useAchievements(state.romId, state.raId, state.activeTab === "achievements");
   const bios = useBiosTab({
     biosStatus: state.biosStatus,

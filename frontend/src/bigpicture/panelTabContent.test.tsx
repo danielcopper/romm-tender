@@ -60,6 +60,7 @@ function state(overrides: Partial<PanelState> = {}): PanelState {
 const syncs = (overrides: Partial<SaveSyncAvailability> = {}): SaveSyncAvailability => ({
   available: true,
   installed: true,
+  established: true,
   emulator_label: "mGBA",
   ...overrides,
 });
@@ -70,6 +71,7 @@ const refuses = (
 ): SaveSyncAvailability => ({
   available: false,
   installed: true,
+  established: true,
   emulator_label: "mGBA",
   reason,
   message: REFUSAL,
@@ -217,6 +219,20 @@ describe("the SAVES pane of a game that is not downloaded (#2149 D4)", () => {
     );
 
     expect(getByTestId("saves-not-downloaded").textContent).toContain("Write Saves to Content Directory");
+  });
+
+  it("says it could not be established where the reading established nothing (#2149 D9)", () => {
+    const { getByTestId, queryByTestId } = paneOf(
+      state({
+        slotConfirmed: false,
+        saveSyncAnswer: refuses("save_shape_unsupported", { installed: false, established: false }),
+      }),
+    );
+
+    expect(getByTestId("saves-not-downloaded").textContent).toBe(
+      "Not downloaded. Whether its saves will sync could not be established.",
+    );
+    expect(queryByTestId("slot-setup-wizard")).not.toBeNull();
   });
 
   it("says nothing of it for a game that is downloaded", () => {

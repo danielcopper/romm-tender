@@ -1187,13 +1187,30 @@ describe("SlotPanel", () => {
       expect(container.textContent).not.toContain("No save files tracked yet");
     });
 
-    it("says it under the slot while no status is held", () => {
+    it("says nothing under the slot while no status is held (#2149 D10)", () => {
       const { container } = render(
         <SlotPanel {...defaultProps({ isActive: true, defaultExpanded: true, saveStatus: null })} noSaveLine={line} />,
       );
 
       expect(container.querySelector(".romm-slot-sync-summary")).toBeNull();
-      expect(container.textContent).toContain(line);
+      expect(container.querySelector(".romm-slot-body")?.textContent).toBe("");
+    });
+
+    it("speaks only for this device where RomM could not be asked (#2149 D10)", () => {
+      const { container } = render(
+        <SlotPanel
+          {...defaultProps({
+            isActive: true,
+            defaultExpanded: true,
+            saveStatus: makeStatus({ files: [], server_query_failed: true, server_query_reason: "server_unreachable" }),
+          })}
+          noSaveLine={line}
+        />,
+      );
+
+      expect(container.querySelector(".romm-slot-sync-summary")?.textContent).toBe("Server unreachable");
+      expect(container.querySelector(".romm-slot-body")?.textContent).toBe("No save on this device.");
+      expect(container.textContent).not.toContain(line);
     });
 
     it("leaves an inactive slot's empty list as it was", () => {

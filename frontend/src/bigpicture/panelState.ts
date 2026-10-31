@@ -64,9 +64,10 @@ export interface PanelState {
   // previous emulator against the new emulator's requirements.
   coreInfo: CoreInfo | null;
   saveSyncEnabled: boolean;
-  // Whether this ROM's saves sync, read without RomM: what the SAVES tab says
-  // of them and whether its title is marked (#2149). `null` while no answer is
-  // held — not read yet, or the read failed — and nothing is said or marked then.
+  // Whether this ROM's saves sync (`get_save_sync_availability`): what the SAVES
+  // tab says of them and whether its title is marked (#2149). `null` while no
+  // answer is held — not read yet, or the read failed — and the tab then marks
+  // nothing and shows the slots or the setup as for a game that syncs.
   saveSyncAnswer: SaveSyncAvailability | null;
   saveStatus: SaveStatus | null;
   conflicts: SyncConflict[];

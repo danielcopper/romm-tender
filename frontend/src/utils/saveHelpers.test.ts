@@ -365,7 +365,7 @@ describe("computeSyncSummary", () => {
     });
   });
 
-  it("returns 'No save yet.' when fileCount is 0, no conflicts and no line is handed", () => {
+  it("returns 'No save yet.' for a slot with no files and no conflicts when no line is handed", () => {
     expect(computeSyncSummary(true, makeStatus(), [])).toEqual({
       syncSummaryText: "No save yet.",
       syncSummaryColor: "#8f98a0",

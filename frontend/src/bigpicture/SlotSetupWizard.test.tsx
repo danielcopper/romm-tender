@@ -237,6 +237,7 @@ describe("SlotSetupWizard", () => {
       vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue({
         available: false,
         installed: true,
+        established: true,
         emulator_label: null,
         reason: "savefiles_in_content_dir",
         message,
@@ -257,6 +258,7 @@ describe("SlotSetupWizard", () => {
       vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue({
         available: true,
         installed: true,
+        established: true,
         emulator_label: null,
       });
 
@@ -297,7 +299,7 @@ describe("SlotSetupWizard", () => {
         await Promise.resolve();
       });
       await act(async () => {
-        answerAvailability({ available: true, installed: true, emulator_label: null });
+        answerAvailability({ available: true, installed: true, established: true, emulator_label: null });
         await Promise.resolve();
       });
       await flushAsync();
@@ -338,6 +340,7 @@ describe("SlotSetupWizard", () => {
       vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue({
         available: false,
         installed: true,
+        established: true,
         emulator_label: null,
         reason: "savefiles_in_content_dir",
         message,
@@ -354,6 +357,7 @@ describe("SlotSetupWizard", () => {
       vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue({
         available: false,
         installed: false,
+        established: true,
         emulator_label: null,
         reason: "save_shape_unsupported",
         message,

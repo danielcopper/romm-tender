@@ -1,9 +1,9 @@
 /**
  * RomMPlaySection — the game page's play section, mimicking Steam's native
  * PlaySection: the play row (CustomPlayButton, the disc and version pickers,
- * the info items, and the gear buttons at the far right), under the
- * VanishedVersionBanner, which is why the root is a Fragment. The info items,
- * for example:
+ * the info items, and the gear buttons at the far right), with the
+ * VanishedVersionBanner above it and the emulator notes below it as siblings,
+ * which is why the root is a Fragment. The info items, for example:
  *
  *   [▶ Play ▾]   LAST PLAYED    PLAYTIME    ACHIEVEMENTS    BIOS
  *                24. Jan.       14 Hours    🏆 12/40        🔴 <bios_label>
@@ -1069,13 +1069,12 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     </Focusable>
   );
 
-  // The banner above the row is a keyed sibling under a Fragment, never a
-  // branch returning a different root: it can land a moment after the row first
-  // paints, and a root whose element type changes makes React unmount the whole
-  // row — the play button drops back to "loading" and re-runs its init (#1682).
-  // A Fragment adds no DOM node, so the row stays a direct child of the injected
-  // panel either way. Whether a game's saves sync is said on its SAVES tab, not
-  // here (#2149 D2).
+  // The row and what stands beside it are keyed siblings under a Fragment,
+  // never a branch returning a different root: a sibling that lands a moment
+  // after the row first paints would otherwise change the root's element type,
+  // and React would unmount the whole row — the play button drops back to
+  // "loading" and re-runs its init (#1682). A Fragment adds no DOM node, so the
+  // row stays a direct child of the injected panel either way.
   const emulatorNote = activeEmulatorNote(detail.emulators, detail.activeCoreLabel);
   // The pick that no longer exists and the user's own choice in ES-DE — each
   // said once, under the row.

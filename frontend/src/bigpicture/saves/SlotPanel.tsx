@@ -10,6 +10,7 @@ import { getSlotSaves, debugLog, logError } from "../../api/backend";
 import type { SaveStatus, SyncConflict, SaveSlotSummary, SlotSaveFile } from "../../types";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { MUTED_COLOR, computeSyncSummary, displaySlot } from "../../utils/saveHelpers";
+import { NO_SAVE_ON_DEVICE } from "../../utils/saveSyncStatement";
 import { formatSlotDeleteDescription } from "../../utils/saveSlotWording";
 import { executeSlotDelete, executeSlotSwitch, loadSlotDeleteInfo } from "../../utils/saveSlotFlow";
 import { renderSaveFileRow } from "./SaveFileRow";
@@ -52,7 +53,6 @@ function renderMultiFileNote(componentFiles: string[]): ReactElement {
 
 function renderActiveSlotBody(
   saveStatus: SaveStatus | null,
-  noSaveLine: string,
   conflicts: SyncConflict[],
   romId: number,
   slot: string,
@@ -109,12 +109,13 @@ function renderActiveSlotBody(
       );
     });
   }
-  // Where the summary line above says there is no save, the body repeats
-  // nothing (#2149 D3).
-  if (saveStatus && !saveStatus.server_query_failed) return [];
+  // An answered empty status says so on the summary line above, and no status
+  // says nothing; only where RomM could not be asked does the body speak for
+  // this device (#2149 D10).
+  if (!saveStatus?.server_query_failed) return [];
   return [
     <div key="no-files" style={{ fontSize: "13px", color: MUTED_COLOR, fontStyle: "italic" }}>
-      {noSaveLine}
+      {NO_SAVE_ON_DEVICE}
     </div>,
   ];
 }
@@ -329,16 +330,9 @@ export const SlotPanel: FC<SlotPanelProps> = ({
   if (expanded) {
     bodyEl = isActive ? (
       <div key="body" className="romm-slot-body">
-        {renderActiveSlotBody(
-          saveStatus,
-          noSaveLine,
-          conflicts,
-          romId,
-          slotName,
-          isOffline,
-          onVersionRestored,
-          onCopy,
-        ).filter(Boolean)}
+        {renderActiveSlotBody(saveStatus, conflicts, romId, slotName, isOffline, onVersionRestored, onCopy).filter(
+          Boolean,
+        )}
       </div>
     ) : (
       <InactiveSlotBody

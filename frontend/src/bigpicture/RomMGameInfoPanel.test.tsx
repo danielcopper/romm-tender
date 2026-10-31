@@ -6644,11 +6644,17 @@ describe("RomMGameInfoPanel", () => {
     const REFUSED: SaveSyncAvailability = {
       available: false,
       installed: true,
+      established: true,
       emulator_label: "PCSX2",
       reason: "save_shape_unsupported",
       message: "a refusal's sentence",
     };
-    const SYNCS: SaveSyncAvailability = { available: true, installed: true, emulator_label: "mGBA" };
+    const SYNCS: SaveSyncAvailability = {
+      available: true,
+      installed: true,
+      established: true,
+      emulator_label: "mGBA",
+    };
 
     const detailFor = (romId: number): CachedGameDetail => ({
       found: true,
@@ -6750,6 +6756,37 @@ describe("RomMGameInfoPanel", () => {
       await flushAsync();
 
       expect(mark(container)).not.toBeNull();
+    });
+
+    it("asks again each time the SAVES tab opens, keeping the shown answer until the new one lands (#2149 D8)", async () => {
+      const openTab = async (container: HTMLElement, tab: string) => {
+        await act(async () => {
+          fireEvent.click(container.querySelector(`[data-testid="tab-${tab}"]`) as HTMLElement);
+        });
+        await flushAsync();
+      };
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1));
+      vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue(REFUSED);
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      await openTab(container, "saves");
+      expect(mark(container)).not.toBeNull();
+      expect(container.textContent).toContain(REFUSED.message);
+
+      // The emulator's setting changed while the page stood open.
+      await openTab(container, "info");
+      const reread = heldRead<SaveSyncAvailability>();
+      vi.mocked(backend.getSaveSyncAvailability).mockReturnValue(reread.promise);
+      await openTab(container, "saves");
+      expect(mark(container)).not.toBeNull();
+
+      await act(async () => {
+        reread.release(SYNCS);
+      });
+      await flushAsync();
+
+      expect(mark(container)).toBeNull();
+      expect(container.textContent).not.toContain(REFUSED.message);
     });
 
     it("asks again once the game is downloaded, and once it is uninstalled", async () => {

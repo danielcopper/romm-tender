@@ -483,9 +483,9 @@ function reachabilityOf(result: SaveSetupInfo): boolean | null {
   return result.recommended_action !== "server_unreachable";
 }
 
-/** Whether a slot can be set up for the game at all, asked without RomM; `null` where the question failed, which the
- *  caller treats as a game that can sync. A game that is not downloaded is answered about the path it would be
- *  downloaded to, and its slot setup stays as it is whatever that answer says (#2149 D4). */
+/** Whether the game's saves sync, asked with no device registration and no save listing; `null` where the question
+ *  failed, which the caller treats as a game that can sync. Only a downloaded game's refusal stands in place of the
+ *  setup: a game that is not downloaded keeps its setup whatever its would-be saves (#2149 D4). */
 async function readAvailabilityOffline(romId: number): Promise<SaveSyncAvailability | null> {
   try {
     return await getSaveSyncAvailability(romId);

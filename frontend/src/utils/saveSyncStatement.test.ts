@@ -7,6 +7,7 @@ const REFUSAL = "a refusal's sentence, as the backend words it";
 const answer = (overrides: Partial<SaveSyncAvailability> = {}): SaveSyncAvailability => ({
   available: true,
   installed: true,
+  established: true,
   emulator_label: "mGBA",
   ...overrides,
 });
@@ -36,6 +37,13 @@ describe("notDownloadedStatement (#2149 D4)", () => {
   it("names no emulator where the game starts with no entry", () => {
     expect(notDownloadedStatement(answer({ installed: false, emulator_label: null }))).toEqual({
       line: "Not downloaded. Once it is, its saves sync with RomM.",
+      refusal: null,
+    });
+  });
+
+  it("says it could not be established where the reading established nothing, whatever the sentence (D9)", () => {
+    expect(notDownloadedStatement(refused({ installed: false, established: false }))).toEqual({
+      line: "Not downloaded. Whether its saves will sync could not be established.",
       refusal: null,
     });
   });
