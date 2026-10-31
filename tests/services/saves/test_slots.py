@@ -1615,7 +1615,6 @@ def _started_with(label: str) -> ResolvedEmulator:
         choice=EmulatorChoice(option=option, layer=GAME_PICK, vanished=None),
         options=[option],
         invocation=None,
-        folder_unstartable=False,
     )
 
 
