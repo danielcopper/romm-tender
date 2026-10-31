@@ -126,9 +126,10 @@ Each game's **Saves** tab says whether its saves sync:
   yet — this game's saves sync with RomM once its emulator writes one." where the game starts with no entry. While RomM
   cannot be reached, a slot with no save on the device reads "No save on this device."
 - **A game that is not downloaded** says whether its saves will sync once it is: "Not downloaded. Once it is,
-  _emulator_'s saves for this game sync with RomM.", "Not downloaded. Once it is, its saves will not sync:" and the
-  reason, or "Not downloaded. Whether its saves will sync could not be established." where Tender could not tell. Tender
-  works that out from where the game would be downloaded to. Its slot setup stays as it is, and the tab is not marked.
+  _emulator_'s saves for this game sync with RomM.", or "Not downloaded. Once it is, its saves sync with RomM." where
+  the game starts with no entry; "Not downloaded. Once it is, its saves will not sync:" and the reason; or "Not
+  downloaded. Whether its saves will sync could not be established." where Tender could not tell. Tender works that out
+  from where the game would be downloaded to. Its slot setup stays as it is, and the tab is not marked.
 
 The tab asks when the game's page opens, and again after a version switch, a change of emulator, switching save sync on,
 a download, an uninstall, and each time you open the tab. So when the emulator's own settings change so that a game's
