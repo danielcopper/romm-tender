@@ -34,7 +34,7 @@ vi.mock("./vanishedBinding", async (importOriginal) => ({
 }));
 
 vi.mock("./versionSwitchApplication", () => ({
-  applyCommittedVersionSwitch: vi.fn().mockResolvedValue(true),
+  applyCommittedVersionSwitch: vi.fn().mockResolvedValue({ confirmed: true, broadcast: true }),
 }));
 
 vi.mock("./toast", () => ({
@@ -218,6 +218,56 @@ describe("executeVersionSwitch", () => {
     );
   });
 
+  const committed = () =>
+    vi.mocked(backend.switchVersion).mockResolvedValueOnce({
+      success: true,
+      app_id: 100,
+      rom_id: 2,
+      target_installed: true,
+      launch_options: "run",
+    });
+
+  it("has the caller read the list again when a committed switch was stopped short of its broadcast", async () => {
+    committed();
+    vi.mocked(versionApp.applyCommittedVersionSwitch).mockResolvedValueOnce({ confirmed: true, broadcast: false });
+    const setSwitching = vi.fn();
+    const onUnbroadcastSwitch = vi.fn();
+
+    await executeVersionSwitch({
+      appId: 100,
+      target: mockTarget,
+      leaseOwner,
+      askUnsyncedSaves,
+      setSwitching,
+      onUnbroadcastSwitch,
+    });
+
+    expect(onUnbroadcastSwitch).toHaveBeenCalledTimes(1);
+    expect(setSwitching.mock.calls).toEqual([[true]]);
+  });
+
+  it("asks nothing when the caller went before a committed switch could broadcast", async () => {
+    committed();
+    vi.mocked(versionApp.applyCommittedVersionSwitch).mockImplementationOnce(async () => {
+      await pruneLease.releasePruneLeasesByOwner(leaseOwner);
+      return { confirmed: true, broadcast: false };
+    });
+    const onUnbroadcastSwitch = vi.fn();
+
+    await executeVersionSwitch({ appId: 100, target: mockTarget, leaseOwner, askUnsyncedSaves, onUnbroadcastSwitch });
+
+    expect(onUnbroadcastSwitch).not.toHaveBeenCalled();
+  });
+
+  it("asks nothing when the switch broadcast", async () => {
+    committed();
+    const onUnbroadcastSwitch = vi.fn();
+
+    await executeVersionSwitch({ appId: 100, target: mockTarget, leaseOwner, askUnsyncedSaves, onUnbroadcastSwitch });
+
+    expect(onUnbroadcastSwitch).not.toHaveBeenCalled();
+  });
+
   it("warns user if shortcut confirm fails on successful switch", async () => {
     vi.mocked(backend.switchVersion).mockResolvedValueOnce({
       success: true,
@@ -226,7 +276,7 @@ describe("executeVersionSwitch", () => {
       target_installed: true,
       launch_options: "run",
     });
-    vi.mocked(versionApp.applyCommittedVersionSwitch).mockResolvedValueOnce(false);
+    vi.mocked(versionApp.applyCommittedVersionSwitch).mockResolvedValueOnce({ confirmed: false, broadcast: true });
 
     await executeVersionSwitch({
       appId: 100,

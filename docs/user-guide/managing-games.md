@@ -170,8 +170,8 @@ retained row and continues checking any later live versions.
 While a download of the game is running, switching is blocked with a short message — cancel the running download first.
 
 While a switch is being applied, the version control briefly shows a spinner and can't be reopened until the switch
-settles and its version list refreshes — so a fast second tap can't act against the not-yet-updated list (for example,
-switching straight back before the list has caught up).
+settles and its version list refreshes — also when a library sync ends in the meantime — so a fast second tap can't act
+against the not-yet-updated list (for example, switching straight back before the list has caught up).
 
 ### Cleaning up versions removed from RomM
 
