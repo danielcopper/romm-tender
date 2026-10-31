@@ -146,7 +146,19 @@ describe("each verdict has its own sentence (#2195 D2)", () => {
   it("a file that starts says nothing", () => {
     expect(launchRefusal(launch(), true)).toBeNull();
     expect(launchNote(launch(), RETRODECK)).toBeNull();
-    expect(launchNote(launch({ format_unestablished: true }), RETRODECK)).toBeNull();
+  });
+
+  it("a format the entry was not established to read is said under Play, and lets the game start (#2195 D41)", () => {
+    const answer = launch({
+      entry: "RPCS3 Shortcut (Standalone)",
+      file: "Game.iso",
+      extension: ".iso",
+      format_unestablished: true,
+    });
+    expect(launchRefusal(answer, true)).toBeNull();
+    expect(launchNote(answer, RETRODECK)).toBe(
+      "Whether RPCS3 Shortcut (Standalone) reads .iso files is not established.",
+    );
   });
 
   it("nothing asked says nothing", () => {
@@ -176,6 +188,115 @@ describe("entryLaunchLine — the emulator menu's line per entry (#2195 D22, D29
   });
 });
 
+describe("the resolver's own reasons (#2195 D21, D40)", () => {
+  const SHORTCUT = "RPCS3 Shortcut (Standalone)";
+  const DIRECTORY = "RPCS3 Directory (Standalone)";
+  const ISO = "RPCS3 ISO (Standalone)";
+  const refused = (reason: GameLaunch["reason"], overrides: Partial<GameLaunch> = {}) =>
+    launch({ state: "not_this_emulator", entry: SHORTCUT, reason, ...overrides });
+  const stoppedShort = (reason: GameLaunch["reason"], overrides: Partial<GameLaunch> = {}) =>
+    launch({ state: "starts", entry: DIRECTORY, reason, ...overrides });
+
+  it.each([
+    [
+      "takes_no_folder",
+      "RPCS3 Shortcut (Standalone) cannot start a game installed as a folder.",
+      "cannot start a game installed as a folder",
+    ],
+    [
+      "nothing_to_start",
+      "RPCS3 Shortcut (Standalone) finds nothing to start in Game.ps3.",
+      "finds nothing to start in this folder",
+    ],
+    [
+      "not_a_game_file",
+      "RPCS3 Shortcut (Standalone) cannot start Game.ps3: it is neither a disc image nor a game program.",
+      "cannot start it: neither a disc image nor a game program",
+    ],
+    [
+      "disc_not_found",
+      "RPCS3 Shortcut (Standalone) cannot start this game: it is a disc game, and no PS3_GAME folder above it has a valid PS3_DISC.SFB beside it.",
+      "the game's disc cannot be mounted",
+    ],
+    [
+      "disc_key_missing",
+      "RPCS3 Shortcut (Standalone) cannot start Game.ps3: the image is encrypted and no key file for it was found.",
+      "the image is encrypted and has no key file",
+    ],
+  ] as const)("a refusal for %s refuses the start and names the reason", (reason, sentence, line) => {
+    const answer = refused(reason);
+    expect(launchRefused(answer)).toBe(true);
+    expect(launchRefusal(answer, true)).toBe(sentence);
+    expect(entryLaunchLine(answer, RETRODECK)).toBe(line);
+    expect(launchNote(answer, RETRODECK)).toBeNull();
+  });
+
+  it("names the one entry the resolver says starts it, pointing at the emulator menu", () => {
+    expect(launchRefusal(refused("takes_no_folder", { other_entries: [DIRECTORY] }), true)).toBe(
+      "RPCS3 Shortcut (Standalone) cannot start a game installed as a folder. RPCS3 Directory (Standalone) can — choose it in the emulator menu.",
+    );
+  });
+
+  it("names every entry the resolver says starts it", () => {
+    expect(launchRefusal(refused("takes_no_folder", { other_entries: [DIRECTORY, ISO] }), true)).toBe(
+      "RPCS3 Shortcut (Standalone) cannot start a game installed as a folder. RPCS3 Directory (Standalone) or RPCS3 ISO (Standalone) can — choose one in the emulator menu.",
+    );
+  });
+
+  it("points at no entry where the emulator menu offers none", () => {
+    expect(launchRefusal(refused("takes_no_folder", { other_entries: [DIRECTORY] }), false)).toBe(
+      "RPCS3 Shortcut (Standalone) cannot start a game installed as a folder.",
+    );
+  });
+
+  it("a refusal with no reason of the resolver's keeps its own sentence", () => {
+    const answer = refused(null, { entry: "Dolphin (Standalone)", extension: ".zip" });
+    expect(launchRefusal(answer, true)).toBe("Dolphin (Standalone) does not start .zip.");
+    expect(entryLaunchLine(answer, RETRODECK)).toBe("cannot start .zip files");
+  });
+
+  it.each([
+    ["content_missing", "Game.ps3 was not found"],
+    ["content_unreadable", "what RPCS3 would look at could not be read"],
+    ["game_list_unread", "the emulator's own list of installed games was not read"],
+    ["game_kind_unfollowed", "its PARAM.SFO names a kind of game whose start was not followed"],
+    ["inside_emulator_drive", "the game lies inside the emulator's own game folder, which starts games another way"],
+    ["emulator_drive_unknown", "where the emulator's internal drive is could not be read"],
+    ["savestate_unread", "RPCS3 opens Game.ps3 as a savestate, which was not followed"],
+    [
+      "image_layout_unread",
+      "the disc image states a region count RPCS3 does not accept, and what its start does then was not followed",
+    ],
+    ["encryption_unread", "whether the disc image is encrypted could not be read"],
+    ["key_untested", "whether its key file fits the disc image was not checked"],
+    [
+      "key_folder_unknown",
+      "no key file is beside the disc image, and where the emulator keeps its other key files could not be read",
+    ],
+    [
+      "disc_folder_set",
+      "the emulator's own disc folder holds a disc it mounts instead, and which disc that boots was not followed",
+    ],
+    ["disc_folder_unknown", "where the emulator's own disc folder is could not be read"],
+    ["content_unchecked", ".ps3 files are taken, but the content of Game.ps3 was not checked"],
+    ["version_dependent", "whether it reads .ps3 depends on the emulator's version"],
+  ] as const)("a file that starts says what its reading stopped short of: %s", (reason, why) => {
+    const answer = stoppedShort(reason);
+    expect(launchRefused(answer)).toBe(false);
+    expect(launchRefusal(answer, true)).toBeNull();
+    expect(launchNote(answer, RETRODECK)).toBe(
+      `Whether RPCS3 Directory (Standalone) starts this game cannot be established: ${why}.`,
+    );
+    expect(entryLaunchLine(answer, RETRODECK)).toBe(`whether it starts the game is not established: ${why}`);
+  });
+
+  it("a refusal's reason on a file that starts is no note", () => {
+    const answer = stoppedShort("takes_no_folder");
+    expect(launchNote(answer, RETRODECK)).toBeNull();
+    expect(entryLaunchLine(answer, RETRODECK)).toBe("can start it");
+  });
+});
+
 describe("startCheckFailureSentence — what went wrong with the page's check (#2195 D32, D36)", () => {
   it.each([
     [new TimeoutError(5000), "Tender's backend did not answer in time"],
@@ -184,5 +305,21 @@ describe("startCheckFailureSentence — what went wrong with the page's check (#
     ["odd", "odd"],
   ])("words %o", (error, words) => {
     expect(startCheckFailureSentence(error)).toBe(`Tender could not check whether this game can start: ${words}.`);
+  });
+});
+
+describe("entryLaunchLine for an entry Tender cannot start (#2195 D42)", () => {
+  it("says no plain 'can start it'", () => {
+    expect(entryLaunchLine(launch(), RETRODECK, false)).toBeNull();
+    expect(entryLaunchLine(launch(), RETRODECK)).toBe("can start it");
+  });
+
+  it("keeps every line of the resolver's", () => {
+    expect(entryLaunchLine(launch({ format_unestablished: true }), RETRODECK, false)).toBe(
+      "whether it reads .ps3 is not established",
+    );
+    expect(entryLaunchLine(launch({ state: "not_this_emulator", reason: "takes_no_folder" }), RETRODECK, false)).toBe(
+      "cannot start a game installed as a folder",
+    );
   });
 });

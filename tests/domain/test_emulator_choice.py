@@ -17,6 +17,8 @@ from domain.emulator_choice import (
     vanished_payload,
 )
 from domain.emulator_commands import (
+    CORE,
+    NOT_BAKEABLE,
     NOT_ESTABLISHED_NO_FIND_RULE,
     NOT_INSTALLED,
     PROGRAM,
@@ -94,17 +96,43 @@ class TestStartPayload:
             "state": STARTS,
             "reason": None,
             "entry": "Shipped",
-            "folder_entry": None,
         }
 
-    def test_an_entry_tender_cannot_bake_bakes_nothing_and_is_not_refused(self):
-        """Nothing stands in its way; it renders no invocation (#2195 D7)."""
+    def test_an_entry_tender_cannot_bake_cannot_start(self):
+        """Its plain start would run ES-DE's own choice, so Tender does not start it (#2195 D7, D23)."""
         script = dataclasses.replace(
             classify_command("Shortcut", "%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%", kind=PROGRAM),
             declared_index=0,
         )
         choice = choose_emulator([script], game=None, platform=None)
-        assert start_payload(choice, [script])["state"] == STARTS
+        assert start_payload(choice, [script]) == {
+            "state": CANNOT_START_STATE,
+            "reason": NOT_BAKEABLE,
+            "entry": "Shortcut",
+        }
+
+    def test_an_entry_tender_cannot_bake_cannot_start_whichever_layer_it_comes_from(self):
+        """Its plain start would run ES-DE's own choice, so Tender does not start it (#2195 D7, D23)."""
+        serial = dataclasses.replace(
+            classify_command(
+                "Game Serial", "%EMULATOR_RPCS3% --no-gui %RPCS3_GAMEID%:%INJECT%=%BASENAME%.ps3", kind=PROGRAM
+            ),
+            declared_index=1,
+        )
+        choice = choose_emulator([SHIPPED, serial], game=StoredPick("Game Serial", "retrodeck"), platform=None)
+        assert start_payload(choice, [SHIPPED, serial]) == {
+            "state": CANNOT_START_STATE,
+            "reason": NOT_BAKEABLE,
+            "entry": "Game Serial",
+        }
+
+    def test_a_core_entry_without_its_core_path_cannot_start(self):
+        unlocated = dataclasses.replace(
+            classify_command("mGBA", "%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%", kind=CORE),
+            declared_index=0,
+        )
+        choice = choose_emulator([unlocated], game=None, platform=None)
+        assert start_payload(choice, [unlocated])["reason"] == NOT_BAKEABLE
 
     def test_an_entry_not_installed_cannot_start(self):
         missing = _entry("Missing", 0, installation=NOT_INSTALLED)
@@ -113,22 +141,12 @@ class TestStartPayload:
             "state": CANNOT_START_STATE,
             "reason": NOT_INSTALLED,
             "entry": "Missing",
-            "folder_entry": None,
         }
 
     def test_an_entry_the_start_script_runs_nothing_for_cannot_start(self):
         nothing = _entry("PICO-8", 0, start_script_runs_nothing=True)
         choice = choose_emulator([nothing], game=None, platform=None)
         assert start_payload(choice, [nothing])["reason"] == "start_script_runs_nothing"
-
-    def test_a_folder_its_entry_cannot_start_names_the_entry_that_can(self):
-        choice = choose_emulator(OPTIONS, game=None, platform=None)
-        assert start_payload(choice, OPTIONS, folder_unstartable=True) == {
-            "state": CANNOT_START_STATE,
-            "reason": "folder_install",
-            "entry": "Shipped",
-            "folder_entry": "RPCS3 Directory (Standalone)",
-        }
 
     def test_a_shipped_default_not_established_asks_for_a_choice_with_its_note(self):
         unseen = _entry("Unseen", 0, installation=NOT_ESTABLISHED_NO_FIND_RULE)
@@ -137,7 +155,6 @@ class TestStartPayload:
             "state": CHOOSE,
             "reason": NOT_ESTABLISHED_NO_FIND_RULE,
             "entry": "Unseen",
-            "folder_entry": None,
         }
 
     def test_no_entry_at_all(self):

@@ -1,8 +1,12 @@
 """Probe a libretro core — run as a subprocess.
 
-Invoked as ``python -m atlas._core_probe <core.so>`` by
-:meth:`atlas.machine.RealMachine.query_core`. The subprocess *is* the crash
-isolation: a core that segfaults takes this process down, not the host.
+Invoked as ``python -I <this file> <core.so>`` by
+:meth:`atlas.machine.RealMachine.query_core` — or as
+``python -m atlas._core_probe <core.so>`` where this module has no file on
+disk. Run by path, it is the only code of this package the child loads, so
+it imports nothing but the standard library. The subprocess *is* the crash
+isolation: a core that segfaults takes this process down, not the host, and
+on Linux the kernel produces no dump of it (:func:`_leave_no_core_dump`).
 
 The probe emits one JSON object per line and the parent uses the LAST valid
 line — whatever reached it before the process stopped, however it stopped — a
@@ -53,6 +57,8 @@ RETRO_ENVIRONMENT_SET_CORE_OPTIONS = 53
 RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL = 54
 RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2 = 67
 RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL = 68
+
+PR_SET_DUMPABLE = 4  # include/uapi/linux/prctl.h @ v6.18
 
 RETRO_NUM_CORE_OPTION_VALUES_MAX = 128
 _MAX_DEFINITIONS = 4096  # defensive walk limit over NULL-terminated arrays
@@ -226,10 +232,71 @@ class _OptionCapture:
             self._add(definition.key, definition.default_value, _option_values(definition.values))
 
 
+def _leave_no_core_dump() -> None:
+    """Keep a core that crashes this process from producing a core dump.
+
+    A crashing core is an outcome this process exists to absorb, not a fault
+    to keep evidence of, and without this the crashed process would be dumped,
+    unasked, every time it happens. Called before the core is loaded.
+    Each half is guarded: a platform without it, or one that refuses it,
+    probes as before.
+    """
+    _clear_dumpable()
+    _zero_core_file_limit()
+
+
+def _clear_dumpable() -> None:
+    """``prctl(PR_SET_DUMPABLE, 0)``: on Linux, the kernel produces no dump at all.
+
+    The kernel tests the process's dumpable flag before it reads
+    ``core_pattern`` to choose between a file and a pipe (fs/coredump.c @
+    v6.18: ``vfs_coredump`` returns at ``coredump_skip`` :1116, which tests
+    ``__get_dumpable`` :1084, before ``coredump_parse`` :1136 can choose
+    ``COREDUMP_PIPE`` :1146). The kernel produces no dump at all, so neither
+    systemd-coredump nor a pipe handler such as SteamOS's receives one.
+    Elsewhere, without ``prctl`` in the process, or where the call fails,
+    nothing changes.
+    """
+    if not sys.platform.startswith("linux"):
+        return
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+    except OSError:
+        return
+    prctl = getattr(libc, "prctl", None)
+    if prctl is None:
+        return
+    # A failing call returns -1 and is deliberately not read: the probe runs
+    # either way.
+    prctl(PR_SET_DUMPABLE, 0, 0, 0, 0)
+
+
+def _zero_core_file_limit() -> None:
+    """``RLIMIT_CORE`` to zero: no core file, also where the dumpable flag is not cleared.
+
+    The kernel does not apply this limit when ``core_pattern`` is a pipe
+    (fs/coredump.c @ v6.18:978 reads only a limit of 1 there), so on its own
+    it stops a core file written by the kernel and nothing else.
+    ``resource`` is POSIX-only.
+    """
+    try:
+        import resource
+    except ImportError:
+        return
+    try:
+        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    except (ValueError, OSError):
+        return
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 2:
-        print("usage: python -m atlas._core_probe <core.so>", file=sys.stderr)
+        print(
+            "usage: python -I _core_probe.py <core.so>\n   or: python -m atlas._core_probe <core.so>",
+            file=sys.stderr,
+        )
         return 2
+    _leave_no_core_dump()
     so_path = argv[1]
     try:
         lib = ctypes.CDLL(so_path, mode=os.RTLD_LAZY)

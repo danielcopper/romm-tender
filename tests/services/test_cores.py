@@ -29,7 +29,7 @@ from domain.emulator_choice import DEFAULT, EmulatorChoice, ResolvedEmulator, Va
 from domain.emulator_commands import options_to_payload
 from domain.emulator_pick import StoredPick
 from domain.emulator_sources import ArrangedSource
-from domain.launchability import NEEDS_INSTALLING, Launchability
+from domain.launchability import NEEDS_INSTALLING, NOT_THIS_EMULATOR, TAKES_NO_FOLDER, Launchability
 from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
 from domain.rom import Rom
 from domain.rom_install import RomInstall
@@ -198,7 +198,7 @@ class TestGetPlatformCoreInfo:
             "active_core_label": "Snes9x",
             "platform_core_label": None,
             "has_game_override": False,
-            "start": {"state": "starts", "reason": None, "entry": "Snes9x", "folder_entry": None},
+            "start": {"state": "starts", "reason": None, "entry": "Snes9x"},
             "launch": None,
             "vanished_pick": None,
         }
@@ -217,7 +217,7 @@ class TestGetPlatformCoreInfo:
             "active_core_label": None,
             "platform_core_label": None,
             "has_game_override": False,
-            "start": {"state": "no_entry", "reason": None, "entry": None, "folder_entry": None},
+            "start": {"state": "no_entry", "reason": None, "entry": None},
             "launch": None,
             "vanished_pick": None,
         }
@@ -348,7 +348,7 @@ class TestGetSystemCoreInfo:
             "emulator_source": {"kind": "retrodeck", "starts_games": True},
             "platform_system": {"state": "found", "source": "retrodeck", "system": "snes", "platform": "snes"},
             "active_core_label": "Snes9x",
-            "start": {"state": "starts", "reason": None, "entry": "Snes9x", "folder_entry": None},
+            "start": {"state": "starts", "reason": None, "entry": "Snes9x"},
             "vanished_pick": None,
             "source_defaults": [
                 {"kind": "retrodeck", "default": "Snes9x", "chosen_in_frontend": None, "reason": None},
@@ -524,9 +524,46 @@ class TestSetGameCore:
         assert result["app_id"] is None
         assert uow.roms.get(42).emulator_override == "bsnes"
 
+    def test_an_entry_tender_cannot_bake_is_pinned_and_bakes_the_empty_command(
+        self, event_loop, service, uow, core_info
+    ):
+        # Pinned like any other (#2195 D23); the game page then refuses Play, and
+        # its shortcut gets no start that would run ES-DE's own choice (D43).
+        core_info.options = [
+            standalone_option(
+                "%EMULATOR_OS-SHELL% %ROM%",
+                "RPCS3 Shortcut (Standalone)",
+                status="unbakeable",
+                reason="shortcut_script",
+            )
+        ]
+        _seed_rom(uow, rom_id=42, platform_slug="ps3", shortcut_app_id=99)
+        _seed_install(uow, rom_id=42, file_path="/roms/ps3/Game.iso", platform_slug="ps3")
+
+        result = event_loop.run_until_complete(service.set_game_core(42, "RPCS3 Shortcut (Standalone)"))
+
+        assert result["success"] is True
+        assert uow.roms.get(42).emulator_override == "RPCS3 Shortcut (Standalone)"
+        assert result["launch_options"] == ""
+
+    def test_an_entry_not_installed_is_refused_and_nothing_written(self, event_loop, service, uow, core_info):
+        core_info.options = [
+            standalone_option(
+                "%EMULATOR_X% %ROM%", "Missing (Standalone)", status="needs_setup", reason="not_installed"
+            )
+        ]
+        _seed_rom(uow, rom_id=42, platform_slug="snes", shortcut_app_id=99)
+        _seed_install(uow, rom_id=42, file_path="/roms/snes/mario.sfc")
+        setting = service.set_game_core(42, "Missing (Standalone)")
+
+        with pytest.raises(Refused) as refused:
+            event_loop.run_until_complete(setting)
+
+        assert refused.value.reason == "core_unavailable"
+        assert uow.roms.get(42).emulator_override is None
+
     def test_unresolvable_label_fails_and_writes_nothing(self, event_loop, service, uow):
-        # An un-bakeable / unknown label hard-fails BEFORE any write — the DB
-        # must never hold a label no consumer can bake.
+        # A label the system does not list hard-fails BEFORE any write.
         _seed_rom(uow, rom_id=42, platform_slug="snes", shortcut_app_id=99)
         _seed_install(uow, rom_id=42, file_path="/roms/snes/mario.sfc")
         setting = service.set_game_core(42, "Genesis Plus GX")
@@ -1147,7 +1184,6 @@ class TestAVanishedPick:
             ),
             options=[snes9x],
             invocation=None,
-            folder_unstartable=False,
         )
 
         result = event_loop.run_until_complete(service.get_platform_core_info(42))
@@ -1293,7 +1329,7 @@ class TestEverySourcesDefault:
         )
 
         assert result["active_core_label"] == "PicoDrive"
-        assert result["start"] == {"state": "starts", "reason": None, "entry": "PicoDrive", "folder_entry": None}
+        assert result["start"] == {"state": "starts", "reason": None, "entry": "PicoDrive"}
         assert result["vanished_pick"] is None
         assert result["default_elsewhere"] is True
 
@@ -1381,7 +1417,6 @@ def _resolved(*options: Any, chosen: Any | None = None) -> ResolvedEmulator:
         choice=EmulatorChoice(option=chosen, layer=DEFAULT if chosen is not None else None, vanished=None),
         options=list(options),
         invocation=None,
-        folder_unstartable=False,
     )
 
 
@@ -1505,6 +1540,38 @@ class TestTheChosenEntrysLaunch:
         ]
         assert result["launch"]["state"] == NEEDS_INSTALLING
         assert result["launch"]["install_in"] == ["RPCS3 Game Serial (Standalone)"]
+
+    def test_a_folder_game_whose_entry_takes_no_folder_is_refused_by_the_verdict_not_by_its_start(
+        self, event_loop, service, core_info, active_core, uow
+    ):
+        # Whether the entry takes a folder is the resolver's (#2195 D21 changed).
+        _seed_rom(uow, rom_id=42, platform_slug="ps3")
+        _seed_install(
+            uow,
+            rom_id=42,
+            file_path="/roms/ps3/Game.ps3/PS3_GAME/USRDIR/EBOOT.BIN",
+            rom_dir="/roms/ps3/Game.ps3",
+            platform_slug="ps3",
+        )
+        active_core.resolved[42] = _resolved(self._SHORTCUT, self._DIRECTORY, chosen=self._SHORTCUT)
+        core_info.launch_verdicts["RPCS3 Shortcut (Standalone)"] = Launchability(
+            state=NOT_THIS_EMULATOR,
+            entry="RPCS3 Shortcut (Standalone)",
+            system="ps3",
+            file="Game.ps3",
+            extension=".ps3",
+            other_entries=("RPCS3 Directory (Standalone)",),
+            reason=TAKES_NO_FOLDER,
+        )
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert result["start"] == {"state": "starts", "reason": None, "entry": "RPCS3 Shortcut (Standalone)"}
+        assert (result["launch"]["state"], result["launch"]["reason"], result["launch"]["other_entries"]) == (
+            NOT_THIS_EMULATOR,
+            TAKES_NO_FOLDER,
+            ["RPCS3 Directory (Standalone)"],
+        )
 
     def test_the_answer_names_the_platform_as_the_game_page_does(self, event_loop, service, active_core, uow):
         # The sentences name the platform, never the system short name (#2195 D36).

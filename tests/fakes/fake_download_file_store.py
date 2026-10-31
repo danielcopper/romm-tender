@@ -260,6 +260,18 @@ class FakeDownloadFileStore:
     def make_dirs(self, path: str) -> None:
         self.dirs.add(path)
 
+    def remove_empty_dir(self, path: str) -> None:
+        """Refuse, as ``os.rmdir`` does, a directory anything is stored under.
+
+        A directory nothing is stored under is one this fake cannot tell from
+        a missing one, so both are removed without a word.
+        """
+        prefix = path.rstrip("/") + "/"
+        held = (*self.files, *self.dirs, *self.links, *self.other_kinds)
+        if any(stored.startswith(prefix) for stored in held):
+            raise OSError(f"directory not empty: {path}")
+        self.dirs.discard(path)
+
     def rename(self, src: str, dst: str) -> None:
         if src not in self.files:
             raise FileNotFoundError(src)

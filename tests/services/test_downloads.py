@@ -2526,6 +2526,123 @@ class TestDoDownloadMultiFile:
         assert installed.file_path == str(kept / "PS3_GAME" / "USRDIR" / "EBOOT.BIN")
         assert not (roms_dir / "MyGame.PS3.ps3").exists()
 
+    async def _download_ps3_zip(
+        self, make_downloads, tmp_path, members: dict[str, bytes], *, store=None, staging_taken: bool = False
+    ):
+        """Download a ps3 zip holding *members* through the real unpack, and answer the roms folder and the install."""
+        import zipfile as zf
+        from unittest.mock import patch
+
+        downloads = make_downloads(
+            retrodeck_folders=FakeRetroDeckFolders(
+                roms=str(tmp_path / "retrodeck" / "roms"),
+                bios=str(tmp_path / "retrodeck" / "bios"),
+            ),
+            download_file_store=store,
+        )
+        downloads.accepted_extensions = frozenset({".ps3", ".PS3", ".ps3dir", ".PS3DIR"})
+        roms_dir = tmp_path / "retrodeck" / "roms" / "ps3"
+        roms_dir.mkdir(parents=True)
+        if staging_taken:
+            (roms_dir / "MyGame.tender-lift").mkdir()
+        target_path = str(roms_dir / "MyGame.zip")
+        zip_content_path = tmp_path / "source_ps3.zip"
+        with zf.ZipFile(str(zip_content_path), "w") as z:
+            for name, data in members.items():
+                z.writestr(name, data)
+        zip_bytes = zip_content_path.read_bytes()
+        rom_detail = {
+            "id": 78,
+            "name": "My Game",
+            "fs_name": "MyGame.zip",
+            "fs_name_no_ext": "MyGame",
+            "platform_slug": "ps3",
+            "platform_name": "PlayStation 3",
+            "has_multiple_files": True,
+        }
+
+        def fake_download(_rom_id, _filename, dest, _progress_callback=None, *, resume=False, on_meta=None):
+            with open(dest, "wb") as f:
+                f.write(zip_bytes)
+
+        _seed_rom(downloads.uow, 78, platform_slug="ps3")
+        downloads.queue.enqueue(78, {"rom_id": 78, "status": "downloading", "progress": 0})
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.transfer.run(
+                78,
+                rom_detail,
+                target_path,
+                "ps3",
+                "MyGame.zip",
+                _admitted(downloads, 78),
+                platform_name="PlayStation 3",
+            )
+        return roms_dir, downloads.uow.rom_installs.get(78)
+
+    @pytest.mark.asyncio
+    async def test_a_ps3_game_folder_one_level_deeper_is_placed_as_the_ps3_folder_itself(
+        self, make_downloads, tmp_path
+    ):
+        """ES-DE, the resolver and RPCS3 look at ``<game>.ps3`` itself (#2195 D39)."""
+        roms_dir, installed = await self._download_ps3_zip(
+            make_downloads,
+            tmp_path,
+            {
+                "Inner/PS3_GAME/USRDIR/EBOOT.BIN": b"\x00" * 100,
+                "Inner/PS3_DISC.SFB": b"\x00" * 10,
+            },
+        )
+
+        placed = roms_dir / "MyGame.ps3"
+        assert installed is not None
+        assert installed.rom_dir == str(placed)
+        assert installed.file_path == str(placed / "PS3_GAME" / "USRDIR" / "EBOOT.BIN")
+        assert (placed / "PS3_DISC.SFB").exists()
+        assert sorted(path.name for path in roms_dir.iterdir()) == ["MyGame.ps3"]
+
+    @pytest.mark.asyncio
+    async def test_a_ps3_game_folder_with_anything_beside_it_is_left_where_it_is(self, make_downloads, tmp_path):
+        """Nothing beside the game folder is deleted or left outside the install (#2195 D39)."""
+        roms_dir, installed = await self._download_ps3_zip(
+            make_downloads,
+            tmp_path,
+            {
+                "Inner/PS3_GAME/USRDIR/EBOOT.BIN": b"\x00" * 100,
+                "readme.txt": b"kept",
+            },
+        )
+
+        placed = roms_dir / "MyGame.ps3"
+        assert installed is not None
+        assert installed.rom_dir == str(placed)
+        assert installed.file_path == str(placed / "Inner" / "PS3_GAME" / "USRDIR" / "EBOOT.BIN")
+        assert (placed / "readme.txt").read_bytes() == b"kept"
+
+    @pytest.mark.asyncio
+    async def test_a_ps3_game_folder_whose_staging_name_is_taken_is_left_where_it_is(self, make_downloads, tmp_path):
+        """Nothing is moved over another folder (#2195 D39)."""
+        roms_dir, installed = await self._download_ps3_zip(
+            make_downloads, tmp_path, {"Inner/PS3_GAME/USRDIR/EBOOT.BIN": b"\x00" * 100}, staging_taken=True
+        )
+
+        placed = roms_dir / "MyGame.ps3"
+        assert installed is not None
+        assert installed.file_path == str(placed / "Inner" / "PS3_GAME" / "USRDIR" / "EBOOT.BIN")
+        assert list((roms_dir / "MyGame.tender-lift").iterdir()) == []
+
+    @pytest.mark.asyncio
+    async def test_a_ps3_lift_that_fails_part_way_leaves_no_staging_folder_behind(self, make_downloads, tmp_path):
+        class RefusingStore(DownloadFileAdapter):
+            def remove_empty_dir(self, path: str) -> None:
+                raise PermissionError(path)
+
+        roms_dir, installed = await self._download_ps3_zip(
+            make_downloads, tmp_path, {"Inner/PS3_GAME/USRDIR/EBOOT.BIN": b"\x00" * 100}, store=RefusingStore()
+        )
+
+        assert installed is None
+        assert sorted(path.name for path in roms_dir.iterdir()) == []
+
     @pytest.mark.asyncio
     async def test_nested_multi_file_cleanup_targets_identity_dir_not_files_zero(self, make_downloads, tmp_path, emit):
         """#1292: a failed folder-game download tears down the identity-named

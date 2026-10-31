@@ -3720,6 +3720,7 @@
             "Azahar (Standalone)"
           ],
           "installers": null,
+          "boots": null,
           "caveats": [
             {
               "code": "emulator-catalogue-sealed",
@@ -3807,6 +3808,7 @@
           },
           "alternatives": [],
           "installers": null,
+          "boots": null,
           "caveats": [
             {
               "code": "emulator-catalogue-sealed",
@@ -3868,6 +3870,7 @@
           "entry": null,
           "alternatives": [],
           "installers": null,
+          "boots": null,
           "caveats": [
             {
               "code": "emulator-catalogue-sealed",
@@ -16902,6 +16905,7 @@
           },
           "alternatives": [],
           "installers": null,
+          "boots": null,
           "caveats": []
         }
       }
@@ -16982,6 +16986,7 @@
           },
           "alternatives": [],
           "installers": null,
+          "boots": null,
           "caveats": [
             {
               "code": "emulator-config-missing",
@@ -17044,6 +17049,7 @@
           "entry": null,
           "alternatives": [],
           "installers": null,
+          "boots": null,
           "caveats": []
         }
       }
@@ -17117,6 +17123,7 @@
               }
             }
           ],
+          "boots": null,
           "caveats": []
         }
       }
@@ -17196,6 +17203,7 @@
               }
             }
           ],
+          "boots": null,
           "caveats": []
         }
       }
@@ -17297,6 +17305,7 @@
               "entry": null
             }
           ],
+          "boots": null,
           "caveats": []
         }
       }
@@ -17370,6 +17379,7 @@
               }
             }
           ],
+          "boots": null,
           "caveats": []
         }
       }
@@ -17452,6 +17462,7 @@
               }
             }
           ],
+          "boots": null,
           "caveats": []
         }
       }
@@ -17512,6 +17523,7 @@
           "entry": null,
           "alternatives": [],
           "installers": [],
+          "boots": null,
           "caveats": [
             {
               "code": "emulator-catalogue-sealed",
@@ -17589,6 +17601,7 @@
           },
           "alternatives": [],
           "installers": null,
+          "boots": null,
           "caveats": []
         }
       }
@@ -17637,6 +17650,7 @@
           "entry": null,
           "alternatives": [],
           "installers": null,
+          "boots": null,
           "caveats": [
             {
               "code": "emulator-catalogue-sealed",
@@ -17720,6 +17734,7 @@
             "Citra"
           ],
           "installers": null,
+          "boots": null,
           "caveats": []
         }
       }
@@ -17795,6 +17810,7 @@
           },
           "alternatives": [],
           "installers": null,
+          "boots": null,
           "caveats": [
             {
               "code": "archive-contents-unread",
@@ -17880,6 +17896,7 @@
             "Citra"
           ],
           "installers": null,
+          "boots": null,
           "caveats": []
         }
       }
@@ -17936,6 +17953,7 @@
           "entry": null,
           "alternatives": [],
           "installers": null,
+          "boots": null,
           "caveats": [
             {
               "code": "launch-command-label-unknown",
@@ -18018,6 +18036,7 @@
           },
           "alternatives": [],
           "installers": null,
+          "boots": null,
           "caveats": [
             {
               "code": "archive-contents-unread",
@@ -18100,6 +18119,7 @@
           },
           "alternatives": [],
           "installers": null,
+          "boots": null,
           "caveats": [
             {
               "code": "entry-format-unclaimed",
@@ -18114,7 +18134,7 @@
     },
     {
       "name": "an-entry-nobody-read-stays-unestablished",
-      "rationale": "The ps3 accept-list carries .iso and the entry that would run is a standalone no card covers: what RPCS3's loader reads is not established, and an entry nobody read is never 'refuses' — the verdict stands on the system-level read with entry-format-unestablished saying exactly which half is missing (the same discipline the issue demands: a standalone entry with no card is not the same as an entry known to refuse the file).",
+      "rationale": "The ps3 accept-list carries .iso and the entry that would run is a standalone no card covers, with a command — %EMULATOR_RPCS3% %ROM%, no --no-gui — that is none of the shapes atlas reads RPCS3's own boot for: what its loader reads is not established, and an entry nobody read is never 'refuses' — the verdict stands on the system-level read with entry-format-unestablished saying exactly which half is missing (the same discipline the issue demands: a standalone entry with no card is not the same as an entry known to refuse the file). The catalogue's own RPCS3 commands are read without a card (rpcs3-boot.json).",
       "input": {
         "home": "/home/deck",
         "files": {
@@ -18176,6 +18196,7 @@
           },
           "alternatives": [],
           "installers": null,
+          "boots": null,
           "caveats": [
             {
               "code": "entry-format-unestablished",
@@ -18311,6 +18332,7 @@
           "entry": null,
           "alternatives": [],
           "installers": null,
+          "boots": null,
           "caveats": [
             {
               "code": "emulator-catalogue-unavailable",

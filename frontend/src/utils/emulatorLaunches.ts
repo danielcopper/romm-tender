@@ -2,8 +2,8 @@
  * The emulator menu's per-entry answers: whether each entry can start the
  * installed game, asked when the menu opens (#2195 D22, D31).
  *
- * The menu opens at once with every entry choosable, and each entry waits for
- * its answer on a spinner. The answers are bound to the ROM they were asked
+ * The menu opens at once with every entry choosable, and the rows wait together
+ * on a spinner for the one request that answers them all. The answers are bound to the ROM they were asked
  * for: one that lands after the page moved to another version is dropped, and
  * one that lands after the menu closed reaches nothing, because nothing
  * listens any more.
@@ -12,11 +12,11 @@
 import { getEmulatorLaunches, logError } from "../api/backend";
 import type { GameLaunch } from "../types";
 
-/** One menu's answers, read as they land. */
+/** One menu's answers, read once the one request lands. */
 export interface EntryLaunches {
   /** The entry's verdict; `undefined` while the answer is out, `null` where it holds none for the entry. */
   forLabel(label: string): GameLaunch | null | undefined;
-  /** Call `listener` when the answers land; the returned function stops it. */
+  /** Call `listener` when the answer lands; the returned function stops it. */
   subscribe(listener: () => void): () => void;
 }
 

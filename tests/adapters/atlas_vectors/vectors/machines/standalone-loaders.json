@@ -1,0 +1,1169 @@
+{
+  "family": "machines",
+  "schema": 5,
+  "spec": "atlas/data/launch_formats.json; atlas/installations.py; docs/how-to-use.md",
+  "description": "What Dolphin's and PrimeHack's own loaders take (#618): whole fixture machines in, the launchability verdict of each Dolphin and PrimeHack entry out — judged by the loader cards read at the builds RetroDECK ships, for the command shapes those cards were read for.",
+  "vectors": [
+    {
+      "name": "dolphin-a-zip-on-wii-is-not-accepted-by-the-dolphin-entry",
+      "rationale": "RetroDECK's wii list declares .zip on account of every entry, and the entry the frontend puts first is Dolphin's own: its loader takes a file by extension and holds no branch for an archive, so the zip is refused and the verdict is entry-not-accepted. PrimeHack refuses it the same way and the libretro entry's core was not read, so no entry is established to take it.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/mnt/sd/retrodeck/roms/systeminfo.txt": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>wii</name>\n    <path>%ROMPATH%/wii</path>\n    <extension>.ciso .CISO .dff .DFF .dol .DOL .elf .ELF .gcm .GCM .gcz .GCZ .iso .ISO .json .JSON .m3u .M3U .rvz .RVZ .tgc .TGC .wad .WAD .wbfs .WBFS .wia .WIA .7z .7Z .zip .ZIP</extension>\n    <command label=\"Dolphin (Standalone)\">env QT_QPA_PLATFORM=xcb %EMULATOR_DOLPHIN% -b -e %ROM%</command>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n    <command label=\"PrimeHack (Standalone)\">env QT_QPA_PLATFORM=xcb %EMULATOR_PRIMEHACK% -b -e %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_find_rules.xml": "<?xml version=\"1.0\"?>\n<ruleList>\n    <emulator name=\"DOLPHIN\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/dolphin/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"PRIMEHACK\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/primehack/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"RETROARCH\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/retroarch/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <core name=\"RETROARCH\">\n        <rule type=\"corepath\">\n            <entry>/var/config/retroarch/cores</entry>\n        </rule>\n    </core>\n</ruleList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/dolphin/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/primehack/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/component_launcher.sh": "#!/bin/bash\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "launchable_query": {
+          "system": "wii",
+          "content_path": "/mnt/sd/retrodeck/roms/wii/Game.zip"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "entry-not-accepted",
+          "extension": ".zip",
+          "accepted": [
+            ".ciso",
+            ".CISO",
+            ".dff",
+            ".DFF",
+            ".dol",
+            ".DOL",
+            ".elf",
+            ".ELF",
+            ".gcm",
+            ".GCM",
+            ".gcz",
+            ".GCZ",
+            ".iso",
+            ".ISO",
+            ".json",
+            ".JSON",
+            ".m3u",
+            ".M3U",
+            ".rvz",
+            ".RVZ",
+            ".tgc",
+            ".TGC",
+            ".wad",
+            ".WAD",
+            ".wbfs",
+            ".WBFS",
+            ".wia",
+            ".WIA",
+            ".7z",
+            ".7Z",
+            ".zip",
+            ".ZIP"
+          ],
+          "entry": {
+            "system": "wii",
+            "label": "Dolphin (Standalone)",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "DOLPHIN",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "startable",
+            "launcher": {
+              "path": "/app/retrodeck/components/dolphin/component_launcher.sh",
+              "replacement_command": null,
+              "app_id": "net.retrodeck.retrodeck",
+              "rule": "staticpath",
+              "entry": "/app/retrodeck/components/dolphin/component_launcher.sh"
+            },
+            "core_path": null,
+            "caveats": []
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "dolphin-a-7z-on-wii-is-not-accepted-by-the-dolphin-entry",
+      "rationale": "The same refusal for the other container the list declares: Dolphin's loader has no 7-Zip branch either.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/mnt/sd/retrodeck/roms/systeminfo.txt": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>wii</name>\n    <path>%ROMPATH%/wii</path>\n    <extension>.ciso .CISO .dff .DFF .dol .DOL .elf .ELF .gcm .GCM .gcz .GCZ .iso .ISO .json .JSON .m3u .M3U .rvz .RVZ .tgc .TGC .wad .WAD .wbfs .WBFS .wia .WIA .7z .7Z .zip .ZIP</extension>\n    <command label=\"Dolphin (Standalone)\">env QT_QPA_PLATFORM=xcb %EMULATOR_DOLPHIN% -b -e %ROM%</command>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n    <command label=\"PrimeHack (Standalone)\">env QT_QPA_PLATFORM=xcb %EMULATOR_PRIMEHACK% -b -e %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_find_rules.xml": "<?xml version=\"1.0\"?>\n<ruleList>\n    <emulator name=\"DOLPHIN\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/dolphin/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"PRIMEHACK\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/primehack/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"RETROARCH\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/retroarch/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <core name=\"RETROARCH\">\n        <rule type=\"corepath\">\n            <entry>/var/config/retroarch/cores</entry>\n        </rule>\n    </core>\n</ruleList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/dolphin/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/primehack/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/component_launcher.sh": "#!/bin/bash\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "launchable_query": {
+          "system": "wii",
+          "content_path": "/mnt/sd/retrodeck/roms/wii/Game.7z"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "entry-not-accepted",
+          "extension": ".7z",
+          "accepted": [
+            ".ciso",
+            ".CISO",
+            ".dff",
+            ".DFF",
+            ".dol",
+            ".DOL",
+            ".elf",
+            ".ELF",
+            ".gcm",
+            ".GCM",
+            ".gcz",
+            ".GCZ",
+            ".iso",
+            ".ISO",
+            ".json",
+            ".JSON",
+            ".m3u",
+            ".M3U",
+            ".rvz",
+            ".RVZ",
+            ".tgc",
+            ".TGC",
+            ".wad",
+            ".WAD",
+            ".wbfs",
+            ".WBFS",
+            ".wia",
+            ".WIA",
+            ".7z",
+            ".7Z",
+            ".zip",
+            ".ZIP"
+          ],
+          "entry": {
+            "system": "wii",
+            "label": "Dolphin (Standalone)",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "DOLPHIN",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "startable",
+            "launcher": {
+              "path": "/app/retrodeck/components/dolphin/component_launcher.sh",
+              "replacement_command": null,
+              "app_id": "net.retrodeck.retrodeck",
+              "rule": "staticpath",
+              "entry": "/app/retrodeck/components/dolphin/component_launcher.sh"
+            },
+            "core_path": null,
+            "caveats": []
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "primehack-a-zip-on-gc-is-not-accepted-by-the-primehack-entry",
+      "rationale": "Named by its label, PrimeHack's entry on gc refuses a .zip as Dolphin's does: the fork's loader takes no archive. Dolphin's own entry refuses it too, so neither is an alternative.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/mnt/sd/retrodeck/roms/systeminfo.txt": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>gc</name>\n    <path>%ROMPATH%/gc</path>\n    <extension>.ciso .CISO .dff .DFF .dol .DOL .elf .ELF .gcm .GCM .gcz .GCZ .iso .ISO .json .JSON .m3u .M3U .rvz .RVZ .tgc .TGC .wad .WAD .wbfs .WBFS .wia .WIA .7z .7Z .zip .ZIP</extension>\n    <command label=\"Dolphin (Standalone)\">env QT_QPA_PLATFORM=xcb %EMULATOR_DOLPHIN% -b -e %ROM%</command>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n    <command label=\"PrimeHack (Standalone)\">env QT_QPA_PLATFORM=xcb %EMULATOR_PRIMEHACK% -b -e %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_find_rules.xml": "<?xml version=\"1.0\"?>\n<ruleList>\n    <emulator name=\"DOLPHIN\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/dolphin/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"PRIMEHACK\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/primehack/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"RETROARCH\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/retroarch/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <core name=\"RETROARCH\">\n        <rule type=\"corepath\">\n            <entry>/var/config/retroarch/cores</entry>\n        </rule>\n    </core>\n</ruleList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/dolphin/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/primehack/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/component_launcher.sh": "#!/bin/bash\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "launchable_query": {
+          "system": "gc",
+          "content_path": "/mnt/sd/retrodeck/roms/gc/Game.zip",
+          "label": "PrimeHack (Standalone)"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "entry-not-accepted",
+          "extension": ".zip",
+          "accepted": [
+            ".ciso",
+            ".CISO",
+            ".dff",
+            ".DFF",
+            ".dol",
+            ".DOL",
+            ".elf",
+            ".ELF",
+            ".gcm",
+            ".GCM",
+            ".gcz",
+            ".GCZ",
+            ".iso",
+            ".ISO",
+            ".json",
+            ".JSON",
+            ".m3u",
+            ".M3U",
+            ".rvz",
+            ".RVZ",
+            ".tgc",
+            ".TGC",
+            ".wad",
+            ".WAD",
+            ".wbfs",
+            ".WBFS",
+            ".wia",
+            ".WIA",
+            ".7z",
+            ".7Z",
+            ".zip",
+            ".ZIP"
+          ],
+          "entry": {
+            "system": "gc",
+            "label": "PrimeHack (Standalone)",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "PRIMEHACK",
+            "declared_index": 2,
+            "selection": null,
+            "availability": "startable",
+            "launcher": {
+              "path": "/app/retrodeck/components/primehack/component_launcher.sh",
+              "replacement_command": null,
+              "app_id": "net.retrodeck.retrodeck",
+              "rule": "staticpath",
+              "entry": "/app/retrodeck/components/primehack/component_launcher.sh"
+            },
+            "core_path": null,
+            "caveats": []
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "primehack-a-7z-on-gc-is-not-accepted-by-the-primehack-entry",
+      "rationale": "The 7-Zip container, refused by PrimeHack's loader the same way.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/mnt/sd/retrodeck/roms/systeminfo.txt": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>gc</name>\n    <path>%ROMPATH%/gc</path>\n    <extension>.ciso .CISO .dff .DFF .dol .DOL .elf .ELF .gcm .GCM .gcz .GCZ .iso .ISO .json .JSON .m3u .M3U .rvz .RVZ .tgc .TGC .wad .WAD .wbfs .WBFS .wia .WIA .7z .7Z .zip .ZIP</extension>\n    <command label=\"Dolphin (Standalone)\">env QT_QPA_PLATFORM=xcb %EMULATOR_DOLPHIN% -b -e %ROM%</command>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n    <command label=\"PrimeHack (Standalone)\">env QT_QPA_PLATFORM=xcb %EMULATOR_PRIMEHACK% -b -e %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_find_rules.xml": "<?xml version=\"1.0\"?>\n<ruleList>\n    <emulator name=\"DOLPHIN\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/dolphin/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"PRIMEHACK\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/primehack/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"RETROARCH\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/retroarch/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <core name=\"RETROARCH\">\n        <rule type=\"corepath\">\n            <entry>/var/config/retroarch/cores</entry>\n        </rule>\n    </core>\n</ruleList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/dolphin/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/primehack/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/component_launcher.sh": "#!/bin/bash\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "launchable_query": {
+          "system": "gc",
+          "content_path": "/mnt/sd/retrodeck/roms/gc/Game.7z",
+          "label": "PrimeHack (Standalone)"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "entry-not-accepted",
+          "extension": ".7z",
+          "accepted": [
+            ".ciso",
+            ".CISO",
+            ".dff",
+            ".DFF",
+            ".dol",
+            ".DOL",
+            ".elf",
+            ".ELF",
+            ".gcm",
+            ".GCM",
+            ".gcz",
+            ".GCZ",
+            ".iso",
+            ".ISO",
+            ".json",
+            ".JSON",
+            ".m3u",
+            ".M3U",
+            ".rvz",
+            ".RVZ",
+            ".tgc",
+            ".TGC",
+            ".wad",
+            ".WAD",
+            ".wbfs",
+            ".WBFS",
+            ".wia",
+            ".WIA",
+            ".7z",
+            ".7Z",
+            ".zip",
+            ".ZIP"
+          ],
+          "entry": {
+            "system": "gc",
+            "label": "PrimeHack (Standalone)",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "PRIMEHACK",
+            "declared_index": 2,
+            "selection": null,
+            "availability": "startable",
+            "launcher": {
+              "path": "/app/retrodeck/components/primehack/component_launcher.sh",
+              "replacement_command": null,
+              "app_id": "net.retrodeck.retrodeck",
+              "rule": "staticpath",
+              "entry": "/app/retrodeck/components/primehack/component_launcher.sh"
+            },
+            "core_path": null,
+            "caveats": []
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "dolphin-an-rvz-is-launchable-with-its-content-unread",
+      "rationale": "An .rvz is in the disc set Dolphin's loader takes; the loader then reads the disc's magic, which atlas does not, so the verdict is launchable with entry-format-content-unread stating it.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/mnt/sd/retrodeck/roms/systeminfo.txt": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>wii</name>\n    <path>%ROMPATH%/wii</path>\n    <extension>.ciso .CISO .dff .DFF .dol .DOL .elf .ELF .gcm .GCM .gcz .GCZ .iso .ISO .json .JSON .m3u .M3U .rvz .RVZ .tgc .TGC .wad .WAD .wbfs .WBFS .wia .WIA .7z .7Z .zip .ZIP</extension>\n    <command label=\"Dolphin (Standalone)\">env QT_QPA_PLATFORM=xcb %EMULATOR_DOLPHIN% -b -e %ROM%</command>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n    <command label=\"PrimeHack (Standalone)\">env QT_QPA_PLATFORM=xcb %EMULATOR_PRIMEHACK% -b -e %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_find_rules.xml": "<?xml version=\"1.0\"?>\n<ruleList>\n    <emulator name=\"DOLPHIN\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/dolphin/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"PRIMEHACK\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/primehack/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"RETROARCH\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/retroarch/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <core name=\"RETROARCH\">\n        <rule type=\"corepath\">\n            <entry>/var/config/retroarch/cores</entry>\n        </rule>\n    </core>\n</ruleList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/dolphin/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/primehack/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/component_launcher.sh": "#!/bin/bash\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "launchable_query": {
+          "system": "wii",
+          "content_path": "/mnt/sd/retrodeck/roms/wii/Game.rvz"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "launchable",
+          "extension": ".rvz",
+          "accepted": [
+            ".ciso",
+            ".CISO",
+            ".dff",
+            ".DFF",
+            ".dol",
+            ".DOL",
+            ".elf",
+            ".ELF",
+            ".gcm",
+            ".GCM",
+            ".gcz",
+            ".GCZ",
+            ".iso",
+            ".ISO",
+            ".json",
+            ".JSON",
+            ".m3u",
+            ".M3U",
+            ".rvz",
+            ".RVZ",
+            ".tgc",
+            ".TGC",
+            ".wad",
+            ".WAD",
+            ".wbfs",
+            ".WBFS",
+            ".wia",
+            ".WIA",
+            ".7z",
+            ".7Z",
+            ".zip",
+            ".ZIP"
+          ],
+          "entry": {
+            "system": "wii",
+            "label": "Dolphin (Standalone)",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "DOLPHIN",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "startable",
+            "launcher": {
+              "path": "/app/retrodeck/components/dolphin/component_launcher.sh",
+              "replacement_command": null,
+              "app_id": "net.retrodeck.retrodeck",
+              "rule": "staticpath",
+              "entry": "/app/retrodeck/components/dolphin/component_launcher.sh"
+            },
+            "core_path": null,
+            "caveats": []
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "caveats": [
+            {
+              "code": "entry-format-content-unread",
+              "data": {
+                "entry": "Dolphin (Standalone)",
+                "extension": ".rvz"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "dolphin-an-upper-case-iso-is-launchable-as-its-loader-folds-case",
+      "rationale": "ES-DE's scan is case-exact and the list carries .ISO, so the file is scanned; Dolphin's loader folds the extension's case before it compares, so the card takes .ISO as .iso.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/mnt/sd/retrodeck/roms/systeminfo.txt": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>wii</name>\n    <path>%ROMPATH%/wii</path>\n    <extension>.ciso .CISO .dff .DFF .dol .DOL .elf .ELF .gcm .GCM .gcz .GCZ .iso .ISO .json .JSON .m3u .M3U .rvz .RVZ .tgc .TGC .wad .WAD .wbfs .WBFS .wia .WIA .7z .7Z .zip .ZIP</extension>\n    <command label=\"Dolphin (Standalone)\">env QT_QPA_PLATFORM=xcb %EMULATOR_DOLPHIN% -b -e %ROM%</command>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n    <command label=\"PrimeHack (Standalone)\">env QT_QPA_PLATFORM=xcb %EMULATOR_PRIMEHACK% -b -e %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_find_rules.xml": "<?xml version=\"1.0\"?>\n<ruleList>\n    <emulator name=\"DOLPHIN\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/dolphin/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"PRIMEHACK\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/primehack/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"RETROARCH\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/retroarch/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <core name=\"RETROARCH\">\n        <rule type=\"corepath\">\n            <entry>/var/config/retroarch/cores</entry>\n        </rule>\n    </core>\n</ruleList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/dolphin/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/primehack/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/component_launcher.sh": "#!/bin/bash\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "launchable_query": {
+          "system": "wii",
+          "content_path": "/mnt/sd/retrodeck/roms/wii/Game.ISO"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "launchable",
+          "extension": ".ISO",
+          "accepted": [
+            ".ciso",
+            ".CISO",
+            ".dff",
+            ".DFF",
+            ".dol",
+            ".DOL",
+            ".elf",
+            ".ELF",
+            ".gcm",
+            ".GCM",
+            ".gcz",
+            ".GCZ",
+            ".iso",
+            ".ISO",
+            ".json",
+            ".JSON",
+            ".m3u",
+            ".M3U",
+            ".rvz",
+            ".RVZ",
+            ".tgc",
+            ".TGC",
+            ".wad",
+            ".WAD",
+            ".wbfs",
+            ".WBFS",
+            ".wia",
+            ".WIA",
+            ".7z",
+            ".7Z",
+            ".zip",
+            ".ZIP"
+          ],
+          "entry": {
+            "system": "wii",
+            "label": "Dolphin (Standalone)",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "DOLPHIN",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "startable",
+            "launcher": {
+              "path": "/app/retrodeck/components/dolphin/component_launcher.sh",
+              "replacement_command": null,
+              "app_id": "net.retrodeck.retrodeck",
+              "rule": "staticpath",
+              "entry": "/app/retrodeck/components/dolphin/component_launcher.sh"
+            },
+            "core_path": null,
+            "caveats": []
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "caveats": [
+            {
+              "code": "entry-format-content-unread",
+              "data": {
+                "entry": "Dolphin (Standalone)",
+                "extension": ".ISO"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "dolphin-a-bin-is-launchable-with-its-content-unread",
+      "rationale": "A catalogue that declares .bin meets Dolphin's disc set, which carries it at the build the card pins: launchable, with the content unread.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/mnt/sd/retrodeck/roms/systeminfo.txt": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>wii</name>\n    <path>%ROMPATH%/wii</path>\n    <extension>.bin .BIN .ciso .CISO .dff .DFF .dol .DOL .elf .ELF .gcm .GCM .gcz .GCZ .iso .ISO .json .JSON .m3u .M3U .rvz .RVZ .tgc .TGC .wad .WAD .wbfs .WBFS .wia .WIA .7z .7Z .zip .ZIP</extension>\n    <command label=\"Dolphin (Standalone)\">env QT_QPA_PLATFORM=xcb %EMULATOR_DOLPHIN% -b -e %ROM%</command>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n    <command label=\"PrimeHack (Standalone)\">env QT_QPA_PLATFORM=xcb %EMULATOR_PRIMEHACK% -b -e %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_find_rules.xml": "<?xml version=\"1.0\"?>\n<ruleList>\n    <emulator name=\"DOLPHIN\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/dolphin/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"PRIMEHACK\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/primehack/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"RETROARCH\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/retroarch/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <core name=\"RETROARCH\">\n        <rule type=\"corepath\">\n            <entry>/var/config/retroarch/cores</entry>\n        </rule>\n    </core>\n</ruleList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/dolphin/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/primehack/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/component_launcher.sh": "#!/bin/bash\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "launchable_query": {
+          "system": "wii",
+          "content_path": "/mnt/sd/retrodeck/roms/wii/Game.bin"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "launchable",
+          "extension": ".bin",
+          "accepted": [
+            ".bin",
+            ".BIN",
+            ".ciso",
+            ".CISO",
+            ".dff",
+            ".DFF",
+            ".dol",
+            ".DOL",
+            ".elf",
+            ".ELF",
+            ".gcm",
+            ".GCM",
+            ".gcz",
+            ".GCZ",
+            ".iso",
+            ".ISO",
+            ".json",
+            ".JSON",
+            ".m3u",
+            ".M3U",
+            ".rvz",
+            ".RVZ",
+            ".tgc",
+            ".TGC",
+            ".wad",
+            ".WAD",
+            ".wbfs",
+            ".WBFS",
+            ".wia",
+            ".WIA",
+            ".7z",
+            ".7Z",
+            ".zip",
+            ".ZIP"
+          ],
+          "entry": {
+            "system": "wii",
+            "label": "Dolphin (Standalone)",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "DOLPHIN",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "startable",
+            "launcher": {
+              "path": "/app/retrodeck/components/dolphin/component_launcher.sh",
+              "replacement_command": null,
+              "app_id": "net.retrodeck.retrodeck",
+              "rule": "staticpath",
+              "entry": "/app/retrodeck/components/dolphin/component_launcher.sh"
+            },
+            "core_path": null,
+            "caveats": []
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "caveats": [
+            {
+              "code": "entry-format-content-unread",
+              "data": {
+                "entry": "Dolphin (Standalone)",
+                "extension": ".bin"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "primehack-a-bin-depends-on-the-build",
+      "rationale": "PrimeHack's disc set carries .bin at the build EmuDeck installs and not at the build RetroDECK ships, and the card serves both: neither a take nor a refusal holds everywhere, so the entry's reading is unestablished and the verdict stays on the accept-list with entry-format-build-dependent.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/mnt/sd/retrodeck/roms/systeminfo.txt": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>primehack</name>\n    <path>%ROMPATH%/primehack</path>\n    <extension>.bin .BIN .ciso .CISO .dff .DFF .dol .DOL .elf .ELF .gcm .GCM .gcz .GCZ .iso .ISO .json .JSON .m3u .M3U .rvz .RVZ .tgc .TGC .wad .WAD .wbfs .WBFS .wia .WIA .7z .7Z .zip .ZIP</extension>\n    <command label=\"PrimeHack (Standalone)\">env QT_QPA_PLATFORM=xcb %EMULATOR_PRIMEHACK% -b -e %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_find_rules.xml": "<?xml version=\"1.0\"?>\n<ruleList>\n    <emulator name=\"DOLPHIN\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/dolphin/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"PRIMEHACK\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/primehack/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"RETROARCH\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/retroarch/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <core name=\"RETROARCH\">\n        <rule type=\"corepath\">\n            <entry>/var/config/retroarch/cores</entry>\n        </rule>\n    </core>\n</ruleList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/dolphin/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/primehack/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/component_launcher.sh": "#!/bin/bash\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "launchable_query": {
+          "system": "primehack",
+          "content_path": "/mnt/sd/retrodeck/roms/primehack/Game.bin"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "launchable",
+          "extension": ".bin",
+          "accepted": [
+            ".bin",
+            ".BIN",
+            ".ciso",
+            ".CISO",
+            ".dff",
+            ".DFF",
+            ".dol",
+            ".DOL",
+            ".elf",
+            ".ELF",
+            ".gcm",
+            ".GCM",
+            ".gcz",
+            ".GCZ",
+            ".iso",
+            ".ISO",
+            ".json",
+            ".JSON",
+            ".m3u",
+            ".M3U",
+            ".rvz",
+            ".RVZ",
+            ".tgc",
+            ".TGC",
+            ".wad",
+            ".WAD",
+            ".wbfs",
+            ".WBFS",
+            ".wia",
+            ".WIA",
+            ".7z",
+            ".7Z",
+            ".zip",
+            ".ZIP"
+          ],
+          "entry": {
+            "system": "primehack",
+            "label": "PrimeHack (Standalone)",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "PRIMEHACK",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "startable",
+            "launcher": {
+              "path": "/app/retrodeck/components/primehack/component_launcher.sh",
+              "replacement_command": null,
+              "app_id": "net.retrodeck.retrodeck",
+              "rule": "staticpath",
+              "entry": "/app/retrodeck/components/primehack/component_launcher.sh"
+            },
+            "core_path": null,
+            "caveats": []
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "caveats": [
+            {
+              "code": "entry-format-build-dependent",
+              "data": {
+                "entry": "PrimeHack (Standalone)",
+                "extension": ".bin"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "dolphin-a-command-of-another-shape-stays-unestablished",
+      "rationale": "The card was read for a command handing Dolphin -b -e %ROM%; an entry handing it the file without -e is one the card does not answer for, so it stays entry-format-unestablished — and the .zip it would refuse is not refused.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "",
+          "/mnt/sd/retrodeck/roms/systeminfo.txt": "",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>wii</name>\n    <path>%ROMPATH%/wii</path>\n    <extension>.ciso .CISO .dff .DFF .dol .DOL .elf .ELF .gcm .GCM .gcz .GCZ .iso .ISO .json .JSON .m3u .M3U .rvz .RVZ .tgc .TGC .wad .WAD .wbfs .WBFS .wia .WIA .7z .7Z .zip .ZIP</extension>\n    <command label=\"Dolphin (Standalone)\">%EMULATOR_DOLPHIN% %ROM%</command>\n  </system>\n</systemList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_find_rules.xml": "<?xml version=\"1.0\"?>\n<ruleList>\n    <emulator name=\"DOLPHIN\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/dolphin/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"PRIMEHACK\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/primehack/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <emulator name=\"RETROARCH\">\n        <rule type=\"staticpath\">\n            <entry>/app/retrodeck/components/retroarch/component_launcher.sh</entry>\n        </rule>\n    </emulator>\n    <core name=\"RETROARCH\">\n        <rule type=\"corepath\">\n            <entry>/var/config/retroarch/cores</entry>\n        </rule>\n    </core>\n</ruleList>\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/metadata": "[Application]\nname=net.retrodeck.retrodeck\nruntime=org.kde.Platform/x86_64/6.11\nsdk=org.kde.Sdk/x86_64/6.11\ncommand=retrodeck\n\n[Context]\nfilesystems=host;\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/dolphin/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/primehack/component_launcher.sh": "#!/bin/bash\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/retroarch/component_launcher.sh": "#!/bin/bash\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "launchable_query": {
+          "system": "wii",
+          "content_path": "/mnt/sd/retrodeck/roms/wii/Game.zip"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "launchable",
+          "extension": ".zip",
+          "accepted": [
+            ".ciso",
+            ".CISO",
+            ".dff",
+            ".DFF",
+            ".dol",
+            ".DOL",
+            ".elf",
+            ".ELF",
+            ".gcm",
+            ".GCM",
+            ".gcz",
+            ".GCZ",
+            ".iso",
+            ".ISO",
+            ".json",
+            ".JSON",
+            ".m3u",
+            ".M3U",
+            ".rvz",
+            ".RVZ",
+            ".tgc",
+            ".TGC",
+            ".wad",
+            ".WAD",
+            ".wbfs",
+            ".WBFS",
+            ".wia",
+            ".WIA",
+            ".7z",
+            ".7Z",
+            ".zip",
+            ".ZIP"
+          ],
+          "entry": {
+            "system": "wii",
+            "label": "Dolphin (Standalone)",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "DOLPHIN",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "startable",
+            "launcher": {
+              "path": "/app/retrodeck/components/dolphin/component_launcher.sh",
+              "replacement_command": null,
+              "app_id": "net.retrodeck.retrodeck",
+              "rule": "staticpath",
+              "entry": "/app/retrodeck/components/dolphin/component_launcher.sh"
+            },
+            "core_path": null,
+            "caveats": []
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "caveats": [
+            {
+              "code": "entry-format-unestablished",
+              "data": {
+                "entry": "Dolphin (Standalone)",
+                "extension": ".zip"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "emudeck-dolphin-with-the-upstream-prefix-refuses-a-zip",
+      "rationale": "EmuDeck's ES-DE runs its own catalogue, whose Dolphin entry opens with an %INJECT% of a per-game prefix file: that text is placed in front of the emulator, and Dolphin is still handed -b -e %ROM%, so the card answers — the zip is refused.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"$HOME/Emulation/roms\"\nsavesPath=\"$HOME/Emulation/saves\"\ndoInstallESDE=true\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "savefile_directory = \"/home/deck/Emulation/saves/retroarch/saves\"\n",
+          "/home/deck/Applications/ES-DE.AppImage": {
+            "status": "invalid-text",
+            "size": 119537664
+          },
+          "/home/deck/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n<string name=\"ROMDirectory\" value=\"/home/deck/Emulation/roms\" />\n"
+        },
+        "dirs": [
+          "/home/deck/Emulation/saves",
+          "/home/deck/Emulation/saves/retroarch/saves",
+          "/home/deck/Emulation/bios",
+          "/home/deck/Emulation/roms"
+        ],
+        "appimages": {
+          "/home/deck/Applications/ES-DE.AppImage": {
+            "usr/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>wii</name>\n    <path>%ROMPATH%/wii</path>\n    <extension>.ciso .CISO .dff .DFF .dol .DOL .elf .ELF .gcm .GCM .gcz .GCZ .iso .ISO .json .JSON .m3u .M3U .rvz .RVZ .tgc .TGC .wad .WAD .wbfs .WBFS .wia .WIA .7z .7Z .zip .ZIP</extension>\n    <command label=\"Dolphin (Standalone)\">%INJECT%=%BASENAME%.esprefix %EMULATOR_DOLPHIN% -b -e %ROM%</command>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n    <command label=\"PrimeHack (Standalone)\">%INJECT%=%BASENAME%.esprefix %EMULATOR_PRIMEHACK% -b -e %ROM%</command>\n  </system>\n</systemList>\n"
+          }
+        },
+        "launchable_query": {
+          "installation": "emudeck",
+          "system": "wii",
+          "content_path": "/home/deck/Emulation/roms/wii/Game.zip"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "entry-not-accepted",
+          "extension": ".zip",
+          "accepted": [
+            ".ciso",
+            ".CISO",
+            ".dff",
+            ".DFF",
+            ".dol",
+            ".DOL",
+            ".elf",
+            ".ELF",
+            ".gcm",
+            ".GCM",
+            ".gcz",
+            ".GCZ",
+            ".iso",
+            ".ISO",
+            ".json",
+            ".JSON",
+            ".m3u",
+            ".M3U",
+            ".rvz",
+            ".RVZ",
+            ".tgc",
+            ".TGC",
+            ".wad",
+            ".WAD",
+            ".wbfs",
+            ".WBFS",
+            ".wia",
+            ".WIA",
+            ".7z",
+            ".7Z",
+            ".zip",
+            ".ZIP"
+          ],
+          "entry": {
+            "system": "wii",
+            "label": "Dolphin (Standalone)",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "DOLPHIN",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "emudeck-dolphin-on-consolearcade-takes-an-iso-with-its-content-unread",
+      "rationale": "ES-DE's consolearcade system declares a Dolphin entry of the same shape; named by its label, it takes an .iso by its extension, with the content unread.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.config/EmuDeck/settings.sh": "romsPath=\"$HOME/Emulation/roms\"\nsavesPath=\"$HOME/Emulation/saves\"\ndoInstallESDE=true\n",
+          "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg": "savefile_directory = \"/home/deck/Emulation/saves/retroarch/saves\"\n",
+          "/home/deck/Applications/ES-DE.AppImage": {
+            "status": "invalid-text",
+            "size": 119537664
+          },
+          "/home/deck/ES-DE/settings/es_settings.xml": "<?xml version=\"1.0\"?>\n<string name=\"ROMDirectory\" value=\"/home/deck/Emulation/roms\" />\n"
+        },
+        "dirs": [
+          "/home/deck/Emulation/saves",
+          "/home/deck/Emulation/saves/retroarch/saves",
+          "/home/deck/Emulation/bios",
+          "/home/deck/Emulation/roms"
+        ],
+        "appimages": {
+          "/home/deck/Applications/ES-DE.AppImage": {
+            "usr/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>consolearcade</name>\n    <path>%ROMPATH%/consolearcade</path>\n    <extension>.arcadedef .desktop .iso .ISO .ps3 .PS3 .sh .xbe .XBE .7z .7Z .zip .ZIP</extension>\n    <command label=\"MAME - Current\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame_libretro.so %ROM%</command>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n    <command label=\"Dolphin (Standalone)\">%INJECT%=%BASENAME%.esprefix %EMULATOR_DOLPHIN% -b -e %ROM%</command>\n    <command label=\"Triforce (Standalone)\">%INJECT%=%BASENAME%.esprefix %EMULATOR_TRIFORCE% -b -e %ROM%</command>\n  </system>\n</systemList>\n"
+          }
+        },
+        "launchable_query": {
+          "installation": "emudeck",
+          "system": "consolearcade",
+          "content_path": "/home/deck/Emulation/roms/consolearcade/Game.iso",
+          "label": "Dolphin (Standalone)"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "emudeck",
+            "label": "EmuDeck",
+            "kinds": [
+              "emudeck",
+              "bare_retroarch_flatpak"
+            ],
+            "root": "/home/deck/Emulation",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "launchable",
+          "extension": ".iso",
+          "accepted": [
+            ".arcadedef",
+            ".desktop",
+            ".iso",
+            ".ISO",
+            ".ps3",
+            ".PS3",
+            ".sh",
+            ".xbe",
+            ".XBE",
+            ".7z",
+            ".7Z",
+            ".zip",
+            ".ZIP"
+          ],
+          "entry": {
+            "system": "consolearcade",
+            "label": "Dolphin (Standalone)",
+            "kind": "standalone",
+            "core_so": null,
+            "emulator": "DOLPHIN",
+            "declared_index": 2,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "caveats": [
+            {
+              "code": "entry-format-content-unread",
+              "data": {
+                "entry": "Dolphin (Standalone)",
+                "extension": ".iso"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

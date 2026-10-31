@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { EmulatorOption, EmulatorStart } from "../types";
+import type { EmulatorOption, EmulatorStart, GameLaunch } from "../types";
 
 vi.mock("../api/backend", () => ({
   getPlatformCoreInfo: vi.fn(),
@@ -14,13 +14,15 @@ import {
   frontendChoiceLines,
   frontendChoiceSentence,
   gameCanPickAnother,
+  isChoosable,
+  startRefusal,
   startRefused,
   vanishedPickSentence,
 } from "./emulatorStart";
 import { coreInfo } from "../test-utils/coreFixtures";
 
 function start(overrides: Partial<EmulatorStart>): EmulatorStart {
-  return { state: "starts", reason: null, entry: "mGBA", folder_entry: null, ...overrides };
+  return { state: "starts", reason: null, entry: "mGBA", ...overrides };
 }
 
 function row(label: string, overrides: Partial<EmulatorOption> = {}): EmulatorOption {
@@ -70,22 +72,6 @@ describe("why a start is refused", () => {
     );
   });
 
-  it("names the entry that starts a folder where the chosen one cannot", () => {
-    const words = emulatorStartRefusal(
-      start({
-        state: "cannot_start",
-        reason: "folder_install",
-        entry: "RPCS3 Shortcut (Standalone)",
-        folder_entry: "RPCS3 Directory (Standalone)",
-      }),
-      "this game",
-      true,
-    );
-    expect(words).toBe(
-      "RPCS3 Shortcut (Standalone) cannot start a game installed as a folder. RPCS3 Directory (Standalone) can — choose it in the emulator menu.",
-    );
-  });
-
   it("asks for a choice where the default's installation could not be established, with its cause", () => {
     const answer = start({ state: "choose", reason: "no_find_rule", entry: "BlastEm" });
     expect(emulatorStartRefusal(answer, "this game", true)).toBe(
@@ -106,11 +92,6 @@ describe("why a start is refused", () => {
       "RetroDECK's start script cannot start PICO-8 (Standalone), so this game cannot start.",
     ],
     [
-      "unable to start a folder",
-      start({ state: "cannot_start", reason: "folder_install", entry: "RPCS3 Shortcut (Standalone)" }),
-      "RPCS3 Shortcut (Standalone) cannot start a game installed as a folder.",
-    ],
-    [
       "not established",
       start({ state: "choose", reason: "no_find_rule", entry: "BlastEm" }),
       "No emulator is the default, because whether BlastEm is installed could not be established (ES-DE has no rule for finding it).",
@@ -121,11 +102,20 @@ describe("why a start is refused", () => {
 });
 
 describe("whether another entry can be pinned", () => {
-  it("is so only for a bakeable entry other than the one in effect", () => {
+  it("is so only for an entry not stated not installed, other than the one in effect", () => {
     expect(canPickAnother([row("A"), row("B")], "A")).toBe(true);
-    expect(canPickAnother([row("A"), row("B", { bakeable: false })], "A")).toBe(false);
+    expect(canPickAnother([row("A"), row("B", { bakeable: false })], "A")).toBe(true);
+    expect(canPickAnother([row("A"), row("B", { bakeable: false, reason: "not_installed" })], "A")).toBe(false);
     expect(canPickAnother([row("A")], "A")).toBe(false);
     expect(canPickAnother([row("A")], null)).toBe(true);
+  });
+
+  it("counts an entry Tender cannot bake, but never one the resolver states not installed (#2195 D9, D23)", () => {
+    expect(isChoosable(row("B", { bakeable: false, reason: "shortcut_script" }))).toBe(true);
+    expect(isChoosable(row("B", { bakeable: false, reason: "start_script_runs_nothing" }))).toBe(true);
+    expect(isChoosable(row("B", { bakeable: false, reason: "not_installed" }))).toBe(false);
+    expect(canPickAnother([row("A"), row("B", { bakeable: false, reason: "inject" })], "A")).toBe(true);
+    expect(canPickAnother([row("A"), row("B", { bakeable: false, reason: "not_installed" })], "A")).toBe(false);
   });
 
   it("is never so on a game's page with one emulator, where the page offers no menu", () => {
@@ -251,6 +241,82 @@ describe("a start's own read of the emulator", () => {
     );
     expect(await emulatorRefusalForRom(7, "test")).toBe(
       "track03.bin is not the file Sega Dreamcast starts from; it starts from .cue, .gdi.",
+    );
+  });
+});
+
+describe("an entry Tender cannot bake (#2195 D7, D23)", () => {
+  const answer = start({ state: "cannot_start", reason: "not_bakeable", entry: "RPCS3 Shortcut (Standalone)" });
+
+  it("refuses the start, saying Tender cannot start it yet", () => {
+    expect(startRefused(answer)).toBe(true);
+    expect(emulatorStartRefusal(answer, "this game", false)).toBe(
+      "Tender cannot start RPCS3 Shortcut (Standalone) yet.",
+    );
+  });
+
+  it("points at the emulator menu where it offers another entry", () => {
+    expect(emulatorStartRefusal(answer, "this game", true)).toBe(
+      "Tender cannot start RPCS3 Shortcut (Standalone) yet. Choose another emulator in the emulator menu.",
+    );
+  });
+
+  it("refuses Steam's own Play with the same words", async () => {
+    vi.mocked(getPlatformCoreInfo).mockResolvedValue({
+      start: answer,
+      emulators: [row("RPCS3 Shortcut (Standalone)", { bakeable: false, reason: "shortcut_script" })],
+      active_core_label: "RPCS3 Shortcut (Standalone)",
+    } as Awaited<ReturnType<typeof getPlatformCoreInfo>>);
+    expect(await emulatorRefusalForRom(7, "test")).toBe("Tender cannot start RPCS3 Shortcut (Standalone) yet.");
+  });
+});
+
+describe("which refusal a game's page says first (#2195 D42)", () => {
+  const notBakeable = start({ state: "cannot_start", reason: "not_bakeable", entry: "RPCS3 Shortcut (Standalone)" });
+  const folder: GameLaunch = {
+    state: "not_this_emulator",
+    entry: "RPCS3 Shortcut (Standalone)",
+    system: "ps3",
+    platform_name: "PlayStation 3",
+    file: "Game.ps3",
+    extension: ".ps3",
+    starts_from: [],
+    other_entries: ["RPCS3 Directory (Standalone)"],
+    install_in: null,
+    reason: "takes_no_folder",
+    contents_unread: false,
+    format_unestablished: false,
+  };
+
+  it("says the resolver's refusal of the file before Tender's own that it cannot start the entry yet", () => {
+    expect(startRefusal(notBakeable, folder, true)).toBe(
+      "RPCS3 Shortcut (Standalone) cannot start a game installed as a folder. RPCS3 Directory (Standalone) can — choose it in the emulator menu.",
+    );
+  });
+
+  it("says Tender cannot start the entry yet where the resolver refuses nothing", () => {
+    expect(startRefusal(notBakeable, { ...folder, state: "starts", reason: null }, false)).toBe(
+      "Tender cannot start RPCS3 Shortcut (Standalone) yet.",
+    );
+    expect(startRefusal(notBakeable, null, false)).toBe("Tender cannot start RPCS3 Shortcut (Standalone) yet.");
+  });
+
+  it("keeps an emulator that is not installed ahead of the file's refusal", () => {
+    const missing = start({ state: "cannot_start", reason: "not_installed", entry: "RPCS3 Shortcut (Standalone)" });
+    expect(startRefusal(missing, folder, false)).toBe(
+      "RPCS3 Shortcut (Standalone) is not installed, so this game cannot start.",
+    );
+  });
+
+  it("refuses Steam's own Play with the resolver's sentence too", async () => {
+    vi.mocked(getPlatformCoreInfo).mockResolvedValue({
+      start: notBakeable,
+      launch: folder,
+      emulators: [row("RPCS3 Shortcut (Standalone)", { bakeable: false, reason: "shortcut_script" })],
+      active_core_label: "RPCS3 Shortcut (Standalone)",
+    } as Awaited<ReturnType<typeof getPlatformCoreInfo>>);
+    expect(await emulatorRefusalForRom(7, "test")).toBe(
+      "RPCS3 Shortcut (Standalone) cannot start a game installed as a folder.",
     );
   });
 });

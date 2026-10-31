@@ -1,4 +1,4 @@
-"""Ps3FolderNamingService — naming the PS3 games already installed as folders as ES-DE scans them.
+"""Ps3FolderNamingService — naming and placing the PS3 games already installed as folders as ES-DE scans them.
 
 A one-time step (#2195 D27): a download names a PS3 game kept as a folder
 ``<game>.ps3`` (D11), and the resolver answers a folder without that name as no
@@ -19,19 +19,29 @@ done: nothing is moved over another folder. A folder already moved whose
 record still names its old place — a pass stopped between the two, or a
 database put back by the installer's rollback — gets its record moved after
 it.
+
+A second one-time step runs right after it, with its own subject and stamp
+and the same rules: a game folder found exactly one level inside an install's
+folder is placed as that folder itself (D39). It is moved only where it is the
+folder's only entry; anything beside it keeps the install as it is, so nothing
+is deleted or left behind. The game folder waits in a sibling while the
+install's folder is emptied, and goes back inside it where that folder cannot
+be removed; a pass stopped at any point is finished at the next start.
 """
 
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from domain.rom_files import ps3_folder_rename
+from domain.rom_files import ps3_folder_lift, ps3_folder_rename
 
 if TYPE_CHECKING:
     import logging
 
+    from domain.rom_files import Ps3FolderLift
     from domain.rom_install import RomInstall
     from services.protocols import DownloadFileStore, SystemSupportedExtensionsFn, UnitOfWorkFactory
 
@@ -40,6 +50,8 @@ if TYPE_CHECKING:
 # (GLOSSARY.md, persistence boundary). The subject is a JSON list of rom_ids.
 KV_PS3_FOLDERS_NAMED = "ps3_folders_named"
 KV_PS3_FOLDERS_TO_NAME = "ps3_folders_to_name"
+KV_PS3_FOLDERS_LIFTED = "ps3_folders_lifted"
+KV_PS3_FOLDERS_TO_LIFT = "ps3_folders_to_lift"
 
 
 @dataclass(frozen=True)
@@ -57,7 +69,10 @@ class Ps3FolderNamingServiceConfig:
 
 
 class Ps3FolderNamingService:
-    """Renames the PS3 folder installs not yet named ``<game>.ps3``, once."""
+    """Renames the PS3 folder installs not yet named ``<game>.ps3``, then lifts a game folder one level inside one.
+
+    Each of the two steps runs once.
+    """
 
     def __init__(self, *, config: Ps3FolderNamingServiceConfig) -> None:
         self._uow_factory = config.uow_factory
@@ -66,12 +81,17 @@ class Ps3FolderNamingService:
         self._logger = config.logger
 
     def name_ps3_folders(self) -> None:
-        """Rename each install of the step's subject not named for ES-DE, and stamp the step done when none is left.
+        """Run the naming step, then the lifting step, each until its own stamp says it is done.
 
         Each folder is moved outside any Unit of Work, and its install record is
         relocated in a short one after the move, only while it still names the
         folder that was moved.
         """
+        self._name_pass()
+        self._lift_pass()
+
+    def _name_pass(self) -> None:
+        """Rename each install of the step's subject not named for ES-DE, and stamp the step done when none is left."""
         with self._uow_factory() as uow:
             if uow.kv_config.get(KV_PS3_FOLDERS_NAMED) == "1":
                 return
@@ -98,6 +118,94 @@ class Ps3FolderNamingService:
         if left == 0:
             with self._uow_factory() as uow:
                 uow.kv_config.set(KV_PS3_FOLDERS_NAMED, "1")
+
+    def _lift_pass(self) -> None:
+        """Lift each install of the lifting step's subject, and stamp that step done when none is left."""
+        with self._uow_factory() as uow:
+            if uow.kv_config.get(KV_PS3_FOLDERS_LIFTED) == "1":
+                return
+            recorded = uow.kv_config.get(KV_PS3_FOLDERS_TO_LIFT)
+            installs = list(uow.rom_installs.iter_all())
+        if recorded is None:
+            subject = {install.rom_id for install in installs if ps3_folder_lift(install.rom_dir, install.file_path)}
+            with self._uow_factory() as uow:
+                uow.kv_config.set(KV_PS3_FOLDERS_TO_LIFT, json.dumps(sorted(subject)))
+        else:
+            subject = set(json.loads(recorded))
+        left = 0
+        for install in installs:
+            lift = ps3_folder_lift(install.rom_dir, install.file_path) if install.rom_id in subject else None
+            if lift is not None and not self._lift(install, lift):
+                left += 1
+        if left == 0:
+            with self._uow_factory() as uow:
+                uow.kv_config.set(KV_PS3_FOLDERS_LIFTED, "1")
+
+    def _lift(self, install: RomInstall, lift: Ps3FolderLift) -> bool:
+        """Place one install's game folder as its folder; ``False`` where the next start has to ask again.
+
+        Each state a pass stopped in is picked up where it stopped: the game
+        folder waiting in its sibling, with the install's folder empty or gone,
+        or already in place with its record still naming the folder inside.
+        """
+        rom_dir = install.rom_dir
+        if rom_dir is None:
+            return True
+        store = self._file_store
+        if not store.exists(install.file_path) and store.exists(lift.launch_path):
+            return self._relocate(install.rom_id, rom_dir, rom_dir, lift.launch_path)
+        if store.exists(lift.staging):
+            return self._finish_lift(install.rom_id, rom_dir, lift)
+        if not store.exists(rom_dir):
+            self._logger.info(f"PS3 folder of rom_id={install.rom_id} is not at {rom_dir}; asked again later")
+            return False
+        names = [entry["name"] for entry in store.list_top_level_names(rom_dir)]
+        if names != [os.path.basename(lift.inner)]:
+            self._logger.info(f"PS3 game folder {lift.inner} is not alone in {rom_dir}; left where it is")
+            return True
+        try:
+            store.move_dir(lift.inner, lift.staging)
+        except OSError as e:
+            self._logger.warning(f"PS3 folder lift of {lift.inner} failed: {e}; asked again later")
+            return False
+        return self._finish_lift(install.rom_id, rom_dir, lift)
+
+    def _finish_lift(self, rom_id: int, rom_dir: str, lift: Ps3FolderLift) -> bool:
+        """Remove the emptied *rom_dir*, put the waiting game folder in its place, then move the record after it.
+
+        Where *rom_dir* cannot be removed — something came into it — the game
+        folder goes back inside it, so the files are where the record says
+        and an uninstall meanwhile leaves nothing behind outside the install.
+        """
+        store = self._file_store
+        if store.exists(rom_dir):
+            try:
+                store.remove_empty_dir(rom_dir)
+            except OSError as e:
+                self._put_back(rom_dir, lift, e)
+                return False
+        try:
+            store.move_dir(lift.staging, rom_dir)
+        except OSError as e:
+            self._logger.warning(f"PS3 folder lift into {rom_dir} failed: {e}; {lift.staging} kept, asked again later")
+            return False
+        self._logger.info(f"Lifted the PS3 game folder of rom_id={rom_id} into {rom_dir}")
+        return self._relocate(rom_id, rom_dir, rom_dir, lift.launch_path)
+
+    def _put_back(self, rom_dir: str, lift: Ps3FolderLift, refusal: OSError) -> None:
+        """Move the waiting game folder back inside *rom_dir*, which could not be removed; asked again later."""
+        try:
+            self._file_store.move_dir(lift.staging, lift.inner)
+        except OSError as e:
+            self._logger.warning(
+                f"PS3 folder lift: {rom_dir} could not be removed ({refusal}), and moving {lift.staging} back "
+                f"failed: {e}; asked again later"
+            )
+            return
+        self._logger.warning(
+            f"PS3 folder lift: {rom_dir} could not be removed ({refusal}); its game folder is back inside it, "
+            "asked again later"
+        )
 
     def _name(self, install: RomInstall, new_rom_dir: str, new_file_path: str) -> bool:
         """Name one install's folder and move its record after it; ``False`` where the next start has to ask again."""

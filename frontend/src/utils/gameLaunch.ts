@@ -5,13 +5,15 @@
  *
  * Three states refuse a start: the game has to be installed in an emulator
  * first, the file is not one the system starts from, or the entry does not
- * start it. The other two let it go ahead: it starts, which says nothing unless
- * the file is an archive whose contents were not read, or whether it starts
- * could not be established, which says so. This is the one home of that rule.
+ * start it, with the resolver's reason where it states one. The other two let
+ * it go ahead: it starts, which says nothing unless the resolver's reading of
+ * the file stopped short of something, its format included, or the file is an
+ * archive whose contents were not read, or whether it starts could not be
+ * established, which says so (#2195 D40, D41). This is the one home of that rule.
  */
 
 import { HostTransportError } from "../api/host";
-import type { AnsweringSource, GameLaunch } from "../types";
+import type { AnsweringSource, GameLaunch, LaunchRefusalReason, LaunchStoppedShortReason } from "../types";
 import { sourceName } from "./emulatorSourceWording";
 import { TimeoutError } from "./withTimeout";
 
@@ -41,6 +43,87 @@ function notEstablishedBecause(launch: GameLaunch, source: AnsweringSource | nul
     default:
       return `${named} gave no answer`;
   }
+}
+
+/**
+ * Why the entry does not start the file, for a refusal the resolver states a
+ * reason of its own for (#2195 D40): the page's sentence and the emulator
+ * menu's line. A menu line says only what stands in the way (D36).
+ */
+const REFUSED_BECAUSE: Record<
+  LaunchRefusalReason,
+  { page: (launch: GameLaunch) => string; line: (launch: GameLaunch) => string }
+> = {
+  takes_no_folder: {
+    page: (launch) => `${launch.entry} cannot start a game installed as a folder.`,
+    line: () => "cannot start a game installed as a folder",
+  },
+  nothing_to_start: {
+    page: (launch) => `${launch.entry} finds nothing to start in ${launch.file}.`,
+    line: () => "finds nothing to start in this folder",
+  },
+  not_a_game_file: {
+    page: (launch) => `${launch.entry} cannot start ${launch.file}: it is neither a disc image nor a game program.`,
+    line: () => "cannot start it: neither a disc image nor a game program",
+  },
+  disc_not_found: {
+    page: (launch) =>
+      `${launch.entry} cannot start this game: it is a disc game, and no PS3_GAME folder above it has a valid PS3_DISC.SFB beside it.`,
+    line: () => "the game's disc cannot be mounted",
+  },
+  disc_key_missing: {
+    page: (launch) =>
+      `${launch.entry} cannot start ${launch.file}: the image is encrypted and no key file for it was found.`,
+    line: () => "the image is encrypted and has no key file",
+  },
+};
+
+/**
+ * What could not be established about a file the entry starts (#2195 D40), as
+ * the page's note and the menu's line both finish their sentence.
+ */
+const STOPPED_SHORT_BECAUSE: Record<LaunchStoppedShortReason, (launch: GameLaunch) => string> = {
+  content_missing: (launch) => `${launch.file} was not found`,
+  content_unreadable: () => "what RPCS3 would look at could not be read",
+  game_list_unread: () => "the emulator's own list of installed games was not read",
+  game_kind_unfollowed: () => "its PARAM.SFO names a kind of game whose start was not followed",
+  inside_emulator_drive: () => "the game lies inside the emulator's own game folder, which starts games another way",
+  emulator_drive_unknown: () => "where the emulator's internal drive is could not be read",
+  savestate_unread: (launch) => `RPCS3 opens ${launch.file} as a savestate, which was not followed`,
+  image_layout_unread: () =>
+    "the disc image states a region count RPCS3 does not accept, and what its start does then was not followed",
+  encryption_unread: () => "whether the disc image is encrypted could not be read",
+  key_untested: () => "whether its key file fits the disc image was not checked",
+  key_folder_unknown: () =>
+    "no key file is beside the disc image, and where the emulator keeps its other key files could not be read",
+  disc_folder_set: () =>
+    "the emulator's own disc folder holds a disc it mounts instead, and which disc that boots was not followed",
+  disc_folder_unknown: () => "where the emulator's own disc folder is could not be read",
+  content_unchecked: (launch) =>
+    `${launch.extension} files are taken, but the content of ${launch.file} was not checked`,
+  version_dependent: (launch) => `whether it reads ${launch.extension} depends on the emulator's version`,
+};
+
+function refusedBecause(launch: GameLaunch): (typeof REFUSED_BECAUSE)[LaunchRefusalReason] | null {
+  return launch.state === "not_this_emulator" && launch.reason !== null && launch.reason in REFUSED_BECAUSE
+    ? REFUSED_BECAUSE[launch.reason as LaunchRefusalReason]
+    : null;
+}
+
+function stoppedShortBecause(launch: GameLaunch): string | null {
+  return launch.state === "starts" && launch.reason !== null && launch.reason in STOPPED_SHORT_BECAUSE
+    ? STOPPED_SHORT_BECAUSE[launch.reason as LaunchStoppedShortReason](launch)
+    : null;
+}
+
+/**
+ * The entries the resolver names as starting the file, pointed at in the emulator
+ * menu (#2195 D21), or nothing where it names none or the menu offers none.
+ */
+function otherEntriesPointer(launch: GameLaunch, canPick: boolean): string {
+  if (!canPick || launch.other_entries.length === 0) return "";
+  const choose = launch.other_entries.length === 1 ? "choose it" : "choose one";
+  return ` ${launch.other_entries.join(" or ")} can — ${choose} in the emulator menu.`;
 }
 
 /**
@@ -83,6 +166,8 @@ export function launchRefusal(launch: GameLaunch | null, canPick: boolean): stri
     case "not_a_launch_file":
       return `${launch.file} is not the file ${launch.platform_name} starts from; it starts from ${listedExtensions(launch.starts_from)}.`;
     case "not_this_emulator": {
+      const refused = refusedBecause(launch);
+      if (refused !== null) return `${refused.page(launch)}${otherEntriesPointer(launch, canPick)}`;
       if (launch.other_entries.length === 0) return `${launch.entry} does not start ${launch.extension}.`;
       const pointer = canPick ? " Choose another emulator in the emulator menu." : "";
       return `${launch.entry} does not start ${launch.extension}; other emulators of this system do.${pointer}`;
@@ -94,14 +179,20 @@ export function launchRefusal(launch: GameLaunch | null, canPick: boolean): stri
 
 /**
  * What the page says about a verdict that lets the game start, or `null` where
- * there is nothing to say: whether it starts could not be established, or the
- * file is an archive whose contents were not read. `source` is the source the
- * answer came from.
+ * there is nothing to say: whether it starts could not be established, what the
+ * reading of the file stopped short of, whether the entry reads its format
+ * (#2195 D41), or that the file is an archive whose contents were not read.
+ * `source` is the source the answer came from.
  */
 export function launchNote(launch: GameLaunch | null, source: AnsweringSource | null): string | null {
   if (launch === null) return null;
   if (launch.state === "not_established") {
     return `Whether ${launch.file} starts cannot be established: ${notEstablishedBecause(launch, source)}.`;
+  }
+  const stoppedShort = stoppedShortBecause(launch);
+  if (stoppedShort !== null) return `Whether ${launch.entry} starts this game cannot be established: ${stoppedShort}.`;
+  if (launch.state === "starts" && launch.format_unestablished) {
+    return `Whether ${launch.entry} reads ${launch.extension} files is not established.`;
   }
   if (launch.state === "starts" && launch.contents_unread) {
     return `What is inside ${launch.file} was not read, so whether ${launch.entry} finds a game in it cannot be established.`;
@@ -111,22 +202,32 @@ export function launchNote(launch: GameLaunch | null, source: AnsweringSource | 
 
 /**
  * The short line the emulator menu shows under an entry for its verdict on the
- * game (#2195 D22, D29, D36). `source` is the source the answer came from.
+ * game (#2195 D22, D29, D36), or `null` where there is nothing to say: a plain
+ * "can start it" for an entry Tender cannot start (`tenderStarts` false), which
+ * its row already says it cannot (D42). `source` is the source the answer came
+ * from.
  */
-export function entryLaunchLine(launch: GameLaunch, source: AnsweringSource | null): string {
+export function entryLaunchLine(
+  launch: GameLaunch,
+  source: AnsweringSource | null,
+  tenderStarts = true,
+): string | null {
   switch (launch.state) {
     case "needs_installing":
       return "cannot start it: the game has to be installed first";
     case "not_a_launch_file":
       return `${launch.platform_name} does not start from ${launch.extension}`;
     case "not_this_emulator":
-      return `cannot start ${launch.extension} files`;
+      return refusedBecause(launch)?.line(launch) ?? `cannot start ${launch.extension} files`;
     case "not_established":
       return `whether it starts cannot be established: ${notEstablishedBecause(launch, source)}`;
-    default:
+    default: {
+      const stoppedShort = stoppedShortBecause(launch);
+      if (stoppedShort !== null) return `whether it starts the game is not established: ${stoppedShort}`;
       if (launch.format_unestablished) return `whether it reads ${launch.extension} is not established`;
       if (launch.contents_unread) return `what is inside ${launch.file} was not read`;
-      return "can start it";
+      return tenderStarts ? "can start it" : null;
+    }
   }
 }
 

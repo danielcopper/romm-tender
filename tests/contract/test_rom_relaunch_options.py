@@ -20,7 +20,8 @@ from domain.rom_install import RomInstall
 from ._seed import seed_component_launcher, seed_es_find_rules, seed_es_systems, seed_install, seed_rom
 
 # A ps3 system as RetroDECK ships it: the shortcut form is its default and cannot
-# be baked, and RPCS3 Directory (Standalone) is the entry that starts a folder.
+# be baked, and RPCS3 Directory (Standalone) is the entry whose command hands
+# RPCS3 the game's path.
 _PS3_ES_SYSTEMS_XML = """\
 <?xml version="1.0"?>
 <systemList>
@@ -94,13 +95,13 @@ _PS3_AND_SHELL_FIND_RULES_XML = _PS3_ES_FIND_RULES_XML.replace(
 )
 
 
-def _seed_ps3_folder_game(harness, rom_id: int, *, find_rules: str = _PS3_ES_FIND_RULES_XML):
-    """A PS3 game installed as a folder and bound to a shortcut, over RetroDECK's ps3 catalogue."""
+def _seed_ps3_folder_game(harness, rom_id: int, *, find_rules: str = _PS3_ES_FIND_RULES_XML, folder: str = "MyGame"):
+    """A PS3 game installed as the folder *folder* and bound to a shortcut, over RetroDECK's ps3 catalogue."""
     seed_es_systems(harness, _PS3_ES_SYSTEMS_XML)
     seed_es_find_rules(harness, find_rules)
     launcher = seed_component_launcher(harness, "rpcs3")
     seed_rom(harness, rom_id, platform_slug="ps3", shortcut_app_id=rom_id)
-    rom_dir = harness.tmp_path / "retrodeck" / "roms" / "ps3" / "MyGame"
+    rom_dir = harness.tmp_path / "retrodeck" / "roms" / "ps3" / folder
     eboot = rom_dir / "PS3_GAME" / "USRDIR" / "EBOOT.BIN"
     eboot.parent.mkdir(parents=True, exist_ok=True)
     eboot.write_bytes(b"\x00" * 16)
@@ -118,20 +119,49 @@ def _seed_ps3_folder_game(harness, rom_id: int, *, find_rules: str = _PS3_ES_FIN
     return rom_dir, launcher
 
 
-async def test_a_ps3_folder_game_whose_default_cannot_start_a_folder_says_which_entry_can(harness):
-    """The shipped default cannot start a folder, and nothing else is taken by itself (#2195 D21)."""
-    _seed_ps3_folder_game(harness, 56, find_rules=_PS3_AND_SHELL_FIND_RULES_XML)
+async def test_a_ps3_folder_game_with_its_shipped_default_cannot_be_started_by_tender_yet(harness):
+    """No entry is taken by itself, and a default Tender cannot bake is refused (#2195 D7, D23).
+
+    Whether the default starts the folder is the launch verdict's (D21). The
+    resolver looks at the folder as RetroDECK's sandbox sees it, which does not
+    see under ``tmp_path``; what it answers about a folder it does see is pinned
+    in ``tests/adapters/test_atlas_launchability.py``.
+    """
+    _seed_ps3_folder_game(harness, 56, find_rules=_PS3_AND_SHELL_FIND_RULES_XML, folder="MyGame.ps3")
     seed_component_launcher(harness, "osshell")
 
     info = await harness.endpoints.get_platform_core_info(56)
 
     assert info["active_core_label"] == "RPCS3 Shortcut (Standalone)"
-    assert info["start"] == {
-        "state": "cannot_start",
-        "reason": "folder_install",
-        "entry": "RPCS3 Shortcut (Standalone)",
-        "folder_entry": "RPCS3 Directory (Standalone)",
-    }
+    assert info["start"] == {"state": "cannot_start", "reason": "not_bakeable", "entry": "RPCS3 Shortcut (Standalone)"}
+    assert info["launch"]["entry"] == "RPCS3 Shortcut (Standalone)"
+
+
+async def test_a_pick_of_an_entry_tender_cannot_bake_is_stored_and_its_start_refused(harness):
+    """Choosable like any other entry, and Play refused rather than started through ES-DE's choice (#2195 D7, D23)."""
+    _seed_ps3_folder_game(harness, 57, find_rules=_PS3_AND_SHELL_FIND_RULES_XML, folder="MyGame.ps3")
+    seed_component_launcher(harness, "osshell")
+    with harness.uow_factory() as uow:
+        uow.roms.set_emulator_override(57, "RPCS3 Directory (Standalone)", "retrodeck")
+
+    pinned = await harness.endpoints.set_game_core(57, "RPCS3 Shortcut (Standalone)")
+    info = await harness.endpoints.get_platform_core_info(57)
+
+    assert pinned["success"] is True
+    with harness.uow_factory() as uow:
+        assert uow.roms.get(57).emulator_override == "RPCS3 Shortcut (Standalone)"
+    assert info["start"] == {"state": "cannot_start", "reason": "not_bakeable", "entry": "RPCS3 Shortcut (Standalone)"}
+
+
+async def test_a_game_whose_entry_tender_cannot_bake_is_re_confirmed_with_the_empty_command(harness):
+    """The shipped default RPCS3 Shortcut bakes nothing, over the real catalogue (#2195 D43)."""
+    _seed_ps3_folder_game(harness, 58, find_rules=_PS3_AND_SHELL_FIND_RULES_XML, folder="MyGame.ps3")
+    seed_component_launcher(harness, "osshell")
+
+    item = await harness.endpoints.get_rom_relaunch_options(58)
+
+    assert item is not None
+    assert item["launch_options"] == ""
 
 
 async def test_ps3_folder_install_bakes_direct_sandbox_invocation(harness):

@@ -82,17 +82,15 @@ NOT_ESTABLISHED_PATH_UNSEEN = "path_unseen"
 CORE_UNLOCATED = "core_unlocated"
 START_SCRIPT_RUNS_NOTHING = "start_script_runs_nothing"
 
-# Why the entry a game would start with cannot start it, in Tender's words: the
-# two reasons above that the resolver states about the entry itself, and
-# ``FOLDER_INSTALL`` — a game installed as a folder whose entry starts no
-# folder. A game with such an entry has Play refused with the reason (#2195 D7,
-# D21). The panel words each (``frontend/src/utils/emulatorStart.ts``).
-FOLDER_INSTALL = "folder_install"
+# Why the entry a game would start with cannot start it, in Tender's words:
+# ``NOT_INSTALLED`` and ``START_SCRIPT_RUNS_NOTHING``, which the resolver states
+# about the entry itself, and ``NOT_BAKEABLE`` — any other entry Tender cannot
+# bake, which Tender does not start (#2195 D7, D23; why is
+# docs/architecture/core-emulator-selection.md, "What starting comes to"). A
+# game with such an entry has Play refused with the reason. The panel words
+# each (``frontend/src/utils/emulatorStart.ts``).
 CANNOT_START = frozenset({NOT_INSTALLED, START_SCRIPT_RUNS_NOTHING})
-
-# The entry named in the sentence a PS3 game kept as a folder gets where its own
-# entry cannot start a folder (#2195 D21). Tender's own rule.
-FOLDER_ENTRY_LABEL = "RPCS3 Directory (Standalone)"
+NOT_BAKEABLE = "not_bakeable"
 
 # What an entry launches, as the resolver states it, in Tender's words: a core
 # RetroArch loads on this machine, an emulator program of its own, or a
@@ -345,8 +343,9 @@ def option_to_invocation(option: EmulatorOption | None) -> EmulatorInvocation | 
     on Neo Geo CD — keeps all of it. The invocation carries the option's
     ``core_so``, and an emulator program's ``launcher`` for the folder-boot
     fold, which execs a program and never RetroArch with a core. A ``None``
-    option, or one that is not bakeable, resolves to ``None`` (the plain-launch
-    signal).
+    option, or one that is not bakeable, resolves to ``None``; for the entry in
+    effect, the active-core resolver bakes the latter as the empty command
+    (#2195 D43).
     """
     if option is None or option.status != "bakeable" or not option.command:
         return None
@@ -373,7 +372,7 @@ def label_to_invocation(options: list[EmulatorOption], label: str) -> EmulatorIn
     """Resolve a picked *label* to its :class:`EmulatorInvocation`, else ``None``.
 
     ``None`` where no option carries the label or the option it names cannot be
-    baked; a caller validating a new pick refuses both.
+    baked.
     """
     return option_to_invocation(option_for_label(options, label))
 
@@ -399,13 +398,12 @@ def options_to_payload(options: list[EmulatorOption]) -> list[dict[str, Any]]:
     declared_index, is_default, chosen_in_frontend, bakeable, reason}``.
     ``is_default`` marks the option :func:`default_option` takes;
     ``chosen_in_frontend`` the one the user chose inside ES-DE. ``bakeable`` is
-    ``True`` only for a fully bakeable option (``needs_setup`` reads as
-    ``bakeable: False`` with its ``reason`` — ``"inject"`` or
-    ``"not_installed"`` — so the picker can disable it with a distinct message).
-    A bakeable option's ``reason`` carries its ``not_established`` note, where
-    it has one, so a surface can say so beside a pick it still offers; an option
-    that cannot be baked keeps the reason it cannot. The raw ``command`` text is
-    intentionally dropped from the wire payload.
+    ``True`` only for a fully bakeable option. ``reason`` is the option's
+    ``not_established`` note where it has one, so a surface says so beside a
+    pick it offers whether or not it can be baked (#2195 D9), else the reason it
+    cannot be baked — ``"not_installed"`` among them, the one an entry is not
+    offered for. The raw ``command`` text is intentionally dropped from the wire
+    payload.
 
     ``kind`` is Tender's word for what the entry launches (:data:`CORE`,
     :data:`PROGRAM`, :data:`FOREIGN_CORE`). ``emulator`` is the identity, and it
@@ -425,7 +423,7 @@ def options_to_payload(options: list[EmulatorOption]) -> list[dict[str, Any]]:
             "is_default": option is default,
             "chosen_in_frontend": option.chosen_in_frontend,
             "bakeable": option.status == "bakeable",
-            "reason": option.reason if option.reason is not None else option.not_established,
+            "reason": option.not_established if option.not_established is not None else option.reason,
         }
         for option in options
     ]

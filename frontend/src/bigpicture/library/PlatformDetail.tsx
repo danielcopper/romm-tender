@@ -26,6 +26,7 @@ import { buildEmulatorMenu } from "../../utils/emulatorMenu";
 import { activeEmulatorNote } from "../../utils/emulatorInstallation";
 import {
   canPickAnother,
+  isChoosable,
   emulatorStartRefusal,
   frontendChoiceLines,
   vanishedPickSentence,
@@ -162,7 +163,7 @@ function noDefaultOffer(core: SystemCoreInfo): CoreOffer {
   const sentence =
     emulatorStartRefusal(core.start, "these games", canPickAnother(core.emulators, null)) ??
     "No emulator is the default here.";
-  if (core.emulators.some((entry) => entry.bakeable)) return { kind: "pick", core, notice: sentence };
+  if (core.emulators.some(isChoosable)) return { kind: "pick", core, notice: sentence };
   return { kind: "blocked", reason: sentence, notice: sentence };
 }
 

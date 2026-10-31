@@ -1,12 +1,12 @@
 /**
  * The words for an emulator a game or a platform cannot start with, and for a
- * stored pick whose label no longer exists (#2195 D5, D7, D21, D23). One home
+ * stored pick whose label no longer exists (#2195 D5, D7, D23). One home
  * for each sentence: the game page, the platform page and a refused start —
  * the Play button's and Steam's own — say the same words.
  */
 
 import { getPlatformCoreInfo, logError } from "../api/backend";
-import type { CoreInfo, EmulatorOption, EmulatorStart, SourceDefault, VanishedPick } from "../types";
+import type { CoreInfo, EmulatorOption, EmulatorStart, GameLaunch, SourceDefault, VanishedPick } from "../types";
 import { notEstablishedCause } from "./emulatorInstallation";
 import { launchRefusal } from "./gameLaunch";
 import { sourceName } from "./emulatorSourceWording";
@@ -16,11 +16,19 @@ import { withTimeout } from "./withTimeout";
 const CHOOSE_ANOTHER = " Choose another emulator in the emulator menu.";
 
 /**
+ * Whether the emulator menu offers *entry* as a pick: every entry but one the
+ * resolver states not installed (#2195 D9, D23), whether Tender can bake it or not.
+ */
+export function isChoosable(entry: EmulatorOption): boolean {
+  return entry.reason !== "not_installed";
+}
+
+/**
  * Whether the emulator menu offers an entry to pick other than the one in
  * effect — what a sentence may point the reader at.
  */
 export function canPickAnother(emulators: readonly EmulatorOption[], activeLabel: string | null): boolean {
-  return emulators.some((entry) => entry.bakeable && entry.label !== activeLabel);
+  return emulators.some((entry) => isChoosable(entry) && entry.label !== activeLabel);
 }
 
 /** {@link canPickAnother} for a game's page, whose emulator menu is offered only with more than one emulator. */
@@ -43,10 +51,8 @@ export function emulatorStartRefusal(start: EmulatorStart, subject: string, canP
         return `${entry} is not installed, so ${subject} cannot start.${pointer}`;
       case "start_script_runs_nothing":
         return `RetroDECK's start script cannot start ${entry}, so ${subject} cannot start.${pointer}`;
-      case "folder_install":
-        return canPick
-          ? `${entry} cannot start a game installed as a folder. ${start.folder_entry ?? "Another entry"} can — choose it in the emulator menu.`
-          : `${entry} cannot start a game installed as a folder.`;
+      case "not_bakeable":
+        return `Tender cannot start ${entry} yet.${pointer}`;
       default:
         return `${entry} cannot start ${subject}.${pointer}`;
     }
@@ -103,10 +109,22 @@ export function frontendChoiceSentence(
   return `${chosen.label} is chosen in ES-DE; Tender starts this game with the emulator chosen in its emulator menu.`;
 }
 
-/** Why a game cannot start, from its core read: its emulator's refusal first, then its file's (#2195 D2), or `null`. */
+/**
+ * Why a game cannot start, or `null`: its emulator's refusal first, then its
+ * file's (#2195 D2) — except that Tender's own "cannot start it yet" gives way
+ * to the resolver's refusal of the file, which says more (D42). The one
+ * composition the game page and a refused start both say.
+ */
+export function startRefusal(start: EmulatorStart, launch: GameLaunch | null, canPick: boolean): string | null {
+  const emulator = emulatorStartRefusal(start, "this game", canPick);
+  const file = launchRefusal(launch, canPick);
+  return start.reason === "not_bakeable" ? (file ?? emulator) : (emulator ?? file);
+}
+
+/** Why a game cannot start, from its core read ({@link startRefusal}), or `null`. */
 export function gameStartRefusal(info: CoreInfo): string | null {
   const canPick = gameCanPickAnother(info.emulators, info.active_core_label);
-  return emulatorStartRefusal(info.start, "this game", canPick) ?? launchRefusal(info.launch ?? null, canPick);
+  return startRefusal(info.start, info.launch ?? null, canPick);
 }
 
 /**

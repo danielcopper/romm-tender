@@ -46,6 +46,11 @@ class TestResolveEmulatorInvocation:
             {"id": 5, "platform_slug": "n64", "name": "X"}
         )
 
+    def test_an_entry_tender_cannot_bake_bakes_the_empty_command(self):
+        invocation = resolve_emulator_invocation({"id": 1}, EmulatorInvocation.nothing())
+        assert invocation == ""
+        assert build_launch_options(invocation, "/roms/ps3/Game.ps3") == ""
+
     def test_explicit_none_core_is_plain_invocation(self):
         # active_core_so=None must behave exactly like the 1-arg call: no -e override.
         result = resolve_emulator_invocation({"id": 1}, None)
@@ -411,6 +416,12 @@ class TestBuildShortcutsData:
         assert result[0]["exe"] == _LAUNCHER
         assert result[0]["start_dir"] == os.path.dirname(_LAUNCHER)
         assert result[1]["fs_name"] == ""
+
+    def test_an_installed_rom_whose_entry_tender_cannot_bake_gets_the_empty_command(self):
+        # A start Tender does not see then runs nothing, not ES-DE's own choice (#2195 D43).
+        roms = [{"id": 1, "name": "Game A"}]
+        result = build_shortcuts_data(roms, _LAUNCHER, {1: "/roms/ps3/Game.ps3"}, {1: EmulatorInvocation.nothing()})
+        assert result[0]["launch_options"] == ""
 
     def test_installed_rom_gets_launch_command(self):
         roms = [{"id": 1, "name": "Game A"}]

@@ -1501,6 +1501,20 @@ describe("Library › Platforms", () => {
       expect(coreButton(container)!.title).toBe(sentence);
     });
 
+    it("offers the pick where no default stands and the one entry is one Tender cannot bake (#2195 D23)", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          emulators: [{ ...LRPS2_PCSX2, is_default: false, bakeable: false, reason: "lookup_unsupported" }],
+          active_core_label: null,
+          start: emulatorStart({ state: "choose", reason: "lookup_unsupported", entry: "LRPS2" }),
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(coreButton(container)).not.toBeDisabled();
+    });
+
     it("says no emulator is the default where the default's installation could not be established, and still offers the pick", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
@@ -1522,7 +1536,11 @@ describe("Library › Platforms", () => {
 
     it.each([
       ["not installed", "not_installed", "mGBA is not installed, so these games cannot start."],
-      ["one Tender cannot bake", "inject", null],
+      [
+        "one Tender cannot bake",
+        "inject",
+        "Tender cannot start mGBA yet. Choose another emulator in the emulator menu.",
+      ],
     ])("keeps the picker open beside a default that is %s", async (_shape, reason, sentence) => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
@@ -1531,17 +1549,17 @@ describe("Library › Platforms", () => {
             { ...LRPS2_PCSX2, is_default: false, bakeable: true, reason: "no_find_rule" },
           ],
           active_core_label: "mGBA",
-          start:
-            reason === "not_installed"
-              ? emulatorStart({ state: "cannot_start", reason, entry: "mGBA" })
-              : emulatorStart({ entry: "mGBA" }),
+          start: emulatorStart({
+            state: "cannot_start",
+            reason: reason === "not_installed" ? reason : "not_bakeable",
+            entry: "mGBA",
+          }),
         }),
       );
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      if (sentence === null) expect(container.textContent).not.toContain("cannot start");
-      else expect(container.textContent).toContain(sentence);
+      expect(container.textContent).toContain(sentence);
       expect(coreButton(container)).not.toBeDisabled();
     });
 
@@ -1592,21 +1610,35 @@ describe("Library › Platforms", () => {
       expect(coreButton(container)).toBeDisabled();
     });
 
-    it.each([
-      ["one option", [{ ...MGBA, bakeable: false, reason: "not_installed" }]],
-      [
-        "two options, the second not one Tender can bake",
-        [
-          { ...MGBA, bakeable: false, reason: "not_installed" },
-          { ...VBA, bakeable: false, reason: "inject" },
-        ],
-      ],
-    ])("names a default that is not installed in red, with nothing else to pin (%s)", async (_shape, emulators) => {
+    it.each([["one option", [{ ...MGBA, bakeable: false, reason: "not_installed" }]]])(
+      "names a default that is not installed in red, with nothing else to pin (%s)",
+      async (_shape, emulators) => {
+        vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+          coreInfo({
+            emulators,
+            active_core_label: "mGBA",
+            start: emulatorStart({ state: "cannot_start", reason: "not_installed", entry: "mGBA" }),
+          }),
+        );
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+
+        const clause = factPart(container, "mGBA");
+        expect(clause).toBeTruthy();
+        expect(clause!.style.color).toBe(RED);
+        expect(container.textContent).toContain("mGBA is not installed, so these games cannot start");
+        // Rendered and dead rather than absent, so the header keeps its shape
+        // and a reader who lands on it is told why it cannot be pressed.
+        expect(coreButton(container)).toBeDisabled();
+      },
+    );
+
+    it("names a default Tender cannot bake in red, saying Tender cannot start it yet", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
-          emulators,
+          emulators: [{ ...MGBA, bakeable: false, reason: "inject" }],
           active_core_label: "mGBA",
-          start: emulatorStart({ state: "cannot_start", reason: "not_installed", entry: "mGBA" }),
+          start: emulatorStart({ state: "cannot_start", reason: "not_bakeable", entry: "mGBA" }),
         }),
       );
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
@@ -1615,28 +1647,28 @@ describe("Library › Platforms", () => {
       const clause = factPart(container, "mGBA");
       expect(clause).toBeTruthy();
       expect(clause!.style.color).toBe(RED);
-      expect(container.textContent).toContain("mGBA is not installed, so these games cannot start");
-      // Rendered and dead rather than absent, so the header keeps its shape
-      // and a reader who lands on it is told why it cannot be pressed.
+      expect(container.textContent).toContain("Tender cannot start mGBA yet.");
       expect(coreButton(container)).toBeDisabled();
     });
 
-    it("names a default Tender cannot bake, which bakes nothing", async () => {
+    it("keeps the picker open beside a default that is not installed where another entry Tender cannot bake stands", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
-          emulators: [{ ...MGBA, bakeable: false, reason: "inject" }],
+          emulators: [
+            { ...MGBA, bakeable: false, reason: "not_installed" },
+            { ...VBA, bakeable: false, reason: "inject" },
+          ],
           active_core_label: "mGBA",
-          start: emulatorStart({ entry: "mGBA" }),
+          start: emulatorStart({ state: "cannot_start", reason: "not_installed", entry: "mGBA" }),
         }),
       );
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      const clause = factPart(container, "mGBA");
-      expect(clause).toBeTruthy();
-      expect(clause!.style.color).toBe(GREY);
-      expect(container.textContent).not.toContain("cannot start");
-      expect(coreButton(container)).toBeDisabled();
+      expect(container.textContent).toContain(
+        "mGBA is not installed, so these games cannot start. Choose another emulator in the emulator menu.",
+      );
+      expect(coreButton(container)).not.toBeDisabled();
     });
 
     it("names Tender's default and, per source, the choice made in ES-DE, the source named where several are on (#2195 D25)", async () => {

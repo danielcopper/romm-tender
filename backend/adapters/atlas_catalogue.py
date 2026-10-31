@@ -55,6 +55,23 @@ from _vendor.atlas import (
     AVAILABILITY_STARTABLE,
     CAVEAT_ARCHIVE_CONTENTS_UNREAD,
     CAVEAT_ARRANGEMENT_VERSION_DRIFTED,
+    CAVEAT_BOOT_CATEGORY_UNESTABLISHED,
+    CAVEAT_BOOT_DISC_DIR_CONFIGURED,
+    CAVEAT_BOOT_DISC_DIR_UNRESOLVED,
+    CAVEAT_BOOT_DISC_KEY_MISSING,
+    CAVEAT_BOOT_DISC_ROOT_MISSING,
+    CAVEAT_BOOT_DRIVE_UNRESOLVED,
+    CAVEAT_BOOT_FILE_UNBOOTABLE,
+    CAVEAT_BOOT_INSIDE_INTERNAL_DRIVE,
+    CAVEAT_BOOT_ISO_ENCRYPTION_UNREAD,
+    CAVEAT_BOOT_ISO_KEY_UNTESTED,
+    CAVEAT_BOOT_ISO_REGIONS_INVALID,
+    CAVEAT_BOOT_KEY_FOLDER_UNRESOLVED,
+    CAVEAT_BOOT_NOTHING_FOUND,
+    CAVEAT_BOOT_PATH_MISSING,
+    CAVEAT_BOOT_PATH_UNESTABLISHED,
+    CAVEAT_BOOT_REGISTRY_UNREAD,
+    CAVEAT_BOOT_SAVESTATE_UNREAD,
     CAVEAT_COMMAND_REWRITTEN_AT_START,
     CAVEAT_CORE_FILE_FOREIGN,
     CAVEAT_CORE_NOT_INSTALLED,
@@ -65,8 +82,11 @@ from _vendor.atlas import (
     CAVEAT_EMULATOR_CATALOGUE_UNREADABLE,
     CAVEAT_EMULATOR_NOT_FOUND,
     CAVEAT_EMULATOR_RULES_MISSING,
+    CAVEAT_ENTRY_FORMAT_BUILD_DEPENDENT,
+    CAVEAT_ENTRY_FORMAT_CONTENT_UNREAD,
     CAVEAT_ENTRY_FORMAT_UNCLAIMED,
     CAVEAT_ENTRY_FORMAT_UNESTABLISHED,
+    CAVEAT_ENTRY_TAKES_NO_DIRECTORY,
     CAVEAT_FIND_RULES_REWRITTEN_AT_START,
     CAVEAT_FIND_RULES_UNREADABLE,
     CAVEAT_LAUNCH_COMMAND_LABEL_UNKNOWN,
@@ -112,13 +132,33 @@ from domain.emulator_sources import (
 )
 from domain.launchability import (
     CATALOGUE_UNREAD,
+    CONTENT_MISSING,
+    CONTENT_UNCHECKED,
+    CONTENT_UNREADABLE,
+    DISC_FOLDER_SET,
+    DISC_FOLDER_UNKNOWN,
+    DISC_KEY_MISSING,
+    DISC_NOT_FOUND,
+    EMULATOR_DRIVE_UNKNOWN,
+    ENCRYPTION_UNREAD,
     ENTRY_UNKNOWN,
+    GAME_KIND_UNFOLLOWED,
+    GAME_LIST_UNREAD,
+    IMAGE_LAYOUT_UNREAD,
+    INSIDE_EMULATOR_DRIVE,
+    KEY_FOLDER_UNKNOWN,
+    KEY_UNTESTED,
     NEEDS_INSTALLING,
     NO_SOURCE,
+    NOT_A_GAME_FILE,
     NOT_A_LAUNCH_FILE,
     NOT_THIS_EMULATOR,
+    NOTHING_TO_START,
+    SAVESTATE_UNREAD,
     STARTS,
     SYSTEM_UNKNOWN,
+    TAKES_NO_FOLDER,
+    VERSION_DEPENDENT,
     Launchability,
 )
 from domain.launchability import NOT_ESTABLISHED as LAUNCH_NOT_ESTABLISHED
@@ -232,6 +272,40 @@ _NOT_ESTABLISHED_LAUNCH_BECAUSE = (
     (CAVEAT_LAUNCH_COMMAND_LABEL_UNKNOWN, ENTRY_UNKNOWN),
     (CAVEAT_SYSTEM_UNKNOWN, SYSTEM_UNKNOWN),
 )
+
+# Why the entry does not take the file, where the resolver states its own reason
+# on an entry-not-accepted verdict (#2195 D40). An entry's loader card refuses
+# with no code, which reads as no reason.
+_REFUSED_BECAUSE = {
+    CAVEAT_ENTRY_TAKES_NO_DIRECTORY: TAKES_NO_FOLDER,
+    CAVEAT_BOOT_NOTHING_FOUND: NOTHING_TO_START,
+    CAVEAT_BOOT_FILE_UNBOOTABLE: NOT_A_GAME_FILE,
+    CAVEAT_BOOT_DISC_ROOT_MISSING: DISC_NOT_FOUND,
+    CAVEAT_BOOT_DISC_KEY_MISSING: DISC_KEY_MISSING,
+}
+
+# What the resolver's reading of a file the entry starts stopped short of, on a
+# launchable verdict (#2195 D40): the entry's own boot read as far as it goes,
+# a loader that takes the extension and then reads content atlas does not, or
+# an extension the emulator's builds disagree on. None of them refuses the
+# start; each is said beside it.
+_STOPPED_SHORT_BECAUSE = {
+    CAVEAT_BOOT_PATH_MISSING: CONTENT_MISSING,
+    CAVEAT_BOOT_PATH_UNESTABLISHED: CONTENT_UNREADABLE,
+    CAVEAT_BOOT_REGISTRY_UNREAD: GAME_LIST_UNREAD,
+    CAVEAT_BOOT_CATEGORY_UNESTABLISHED: GAME_KIND_UNFOLLOWED,
+    CAVEAT_BOOT_INSIDE_INTERNAL_DRIVE: INSIDE_EMULATOR_DRIVE,
+    CAVEAT_BOOT_DRIVE_UNRESOLVED: EMULATOR_DRIVE_UNKNOWN,
+    CAVEAT_BOOT_SAVESTATE_UNREAD: SAVESTATE_UNREAD,
+    CAVEAT_BOOT_ISO_REGIONS_INVALID: IMAGE_LAYOUT_UNREAD,
+    CAVEAT_BOOT_ISO_ENCRYPTION_UNREAD: ENCRYPTION_UNREAD,
+    CAVEAT_BOOT_ISO_KEY_UNTESTED: KEY_UNTESTED,
+    CAVEAT_BOOT_KEY_FOLDER_UNRESOLVED: KEY_FOLDER_UNKNOWN,
+    CAVEAT_BOOT_DISC_DIR_CONFIGURED: DISC_FOLDER_SET,
+    CAVEAT_BOOT_DISC_DIR_UNRESOLVED: DISC_FOLDER_UNKNOWN,
+    CAVEAT_ENTRY_FORMAT_CONTENT_UNREAD: CONTENT_UNCHECKED,
+    CAVEAT_ENTRY_FORMAT_BUILD_DEPENDENT: VERSION_DEPENDENT,
+}
 
 # Codes a launchability answer carries that change nothing Tender says.
 # ``entry-format-unclaimed`` stands on a verdict that lets the file start:
@@ -379,9 +453,19 @@ def _frontend_choice(entries: tuple[Any, ...]) -> Any:
     return None if declared and first.declared_index == min(declared) else first
 
 
-def _launch_reason(answer: Any) -> str | None:
-    """Why *answer*'s verdict could not be established, in Tender's word, or ``None`` where Tender words none."""
-    codes = set(_caveat_codes(answer))
+def _launch_reason(answer: Any, state: str) -> str | None:
+    """The resolver's reason behind *answer*'s verdict, in Tender's words, or ``None`` where Tender words none.
+
+    Why it could not be established, why the entry does not take the file, or
+    what a reading of a file the entry starts stopped short of.
+    """
+    codes = _caveat_codes(answer)
+    if state == NOT_THIS_EMULATOR:
+        return next((_REFUSED_BECAUSE[code] for code in codes if code in _REFUSED_BECAUSE), None)
+    if state == STARTS:
+        return next((_STOPPED_SHORT_BECAUSE[code] for code in codes if code in _STOPPED_SHORT_BECAUSE), None)
+    if state != LAUNCH_NOT_ESTABLISHED:
+        return None
     reason = next((reason for code, reason in _NOT_ESTABLISHED_LAUNCH_BECAUSE if code in codes), None)
     if reason is None and catalogue_refused(answer):
         return CATALOGUE_UNREAD
@@ -411,7 +495,7 @@ def _launchability(answer: Any, *, system: str, content_path: str, label: str) -
         starts_from=tuple(answer.accepted),
         other_entries=tuple(answer.alternatives),
         install_in=None if answer.installers is None else _installed_in(answer.installers),
-        reason=_launch_reason(answer) if state == LAUNCH_NOT_ESTABLISHED else None,
+        reason=_launch_reason(answer, state),
         contents_unread=CAVEAT_ARCHIVE_CONTENTS_UNREAD in codes,
         format_unestablished=CAVEAT_ENTRY_FORMAT_UNESTABLISHED in codes,
     )
@@ -505,7 +589,9 @@ class AtlasCatalogueAdapter:
         the source ships first) rendered into an :class:`EmulatorInvocation` — a
         libretro core or a standalone emulator. Returns ``None`` when that entry
         cannot be baked, when there is no default, or when the catalogue could not
-        be read; the caller bakes the plain RetroDECK launch.
+        be read; the active-core resolver bakes the empty command where the
+        system lists entries (#2195 D43) and the plain RetroDECK launch where it
+        lists none or the catalogue could not be read.
 
         Keeps the read-path/launch-path invariant: the resolved emulator is both
         what the ROM launches with and what derived values key on.

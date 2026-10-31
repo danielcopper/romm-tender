@@ -387,13 +387,12 @@ interface FirmwareFile extends FirmwareVerdict {
  * this machine, `core_so` set to its bare name), `"program"` (an emulator program
  * of its own) or `"foreign_core"` (a RetroArch launch naming a core this machine
  * cannot load); `core_so` is null on the last two.
- * `bakeable` is false for the `needs_setup` (`reason: "inject"`, or
- * `"not_installed"` for an emulator the resolver states is not installed —
- * worded by `reasonCopy` in `utils/emulatorMenu.tsx`) and un-bakeable forms;
- * `reason` names why the frontend can't offer it as a clickable pick. A
- * bakeable entry's `reason` is a note instead: where the resolver could not
- * establish whether the emulator is installed, the cause, worded by
- * `utils/emulatorInstallation.ts`, and `null` otherwise.
+ * `bakeable` is false for an entry Tender cannot bake into a shortcut. `reason`
+ * is the entry's not-established note where the resolver could not establish
+ * whether its emulator is installed (worded by `utils/emulatorInstallation.ts`),
+ * else why it cannot be baked (worded by `reasonCopy` in
+ * `utils/emulatorMenu.tsx`), `"not_installed"` among them — the one reason an
+ * entry is not offered as a pick (`isChoosable`) — and `null` otherwise.
  *
  * `emulator` is the resolver's identity for the emulator behind the row and the
  * only field that names one for every kind — `dolphin_libretro.so` for a core
@@ -428,8 +427,7 @@ export interface EmulatorOption {
 /**
  * What starting with the entry a game or a platform resolves to comes to.
  * `starts` — nothing stands in its way; `cannot_start` — `reason` says why
- * (`not_installed`, `start_script_runs_nothing`, `folder_install`, the last
- * naming in `folder_entry` the entry that starts a folder); `choose` — there is
+ * (`not_installed`, `start_script_runs_nothing`); `choose` — there is
  * no default, because the shipped entry's installation could not be
  * established (`reason` is its note); `no_entry` — nothing to start with.
  * `entry` is the label of the entry it is about — for `choose`, the shipped one.
@@ -438,8 +436,32 @@ export interface EmulatorStart {
   state: "starts" | "cannot_start" | "choose" | "no_entry";
   reason: string | null;
   entry: string | null;
-  folder_entry: string | null;
 }
+
+/** Why a launch verdict could not be established, in Tender's words. */
+export type LaunchNotEstablishedReason = "system_unknown" | "entry_unknown" | "catalogue_unread" | "no_source";
+
+/** Why the entry does not start the file, where the resolver states a reason of its own, in Tender's words. */
+export type LaunchRefusalReason =
+  "takes_no_folder" | "nothing_to_start" | "not_a_game_file" | "disc_not_found" | "disc_key_missing";
+
+/** What could not be established about a file the entry starts, in Tender's words. */
+export type LaunchStoppedShortReason =
+  | "content_missing"
+  | "content_unreadable"
+  | "game_list_unread"
+  | "game_kind_unfollowed"
+  | "inside_emulator_drive"
+  | "emulator_drive_unknown"
+  | "savestate_unread"
+  | "image_layout_unread"
+  | "encryption_unread"
+  | "key_untested"
+  | "key_folder_unknown"
+  | "disc_folder_set"
+  | "disc_folder_unknown"
+  | "content_unchecked"
+  | "version_dependent";
 
 /**
  * Whether one installed game's file starts with one emulator entry, as the
@@ -452,8 +474,10 @@ export interface EmulatorStart {
  * `not_this_emulator`), and `install_in` the system's entries that install
  * it — for `needs_installing` alone, empty where the system has an entry for
  * none of the emulators known to, `null` otherwise.
- * `reason` says why a verdict was `not_established`, `null` where nothing
- * Tender words was named. `contents_unread` says the file is an archive whose
+ * `reason` is the resolver's reason in Tender's words, `null` where it named
+ * none Tender words: why a verdict was `not_established`, why the entry does not
+ * start the file on `not_this_emulator`, and what could not be established
+ * about a file that `starts` (#2195 D40). `contents_unread` says the file is an archive whose
  * contents were not read; `format_unestablished` that whether the entry reads
  * this format was not established.
  */
@@ -467,7 +491,7 @@ export interface GameLaunch {
   starts_from: string[];
   other_entries: string[];
   install_in: string[] | null;
-  reason: "system_unknown" | "entry_unknown" | "catalogue_unread" | "no_source" | null;
+  reason: LaunchNotEstablishedReason | LaunchRefusalReason | LaunchStoppedShortReason | null;
   contents_unread: boolean;
   format_unestablished: boolean;
 }

@@ -67,13 +67,8 @@ import {
   releasePruneLeasesByOwner,
 } from "../utils/pruneLease";
 import { executeGameCoreChange } from "../utils/coreOverride";
-import {
-  emulatorStartRefusal,
-  frontendChoiceSentence,
-  gameCanPickAnother,
-  vanishedPickSentence,
-} from "../utils/emulatorStart";
-import { launchNote, launchRefusal } from "../utils/gameLaunch";
+import { frontendChoiceSentence, gameCanPickAnother, startRefusal, vanishedPickSentence } from "../utils/emulatorStart";
+import { launchNote } from "../utils/gameLaunch";
 import { askEntryLaunches } from "../utils/emulatorLaunches";
 import { useGamePlaytime } from "../utils/playtimeReconcile";
 import { buildEmulatorMenu } from "../utils/emulatorMenu";
@@ -696,7 +691,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   const showCoreMenu = (e: Event) => {
     // Both pickers share the builder in utils/emulatorMenu. The game-detail menu
     // carries the "Use System Override" reset item (the only clear path, #211);
-    // every bakeable emulator entry PINS the per-game override. For an
+    // every entry the menu offers PINS the per-game override. For an
     // installed game it also asks, as it opens, whether each entry can start it.
     const romId = detail.romId;
     const launches =
@@ -962,7 +957,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   const emulatorRefusal =
     stranded || fileMissing || startCheckFailed || detail.emulatorStart === null
       ? null
-      : (emulatorStartRefusal(detail.emulatorStart, "this game", canPick) ?? launchRefusal(gameLaunch, canPick));
+      : startRefusal(detail.emulatorStart, gameLaunch, canPick);
   const startNote =
     stranded || fileMissing || startCheckFailed || emulatorRefusal !== null ? null : launchNote(gameLaunch, detail.emulatorSource);
 

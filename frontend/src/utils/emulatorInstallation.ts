@@ -1,6 +1,6 @@
 /**
  * The words for an emulator entry whose installation could not be
- * established. The backend sends the note as a bakeable entry's `reason`, one
+ * established. The backend sends the note as an entry's `reason`, one
  * of Tender's own words (`domain/emulator_commands.py`, the `NOT_ESTABLISHED*`
  * constants, held equal to the map below by
  * `tests/domain/test_emulator_commands.py`). Such an entry stays a pick a user

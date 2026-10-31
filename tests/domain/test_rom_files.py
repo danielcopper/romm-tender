@@ -5,6 +5,7 @@ import os
 import pytest
 
 from domain.rom_files import (
+    Ps3FolderLift,
     build_m3u_content,
     detect_launch_file,
     es_de_collapse_rename,
@@ -12,6 +13,7 @@ from domain.rom_files import (
     folder_boot_root,
     is_multi_file_download,
     needs_m3u,
+    ps3_folder_lift,
     ps3_folder_rename,
     resolve_extract_dir_name,
     resolve_local_file_name,
@@ -427,6 +429,37 @@ class TestPs3FolderRename:
 
     def test_a_single_file_install_is_left_alone(self):
         assert ps3_folder_rename(None, "/roms/ps3/Game.iso", _PS3) is None
+
+
+class TestPs3FolderLift:
+    """A game folder one level inside its install's folder is placed as that folder (#2195 D39)."""
+
+    def test_a_game_folder_one_level_inside_is_lifted_and_its_launch_file_follows(self):
+        lift = ps3_folder_lift("/roms/ps3/MyGame.ps3", "/roms/ps3/MyGame.ps3/Inner/PS3_GAME/USRDIR/EBOOT.BIN")
+
+        assert lift == Ps3FolderLift(
+            inner="/roms/ps3/MyGame.ps3/Inner",
+            staging="/roms/ps3/MyGame.ps3.tender-lift",
+            launch_path="/roms/ps3/MyGame.ps3/PS3_GAME/USRDIR/EBOOT.BIN",
+        )
+
+    def test_a_trailing_separator_lifts_the_same_way(self):
+        lift = ps3_folder_lift("/roms/ps3/MyGame/", "/roms/ps3/MyGame/Inner/PS3_GAME/USRDIR/EBOOT.BIN")
+
+        assert lift is not None
+        assert (lift.inner, lift.staging) == ("/roms/ps3/MyGame/Inner", "/roms/ps3/MyGame.tender-lift")
+
+    def test_a_game_folder_that_is_the_install_folder_is_not_lifted(self):
+        assert ps3_folder_lift("/roms/ps3/MyGame.ps3", "/roms/ps3/MyGame.ps3/PS3_GAME/USRDIR/EBOOT.BIN") is None
+
+    def test_a_game_folder_two_levels_inside_is_not_lifted(self):
+        assert ps3_folder_lift("/roms/ps3/MyGame.ps3", "/roms/ps3/MyGame.ps3/A/B/PS3_GAME/USRDIR/EBOOT.BIN") is None
+
+    def test_a_folder_that_is_no_folder_boot_layout_is_not_lifted(self):
+        assert ps3_folder_lift("/roms/ps3/Puppeteer", "/roms/ps3/Puppeteer/Inner/Puppeteer.pkg") is None
+
+    def test_a_single_file_install_is_not_lifted(self):
+        assert ps3_folder_lift(None, "/roms/ps3/Game.iso") is None
 
 
 class TestFolderBootLayoutRoot:

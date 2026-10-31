@@ -910,15 +910,15 @@ In **Library › Platforms**, a platform with more than one emulator shows a **c
 line — the same button a game's page carries, grey when the platform is on its default emulator and gold when you have
 picked another. It opens a menu listing every emulator ES-DE offers for that platform — both RetroArch cores and
 **standalone emulators** (e.g. PCSX2, RPCS3, Dolphin, PPSSPP) — in the order ES-DE lists them, the one you chose in
-ES-DE first. Some entries appear **disabled** with a short reason (for example "script/shortcut form" or "Tender can't
-start this entry") when Tender can't launch them directly from Steam; those can't be picked. An emulator RetroDECK does
-not have — a standalone emulator or a RetroArch core — reads "emulator not installed". Where Tender cannot tell whether
-a standalone emulator is installed, it carries "installation not established" and, where it is known, why: you can still
+ES-DE first. Every entry can be picked except an emulator RetroDECK does not have — a standalone emulator or a RetroArch
+core — which reads "emulator not installed". An entry Tender cannot start from Steam yet reads "Tender cannot start it
+yet": you can still pick it, and its games then say so instead of starting. Where Tender cannot tell whether a
+standalone emulator is installed, it carries "installation not established" and, where it is known, why: you can still
 pick it, and a pick you made stays, but Tender never makes it the default by itself or reports it missing; a page whose
 games launch with it says so under its header. A RetroArch core whose installation cannot be established has no known
-core file to start, so it reads "core location not established" and cannot be picked. Picking an enabled emulator sets
-it as the default for all games on that platform. A "Switching cores may affect save compatibility" note is the first
-line of the menu.
+core file to start, so it says why beside "Tender cannot start it yet". Picking an enabled emulator sets it as the
+default for all games on that platform. A "Switching cores may affect save compatibility" note is the first line of the
+menu.
 
 Every name RetroDECK lists is an entry of its own, as in ES-DE: RetroDECK lists the same RetroArch core for PlayStation
 2 as LRPS2 and as PCSX2, and the menu offers both. Your choice is stored by its name, with the emulator source it came
@@ -1007,14 +1007,16 @@ confirms the change landed before reporting success. If Steam can't accept the c
 a "Core saved — restart Steam to apply" message — your choice is still saved; it takes effect after a Steam restart (or
 the next sync).
 
-**When a game cannot start.** Where the emulator a game starts with is not installed, or RetroDECK's start script cannot
-start it, **Play** is disabled and the play row says why on a line under its buttons, in yellow, behind a warning sign —
-and to choose another emulator in the menu, where the game offers another; starting the game from Steam's library is
-refused with the same words. A PS3 game installed as a folder whose emulator cannot start a folder — RPCS3 Shortcut,
-RetroDECK's default — says so and names **RPCS3 Directory** as the one that can, for you to pick; Tender does not switch
-it by itself. Where whether the default is installed could not be established, the line asks you to choose an emulator,
-and Play stays disabled until you do. A pick you made stands whatever happens to it: only one whose name no longer
-exists gives way to the default, and the line says so.
+**When a game cannot start.** Where the emulator a game starts with is not installed, RetroDECK's start script cannot
+start it, or Tender cannot start it yet ("Tender cannot start RPCS3 Shortcut (Standalone) yet."), **Play** is disabled
+and the play row says why on a line under its buttons, in yellow, behind a warning sign — and to choose another emulator
+in the menu, where the game offers another; starting the game from Steam's library is refused with the same words. Where
+the emulator's own reading of the game also refuses it, that reason is the one said: a PS3 game installed as a folder
+whose emulator cannot start a folder — RPCS3 Shortcut, RetroDECK's default — says so and names the emulators that can,
+such as **RPCS3 Directory**, for you to pick; Tender does not switch it by itself. Where whether the default is
+installed could not be established, the line asks you to choose an emulator, and Play stays disabled until you do. A
+pick you made stands whatever happens to it: only one whose name no longer exists gives way to the default, and the line
+says so.
 
 Per-game cores work for **any ROM filename**. Tender bakes the chosen core directly into the game's launch command, so
 it does not rely on RetroDECK's gamelist lookup (which mishandles parentheses and other special characters in filenames)

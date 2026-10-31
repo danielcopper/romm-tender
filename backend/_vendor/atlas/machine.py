@@ -95,7 +95,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import BinaryIO, Callable, Iterable, Literal, Mapping, NamedTuple, Protocol, cast, runtime_checkable
 
-from . import lha, ps2_bios, psx_chd, psx_disc, psx_pbp, squashfs, whdload
+from . import lha, ps2_bios, ps3_file, ps3_iso, psx_chd, psx_disc, psx_pbp, squashfs, whdload
 from .content_path import archive_delimiter
 
 try:
@@ -240,6 +240,17 @@ PS2_BIOS_OK: Ps2BiosHeaderStatus = "ok"
 PS2_BIOS_MISSING: Ps2BiosHeaderStatus = "missing"
 PS2_BIOS_UNREADABLE: Ps2BiosHeaderStatus = "unreadable"
 PS2_BIOS_NOT_A_BIOS: Ps2BiosHeaderStatus = "not-a-bios"
+
+# Reading what RPCS3's boot asks of a file's bytes (atlas.ps3_file) fails the
+# way a plain read fails, and in one way of its own that it reports the same:
+# a PARAM.SFO beyond the size atlas parses is "unreadable", a read atlas did
+# not make. Whatever else a file holds, the reader states what it is, so there
+# is no finding about the bytes to name. "missing" is no regular file there
+# once links are followed — RPCS3 opens none either.
+Ps3FileStatus = Literal["ok", "missing", "unreadable"]
+PS3_FILE_OK: Ps3FileStatus = "ok"
+PS3_FILE_MISSING: Ps3FileStatus = "missing"
+PS3_FILE_UNREADABLE: Ps3FileStatus = "unreadable"
 
 # Reading a PlayStation disc's identity has two ways to fail beyond a plain
 # file read, and both are findings rather than read failures. "format-not-read"
@@ -428,6 +439,22 @@ class AppImageStampResult:
             raise ValueError(
                 f"AppImageStampResult: stamp must be set exactly when status is 'ok' (got {self.status!r})"
             )
+
+
+@dataclass(frozen=True, slots=True)
+class Ps3FileResult:
+    """One read of what RPCS3's boot asks of a file's bytes — ``facts`` is set exactly when ``status`` is ok.
+
+    ``missing`` / ``unreadable`` mean what they mean on :class:`ReadResult`;
+    the facts are :class:`atlas.ps3_file.Ps3FileFacts`.
+    """
+
+    status: Ps3FileStatus
+    facts: ps3_file.Ps3FileFacts | None = None
+
+    def __post_init__(self) -> None:
+        if (self.facts is None) == (self.status == PS3_FILE_OK):
+            raise ValueError(f"Ps3FileResult: facts must be set exactly when status is 'ok' (got {self.status!r})")
 
 
 @dataclass(frozen=True, slots=True)
@@ -1191,6 +1218,8 @@ class Machine(Protocol):
 
     def read_ps2_bios_header(self, path: str) -> Ps2BiosHeaderResult: ...
 
+    def read_ps3_file(self, path: str) -> Ps3FileResult: ...
+
     def read_disc_identity(self, path: str, *, extracted: ExtractedEntry | None = None) -> DiscIdentityResult: ...
 
     def list_archive(self, path: str) -> ArchiveListResult: ...
@@ -1490,8 +1519,8 @@ class RealMachine:
     a caller that re-detects per question pays the timeout every time, while
     one that keeps its installations, or passes its own machine, pays it once.
     Where no interpreter can be named nothing is launched at all and every core
-    answers *unknown*. The child is pointed back at this package
-    (:func:`_probe_environment`) and answers with whatever it printed before it
+    answers *unknown*. The child runs this package's own probe
+    (:func:`_probe_command`) and answers with whatever it printed before it
     stopped (:func:`_parse_probe_output`). ``read_core`` is the same read with
     the loader's refusal kept (:class:`CoreReading`), for the caller that must
     tell a core it could not open from one that answered nothing.
@@ -1609,6 +1638,34 @@ class RealMachine:
         except OSError:
             return Ps2BiosHeaderResult(PS2_BIOS_UNREADABLE)
         return Ps2BiosHeaderResult(PS2_BIOS_OK, header)
+
+    def read_ps3_file(self, path: str) -> Ps3FileResult:
+        """What RPCS3's boot reads of the file at *path* — a status, and the facts where it was read.
+
+        A regular file once links are followed, checked before opening: RPCS3
+        opens a ``PS3_DISC.SFB`` only as a file (``fs::isfile``,
+        System.cpp:5054), and everything else it asks of a path that is no
+        file comes back empty too. The reader is :mod:`atlas.ps3_file`, and
+        it states whatever the bytes are, so this comes back without facts
+        only where the read failed or was not made: a PARAM.SFO larger than
+        the reader parses is ``unreadable`` too.
+        """
+        try:
+            st = os.stat(path)
+        except (FileNotFoundError, NotADirectoryError):
+            return Ps3FileResult(PS3_FILE_MISSING)
+        except OSError:
+            return Ps3FileResult(PS3_FILE_UNREADABLE)
+        if not _stat.S_ISREG(st.st_mode):
+            return Ps3FileResult(PS3_FILE_MISSING)
+        try:
+            with open(path, "rb") as f:
+                facts = ps3_file.read_facts(f)
+        except (FileNotFoundError, NotADirectoryError):
+            return Ps3FileResult(PS3_FILE_MISSING)
+        except (OSError, ps3_file.Ps3FileUnread):
+            return Ps3FileResult(PS3_FILE_UNREADABLE)
+        return Ps3FileResult(PS3_FILE_OK, facts)
 
     def read_disc_identity(self, path: str, *, extracted: ExtractedEntry | None = None) -> DiscIdentityResult:
         """The bytes a PlayStation disc's emulators decide its region from — a status, and the identity where read.
@@ -1929,12 +1986,13 @@ class RealMachine:
             # Nothing ran, so nothing timed out: the next question asks again,
             # and it is free — an interpreter may be registered by then.
             return _ProbeResult(CoreReading(CORE_READ_NO_INTERPRETER), timed_out=False)
+        argv, env = _probe_command(interpreter.path, so_path)
         try:
             proc = subprocess.run(
-                [interpreter.path, "-m", "atlas._core_probe", so_path],
+                argv,
                 capture_output=True,
                 timeout=_CORE_PROBE_TIMEOUT_SECONDS,
-                env=_probe_environment(),
+                env=env,
             )
         except subprocess.TimeoutExpired as expired:
             # A core that hangs in the option-capture phase printed its base
@@ -2016,8 +2074,39 @@ def _parse_probe_output(stdout: bytes | None, ended: CoreUnansweredStatus) -> Co
     )
 
 
+def _probe_command(interpreter: str, so_path: str) -> tuple[list[str], dict[str, str] | None]:
+    """The probe child's argument vector and environment: the probe's own file wherever it has one.
+
+    Run by path, the child loads ``_core_probe.py`` and nothing else of this
+    package — the probe needs only the standard library, while ``-m`` imports
+    ``atlas/__init__.py`` and everything it pulls in first, which is most of a
+    cold probe's cost. ``-I`` keeps the script's directory off ``sys.path``,
+    so no module of this package can stand in for a standard-library one, and
+    ignores every ``PYTHON*`` variable; the rest of the environment, which the
+    core's own library lookup reads, is inherited unchanged.
+
+    Where the probe has no file on disk (a frozen build, a zip import) there
+    is nothing to run by path, and the child imports the module by name in
+    the environment :func:`_probe_environment` builds — the route every probe
+    took before.
+    """
+    script = _probe_script()
+    if script is not None:
+        return [interpreter, "-I", script, so_path], None
+    return [interpreter, "-m", "atlas._core_probe", so_path], _probe_environment()
+
+
+def _probe_script() -> str | None:
+    """The probe module's file beside this one — ``None`` where it is not a file on disk."""
+    location = globals().get("__file__")
+    if not isinstance(location, str) or not location:
+        return None
+    script = os.path.join(os.path.dirname(os.path.abspath(location)), "_core_probe.py")
+    return script if os.path.isfile(script) else None
+
+
 def _probe_environment() -> dict[str, str] | None:
-    """The probe child's environment: this package's location ahead of ``PYTHONPATH``.
+    """The environment of a probe child that imports the module by name.
 
     The child imports ``atlas._core_probe`` by name, and under the vendoring
     model — this package copied into a host that puts it on ``sys.path`` at
@@ -2096,12 +2185,11 @@ def register_core_probe_interpreter(path: str | None) -> None:
     in a child process; that child is a Python interpreter running
     ``atlas._core_probe``. A frozen host (PyInstaller, cx_Freeze, py2exe) has
     no interpreter to offer as ``sys.executable`` — there that path is the
-    *application*, whose bootloader ignores ``-m atlas._core_probe`` and starts
+    *application*, whose bootloader ignores the probe's arguments and starts
     the application a second time — so a host that knows where a real
     interpreter lives says so here, and atlas launches that one instead. The
-    environment the child receives points it back at this package (see
-    :func:`_probe_environment`), so a foreign interpreter is not a poorer
-    answer: it is the same answer.
+    child runs this package's own probe (see :func:`_probe_command`), so a
+    foreign interpreter is not a poorer answer: it is the same answer.
 
     The path must be absolute, and it must be one the operating system can
     actually be handed — :func:`_is_spawnable_interpreter_path` carries the
@@ -2145,9 +2233,9 @@ class CoreProbeInterpreter(NamedTuple):
 def _running_python_interpreter() -> str | None:
     """``sys.executable``, but only where the running program is plainly an interpreter.
 
-    Launching ``sys.executable -m atlas._core_probe`` is a probe only where
-    that executable *is* an interpreter. In a frozen build it is the
-    application: the bootloader ignores the module arguments and starts the
+    Launching the probe under ``sys.executable`` is a probe only where that
+    executable *is* an interpreter. In a frozen build it is the
+    application: the bootloader ignores the probe's arguments and starts the
     application again, so asking atlas where a save lives would restart the
     host that asked — and ``capture_output`` would hide it.
 
@@ -2616,6 +2704,72 @@ def _fixture_ps2_bios_header(path: str, spec: Mapping[str, object]) -> ps2_bios.
     return ps2_bios.Ps2BiosHeader.from_strings(strings["romver"], strings["serial"])
 
 
+_FIXTURE_PS3_FILE_FIELDS = ("magic", "iso", "category")
+_FIXTURE_PS3_ISO_FIELDS = ("regions", "watermark")
+_FIXTURE_PS3_ISO_OPTIONAL = ("blocks",)
+
+
+def _validate_fixture_ps3_files(
+    declared: Mapping[str, object],
+    files: Mapping[str, tuple[ReadStatus, str | None]],
+) -> dict[str, ps3_file.Ps3FileFacts]:
+    """The declared facts of each file RPCS3's boot reads, built by the reader's own types.
+
+    The facts describe a file's bytes, so the path must be a declared file
+    whose bytes can be read, as for ``ps2_bios_headers``. ``magic`` is the
+    leading bytes, one character each; ``iso`` the header facts or ``null``;
+    ``category`` what the PARAM.SFO loader keeps, empty where it keeps none —
+    and the facts type refuses a category beside any magic but a PARAM.SFO's.
+    """
+    validated: dict[str, ps3_file.Ps3FileFacts] = {}
+    for path, spec in declared.items():
+        if path not in files:
+            raise ValueError(f"ps3 file {path!r}: facts describe a file's bytes, and no file is declared there")
+        if files[path][0] == READ_UNREADABLE:
+            raise ValueError(
+                f"ps3 file {path!r}: an unreadable file states no facts — its bytes are what cannot be read"
+            )
+        if not isinstance(spec, Mapping) or "magic" not in spec or not set(spec) <= set(_FIXTURE_PS3_FILE_FIELDS):
+            raise ValueError(
+                f"ps3 file {path!r}: expected an object with magic and optionally iso and category, got {spec!r}"
+            )
+        fields = cast("Mapping[str, object]", spec)
+        magic, category = fields["magic"], fields.get("category", "")
+        if not isinstance(magic, str) or not isinstance(category, str):
+            raise ValueError(f"ps3 file {path!r}: magic and category must be strings, got {spec!r}")
+        try:
+            magic.encode("latin-1")
+        except UnicodeEncodeError as error:
+            raise ValueError(f"ps3 file {path!r}: magic must be one byte per character (latin-1)") from error
+        validated[path] = ps3_file.Ps3FileFacts(magic, _fixture_ps3_iso(path, fields.get("iso")), category)
+    return validated
+
+
+def _fixture_ps3_iso(path: str, spec: object) -> ps3_file.Ps3IsoHeader | None:
+    """An image header's two facts, or ``None`` for a file ``is_iso_file`` does not take."""
+    if spec is None:
+        return None
+    if (
+        not isinstance(spec, Mapping)
+        or not set(_FIXTURE_PS3_ISO_FIELDS) <= set(spec)
+        or not set(spec) <= {*_FIXTURE_PS3_ISO_FIELDS, *_FIXTURE_PS3_ISO_OPTIONAL}
+    ):
+        raise ValueError(
+            f"ps3 file {path!r}: iso must be null or an object with regions and watermark, and optionally blocks"
+        )
+    fields = cast("Mapping[str, object]", spec)
+    regions, watermark, blocks = fields["regions"], fields["watermark"], fields.get("blocks")
+    if not isinstance(regions, int) or isinstance(regions, bool) or not 0 <= regions <= 0xFFFFFFFF:
+        raise ValueError(f"ps3 file {path!r}: iso regions is the u32 the header holds, got {regions!r}")
+    if watermark is not None and watermark not in ps3_file.WATERMARKS:
+        raise ValueError(f"ps3 file {path!r}: iso watermark must be null or one of {ps3_file.WATERMARKS}")
+    if blocks is not None and blocks not in ps3_iso.BLOCKS:
+        raise ValueError(f"ps3 file {path!r}: iso blocks must be null or one of {ps3_iso.BLOCKS}")
+    return ps3_file.Ps3IsoHeader(
+        regions, cast("ps3_file.Watermark | None", watermark), cast("ps3_iso.Blocks | None", blocks)
+    )
+
+
 # The states a fixture disc identity of a cue sheet or a bare image may declare
 # short of the identity: what RealMachine can report about an image it opened. "missing" is among them
 # because the read opens more than the declared file — a cue sheet's data file
@@ -3055,8 +3209,11 @@ class FixtureMachine:
     ``.``, a ``..``, a doubled separator or a trailing slash.
     """
 
+    # One keyword per input key of the vector format (vectors/README.md), which
+    # every caller passes by name; grouping them would part the constructor
+    # from the format it mirrors and rewrite about a hundred test call sites.
     def __init__(
-        self,
+        self,  # NOSONAR S107: one parameter per vector input key, see above
         files: Mapping[str, FixtureFileSpec],
         symlinks: Mapping[str, str] | None = None,
         cores: Mapping[str, Mapping[str, object] | str | None] | None = None,
@@ -3066,6 +3223,7 @@ class FixtureMachine:
         appimages: Mapping[str, Mapping[str, object] | str] | None = None,
         appimage_stamps: Mapping[str, object] | None = None,
         ps2_bios_headers: Mapping[str, Mapping[str, object] | str] | None = None,
+        ps3_files: Mapping[str, object] | None = None,
         disc_identities: Mapping[str, Mapping[str, object] | str] | None = None,
         archives: Mapping[str, object] | None = None,
         whdload_slaves: Mapping[str, object] | None = None,
@@ -3077,6 +3235,7 @@ class FixtureMachine:
         self._appimages = _validate_fixture_appimages(appimages or {})
         self._appimage_stamps = _validate_fixture_appimage_stamps(appimage_stamps or {}, self._appimages)
         self._ps2_bios_headers = _validate_fixture_ps2_bios_headers(ps2_bios_headers or {}, self._files)
+        self._ps3_files = _validate_fixture_ps3_files(ps3_files or {}, self._files)
         self._inaccessible = set(inaccessible or ())
         self._unlistable = set(unlistable or ())
         _refuse_both_unreadable_lists(self._inaccessible, self._unlistable)
@@ -3255,6 +3414,30 @@ class FixtureMachine:
         if resolved in self._dirs or self._files.get(resolved, (READ_MISSING, None))[0] == READ_UNREADABLE:
             return Ps2BiosHeaderResult(PS2_BIOS_UNREADABLE)
         return Ps2BiosHeaderResult(PS2_BIOS_MISSING)
+
+    def read_ps3_file(self, path: str) -> Ps3FileResult:
+        """The modeled read of what RPCS3's boot asks of a file — the facts declared, the same outcomes RealMachine
+        reports.
+
+        Modeled beside ``files`` for the reason ``ps2_bios_headers`` is: an
+        image header sits 32 KiB into a file no fixture should carry. A path
+        declared in ``ps3_files`` answers its facts. A declared file with no
+        entry there answers ``unreadable``: the fixture has no facts to answer
+        with, and inventing a magic would let a vector that forgot the key
+        prove a boot nobody modeled. A directory, a dead link and nothing at
+        all answer ``missing``, an ``unreadable`` file ``unreadable``.
+        """
+        if self._is_inaccessible(path):
+            return Ps3FileResult(PS3_FILE_UNREADABLE)
+        resolved = self._resolve(path).path
+        if resolved is None or resolved in self._dirs:
+            return Ps3FileResult(PS3_FILE_MISSING)
+        facts = self._ps3_files.get(resolved)
+        if facts is not None:
+            return Ps3FileResult(PS3_FILE_OK, facts)
+        if resolved in self._files:
+            return Ps3FileResult(PS3_FILE_UNREADABLE)
+        return Ps3FileResult(PS3_FILE_MISSING)
 
     def read_disc_identity(self, path: str, *, extracted: ExtractedEntry | None = None) -> DiscIdentityResult:
         """The modeled disc identity read — the four facts in, the same outcomes RealMachine reports.

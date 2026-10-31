@@ -15,11 +15,12 @@ describe("emulatorClause", () => {
     expect(emulatorClause(known({}))).toEqual({ text: "mGBA", gamesCannotStart: false });
   });
 
-  it("names a default Tender cannot bake, which bakes nothing", () => {
+  it("names a default Tender cannot bake, which the games cannot start with", () => {
     const emulators = [standaloneEmu("mGBA (Standalone)", true, { bakeable: false, reason: "inject" })];
-    expect(emulatorClause(known({ emulators, active_core_label: "mGBA (Standalone)" }))).toEqual({
+    const start = emulatorStart({ state: "cannot_start", reason: "not_bakeable", entry: "mGBA (Standalone)" });
+    expect(emulatorClause(known({ emulators, active_core_label: "mGBA (Standalone)", start }))).toEqual({
       text: "mGBA (Standalone)",
-      gamesCannotStart: false,
+      gamesCannotStart: true,
     });
   });
 

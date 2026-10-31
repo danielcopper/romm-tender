@@ -7,17 +7,20 @@ ES-DE/RetroDECK resolution. Every per-game core read consumer and every
 launch-bake site draws from this seam so the read-path core never diverges from
 the launched core.
 
-Precedence (three layers, then the plain launch): DB ``emulator_override`` (top)
-→ ``settings.json`` per-platform core → the default, the entry the source ships
-first → ``None`` (:func:`domain.emulator_choice.choose_emulator`). An ES-DE
+Precedence (three layers): DB ``emulator_override`` (top) → ``settings.json``
+per-platform core → the default, the entry the source ships first
+(:func:`domain.emulator_choice.choose_emulator`); with none of them, the empty
+command where the system lists entries (#2195 D43), the plain launch where it
+lists none. An ES-DE
 ``<alternativeEmulator>`` or ``<altemulator>`` never moves that default
 (ADR-0012). A stored pick applies only while its source is the one games start
 through; otherwise the default applies and the pick is kept (#2222 D5). A
 stored label stands while it names an entry, whatever that entry's state: one
-Tender cannot bake renders no invocation, and one that cannot start is refused
-at Play. Only a label that no longer exists gives way to the next layer, with a
-warning. The per-game/per-platform label may name
-a **standalone** emulator (not just a libretro core); it resolves the same way.
+that cannot start — Tender cannot bake it among the reasons — is refused at
+Play (#2195 D7, D23), and one Tender cannot bake bakes the empty command
+(D43). Only a label that no longer exists gives way to the next layer, with a
+warning. The per-game/per-platform label may name a **standalone** emulator
+(not just a libretro core); it resolves the same way.
 """
 
 from __future__ import annotations
@@ -29,7 +32,7 @@ from domain.emulator_choice import DEFAULT, ResolvedEmulator, choose_emulator
 from domain.emulator_commands import option_for_label, option_to_invocation
 from domain.emulator_pick import StoredPick, pick_for, source_kind
 from domain.rom_files import folder_boot_root
-from domain.shortcut_data import DIRECT, RUN_GAME, EmulatorInvocation
+from domain.shortcut_data import RUN_GAME, EmulatorInvocation
 
 if TYPE_CHECKING:
     import logging
@@ -81,9 +84,11 @@ class ActiveCoreResolver:
         """Return the :class:`EmulatorInvocation` the ROM ``rom_id`` will launch with.
 
         The launch-bake seam, the invocation half of :meth:`resolve_rom`.
-        ``None`` is the plain launch: where the ROM's entry cannot be baked,
-        where it has no entry, including when ``es_systems.xml`` cannot be read
-        and when the platform has no switched-on system in the answering source.
+        ``None`` is the plain launch, only where the system lists no entry,
+        where no system is found in the answering source, or where the
+        catalogue cannot be read. Where the system lists entries but none is in
+        effect, or the one in effect is one Tender cannot bake, it is
+        :meth:`EmulatorInvocation.nothing`, the empty command (#2195 D43).
         """
         resolved = self.resolve_rom(rom_id, reading=reading)
         return resolved.invocation if resolved is not None else None
@@ -110,8 +115,8 @@ class ActiveCoreResolver:
         a non-folder install, or a program that carries no launcher (which
         launchers the reading hands on is
         ``adapters/atlas_catalogue.py::_sandbox_launcher``'s rule) all leave the
-        invocation unchanged, and a folder-boot install left without the direct
-        form is ``folder_unstartable``.
+        invocation unchanged. Whether the entry takes the folder at all is the
+        launch verdict's, asked on the game's page (#2195 D21, D26).
 
         *reading* is a run's one reading of the emulator sources, handed down so
         a run resolving many ROMs asks each catalogue question once; a call
@@ -146,14 +151,13 @@ class ActiveCoreResolver:
             emulator = self._core_info.get_default_emulator(system, reading=reading)
         else:
             emulator = option_to_invocation(choice.option)
+        if (choice.option is None and options) or (choice.option is not None and choice.option.status != "bakeable"):
+            # No entry in effect though the system lists some, or one Tender
+            # cannot bake: the bake writes the empty command (#2195 D43; why,
+            # docs/architecture/core-emulator-selection.md, "What starting comes to").
+            emulator = EmulatorInvocation.nothing()
         invocation = self._maybe_folder_boot_direct(emulator, install, rom_id)
-        folder = install is not None and folder_boot_root(install.file_path, install.rom_dir) is not None
-        return ResolvedEmulator(
-            choice=choice,
-            options=options,
-            invocation=invocation,
-            folder_unstartable=folder and (invocation is None or invocation.form != DIRECT),
-        )
+        return ResolvedEmulator(choice=choice, options=options, invocation=invocation)
 
     def _warn_vanished(
         self,

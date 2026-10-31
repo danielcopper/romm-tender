@@ -37,10 +37,13 @@ RETRODECK_INVOCATION = f"{_RETRODECK_RUN} {RETRODECK_APP_ID}"
 # middle launcher args (e.g. ``--no-gui``) for the folder-boot ``direct`` bake.
 _EMULATOR_TOKEN_RE = re.compile(r"%EMULATOR_[A-Z0-9_-]+%")
 
-# How an invocation is baked: through RetroDECK's ``run_game.sh -e``, or by
-# running the emulator's launcher directly in the sandbox (ADR-0019).
+# How an invocation is baked: through RetroDECK's ``run_game.sh -e``, by
+# running the emulator's launcher directly in the sandbox (ADR-0019), or not at
+# all, where the entry in effect is one Tender cannot bake or none is in effect
+# though the system lists entries (#2195 D43).
 RUN_GAME = "run_game"
 DIRECT = "direct"
+NOTHING = "nothing"
 
 
 @dataclass(frozen=True)
@@ -69,6 +72,12 @@ class EmulatorInvocation:
       are the standalone command's middle (``%EMULATOR_*%`` and ``%ROM%``
       stripped, e.g. ``--no-gui``); the game folder is appended by
       :func:`build_launch_options`.
+    - :data:`NOTHING` → the entry in effect is one Tender cannot bake, or none
+      is in effect though the system lists entries, and the shortcut gets the
+      empty start command, so a start Tender does not see
+      runs nothing (#2195 D43; why, docs/architecture/core-emulator-selection.md, "What starting comes to"). It names no
+      emulator, so a read of the emulator a ROM launches with takes it for
+      none, as it did the plain launch.
 
     ``core_so`` is the RetroArch core the resolver states the command loads,
     its bare name (no ``.so``), and ``None`` for anything else; it is read by
@@ -115,14 +124,21 @@ class EmulatorInvocation:
         """
         return cls(form=DIRECT, label=label, command=command, launcher=launcher, emulator=emulator)
 
+    @classmethod
+    def nothing(cls) -> EmulatorInvocation:
+        """No entry Tender can bake is in effect though the system lists entries: the empty start command."""
+        return cls(form=NOTHING)
+
 
 def resolve_emulator_invocation(rom: dict[str, Any], emulator: EmulatorInvocation | None = None) -> str:
     """Return the emulator invocation prefix for *rom*.
 
     With *emulator* unset (``None``) the ROM follows the plain RetroDECK flatpak
-    command (the single genuine fallback for a platform with no resolvable
-    emulator). A :data:`RUN_GAME` invocation bakes its command into RetroDECK's
-    ``-e`` override: ``flatpak run … -e "<command … %ROM%>"`` (e.g.
+    command: the system lists no entry, no system is found, or the catalogue
+    cannot be read. A :data:`NOTHING` invocation is the empty prefix, which
+    :func:`build_launch_options` bakes to the empty command (#2195 D43). A
+    :data:`RUN_GAME` invocation bakes its command into RetroDECK's ``-e``
+    override: ``flatpak run … -e "<command … %ROM%>"`` (e.g.
     ``%EMULATOR_RPCS3% --no-gui %ROM%``) — RetroDECK resolves ``%EMULATOR_*%``
     and substitutes ``%ROM%`` at launch. *rom* is the per-emulator-branch seam
     and is ignored today.
@@ -132,6 +148,8 @@ def resolve_emulator_invocation(rom: dict[str, Any], emulator: EmulatorInvocatio
     # (no empty -e); anything unrenderable degrades to the plain launch.
     if emulator is None:
         return RETRODECK_INVOCATION
+    if emulator.form == NOTHING:
+        return ""
     if emulator.form == DIRECT and emulator.launcher and emulator.command:
         # Run the emulator's sandbox launcher directly, bypassing run_game.sh's
         # directory-as-a-file reinterpretation (ADR-0019). The game folder is
@@ -159,8 +177,9 @@ def _direct_launch_args(command: str) -> str:
 def build_launch_options(invocation: str, path: str) -> str:
     """Compose the Steam shortcut launch command from *invocation* and ROM *path*.
 
-    An empty *path* means the ROM is **not downloaded**, and yields the empty
-    launch command. Composing one anyway would hand the emulator an empty
+    An empty *path* means the ROM is **not downloaded**, and an empty
+    *invocation* that no entry Tender can bake is in effect (#2195 D43); both
+    yield the empty launch command. Composing one anyway would hand the emulator an empty
     argument — the silent failure this rule exists to prevent. A downloaded ROM
     always has a path, whether or not its file starts: that is asked when its
     page reads it (#2195 D26, D28).
@@ -180,7 +199,7 @@ def build_launch_options(invocation: str, path: str) -> str:
     is named. Only the path is quoted — *invocation* is trusted build-time text
     whose own ``-e "..."`` quoting must survive verbatim.
     """
-    if not path:
+    if not path or not invocation:
         return ""
     quoted = path.replace("'", "'\\''")
     return f"{invocation} '{quoted}'"
@@ -263,8 +282,9 @@ def build_shortcuts_data(
     folding the per-game/per-platform override over
     the shipped default). Only ROMs that resolved to an emulator appear (the
     caller omits the ``(None, None)`` fallback); a ROM absent from the map follows
-    the plain RetroDECK launch, a present ROM bakes its ``-e`` form into
-    ``launch_options``. Required so a new bake site can never silently skip the
+    the plain RetroDECK launch, a present ROM bakes its invocation into
+    ``launch_options`` — the ``-e`` form, or the empty command where no entry
+    Tender can bake is in effect (#2195 D43). Required so a new bake site can never silently skip the
     override.
 
     The sibling-group key (ADR-0021) and RomM's version dimensions (``regions`` /

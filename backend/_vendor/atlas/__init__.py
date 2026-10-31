@@ -65,7 +65,7 @@ from __future__ import annotations
 # tests/test_version.py holds it equal to pyproject — CI's package job holds
 # dist-info to pyproject in a clean venv — so drift is a red test, not a
 # silent fork.
-__version__ = "0.31.0"  # x-release-please-version
+__version__ = "0.32.0"  # x-release-please-version
 
 # --- The two entry points, and the aggregate over them -----------------------
 from .detect import detect
@@ -101,6 +101,29 @@ from .platforms import (
     platform_identities,
     platforms_for,
     systems_for,
+)
+
+# What an entry boots, read the way RPCS3 boots a path (issue #618): why an
+# entry refuses the path, and why a reading stops short of a verdict.
+from .rpcs3_boot import (
+    CAVEAT_BOOT_PATH_MISSING,
+    CAVEAT_BOOT_PATH_UNESTABLISHED,
+    CAVEAT_BOOT_NOTHING_FOUND,
+    CAVEAT_BOOT_FILE_UNBOOTABLE,
+    CAVEAT_BOOT_DISC_ROOT_MISSING,
+    CAVEAT_BOOT_REGISTRY_UNREAD,
+    CAVEAT_BOOT_CATEGORY_UNESTABLISHED,
+    CAVEAT_BOOT_INSIDE_INTERNAL_DRIVE,
+    CAVEAT_BOOT_DRIVE_UNRESOLVED,
+    CAVEAT_BOOT_SAVESTATE_UNREAD,
+    CAVEAT_BOOT_ISO_REGIONS_INVALID,
+    CAVEAT_BOOT_ISO_ENCRYPTION_UNREAD,
+    CAVEAT_BOOT_ISO_KEY_UNTESTED,
+    CAVEAT_BOOT_KEY_FOLDER_UNRESOLVED,
+    CAVEAT_BOOT_DISC_KEY_MISSING,
+    CAVEAT_BOOT_DISC_DIR_CONFIGURED,
+    CAVEAT_BOOT_DISC_DIR_UNRESOLVED,
+    CAVEAT_ENTRY_TAKES_NO_DIRECTORY,
 )
 
 # --- The handles every question is asked of ----------------------------------
@@ -162,6 +185,8 @@ from .installations import (
     CAVEAT_ARCHIVE_CONTENTS_UNREAD,
     CAVEAT_ENTRY_FORMAT_UNCLAIMED,
     CAVEAT_ENTRY_FORMAT_UNESTABLISHED,
+    CAVEAT_ENTRY_FORMAT_CONTENT_UNREAD,
+    CAVEAT_ENTRY_FORMAT_BUILD_DEPENDENT,
     LAUNCH_VERDICTS,
     PLATFORM_STATUS_ABSENT,
     PLATFORM_STATUS_DECLARED,
@@ -182,6 +207,7 @@ from .installations import (
     VERDICT_NEEDS_INSTALLATION,
     VERDICT_NOT_ACCEPTED,
     VERDICT_UNKNOWN,
+    Boot,
     CatalogueAnswer,
     EmulatorEntry,
     Health,
@@ -870,6 +896,7 @@ __all__ = [
     "CAVEAT_PLATFORM_SCRAPING_IGNORED",
     "LaunchabilityAnswer",
     "Installer",
+    "Boot",
     "LaunchCommandAnswer",
     "LaunchCommand",
     "LaunchProgram",
@@ -888,6 +915,26 @@ __all__ = [
     "CAVEAT_ENTRY_FORMAT_UNCLAIMED",
     "CAVEAT_ARCHIVE_CONTENTS_UNREAD",
     "CAVEAT_ENTRY_FORMAT_UNESTABLISHED",
+    "CAVEAT_ENTRY_FORMAT_CONTENT_UNREAD",
+    "CAVEAT_ENTRY_FORMAT_BUILD_DEPENDENT",
+    "CAVEAT_BOOT_PATH_MISSING",
+    "CAVEAT_BOOT_PATH_UNESTABLISHED",
+    "CAVEAT_BOOT_NOTHING_FOUND",
+    "CAVEAT_BOOT_FILE_UNBOOTABLE",
+    "CAVEAT_BOOT_DISC_ROOT_MISSING",
+    "CAVEAT_BOOT_REGISTRY_UNREAD",
+    "CAVEAT_BOOT_CATEGORY_UNESTABLISHED",
+    "CAVEAT_BOOT_INSIDE_INTERNAL_DRIVE",
+    "CAVEAT_BOOT_DRIVE_UNRESOLVED",
+    "CAVEAT_BOOT_SAVESTATE_UNREAD",
+    "CAVEAT_BOOT_ISO_REGIONS_INVALID",
+    "CAVEAT_BOOT_ISO_ENCRYPTION_UNREAD",
+    "CAVEAT_BOOT_ISO_KEY_UNTESTED",
+    "CAVEAT_BOOT_KEY_FOLDER_UNRESOLVED",
+    "CAVEAT_BOOT_DISC_KEY_MISSING",
+    "CAVEAT_BOOT_DISC_DIR_CONFIGURED",
+    "CAVEAT_BOOT_DISC_DIR_UNRESOLVED",
+    "CAVEAT_ENTRY_TAKES_NO_DIRECTORY",
     "InstallFirstFormat",
     "StandaloneLaunchCard",
     "load_launch_formats",

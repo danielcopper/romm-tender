@@ -1533,10 +1533,10 @@ it, for the focused platform:
   — a default Tender cannot bake is named like any other. The clause is red where the games cannot start
   (`frontend/src/utils/emulatorClause.ts`):
 
-  - **The emulator cannot start them** — `start` says `cannot_start`: it is not installed, or RetroDECK's start script
-    cannot start it. The clause names it in **red** and the line under it says why
-    (`frontend/src/utils/emulatorStart.ts`, the same sentence a game's page and a refused start use); the chip stays
-    open, and the line points at the emulator menu, only where another entry can be pinned.
+  - **The emulator cannot start them** — `start` says `cannot_start`: it is not installed, RetroDECK's start script
+    cannot start it, or Tender cannot bake it, so Tender cannot start it yet. The clause names it in **red** and the
+    line under it says why (`frontend/src/utils/emulatorStart.ts`, the same sentence a game's page and a refused start
+    use); the chip stays open, and the line points at the emulator menu, only where another entry can be pinned.
   - **No default** — the entry the source ships first could not be established installed, so it is never the default by
     itself ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D9). The clause reads `no default` in
     **red**, the line asks for a choice with the cause where one is known, and the chip stays open where an entry can be
@@ -1555,31 +1555,32 @@ it, for the focused platform:
   starting source lists no emulator (D24).
 
   **The button is always rendered**, and opens a menu only when there is something to pick: the core read landed,
-  RetroDECK was found, and there are at least two options, one of them a bakeable entry other than the one in effect —
-  or nothing is the default and an option can be pinned. The platform's shortcut count is deliberately not a condition:
-  the per-platform core is a setting read when a game is resolved, so it applies to games synced later too, and picking
-  it before the first sync is the ordinary case. In every other case it is the same chip, disabled, with the reason in
-  its `title` — the ruling the Remove group already follows, and what keeps the header's shape constant across panes. A
-  disabled button is still a focus stop and the wide page's own sheet gives it Steam's focus outline, so a reader
-  walking the header lands on it and is told why.
+  RetroDECK was found, and there are at least two options, one of them a choosable entry other than the one in effect —
+  every entry is choosable but one the resolver states not installed (#2195 D9, D23) — or nothing is the default and an
+  option can be pinned. The platform's shortcut count is deliberately not a condition: the per-platform core is a
+  setting read when a game is resolved, so it applies to games synced later too, and picking it before the first sync is
+  the ordinary case. In every other case it is the same chip, disabled, with the reason in its `title` — the ruling the
+  Remove group already follows, and what keeps the header's shape constant across panes. A disabled button is still a
+  focus stop and the wide page's own sheet gives it Steam's focus outline, so a reader walking the header lands on it
+  and is told why.
 
   **Which of those cases also keeps a line under the header is a judgement about what it reports, not about the chip.**
   "Nothing to switch" states — the read in flight, one emulator on the menu — say it in the tooltip alone: a sentence
   would spend a row of the pane reporting that nothing can be done, which is what the device round asked to remove.
   States that report a PROBLEM keep their line, because a tooltip is a hover and the Deck's controller cannot perform
   one: the read failed, the answering source gives no emulator list (worded by why, § Notices and homes), **ES-DE lists
-  no emulator at all**, nothing on its menu is bakeable, the fallback is not installed, and the fallback or the
-  platform's own pick is one whose installation could not be established. ES-DE listing no emulator and nothing on the
-  menu being bakeable are the split above, and they are checked in that order: an empty menu is the case where
-  RetroDECK's own fallback fails too, so it is answered before the not-bakeable one, and the surviving count branch then
-  speaks only for a menu that really does hold one bakeable option. A switch the backend refuses is reported in the same
-  place, and the header keeps naming the old core, which every shortcut following the platform's pick still launches
-  with. A switch takes the page's busy hold from the moment it is picked until it is over; an accepted one re-bakes the
-  launch command of every bound shortcut, which is why the hold has to cover the whole of it. The chip and the pane's
-  buttons disable, another platform's pane says `Working on X`, and the acting pane says `Switching to <emulator>…` in
-  the same status line the outcome lands in — a success takes that line back, a refusal replaces it, and a continuation
-  cancelled by leaving the page takes it back too, because such a switch either committed or never ran and there is no
-  pane left to report to either way.
+  no emulator at all**, nothing on its menu is choosable, the fallback is not installed or one Tender cannot start yet,
+  and the fallback or the platform's own pick is one whose installation could not be established. ES-DE listing no
+  emulator and nothing on the menu being choosable are the split above, and they are checked in that order: an empty
+  menu is the case where RetroDECK's own fallback fails too, so it is answered before the not-choosable one, and the
+  surviving count branch then speaks only for a menu that really does hold one choosable option. A switch the backend
+  refuses is reported in the same place, and the header keeps naming the old core, which every shortcut following the
+  platform's pick still launches with. A switch takes the page's busy hold from the moment it is picked until it is
+  over; an accepted one re-bakes the launch command of every bound shortcut, which is why the hold has to cover the
+  whole of it. The chip and the pane's buttons disable, another platform's pane says `Working on X`, and the acting pane
+  says `Switching to <emulator>…` in the same status line the outcome lands in — a success takes that line back, a
+  refusal replaces it, and a continuation cancelled by leaving the page takes it back too, because such a switch either
+  committed or never ran and there is no pane left to report to either way.
 
 - **BIOS files** — the summary, which this pane words nowhere: `frontend/src/utils/biosSummary.ts` holds every state and
   a one-of group's, and answers each in two lengths, and the pane takes both — the short `status` as the section's

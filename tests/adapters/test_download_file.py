@@ -82,6 +82,26 @@ class TestMakeDirs:
         adapter.make_dirs(str(tmp_path))  # already exists — must not raise
 
 
+class TestRemoveEmptyDir:
+    def test_an_empty_directory_is_removed(self, adapter, tmp_path):
+        target = tmp_path / "Emptied"
+        target.mkdir()
+
+        adapter.remove_empty_dir(str(target))
+
+        assert not target.exists()
+
+    def test_a_directory_holding_anything_stays_and_the_refusal_is_raised(self, adapter, tmp_path):
+        target = tmp_path / "Held"
+        target.mkdir()
+        (target / "readme.txt").write_text("kept")
+
+        with pytest.raises(OSError):
+            adapter.remove_empty_dir(str(target))
+
+        assert (target / "readme.txt").read_text() == "kept"
+
+
 class TestRename:
     def test_renames(self, adapter, tmp_path):
         src = tmp_path / "src.rom"

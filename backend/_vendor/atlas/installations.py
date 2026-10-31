@@ -142,6 +142,7 @@ from .find_rules import (
     Availability,
 )
 from .launch import (
+    ENABLESHORTCUTS,
     PROBE_HIT,
     PROBE_MISS,
     PROBE_UNKNOWN,
@@ -151,6 +152,7 @@ from .launch import (
     LaunchView,
     LayeredFindRules,
     Probe,
+    RUNINBACKGROUND,
     command_unsupported,
     program_word,
     unsupported,
@@ -159,6 +161,7 @@ from .launch import (
 from .launch_command import (
     TOO_LARGE,
     CommandInputs,
+    CommandView,
     DistributionVariable,
     LaunchCommand,
     LauncherScript,
@@ -427,7 +430,7 @@ from .placement import (
     file_set_holes,
     needs_with_file_set,
 )
-from . import duckstation, emulator_settings, melonds, qt_ini
+from . import duckstation, emulator_settings, melonds, qt_ini, rpcs3_boot
 from .yaml_scalars import YamlScalars, read_scalars
 from .standalone_saves import (
     RedirectSetting,
@@ -12999,6 +13002,95 @@ def _rpcs3_vfs_refusal(
     return None
 
 
+@dataclass(frozen=True, slots=True)
+class _Rpcs3Vfs:
+    """RPCS3's ``vfs.yml`` as read once: where it is, the config directory beside it, how the read went, and its
+    scalars — empty where the file could not be read.
+    """
+
+    path: str
+    config_dir: str
+    status: ReadStatus
+    read: YamlScalars
+
+
+def _rpcs3_vfs(machine: Machine, card: StandaloneSaveCard, homes: _XdgHomes) -> _Rpcs3Vfs:
+    """The one read of ``vfs.yml`` both the save answer and the boot reading take their drive from."""
+    settings = _standalone_settings(card)
+    config_dir = homes.emulator_root(settings.bases[0], card.token)
+    vfs_path = settings.only(
+        config_home=homes.base("config"), data_home=homes.base("data"), flatpak=homes.flatpak
+    )
+    result = machine.read_text(vfs_path)
+    text = result.text or "" if result.status == READ_OK else ""
+    read = read_scalars(text, fallbacks={_RPCS3_EMULATOR_DIR_KEY: f"{config_dir}/"})
+    return _Rpcs3Vfs(vfs_path, config_dir, result.status, read)
+
+
+_RPCS3_TOKEN = "RPCS3"
+
+
+def _rpcs3_boot_dirs(machine: Machine, homes: _XdgHomes | None) -> rpcs3_boot.Dirs:
+    """RPCS3's internal drive and its key folder in its own spelling, as the save answer reads its trees.
+
+    The boot reading asks them two things: whether a boot file lies inside
+    the drive's ``game`` folder, which RPCS3 boots another way, and whether
+    a disc key stands in ``<config>/data/redump/``, and the disc directory
+    ``vfs.yml`` names, which RPCS3 mounts in place of the one above a boot
+    file where it holds a ``PS3_DISC.SFB``. The paths stay the
+    emulator's own, the spelling RPCS3 opens them in. Neither is known
+    where the emulator's trees are not established; the drive is not known
+    either where ``vfs.yml`` cannot be read or names it in a way the save
+    answer refuses.
+    """
+    card = lookup_standalone_save_card(_RPCS3_TOKEN)
+    if homes is None or card is None:
+        return rpcs3_boot.Dirs(None, None)
+    vfs = _rpcs3_vfs(machine, card, homes)
+    redump = f"{vfs.config_dir}/data/redump"
+    refused = _rpcs3_vfs_refusal(vfs.read, card=card, vfs_path=vfs.path)
+    if vfs.status not in (READ_OK, READ_MISSING) or refused is not None:
+        return rpcs3_boot.Dirs(None, vfs.path, redump)
+    drive = _rpcs3_drive(vfs.read, vfs.config_dir).raw
+    return rpcs3_boot.Dirs(drive, vfs.path, redump, _rpcs3_disc_dir(vfs.read, vfs.config_dir))
+
+
+_RPCS3_BDVD_KEY = "/dev_bdvd/"
+_RPCS3_BDVD_DEFAULT = "$(EmulatorDir)dev_bdvd/"
+
+
+def _rpcs3_disc_dir(read: YamlScalars, config_dir: str) -> str | None:
+    """The disc directory vfs.yml names, or the compiled default composed the way the drive's is (vfs_config.h:18) —
+    ``None`` where that is not established.
+
+    The stated value is the scalar reader's, ``$(EmulatorDir)`` already
+    substituted; an unset, empty or null one falls to the default with
+    ``$(EmulatorDir)`` the value vfs.yml states or the config directory, as
+    :func:`_rpcs3_default_drive` composes the drive's. The discipline is the
+    drive's (:func:`_rpcs3_vfs_refusal`): a ``/dev_bdvd/`` stated as a
+    construct the reader passed over is unread, not absent; one stated more
+    than once is read by RPCS3 from its last statement and by the reader from
+    its first; and a default composed off a ``$(EmulatorDir)`` the reader
+    passed over is the same gap one step later. A repeated
+    ``$(EmulatorDir)`` has refused the drive already, so this is not asked.
+
+    A ``/dev_bdvd/`` stated with the ``$(EmulatorDir)`` token beside a
+    skipped one is the gap :func:`_rpcs3_vfs_refusal` names for the drive:
+    the reader has already substituted its config-directory fallback into
+    the value, so the token is gone by the time this could look for it. That
+    case is open (#511).
+    """
+    if _RPCS3_BDVD_KEY in read.skipped or _RPCS3_BDVD_KEY in read.repeated:
+        return None
+    stated = read.get(_RPCS3_BDVD_KEY)
+    if stated:
+        return stated
+    if _RPCS3_EMULATOR_DIR_KEY in read.skipped:
+        return None
+    emulator_dir = read.get(_RPCS3_EMULATOR_DIR_KEY) or f"{config_dir}/"
+    return _RPCS3_BDVD_DEFAULT.replace(_RPCS3_EMULATOR_DIR_KEY, emulator_dir)
+
+
 def _rpcs3_savefile_placement(
     machine: Machine,
     *,
@@ -13033,21 +13125,15 @@ def _rpcs3_savefile_placement(
     established here rather than the emulator's whole list (see
     :func:`_rpcs3_listing_claim`).
     """
-    settings = _standalone_settings(card)
-    config_dir = homes.emulator_root(settings.bases[0], card.token)
-    vfs_path = settings.only(
-        config_home=homes.base("config"), data_home=homes.base("data"), flatpak=homes.flatpak
-    )
-    result = machine.read_text(vfs_path)
-    if result.status not in (READ_OK, READ_MISSING):
+    vfs = _rpcs3_vfs(machine, card, homes)
+    vfs_path, config_dir, read = vfs.path, vfs.config_dir, vfs.read
+    if vfs.status not in (READ_OK, READ_MISSING):
         return Unresolved(
             UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
             f"RPCS3's VFS configuration ({vfs_path}) exists and could not be read — which "
             "drive its saves live on is unknowable here",
             {"token": card.token, "config": vfs_path},
         )
-    text = result.text or "" if result.status == READ_OK else ""
-    read = read_scalars(text, fallbacks={_RPCS3_EMULATOR_DIR_KEY: f"{config_dir}/"})
     refused = _rpcs3_vfs_refusal(read, card=card, vfs_path=vfs_path)
     if refused is not None:
         return refused
@@ -13126,7 +13212,7 @@ def _rpcs3_savefile_placement(
             unestablished=survey.unestablished,
             mode="hdd0",
             readings=(OptionReading(_RPCS3_HDD0_KEY, stated, drive.provenance, None),),
-            reading_file=vfs_path if result.status == READ_OK else None,
+            reading_file=vfs_path if vfs.status == READ_OK else None,
             provenance=(
                 f"standalone save card '{card.token}': the drive from vfs.yml "
                 "(cfg_vfs::get, vfs_config.cpp:14-64 at build d5213de6)"
@@ -13143,7 +13229,7 @@ def _rpcs3_savefile_placement(
                         governs="which drive its saves live on",
                     ),
                 )
-                if result.status == READ_MISSING
+                if vfs.status == READ_MISSING
                 else ()
             ),
         ),
@@ -18721,6 +18807,15 @@ LAUNCH_VERDICTS = (
 CAVEAT_ENTRY_FORMAT_UNCLAIMED = "entry-format-unclaimed"
 CAVEAT_ARCHIVE_CONTENTS_UNREAD = "archive-contents-unread"
 CAVEAT_ENTRY_FORMAT_UNESTABLISHED = "entry-format-unestablished"
+# Two more statements a standalone card makes (issue #618). A loader that
+# takes the extension and then reads the file's content — a disc's magic, a
+# WAD's header, a playlist's entries — has passed the file only as far as the
+# card reads it, so the launchable verdict says the content was not read. And
+# an extension the builds a card serves disagree on is taken on one machine and
+# refused on the next, which is neither a refusal nor a take: unestablished,
+# under a code of its own that names the reason.
+CAVEAT_ENTRY_FORMAT_CONTENT_UNREAD = "entry-format-content-unread"
+CAVEAT_ENTRY_FORMAT_BUILD_DEPENDENT = "entry-format-build-dependent"
 
 _ENTRY_ACCEPTS = "accepts"
 _ENTRY_REFUSES = "refuses"
@@ -18748,6 +18843,25 @@ class Installer:
 
 
 @dataclass(frozen=True, slots=True)
+class Boot:
+    """What the judged entry boots from the file, read the way its emulator boots it (issue #618).
+
+    Stated only where atlas reads the emulator's own boot for that entry —
+    RPCS3's, for the entries that hand it the file's path — so a client can
+    place or bake exactly what the emulator starts.
+    """
+
+    file: str
+    """The path the emulator's loader is handed, in the emulator's own spelling: for RPCS3 the boot file it picks
+    inside a directory, made absolute as RPCS3 makes it and with no link resolved, or the file itself.
+    """
+    disc_root: str | None = None
+    """What the emulator mounts as the disc: for RPCS3 the directory holding ``PS3_DISC.SFB``, or the image itself
+    for an ISO — ``None`` for a game that boots without a disc.
+    """
+
+
+@dataclass(frozen=True, slots=True)
 class LaunchabilityAnswer:
     """Whether one file launches as one system's content here — and why not, when not.
 
@@ -18762,7 +18876,9 @@ class LaunchabilityAnswer:
     latter alone: the labels of the declared entries established to take the
     file, which is one of the two remedies that verdict leaves open.
     ``installers`` travels with ``needs-installation`` alone, whose remedy it
-    is, and is ``None`` on every other verdict.
+    is, and is ``None`` on every other verdict. ``boots`` travels with
+    ``launchable`` alone, and only where atlas read the judged entry's own
+    boot of the file.
     """
 
     verdict: str
@@ -18788,6 +18904,10 @@ class LaunchabilityAnswer:
     needs-installation verdict alone, where an empty tuple says that no emulator RetroDECK or EmuDeck sets up
     installs it, and ``None`` on every other.
     """
+    boots: Boot | None = None
+    """What the judged entry boots from this file — on a launchable verdict whose entry atlas read the emulator's own
+    boot for, and ``None`` everywhere else, including every entry whose emulator's boot atlas does not read.
+    """
     sources: tuple[str, ...] = ()
     caveats: tuple[Caveat, ...] = ()
     """Every degradation of this answer, stated structurally so a client branches on the
@@ -18802,6 +18922,10 @@ class LaunchabilityAnswer:
             raise ValueError(
                 "LaunchabilityAnswer: installers stand exactly where the verdict is needs-installation"
             )
+        # What an entry boots is a statement about a launch that happens: a
+        # verdict that launches nothing, or names no entry, has nothing to boot.
+        if self.boots is not None and (self.verdict != VERDICT_LAUNCHABLE or self.entry is None):
+            raise ValueError("LaunchabilityAnswer: boots stand only on a launchable verdict about an entry")
 
 
 @dataclass(frozen=True, slots=True)
@@ -20808,13 +20932,22 @@ class _EntryCoreReader:
         return info
 
 
+# What one entry makes of one file: its stance, the sources and caveats that
+# say why, and what it boots where atlas read the emulator's own boot.
+_Stance = tuple[str, tuple[str, ...], tuple[Caveat, ...], Boot | None]
+# The reading of an entry's own boot of the file, or None where atlas reads
+# none for that entry and its loader card decides.
+type _BootReader = Callable[[EmulatorEntry], rpcs3_boot.BootReading | None]
+
+
 def _entry_reading(
     entry: EmulatorEntry,
     *,
     extension: str,
     core_info_for: "Callable[[EmulatorEntry], CoreInfo | None]",
-) -> tuple[str, tuple[str, ...], tuple[Caveat, ...]]:
-    """One entry's stance on one extension: accepts, refuses, or unestablished.
+    boot_reader: _BootReader | None = None,
+) -> _Stance:
+    """One entry's stance on one file: accepts, refuses, or unestablished — and what it boots where that is read.
 
     The two kinds of entry that launch something split along the boundary rule
     (issue #66). A libretro entry's claims are read live off the installed
@@ -20833,13 +20966,33 @@ def _entry_reading(
     any format — the split :data:`VERDICT_ENTRY_NOT_ACCEPTED` exists for — and
     the reason is stated under the entry's own code rather than under one of
     the three format words, none of which was read.
+
+    A standalone entry whose emulator's own boot atlas reads is judged by that
+    reading instead of a card (*boot_reader*, issue #618): it reads the file
+    itself rather than its extension, and where it boots it states what.
     """
     if entry.kind == KIND_LIBRETRO:
-        return _libretro_entry_reading(entry, extension=extension, info=core_info_for(entry))
+        return (*_libretro_entry_reading(entry, extension=extension, info=core_info_for(entry)), None)
     foreign = _foreign_core_of(entry.kind, entry.command)
     if foreign is not None:
-        return _foreign_core_entry_reading(entry, foreign)
-    return _standalone_entry_reading(entry, extension=extension)
+        return (*_foreign_core_entry_reading(entry, foreign), None)
+    reading = boot_reader(entry) if boot_reader is not None else None
+    if reading is not None:
+        return _boot_stance(reading)
+    return (*_standalone_entry_reading(entry, extension=extension), None)
+
+
+_BOOT_STANCES = {
+    rpcs3_boot.BOOTS: _ENTRY_ACCEPTS,
+    rpcs3_boot.REFUSES: _ENTRY_REFUSES,
+    rpcs3_boot.UNESTABLISHED: _ENTRY_UNESTABLISHED,
+}
+
+
+def _boot_stance(reading: rpcs3_boot.BootReading) -> _Stance:
+    """A boot reading as an entry's stance — what boots stated where it does."""
+    boot = Boot(reading.file, reading.disc_root) if reading.file is not None else None
+    return _BOOT_STANCES[reading.outcome], reading.sources, reading.caveats, boot
 
 
 def _foreign_core_entry_reading(
@@ -20937,18 +21090,42 @@ def _libretro_entry_reading(
 def _standalone_entry_reading(
     entry: EmulatorEntry, *, extension: str
 ) -> tuple[str, tuple[str, ...], tuple[Caveat, ...]]:
-    """The standalone half of :func:`_entry_reading` — the recorded loader decides."""
+    """The standalone half of :func:`_entry_reading` — the recorded loader decides.
+
+    A card answers only for the commands it was read for: one whose emulator
+    is handed something other than the card's arguments is an entry nobody
+    read, whatever its token.
+    """
     card = lookup_standalone_launch(emulator_token(entry.command))
-    if card is None:
+    if card is None or not card.covers(_emulator_arguments(entry.command)):
+        why = (
+            "no card covers this standalone emulator's loader"
+            if card is None
+            else "its command hands the emulator arguments its loader card was not read for"
+        )
         return (
             _ENTRY_UNESTABLISHED,
             (),
             (
                 Caveat(
                     CAVEAT_ENTRY_FORMAT_UNESTABLISHED,
-                    f"what {entry.label!r} reads is not established — no card covers this "
-                    "standalone emulator's loader, which says nothing about whether it takes "
-                    f"{extension!r}",
+                    f"what {entry.label!r} reads is not established — {why}, which says nothing "
+                    f"about whether it takes {extension!r}",
+                    {"entry": entry.label, "extension": extension},
+                ),
+            ),
+        )
+    build_note = card.build_note(extension)
+    if build_note is not None:
+        return (
+            _ENTRY_UNESTABLISHED,
+            (f"entry {entry.label!r}: {build_note}",),
+            (
+                Caveat(
+                    CAVEAT_ENTRY_FORMAT_BUILD_DEPENDENT,
+                    f"whether {entry.label!r} reads {extension!r} depends on the build of the emulator "
+                    "that runs: the builds its loader card was read at disagree on it, so neither a "
+                    "take nor a refusal holds on every machine",
                     {"entry": entry.label, "extension": extension},
                 ),
             ),
@@ -20957,7 +21134,7 @@ def _standalone_entry_reading(
         return (
             _ENTRY_ACCEPTS,
             (f"entry {entry.label!r}: its own loader reads {extension!r} — {card.source}",),
-            (),
+            _content_unread(entry.label, extension) if card.content_checked else (),
         )
     archive_note = (
         " (an archive container, and this loader opens none — no RetroArch stands in front of "
@@ -20975,6 +21152,102 @@ def _standalone_entry_reading(
     )
 
 
+def _content_unread(label: str, extension: str) -> tuple[Caveat, ...]:
+    """A loader that takes *extension* and then reads the content, which its card does not."""
+    return (
+        Caveat(
+            CAVEAT_ENTRY_FORMAT_CONTENT_UNREAD,
+            f"{label!r} takes {extension!r} by its extension, and its loader then reads the file's "
+            "content, which atlas does not — whether the content passes is not established",
+            {"entry": label, "extension": extension},
+        ),
+    )
+
+
+# What a leading ``env`` assigns: ``NAME=value``, the name a shell variable's
+# — ASCII letters, digits and underscores, so ``\w`` is held to ASCII.
+_ENV_ASSIGNMENT_RE = re.compile(r"[A-Za-z_]\w*=", re.ASCII)
+_INJECT_WORD = "%INJECT%="
+
+
+def _emulator_arguments(command: str) -> tuple[str, ...] | None:
+    """The words *command* hands its ``%EMULATOR_…%`` token, or ``None`` where that cannot be told.
+
+    ES-DE removes its two flags before it runs anything (``FileData.cpp:1057-1093``
+    @ v3.4.1). In front of the token only what sets up the emulator's run is
+    passed over: a leading ``env`` with its ``NAME=value`` words, which
+    ``env`` sets as the environment before it runs the rest, and ``%INJECT%`` words, whose
+    per-game text ES-DE places where the word stood (``:1672-1791``) and which
+    is not read here. Anything else in front of the token runs something whose
+    arguments this reading does not know.
+    """
+    words = [word for word in command.split() if word not in (ENABLESHORTCUTS, RUNINBACKGROUND)]
+    token = emulator_token(command)
+    if token is None or f"%EMULATOR_{token}%" not in words:
+        return None
+    at = words.index(f"%EMULATOR_{token}%")
+    prefix = [word for word in words[:at] if not word.startswith(_INJECT_WORD)]
+    if prefix and (prefix[0] != "env" or not all(_ENV_ASSIGNMENT_RE.match(word) for word in prefix[1:])):
+        return None
+    return tuple(words[at + 1 :])
+
+
+class _EntryBootReader:
+    """The boot readings of one launchability answer's entries — each read once, and only once an entry asks.
+
+    The entries atlas reads an emulator's own boot for are recognised by
+    their command (:mod:`atlas.rpcs3_boot`): RPCS3 handed the file's path,
+    RPCS3 handed a serial, and the shell handed the file's path. Every other
+    entry answers ``None`` and keeps its loader card. *view* builds the
+    frontend's view the launch lookup reads through, and *dirs* reads
+    RPCS3's own directories for the entry it is asked about.
+    """
+
+    def __init__(
+        self,
+        machine: Machine,
+        content_path: str,
+        view: Callable[[], CommandView],
+        dirs: Callable[[EmulatorEntry], rpcs3_boot.Dirs],
+    ) -> None:
+        self._machine = machine
+        self._content_path = content_path
+        self._view = view
+        self._dirs = dirs
+        self._readings: dict[tuple[str, str], rpcs3_boot.BootReading | None] = {}
+
+    def __call__(self, entry: EmulatorEntry) -> rpcs3_boot.BootReading | None:
+        key = (entry.label, entry.command)
+        if key not in self._readings:
+            self._readings[key] = self._read(entry)
+        return self._readings[key]
+
+    def _read(self, entry: EmulatorEntry) -> rpcs3_boot.BootReading | None:
+        command = entry.command
+        if rpcs3_boot.boots_by_serial(command):
+            return rpcs3_boot.by_serial(entry.label)
+        if rpcs3_boot.hands_path(command):
+            return rpcs3_boot.read_boot(
+                entry.label, self._content_path, self._view(), self._machine.read_ps3_file, lambda: self._dirs(entry)
+            )
+        if rpcs3_boot.shell_runs_rom(command):
+            return rpcs3_boot.shell_reading(entry.label, self._content_path, self._view())
+        return None
+
+
+# What :func:`_launchability_verdict` returns:
+# (verdict, entry, alternatives, installers, boots, sources, own caveats).
+_Verdict = tuple[
+    str,
+    EmulatorEntry | None,
+    tuple[str, ...],
+    tuple[Installer, ...] | None,
+    Boot | None,
+    tuple[str, ...],
+    tuple[Caveat, ...],
+]
+
+
 def _launchability_verdict(
     *,
     system: str,
@@ -20984,12 +21257,11 @@ def _launchability_verdict(
     complete: bool,
     core_info_for: "Callable[[EmulatorEntry], CoreInfo | None]",
     label: str | None,
-) -> tuple[
-    str, EmulatorEntry | None, tuple[str, ...], tuple[Installer, ...] | None, tuple[str, ...], tuple[Caveat, ...]
-]:
+    boot_reader: _BootReader | None = None,
+) -> _Verdict:
     """One (declaration, extension) pair's verdict — shared by every ES-DE-driven handle.
 
-    Returns ``(verdict, entry, alternatives, installers, sources, own caveats)``.
+    Returns ``(verdict, entry, alternatives, installers, boots, sources, own caveats)``.
     Module-level for the reason :func:`_entries_from` is: the match is
     ES-DE's, not an arrangement's, and two copies of it are how "launchable
     here" and "launchable there" would silently mean different comparisons.
@@ -20999,7 +21271,9 @@ def _launchability_verdict(
     refusal flips the verdict to ``entry-not-accepted`` — the accept-list is
     the union over every entry, and the machine then does nothing at all. The
     other declared entries are judged only then, because ``alternatives`` is
-    that verdict's remedy and nobody else's read.
+    that verdict's remedy and nobody else's read. An entry whose emulator's
+    own boot atlas reads (*boot_reader*) is judged by that reading of the
+    file, and a ``launchable`` verdict then states what it boots.
 
     A ``needs-installation`` verdict names the emulators its record says
     install the file, each with the system's entry that runs it
@@ -21029,11 +21303,12 @@ def _launchability_verdict(
     """
     if declaration is None:
         if not complete:
-            return VERDICT_UNKNOWN, None, (), None, (), ()
+            return VERDICT_UNKNOWN, None, (), None, None, (), ()
         return (
             VERDICT_UNKNOWN,
             None,
             (),
+            None,
             None,
             (),
             (
@@ -21052,6 +21327,7 @@ def _launchability_verdict(
             None,
             (),
             None,
+            None,
             (),
             (
                 Caveat(
@@ -21065,7 +21341,7 @@ def _launchability_verdict(
         )
     entry = _chosen_entry(entries, label, system)
     if isinstance(entry, Caveat):
-        return VERDICT_UNKNOWN, None, (), None, (), (entry,)
+        return VERDICT_UNKNOWN, None, (), None, None, (), (entry,)
     if extension in declaration.extensions:
         match_source = (
             f"accept-list match: the file yields {extension!r} (its name from the last dot, "
@@ -21074,16 +21350,18 @@ def _launchability_verdict(
             "SystemData.cpp:669)"
         )
         if entry is None:
-            return VERDICT_LAUNCHABLE, None, (), None, (match_source,), ()
-        stance, entry_sources, entry_caveats = _entry_reading(
-            entry, extension=extension, core_info_for=core_info_for
+            return VERDICT_LAUNCHABLE, None, (), None, None, (match_source,), ()
+        stance, entry_sources, entry_caveats, boots = _entry_reading(
+            entry, extension=extension, core_info_for=core_info_for, boot_reader=boot_reader
         )
         if stance == _ENTRY_REFUSES:
             alternatives = tuple(
                 other.label
                 for other in entries
                 if other is not entry
-                and _entry_reading(other, extension=extension, core_info_for=core_info_for)[0]
+                and _entry_reading(
+                    other, extension=extension, core_info_for=core_info_for, boot_reader=boot_reader
+                )[0]
                 == _ENTRY_ACCEPTS
             )
             return (
@@ -21091,10 +21369,11 @@ def _launchability_verdict(
                 entry,
                 alternatives,
                 None,
+                None,
                 (match_source, *entry_sources),
                 entry_caveats,
             )
-        return VERDICT_LAUNCHABLE, entry, (), None, (match_source, *entry_sources), entry_caveats
+        return VERDICT_LAUNCHABLE, entry, (), None, boots, (match_source, *entry_sources), entry_caveats
     record = lookup_install_first(system, extension)
     if record is not None:
         return (
@@ -21102,6 +21381,7 @@ def _launchability_verdict(
             None,
             (),
             _installers(record.installers, entries),
+            None,
             (f"install-first format {extension!r} for {system}: {record.statement} — {record.source}",),
             (),
         )
@@ -21109,6 +21389,7 @@ def _launchability_verdict(
         VERDICT_NOT_ACCEPTED,
         None,
         (),
+        None,
         None,
         (
             f"the file yields {extension!r} and the system's <extension> list "
@@ -22991,13 +23272,14 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             )
         status = self._catalogue_exclusive(root, system) if exclusive else ()
         anchor = self._esde_system_dir(by_system, system)
+        lookups: list[tuple[LaunchLookup, _SandboxLaunchView]] = []
         entries = _entries_from(
             self,
             _declared_entries(by_system, system),
             self._gamelist_selections_at(root, system),
             system_roms_dir=anchor.directory,
             content_path=content_path,
-            launch_for=self._launch_for(),
+            launch_for=self._launch_for(lookups),
         )
         declaration = by_system.get(system)
         core_reader = _EntryCoreReader(
@@ -23006,7 +23288,18 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             self._cfg_sandbox,
             findings=self._cfg_findings,
         )
-        verdict, entry, alternatives, installers, sources, own = _launchability_verdict(
+
+        def view() -> CommandView:
+            if not lookups:
+                lookups.append(self._lookup())
+            return lookups[0][1]
+
+        # RPCS3 runs inside this same sandbox, so the frontend's view is the
+        # emulator's, and its trees are the ones every bundled emulator reads.
+        boot_reader = _EntryBootReader(
+            self._machine, content_path, view, lambda _entry: _rpcs3_boot_dirs(self._machine, self._xdg_homes())
+        )
+        verdict, entry, alternatives, installers, boots, sources, own = _launchability_verdict(
             system=system,
             extension=extension,
             declaration=declaration,
@@ -23014,6 +23307,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             complete=True,
             core_info_for=core_reader,
             label=label,
+            boot_reader=boot_reader,
         )
         return (
             LaunchabilityAnswer(
@@ -23023,6 +23317,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
                 entry=entry,
                 alternatives=alternatives,
                 installers=installers,
+                boots=boots,
                 sources=(
                     _CATALOGUE_SOURCE_EXCLUSIVE if exclusive else self._CATALOGUE_SOURCE,
                     *core_reader.sources,
@@ -25327,19 +25622,34 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
                 version,
             )
         anchor = self._esde_system_dir(snapshot.by_system, system, complete=snapshot.complete)
+        lookups: list[tuple[LaunchLookup, _HostLaunchView]] = []
         entries = _entries_from(
             self,
             _declared_entries(snapshot.by_system, system),
             self._gamelist_selections(system),
             system_roms_dir=anchor.directory,
             content_path=content_path,
-            launch_for=self._launch_for(snapshot),
+            launch_for=self._launch_for(snapshot, lookups),
         )
         declaration = snapshot.by_system.get(system)
         core_reader = _EntryCoreReader(
             self._machine, self._companion_cfg_path(), self._cfg_sandbox
         )
-        verdict, entry, alternatives, installers, sources, own = _launchability_verdict(
+
+        def view() -> CommandView:
+            if not lookups:
+                lookups.append(self._lookup(snapshot))
+            return lookups[0][1]
+
+        # The emulator runs on the host, as the frontend does, so the host's
+        # view is its own; its trees are the ones the variant gate settles.
+        boot_reader = _EntryBootReader(
+            self._machine,
+            content_path,
+            view,
+            lambda entry: _rpcs3_boot_dirs(self._machine, self._launch_gate(entry.command).homes),
+        )
+        verdict, entry, alternatives, installers, boots, sources, own = _launchability_verdict(
             system=system,
             extension=extension,
             declaration=declaration,
@@ -25347,6 +25657,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             complete=snapshot.complete,
             core_info_for=core_reader,
             label=label,
+            boot_reader=boot_reader,
         )
         return (
             LaunchabilityAnswer(
@@ -25356,6 +25667,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
                 entry=entry,
                 alternatives=alternatives,
                 installers=installers,
+                boots=boots,
                 sources=(
                     self._catalogue_provenance(snapshot.exclusive),
                     *core_reader.sources,
@@ -25940,7 +26252,11 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         binary reads — or, where nothing is established, the refusal that
         names the variant instead of an invented tree.
         """
-        launch = self._standalone_launch_identity(spec.command)
+        return self._launch_gate(spec.command)
+
+    def _launch_gate(self, command: str) -> "_EmuDeckGate":
+        """:meth:`_standalone_launch_gate` over a command — all the gate reads of an entry."""
+        launch = self._standalone_launch_identity(command)
         if launch.token is None or launch.probe_name is None:
             return _EmuDeckGate(launch, None, None, None)
         if "-w" in launch.args:

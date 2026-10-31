@@ -29,7 +29,14 @@ from domain.emulator_choice import (
     unspoken_start,
     vanished_payload,
 )
-from domain.emulator_commands import default_option, label_to_invocation, options_to_payload, shipped_default
+from domain.emulator_commands import (
+    NOT_INSTALLED,
+    default_option,
+    label_to_invocation,
+    option_for_label,
+    options_to_payload,
+    shipped_default,
+)
 from domain.emulator_pick import pick_for, platform_pick, platform_pick_value, source_kind
 from domain.platform_names import PLATFORM_NAMES_KEY, platform_display_name
 from domain.rom_files import folder_boot_root
@@ -189,11 +196,7 @@ class CoreService:
             "active_core_label": option.label if option is not None else None,
             "platform_core_label": stored.label if stored is not None else None,
             "has_game_override": rom.emulator_override is not None,
-            "start": start_payload(
-                choice,
-                resolved.options if resolved is not None else [],
-                folder_unstartable=resolved is not None and resolved.folder_unstartable,
-            ),
+            "start": start_payload(choice, resolved.options if resolved is not None else []),
             "launch": self._chosen_launch(rom, install, resolved),
             "vanished_pick": vanished_payload(choice),
         }
@@ -397,8 +400,10 @@ class CoreService:
         with a per-game ``emulator_override`` are skipped (the pin wins over the
         platform default), as are uninstalled or unbound ROMs (no live shortcut to
         rewrite). Each entry's ``launch_options`` is the FULL active core baked by
-        the shared resolver — the ``-e`` override form, or the plain launch when
-        the resolver yields ``(None, None)`` — over the disc-resolved bake path,
+        the shared resolver — the ``-e`` override form, the empty command for an
+        entry Tender cannot bake or none in effect (#2195 D43), or the plain
+        launch where the system lists no entry, no system is found, or the
+        catalogue cannot be read — over the disc-resolved bake path,
         so a multi-disc ROM keeps its persisted ``selected_disc`` rather than
         reverting to disc 1 / the m3u (a single-disc ROM bakes its ``file_path``
         unchanged).
@@ -491,16 +496,16 @@ class CoreService:
     async def set_game_core(self, rom_id: int, label: str) -> dict[str, Any]:
         """Pin the per-game emulator override for ``rom_id`` to *label*.
 
-        The picked LABEL is resolved to a bakeable :class:`EmulatorInvocation`
-        FIRST (against the emulators ES-DE lists for the ROM's platform, libretro
-        OR standalone). A label that does not resolve to a bakeable emulator —
-        unknown, ``needs_setup``, or otherwise un-bakeable — or for which no
+        The picked LABEL is checked FIRST against the emulators the ROM's
+        system lists, libretro OR standalone. A label the system does not list,
+        one the resolver states not installed (#2195 D9), or one for which no
         emulator source answers is refused with ``core_unavailable`` and
-        **nothing is written**, so the DB never holds a
-        label no consumer can bake; an unknown ROM is refused with
-        ``not_found``. On success the pin is written via the Unit-of-Work and
-        the response carries the freshly-baked ``launch_options`` (the ``-e``
-        override form) and ``app_id`` for the frontend to confirm-set on the live
+        **nothing is written**; an entry Tender cannot bake is pinned like any
+        other, and the game page then says Tender cannot start it (D23). An
+        unknown ROM is refused with ``not_found``. On success the pin is written
+        via the Unit-of-Work and the response carries the freshly-baked
+        ``launch_options`` (the ``-e`` override form for an entry Tender can
+        bake) and ``app_id`` for the frontend to confirm-set on the live
         Steam shortcut. When the ROM is not installed or not bound to a shortcut
         there is nothing to update live: the pin still lands and
         ``launch_options``/``app_id`` are ``None`` (the override applies on the
@@ -525,11 +530,13 @@ class CoreService:
         # stalls every other writer for its duration.
         options = self._emulator_options(self._platform_systems.rom_system(platform_slug, install))
         source = source_kind(options)
-        invocation = label_to_invocation(options["options"], label)
-        if invocation is None or source is None:
-            # Refuse BEFORE any write — never persist a label that does not
-            # resolve to a bakeable emulator (unknown / needs_setup / un-bakeable).
+        option = option_for_label(options["options"], label)
+        if option is None or option.reason == NOT_INSTALLED or source is None:
+            # Refuse BEFORE any write — never persist a label the system does not
+            # list, or one whose emulator the resolver states not installed.
             raise Refused("core_unavailable", f"Emulator '{label}' is not available for {platform_slug}")
+        # A listed entry Tender cannot bake has no invocation: its shortcut gets the empty command (#2195 D43).
+        invocation = label_to_invocation(options["options"], label) or EmulatorInvocation.nothing()
         with self._uow_factory() as uow:
             # The row is re-read because the label was resolved against a
             # snapshot: a background sync, a finishing download or the
@@ -571,8 +578,10 @@ class CoreService:
         an installed+bound ROM so the frontend confirm-sets the now-default launch
         on the live shortcut. Because the resolved default may itself be a
         per-platform core, the recomputed command bakes the ROM's FULL active core
-        (the ``-e`` override form, or the plain launch when the platform resolves
-        to ``(None, None)``) — never an unconditional plain launch. Clearing is
+        (the ``-e`` override form, the empty command where the entry in effect is
+        one Tender cannot bake or none is in effect (#2195 D43), or the plain
+        launch where the system lists no entry, no system is found, or the
+        catalogue cannot be read) — never an unconditional plain launch. Clearing is
         always valid — there is no label to resolve. An unknown ROM is refused
         with ``not_found``; when it is uninstalled or unbound the NULL still
         lands and ``launch_options``/``app_id`` are ``None``. A live update
@@ -626,8 +635,9 @@ class CoreService:
 
         An installed (``RomInstall`` with a ``file_path``) **and** bound
         (``shortcut_app_id`` set) ROM gets the full launch command — the ``-e``
-        form when *emulator* is set (libretro core or standalone), the plain form
-        when it is ``None`` — over the disc-resolved bake path (the ROM's persisted
+        form for an emulator Tender can bake (libretro core or standalone), the
+        empty command for :meth:`EmulatorInvocation.nothing` (#2195 D43), the
+        plain form for ``None`` — over the disc-resolved bake path (the ROM's persisted
         ``selected_disc`` for a multi-disc ROM, its ``file_path`` unchanged for a
         single-disc ROM), paired with its Steam ``app_id``. An uninstalled or
         unbound ROM has no live shortcut to update, so both are ``None`` and the

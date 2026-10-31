@@ -96,9 +96,11 @@ class ShortcutLaunchResolver:
         and per-platform ``settings.json`` core over the shipped default). Only
         ROMs that resolve to an emulator (libretro core or standalone) appear in
         the returned ``{rom_id: EmulatorInvocation}`` map, so
-        :func:`build_shortcuts_data` bakes their ``-e`` form; a ROM that
-        resolves to nothing (a genuinely unresolvable platform) is absent and
-        falls back to the plain launch. The resolver already warns + degrades on
+        :func:`build_shortcuts_data` bakes their ``-e`` form, or the empty
+        command for an entry Tender cannot bake or none in effect (#2195 D43);
+        a ROM that resolves to nothing — the system lists no entry, no system
+        is found, or the catalogue cannot be read — is absent and falls back to
+        the plain launch. The resolver already warns + degrades on
         a stale label, so no bogus invocation ever reaches the bake.
 
         *reading* is the run's one reading of the emulator sources, so every ROM

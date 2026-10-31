@@ -444,13 +444,13 @@ def test_per_platform_standalone_label_resolves_standalone() -> None:
     assert resolver.active_emulator_for_rom(61) == _RPCS3
 
 
-def test_a_standalone_pin_that_cannot_be_baked_stands_and_renders_no_invocation(
+def test_a_standalone_pin_that_cannot_be_baked_stands_and_bakes_nothing(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """A per-game pin to a label that still exists stands whatever its state (#2195 D23).
 
-    The entry cannot be baked, so it renders no invocation — never another
-    emulator the user did not choose — and nothing is passed over.
+    The entry cannot be baked, so it bakes the empty command, never another
+    emulator the user did not choose (#2195 D23, D43), and nothing is passed over.
     """
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=62, platform_slug="ps3", emulator_override="RPCS3 Shortcut (Standalone)")
@@ -468,7 +468,7 @@ def test_a_standalone_pin_that_cannot_be_baked_stands_and_renders_no_invocation(
     with caplog.at_level(logging.WARNING, logger="test"):
         result = resolver.active_emulator_for_rom(62)
 
-    assert result is None
+    assert result == EmulatorInvocation.nothing()
     assert not caplog.records
 
 
@@ -630,24 +630,6 @@ _SHORTCUT = standalone_option(
 )
 
 
-def test_a_folder_game_whose_default_cannot_be_baked_is_folder_unstartable() -> None:
-    """The shipped default bakes nothing, so nothing starts the folder; no later entry is taken instead."""
-    uow = FakeUnitOfWork()
-    _seed_rom(uow, rom_id=80, platform_slug="ps3")
-    _seed_install(uow, rom_id=80, file_path=_PS3_EBOOT, rom_dir=_PS3_ROM_DIR)
-    core_info = FakeCoreInfoProvider(
-        options=[_SHORTCUT, standalone_option(_RPCS3_COMMAND, _RPCS3_LABEL, launcher=_RPCS3_LAUNCHER)]
-    )
-    resolver, _ = _make_resolver(uow=uow, core_info=core_info)
-
-    resolved = resolver.resolve_rom(80)
-
-    assert resolved is not None
-    assert resolved.choice.option is not None
-    assert resolved.choice.option.label == "RPCS3 Shortcut (Standalone)"
-    assert (resolved.invocation, resolved.folder_unstartable) == (None, True)
-
-
 def test_a_folder_game_with_rpcs3_directory_picked_starts_it_directly() -> None:
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=81, platform_slug="ps3", emulator_override=_RPCS3_LABEL)
@@ -660,21 +642,67 @@ def test_a_folder_game_with_rpcs3_directory_picked_starts_it_directly() -> None:
     resolved = resolver.resolve_rom(81)
 
     assert resolved is not None
-    assert resolved.folder_unstartable is False
     assert resolved.invocation == EmulatorInvocation.direct(_RPCS3_COMMAND, _RPCS3_LAUNCHER, _RPCS3_LABEL)
 
 
-def test_a_game_not_installed_as_a_folder_is_never_folder_unstartable() -> None:
+def test_a_shipped_default_tender_cannot_bake_bakes_the_empty_command() -> None:
+    """The default stands, and its shortcut gets no start that would run ES-DE's own choice (#2195 D7, D43)."""
     uow = FakeUnitOfWork()
-    _seed_rom(uow, rom_id=82, platform_slug="ps3")
-    _seed_install(uow, rom_id=82, file_path="/roms/ps3/Game.iso", rom_dir="/roms/ps3/Game")
-    core_info = FakeCoreInfoProvider(options=[_SHORTCUT])
+    _seed_rom(uow, rom_id=85, platform_slug="ps3")
+    core_info = FakeCoreInfoProvider(options=[_SHORTCUT, standalone_option(_RPCS3_COMMAND, _RPCS3_LABEL)])
     resolver, _ = _make_resolver(uow=uow, core_info=core_info)
 
-    resolved = resolver.resolve_rom(82)
+    resolved = resolver.resolve_rom(85)
 
     assert resolved is not None
-    assert resolved.folder_unstartable is False
+    assert resolved.choice.option is not None
+    assert (resolved.choice.option.label, resolved.invocation) == (
+        "RPCS3 Shortcut (Standalone)",
+        EmulatorInvocation.nothing(),
+    )
+    assert resolver.active_core_for_rom(85) == (None, None)
+
+
+def test_a_platform_with_no_entry_keeps_the_plain_launch() -> None:
+    uow = FakeUnitOfWork()
+    _seed_rom(uow, rom_id=86, platform_slug="gba")
+    resolver, _ = _make_resolver(uow=uow, core_info=FakeCoreInfoProvider(options=[]))
+
+    assert resolver.active_emulator_for_rom(86) is None
+
+
+def test_a_system_with_entries_but_no_default_established_bakes_the_empty_command() -> None:
+    """D9's choose state: no entry is in effect, so the shortcut gets the empty command (#2195 D43)."""
+    uow = FakeUnitOfWork()
+    _seed_rom(uow, rom_id=87, platform_slug="ps2")
+    unseen = dataclasses.replace(
+        standalone_option("%EMULATOR_PCSX2% -batch %ROM%", "PCSX2 (Standalone)"),
+        declared_index=0,
+        not_established="no_find_rule",
+    )
+    resolver, _ = _make_resolver(uow=uow, core_info=FakeCoreInfoProvider(options=[unseen]))
+
+    resolved = resolver.resolve_rom(87)
+
+    assert resolved is not None
+    assert (resolved.choice.option, resolved.invocation) == (None, EmulatorInvocation.nothing())
+
+
+def test_a_vanished_pick_with_no_default_bakes_the_empty_command() -> None:
+    uow = FakeUnitOfWork()
+    _seed_rom(uow, rom_id=88, platform_slug="ps2", emulator_override="Gone (Standalone)")
+    unseen = dataclasses.replace(
+        standalone_option("%EMULATOR_PCSX2% -batch %ROM%", "PCSX2 (Standalone)"),
+        declared_index=0,
+        not_established="no_find_rule",
+    )
+    resolver, _ = _make_resolver(uow=uow, core_info=FakeCoreInfoProvider(options=[unseen]))
+
+    resolved = resolver.resolve_rom(88)
+
+    assert resolved is not None
+    assert resolved.choice.vanished is not None
+    assert (resolved.choice.option, resolved.invocation) == (None, EmulatorInvocation.nothing())
 
 
 def test_a_pin_to_an_entry_not_installed_stands() -> None:
@@ -688,7 +716,11 @@ def test_a_pin_to_an_entry_not_installed_stands() -> None:
 
     assert resolved is not None
     assert resolved.choice.option is not None
-    assert (resolved.choice.option.label, resolved.choice.layer, resolved.invocation) == ("Missing", "game", None)
+    assert (resolved.choice.option.label, resolved.choice.layer, resolved.invocation) == (
+        "Missing",
+        "game",
+        EmulatorInvocation.nothing(),
+    )
 
 
 def test_a_vanished_pin_is_named_with_its_source_beside_the_default() -> None:

@@ -8,6 +8,7 @@ as parameters.
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from typing import Any
 
 from domain.disc_formats import TRACK_DESCRIPTORS
@@ -249,6 +250,52 @@ def ps3_folder_rename(rom_dir: str | None, launch_path: str, accepted: frozenset
         return None
     new_rom_dir = rom_dir + PS3_FOLDER_SUFFIX
     return (new_rom_dir, os.path.join(new_rom_dir, os.path.relpath(launch_path, rom_dir)))
+
+
+# Where a game folder lifted into its install's place waits while that place is
+# emptied (#2195 D39). A sibling of the install's folder, so each move stays on
+# one filesystem.
+PS3_LIFT_STAGING_SUFFIX = ".tender-lift"
+
+
+@dataclass(frozen=True, slots=True)
+class Ps3FolderLift:
+    """Placing a game folder found one level inside its install's folder as that folder itself.
+
+    ``inner`` is the game folder, ``staging`` the sibling it waits in while the
+    install's folder is emptied, and ``launch_path`` the launch path once it
+    stands in the install's place.
+    """
+
+    inner: str
+    staging: str
+    launch_path: str
+
+
+def ps3_folder_lift(rom_dir: str | None, launch_path: str) -> Ps3FolderLift | None:
+    """Return the lift of a folder-boot install whose game folder lies exactly one level inside *rom_dir*, or ``None``.
+
+    The game folder is :func:`folder_boot_root`'s (#2195 D39). ``None`` for a game folder that is
+    *rom_dir* itself or lies deeper, and for any other layout, so asking twice
+    lifts once. Whether the game folder is the only entry of *rom_dir* — the
+    one case it is lifted in — is the caller's to read.
+
+    Pure path algebra — the caller moves the folders.
+    """
+    if rom_dir is None:
+        return None
+    root = folder_boot_root(launch_path, rom_dir)
+    if root is None:
+        return None
+    rom_dir = os.path.normpath(rom_dir)
+    inner = os.path.normpath(root)
+    if os.path.dirname(inner) != rom_dir:
+        return None
+    return Ps3FolderLift(
+        inner=inner,
+        staging=rom_dir + PS3_LIFT_STAGING_SUFFIX,
+        launch_path=os.path.join(rom_dir, os.path.relpath(launch_path, inner)),
+    )
 
 
 def folder_boot_layout_root(files: list[str]) -> str | None:

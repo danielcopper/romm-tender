@@ -16,8 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.emulator_commands import (
     CANNOT_START,
-    FOLDER_ENTRY_LABEL,
-    FOLDER_INSTALL,
+    NOT_BAKEABLE,
     default_option,
     option_for_label,
     shipped_default,
@@ -69,15 +68,14 @@ class EmulatorChoice:
 class ResolvedEmulator:
     """One ROM's emulator: the choice, the options it was made among, and what it bakes to.
 
-    ``invocation`` is ``None`` for the plain launch. ``folder_unstartable``
-    says the ROM is installed as a folder that ``invocation`` does not start
-    directly, so nothing it bakes can start it (#2195 D21).
+    ``invocation`` is ``None`` for the plain launch, and
+    :meth:`~domain.shortcut_data.EmulatorInvocation.nothing` where no entry
+    Tender can bake is in effect (#2195 D43).
     """
 
     choice: EmulatorChoice
     options: list[EmulatorOption]
     invocation: EmulatorInvocation | None
-    folder_unstartable: bool
 
 
 def choose_emulator(
@@ -100,36 +98,30 @@ def choose_emulator(
     return EmulatorChoice(option=default, layer=DEFAULT if default is not None else None, vanished=vanished)
 
 
-def start_payload(
-    choice: EmulatorChoice, options: list[EmulatorOption], *, folder_unstartable: bool = False
-) -> dict[str, Any]:
-    """What starting with *choice* comes to, as ``{state, reason, entry, folder_entry}``.
+def start_payload(choice: EmulatorChoice, options: list[EmulatorOption]) -> dict[str, Any]:
+    """What starting with *choice* comes to, as ``{state, reason, entry}``.
 
     ``entry`` is the label of the entry it is about — the chosen one, or for
     :data:`CHOOSE` the shipped default — ``None`` for :data:`NO_ENTRY`.
     ``reason`` is why it cannot start (:data:`domain.emulator_commands.NOT_INSTALLED`,
-    :data:`~domain.emulator_commands.START_SCRIPT_RUNS_NOTHING`,
-    :data:`~domain.emulator_commands.FOLDER_INSTALL`), or, for :data:`CHOOSE`,
-    the shipped entry's not-established note; ``None`` otherwise.
-    *folder_unstartable* says the game is installed as a folder its entry
-    cannot start (#2195 D21); ``folder_entry`` then names the entry that can.
+    :data:`~domain.emulator_commands.START_SCRIPT_RUNS_NOTHING`, and
+    :data:`~domain.emulator_commands.NOT_BAKEABLE` for any other entry Tender
+    cannot bake, #2195 D7, D23), or, for :data:`CHOOSE`, the shipped entry's
+    not-established note; ``None`` otherwise. Whether the game's file starts with the entry is the launch
+    verdict's (:mod:`domain.launchability`), a folder the entry does not take
+    included (#2195 D21).
     """
     option = choice.option
     if option is None:
         shipped = shipped_default(options)
         if shipped is None:
-            return {"state": NO_ENTRY, "reason": None, "entry": None, "folder_entry": None}
-        return {"state": CHOOSE, "reason": shipped.not_established, "entry": shipped.label, "folder_entry": None}
+            return {"state": NO_ENTRY, "reason": None, "entry": None}
+        return {"state": CHOOSE, "reason": shipped.not_established, "entry": shipped.label}
     if option.reason in CANNOT_START:
-        return {"state": CANNOT_START_STATE, "reason": option.reason, "entry": option.label, "folder_entry": None}
-    if folder_unstartable:
-        return {
-            "state": CANNOT_START_STATE,
-            "reason": FOLDER_INSTALL,
-            "entry": option.label,
-            "folder_entry": FOLDER_ENTRY_LABEL,
-        }
-    return {"state": STARTS, "reason": None, "entry": option.label, "folder_entry": None}
+        return {"state": CANNOT_START_STATE, "reason": option.reason, "entry": option.label}
+    if option.status != "bakeable":
+        return {"state": CANNOT_START_STATE, "reason": NOT_BAKEABLE, "entry": option.label}
+    return {"state": STARTS, "reason": None, "entry": option.label}
 
 
 def unspoken_start(entry: str | None) -> dict[str, Any]:
@@ -138,7 +130,7 @@ def unspoken_start(entry: str | None) -> dict[str, Any]:
     Until such a source starts games, whether its entry could start them is not
     a question a page asks (#2195 D24).
     """
-    return {"state": STARTS, "reason": None, "entry": entry, "folder_entry": None}
+    return {"state": STARTS, "reason": None, "entry": entry}
 
 
 def vanished_payload(choice: EmulatorChoice) -> dict[str, Any] | None:

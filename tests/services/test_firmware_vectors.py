@@ -266,7 +266,7 @@ def fixture_machine(inp: dict[str, Any]) -> FixtureMachine:
     """The vector's machine, built as upstream's runner builds it.
 
     emu-atlas ``tests/test_machine_vectors.py`` at the release the copy's README
-    names, lines 68-83.
+    names, lines 68-84.
     """
     return FixtureMachine(
         inp["files"],
@@ -278,6 +278,7 @@ def fixture_machine(inp: dict[str, Any]) -> FixtureMachine:
         appimages=inp.get("appimages"),
         appimage_stamps=inp.get("appimage_stamps"),
         ps2_bios_headers=inp.get("ps2_bios_headers"),
+        ps3_files=inp.get("ps3_files"),
         disc_identities=inp.get("disc_identities"),
         archive_texts=inp.get("archive_texts"),
         archives=inp.get("archives"),
@@ -288,7 +289,7 @@ def fixture_machine(inp: dict[str, Any]) -> FixtureMachine:
 def _target(inp: dict[str, Any]) -> tuple[Any, tuple[str, ...]]:
     """The installation the vector's question names, else the first detected; and every kind detected.
 
-    The selection is upstream's ``_select``, the same file, lines 86-93.
+    The selection is upstream's ``_select``, the same file, lines 87-94.
     """
     installs = atlas.detect(inp["home"], fixture_machine(inp))
     selector = inp["firmware_query"].get("installation")

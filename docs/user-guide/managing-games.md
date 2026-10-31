@@ -631,8 +631,8 @@ commonly a PS3 game shipped as a `.pkg` (plus a `.rap` licence file), where the 
 until an emulator installs it. A disc rip can arrive as raw `.bin` tracks with no `.cue` or `.gdi` beside them, which is
 not a file the system starts from. And a file one emulator of a system does not take, another may.
 
-Whenever a game's page opens, Tender asks whether its file starts with the emulator the game starts with. Where it does,
-nothing is said; otherwise the answer stands under the **Play** button:
+Whenever a game's page opens, Tender asks whether its file starts with the emulator the game starts with. Where it does
+and nothing about it is in doubt, nothing is said; otherwise the answer stands under the **Play** button:
 
 - **"This game has to be installed in RPCS3 Game Serial (Standalone) first."** — the file is a package to install in the
   emulator named, before anything starts it. **Play** is off.
@@ -640,18 +640,32 @@ nothing is said; otherwise the answer stands under the **Play** button:
   no file the system starts. **Play** is off.
 - **"Azahar (Standalone) does not start .zip; other emulators of this system do. Choose another emulator in the emulator
   menu."** — **Play** is off until you do.
+- **"RPCS3 Shortcut (Standalone) cannot start a game installed as a folder. RPCS3 Directory (Standalone) or RPCS3 ISO
+  (Standalone) can — choose one in the emulator menu."** — where the emulator's own reading of the game says why it
+  cannot start it, the sentence says so: a folder it does not take, nothing in the folder for it to start, a file that
+  is neither a disc image nor a game program, a disc game whose disc cannot be mounted, or an encrypted disc image
+  without its key file. **Play** is off. Where Tender cannot start that emulator yet either, this reason is still the
+  one said.
+- **"Tender cannot start RPCS3 Game Serial (Standalone) yet."** — the emulator in effect is one Tender cannot start from
+  Steam yet, and nothing else stands in the way. **Play** is off; choose another emulator in the emulator menu.
 - **"Whether Game.sfc starts cannot be established: …"** — the emulator source could not answer, with the reason.
   **Play** stays on.
 - **"What is inside Game.zip was not read, …"** — the file is an archive the emulator opens, and whether it holds a game
   it starts was not read. **Play** stays on.
+- **"Whether RPCS3 Directory (Standalone) starts this game cannot be established: …"** — nothing is known to stand in
+  the way, but the answer could not follow the start all the way, and the sentence says where it stopped: the folder was
+  not found, whether a disc image is encrypted or its key file fits could not be checked, or the emulator's version
+  decides whether it reads that kind of file. **Play** stays on.
+- **"Whether _emulator_ reads _.ext_ files is not established."** — nobody has established which files the emulator
+  reads. **Play** stays on.
 
 Where **Play** is off, Steam's own **Play** on the game's shortcut is refused with the same words. While the page is
 still asking, **Play** is grey and reads **Checking...** beside the same spinning circle "Preparing..." shows. Where the
 question itself goes wrong — Tender's backend does not answer in time, or the connection to it is lost — a notification
 says what went wrong, and **Play** stays grey but can be pressed: the press asks again, and says what stands in the way
-if anything does. The emulator menu shows the same answer for each of its emulators: it opens at once, each emulator
-shows that spinning circle until its answer is in, and then says whether it can start the game and, where not, why.
-Every emulator stays choosable meanwhile.
+if anything does. The emulator menu shows the same answer for each of its emulators: it opens at once, every emulator
+shows that spinning circle until the answers are in together, and then each says whether it can start the game and,
+where not, why. Every emulator stays choosable meanwhile.
 
 **Your download is kept.** The files stay on disk where the ROM would normally live, and **Uninstall** works as usual —
 because installing the package by hand in the emulator is exactly what you would do next. See
@@ -659,7 +673,11 @@ because installing the package by hand in the emulator is exactly what you would
 
 **A PS3 game downloaded as a folder** is named `<game>.ps3`, the name ES-DE expects for a PS3 game kept as a folder. A
 PS3 folder downloaded before this version is renamed so once, when Tender next starts; a folder whose new name is
-already taken keeps its name.
+already taken keeps its name. Where the download holds the game one folder deeper — `<game>.ps3` holding just one
+folder, with `PS3_GAME` inside that — the inner folder becomes `<game>.ps3` itself; a download already on the device is
+fixed so once, when Tender next starts. Where anything else lies beside that inner folder, nothing is moved: with RPCS3
+Shortcut, RetroDECK's default, the game's page says it cannot start a game installed as a folder, and with RPCS3
+Directory or RPCS3 ISO that it finds nothing to start in the folder.
 
 ## Picking a Disc for Multi-Disc Games
 

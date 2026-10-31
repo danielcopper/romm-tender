@@ -98,4 +98,4 @@ class FakeActiveCoreResolver:
             )
         )
         choice = EmulatorChoice(option=option, layer=DEFAULT if option is not None else None, vanished=None)
-        return ResolvedEmulator(choice=choice, options=[], invocation=invocation, folder_unstartable=False)
+        return ResolvedEmulator(choice=choice, options=[], invocation=invocation)
