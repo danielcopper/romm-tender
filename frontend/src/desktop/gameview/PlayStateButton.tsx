@@ -1,5 +1,5 @@
 /**
- * The desktop Play button's PLAY, and the press's progress — CHECKING SAVES...,
+ * The desktop Play button's PLAY, and the press's progress — PREPARING...,
  * SYNCING SAVES..., LAUNCHING... — in its place.
  */
 
@@ -30,7 +30,7 @@ const CHECK_FAILED_PLAY_BUTTON_STYLE: CSSProperties = {
 };
 
 const PRESS_LABEL: Record<PressState, string> = {
-  checking: "CHECKING SAVES...",
+  checking: "PREPARING...",
   syncing: "SYNCING SAVES...",
   launching: "LAUNCHING...",
 };

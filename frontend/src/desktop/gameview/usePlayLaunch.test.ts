@@ -4,13 +4,11 @@ import { usePlayLaunch } from "./usePlayLaunch";
 import * as backend from "../../api/backend";
 import * as toast from "../../utils/toast";
 import * as sessionManager from "../../utils/sessionManager";
-import * as runningGame from "../../utils/runningGame";
 import * as pruneLease from "../../utils/pruneLease";
 import { reconfirmLaunchOptions } from "../../utils/launchOptionsReconcile";
 import { consumeLaunchSkip } from "../../utils/launchGate";
 import { getMigrationState } from "../../utils/migrationStore";
 import * as gameDetailStore from "../../utils/gameDetailStore";
-import { setStrandedAnswer } from "../../test-utils/stranded-panel";
 
 vi.mock("../../api/backend", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../api/backend")>();
@@ -60,14 +58,6 @@ vi.mock("../../utils/sessionManager", () => {
   };
 });
 
-vi.mock("../../utils/runningGame", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../utils/runningGame")>();
-  return {
-    ...actual,
-    activateRunningApp: vi.fn(),
-  };
-});
-
 vi.mock("../../utils/launchOptionsReconcile", () => ({
   reconfirmLaunchOptions: vi.fn().mockResolvedValue({ status: "ready" }),
 }));
@@ -96,8 +86,6 @@ describe("usePlayLaunch", () => {
         romId: 100,
         pressState: null,
         startCheckFailed: false,
-        startChecking: false,
-        playRefusal: null,
         ask,
         leaseOwner: "desktop-play-button:12345",
         setPressState,
@@ -118,6 +106,14 @@ describe("usePlayLaunch", () => {
     steamListsApp.mockReturnValue(false);
   });
 
+  /** The Stop press's update of the press state takes down a held LAUNCHING and nothing else. */
+  const expectOnlyLaunchingTakenDown = () => {
+    const update = setPressState.mock.lastCall?.[0] as (prev: string | null) => string | null;
+    expect(update("launching")).toBeNull();
+    expect(update("checking")).toBe("checking");
+    expect(update("syncing")).toBe("syncing");
+  };
+
   describe("Stop", () => {
     it("stops the running game once the Stop confirm is accepted", async () => {
       vi.mocked(sessionManager.isSessionActive).mockReturnValue(true);
@@ -132,7 +128,7 @@ describe("usePlayLaunch", () => {
       expect(backend.stopRunningGame).toHaveBeenCalledWith(100);
       expect(setStopPending.mock.calls).toEqual([[true], [false]]);
       expect(clearSessionRunning).toHaveBeenCalled();
-      expect(setPressState).toHaveBeenCalledWith(null);
+      expectOnlyLaunchingTakenDown();
     });
 
     it("does not stop the game when the Stop confirm is declined", async () => {
@@ -159,95 +155,7 @@ describe("usePlayLaunch", () => {
       expect(ask).not.toHaveBeenCalled();
       expect(backend.stopRunningGame).not.toHaveBeenCalled();
       expect(clearSessionRunning).toHaveBeenCalled();
-      expect(setPressState).toHaveBeenCalledWith(null);
-    });
-  });
-
-  describe("Resume", () => {
-    it("brings a running game to the front without a start or a sync", async () => {
-      vi.mocked(sessionManager.isSessionActive).mockReturnValue(true);
-      const result = renderLaunch();
-
-      await act(async () => {
-        await result.current.handleResumeClick();
-      });
-
-      expect(runningGame.activateRunningApp).toHaveBeenCalledWith(12345, "DesktopPlayButton");
-      expect(runGame).not.toHaveBeenCalled();
-      expect(backend.preLaunchSync).not.toHaveBeenCalled();
-    });
-
-    it("starts the game through the gate when nothing is running any more", async () => {
-      const result = renderLaunch();
-
-      await act(async () => {
-        await result.current.handleResumeClick();
-      });
-
-      expect(clearSessionRunning).toHaveBeenCalled();
-      expect(runningGame.activateRunningApp).not.toHaveBeenCalled();
-      expect(backend.preLaunchSync).toHaveBeenCalledWith(100);
-      expect(runGame).toHaveBeenCalledWith("12345", "", -1, 100);
-      expect(backend.debugLog).toHaveBeenCalledWith(
-        "DesktopPlayButton: Resume on appId=12345 but nothing is running — self-healing to launch",
-      );
-    });
-
-    it("on a stranded panel takes the running state down and starts nothing when nothing is running", async () => {
-      setStrandedAnswer("reloads");
-      const result = renderLaunch();
-
-      await act(async () => {
-        await result.current.handleResumeClick();
-      });
-
-      expect(clearSessionRunning).toHaveBeenCalled();
-      expect(runGame).not.toHaveBeenCalled();
-      expect(backend.debugLog).toHaveBeenCalledWith(
-        "DesktopPlayButton: Resume on appId=12345 from a stranded panel but nothing is running",
-      );
-    });
-
-    it("with nothing running, says why PLAY is refused and starts nothing where PLAY would be refused", async () => {
-      const refused = "DuckStation is not installed, so this game cannot start.";
-      const result = renderLaunch({ playRefusal: refused });
-
-      await act(async () => {
-        await result.current.handleResumeClick();
-      });
-
-      expect(clearSessionRunning).toHaveBeenCalled();
-      expect(toast.showToast).toHaveBeenCalledWith(refused);
-      expect(backend.probeReachability).not.toHaveBeenCalled();
-      expect(runGame).not.toHaveBeenCalled();
-    });
-
-    it("with nothing running, starts nothing while the page still checks whether the game can start", async () => {
-      const result = renderLaunch({ startChecking: true });
-
-      await act(async () => {
-        await result.current.handleResumeClick();
-      });
-
-      expect(clearSessionRunning).toHaveBeenCalled();
-      expect(backend.probeReachability).not.toHaveBeenCalled();
-      expect(runGame).not.toHaveBeenCalled();
-      expect(toast.showToast).not.toHaveBeenCalled();
-      expect(backend.debugLog).toHaveBeenCalledWith(
-        "DesktopPlayButton: Resume on appId=12345 but nothing is running, and the page is still checking",
-      );
-    });
-
-    it("with nothing running after a check that went wrong, asks again before it starts, as PLAY does", async () => {
-      vi.mocked(gameDetailStore.recheckStart).mockResolvedValueOnce(null);
-      const result = renderLaunch({ startCheckFailed: true });
-
-      await act(async () => {
-        await result.current.handleResumeClick();
-      });
-
-      expect(gameDetailStore.recheckStart).toHaveBeenCalledWith(12345, 100, false);
-      expect(runGame).toHaveBeenCalledWith("12345", "", -1, 100);
+      expectOnlyLaunchingTakenDown();
     });
   });
 
@@ -322,15 +230,36 @@ describe("usePlayLaunch", () => {
       expect(runGame).not.toHaveBeenCalled();
     });
 
-    it("marks the start so the launch watcher does not gate it again", async () => {
+    it("marks the start before Steam is asked to start it, so the launch watcher does not gate it again", async () => {
+      let markedAtStart: boolean | null = null;
+      runGame.mockImplementationOnce(() => {
+        markedAtStart = consumeLaunchSkip(12345);
+      });
       const result = renderLaunch();
 
       await act(async () => {
         await result.current.handlePlayClick();
       });
 
-      expect(runGame).toHaveBeenCalled();
-      expect(consumeLaunchSkip(12345)).toBe(true);
+      expect(runGame).toHaveBeenCalledTimes(1);
+      expect(markedAtStart).toBe(true);
+    });
+
+    it("logs that it runs the launch gate for a game that is not running", async () => {
+      vi.mocked(sessionManager.readGameRunning).mockReturnValueOnce({
+        running: false,
+        decidedBy: "none",
+        diagnostics: "session=none",
+      } as ReturnType<typeof sessionManager.readGameRunning>);
+      const result = renderLaunch();
+
+      await act(async () => {
+        await result.current.handlePlayClick();
+      });
+
+      expect(backend.debugLog).toHaveBeenCalledWith(
+        "DesktopPlayButton: appId=12345 not running — running the launch gate [session=none]",
+      );
     });
 
     it("re-confirms the shortcut's launch options before the start", async () => {

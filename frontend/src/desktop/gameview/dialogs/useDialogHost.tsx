@@ -55,10 +55,7 @@ export function useDialogHost(): DialogHost {
     dismissOpenRef.current?.();
     if (!mountedRef.current) return Promise.resolve(dismissed);
     return new Promise<T>((outer) => {
-      let settled = false;
       const settle = (value: T) => {
-        if (settled) return;
-        settled = true;
         if (dismissOpenRef.current === dismiss) {
           dismissOpenRef.current = null;
           if (mountedRef.current) setDialog(null);

@@ -2577,15 +2577,15 @@ it can also keep an app listed that has already exited: [Is the game running](#i
 
 Several places in the panel ask whether a game is running; the backend's save paths and the removed-game cleanup ask its
 own reading, below. All but one ask one predicate in the session manager, `readGameRunning(appId, romId)`: the launch
-watcher's already-running guard; on each Play button — Big Picture's, and in the desktop dev build the desktop client's
-— its launch guard, its Resume overlay as it is drawn and Resume; and Stop (`executeStopRunningGame`,
-`frontend/src/utils/runningGame.ts`), which both buttons call. The one left asks differently: the stranded panel's card,
-in Quick Access and on a game page (`StrandedPanelCard.tsx`), takes every app the store lists as running or starting
-whose status was read, leaves out one whose stop was observed since its last start (`isStopObserved`, the session
-manager's stop record), with no ROM and so without rule 1, and lets its own last lifetime notification per app answer
-first, to tell whether ANY game runs. At the three launch guards a wrong "running" skips the whole launch gate — the
-migration block, the starting source, tracking setup, the core-change confirmation, the offline drift check, the
-pre-launch sync and conflict resolution.
+watcher's already-running guard; Big Picture's Play button's launch guard, its Resume overlay as it is drawn and Resume,
+and in the desktop dev build the desktop client's Play button's launch guard and its STOP as it is drawn; and Stop
+(`executeStopRunningGame`, `frontend/src/utils/runningGame.ts`), which both buttons call. The one left asks differently:
+the stranded panel's card, in Quick Access and on a game page (`StrandedPanelCard.tsx`), takes every app the store lists
+as running or starting whose status was read, leaves out one whose stop was observed since its last start
+(`isStopObserved`, the session manager's stop record), with no ROM and so without rule 1, and lets its own last lifetime
+notification per app answer first, to tell whether ANY game runs. At the three launch guards a wrong "running" skips the
+whole launch gate — the migration block, the starting source, tracking setup, the core-change confirmation, the offline
+drift check, the pre-launch sync and conflict resolution.
 
 1. **An active session answers "running"**, whatever the store says: the store has been measured reporting nothing with
    the game still up ([Surviving a JS-context rebuild mid-session](#surviving-a-js-context-rebuild-mid-session)).
@@ -2709,8 +2709,8 @@ Detection is **reactive, not polled**: the overlay is seeded synchronously at mo
 (the interceptor and the `handlePlay` guard) stay in place as **backstops** for the render→click race, where the session
 begins between the button rendering Play and the user pressing it; they ask the same predicate.
 
-In the desktop dev build, the desktop client's Play button (`frontend/src/desktop/gameview/PlayButton.tsx`) shows
-**RESUME** too (`usePlayLaunch`).
+In the desktop dev build, the desktop client's Play button (`frontend/src/desktop/gameview/PlayButton.tsx`) has no
+Resume; [Desktop DOM architecture](desktop-dom-architecture.md) says what it shows while the game runs.
 
 #### Stop Game
 
@@ -2718,8 +2718,8 @@ Beside Resume sits a chevron whose menu holds one destructive action: **Stop Gam
 progress since the last in-game save may be lost — Tender promises nothing about the save, because it cannot), then
 calls the `stop_running_game(rom_id)` backend endpoint.
 
-In the desktop dev build, the desktop client's Play button has a Stop button beside RESUME in place of the chevron, and
-asks the same question in a desktop dialog (`DesktopStopGameDialog`).
+In the desktop dev build, the desktop client's Play button asks the same question in a desktop dialog
+(`DesktopStopGameDialog`, `frontend/src/desktop/gameview/dialogs/DesktopStopGameDialog.tsx`).
 
 **Why Tender ends the game itself.** In Gaming Mode, Exit Game in Steam's overlay ends these games. In Desktop Mode the
 emulator runs inside Steam's process tree as well — `reaper`, then `tender-rom-launcher`, then `bwrap`, then the

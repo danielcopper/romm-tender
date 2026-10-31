@@ -15,7 +15,7 @@ import { detach } from "../../utils/detach";
 import type { SaveStatus } from "../../types";
 import type { AskDialog } from "./dialogs/askDialog";
 import { useDialogHost } from "./dialogs/useDialogHost";
-import { CONTAINER_STYLE, BUTTON_GROUP_STYLE, BUTTON_BASE_STYLE, SIDE_ACTION_STYLE } from "./styles";
+import { CONTAINER_STYLE, BUTTON_GROUP_STYLE, BUTTON_BASE_STYLE } from "./styles";
 import { PlayStateButton } from "./PlayStateButton";
 import { usePlayLaunch, type PressState } from "./usePlayLaunch";
 
@@ -25,20 +25,23 @@ interface PlayButtonProps {
 
 /**
  * A verdict this button reached itself — a conflict left unresolved, one just
- * resolved — held only until the shared detail moves on. The detail it was
- * reached against is kept with it, so the next save status or install state the
- * store folds in replaces the verdict rather than sitting under it.
+ * resolved — held only until the shared detail moves on. The ROM and the detail
+ * it was reached against are kept with it, so a version switch, or the next save
+ * status or install state the store folds in, replaces the verdict rather than
+ * sitting under it.
  */
 interface HeldVerdict {
   state: "play" | "conflict";
+  romId: number | null;
   saveStatus: SaveStatus | null;
   installed: boolean;
 }
 
-const RESUME_BUTTON_STYLE: CSSProperties = {
+const STOP_BUTTON_STYLE: CSSProperties = {
   ...BUTTON_BASE_STYLE,
-  background: "linear-gradient(90deg, #59bf43 0%, #409930 100%)",
-  borderRadius: "2px 0 0 2px",
+  width: "100%",
+  borderRadius: "2px",
+  background: "linear-gradient(90deg, #47bfff 0%, #1a44c2 100%)",
 };
 
 const CONFLICT_BUTTON_STYLE: CSSProperties = {
@@ -90,12 +93,19 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
   const leaseOwner = `desktop-play-button:${appId}`;
   usePruneLeaseOwner(leaseOwner);
 
+  // A version switch keeps the previous version's save status until the new
+  // one's lands, so a status for another ROM counts as none yet.
+  const saveStatusOf = (d: typeof detail) => (d.saveStatus?.rom_id === d.romId ? d.saveStatus : null);
+  const saveStatus = saveStatusOf(detail);
   const holdVerdict = (state: HeldVerdict["state"]) => {
     const latest = detailRef.current;
-    setHeldVerdict({ state, saveStatus: latest.saveStatus, installed: latest.installed });
+    setHeldVerdict({ state, romId: latest.romId, saveStatus: saveStatusOf(latest), installed: latest.installed });
   };
   const heldVerdictApplies =
-    heldVerdict !== null && heldVerdict.saveStatus === detail.saveStatus && heldVerdict.installed === detail.installed;
+    heldVerdict !== null &&
+    heldVerdict.romId === romId &&
+    heldVerdict.saveStatus === saveStatus &&
+    heldVerdict.installed === detail.installed;
 
   useEffect(() => {
     if (!romId) return;
@@ -118,13 +128,11 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
     startCheckFailed || detail.emulatorStart === null
       ? null
       : startRefusal(detail.emulatorStart, detail.gameLaunch ?? null, false);
-  const { handlePlayClick, handleResumeClick, handleResolveConflictClick, handleStopClick } = usePlayLaunch({
+  const { handlePlayClick, handleResolveConflictClick, handleStopClick } = usePlayLaunch({
     appId,
     romId,
     pressState,
     startCheckFailed,
-    startChecking,
-    playRefusal,
     ask,
     leaseOwner,
     setPressState,
@@ -136,8 +144,9 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
   });
 
   if (romId === null) return null;
-  // A stranded panel offers only Resume, and only while the game runs.
-  if (stranded && !sessionRunning) return null;
+  // PLAY, STOP and RESOLVE CONFLICT each need the backend to do what they say,
+  // and a stranded panel cannot reach it.
+  if (stranded) return null;
 
   const placeholder = (label: string, title?: string) => (
     <div className="tender-desktop-play-btn-group" style={BUTTON_GROUP_STYLE}>
@@ -154,35 +163,22 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
   );
 
   const renderButtonGroup = () => {
+    // No RESUME: docs/architecture/desktop-dom-architecture.md says why.
     if (sessionRunning) {
       return (
         <div className="tender-desktop-play-btn-group" style={BUTTON_GROUP_STYLE}>
           <button
             type="button"
-            className="tender-desktop-btn-resume"
-            style={stranded ? { ...RESUME_BUTTON_STYLE, borderRadius: "2px" } : RESUME_BUTTON_STYLE}
-            onClick={() => detach(handleResumeClick())}
+            className="tender-desktop-btn-stop"
+            disabled={stopPending}
+            style={stopPending ? { ...STOP_BUTTON_STYLE, cursor: "default" } : STOP_BUTTON_STYLE}
+            onClick={() => detach(handleStopClick())}
           >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
-              <path d="M3 2L12 7L3 12V2Z" />
+            <svg width="12" height="12" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true">
+              <rect width="10" height="10" rx="1" />
             </svg>
-            RESUME
+            {stopPending ? "STOPPING..." : "STOP"}
           </button>
-          {!stranded && (
-            <button
-              type="button"
-              className="tender-desktop-btn-stop"
-              title={stopPending ? "Stopping..." : "Stop Game"}
-              aria-label="Stop Game"
-              disabled={stopPending}
-              style={SIDE_ACTION_STYLE}
-              onClick={() => detach(handleStopClick())}
-            >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true">
-                <rect width="10" height="10" rx="1" />
-              </svg>
-            </button>
-          )}
         </div>
       );
     }
@@ -204,7 +200,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
 
     const conflict = heldVerdictApplies
       ? heldVerdict.state === "conflict"
-      : detail.saveStatus !== null && hasAnySaveConflict(detail.saveStatus);
+      : saveStatus !== null && hasAnySaveConflict(saveStatus);
     if (conflict) {
       return (
         <div className="tender-desktop-play-btn-group" style={BUTTON_GROUP_STYLE}>

@@ -96,20 +96,24 @@ describe("useDialogHost", () => {
     await expect(second).resolves.toBe("second:yes");
   });
 
-  it("takes only the first answer a dialog gives", async () => {
+  it("leaves a newer dialog open when an older one answers again", async () => {
     render(<Host />);
-    let resolveIt!: (value: string) => void;
-    let answer!: Promise<string>;
+    let answerFirst!: (value: string) => void;
+    let first!: Promise<string>;
     act(() => {
-      answer = ask("dismissed", (resolve) => {
-        resolveIt = resolve;
+      first = ask("dismissed", (resolve) => {
+        answerFirst = resolve;
         return <Question label="first" onAnswer={resolve} />;
       });
     });
+    act(() => answerFirst("one"));
+    await expect(first).resolves.toBe("one");
     act(() => {
-      resolveIt("one");
-      resolveIt("two");
+      void ask("dismissed", (resolve) => <Question label="second" onAnswer={resolve} />);
     });
-    await expect(answer).resolves.toBe("one");
+
+    act(() => answerFirst("again"));
+
+    expect(screen.getByRole("dialog", { name: "second" })).toBeInTheDocument();
   });
 });

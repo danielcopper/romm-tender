@@ -8,9 +8,10 @@ import * as sessionManager from "../../utils/sessionManager";
 import * as backend from "../../api/backend";
 import * as toast from "../../utils/toast";
 import { setStrandedAnswer } from "../../test-utils/stranded-panel";
+import { emitHostEvent } from "../../test-utils/host-event-bus";
 import { stubAppStore } from "../../test-utils/steamStubs";
 import type { GameDetailState } from "../../utils/gameDetailStore";
-import type { DownloadItem, GameLaunch, SaveStatus, SyncConflict } from "../../types";
+import type { DownloadItem, GameLaunch, PreLaunchSyncStartedEvent, SaveStatus, SyncConflict } from "../../types";
 import { launchRefusal } from "../../utils/gameLaunch";
 
 vi.mock("../../utils/gameDetailStore", () => ({
@@ -193,7 +194,7 @@ describe("PlayButton", () => {
       expect(sessionManager.noteAppRom).toHaveBeenCalledWith(APP_ID, 100);
     });
 
-    it("reads CHECKING SAVES... during the check and SYNCING SAVES... during the sync, and takes no second press", async () => {
+    it("reads PREPARING... until the backend reports the sync began, SYNCING SAVES... after, and takes no second press", async () => {
       let finishSync!: (value: never) => void;
       vi.mocked(backend.preLaunchSync).mockReturnValue(new Promise((resolve) => (finishSync = resolve)));
       let answerProbe!: (value: { online: boolean }) => void;
@@ -201,19 +202,22 @@ describe("PlayButton", () => {
       render(<PlayButton appId={APP_ID} />);
 
       pressPlay();
-      const checking = await screen.findByRole("button", { name: /CHECKING SAVES\.\.\./ });
-      expect(checking).toBeDisabled();
-      fireEvent.click(checking);
+      const preparing = await screen.findByRole("button", { name: /PREPARING\.\.\./ });
+      expect(preparing).toBeDisabled();
+      fireEvent.click(preparing);
       await act(async () => answerProbe({ online: true }));
+      await waitFor(() => expect(backend.preLaunchSync).toHaveBeenCalled());
+      expect(screen.getByRole("button", { name: /PREPARING\.\.\./ })).toBeDisabled();
 
-      expect(await screen.findByRole("button", { name: /SYNCING SAVES\.\.\./ })).toBeDisabled();
+      act(() => emitHostEvent<PreLaunchSyncStartedEvent>("pre_launch_sync_started", { rom_id: 100 }));
+      expect(screen.getByRole("button", { name: /SYNCING SAVES\.\.\./ })).toBeDisabled();
       await act(async () => finishSync({ success: true, synced: 0, uploaded: 0, downloaded: 0 } as never));
 
       await waitFor(() => expect(mockRunGame).toHaveBeenCalledTimes(1));
       expect(backend.probeReachability).toHaveBeenCalledTimes(1);
     });
 
-    it("reads LAUNCHING... once started, RESUME when the session begins, and PLAY again when it ends", async () => {
+    it("reads LAUNCHING... once started, STOP when the session begins, and PLAY again when it ends", async () => {
       render(<PlayButton appId={APP_ID} />);
 
       pressPlay();
@@ -221,39 +225,39 @@ describe("PlayButton", () => {
       await waitFor(() => expect(mockRunGame).toHaveBeenCalled());
 
       sessionChanged(true, 100);
-      expect(screen.getByRole("button", { name: /RESUME/ })).toBeInTheDocument();
+      expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["STOP"]);
       sessionChanged(false, 100);
       expect(screen.getByRole("button", { name: /^PLAY/ })).toBeEnabled();
     });
 
-    it("starts the game again from a RESUME whose session ended unseen", async () => {
+    it("comes down to PLAY from a STOP whose session ended unseen, without asking and without a start", async () => {
       render(<PlayButton appId={APP_ID} />);
       pressPlay();
       await waitFor(() => expect(mockRunGame).toHaveBeenCalledTimes(1));
       sessionChanged(true, 100);
 
-      fireEvent.click(screen.getByRole("button", { name: /RESUME/ }));
+      fireEvent.click(screen.getByRole("button", { name: /^STOP/ }));
 
-      await waitFor(() => expect(mockRunGame).toHaveBeenCalledTimes(2));
-      expect(backend.preLaunchSync).toHaveBeenCalledTimes(2);
+      expect(await screen.findByRole("button", { name: /^PLAY/ })).toBeEnabled();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(backend.stopRunningGame).not.toHaveBeenCalled();
+      expect(mockRunGame).toHaveBeenCalledTimes(1);
     });
 
-    it("says why from a RESUME whose session ended unseen where PLAY is refused, and starts nothing", async () => {
-      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(
-        detailState({
-          emulatorStart: { state: "cannot_start", reason: "not_installed", entry: "DuckStation" },
-        }),
-      );
+    it("keeps PREPARING... through a STOP whose session ended unseen, and starts no second check", async () => {
+      vi.mocked(backend.probeReachability).mockReturnValue(new Promise(() => {}));
       render(<PlayButton appId={APP_ID} />);
+      pressPlay();
+      await screen.findByRole("button", { name: /PREPARING\.\.\./ });
       sessionChanged(true, 100);
 
-      fireEvent.click(screen.getByRole("button", { name: /RESUME/ }));
+      fireEvent.click(screen.getByRole("button", { name: /^STOP/ }));
 
-      await waitFor(() =>
-        expect(toast.showToast).toHaveBeenCalledWith("DuckStation is not installed, so this game cannot start."),
-      );
-      expect(mockRunGame).not.toHaveBeenCalled();
-      expect(screen.getByRole("button", { name: /^PLAY/ })).toBeDisabled();
+      const preparing = await screen.findByRole("button", { name: /PREPARING\.\.\./ });
+      expect(preparing).toBeDisabled();
+      fireEvent.click(preparing);
+      expect(backend.probeReachability).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole("button", { name: /^PLAY/ })).not.toBeInTheDocument();
     });
 
     it("adopts the default slot without asking where that is safe, and starts the game", async () => {
@@ -286,6 +290,7 @@ describe("PlayButton", () => {
 
       await waitFor(() => expect(mockRunGame).toHaveBeenCalledWith("123", "", -1, 100));
       expect(backend.getSaveSetupInfo).toHaveBeenCalledWith(100);
+      expect(backend.confirmSlotChoice).not.toHaveBeenCalled();
       expect(toast.showToast).not.toHaveBeenCalled();
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
@@ -565,63 +570,57 @@ describe("PlayButton", () => {
     });
   });
 
-  describe("RESUME and Stop", () => {
-    it("brings a running game to the front on RESUME, and stops it once the dialog is confirmed", async () => {
+  describe("STOP", () => {
+    it("is the one button while the game runs, and stops it once the dialog is confirmed", async () => {
       vi.mocked(sessionManager.isSessionActive).mockReturnValue(true);
-      const setRunningApp = vi.fn();
-      vi.stubGlobal("SteamUIStore", { SetRunningApp: setRunningApp });
       render(<PlayButton appId={APP_ID} />);
+      expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["STOP"]);
 
-      fireEvent.click(screen.getByRole("button", { name: /RESUME/ }));
-      await waitFor(() => expect(setRunningApp).toHaveBeenCalledWith(APP_ID));
-      expect(mockRunGame).not.toHaveBeenCalled();
-
-      fireEvent.click(screen.getByRole("button", { name: "Stop Game" }));
+      fireEvent.click(screen.getByRole("button", { name: /^STOP/ }));
       const confirm = await screen.findByRole("dialog", { name: "Stop Game?" });
       expect(backend.stopRunningGame).not.toHaveBeenCalled();
       fireEvent.click(within(confirm).getByRole("button", { name: "Stop Game" }));
 
       await waitFor(() => expect(backend.stopRunningGame).toHaveBeenCalledWith(100));
+      expect(mockRunGame).not.toHaveBeenCalled();
     });
 
     it("stops nothing when the Stop dialog is cancelled", async () => {
       vi.mocked(sessionManager.isSessionActive).mockReturnValue(true);
       render(<PlayButton appId={APP_ID} />);
 
-      fireEvent.click(screen.getByRole("button", { name: "Stop Game" }));
+      fireEvent.click(screen.getByRole("button", { name: /^STOP/ }));
       const confirm = await screen.findByRole("dialog", { name: "Stop Game?" });
       fireEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
 
       await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
       expect(backend.stopRunningGame).not.toHaveBeenCalled();
-      expect(screen.getByRole("button", { name: /RESUME/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /^STOP/ })).toBeEnabled();
     });
 
-    it("disables Stop while a stop runs", async () => {
+    it("reads STOPPING... and takes no press while a stop runs", async () => {
       vi.mocked(sessionManager.isSessionActive).mockReturnValue(true);
       vi.mocked(backend.stopRunningGame).mockReturnValue(new Promise(() => {}));
       render(<PlayButton appId={APP_ID} />);
 
-      fireEvent.click(screen.getByRole("button", { name: "Stop Game" }));
+      fireEvent.click(screen.getByRole("button", { name: /^STOP/ }));
       fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Stop Game" }));
 
-      await waitFor(() => expect(screen.getByRole("button", { name: "Stop Game" })).toBeDisabled());
-      expect(screen.getByRole("button", { name: "Stop Game" })).toHaveAttribute("title", "Stopping...");
+      expect(await screen.findByRole("button", { name: /STOPPING\.\.\./ })).toBeDisabled();
     });
   });
 
   describe("a session started somewhere other than this button", () => {
-    it("turns Play into Resume when it starts, and back when it ends", () => {
+    it("turns PLAY into STOP when it starts, and back when it ends", () => {
       render(<PlayButton appId={APP_ID} />);
       expect(screen.getByRole("button", { name: /^PLAY/ })).toBeInTheDocument();
 
       sessionChanged(true, 100);
-      expect(screen.getByRole("button", { name: /RESUME/ })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Stop Game" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /^STOP/ })).toBeInTheDocument();
 
       sessionChanged(false, 100);
       expect(screen.getByRole("button", { name: /^PLAY/ })).toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: /RESUME/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /^STOP/ })).not.toBeInTheDocument();
     });
 
     it("ignores a session of another ROM", () => {
@@ -630,7 +629,7 @@ describe("PlayButton", () => {
       sessionChanged(true, 999);
 
       expect(screen.getByRole("button", { name: /^PLAY/ })).toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: /RESUME/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /^STOP/ })).not.toBeInTheDocument();
     });
 
     it("stops listening once unmounted", () => {
@@ -653,7 +652,7 @@ describe("PlayButton", () => {
     it("holds a session it saw for its ROM only, not for the version the page switches to", () => {
       const { rerender } = render(<PlayButton appId={APP_ID} />);
       sessionChanged(true, 100);
-      expect(screen.getByRole("button", { name: /RESUME/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /^STOP/ })).toBeInTheDocument();
 
       vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ romId: 200 }));
       rerender(<PlayButton appId={APP_ID} />);
@@ -757,6 +756,34 @@ describe("PlayButton", () => {
 
       expect(screen.getByRole("button", { name: /^PLAY/ })).toBeInTheDocument();
     });
+
+    it("holds a verdict for its ROM only, not for the version the page switches to", async () => {
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ saveSyncEnabled: true }));
+      vi.mocked(backend.preLaunchSync).mockResolvedValueOnce({
+        success: true,
+        synced: 0,
+        uploaded: 0,
+        downloaded: 0,
+        conflicts: [CONFLICT],
+      } as never);
+      const { rerender } = render(<PlayButton appId={APP_ID} />);
+      pressPlay();
+      fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+      await screen.findByRole("button", { name: /RESOLVE CONFLICT/ });
+
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ romId: 200, saveSyncEnabled: true }));
+      rerender(<PlayButton appId={APP_ID} />);
+
+      expect(screen.getByRole("button", { name: /^PLAY/ })).toBeInTheDocument();
+    });
+
+    it("shows no conflict of the version the page switched from while the new version's save status is read", () => {
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue({ ...inConflict(), romId: 200 });
+      render(<PlayButton appId={APP_ID} />);
+
+      expect(screen.getByRole("button", { name: /^PLAY/ })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /RESOLVE CONFLICT/ })).not.toBeInTheDocument();
+    });
   });
 
   describe("a game that cannot be played from here yet", () => {
@@ -801,18 +828,14 @@ describe("PlayButton", () => {
   });
 
   describe("on a stranded panel", () => {
-    it("keeps only RESUME while the game runs", async () => {
+    it("takes STOP away while the game runs", () => {
       vi.mocked(sessionManager.isSessionActive).mockReturnValue(true);
-      const setRunningApp = vi.fn();
-      vi.stubGlobal("SteamUIStore", { SetRunningApp: setRunningApp });
-      render(<PlayButton appId={APP_ID} />);
-      expect(screen.getByRole("button", { name: "Stop Game" })).toBeInTheDocument();
+      const { container } = render(<PlayButton appId={APP_ID} />);
+      expect(screen.getByRole("button", { name: /^STOP/ })).toBeInTheDocument();
 
       act(() => setStrandedAnswer("reloads"));
 
-      expect(screen.getAllByRole("button")).toHaveLength(1);
-      fireEvent.click(screen.getByRole("button", { name: /RESUME/ }));
-      await waitFor(() => expect(setRunningApp).toHaveBeenCalledWith(APP_ID));
+      expect(container).toBeEmptyDOMElement();
     });
 
     it.each([
@@ -825,18 +848,6 @@ describe("PlayButton", () => {
       act(() => setStrandedAnswer("restart_steam"));
 
       expect(container).toBeEmptyDOMElement();
-    });
-
-    it("drops a stale RESUME instead of starting the game", async () => {
-      render(<PlayButton appId={APP_ID} />);
-      sessionChanged(true, 100);
-      act(() => setStrandedAnswer("reloads"));
-
-      fireEvent.click(screen.getByRole("button", { name: /RESUME/ }));
-
-      await waitFor(() => expect(screen.queryByRole("button")).not.toBeInTheDocument());
-      expect(mockRunGame).not.toHaveBeenCalled();
-      expect(backend.preLaunchSync).not.toHaveBeenCalled();
     });
   });
 });

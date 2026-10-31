@@ -124,21 +124,3 @@ export const BUTTON_BASE_STYLE: CSSProperties = {
   textShadow: "0 1px 2px rgba(0, 0, 0, 0.4)",
   transition: "filter 0.15s ease, background 0.15s ease",
 };
-
-export const SIDE_ACTION_STYLE: CSSProperties = {
-  height: "48px",
-  width: "36px",
-  minWidth: "36px",
-  maxWidth: "36px",
-  flex: "0 0 36px",
-  border: "none",
-  borderRadius: "0 2px 2px 0",
-  background: "rgba(0, 0, 0, 0.25)",
-  borderLeft: "1px solid rgba(255, 255, 255, 0.15)",
-  color: "#ffffff",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  transition: "background 0.15s ease",
-};

@@ -1,15 +1,14 @@
 /**
  * The desktop Play button's presses: Play through the shared launch gate
  * (`utils/launchGateOps.ts`, `utils/launchVerdict.ts`) asked through the desktop
- * dialogs, Resume, Stop and Resolve Conflict. `bigpicture/CustomPlayButton`'s
- * handlers are the gamepad drawing of the same presses.
+ * dialogs, Stop and Resolve Conflict. `bigpicture/CustomPlayButton`'s handlers
+ * are the gamepad drawing of the same presses.
  */
 
-import { useRef } from "react";
+import { useRef, type Dispatch, type SetStateAction } from "react";
 import { debugLog } from "../../api/backend";
-import { strandedAnswer } from "../../api/host";
 import { desktopLaunchPrompts, desktopResolveConflicts, desktopStopGameDialog } from "./dialogs/desktopDialogs";
-import { activateRunningApp, executeStopRunningGame } from "../../utils/runningGame";
+import { executeStopRunningGame } from "../../utils/runningGame";
 import { resolveKnownConflicts } from "../../utils/saveConflictFlow";
 import { noteAppRom, readGameRunning } from "../../utils/sessionManager";
 import { reconfirmLaunchOptions } from "../../utils/launchOptionsReconcile";
@@ -38,13 +37,9 @@ interface UsePlayLaunchOptions {
   pressState: PressState | null;
   /** Whether the page's check of whether the game can start went wrong. */
   startCheckFailed: boolean;
-  /** Whether the page's check of whether the game can start is still running. */
-  startChecking: boolean;
-  /** The sentence PLAY is refused with; `null` where nothing refuses it. */
-  playRefusal: string | null;
   ask: AskDialog;
   leaseOwner: string;
-  setPressState: (state: PressState | null) => void;
+  setPressState: Dispatch<SetStateAction<PressState | null>>;
   /** Bring the running state down when the game turns out not to be running. */
   clearSessionRunning: () => void;
   holdVerdict: (state: "play" | "conflict") => void;
@@ -53,7 +48,6 @@ interface UsePlayLaunchOptions {
 
 interface UsePlayLaunchResult {
   handlePlayClick: () => Promise<void>;
-  handleResumeClick: () => Promise<void>;
   handleResolveConflictClick: () => Promise<void>;
   handleStopClick: () => Promise<void>;
 }
@@ -63,8 +57,6 @@ export function usePlayLaunch({
   romId,
   pressState,
   startCheckFailed,
-  startChecking,
-  playRefusal,
   ask,
   leaseOwner,
   setPressState,
@@ -102,12 +94,7 @@ export function usePlayLaunch({
   };
 
   const handlePlayClick = async () => {
-    if (pressState !== null) return;
-    await startGame();
-  };
-
-  const startGame = async () => {
-    if (romId === null) return;
+    if (pressState !== null || romId === null) return;
     const gameId = appStore.GetAppOverviewByAppID(appId)?.GetGameID?.() ?? String(appId);
     const admission = capturePruneLeaseAdmission(leaseOwner);
 
@@ -119,6 +106,7 @@ export function usePlayLaunch({
       await dispatchLaunch(romId, gameId, admission);
       return;
     }
+    detach(debugLog(`${TAG}: appId=${appId} not running — running the launch gate [${running.diagnostics}]`));
 
     setPressState("checking");
     try {
@@ -165,32 +153,6 @@ export function usePlayLaunch({
     }
   };
 
-  const handleResumeClick = async () => {
-    // The running state can outlive a session whose end never reached this
-    // button, and so can a LAUNCHING held under it, during which PLAY takes no
-    // press. With nothing running, the running state comes down and the press
-    // does what PLAY's would on the page under it, unless the panel is stranded.
-    if (!readGameRunning(appId, romId).running) {
-      clearSessionRunning();
-      if (strandedAnswer()) {
-        detach(debugLog(`${TAG}: Resume on appId=${appId} from a stranded panel but nothing is running`));
-        return;
-      }
-      if (startChecking) {
-        detach(debugLog(`${TAG}: Resume on appId=${appId} but nothing is running, and the page is still checking`));
-        return;
-      }
-      if (playRefusal !== null) {
-        showToast(playRefusal);
-        return;
-      }
-      detach(debugLog(`${TAG}: Resume on appId=${appId} but nothing is running — self-healing to launch`));
-      await startGame();
-      return;
-    }
-    activateRunningApp(appId, TAG);
-  };
-
   const handleResolveConflictClick = async () => {
     if (romId === null) return;
     setPressState("syncing");
@@ -207,12 +169,12 @@ export function usePlayLaunch({
       stopInFlightRef,
       onClearOverlay: () => {
         clearSessionRunning();
-        setPressState(null);
+        setPressState((prev) => (prev === "launching" ? null : prev));
       },
       onSetPending: setStopPending,
       confirmModal: desktopStopGameDialog(ask),
     });
   };
 
-  return { handlePlayClick, handleResumeClick, handleResolveConflictClick, handleStopClick };
+  return { handlePlayClick, handleResolveConflictClick, handleStopClick };
 }

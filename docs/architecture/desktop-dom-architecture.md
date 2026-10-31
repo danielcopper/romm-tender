@@ -26,21 +26,23 @@ backend for the migration state again for each game page it is drawn for (`useMi
 `frontend/src/utils/migrationRefresh.ts`).
 
 `PlayButton` (`frontend/src/desktop/gameview/PlayButton.tsx`) is Tender's Play button in the desktop client. Its presses
-(`frontend/src/desktop/gameview/usePlayLaunch.ts`) are those of Big Picture's `CustomPlayButton`: PLAY starts the game
-through the launch gate ([Pre-launch sync](save-file-sync-architecture.md#pre-launch-sync)), and RESUME, Stop and
-RESOLVE CONFLICT do what they do there, except that a RESUME whose game is no longer running does what a press on PLAY
-would. It asks its questions in the desktop dialogs, which `useDialogHost`
-(`frontend/src/desktop/gameview/dialogs/useDialogHost.tsx`) draws into the body of the document the button is drawn in.
-Its save-tracking step is the one the [Pre-launch sync](save-file-sync-architecture.md#pre-launch-sync) table names for
-it. Where the game cannot be played from the page — not downloaded, downloading, or its downloaded file gone — it draws
-a disabled button that says which, and where the game cannot start — its emulator cannot, or its file does not start
-with it — PLAY is disabled with the sentence `startRefusal` (`frontend/src/utils/emulatorStart.ts`) answers. While the
-page checks whether the game can start, and where that check went wrong, PLAY does what Big Picture's does
+(`frontend/src/desktop/gameview/usePlayLaunch.ts`) are those of Big Picture's `CustomPlayButton`
+(`frontend/src/bigpicture/CustomPlayButton.tsx`): PLAY starts the game through the launch gate
+([Pre-launch sync](save-file-sync-architecture.md#pre-launch-sync)), and Stop and RESOLVE CONFLICT do what they do
+there. It has no RESUME: while the game runs, whatever started it, the button is STOP, as Steam's own Play button in the
+desktop client is, and bringing the game's window to the front is the window manager's. It asks its questions in the
+desktop dialogs, which `useDialogHost` (`frontend/src/desktop/gameview/dialogs/useDialogHost.tsx`) draws into the body
+of the document the button is drawn in. Its save-tracking step is the one the
+[Pre-launch sync](save-file-sync-architecture.md#pre-launch-sync) table names for it. Where the game cannot be played
+from the page — not downloaded, downloading, or its downloaded file gone — it draws a disabled button that says which,
+and where the game cannot start — its emulator cannot, or its file does not start with it — PLAY is disabled with the
+sentence `startRefusal` (`frontend/src/utils/emulatorStart.ts`) answers. While the page checks whether the game can
+start, and where that check went wrong, PLAY does what Big Picture's does
 ([Launch-target validation](backend-architecture.md#launch-target-validation)), and reads CHECKING... where Big
 Picture's shows its throbber. On a stranded panel it gates as the [invariant register](invariants.md)'s stranded-panel
 entry says. Steam's Play button and the badges beside it are hidden as soon as the button's root has rendered, also
-while it draws nothing — before the page's detail names the ROM, and on a stranded panel with no game running — and the
-button draws no badges in their place.
+while it draws nothing — before the page's detail names the ROM, and on a stranded panel — and the button draws no
+badges in their place.
 
 ## Two windows, two realms
 

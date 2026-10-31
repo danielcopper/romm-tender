@@ -205,7 +205,8 @@ declare module "react-dom/client" {
  * The one `react-dom` export this package calls (the desktop dialogs' portal),
  * declared here for the reason above. `@decky/ui` types `window.SP_REACTDOM` as
  * `typeof import("react-dom")`, so this is also the whole of that global's type:
- * a module reached through it needs its export added here.
+ * any other `react-dom` export the code uses, directly or through
+ * `window.SP_REACTDOM`, has to be declared here.
  */
 declare module "react-dom" {
   export function createPortal(
