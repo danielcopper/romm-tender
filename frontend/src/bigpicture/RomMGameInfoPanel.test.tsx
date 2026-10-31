@@ -43,7 +43,15 @@ import {
   setServerRetryProgress,
   getServerRetryProgress,
 } from "../utils/connectionState";
-import type { MigrationStatus, RomMetadata, DownloadCompleteEvent, CoreInfo, InstalledRom, SaveStatus } from "../types";
+import type {
+  MigrationStatus,
+  RomMetadata,
+  DownloadCompleteEvent,
+  CoreInfo,
+  InstalledRom,
+  SaveStatus,
+  SaveSyncAvailability,
+} from "../types";
 
 // Type-only imports — vi.mock(...) below replaces the runtime impl, but
 // pinning captured-props shapes to the real component keeps assertions in
@@ -6629,6 +6637,204 @@ describe("RomMGameInfoPanel", () => {
         expect(container.textContent).not.toContain("Loading achievements");
         expect(backend.getAchievements).toHaveBeenCalledTimes(1);
       });
+    });
+  });
+
+  describe("whether a game's saves sync, on its SAVES tab (#2149)", () => {
+    const REFUSED: SaveSyncAvailability = {
+      available: false,
+      installed: true,
+      established: true,
+      emulator_label: "PCSX2",
+      reason: "save_shape_unsupported",
+      message: "a refusal's sentence",
+    };
+    const SYNCS: SaveSyncAvailability = {
+      available: true,
+      installed: true,
+      established: true,
+      emulator_label: "mGBA",
+    };
+
+    const detailFor = (romId: number): CachedGameDetail => ({
+      found: true,
+      rom_id: romId,
+      rom_name: `Game ${romId}`,
+      platform_slug: "ps2",
+      save_sync_enabled: true,
+      metadata: makeMetadata(),
+      stale_fields: [],
+    });
+
+    const mark = (container: HTMLElement) =>
+      container.querySelector('[data-testid="tab-saves"] [data-testid="saves-tab-warning"]');
+
+    const switchTo = async (romId: number) => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(romId));
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", {
+            detail: { type: "version_switched", app_id: testAppId, rom_id: romId },
+          }),
+        );
+      });
+      await flushAsync();
+    };
+
+    it("marks nothing while the answer loads, and marks the tab once it refuses", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1));
+      const read = heldRead<SaveSyncAvailability>();
+      vi.mocked(backend.getSaveSyncAvailability).mockReturnValue(read.promise);
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+
+      expect(container.querySelector('[data-testid="tab-saves"]')).not.toBeNull();
+      expect(mark(container)).toBeNull();
+
+      await act(async () => {
+        read.release(REFUSED);
+      });
+      await flushAsync();
+
+      expect(vi.mocked(backend.getSaveSyncAvailability)).toHaveBeenCalledWith(1);
+      expect(mark(container)).not.toBeNull();
+    });
+
+    it("marks nothing for a game whose saves sync", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1));
+      vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue(SYNCS);
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+
+      expect(vi.mocked(backend.getSaveSyncAvailability)).toHaveBeenCalledWith(1);
+      expect(mark(container)).toBeNull();
+    });
+
+    it("marks the tab on a switch to a version whose saves cannot sync, and unmarks it on the way back", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1));
+      vi.mocked(backend.getSaveSyncAvailability).mockImplementation(async (romId) => (romId === 2 ? REFUSED : SYNCS));
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      expect(mark(container)).toBeNull();
+
+      await switchTo(2);
+      expect(mark(container)).not.toBeNull();
+
+      await switchTo(1);
+      expect(mark(container)).toBeNull();
+    });
+
+    it("drops an answer read for the version the page has switched away from", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1));
+      const first = heldRead<SaveSyncAvailability>();
+      vi.mocked(backend.getSaveSyncAvailability).mockImplementation((romId) =>
+        romId === 1 ? first.promise : Promise.resolve(SYNCS),
+      );
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+
+      await switchTo(2);
+      await act(async () => {
+        first.release(REFUSED);
+      });
+      await flushAsync();
+
+      expect(mark(container)).toBeNull();
+    });
+
+    it("asks again when the game's emulator changes", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1));
+      vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue(SYNCS);
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      expect(mark(container)).toBeNull();
+
+      vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue(REFUSED);
+      await act(async () => {
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "core_changed" } }));
+      });
+      await flushAsync();
+
+      expect(mark(container)).not.toBeNull();
+    });
+
+    it("asks again each time the SAVES tab opens, keeping the shown answer until the new one lands (#2149 D8)", async () => {
+      const openTab = async (container: HTMLElement, tab: string) => {
+        await act(async () => {
+          fireEvent.click(container.querySelector(`[data-testid="tab-${tab}"]`) as HTMLElement);
+        });
+        await flushAsync();
+      };
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1));
+      vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue(REFUSED);
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      await openTab(container, "saves");
+      expect(mark(container)).not.toBeNull();
+      expect(container.textContent).toContain(REFUSED.message);
+
+      // The emulator's setting changed while the page stood open.
+      await openTab(container, "info");
+      const reread = heldRead<SaveSyncAvailability>();
+      vi.mocked(backend.getSaveSyncAvailability).mockReturnValue(reread.promise);
+      await openTab(container, "saves");
+      expect(mark(container)).not.toBeNull();
+
+      await act(async () => {
+        reread.release(SYNCS);
+      });
+      await flushAsync();
+
+      expect(mark(container)).toBeNull();
+      expect(container.textContent).not.toContain(REFUSED.message);
+    });
+
+    it("asks again once the game is downloaded, and once it is uninstalled", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1));
+      vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue({ ...REFUSED, installed: false });
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      expect(mark(container)).toBeNull();
+
+      vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue(REFUSED);
+      await act(async () => {
+        emitHostEvent<DownloadCompleteEvent>("download_complete", {
+          rom_id: 1,
+          rom_name: "Game 1",
+          platform_name: "PlayStation 2",
+          file_path: "/roms/game.iso",
+          app_id: testAppId,
+          launch_options: "cmd",
+        });
+      });
+      await flushAsync();
+      expect(mark(container)).not.toBeNull();
+
+      vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue({ ...REFUSED, installed: false });
+      await act(async () => {
+        globalThis.dispatchEvent(new CustomEvent("romm_rom_uninstalled", { detail: { rom_id: 1 } }));
+      });
+      await flushAsync();
+      expect(mark(container)).toBeNull();
+    });
+
+    it("asks nothing while save sync is off, and asks once it is switched on", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ ...detailFor(1), save_sync_enabled: false });
+      vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue(REFUSED);
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      expect(vi.mocked(backend.getSaveSyncAvailability)).not.toHaveBeenCalled();
+
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", {
+            detail: { type: "save_sync_settings", save_sync_enabled: true },
+          }),
+        );
+      });
+      await flushAsync();
+
+      expect(mark(container)).not.toBeNull();
     });
   });
 });

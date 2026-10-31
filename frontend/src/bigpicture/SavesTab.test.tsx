@@ -104,6 +104,9 @@ function makeSaveFile(overrides: Partial<SaveFileStatus> = {}): SaveFileStatus {
   };
 }
 
+/** The line the panel hands the tab for an active slot with no save. */
+const NO_SAVE_LINE = "the no-save line the panel hands the tab";
+
 function defaultProps(
   overrides: Partial<React.ComponentProps<typeof SavesTab>> = {},
 ): React.ComponentProps<typeof SavesTab> {
@@ -117,6 +120,7 @@ function defaultProps(
     availableSlots: [],
     lastKnownSlots: null,
     slotsLoading: false,
+    noSaveLine: NO_SAVE_LINE,
     onSlotSwitched: vi.fn(),
     ...overrides,
   };
@@ -248,7 +252,7 @@ describe("SavesTab", () => {
       await flushAsync();
     });
 
-    it("renders the 'No save files tracked yet' empty state when activeSlot is null and no files", async () => {
+    it("renders the no-save line when activeSlot is null and no files", async () => {
       const { container } = render(
         <SavesTab
           {...defaultProps({
@@ -257,13 +261,14 @@ describe("SavesTab", () => {
           })}
         />,
       );
-      expect(container.textContent).toContain("No save files tracked yet");
+      expect(container.textContent).toContain(NO_SAVE_LINE);
       await flushAsync();
     });
 
-    it("renders the empty state when activeSlot is null and saveStatus is null", async () => {
+    it("renders no line when activeSlot is null and saveStatus is null", async () => {
       const { container } = render(<SavesTab {...defaultProps({ activeSlot: null, saveStatus: null })} />);
-      expect(container.textContent).toContain("No save files tracked yet");
+      expect(container.textContent).not.toContain(NO_SAVE_LINE);
+      expect(container.textContent).not.toContain("No save on this device.");
       await flushAsync();
     });
 
@@ -424,9 +429,10 @@ describe("SavesTab", () => {
       await flushAsync();
     });
 
-    it("shows the tracked-files empty state while no slot answer has landed", async () => {
+    it("shows no line while no slot answer and no status have landed", async () => {
       const { container } = render(<SavesTab {...defaultProps({ activeSlotKnown: false, saveStatus: null })} />);
-      expect(container.textContent).toContain("No save files tracked yet");
+      expect(container.textContent).not.toContain(NO_SAVE_LINE);
+      expect(container.textContent).not.toContain("No save on this device.");
       await flushAsync();
     });
 
@@ -528,10 +534,12 @@ describe("SavesTab", () => {
     it("falls back to #1747's slot-less view when there is no snapshot", async () => {
       setRommConnectionState("offline");
       const { queryByTestId, container } = render(
-        <SavesTab {...defaultProps({ activeSlotKnown: false, lastKnownSlots: null })} />,
+        <SavesTab
+          {...defaultProps({ activeSlotKnown: false, lastKnownSlots: null, saveStatus: makeSaveStatus({ files: [] }) })}
+        />,
       );
       expect(queryByTestId("last-known-slots")).toBeNull();
-      expect(container.textContent).toContain("No save files tracked yet");
+      expect(container.textContent).toContain(NO_SAVE_LINE);
       expect(capturedSlotPanelProps).toEqual([]);
       await flushAsync();
     });
@@ -1315,6 +1323,48 @@ describe("SavesTab", () => {
       } finally {
         logWarnSpy.mockRestore();
       }
+    });
+  });
+
+  describe("a game with no save yet (#2149 D3)", () => {
+    const line = "No save yet — mGBA's saves for this game sync with RomM once it writes one.";
+
+    it("reads the line it is handed where no slot panel stands", async () => {
+      const { container } = render(
+        <SavesTab
+          {...defaultProps({ activeSlot: null, saveStatus: makeSaveStatus({ files: [] }) })}
+          noSaveLine={line}
+        />,
+      );
+
+      expect(container.textContent).toContain(line);
+      expect(container.textContent).not.toContain("No save files tracked yet");
+      await flushAsync();
+    });
+
+    it("speaks only for this device where RomM could not be asked (#2149 D10)", async () => {
+      const { container } = render(
+        <SavesTab
+          {...defaultProps({ activeSlot: null, saveStatus: makeSaveStatus({ files: [], server_query_failed: true }) })}
+          noSaveLine={line}
+        />,
+      );
+
+      expect(container.textContent).toContain("No save on this device.");
+      expect(container.textContent).not.toContain(line);
+      await flushAsync();
+    });
+
+    it("hands the line to each slot panel", async () => {
+      render(
+        <SavesTab
+          {...defaultProps({ availableSlots: [makeSlot({ slot: "default" }), makeSlot({ slot: "other" })] })}
+          noSaveLine={line}
+        />,
+      );
+
+      expect(capturedSlotPanelProps.map((p) => p.noSaveLine)).toEqual([line, line]);
+      await flushAsync();
     });
   });
 });

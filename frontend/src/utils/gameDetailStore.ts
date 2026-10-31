@@ -82,12 +82,6 @@ export interface GameDetailState extends BiosInfoFields, CoreInfoFields {
   saveStatus: SaveStatus | null;
   saveSyncStatus: "synced" | "pending" | "conflict" | "none" | null; // NOSONAR(typescript:S4323) — inline union inside GameDetailState; extracting an alias adds indirection for no reuse benefit.
   saveSyncLabel: string;
-  /** The emulator writes this game's saves beside the game file, so they can't
-   *  be synced. Read off the local machine, so it is populated even while RomM
-   *  is unreachable. `null` from re-enabling save sync until the status read
-   *  that follows answers, so a read that fails leaves nothing asserted rather
-   *  than the answer from before sync was switched off. */
-  savefilesInContentDir: boolean | null;
   raId: number | null;
   achievementEarned: number;
   achievementTotal: number;
@@ -105,7 +99,6 @@ const DEFAULT_STATE: GameDetailState = {
   saveStatus: null,
   saveSyncStatus: null,
   saveSyncLabel: "",
-  savefilesInContentDir: false,
   raId: null,
   achievementEarned: 0,
   achievementTotal: 0,
@@ -505,7 +498,6 @@ function applySaveStatus(entry: Entry, generation: number, status: SaveStatus): 
     saveStatus: status,
     saveSyncStatus,
     saveSyncLabel,
-    savefilesInContentDir: status.savefiles_in_content_dir === true,
   }));
 }
 
@@ -687,10 +679,6 @@ async function handleSaveSyncSettingsChange(
   detail: Extract<RommDataChangedDetail, { type: "save_sync_settings" }>,
 ): Promise<void> {
   if (!detail.save_sync_enabled) {
-    // Only the sync-derived display is cleared. `savefilesInContentDir` stays as
-    // read: it describes where the emulator writes this game's saves, which the
-    // setting does not change, and each surface decides for itself whether the
-    // fact is worth showing while sync is off.
     writerFor(
       entry,
       entry.generation,
@@ -702,7 +690,7 @@ async function handleSaveSyncSettingsChange(
     }));
     return;
   }
-  writerFor(entry, entry.generation)((prev) => ({ ...prev, saveSyncEnabled: true, savefilesInContentDir: null }));
+  writerFor(entry, entry.generation)((prev) => ({ ...prev, saveSyncEnabled: true }));
   await refreshSaveStatus(appId).catch(() => null);
 }
 

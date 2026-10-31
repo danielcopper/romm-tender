@@ -626,7 +626,9 @@ is not part of the panel, but its tabs are this same component: **GAME INFO**, *
 lands on it, and each tab keeping where focus stood are Steam's. ACHIEVEMENTS is handed to it for a game
 RetroAchievements knows (an `ra_id`) and SAVES while save sync is on, so a tab that is not shown is not stepped onto
 either. Steam's own game page steps its own tabs with L1 and R1 the same way; on a RomM game Tender's section takes that
-panel's place, so nothing of Steam's is left handling the bumpers there (#2421 D2).
+panel's place, so nothing of Steam's is left handling the bumpers there (#2421 D2). SAVES carries a warning mark beside
+its title (Steam's `renderTabAddon`) for a downloaded game whose saves cannot sync
+([save-file-sync-architecture.md](save-file-sync-architecture.md#where-the-check-happens)).
 
 **Height and scrolling are Steam's game page's.** The tabbed page has no height of its own — its tab row and its content
 are positioned absolutely (`steamui/css/sp.css`, `GamepadTabbedPage`) — and Steam's game page passes

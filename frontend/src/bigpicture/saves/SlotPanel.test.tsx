@@ -79,6 +79,9 @@ function makeStatus(overrides: Partial<SaveStatus> = {}): SaveStatus {
   };
 }
 
+/** The line the panel hands an active slot with no save. */
+const NO_SAVE_LINE = "the no-save line the panel hands the slot";
+
 function defaultProps(overrides: Partial<React.ComponentProps<typeof SlotPanel>> = {}) {
   return {
     romId: 1,
@@ -87,6 +90,7 @@ function defaultProps(overrides: Partial<React.ComponentProps<typeof SlotPanel>>
     defaultExpanded: false,
     saveStatus: null,
     conflicts: [],
+    noSaveLine: NO_SAVE_LINE,
     isOffline: false,
     onSlotSwitched: vi.fn(),
     onVersionRestored: vi.fn(),
@@ -315,7 +319,7 @@ describe("SlotPanel", () => {
       expect(queryByTestId("vhp-rally.bkr")).toBeNull();
     });
 
-    it("shows 'No save files tracked yet' when active slot has no files", () => {
+    it("shows the no-save line once when the active slot has no files", () => {
       const { container } = render(
         <SlotPanel
           {...defaultProps({
@@ -325,7 +329,7 @@ describe("SlotPanel", () => {
           })}
         />,
       );
-      expect(container.textContent).toContain("No save files tracked yet");
+      expect(container.textContent.split(NO_SAVE_LINE)).toHaveLength(2);
     });
 
     it("forwards isOffline to VersionHistoryPanel for each file", () => {
@@ -1014,11 +1018,11 @@ describe("SlotPanel", () => {
       // Inactive: no summary line
       const { container, rerender } = render(<SlotPanel {...defaultProps()} />);
       expect(container.querySelector(".romm-slot-sync-summary")).toBeNull();
-      // Active with empty files: "No saves found" text appears
+      // Active with empty files: the no-save line appears
       rerender(<SlotPanel {...defaultProps({ isActive: true, saveStatus: makeStatus() })} />);
       const summary = container.querySelector(".romm-slot-sync-summary");
       expect(summary).not.toBeNull();
-      expect(summary?.textContent).toBe("No saves found");
+      expect(summary?.textContent).toBe(NO_SAVE_LINE);
     });
 
     it("renders the slot count using slot.count when inactive and no slot files loaded", () => {
@@ -1164,6 +1168,55 @@ describe("SlotPanel", () => {
       } finally {
         errorSpy.mockRestore();
       }
+    });
+  });
+
+  describe("an active slot with no save (#2149 D3)", () => {
+    const line = "No save yet — mGBA's saves for this game sync with RomM once it writes one.";
+
+    it("reads the line it is handed once, on its summary line", () => {
+      const { container } = render(
+        <SlotPanel
+          {...defaultProps({ isActive: true, defaultExpanded: true, saveStatus: makeStatus({ files: [] }) })}
+          noSaveLine={line}
+        />,
+      );
+
+      expect(container.querySelector(".romm-slot-sync-summary")?.textContent).toBe(line);
+      expect(container.textContent.split(line)).toHaveLength(2);
+      expect(container.textContent).not.toContain("No save files tracked yet");
+    });
+
+    it("says nothing under the slot while no status is held (#2149 D10)", () => {
+      const { container } = render(
+        <SlotPanel {...defaultProps({ isActive: true, defaultExpanded: true, saveStatus: null })} noSaveLine={line} />,
+      );
+
+      expect(container.querySelector(".romm-slot-sync-summary")).toBeNull();
+      expect(container.querySelector(".romm-slot-body")?.textContent).toBe("");
+    });
+
+    it("speaks only for this device where RomM could not be asked (#2149 D10)", () => {
+      const { container } = render(
+        <SlotPanel
+          {...defaultProps({
+            isActive: true,
+            defaultExpanded: true,
+            saveStatus: makeStatus({ files: [], server_query_failed: true, server_query_reason: "server_unreachable" }),
+          })}
+          noSaveLine={line}
+        />,
+      );
+
+      expect(container.querySelector(".romm-slot-sync-summary")?.textContent).toBe("Server unreachable");
+      expect(container.querySelector(".romm-slot-body")?.textContent).toBe("No save on this device.");
+      expect(container.textContent).not.toContain(line);
+    });
+
+    it("leaves an inactive slot's empty list as it was", () => {
+      const { container } = render(<SlotPanel {...defaultProps({ isActive: false })} noSaveLine={line} />);
+
+      expect(container.textContent).not.toContain(line);
     });
   });
 });

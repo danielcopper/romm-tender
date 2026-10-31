@@ -240,6 +240,11 @@ describe("computeSyncSummary", () => {
     status,
   });
 
+  it("says the line it is handed for a slot holding no save (#2149 D3)", () => {
+    const line = "No save yet — mGBA's saves for this game sync with RomM once it writes one.";
+    expect(computeSyncSummary(true, makeStatus(), [], line).syncSummaryText).toBe(line);
+  });
+
   it("returns null text for inactive slot", () => {
     expect(computeSyncSummary(false, makeStatus(), [])).toEqual({
       syncSummaryText: null,
@@ -360,9 +365,9 @@ describe("computeSyncSummary", () => {
     });
   });
 
-  it("returns 'No saves found' when fileCount is 0 and no conflicts", () => {
+  it("returns 'No save yet.' for a slot with no files and no conflicts when no line is handed", () => {
     expect(computeSyncSummary(true, makeStatus(), [])).toEqual({
-      syncSummaryText: "No saves found",
+      syncSummaryText: "No save yet.",
       syncSummaryColor: "#8f98a0",
     });
   });

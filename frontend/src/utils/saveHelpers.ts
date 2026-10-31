@@ -6,6 +6,7 @@
  */
 
 import type { DeviceSyncInfo, SaveStatus, SyncConflict, SaveSlotSummary } from "../types";
+import { NO_SAVE_YET } from "./saveSyncStatement";
 
 export const MUTED_COLOR = "#8f98a0";
 
@@ -129,12 +130,13 @@ export function statusLabel(status: string, lastSyncAt: string | null): { color:
  * shows yellow "Local changes", any file the server has newer shows blue
  * "Server newer", and only an all-synced slot shows a green "Synced …". A
  * failed post-exit upload therefore reads as "Local changes", not a false
- * green ✓ (#1334).
+ * green ✓ (#1334). A slot holding no save reads *noSaveLine* (#2149 D3).
  */
 export function computeSyncSummary(
   isActive: boolean,
   saveStatus: SaveStatus | null,
   conflicts: SyncConflict[],
+  noSaveLine: string = NO_SAVE_YET,
 ): { syncSummaryText: string | null; syncSummaryColor: string } {
   if (!isActive || !saveStatus) return { syncSummaryText: null, syncSummaryColor: MUTED_COLOR };
 
@@ -152,7 +154,7 @@ export function computeSyncSummary(
   const files = saveStatus.files;
 
   if (hasConflict) return { syncSummaryText: "Conflict detected", syncSummaryColor: "#d94126" };
-  if (files.length === 0) return { syncSummaryText: "No saves found", syncSummaryColor: MUTED_COLOR };
+  if (files.length === 0) return { syncSummaryText: noSaveLine, syncSummaryColor: MUTED_COLOR };
   if (files.some((f) => f.status === "upload")) {
     return { syncSummaryText: "Local changes", syncSummaryColor: "#d4a72c" };
   }

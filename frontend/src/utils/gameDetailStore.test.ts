@@ -413,12 +413,11 @@ describe("gameDetailStore", () => {
 
     it("folds the read into the shared state", async () => {
       subscribe(nextAppId);
-      vi.mocked(backend.getSaveStatus).mockResolvedValue(saveStatus({ savefiles_in_content_dir: true }));
+      vi.mocked(backend.getSaveStatus).mockResolvedValue(saveStatus());
       await flush();
 
       expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledWith(42);
       expect(getGameDetail(nextAppId)).toMatchObject({
-        savefilesInContentDir: true,
         saveSyncStatus: "synced",
         saveSyncLabel: "Up to date",
       });
@@ -479,13 +478,12 @@ describe("gameDetailStore", () => {
       expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledWith(43);
       expect(getGameDetail(nextAppId)).toMatchObject({ romId: 43, saveSyncLabel: "new-version" });
 
-      previousRom.resolve(labelledStatus("old-version", { rom_id: 42, savefiles_in_content_dir: true }));
+      previousRom.resolve(labelledStatus("old-version", { rom_id: 42 }));
       await flush();
 
       expect(getGameDetail(nextAppId)).toMatchObject({
         romId: 43,
         saveSyncLabel: "new-version",
-        savefilesInContentDir: false,
       });
     });
 
@@ -595,7 +593,7 @@ describe("gameDetailStore", () => {
       await flush();
       expect(getGameDetail(nextAppId).romId).toBeNull();
 
-      const foreign = labelledStatus("foreign", { rom_id: 999, savefiles_in_content_dir: true });
+      const foreign = labelledStatus("foreign", { rom_id: 999 });
       vi.mocked(backend.getSaveStatus).mockResolvedValue(foreign);
       await act(async () => {
         dispatchSaveSync({ rom_id: 999 });
@@ -610,7 +608,6 @@ describe("gameDetailStore", () => {
       expect(getGameDetail(nextAppId)).toMatchObject({
         romId: null,
         saveSyncLabel: "",
-        savefilesInContentDir: false,
         saveStatus: null,
       });
 
@@ -632,7 +629,7 @@ describe("gameDetailStore", () => {
 
       await act(async () => {
         dispatchSaveSync({
-          save_status: labelledStatus("foreign", { rom_id: 999, savefiles_in_content_dir: true }),
+          save_status: labelledStatus("foreign", { rom_id: 999 }),
         });
         await Promise.resolve();
       });
@@ -641,7 +638,6 @@ describe("gameDetailStore", () => {
       expect(getGameDetail(nextAppId)).toMatchObject({
         romId: 42,
         saveSyncLabel: "",
-        savefilesInContentDir: false,
         saveStatus: null,
       });
     });
@@ -686,12 +682,11 @@ describe("gameDetailStore", () => {
       expect(getGameDetail(nextAppId).saveSyncEnabled).toBe(true);
     });
 
-    it("enabling with a failed status read leaves the content-dir fact unknown, not the old answer", async () => {
+    it("enabling with a failed status read still turns save sync on", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ save_sync_enabled: true }));
-      vi.mocked(backend.getSaveStatus).mockResolvedValue(saveStatus({ savefiles_in_content_dir: true }));
+      vi.mocked(backend.getSaveStatus).mockResolvedValue(saveStatus());
       subscribe(nextAppId);
       await flush();
-      expect(getGameDetail(nextAppId).savefilesInContentDir).toBe(true);
 
       await act(async () => {
         dispatchSettings(false);
@@ -705,35 +700,14 @@ describe("gameDetailStore", () => {
       await flush();
 
       expect(vi.mocked(backend.getSaveStatus)).toHaveBeenLastCalledWith(42);
-      expect(getGameDetail(nextAppId)).toMatchObject({ saveSyncEnabled: true, savefilesInContentDir: null });
+      expect(getGameDetail(nextAppId)).toMatchObject({ saveSyncEnabled: true });
     });
 
-    it("enabling takes the content-dir fact from the status read that follows", async () => {
+    it("disabling clears the sync-derived display without a read", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ save_sync_enabled: true }));
-      vi.mocked(backend.getSaveStatus).mockResolvedValue(saveStatus({ savefiles_in_content_dir: true }));
+      vi.mocked(backend.getSaveStatus).mockResolvedValue(saveStatus());
       subscribe(nextAppId);
       await flush();
-
-      await act(async () => {
-        dispatchSettings(false);
-        await Promise.resolve();
-      });
-      vi.mocked(backend.getSaveStatus).mockResolvedValue(saveStatus({ savefiles_in_content_dir: false }));
-      await act(async () => {
-        dispatchSettings(true);
-        await Promise.resolve();
-      });
-      await flush();
-
-      expect(getGameDetail(nextAppId).savefilesInContentDir).toBe(false);
-    });
-
-    it("disabling clears the sync-derived display without a read, keeping the content-dir fact", async () => {
-      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ save_sync_enabled: true }));
-      vi.mocked(backend.getSaveStatus).mockResolvedValue(saveStatus({ savefiles_in_content_dir: true }));
-      subscribe(nextAppId);
-      await flush();
-      expect(getGameDetail(nextAppId).savefilesInContentDir).toBe(true);
       vi.mocked(backend.getSaveStatus).mockClear();
 
       await act(async () => {
@@ -746,9 +720,6 @@ describe("gameDetailStore", () => {
         saveSyncEnabled: false,
         saveSyncStatus: null,
         saveSyncLabel: "",
-        // The local RetroArch config did not change with the setting, so the
-        // fact stands; whether it is worth showing is each surface's call.
-        savefilesInContentDir: true,
       });
     });
   });
