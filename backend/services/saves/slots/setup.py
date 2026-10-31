@@ -16,7 +16,7 @@ import os
 from typing import TYPE_CHECKING, Any
 
 from domain.iso_time import epoch_to_iso, parse_iso_to_epoch
-from domain.save_answer import save_finding_details
+from domain.save_answer import SAVE_STATE_UNESTABLISHED, save_finding_details
 from domain.save_backup import BACKUP_RETENTION
 from domain.save_slot import save_in_slot
 from lib.errors import NotInstalled, Refused, RommApiError, RommNotFoundError, classify_error
@@ -310,21 +310,30 @@ class SetupWizard:
         }
 
     async def get_save_sync_availability(self, rom_id: int) -> dict[str, Any]:
-        """Whether this game's saves sync, asking RomM nothing.
+        """Whether this game's saves sync, with no device registration and no save listing.
 
         ``available`` is whether a sync of the game would carry its saves, with
         the refusal ``get_save_setup_info`` answers ``sync_unavailable`` with
         where it would not. A game that is not installed is asked about the
         path it would be downloaded to, and ``installed`` says which of the two
-        was asked. ``emulator_label`` is the label of the entry the game starts
-        with, ``None`` where it has none. One live reading and no device
-        registration, so the panel can ask it while it holds RomM as
-        unreachable, where the setup info would wait out the retry ladder.
+        was asked. ``established`` is false where the reading established
+        nothing about the saves — no path could be formed, or the emulator's
+        answer could not be established — so a refusal there is no statement
+        that they will not sync. ``emulator_label`` is the label of the entry
+        the game starts with, ``None`` where it has none. One live reading,
+        beside the catalogue question the label takes, so the panel can ask it
+        while it holds RomM as unreachable, where the setup info would wait out
+        the retry ladder.
         """
         rom_id = int(rom_id)
         answer, label = await self._loop.run_in_executor(None, self._availability_io, rom_id)
         refusal = _sync_refusal(answer)
-        base = {"available": refusal is None, "installed": answer.content_installed, "emulator_label": label}
+        base = {
+            "available": refusal is None,
+            "installed": answer.content_installed,
+            "established": answer.state != SAVE_STATE_UNESTABLISHED,
+            "emulator_label": label,
+        }
         return base if refusal is None else {**base, **refusal}
 
     def _availability_io(self, rom_id: int) -> tuple[SaveAnswer, str | None]:

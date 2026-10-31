@@ -1583,7 +1583,7 @@ class TestAGameWhoseSavesCannotSync:
 
         result = await svc.get_save_sync_availability(42)
 
-        assert result == {"available": True, "installed": True, "emulator_label": None}
+        assert result == {"available": True, "installed": True, "established": True, "emulator_label": None}
         assert fake.call_log == []
 
     @pytest.mark.asyncio
@@ -1632,6 +1632,7 @@ class TestWhetherAGamesSavesSync:
 
         assert result["available"] is True
         assert result["installed"] is False
+        assert result["established"] is True
         assert reader.calls == [("gba", str(tmp_path / "retrodeck" / "roms" / "gba" / "pokemon.gba"), None)]
         assert fake.call_log == []
 
@@ -1646,10 +1647,38 @@ class TestWhetherAGamesSavesSync:
 
         assert result["available"] is False
         assert result["installed"] is False
+        assert result["established"] is True
         assert result["reason"] == "save_shape_unsupported"
         assert result["message"] == _SHARED_CARD_MESSAGE
         assert len(reader.calls) == 1
         assert fake.call_log == []
+
+    @pytest.mark.asyncio
+    async def test_a_game_not_downloaded_with_no_path_to_ask_about_establishes_nothing(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _seed_rom(svc, 42, platform_slug="gba", fs_name="")
+        reader = cast("FakeSaveLocationReader", svc._rom_info._save_locations)
+
+        result = await svc.get_save_sync_availability(42)
+
+        assert result["available"] is False
+        assert result["installed"] is False
+        assert result["established"] is False
+        assert reader.calls == []
+        assert fake.call_log == []
+
+    @pytest.mark.asyncio
+    async def test_a_game_not_downloaded_whose_emulator_establishes_nothing_establishes_nothing(self, tmp_path):
+        svc, _fake = make_service(tmp_path)
+        _seed_rom(svc, 42, platform_slug="gba", fs_name="pokemon.gba")
+        reader = cast("FakeSaveLocationReader", svc._rom_info._save_locations)
+        reader.refuse("gba")
+
+        result = await svc.get_save_sync_availability(42)
+
+        assert result["available"] is False
+        assert result["established"] is False
+        assert len(reader.calls) == 1
 
     @pytest.mark.asyncio
     async def test_an_installed_game_says_so(self, tmp_path):

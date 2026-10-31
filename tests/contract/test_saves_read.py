@@ -510,6 +510,7 @@ async def test_get_save_sync_availability_of_a_game_that_syncs(harness):
     assert await harness.endpoints.get_save_sync_availability(42) == {
         "available": True,
         "installed": True,
+        "established": True,
         "emulator_label": None,
     }
 
@@ -524,6 +525,7 @@ async def test_get_save_sync_availability_of_a_game_that_cannot_sync(harness):
     assert result == {
         "available": False,
         "installed": True,
+        "established": True,
         "emulator_label": None,
         "reason": "saves_root_missing",
         "message": "Save sync is unavailable: the saves folder /run/media/deck/sd/retrodeck/saves does not exist.",
@@ -533,7 +535,9 @@ async def test_get_save_sync_availability_of_a_game_that_cannot_sync(harness):
     }
 
 
-async def test_get_save_sync_availability_of_a_game_not_downloaded_asks_romm_nothing(harness):
+async def test_get_save_sync_availability_of_a_game_not_downloaded_whose_platform_ids_are_kept_asks_romm_nothing(
+    harness,
+):
     # The harness has no RetroDECK to download into, so there is no path to ask about: a refusal, never a guess.
     enable_save_sync(harness)
     seed_rom(harness, 42)
@@ -545,6 +549,7 @@ async def test_get_save_sync_availability_of_a_game_not_downloaded_asks_romm_not
 
     assert result["available"] is False
     assert result["installed"] is False
+    assert result["established"] is False
     assert result["reason"] == "save_shape_unsupported"
     assert harness.romm.call_log == []
 
