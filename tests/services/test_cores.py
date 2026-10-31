@@ -554,9 +554,10 @@ class TestSetGameCore:
         ]
         _seed_rom(uow, rom_id=42, platform_slug="snes", shortcut_app_id=99)
         _seed_install(uow, rom_id=42, file_path="/roms/snes/mario.sfc")
+        setting = service.set_game_core(42, "Missing (Standalone)")
 
         with pytest.raises(Refused) as refused:
-            event_loop.run_until_complete(service.set_game_core(42, "Missing (Standalone)"))
+            event_loop.run_until_complete(setting)
 
         assert refused.value.reason == "core_unavailable"
         assert uow.roms.get(42).emulator_override is None

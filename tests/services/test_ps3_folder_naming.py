@@ -264,7 +264,8 @@ class TestAGameFolderOneLevelDeeperIsLiftedOnce:
 
         assert (h.rom_dir(1), h.file_path(1)) == ("/roms/ps3/MyGame.ps3", f"/roms/ps3/MyGame.ps3/{_EBOOT}")
         assert list(h.store.files) == [f"/roms/ps3/MyGame.ps3/{_EBOOT}"]
-        assert h.stamped() and h.lifted()
+        assert h.stamped()
+        assert h.lifted()
 
     def test_a_game_folder_with_anything_beside_it_is_left_where_it_is_and_counts_as_done(self):
         h = _Harness()
