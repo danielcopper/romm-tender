@@ -116,21 +116,23 @@ among them, are listed under
 
 Each game's **Saves** tab says whether its saves sync:
 
-- **A game whose saves Tender cannot sync** has a warning mark beside the tab's title, so you see it without opening the
-  tab, and the tab says why instead of offering slots. That holds for a game you set up earlier too: it keeps its slots
-  on RomM, and they are there again once its saves can be synced. Play starts such a game without a setup step. Where
-  the reason is a saves folder that does not exist, Play still asks before starting the game on the saves on the device,
-  while **Sync before launch** is on and RomM can be reached.
+- **A downloaded game whose saves Tender cannot sync** has a warning mark beside the tab's title, so you see it without
+  opening the tab, and the tab says why instead of offering slots. That holds for a game you set up earlier too: its
+  slots on RomM stay as they are and show again once its saves can be synced. Play starts such a game without a setup
+  step. Where the reason is a saves folder that does not exist, Play still asks before starting the game on the saves on
+  the device, while **Sync before launch** is on and RomM can be reached.
 - **A game whose saves sync and that has no save yet** reads "No save yet — _emulator_'s saves for this game sync with
-  RomM once it writes one.", naming the emulator entry the game starts with, as the emulator menu shows it.
+  RomM once it writes one.", naming the emulator entry the game starts with, as the emulator menu shows it, or "No save
+  yet — this game's saves sync with RomM once its emulator writes one." where the game starts with no entry. While RomM
+  cannot be reached, a slot with no save on the device reads "No save on this device."
 - **A game that is not downloaded** says whether its saves will sync once it is: "Not downloaded. Once it is,
-  _emulator_'s saves for this game sync with RomM.", or "Not downloaded. Once it is, its saves will not sync:" and the
-  reason. Tender works that out from where the game would be downloaded to, without asking RomM. Its slot setup stays as
-  it is, and the tab is not marked.
+  _emulator_'s saves for this game sync with RomM.", "Not downloaded. Once it is, its saves will not sync:" and the
+  reason, or "Not downloaded. Whether its saves will sync could not be established." where Tender could not tell. Tender
+  works that out from where the game would be downloaded to. Its slot setup stays as it is, and the tab is not marked.
 
-The tab asks when the game's page opens, and again after a version switch, a change of emulator, a download or an
-uninstall. When the emulator's own settings change so that its saves can be synced, the slot setup appears the next time
-the game's page opens.
+The tab asks when the game's page opens, and again after a version switch, a change of emulator, switching save sync on,
+a download, an uninstall, and each time you open the tab. So when the emulator's own settings change so that a game's
+saves can be synced, its refusal and its mark go the next time you open its **Saves** tab.
 
 ## Settings
 

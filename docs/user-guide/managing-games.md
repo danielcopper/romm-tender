@@ -14,8 +14,8 @@ When you open a RomM game in the Steam Library, you'll see the Tender panel belo
 - **Region / Languages** — attributes of the active version, shown in the Game Info tab when RomM has them (see below)
 - **BIOS status** — whether required BIOS files are present (see [BIOS Management](bios-management.md))
 - **Save sync status** — on the **Saves** tab: whether the game's saves sync at all, when each save file last synced,
-  and any conflict waiting for you. A game whose saves cannot sync has a warning mark beside the tab's title (see
-  [Save Sync](save-sync.md))
+  and any conflict waiting for you. A downloaded game whose saves cannot sync has a warning mark beside the tab's title
+  (see [Save Sync](save-sync.md))
 - **Playtime** — **Last Played** and **Playtime** cells next to the Play button. Last Played reads Today, Yesterday or
   so many days ago within a week, and otherwise the date in your Steam client's language
 - **Space required** — for a game that isn't downloaded yet, a "Space Required" cell next to the Play button shows how
