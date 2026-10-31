@@ -270,17 +270,17 @@ the row first.
 The `sync_stale` tail in `frontend/src/index.tsx` reports from a `finally`, so a tail the next run's `sync_plan` cuts
 short, one whose lease renewal is refused, or one a carry-over stopped reports too. After the paced loop it reads
 Steam's shortcut store once Steam has settled (`shortcutsGoneFromSteam` in `frontend/src/utils/steamShortcuts.ts`: every
-100 ms, until every shortcut a removal was tried for is gone or 3 s have passed) and reports every entry Steam no longer
-lists through `report_sync_removals` (`frontend/src/utils/syncRemovalReport.ts`), stale and converged apart. The backend
-unbinds each reported row only while it still holds the reported appId, so a report that arrives after a later run bound
-the row again changes nothing. An unreadable store reports nothing. A report that unbound a row re-reads the sync stats,
-so the panel's game count, which counts a pending row until then, drops. The settle step logs how long it waited and how
-many of the removed shortcuts Steam stopped listing.
+100 ms, until every shortcut a removal was tried for is gone or 3 s have passed, then it logs how long it waited and how
+many of those Steam stopped listing) and reports every entry Steam no longer lists through `report_sync_removals`
+(`frontend/src/utils/syncRemovalReport.ts`), stale and converged apart. The backend unbinds each reported row only while
+it still holds the reported appId, so a report that arrives after a later run bound the row again changes nothing. An
+unreadable store reports nothing. A report that unbound a row re-reads the sync stats, so the panel's game count, which
+counts a pending row until then, drops.
 
 The passes `onSyncComplete` runs that read the bound rows — launch options, playtime and overview metadata — start only
-once this tail has settled, its report included and whatever its outcome, so they read the rows after the report unbound
-them, as they read them after the finalize's unbind before #2653. The Steam collections pass runs beside the tail, since
-the run's collection maps already leave the removed rows out.
+once this tail has settled, its report included and whatever its outcome, so a row the report unbound is not among what
+they read. The Steam collections pass runs beside the tail, since the run's collection maps already leave the removed
+rows out.
 
 What is not reported is finished by the next sync, in one of two ways:
 
@@ -467,9 +467,9 @@ so `onSyncComplete` re-fetches the full paged metadata cache + appId map (`fetch
 re-registers via `registerMetadataPatches` with the fresh data, and re-applies — mirroring the playtime re-apply beside
 it, and like it only once the run's stale removal has reported (above, "A removal the panel did not finish"). It runs on
 every `sync_complete`, cancelled runs included (a partial run's committed units still carry fresh metadata, and the pass
-is idempotent), in its own detached block with its own error handling so a re-fetch failure never touches the toast,
-collections, or playtime paths (#1207). The backend commits metadata per unit during the sync (before the terminal
-emit), so this re-fetch always sees the new ROMs.
+is idempotent), with its own error handling, so a re-fetch failure never touches the toast, collections, or playtime
+paths. The backend commits metadata per unit during the sync (before the terminal emit), so this re-fetch always sees
+the new ROMs.
 
 See: `frontend/src/utils/metadataPatches.ts` (which appId gets which value, and the retry ladder),
 `frontend/src/utils/steamOverview.ts` (`writeMetadataFields`, where all three assignments onto the overview are made),

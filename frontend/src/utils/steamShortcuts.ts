@@ -378,8 +378,7 @@ function readDesktopAppStore(): Map<number, unknown> | null {
  *
  * Polls every 100ms until no appId in *removed* (the ones a removal was tried for) is listed any more, or
  * *timeoutMs* has passed, then answers every appId of *appIds* absent from that last read — one tried for or
- * not. An unreadable store answers none: nothing was seen gone. How long it waited and how many of *removed* it
- * saw gone is logged.
+ * not. An unreadable store answers none: nothing was seen gone.
  */
 export async function shortcutsGoneFromSteam(
   appIds: readonly number[],
