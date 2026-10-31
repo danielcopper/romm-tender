@@ -103,9 +103,14 @@ export function frontendChoiceSentence(
   return `${chosen.label} is chosen in ES-DE; Tender starts this game with the emulator chosen in its emulator menu.`;
 }
 
-/** Why a game cannot start, from its core read: its emulator's refusal first, then its file's (#2195 D2), or `null`. */
-export function gameStartRefusal(info: CoreInfo): string | null {
-  const canPick = gameCanPickAnother(info.emulators, info.active_core_label);
+/**
+ * Why a game cannot start, from its core read: its emulator's refusal first, then its file's (#2195 D2), or `null`.
+ * `canPick` says the page offers an emulator menu for the sentence to point at; absent, it is read off the entries.
+ */
+export function gameStartRefusal(
+  info: CoreInfo,
+  canPick = gameCanPickAnother(info.emulators, info.active_core_label),
+): string | null {
   return emulatorStartRefusal(info.start, "this game", canPick) ?? launchRefusal(info.launch ?? null, canPick);
 }
 

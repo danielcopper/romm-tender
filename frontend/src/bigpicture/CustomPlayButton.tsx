@@ -74,6 +74,7 @@ import { gamepadLaunchPrompts } from "../shared/launchPrompts";
 import { showStopGameModal } from "./StopGameModal";
 import { showForgetDownloadModal } from "./ForgetDownloadModal";
 import { recheckStart, reloadGameDetail } from "../utils/gameDetailStore";
+import { startFailedSentence } from "../utils/gameLaunch";
 import { markLaunchSkipped } from "../utils/launchGate";
 import { ensureTrackingConfiguredBigPicture, makeLaunchGateOps } from "../utils/launchGateOps";
 import { runGateLoop } from "../utils/launchVerdict";
@@ -676,7 +677,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
       });
     } catch (e) {
       detach(debugLog(`CustomPlayButton: handlePlay unexpected error — resetting to play: ${e}`));
-      if (startCheckFailed) showToast(`Tender could not start this game: ${e instanceof Error ? e.message : String(e)}`);
+      if (startCheckFailed) showToast(startFailedSentence(e));
       setState("play");
     }
   };

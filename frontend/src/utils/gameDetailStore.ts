@@ -648,9 +648,10 @@ export async function refreshCoreAndBios(appId: number): Promise<void> {
  * that ROM as answered — so the page shows what stands in the way, or lets the
  * game start — and the reason it cannot start is returned, `null` where nothing
  * stands in its way. A read that fails or gets no answer in time writes
- * nothing, and answers `null`: the press goes ahead.
+ * nothing, and answers `null`: the press goes ahead. `canPick` is
+ * {@link gameStartRefusal}'s.
  */
-export async function recheckStart(appId: number, romId: number): Promise<string | null> {
+export async function recheckStart(appId: number, romId: number, canPick?: boolean): Promise<string | null> {
   let info: CoreInfo;
   try {
     info = await withTimeout(getPlatformCoreInfo(romId), LOCAL_CALL_LIMIT_MS);
@@ -660,7 +661,7 @@ export async function recheckStart(appId: number, romId: number): Promise<string
   }
   const entry = _entries.get(appId);
   if (entry) writerForRom(entry, entry.generation, romId)((prev) => ({ ...prev, ...extractCoreInfo(info) }));
-  return gameStartRefusal(info);
+  return gameStartRefusal(info, canPick);
 }
 
 /** Re-read the cached detail after something invalidated it. A re-read is a new

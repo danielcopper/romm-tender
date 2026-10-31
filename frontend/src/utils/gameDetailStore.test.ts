@@ -23,7 +23,7 @@ import {
 import { hostEventListenerCount, emitHostEvent } from "../test-utils/host-event-bus";
 import type { CachedGameDetail } from "../api/backend";
 import type { CoreInfo, DownloadCompleteEvent, SaveStatus } from "../types";
-import { coreInfo as coreInfoFixture } from "../test-utils/coreFixtures";
+import { coreInfo as coreInfoFixture, libretroEmu, standaloneEmu } from "../test-utils/coreFixtures";
 
 type BiosStatusResult = Awaited<ReturnType<typeof backend.getBiosStatus>>;
 type AchievementProgressResult = Awaited<ReturnType<typeof backend.getAchievementProgress>>;
@@ -2486,6 +2486,21 @@ describe("gameDetailStore — the page's check of whether the game can start (#2
 
     expect(refusal).toBe("This game has to be installed first.");
     expect(getGameDetail(nextAppId)).toMatchObject({ startCheck: { state: "answered" }, gameLaunch: launch });
+  });
+
+  it("a press's answer points at the emulator menu only where the asker's page has one", async () => {
+    const cannotStart = coreInfoFixture({
+      start: { state: "cannot_start", reason: "not_installed", entry: "DuckStation", folder_entry: null },
+      emulators: [standaloneEmu("DuckStation", true), libretroEmu("swanstation_libretro", "SwanStation")],
+      active_core_label: "DuckStation",
+    });
+    vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(cannotStart);
+
+    const withMenu = await recheckStart(nextAppId, 42);
+    const withoutMenu = await recheckStart(nextAppId, 42, false);
+
+    expect(withMenu).toContain("Choose another emulator in the emulator menu.");
+    expect(withoutMenu).toBe("DuckStation is not installed, so this game cannot start.");
   });
 
   it("a press whose ask fails too writes nothing and lets the start go ahead (#2195 D33)", async () => {
