@@ -31,7 +31,8 @@ copying a save to another slot and restoring an older version all answer with th
 and the one after it exits pass such a game over without a message, and **Sync All Saves Now** counts it among the games
 whose saves cannot be synced. A downloaded game's **Saves** tab is marked with a warning beside its title and gives the
 reason in place of its save slots, whether or not a slot was set up for it before; a game that is not downloaded says
-whether its saves will sync once it is. There are five reasons, and they mean different things:
+whether its saves will sync once it is, or that this could not be established. There are five reasons, and they mean
+different things:
 
 - **The emulator keeps one save card that all games share.** Standalone PCSX2 is the common case. Syncing it per game
   would copy other games' progress onto this one's record, so Tender leaves it alone.
