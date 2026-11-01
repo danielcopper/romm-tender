@@ -16,12 +16,16 @@ page, and the rules every change to that page follows, are in
 - `gameview/GameView.tsx` — what `index.ts` hands the watcher as the page's `gameView`: the page's cards in two columns.
   The About card (`gameview/AboutDetails.tsx`) is the one card so far; `gameview/MigrationBlockedCard.tsx` takes the
   columns' place while a RetroDECK migration is pending.
+- `gameview/PlayButton.tsx` — what `index.ts` hands the watcher as the page's `playButton`: Tender's Play button, whose
+  presses are `gameview/usePlayLaunch.ts`'s, with the disc and version selector beside it (`gameview/DiscSelector.tsx`).
 - `launchPromptHost.tsx` — the dialogs for a start the launch watcher catches, offered through
   `utils/launchPromptRouter.ts` and each drawn into the desktop window in a React root of its own.
-- `gameview/dialogs/` — those dialogs (`desktopLaunchPrompts`), the frame they are drawn in (`DesktopDialog`), and
-  `AskDialog`, the shape of one question.
+- `gameview/dialogs/` — those dialogs (`desktopLaunchPrompts`), the Play button's conflict walk and Stop dialog
+  (`desktopResolveConflicts`, `desktopStopGameDialog`), the selector's unsynced-saves question
+  (`desktopUnsyncedSavesDialog`), the frame they are drawn in (`DesktopDialog`), `AskDialog`, the shape of one question,
+  and `useDialogHost`, which asks one from inside a component.
 - `gameview/styles.ts` — the play bar's glass and pinned colours, which `stickyPlayBarController.ts` applies, the cards'
-  styles, and the dialog frame's backdrop and buttons.
+  styles, the dialog frame's backdrop and buttons, and the shapes the Play button's group and buttons start from.
 
 **Dev build only.** `rollup.config.js` builds the panel from `./src/index.tsx` — the module that mounts the bigpicture
 surface — and nothing there imports this directory, so `pnpm build`, `build:dev`, CI and the release tarball ship none

@@ -14,8 +14,8 @@ import { detach } from "./detach";
 
 export async function applyCommittedVersionSwitch(
   result: SwitchVersionSuccess,
-  onCover?: (romId: number, cover: string) => void,
-  admission?: PruneLeaseAdmission,
+  onCover: ((romId: number, cover: string) => void) | undefined,
+  admission: PruneLeaseAdmission,
 ): Promise<boolean> {
   // The binding moved when the backend answered; Steam's Play must not wait on
   // the Steam writes below to be judged by it.
@@ -41,7 +41,7 @@ export async function applyCommittedVersionSwitch(
       }
       return confirmed;
     },
-    `version-picker:${result.app_id}`,
+    admission.owner,
     admission,
   );
 }

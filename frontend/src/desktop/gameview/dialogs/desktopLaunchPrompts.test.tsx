@@ -1,12 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { isValidElement, type ReactNode } from "react";
-import { desktopLaunchPrompts } from "./desktopDialogs";
+import { desktopLaunchPrompts, desktopUnsyncedSavesDialog } from "./desktopDialogs";
 import { DesktopCoreChangeDialog } from "./DesktopCoreChangeDialog";
 import { DesktopFallbackLaunchDialog } from "./DesktopFallbackLaunchDialog";
 import { DesktopOfflineDriftDialog } from "./DesktopOfflineDriftDialog";
 import { DesktopSaveConflictDialog } from "./DesktopSaveConflictDialog";
 import { DesktopSyncWaitDialog } from "./DesktopSyncWaitDialog";
 import { DesktopUncheckedSourceDialog } from "./DesktopUncheckedSourceDialog";
+import { DesktopUnsyncedSavesDialog } from "./DesktopUnsyncedSavesDialog";
 import type { AskDialog } from "./askDialog";
 import type { SyncConflict } from "../../../types";
 
@@ -128,5 +129,19 @@ describe("desktopLaunchPrompts", () => {
 
     expect(await desktopLaunchPrompts(ask).resolveConflicts([conflict("a.srm"), conflict("b.srm")])).toBe("cancel");
     expect(asked).toHaveLength(1);
+  });
+});
+
+describe("desktopUnsyncedSavesDialog", () => {
+  it("asks a switch's unsynced-saves question through its dialog, dismissed as a cancel", async () => {
+    const { ask, asked } = scriptedAsk(["sync_and_switch"]);
+    const args = { versionName: "USA", stranding: "unsynced" as const, serverReachable: true, versionGone: false };
+
+    expect(await desktopUnsyncedSavesDialog(ask)(args)).toBe("sync_and_switch");
+    expect(asked).toHaveLength(1);
+    expect(first(asked).dismissed).toBe("cancel");
+    expect(typeOf(first(asked).dialog)).toBe(DesktopUnsyncedSavesDialog);
+    const { dialog } = first(asked);
+    expect(isValidElement(dialog) && dialog.props).toMatchObject(args);
   });
 });

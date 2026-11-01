@@ -3,6 +3,7 @@ import { startDesktopSurface, stopDesktopSurface } from "./index";
 import * as desktopWin from "./desktopWindow";
 import * as navigationWatcher from "./navigationWatcher";
 import { GameView } from "./gameview/GameView";
+import { PlayButton } from "./gameview/PlayButton";
 import * as backend from "../api/backend";
 import { launchPromptsForThisStart } from "../utils/launchPromptRouter";
 import type { LaunchPrompts } from "../utils/launchVerdict";
@@ -46,12 +47,12 @@ describe("the desktop surface", () => {
     }
   });
 
-  it("hands the watcher the game view, and no play button, so Steam's own stays", () => {
+  it("hands the watcher the game view and the play button", () => {
     const start = vi.spyOn(navigationWatcher, "startDesktopNavigationWatcher").mockImplementation(() => () => {});
 
     startDesktopSurface();
 
-    expect(start).toHaveBeenCalledExactlyOnceWith({ gameView: GameView });
+    expect(start).toHaveBeenCalledExactlyOnceWith({ gameView: GameView, playButton: PlayButton });
   });
 
   it("logs a start that throws instead of throwing into the panel's start-up", () => {

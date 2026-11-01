@@ -306,6 +306,8 @@ describe("VersionPicker — non-switchable rows (#1359)", () => {
     // …but the row is disabled and explains why.
     expect(laraRow?.getAttribute("aria-disabled")).toBe("true");
     expect(laraRow?.textContent).toContain("conflicting metadata match in RomM");
+    // A version it cannot switch to is not offered as one waiting to sync.
+    expect(laraRow?.textContent).not.toContain("not synced");
     // The switchable active row is not disabled and carries no hint.
     const trRow = items.find((i) => i.textContent.includes("Tomb Raider II"));
     expect(trRow?.getAttribute("aria-disabled")).toBeNull();

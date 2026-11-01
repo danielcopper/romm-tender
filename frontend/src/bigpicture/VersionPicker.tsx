@@ -36,7 +36,14 @@ import { logError, logWarn } from "../api/backend";
 import type { VersionList, VersionInfo } from "../api/backend";
 import { showUnsyncedSavesModal } from "./UnsyncedSavesSwitchModal";
 import { getEventTarget } from "../utils/events";
-import { NO_FILE_ON_ROMM_LABEL } from "../utils/noFileOnRommWording";
+import {
+  DEFAULT_BADGE,
+  DOWNLOADED_BADGE,
+  NOT_SYNCED_BADGE,
+  VANISHED_HINT,
+  versionRowHint,
+} from "../utils/versionPickerWording";
+import { ACTIVE_ACCENT, AvailabilityHint, Badge, NEUTRAL_GREY } from "../shared/VersionMarks";
 import { detach } from "../utils/detach";
 import { Throbber } from "../shared/Throbber";
 import { mountPruneLeaseOwner, releasePruneLeasesByOwner } from "../utils/pruneLease";
@@ -49,23 +56,6 @@ import { openRemovedGamesCleanupModal } from "./RemovedGamesCleanup";
 interface VersionPickerProps {
   appId: number;
 }
-
-// Steam accent blue for the active version, neutral grey otherwise — the same
-// palette DiscSelector uses so the two game-detail pickers read as one system.
-const ACTIVE_ACCENT = "#59b6ff";
-const NEUTRAL_GREY = "#dcdedf";
-
-const BADGE_COLORS: Record<"accent" | "muted" | "good", { bg: string; fg: string }> = {
-  accent: { bg: "rgba(89, 182, 255, 0.18)", fg: ACTIVE_ACCENT },
-  good: { bg: "rgba(91, 163, 43, 0.22)", fg: "#7ac74f" },
-  muted: { bg: "rgba(255, 255, 255, 0.10)", fg: "rgba(255, 255, 255, 0.55)" },
-};
-
-/** The label a row (or a singleton binding) carries once RomM 404s its exact id. */
-const VANISHED_HINT = "No longer available on RomM";
-
-/** The label of a row another shortcut of this game is on. */
-const BOUND_ELSEWHERE_HINT = "On another shortcut of this game";
 
 /** Accessible name of the trash affordance that opens the cleanup confirmation. */
 const REMOVE_LOCAL_DATA_LABEL = "Remove local data";
@@ -90,31 +80,6 @@ const RemoveLocalDataIcon: FC<{ onMenuRow?: boolean; style?: React.CSSProperties
     style={style}
   />
 );
-
-/** The italic inline hint that explains why a version can't be selected. */
-const AvailabilityHint: FC<{ text: string }> = ({ text }) => (
-  <span style={{ marginLeft: "8px", fontSize: "11px", fontStyle: "italic", color: NEUTRAL_GREY }}>{text}</span>
-);
-
-/** A small pill badge (Default / Downloaded / not synced) shown after a row's label. */
-const Badge: FC<{ text: string; tone: "accent" | "muted" | "good" }> = ({ text, tone }) => {
-  const { bg, fg } = BADGE_COLORS[tone];
-  return (
-    <span
-      style={{
-        marginLeft: "8px",
-        padding: "1px 7px",
-        borderRadius: "10px",
-        fontSize: "11px",
-        fontWeight: 600,
-        backgroundColor: bg,
-        color: fg,
-      }}
-    >
-      {text}
-    </span>
-  );
-};
 
 export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
   const leaseOwner = `version-picker:${appId}`;
@@ -305,13 +270,8 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
   };
 
   const rowAvailabilityHint = (v: VersionInfo): ReactNode => {
-    if (v.vanished) return <AvailabilityHint text={VANISHED_HINT} />;
-    // Ahead of the no-file label: an installed version without a file is
-    // otherwise selectable, so that label alone would read as an offer.
-    if (v.bound_elsewhere) return <AvailabilityHint text={BOUND_ELSEWHERE_HINT} />;
-    if (v.no_file) return <AvailabilityHint text={NO_FILE_ON_ROMM_LABEL} />;
-    if (!v.switchable) return <AvailabilityHint text="conflicting metadata match in RomM" />;
-    return null;
+    const hint = versionRowHint(v);
+    return hint === null ? null : <AvailabilityHint text={hint} />;
   };
 
   const openMenu = (e: MouseEvent): void => {
@@ -350,9 +310,9 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
               >
                 {rowCover(v)}
                 <span>{v.label || v.name || String(v.rom_id)}</span>
-                {v.is_default ? <Badge text="Default" tone="accent" /> : null}
-                {v.installed ? <Badge text="Downloaded" tone="good" /> : null}
-                {v.switchable && !v.synced ? <Badge text="not synced" tone="muted" /> : null}
+                {v.is_default ? <Badge text={DEFAULT_BADGE} tone="accent" /> : null}
+                {v.installed ? <Badge text={DOWNLOADED_BADGE} tone="good" /> : null}
+                {v.switchable && !v.synced ? <Badge text={NOT_SYNCED_BADGE} tone="muted" /> : null}
                 {rowAvailabilityHint(v)}
                 {v.active ? <span style={{ marginLeft: "6px", fontWeight: 700 }}>✓</span> : null}
                 {removable ? <RemoveLocalDataIcon onMenuRow style={{ marginLeft: "auto", flexShrink: 0 }} /> : null}

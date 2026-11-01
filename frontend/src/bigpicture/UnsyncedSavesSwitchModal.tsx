@@ -5,15 +5,9 @@ import {
   SWITCH_ANYWAY_LABEL,
   SYNC_AND_SWITCH_LABEL,
   UNSYNCED_SAVES_TITLE,
+  noSyncReason,
   unsyncedSavesDescription,
-  type UnsyncedSavesDescriptionArgs,
 } from "../utils/launchPromptWording";
-
-/** Why the saves can't be synced before the switch (a version gone from RomM first), or `null` when they can. */
-function noSyncReason(serverReachable: boolean, versionGone: boolean): UnsyncedSavesDescriptionArgs["noSync"] {
-  if (versionGone) return "version_gone";
-  return serverReachable ? null : "unreachable";
-}
 
 /**
  * Unsynced-saves confirm for switching away from a downloaded version.

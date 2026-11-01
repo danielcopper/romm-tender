@@ -1,11 +1,14 @@
 /**
- * The desktop dialogs in the shape a launch asks for, {@link LaunchPrompts}.
- * Every one of them settles with its cancel exit when dismissed.
+ * The desktop dialogs in the shapes their callers ask for: a launch's
+ * {@link LaunchPrompts}, the Play button's Resolve Conflict walk and Stop
+ * confirm, and a version switch's {@link UnsyncedSavesPrompt}. Every one of
+ * them settles with its cancel exit when dismissed.
  */
 
 import { resolveConflictsSequentially, type SyncConflictResolution } from "../../../utils/saveConflictFlow";
 import type { LaunchPrompts } from "../../../utils/launchVerdict";
 import type { SyncFinish, SyncWaitChoice, SyncWaitReason } from "../../../utils/launchGate";
+import type { UnsyncedSavesChoice, UnsyncedSavesPrompt } from "../../../utils/versionSwitch";
 import type { SyncConflict } from "../../../types";
 import type { AskDialog } from "./askDialog";
 import { DesktopSaveConflictDialog } from "./DesktopSaveConflictDialog";
@@ -14,6 +17,8 @@ import { DesktopFallbackLaunchDialog } from "./DesktopFallbackLaunchDialog";
 import { DesktopCoreChangeDialog } from "./DesktopCoreChangeDialog";
 import { DesktopUncheckedSourceDialog } from "./DesktopUncheckedSourceDialog";
 import { DesktopSyncWaitDialog } from "./DesktopSyncWaitDialog";
+import { DesktopStopGameDialog } from "./DesktopStopGameDialog";
+import { DesktopUnsyncedSavesDialog } from "./DesktopUnsyncedSavesDialog";
 
 function desktopSaveConflictDialog(
   ask: AskDialog,
@@ -53,6 +58,20 @@ function desktopSyncWaitDialog(
     ask<SyncWaitChoice>("cancel", (resolve) => (
       <DesktopSyncWaitDialog reason={reason} finished={finished} onChoice={resolve} />
     ));
+}
+
+/** The conflicts a Resolve Conflict press found, walked through the dialog outside a start. */
+export function desktopResolveConflicts(ask: AskDialog): (conflicts: SyncConflict[]) => Promise<"cancel" | "resolved"> {
+  return (conflicts) => resolveConflictsSequentially(conflicts, desktopSaveConflictDialog(ask, false));
+}
+
+export function desktopStopGameDialog(ask: AskDialog): () => Promise<boolean> {
+  return () => ask<boolean>(false, (resolve) => <DesktopStopGameDialog onChoice={resolve} />);
+}
+
+export function desktopUnsyncedSavesDialog(ask: AskDialog): UnsyncedSavesPrompt {
+  return (args) =>
+    ask<UnsyncedSavesChoice>("cancel", (resolve) => <DesktopUnsyncedSavesDialog {...args} onChoice={resolve} />);
 }
 
 export function desktopLaunchPrompts(ask: AskDialog): LaunchPrompts {

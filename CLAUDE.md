@@ -869,11 +869,12 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   Steam's own Play on a RomM shortcut that is not running is refused, and the fallback page drops every button but
   Restart Steam** — test + prompt-only — `frontend/src/index.test.tsx`,
   `frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`, `frontend/src/bigpicture/RomMPlaySection.test.tsx`,
-  `frontend/src/bigpicture/CustomPlayButton.test.tsx`, `frontend/src/utils/launchInterceptor.test.ts` and
-  `frontend/src/boot/FallbackActions.test.tsx`, each in its stranded-panel `describe` block. Prompt-only: a new surface
-  outside these shells — another element injected into Steam's game page, another hook on Steam's launch — gates itself
-  on `useStrandedAnswer()` / `strandedAnswer()`; a Tender dialog or menu already open at the strand stays open and fails
-  as before (#2275 D6)
+  `frontend/src/bigpicture/CustomPlayButton.test.tsx`, `frontend/src/utils/launchInterceptor.test.ts`,
+  `frontend/src/boot/FallbackActions.test.tsx` and, in the desktop dev build,
+  `frontend/src/desktop/gameview/PlayButton.test.tsx`, each in its stranded-panel `describe` block. Prompt-only: a new
+  surface outside these shells — another element injected into Steam's game page, another hook on Steam's launch — gates
+  itself on `useStrandedAnswer()` / `strandedAnswer()`; a Tender dialog or menu already open at the strand stays open
+  and fails as before (#2275 D6)
 - **Aggregate state mutated only via verb-named methods: outside them no code assigns, deletes or `setattr`s an
   aggregate's field, or mutates one of its list, dict or set fields in place** — check + prompt-only —
   `scripts/check_aggregate_field_assignment.py`, by field name: the fields the class body of every `@cosmic_aggregate`

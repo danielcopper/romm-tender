@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { fallbackLaunchDescription, syncWaitDescription, unsyncedSavesDescription } from "./launchPromptWording";
+import {
+  fallbackLaunchDescription,
+  noSyncReason,
+  syncWaitDescription,
+  unsyncedSavesDescription,
+} from "./launchPromptWording";
 
 describe("fallbackLaunchDescription", () => {
   it("asks over the failed sync's own message", () => {
@@ -44,6 +49,21 @@ describe("unsyncedSavesDescription", () => {
       '"USA" has saves that haven\'t been synced to RomM. "USA" is no longer available on RomM, so its saves ' +
         "can't be uploaded. They stay on disk.",
     );
+  });
+});
+
+describe("noSyncReason", () => {
+  it("offers the sync while RomM is reachable and still has the version", () => {
+    expect(noSyncReason(true, false)).toBeNull();
+  });
+
+  it("says RomM is unreachable", () => {
+    expect(noSyncReason(false, false)).toBe("unreachable");
+  });
+
+  it("says the version is gone ahead of RomM being unreachable", () => {
+    expect(noSyncReason(true, true)).toBe("version_gone");
+    expect(noSyncReason(false, true)).toBe("version_gone");
   });
 });
 

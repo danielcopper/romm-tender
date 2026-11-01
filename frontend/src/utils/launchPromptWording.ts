@@ -104,6 +104,12 @@ export interface UnsyncedSavesDescriptionArgs {
   noSync: "unreachable" | "version_gone" | null;
 }
 
+/** Why the saves can't be synced before the switch (a version gone from RomM first), or `null` when they can. */
+export function noSyncReason(serverReachable: boolean, versionGone: boolean): UnsyncedSavesDescriptionArgs["noSync"] {
+  if (versionGone) return "version_gone";
+  return serverReachable ? null : "unreachable";
+}
+
 /**
  * A save changed since its last sync and one never synced are one case to the
  * user, since what they can do about either is the same. Where the prompt
