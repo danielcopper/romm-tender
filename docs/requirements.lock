@@ -50,7 +50,7 @@ paginate==0.5.7
     # via mkdocs-material
 pathspec==1.1.1
     # via mkdocs
-platformdirs==4.13.7
+platformdirs==4.14.2
     # via mkdocs-get-deps
 pygments==2.21.0
     # via mkdocs-material
@@ -70,9 +70,9 @@ requests==2.34.2
     # via mkdocs-material
 six==1.17.0
     # via python-dateutil
-tzdata==2026.5
+tzdata==2026.6
     # via python-dateutil
 urllib3==2.8.0
     # via requests
-watchdog==6.0.0
+watchdog==7.0.0
     # via mkdocs
