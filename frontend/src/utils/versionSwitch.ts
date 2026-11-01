@@ -48,13 +48,21 @@ export interface VersionSwitchOptions {
   /** Called after a refusal because the target version vanished, to reload the list. */
   onVanishedRefusal?: (() => void) | undefined;
   /**
+   * Called, unless the caller was torn down, when `applyCommittedVersionSwitch`
+   * answers that a committed switch was stopped short of its broadcast (a
+   * refused lease renewal), to read the list again as the broadcast would have
+   * had it do; that read releases the guard.
+   */
+  onUnbroadcastSwitch?: (() => void) | undefined;
+  /**
    * The caller's in-flight guard. It is set on entry and released on every
    * non-success terminal path but a teardown, which touches no state (the
-   * picker is gone). On success it is deliberately LEFT set: a switch that is
-   * not torn down broadcasts version_switched, and the caller's list reload on
-   * that broadcast must clear it once the fresh list lands — so the trigger
-   * never re-enables against a stale list. A caller without that reload stays
-   * "switching" after its first successful switch.
+   * picker is gone). On success it is deliberately LEFT set once the switch
+   * broadcasts version_switched: the caller's list reload on that broadcast
+   * must clear it once the fresh list lands — so the trigger never re-enables
+   * against a stale list. A caller without that reload stays "switching" after
+   * its first successful switch. A committed switch answered as stopped short
+   * of the broadcast leaves it to `onUnbroadcastSwitch`'s read.
    */
   setSwitching?: ((switching: boolean) => void) | undefined;
   logTag?: string | undefined;
@@ -137,6 +145,7 @@ export async function executeVersionSwitch(options: VersionSwitchOptions): Promi
     askUnsyncedSaves,
     onCoverResolved,
     onVanishedRefusal,
+    onUnbroadcastSwitch,
     setSwitching,
     logTag = "VersionPicker",
   } = options;
@@ -156,15 +165,18 @@ export async function executeVersionSwitch(options: VersionSwitchOptions): Promi
   // broadcast the switch so sibling surfaces re-read the new binding.
   //
   // The backend rebind is ALREADY committed by the time we get here, so the
-  // cache-invalidate + broadcast must always run — even if the launch-command
-  // write fails or throws. A missed confirm only leaves the shortcut on a stale
-  // command; it self-heals at the next startup/sync reconcile, so we warn and
-  // nudge the user rather than reporting the whole switch as failed.
+  // cache-invalidate + broadcast run even if the launch-command write fails or
+  // throws. A lease cut short skips them; where `applyCommittedVersionSwitch`
+  // answers that, the caller reads the list itself unless it was torn down
+  // (`onUnbroadcastSwitch`). A missed confirm only leaves the shortcut on a
+  // stale command; it self-heals at the next startup/sync reconcile, so we warn
+  // and nudge the user rather than reporting the whole switch as failed.
   const applySwitchSuccess = async (result: SwitchVersionSuccess): Promise<void> => {
-    const confirmed = await applyCommittedVersionSwitch(result, onCoverResolved, admission);
+    const { confirmed, broadcast } = await applyCommittedVersionSwitch(result, onCoverResolved, admission);
     if (!confirmed) {
       showToast("Switched — re-switch if launch fails");
     }
+    if (!broadcast && isPruneLeaseAdmissionCurrent(admission)) onUnbroadcastSwitch?.();
   };
 
   // Keep the toast body short (Steam truncates it to one line) and put the
