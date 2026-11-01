@@ -121,9 +121,14 @@ export function startRefusal(start: EmulatorStart, launch: GameLaunch | null, ca
   return start.reason === "not_bakeable" ? (file ?? emulator) : (emulator ?? file);
 }
 
-/** Why a game cannot start, from its core read ({@link startRefusal}), or `null`. */
-export function gameStartRefusal(info: CoreInfo): string | null {
-  const canPick = gameCanPickAnother(info.emulators, info.active_core_label);
+/**
+ * Why a game cannot start, from its core read ({@link startRefusal}), or `null`.
+ * `canPick` says the page offers an emulator menu for the sentence to point at; absent, it is read off the entries.
+ */
+export function gameStartRefusal(
+  info: CoreInfo,
+  canPick = gameCanPickAnother(info.emulators, info.active_core_label),
+): string | null {
   return startRefusal(info.start, info.launch ?? null, canPick);
 }
 

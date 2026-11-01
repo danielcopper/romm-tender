@@ -13,7 +13,7 @@
  * through `loadQamExpansion` with the probe value it wants.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from "vitest";
 import { render, act } from "@testing-library/react";
 import { useRef, useSyncExternalStore, type FC } from "react";
 
@@ -129,7 +129,7 @@ describe("setQamExpanded", () => {
 });
 
 describe("useWideQamPanel", () => {
-  let post: ReturnType<typeof vi.spyOn<Window, "postMessage">>;
+  let post: MockInstance<Window["postMessage"]>;
 
   const lastMessage = () => {
     const { calls } = post.mock;
