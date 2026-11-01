@@ -558,8 +558,8 @@ describe("Desktop DiscSelector — combined multi-disc and multi-version", () =>
     expect(itemTexts[4]).toContain("USA (v1.1)");
     expect(itemTexts[5]).toContain("Japan");
 
-    const rows = Array.from(menu.querySelectorAll('[role="menuitem"], [role="separator"]'), (el) =>
-      el.getAttribute("role"),
+    const rows = Array.from(menu.querySelectorAll('[role="menuitem"], hr'), (el) =>
+      el.tagName === "HR" ? "separator" : el.getAttribute("role"),
     );
     expect(rows).toEqual(["menuitem", "menuitem", "menuitem", "menuitem", "separator", "menuitem", "menuitem"]);
   });

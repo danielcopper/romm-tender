@@ -40,25 +40,15 @@ describe("DesktopUnsyncedSavesDialog — sync offered", () => {
     );
   });
 
-  it("calls onChoice with 'sync_and_switch' on Sync now & switch click", () => {
+  it.each([
+    { name: "Sync now & switch", choice: "sync_and_switch" },
+    { name: "Switch anyway", choice: "switch_anyway" },
+    { name: "Cancel", choice: "cancel" },
+  ] as const)("calls onChoice with '$choice' on $name click", ({ name, choice }) => {
     const onChoice = renderDialog();
 
-    fireEvent.click(screen.getByRole("button", { name: "Sync now & switch" }));
-    expect(onChoice).toHaveBeenCalledWith("sync_and_switch");
-  });
-
-  it("calls onChoice with 'switch_anyway' on Switch anyway click", () => {
-    const onChoice = renderDialog();
-
-    fireEvent.click(screen.getByRole("button", { name: "Switch anyway" }));
-    expect(onChoice).toHaveBeenCalledWith("switch_anyway");
-  });
-
-  it("calls onChoice with 'cancel' on Cancel click", () => {
-    const onChoice = renderDialog();
-
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(onChoice).toHaveBeenCalledWith("cancel");
+    fireEvent.click(screen.getByRole("button", { name }));
+    expect(onChoice).toHaveBeenCalledWith(choice);
   });
 });
 

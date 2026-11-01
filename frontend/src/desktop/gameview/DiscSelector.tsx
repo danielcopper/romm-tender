@@ -14,6 +14,7 @@ import { mountPruneLeaseOwner, releasePruneLeasesByOwner } from "../../utils/pru
 import { executeVersionSwitch, fetchVersionCovers, isSelectable, loadVersionList } from "../../utils/versionSwitch";
 import {
   type DiscOptionData,
+  type DiscDisplayState,
   computeDiscDisplayState,
   fetchDiscSelection,
   executeDiscSelection,
@@ -47,6 +48,40 @@ const MENU_ITEM_STYLE = {
   gap: "10px",
   whiteSpace: "nowrap",
 } as const;
+
+function selectorTriggerFace(discDisplayState: DiscDisplayState | null, offDefault: boolean): ReactNode {
+  if (!discDisplayState) {
+    return <FaLayerGroup size={20} color={offDefault ? DISC_ACCENT : DISC_GREY} />;
+  }
+  if (discDisplayState.showPlaylistFace) {
+    return <DiscStack size={20} color={DISC_GREY} />;
+  }
+  return (
+    <DiscWithNumber
+      size={20}
+      color={discDisplayState.isPinned ? DISC_ACCENT : DISC_GREY}
+      num={discDisplayState.activeNum}
+    />
+  );
+}
+
+function selectorButtonTitle(discDisplayState: DiscDisplayState | null, hasVersions: boolean): string {
+  if (!discDisplayState) return "Select Version";
+  return hasVersions ? "Select Disc or Version" : "Select Disc";
+}
+
+function versionRowCover(base64: string | undefined): ReactNode {
+  if (base64) {
+    return (
+      <img
+        alt=""
+        src={`data:image/png;base64,${base64}`}
+        style={{ width: "24px", height: "24px", borderRadius: "2px", objectFit: "cover", flexShrink: 0 }}
+      />
+    );
+  }
+  return <FaCompactDisc size={18} color={DISC_GREY} style={{ flexShrink: 0 }} />;
+}
 
 export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing }) => {
   const discLeaseOwner = `desktop-disc-selector:${appId}`;
@@ -257,37 +292,8 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing })
   // As Big Picture's VersionPicker: "not the default" only where RomM holds one.
   const offDefault = versions.some((v) => v.is_default) && !(active?.is_default ?? false);
 
-  const rowCover = (v: VersionInfo): ReactNode => {
-    const base64 = covers[v.rom_id];
-    if (base64) {
-      return (
-        <img
-          alt=""
-          src={`data:image/png;base64,${base64}`}
-          style={{ width: "24px", height: "24px", borderRadius: "2px", objectFit: "cover", flexShrink: 0 }}
-        />
-      );
-    }
-    return <FaCompactDisc size={18} color={DISC_GREY} style={{ flexShrink: 0 }} />;
-  };
-
-  let face: ReactNode;
-  if (!discDisplayState) {
-    face = <FaLayerGroup size={20} color={offDefault ? DISC_ACCENT : DISC_GREY} />;
-  } else if (discDisplayState.showPlaylistFace) {
-    face = <DiscStack size={20} color={DISC_GREY} />;
-  } else {
-    face = (
-      <DiscWithNumber
-        size={20}
-        color={discDisplayState.isPinned ? DISC_ACCENT : DISC_GREY}
-        num={discDisplayState.activeNum}
-      />
-    );
-  }
-
-  let buttonTitle = "Select Version";
-  if (discDisplayState) buttonTitle = hasVersions ? "Select Disc or Version" : "Select Disc";
+  const face = selectorTriggerFace(discDisplayState, offDefault);
+  const buttonTitle = selectorButtonTitle(discDisplayState, hasVersions);
 
   return (
     <div style={{ position: "relative" }} ref={menuRef}>
@@ -367,10 +373,9 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing })
             })}
 
           {discDisplayState && hasVersions && (
-            <div
-              role="separator"
+            <hr
               data-testid="disc-version-separator"
-              style={{ height: "1px", background: "#67707b", margin: "4px 0" }}
+              style={{ height: "1px", background: "#67707b", border: "none", margin: "4px 0" }}
             />
           )}
 
@@ -392,7 +397,7 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing })
                 }}
                 onClick={() => detach(handleSwitch(v))}
               >
-                {rowCover(v)}
+                {versionRowCover(covers[v.rom_id])}
                 <span style={{ fontWeight: v.active ? 600 : 400 }}>{v.label || v.name || String(v.rom_id)}</span>
                 {v.is_default ? <Badge text={DEFAULT_BADGE} tone="accent" /> : null}
                 {v.installed ? <Badge text={DOWNLOADED_BADGE} tone="good" /> : null}
