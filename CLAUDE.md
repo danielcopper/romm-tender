@@ -1162,17 +1162,18 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — test + prompt-only —
   the sync paths, `get_save_status`, the slot list, the three slot mutations, copy to slot, rolling back to a save
   version, the removed-game cleanup, deleting a ROM's or a platform's local saves and counting a platform's, the passes
-  that record each installed ROM's save directory, and the local-save check (`check_local_drift`) hold the lock (the
-  count, the record passes and the check for the directory follow, not for a write of the save state), and following a
-  moved save directory runs inside the lock of whichever holder calls it. Tests pin the status
+  that record each installed ROM's save directory, the local-save check (`check_local_drift`) and the SAVES tab's read
+  with save sync off (`get_local_save_files`) hold the lock (the count, the record passes, the check and that read for
+  the directory follow, not for a write of the save state), and following a moved save directory runs inside the lock of
+  whichever holder calls it. Tests pin the status
   (`tests/services/saves/test_status.py::TestGetSaveStatusRomLockSerialization`), the three slot mutations
   (`tests/services/saves/test_slots.py::TestSlotMutationLocking`), the slot list
   (`test_slots.py::TestSaveSlotsUnderRomLock`), a sync
   (`tests/services/saves/test_service.py::TestPerRomLockSerialization::test_per_rom_lock_serializes_concurrent_sync`),
-  the removed-game cleanup (`tests/services/saves/test_prune_support.py::TestLockPruneRoms`) and the local-save check
-  (`test_status.py::TestCheckLocalDriftWithSaveSyncOn::test_the_check_waits_for_the_roms_sync_lock`); prompt-only: every
-  other holder and any new read-mutate-write — mechanize via a call-site audit of `rom_save_sync_states.save` and
-  `write_save_state`
+  the removed-game cleanup (`tests/services/saves/test_prune_support.py::TestLockPruneRoms`), the local-save check
+  (`test_status.py::TestCheckLocalDriftWithSaveSyncOn::test_the_check_waits_for_the_roms_sync_lock`) and the read with
+  save sync off (`tests/services/saves/test_local_saves.py::TestTheRomsLock`); prompt-only: every other holder and any
+  new read-mutate-write — mechanize via a call-site audit of `rom_save_sync_states.save` and `write_save_state`
 - **Which files a game's save consists of is the EMULATOR's answer, read live, and six of its seven states refuse the
   sync — no probe, no state written; a place not read from the emulator's own settings is one of them** — test +
   prompt-only — `tests/adapters/test_atlas_saves.py`, `tests/domain/test_save_answer.py` and
