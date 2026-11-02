@@ -37,6 +37,7 @@ from _spawns import record_spawns
 from fakes.fake_source_platform_systems import FakeSourcePlatformSystems
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 
+import services.library._convergence as convergence_module
 from domain.platform_system import PLATFORM_IDS_KEY, decode_platform_ids
 from domain.playtime import Playtime
 from domain.rom_install import RomInstall
@@ -10317,10 +10318,12 @@ class TestAGameACollectionBringsInConverges:
         entry["updated_at"] = "2030-01-01T00:00:00"
 
     @classmethod
-    async def _two_bound(cls, library, fake_romm_api, *, faves, mine=None, main: int | None = 30, also_bound=(31,)):
-        _seed_platform(
-            fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[cls._golf(r, main=main) for r in _GOLF_REGIONS]
-        )
+    async def _two_bound(
+        cls, library, fake_romm_api, *, faves, mine=None, main: int | None = 30, also_bound=(31,), roms=None
+    ):
+        if roms is None:
+            roms = [cls._golf(rom_id, main=main) for rom_id in _GOLF_REGIONS]
+        _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=roms)
         library.settings["enabled_platforms"] = {"2": False}
         enabled = {}
         for collection_id, name, rom_ids in ((7, "Faves", faves), (8, "Mine", mine)):
@@ -10402,20 +10405,93 @@ class TestAGameACollectionBringsInConverges:
         assert await self._sync(library, fake_romm_api, emit, "run-4") == (0, [], 0)
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("mine_fetched", [True, False], ids=["both-fetched", "mine-skipped"])
+    @pytest.mark.parametrize(
+        "mine_listing_changed", [True, False], ids=["both-listings-changed", "mine-unchanged-fetched-by-the-gate"]
+    )
     async def test_a_game_two_collections_bring_in_converges_once(
-        self, make_library, fake_romm_api, emit, mine_fetched
+        self, make_library, fake_romm_api, emit, mine_listing_changed
     ):
         library = make_library(romm_api=fake_romm_api)
         await self._two_bound(library, fake_romm_api, faves=[30], mine=[31])
         self._list(fake_romm_api, 7, [30])
-        if mine_fetched:
+        if mine_listing_changed:
             self._list(fake_romm_api, 8, [31])
 
         counted, removed, _walks = await self._sync(library, fake_romm_api, emit, "run-2")
 
         assert (counted, [row["rom_id"] for row in removed]) == (1, [31])
         assert self._bound(library) == {30: 6030}
+
+    @classmethod
+    async def _two_games_romm_then_joins(cls, library, fake_romm_api, *, main):
+        """Faves holds 30 and Mine 31, two games each with its own shortcut; then RomM joins 31 to 30's game.
+
+        Only 31's answer moves, so the next sync skips Faves, rebuilding 30's
+        stored row, and fetches Mine. *main* is RomM's default after the join.
+        """
+        roms = [cls._golf(rom_id, main=None) for rom_id in (30, 31)]
+        for rom, igdb in zip(roms, (300, 400), strict=True):
+            rom["igdb_id"] = igdb
+            rom["sibling_roms"] = []
+        await cls._two_bound(library, fake_romm_api, faves=[30], mine=[31], also_bound=(), roms=roms)
+        assert cls._bound(library) == {30: 6030, 31: 6031}
+        fake_romm_api.roms[31]["igdb_id"] = 300
+        fake_romm_api.roms[31]["updated_at"] = "2026-01-01T12:00:00+00:00"
+        for rom_id, other in ((30, 31), (31, 30)):
+            fake_romm_api.roms[rom_id]["sibling_roms"] = [
+                {"id": other, "name": f"Golf ({_GOLF_REGIONS[other]})", "is_main_sibling": other == main}
+            ]
+            fake_romm_api.roms[rom_id]["rom_user"] = {"is_main_sibling": rom_id == main}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("main", "kept", "gone"), [(None, 30, 31), (31, 31, 30)], ids=["the-chain-keeps-30", "romm-s-default-31"]
+    )
+    async def test_a_skipped_collection_s_row_in_the_game_ranks_by_its_stored_version(
+        self, make_library, fake_romm_api, emit, monkeypatch, main, kept, gone
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_games_romm_then_joins(library, fake_romm_api, main=main)
+        ranked = []
+        real_stored_version = convergence_module.stored_version
+
+        def stored_version(rom, **kwargs):
+            ranked.append(rom.rom_id)
+            return real_stored_version(rom, **kwargs)
+
+        monkeypatch.setattr(convergence_module, "stored_version", stored_version)
+
+        counted, removed, _walks = await self._sync(library, fake_romm_api, emit, "run-2")
+
+        walked = {args[0] for name, args, _kwargs in fake_romm_api.call_log if name == "list_roms_by_collection"}
+        assert walked == {8}
+        assert ranked == [30, 30]
+        assert (counted, removed) == (
+            1,
+            [{"rom_id": gone, "app_id": 6000 + gone, "kept_rom_id": kept, "kept_app_id": 6000 + kept}],
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("installed", [False, True], ids=["not-installed", "installed"])
+    async def test_a_version_romm_joined_that_no_collection_brings_in_goes_the_stale_way(
+        self, make_library, fake_romm_api, emit, tmp_path, installed
+    ):
+        # D5: RomM joined 31 to 30's game after Tender last read it, and Mine,
+        # which brought 31 in, is turned off. 31 keeps its old key, so it is
+        # no part of the game Faves brings in and loses its shortcut as any
+        # game's on a platform the sync leaves off does, carrying nothing over.
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_games_romm_then_joins(library, fake_romm_api, main=None)
+        library.settings["enabled_collections"] = {"standard": {"7": True}}
+        if installed:
+            self._install(library, tmp_path, 31)
+
+        counted, removed, _walks = await self._sync(library, fake_romm_api, emit, "run-2")
+
+        assert (counted, removed) == (1, [{"rom_id": 31, "app_id": 6031}])
+        assert self._bound(library) == {30: 6030}
+        with library.uow as uow:
+            assert (uow.rom_installs.get(31) is not None) is installed
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("holds", [[30], [31], [32], [30, 31]], ids=["30", "31", "only-unbound-32", "both"])
