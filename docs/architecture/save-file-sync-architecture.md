@@ -2012,10 +2012,11 @@ The Play button's path:
 4. Save tracking: `is_save_tracking_configured`. Its `setup_needed` decides whether there is a setup at all: true only
    while save sync is on and no slot is set up. With save sync off it is false whatever `configured` says, so the press
    goes on with no `get_save_setup_info`, no toast and no slot confirmed, whether RomM can be reached or holds slots for
-   the game ([#2527](https://github.com/danielcopper/romm-tender/issues/2527) D2, D4); the launch watcher acts on the
-   same answer. Where a setup is needed, `get_save_setup_info` decides between an automatic slot pick
-   (`confirm_slot_choice`) and a toast with a switch to the Saves tab, which ends the press — or, for a game whose saves
-   no sync carries (`sync_unavailable`), neither: the press goes on with nothing set up.
+   the game ([#2527](https://github.com/danielcopper/romm-tender/issues/2527) D2, D4); the launch watcher and, in the
+   desktop dev build, the desktop Play button act on the same answer through `ensureTrackingConfiguredSilently`. Where a
+   setup is needed, `get_save_setup_info` decides between an automatic slot pick (`confirm_slot_choice`) and a toast
+   with a switch to the Saves tab, which ends the press — or, for a game whose saves no sync carries
+   (`sync_unavailable`), neither: the press goes on with nothing set up.
 5. Core change: `check_core_change`. A changed core asks the user in the core-change dialog; Cancel ends the press.
 6. Reachability: `probe_reachability` decides between steps 7 and 8.
 7. Online: `pre_launch_sync` — past its limit, the "Waiting for Save Sync" question above. The button turns into
