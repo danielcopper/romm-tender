@@ -1766,7 +1766,7 @@ describe("launchInterceptor — full funnel watcher", () => {
 
       vi.mocked(backend.isSaveTrackingConfigured).mockRejectedValueOnce(new Error("net"));
       expect(await ops.ensureTrackingConfigured()).toBe("proceed");
-      expect(backend.logError).toHaveBeenCalledWith(expect.stringContaining("tracking check failed"));
+      expect(backend.logError).toHaveBeenCalledWith("Watcher tracking check failed (assuming configured): Error: net");
     });
 
     it("ensureTrackingConfigured: a getSaveSetupInfo throw logs and proceeds unconfigured", async () => {
@@ -1775,7 +1775,9 @@ describe("launchInterceptor — full funnel watcher", () => {
       vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({ configured: false, active_slot: null });
       vi.mocked(backend.getSaveSetupInfo).mockRejectedValueOnce(new Error("net"));
       expect(await ops.ensureTrackingConfigured()).toBe("proceed");
-      expect(backend.logError).toHaveBeenCalledWith(expect.stringContaining("save-setup fetch failed"));
+      expect(backend.logError).toHaveBeenCalledWith(
+        "Watcher save-setup fetch failed (proceeding unconfigured): Error: net",
+      );
     });
 
     it("ensureTrackingConfigured: a game whose saves no sync carries proceeds and confirms nothing (#2153)", async () => {
@@ -1812,7 +1814,7 @@ describe("launchInterceptor — full funnel watcher", () => {
       });
       vi.mocked(backend.confirmSlotChoice).mockRejectedValueOnce(new Error("net"));
       expect(await ops.ensureTrackingConfigured()).toBe("proceed");
-      expect(backend.logError).toHaveBeenCalledWith(expect.stringContaining("auto-adopt slot failed"));
+      expect(backend.logError).toHaveBeenCalledWith("Watcher auto-adopt slot failed (proceeding): Error: net");
     });
 
     describe("a call that never answers rejects the op at its limit, for the gate to answer", () => {

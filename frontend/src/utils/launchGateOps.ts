@@ -31,7 +31,7 @@ import { announceSaveSync } from "./saveSyncEvents";
 import { saveSyncToastBody } from "./saveSyncToast";
 import { applyLaunchGateSetupOutcome, resolveSaveSetupOutcome } from "./saveSetup";
 import { showToast } from "./toast";
-import { TimeoutError, boundedOr, withTimeout } from "./withTimeout";
+import { TimeoutError, boundedOr, rethrowTimeout, withTimeout } from "./withTimeout";
 
 interface PreLaunchSyncOptions {
   /** Prefixes every log line, naming the launch path. */
@@ -243,6 +243,48 @@ export async function ensureTrackingConfiguredBigPicture(romId: number): Promise
     confirmSlotChoice: (...args) => withTimeout(confirmSlotChoice(...args), LOCAL_CALL_LIMIT_MS),
     toast: (body) => showToast(body),
     dispatchSavesTab: () => globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "saves" } })),
+  });
+}
+
+/**
+ * The tracking-setup step for a start with no saves tab to send the user to.
+ * Unlike {@link ensureTrackingConfiguredBigPicture}, it MUST NOT route the user
+ * to the saves tab. Instead it silently auto-adopts the default/recommended
+ * slot (via `confirmSlotChoice`) and proceeds. A start is never blocked on a
+ * setup ANSWER — every answer proceeds; any failure (server unreachable,
+ * needs-user-choice, a thrown error) is swallowed. `tag` begins each log line,
+ * naming the launch path.
+ * A call that gets no answer within its limit is not a failure: its
+ * `TimeoutError` reaches the gate.
+ */
+export async function ensureTrackingConfiguredSilently(romId: number, tag: string): Promise<void> {
+  const trackingResult = await boundedOr(isSaveTrackingConfigured(romId), LOCAL_CALL_LIMIT_MS, (e) => {
+    logError(`${tag} tracking check failed (assuming configured): ${e}`);
+    return { configured: true };
+  });
+  if (trackingResult.configured) return;
+
+  const setupInfo = await boundedOr(getSaveSetupInfo(romId), SERVER_CALL_LIMIT_MS, (e) => {
+    // Network/backend failure — never block a start on setup.
+    logError(`${tag} save-setup fetch failed (proceeding unconfigured): ${e}`);
+    return null;
+  });
+  if (setupInfo === null) return;
+
+  // Reuse the shared outcome handler with a no-op saves-tab dispatch and a
+  // swallowed toast: the auto_confirm branch fires `confirmSlotChoice`; every
+  // other (abort) branch is irrelevant here because this step never aborts a
+  // start on tracking — an unconfigured slot the user can't resolve at the start
+  // must still let the game start (Big Picture's saves tab on the game page can
+  // configure it later).
+  await applyLaunchGateSetupOutcome(resolveSaveSetupOutcome(setupInfo), {
+    rid: romId,
+    confirmSlotChoice: (...args) => withTimeout(confirmSlotChoice(...args), LOCAL_CALL_LIMIT_MS),
+    toast: () => undefined,
+    dispatchSavesTab: () => undefined,
+  }).catch((e: unknown) => {
+    rethrowTimeout(e);
+    logError(`${tag} auto-adopt slot failed (proceeding): ${e}`);
   });
 }
 

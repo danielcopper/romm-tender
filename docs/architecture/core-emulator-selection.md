@@ -218,8 +218,9 @@ Where the check cannot tell — no answer within `LOCAL_CALL_LIMIT_MS`, a call t
 that raised, which `check_start_source` refuses as `detection_failed` rather than answer as if nothing were detected —
 nothing starts or is refused silently: both funnels ask the question `UNCHECKED_START_SOURCE_QUESTION` holds, under the
 title `UNCHECKED_START_SOURCE_TITLE` (both in `frontend/src/utils/emulatorSourceWording.ts`), in
-`frontend/src/shared/UncheckedSourceModal.tsx`, with Start and Cancel. Start runs the rest of the launch check and
-starts the game; Cancel starts nothing.
+`frontend/src/shared/UncheckedSourceModal.tsx` — in the desktop dev build's desktop client, in
+`frontend/src/desktop/gameview/dialogs/DesktopUncheckedSourceDialog.tsx` — with Start and Cancel. Start runs the rest of
+the launch check and starts the game; Cancel starts nothing.
 
 **How long an answer is kept.** Sources are detected per reading, so a source installed later appears on the next call,
 and nothing outlives the call or run that asked it. A call from the panel takes a fresh reading per question. The

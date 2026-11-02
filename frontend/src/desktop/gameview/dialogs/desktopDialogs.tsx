@@ -1,6 +1,7 @@
 /**
- * The desktop dialogs in the shape a launch asks for, {@link LaunchPrompts}.
- * Every one of them settles with its cancel exit when dismissed.
+ * The desktop dialogs in the shapes their callers ask for: a launch's
+ * {@link LaunchPrompts}, and the Play button's Resolve Conflict walk and Stop
+ * confirm. Every one of them settles with its cancel exit when dismissed.
  */
 
 import { resolveConflictsSequentially, type SyncConflictResolution } from "../../../utils/saveConflictFlow";
@@ -14,6 +15,7 @@ import { DesktopFallbackLaunchDialog } from "./DesktopFallbackLaunchDialog";
 import { DesktopCoreChangeDialog } from "./DesktopCoreChangeDialog";
 import { DesktopUncheckedSourceDialog } from "./DesktopUncheckedSourceDialog";
 import { DesktopSyncWaitDialog } from "./DesktopSyncWaitDialog";
+import { DesktopStopGameDialog } from "./DesktopStopGameDialog";
 
 function desktopSaveConflictDialog(
   ask: AskDialog,
@@ -53,6 +55,15 @@ function desktopSyncWaitDialog(
     ask<SyncWaitChoice>("cancel", (resolve) => (
       <DesktopSyncWaitDialog reason={reason} finished={finished} onChoice={resolve} />
     ));
+}
+
+/** The conflicts a Resolve Conflict press found, walked through the dialog outside a start. */
+export function desktopResolveConflicts(ask: AskDialog): (conflicts: SyncConflict[]) => Promise<"cancel" | "resolved"> {
+  return (conflicts) => resolveConflictsSequentially(conflicts, desktopSaveConflictDialog(ask, false));
+}
+
+export function desktopStopGameDialog(ask: AskDialog): () => Promise<boolean> {
+  return () => ask<boolean>(false, (resolve) => <DesktopStopGameDialog onChoice={resolve} />);
 }
 
 export function desktopLaunchPrompts(ask: AskDialog): LaunchPrompts {

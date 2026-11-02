@@ -2568,6 +2568,21 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
     });
   });
 
+  it("a start that throws after a check that answered shows no notification of it", async () => {
+    vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
+    const runGame = vi.fn(() => {
+      throw new Error("Steam refused");
+    });
+    vi.stubGlobal("SteamClient", { Apps: { RunGame: runGame } });
+
+    await clickPlay();
+
+    await waitFor(() => expect(runGame).toHaveBeenCalled());
+    expect(toaster.toast).not.toHaveBeenCalledWith(
+      expect.objectContaining({ body: expect.stringContaining("could not start") }),
+    );
+  });
+
   it("online allow → marks the launch skipped BEFORE RunGame and launches (C1 double-gate fix)", async () => {
     vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
     // Clean sync → allow.

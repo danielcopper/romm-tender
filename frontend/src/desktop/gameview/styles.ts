@@ -77,3 +77,50 @@ export const BUTTON_STYLE: CSSProperties = {
   outline: "none",
   userSelect: "none",
 };
+
+export const CONTAINER_STYLE: CSSProperties = {
+  display: "inline-flex",
+  flexDirection: "row",
+  alignItems: "center",
+  height: "48px",
+  position: "relative",
+  paddingBottom: "2px",
+  boxSizing: "border-box",
+  userSelect: "none",
+  overflow: "visible",
+  zIndex: 20,
+};
+
+export const BUTTON_GROUP_STYLE: CSSProperties = {
+  display: "flex",
+  flexDirection: "row",
+  alignItems: "center",
+  width: "200px",
+  minWidth: "200px",
+  maxWidth: "200px",
+  height: "48px",
+  position: "relative",
+  borderRadius: "2px",
+  boxShadow: "0 1px 4px rgba(0, 0, 0, 0.4)",
+  overflow: "visible",
+  zIndex: 20,
+};
+
+export const BUTTON_BASE_STYLE: CSSProperties = {
+  height: "100%",
+  flex: "1 1 auto",
+  padding: "0 16px",
+  border: "none",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "8px",
+  fontSize: "15px",
+  fontWeight: 700,
+  letterSpacing: "0.5px",
+  color: "#ffffff",
+  borderRadius: "2px",
+  textShadow: "0 1px 2px rgba(0, 0, 0, 0.4)",
+  transition: "filter 0.15s ease, background 0.15s ease",
+};

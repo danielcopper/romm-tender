@@ -9,10 +9,11 @@
  *     and drops the terminal entries after a successful "Clear Completed"
  *
  * Read by:
- *   - MainPage.tsx and DownloadQueue.tsx, both through {@link useDownloads}
- *   - the download_progress / download_failed handlers themselves, which read
- *     the current entry through {@link getDownloadState} to carry forward the
- *     fields their event frame does not carry
+ *   - MainPage.tsx, DownloadQueue.tsx and the desktop client's Play button, all
+ *     through {@link useDownloads}
+ *   - the download_progress / download_complete / download_failed handlers
+ *     themselves, which read the current entry through {@link getDownloadState}
+ *     to carry forward the fields their event frame does not carry
  *
  * The state is held immutably: every mutation that changes something installs a
  * NEW array and notifies, and one that changes nothing does neither. That is

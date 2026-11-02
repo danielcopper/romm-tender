@@ -10,6 +10,9 @@
  * the file stopped short of something, its format included, or the file is an
  * archive whose contents were not read, or whether it starts could not be
  * established, which says so (#2195 D40, D41). This is the one home of that rule.
+ *
+ * Beside them are the notifications for a page whose check of whether the game
+ * can start went wrong, and for a start pressed after it that then fails.
  */
 
 import { HostTransportError } from "../api/host";
@@ -241,4 +244,12 @@ export function startCheckFailureSentence(e: unknown): string {
   if (e instanceof TimeoutError) return `${lead}: Tender's backend did not answer in time.`;
   if (e instanceof HostTransportError) return `${lead}: the connection to Tender's backend was lost.`;
   return `${lead}: ${e instanceof Error ? e.message : String(e)}.`;
+}
+
+/**
+ * What the notification says where a start, pressed after the page's check
+ * went wrong, then fails itself (#2195 D33).
+ */
+export function startFailedSentence(e: unknown): string {
+  return `Tender could not start this game: ${e instanceof Error ? e.message : String(e)}`;
 }
