@@ -1944,7 +1944,7 @@ class TestBroughtInByDelivery:
         brought_in = brought_in_by_delivery([_gsd(3)], {3: [{"id": 1}, {"id": 2}]}, registry)
         assert brought_in == BroughtIn(rows=registry, undelivered={1: False, 2: False})
 
-    def test_a_bound_version_no_delivered_member_lists_keeps_its_shortcut(self):
+    def test_a_bound_version_no_delivered_member_lists_is_not_brought_in(self):
         # Same stored key, but RomM no longer lists it as a sibling: deleted,
         # hidden or regrouped there (D1, D3).
         registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
