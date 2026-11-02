@@ -98,7 +98,6 @@ function detailState(overrides: Partial<GameDetailState> = {}): GameDetailState 
     saveStatus: null,
     saveSyncStatus: null,
     saveSyncLabel: "",
-    savefilesInContentDir: false,
     raId: null,
     achievementEarned: 0,
     achievementTotal: 0,
