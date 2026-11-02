@@ -1035,13 +1035,27 @@ game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app
   the row its game keeps once the run commits (`with_kept_rows_rebound`); each keeps its binding, as a stale row does,
   until the panel reports its shortcut gone, and until then the group still counts as holding two shortcuts, so a
   removal the panel did not finish converges again on the next sync. A stopped run removes nothing. The preview runs the
-  same rule over the listings of the platform units it fetched in full and counts the losers as removals. A collection
-  unit never converges and never sees a loser: it leaves out every member a platform unit synced and every member no
-  listing returns. So two kinds of game keep their shortcuts for good: a game only collections bring in, its platform
-  turned off, and a game on a platform RomM no longer lists — no platform unit reads that platform, so nothing converges
-  it. The panel carries each loser's Steam state over before the removal (`frontend/src/utils/shortcutCarryOver.ts`),
-  then reports the removals Steam no longer lists through `report_sync_removals`, which unbinds each row, resets the
-  Steam Input setting of the removed appId and deletes its grid images, and leaves the per-ROM cover cache.
+  same rule over the listings of the platform units it fetched in full and counts the losers as removals. A game a
+  collection brings in, its platform turned off, converges too (#2661): a collection holding any version brings in the
+  whole game, as RomM's own game page shows every version whichever one a collection holds. Once
+  `UnitApplier.fetch_collection_units` has fetched every collection unit, one decision for the run goes over the ROMs
+  the fetched units delivered: `domain/sync_diff.py::brought_in_by_delivery` answers, in each group where it is more
+  than one, every bound row a delivery holds and every bound row whose stored key is the group's and that a delivered
+  member of the group lists in `sibling_roms`; `services/library/_convergence.py::converge_collection_deliveries` hands
+  those to the same `converge_bound_groups`, scoped to the platforms the sync leaves off
+  (`WorkUnit.unwalked_platform_slugs`). A brought-in row no collection delivered ranks as listed, by the chain over what
+  its last fetch stored (`domain/sync_diff.py::stored_version`: regions, revision, tags, whether RomM holds a file, the
+  `fs_name` stem) and RomM's default as the sibling list states it (#2661 D4); its install, like every brought-in row's,
+  comes from its install record. So which version a collection holds decides neither whether the game converges nor
+  which shortcut stays. The losers join `run_converged`, which every collection unit's collapse leaves out, so a game
+  split over two collections is decided once. A skipped collection's rebuilt rows deliver nothing, and the preview runs
+  the same helper over the ROMs its collection units fetched, never over those rows. A bound row of the group that no
+  delivered member lists — deleted, hidden or regrouped in RomM — keeps its shortcut (#2661 D1, D3). A game on a
+  platform RomM no longer lists keeps its shortcuts for good: no platform unit reads that platform and no collection
+  walk asks for it. The panel carries each loser's Steam state over before the removal
+  (`frontend/src/utils/shortcutCarryOver.ts`), then reports the removals Steam no longer lists through
+  `report_sync_removals`, which unbinds each row, resets the Steam Input setting of the removed appId and deletes its
+  grid images, and leaves the per-ROM cover cache.
 - **Downstream group semantics.** The incremental-skip gate compares RomM's whole visible id set — every sibling, bound
   or unbound — with the checksum the completion stamp recorded (#743), so skip parity on platforms with sibling groups
   holds. The **backfill gate reads the stamp's fetch generation**: a NULL `sibling_group_key` forces a full fetch only
@@ -1051,11 +1065,16 @@ game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app
   migration `031` too, so it carries no checksum and its platform is fetched in full before the backfill gate is asked.
   The **convergence gate** is not generation-gated: a platform any of whose bound rows share a group key with another
   bound row (`domain/fetch_generation.py::convergence_pending`, over `groups_to_converge`) is fetched in full, because a
-  bound version RomM no longer lists converges too; the full fetch converges it, so the skip returns on the run after.
-  Artwork downloads only for the emitted representatives (+ the bound siblings a collection unit keeps), never eager
-  sibling covers. Steam-collection membership resolves each RomM collection `rom_id` with a **group fallback** — an
-  unbound sibling maps to its group's bound sibling's appId — so collecting or favouriting any version puts the game's
-  single shortcut in the collection.
+  bound version RomM no longer lists converges too; the full fetch converges it, so the skip returns on the run after. A
+  collection holding a member whose stored key is such a group's on a platform the sync leaves off is not skipped either
+  (`domain/collection_skip.py::holds_a_game_to_converge`, asked after the listing verdict and before the probe, and
+  logged): the fetch hands the convergence RomM's current sibling list. The removal drops the stamp of a collection that
+  lists the loser, so such a collection is fetched once more before it skips again; where RomM no longer lists the other
+  version as a sibling, the game keeps both shortcuts and the collection is fetched on every sync (#2661 D3). Artwork
+  downloads only for the emitted representatives (+ the bound siblings a collection unit keeps), never eager sibling
+  covers. Steam-collection membership resolves each RomM collection `rom_id` with a **group fallback** — an unbound
+  sibling maps to its group's bound sibling's appId — so collecting or favouriting any version puts the game's single
+  shortcut in the collection.
 
 **Same-named collections union into one Steam collection (#1503).** RomM enforces name uniqueness only per-table and
 per-`(name, user_id)`, so two enabled collections can share a display name — a standard collection and a smart/virtual

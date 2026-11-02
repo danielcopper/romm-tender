@@ -424,10 +424,11 @@ solo groups). Key derivation: `domain/sibling_group.py`, persisted as `roms.sibl
   one already left. Unrelated to a **stranded panel**.
 - **Convergence** — a sync taking a group that holds more than one bound shortcut down to one: the shortcut bound to the
   version `domain/sync_diff.py::converge_bound_groups` keeps stays, every other one is removed and its row **unbound**
-  once the panel reports the shortcut gone, and every version's per-ROM state stays. Only a platform unit the sync
-  fetched in full converges, and the preview counts the same removals; a group one of whose shortcuts is running waits
-  for a later sync. Not a **stale** removal: the version it takes the shortcut off is still a version of a game the sync
-  syncs.
+  once the panel reports the shortcut gone, and every version's per-ROM state stays. A platform unit the sync fetched in
+  full converges its groups, and the run's collection deliveries converge the groups they bring in, over the versions
+  RomM lists as siblings of a delivered one; the preview counts the same removals, and a group one of whose shortcuts is
+  running waits for a later sync. Not a **stale** removal: the version it takes the shortcut off is still a version of a
+  game the sync syncs.
 
 **Region** and **Languages** are **attributes of a single version**, parsed from its filename tags: `(Spain)` → where
 that release shipped; `(En,Fr,De,Es)` → the languages contained in that one dump. A multi-language version is still one

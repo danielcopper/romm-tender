@@ -234,12 +234,13 @@ a unit the run skipped: the apply moves no binding for a skipped unit, so the pr
 ### A game with more than one shortcut
 
 A sibling group holding more than one bound shortcut converges to one on the next complete-view sync (#2645), unless one
-of its shortcuts is running then; a game only collections bring in, its platform turned off, and a game on a platform
-RomM no longer lists keep theirs, since no platform unit reads them. Which one stays, and how the sync gets there, is
-[Backend Architecture](backend-architecture.md), "Convergence". The others reach the panel in `sync_stale` like any
-stale shortcut, each entry naming the shortcut its game keeps (`kept_app_id`, `kept_rom_id`), and are removed by the
-same paced `RemoveShortcut` loop. Before that loop, `frontend/src/utils/shortcutCarryOver.ts` hands the kept shortcut
-what Steam lets a running session move:
+of its shortcuts is running then. A game a collection brings in, its platform turned off, converges over the versions
+RomM lists as siblings of the one the collection holds (#2661); a version RomM no longer lists as such a sibling keeps
+its shortcut, and a game on a platform RomM no longer lists keeps all of them, since nothing reads that platform. Which
+one stays, and how the sync gets there, is [Backend Architecture](backend-architecture.md), "Convergence". The others
+reach the panel in `sync_stale` like any stale shortcut, each entry naming the shortcut its game keeps (`kept_app_id`,
+`kept_rom_id`), and are removed by the same paced `RemoveShortcut` loop. Before that loop,
+`frontend/src/utils/shortcutCarryOver.ts` hands the kept shortcut what Steam lets a running session move:
 
 - the user's collections in `collectionStore.userCollections` that hold the removed appId, each on its own, and not
   Tender's own `RomM: …` collections, which the run's collection maps file the kept shortcut in; that Favorites is among

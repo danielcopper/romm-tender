@@ -709,15 +709,28 @@ Format: **invariant** — tier — enforced by.
   agreeing for a row whose game the run synced on a platform it did not read, the only bound row on that platform once a
   version switch moved the shortcut onto it, whether RomM is asked about it or not, the collection skipped or fetched,
   with platform groups on and off. The convergence keeps a game whose bindings the stale sort would keep one by one from
-  keeping two shortcuts for good wherever a platform unit reads the game's platform (a game only collections bring in,
-  its platform turned off, and a game on a platform RomM no longer lists keep theirs): it judges a group over a platform
-  unit's whole listing and its platform's bound rows, the rows the listing leaves out included, which is why only a
-  fetched platform unit converges, why the gate refuses the skip on the stored keys of every bound row whatever its
-  generation (`domain/fetch_generation.py::convergence_pending`, over the same `groups_to_converge`), and why the
-  preview converges over the listings it fetched in full rather than over its union, where a skipped collection's
-  rebuilt row would read as listed; `tests/domain/test_sync_diff.py::TestConvergeBoundGroups` and
-  `TestCollapseHandedTheConvergedRows` pin the rule and the collapse's side of it, `TestAGroupWithARunningGameIsLeftOut`
-  and `TestWithoutRunningGroups` a group left out while it runs, at the unit and at the finalize,
+  keeping two shortcuts for good (a game on a platform RomM no longer lists keeps them): on a platform a unit reads it
+  judges a group over the unit's whole listing and its platform's bound rows, the rows the listing leaves out included,
+  which is why only a fetched platform unit converges there, why the gate refuses the skip on the stored keys of every
+  bound row whatever its generation (`domain/fetch_generation.py::convergence_pending`, over the same
+  `groups_to_converge`), and why the preview converges over the listings it fetched in full rather than over its union,
+  where a skipped collection's rebuilt row would read as listed. On a platform the sync leaves off, the run's collection
+  deliveries converge a group they bring in (#2661 D1): over the bound rows they deliver and the bound rows of the same
+  stored key a delivered member lists in `sibling_roms` (`domain/sync_diff.py::brought_in_by_delivery`), decided once
+  for the run after every collection unit is fetched, the rows no collection delivered ranked by their stored version
+  fields and the sibling list's default (`stored_version`, D4); a bound row of the group no delivered member lists keeps
+  its shortcut, so a stored key alone never removes one. An unchanged collection holding a member of such a group is
+  fetched rather than skipped (`domain/collection_skip.py::holds_a_game_to_converge`), on every sync where RomM no
+  longer lists the other version as a sibling (D3), and the preview converges over the ROMs its collection units
+  fetched, never a skipped collection's rebuilt rows; `tests/domain/test_sync_diff.py::TestBroughtInByDelivery`,
+  `TestStoredVersion` and `tests/domain/test_collection_skip.py::TestHoldsAGameToConverge` pin those rules,
+  `tests/services/library/test_collection_fetcher.py::TestAGameToConvergeRefusesTheSkip` the gate, and
+  `tests/services/library/test_sync_orchestrator.py::TestAGameACollectionBringsInConverges` the apply and the preview
+  agreeing whichever version a collection holds, for a game split over two collections, an installed version no
+  collection delivered, a version RomM no longer lists as a sibling, a platform RomM no longer lists, a running game and
+  a stopped run; `tests/domain/test_sync_diff.py::TestConvergeBoundGroups` and `TestCollapseHandedTheConvergedRows` pin
+  the rule and the collapse's side of it, `TestAGroupWithARunningGameIsLeftOut` and `TestWithoutRunningGroups` a group
+  left out while it runs, at the unit and at the finalize,
   `tests/services/library/test_sync_orchestrator.py::TestAGameWithSeveralShortcutsConverges` the apply and the preview
   agreeing for every install state, an unlisted version and a game RomM lists no version of, the stopped run, the #1036
   guard, the row the kept shortcut moves onto and a running game left for the next sync,

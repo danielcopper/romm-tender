@@ -69,8 +69,8 @@ class UnitApplierConfig:
     the :class:`CoverPreparer` that holds the unit's covers, the
     :class:`ChunkDispatcher` that takes the built delta the rest of the way, the
     ``emit_progress`` callback the unit's coarse frame goes out through, and the
-    ``running_rom_ids`` reading a platform unit's convergence leaves a running
-    game out by.
+    ``running_rom_ids`` reading a platform unit's convergence, and the collection
+    deliveries', leaves a running game out by.
     """
 
     settings: dict[str, Any]
