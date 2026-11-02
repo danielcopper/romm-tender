@@ -549,10 +549,11 @@ class SyncOrchestrator:
         # stays bound and in its platform's Steam collection, and so does one a
         # collection skip rebuilt (``rebuilt_rows_filed_as_kept``), which no
         # unit left stale. A stopped run files neither in its platform's Steam
-        # collection. A row a platform unit converged is no stale row, so the
-        # stale sort never keeps it: it goes as a removal of its own that names
-        # the shortcut its game keeps, so the panel carries its state over — on
-        # a run that was not stopped, and never over an appId this run bound.
+        # collection. A row the run converged — in a platform unit, or over the
+        # collection deliveries — is no stale row, so the stale sort never keeps
+        # it: it goes as a removal of its own that names the shortcut its game
+        # keeps, so the panel carries its state over — on a run that was not
+        # stopped, and never over an appId this run bound.
         candidates: list[StaleRow] = []
         group_keys: dict[int, str] = {}
         converged = [] if cancelled else list(self._sync_state.run_converged.values())

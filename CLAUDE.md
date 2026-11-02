@@ -727,12 +727,13 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   once for the run, over the bound rows they deliver and the bound rows of the same stored key a delivered member lists
   in `sibling_roms` (`domain/sync_diff.py::brought_in_by_delivery`), a row no collection delivered ranked by its stored
   version fields and the sibling list's default, while a bound row no delivered member lists keeps its shortcut, and no
-  collection holding a member of such a group is skipped. A row whose shortcut either removes keeps its binding until
-  the panel reports the shortcut gone from Steam, the finalize settles the row's stamps whatever its binding by then,
-  and `report_sync_removals` unbinds it only while it still holds the reported appId; a removal never reported is
-  emitted and counted by the preview again while the shortcut is in Steam, and unbound by the next sync's start
-  reconcile where it is gone (#2653 D1). The removed-game cleanup's own proof marks and clears rows too, by its rule in
-  docs/architecture/removed-game-cleanup.md, "Discovery"** — test + prompt-only —
+  collection holding a member of such a group is skipped; a bound version RomM joined to the game after Tender last read
+  it, its stored key still its old game's, is not brought in and goes the stale way (#2661 D5). A row whose shortcut
+  either removes keeps its binding until the panel reports the shortcut gone from Steam, the finalize settles the row's
+  stamps whatever its binding by then, and `report_sync_removals` unbinds it only while it still holds the reported
+  appId; a removal never reported is emitted and counted by the preview again while the shortcut is in Steam, and
+  unbound by the next sync's start reconcile where it is gone (#2653 D1). The removed-game cleanup's own proof marks and
+  clears rows too, by its rule in docs/architecture/removed-game-cleanup.md, "Discovery"** — test + prompt-only —
   `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule,
   `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and the
   preview (among it the third run, the stopped run, the platform route and the fallback),

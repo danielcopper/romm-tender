@@ -8,7 +8,7 @@ collection the same ``updated_at`` — and then a scoped ``updated_after`` probe
 keyed off the fetch start less the platform skip's margin to answer no ROM. What
 RomM does with a hidden member is docs/architecture/backend-architecture.md,
 "Incremental skip". A collection holding a game that still has more than one
-bound shortcut is not skipped either (#2661).
+bound shortcut on a platform the sync leaves off is not skipped either (#2661).
 """
 
 from __future__ import annotations

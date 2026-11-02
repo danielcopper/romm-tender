@@ -307,20 +307,25 @@ If one game has **several Steam shortcuts** — from a library synced before Ten
 RomM joined two games that each had one — the next sync of its platform that runs to its end keeps **one** and removes
 the others. The preview counts them under removals. A game a collection brings in, with its platform turned off, goes
 the same way, whichever of its versions the collection holds: the sync reads the versions RomM lists for the game. A
-version RomM no longer lists for it — deleted or hidden in RomM, or now a game of its own — keeps its shortcut, and the
-collection is then read again on every sync rather than skipped. A game on a platform RomM no longer lists keeps its
-shortcuts for good, since no sync reads that platform. A game one of whose shortcuts is running when the sync reaches
-its platform or when the sync removes shortcuts at its end keeps them only for now: the next sync after it has quit
-converges it. The shortcut that stays is the one of the version you have installed, the ranking above choosing among
-several; with none installed, the one of the version Tender would pick among them, as above, a version RomM has a file
-for before one without. A version RomM no longer lists keeps its shortcut only when it is installed and no version RomM
-lists is, or when no version RomM lists has a shortcut — then the installed one, else the one added to RomM first.
-Before a shortcut goes, the one that stays is added to the Steam collections the removed one was in, Favorites included,
-is hidden if the removed one was, and takes over every image but the icon you set in Steam for the removed one where it
-has none set in Steam itself; that Favorites and Hidden carry over has not been checked on a device. The removed
-shortcut's icon set in Steam, its own Steam playtime and screenshots, and a controller layout saved under its name do
-not move. Tender keeps each version's saves, playtime and download, so switching to another version later finds them
-where they were.
+version no collection holds that RomM no longer lists for the game — deleted or hidden in RomM, or moved to another game
+— keeps its shortcut, and the collection is then read again on every sync rather than skipped; if it is the version the
+collection holds that RomM moved to another game, the collection is skipped again after one sync. A version RomM joined
+to the game after Tender last read it, and that no collection holds, is not counted as part of the game: with its
+platform turned off, its shortcut is removed as any game's there is. The game then keeps one shortcut, the one of the
+version the collection holds, and your Steam collections, Favorites and artwork set in Steam are not moved over to it.
+An installed version stays installed, and the version picker still offers it. A game on a platform RomM no longer lists
+keeps its shortcuts for good, since no sync reads that platform. A game one of whose shortcuts is running when the sync
+reaches its platform or its collections, or when the sync removes shortcuts at its end, keeps them only for now: the
+next sync after it has quit converges it. The shortcut that stays is the one of the version you have installed, the
+ranking above choosing among several; with none installed, the one of the version Tender would pick among them, as
+above, a version RomM has a file for before one without. A version RomM no longer lists keeps its shortcut only when it
+is installed and no version RomM lists is, or when no version RomM lists has a shortcut — then the installed one, else
+the one added to RomM first. Before a shortcut goes, the one that stays is added to the Steam collections the removed
+one was in, Favorites included, is hidden if the removed one was, and takes over every image but the icon you set in
+Steam for the removed one where it has none set in Steam itself; that Favorites and Hidden carry over has not been
+checked on a device. The removed shortcut's icon set in Steam, its own Steam playtime and screenshots, and a controller
+layout saved under its name do not move. Tender keeps each version's saves, playtime and download, so switching to
+another version later finds them where they were.
 
 ## Per-Platform Toggles
 

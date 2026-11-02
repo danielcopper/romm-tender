@@ -287,8 +287,8 @@ What is not reported is finished by the next sync, in one of two ways:
 
 - **The shortcut is still in Steam** — the removal was cut short, no panel received the event, or Steam did not remove
   it. The row is still bound, so the next run's stale removal emits it again, or its group still holds two bound
-  shortcuts and converges again (the platform is fetched in full until it has), with the same `kept_*` and a carry-over
-  that adds nothing twice. The preview counts that removal.
+  shortcuts and converges again (the platform, or for a game a collection brings in the collection, is fetched until it
+  has), with the same `kept_*` and a carry-over that adds nothing twice. The preview counts that removal.
 - **The shortcut is gone but the report was lost** — the backend or the panel stopped between the removal and the
   report, or the backend refused it. The next sync's start reconcile (below) unbinds the row, so the run emits nothing
   for it and the preview counts nothing.

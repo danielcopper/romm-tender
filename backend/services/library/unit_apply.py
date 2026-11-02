@@ -282,9 +282,11 @@ class UnitApplier:
         shortcuts_data = build_shortcuts_data(unit_roms, self._launcher_exe, installed_paths, core_overrides)
         preferred_region = self._settings.get("preferred_region", AUTO_REGION)
 
-        # A group holding more than one bound shortcut converges in a complete
-        # view (#2645), and a collection unit's in :meth:`fetch_collection_units`
-        # (#2661); the finalize of a run that was not stopped removes the others.
+        # A group holding more than one bound shortcut converges here in a
+        # complete view (#2645); a group the collections bring in has converged
+        # already, once for the run, in :meth:`fetch_collection_units` (#2661),
+        # and a collection unit's collapse leaves out every loser the run holds.
+        # The finalize of a run that was not stopped removes them.
         installed = set(installed_paths)
         converged: list[ConvergedBinding] = []
         if complete_view:

@@ -361,7 +361,7 @@ class BroughtIn(NamedTuple):
     """What :func:`brought_in_by_delivery` answers.
 
     ``rows`` are the bound registry rows, keyed by ``str(rom_id)``, of every
-    group in which a collection delivery brings in more than one;
+    group in which the collection deliveries bring in more than one;
     ``undelivered`` maps each of them no collection delivered to whether
     RomM's sibling list marks it as the default version (``is_main_sibling``).
     """
@@ -378,7 +378,7 @@ def brought_in_by_delivery(
     """The bound rows the run's collection deliveries bring in, in the groups holding more than one (#2661 D1).
 
     *delivered* is the built entry of every ROM the run's collection units
-    fetched, keyed by its fresh ``sibling_group_key``; *sibling_stubs* maps each
+    fetched, each carrying its fresh ``sibling_group_key``; *sibling_stubs* maps each
     one's ``rom_id`` to the ``sibling_roms`` RomM answered with it. A delivered
     ROM brings in its own bound row, and every bound row of *registry* that it
     lists as a sibling and whose stored key is its group's: a sibling the
@@ -447,13 +447,15 @@ def converge_bound_groups(
 
     *listed* is the built entry of every ROM the platform listings of
     *platform_slugs* returned — a complete view of those platforms, since a
-    sibling group is per-platform — or, for the run's collection deliveries,
-    every delivered ROM and every bound row they bring in, the latter as
-    :func:`stored_version` shapes it, with *registry* the rows
-    :func:`brought_in_by_delivery` answers (#2661). *registry* is the bound ``roms`` rows as
+    sibling group is per-platform. *registry* is the bound ``roms`` rows as
     :func:`collapse_sibling_groups` takes it, grouped as that collapse groups
     them; a row on another platform is left alone. *installed_rom_ids* must
-    cover the bound rows the listings left out as well as the listed ones.
+    cover the bound rows the listings left out as well as the listed ones. For
+    the run's collection deliveries (#2661), *listed* is every delivered ROM
+    plus, as :func:`stored_version` shapes it, every bound row they bring in
+    that no collection delivered, and *registry* the rows
+    :func:`brought_in_by_delivery` answers, so every row of a group it
+    converges is listed.
 
     A group :func:`groups_to_converge` names keeps the shortcut bound to, in
     order: an installed listed version, the resolution chain ranking several;

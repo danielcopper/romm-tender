@@ -1,8 +1,10 @@
 """Which bound rows a convergence takes the shortcut off, the running games left out.
 
-A platform unit converges over its listing, the run's collection deliveries
-over the bound rows they bring in (#2661). Both are shared by :class:`~services.library.unit_apply.UnitApplier` and
-:class:`~services.library.sync_preview.SyncPreview`, so the removals a preview
+A platform unit converges over its listing (:func:`converge_unless_running`),
+the run's collection deliveries over the bound rows they bring in
+(:func:`converge_collection_deliveries`, #2661).
+:class:`~services.library.unit_apply.UnitApplier` and
+:class:`~services.library.sync_preview.SyncPreview` both call them, so the removals a preview
 counts are the ones its apply makes, each with Steam's running apps read at its
 own time.
 """

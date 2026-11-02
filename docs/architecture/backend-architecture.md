@@ -1021,23 +1021,23 @@ game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app
   `LocalLibraryReader.do_read_installed_rom_ids`. A group one of whose bound shortcuts Steam lists as running is left
   out (#2645 D5): `services/library/_convergence.py::converge_unless_running` reads `RunningGames.running_rom_ids` — the
   reading the removed-game cleanup leaves a running game out by — only when a group would converge, in the apply's
-  platform unit and in the preview each at its own time. The finalize of a run that converged something reads it once
-  more before it removes a shortcut, since the unit's reading may be minutes old by then, and
-  `domain/sync_diff.py::without_running_groups` leaves out every group one of whose shortcuts runs by then, the kept
-  one's included (#2645 D6). The preview therefore counts the removals the apply makes only while no game starts or
-  quits between the two: a game started after the preview keeps the shortcuts the preview counted as removed, and one
-  that quit after it loses the ones the preview left alone. A platform whose rows hold such a group is never skipped
-  (`domain/fetch_generation.py::convergence_pending`), so it is fetched in full on every sync until the game has
-  converged, a game left out while it runs included. The collapse takes the losers (`converged=`), emits nothing for
-  them and still counts their shortcuts as held, so no shortcut moves onto one in the same run. The run keeps them on
-  `LibrarySyncStateBox.run_converged`; the finalize of a run that was not stopped takes them out of the stale scan,
-  passes them through `select_stale_removals` (#1036) and sends them in `sync_stale` with `kept_rom_id` / `kept_app_id`,
-  the row its game keeps once the run commits (`with_kept_rows_rebound`); each keeps its binding, as a stale row does,
-  until the panel reports its shortcut gone, and until then the group still counts as holding two shortcuts, so a
-  removal the panel did not finish converges again on the next sync. A stopped run removes nothing. The preview runs the
-  same rule over the listings of the platform units it fetched in full and counts the losers as removals. A game a
-  collection brings in, its platform turned off, converges too (#2661): a collection holding any version brings in the
-  whole game, as RomM's own game page shows every version whichever one a collection holds. Once
+  platform unit, once the apply has fetched its collection units, and in the preview, each at its own time. The finalize
+  of a run that converged something reads it once more before it removes a shortcut, since the unit's reading may be
+  minutes old by then, and `domain/sync_diff.py::without_running_groups` leaves out every group one of whose shortcuts
+  runs by then, the kept one's included (#2645 D6). The preview therefore counts the removals the apply makes only while
+  no game starts or quits between the two: a game started after the preview keeps the shortcuts the preview counted as
+  removed, and one that quit after it loses the ones the preview left alone. A platform whose rows hold such a group is
+  never skipped (`domain/fetch_generation.py::convergence_pending`), so it is fetched in full on every sync until the
+  game has converged, a game left out while it runs included. The collapse takes the losers (`converged=`), emits
+  nothing for them and still counts their shortcuts as held, so no shortcut moves onto one in the same run. The run
+  keeps them on `LibrarySyncStateBox.run_converged`; the finalize of a run that was not stopped takes them out of the
+  stale scan, passes them through `select_stale_removals` (#1036) and sends them in `sync_stale` with `kept_rom_id` /
+  `kept_app_id`, the row its game keeps once the run commits (`with_kept_rows_rebound`); each keeps its binding, as a
+  stale row does, until the panel reports its shortcut gone, and until then the group still counts as holding two
+  shortcuts, so a removal the panel did not finish converges again on the next sync. A stopped run removes nothing. The
+  preview runs the same rule over the listings of the platform units it fetched in full and counts the losers as
+  removals. A game a collection brings in, its platform turned off, converges too (#2661): a collection holding any
+  version brings in the whole game, as RomM's own game page shows every version whichever one a collection holds. Once
   `UnitApplier.fetch_collection_units` has fetched every collection unit, one decision for the run goes over the ROMs
   the fetched units delivered: `domain/sync_diff.py::brought_in_by_delivery` answers, in each group where it is more
   than one, every bound row a delivery holds and every bound row whose stored key is the group's and that a delivered
@@ -1050,10 +1050,14 @@ game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app
   which shortcut stays. The losers join `run_converged`, which every collection unit's collapse leaves out, so a game
   split over two collections is decided once. A skipped collection's rebuilt rows deliver nothing, and the preview runs
   the same helper over the ROMs its collection units fetched, never over those rows. A bound row of the group that no
-  delivered member lists — deleted, hidden or regrouped in RomM — keeps its shortcut (#2661 D1, D3). A game on a
-  platform RomM no longer lists keeps its shortcuts for good: no platform unit reads that platform and no collection
-  walk asks for it. The panel carries each loser's Steam state over before the removal
-  (`frontend/src/utils/shortcutCarryOver.ts`), then reports the removals Steam no longer lists through
+  delivered member lists — deleted, hidden or regrouped in RomM — keeps its shortcut (#2661 D1, D3). A bound row RomM
+  joined to the game after Tender last read it is not brought in either: its stored key is still its old game's, no
+  collection delivers it, and Tender cannot key it without reading it. On a platform the sync leaves off it goes the
+  stale way, as it would without the join, so the game ends with one shortcut, the delivered version's, without the
+  keeper order and without carry-over; its install record stays, and the version picker, which reads the siblings from
+  RomM, still offers it (#2661 D5). A game on a platform RomM no longer lists keeps its shortcuts for good: no platform
+  unit reads that platform and no collection walk asks for it. The panel carries each loser's Steam state over before
+  the removal (`frontend/src/utils/shortcutCarryOver.ts`), then reports the removals Steam no longer lists through
   `report_sync_removals`, which unbinds each row, resets the Steam Input setting of the removed appId and deletes its
   grid images, and leaves the per-ROM cover cache.
 - **Downstream group semantics.** The incremental-skip gate compares RomM's whole visible id set — every sibling, bound
@@ -1069,12 +1073,15 @@ game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app
   collection holding a member whose stored key is such a group's on a platform the sync leaves off is not skipped either
   (`domain/collection_skip.py::holds_a_game_to_converge`, asked after the listing verdict and before the probe, and
   logged): the fetch hands the convergence RomM's current sibling list. The removal drops the stamp of a collection that
-  lists the loser, so such a collection is fetched once more before it skips again; where RomM no longer lists the other
-  version as a sibling, the game keeps both shortcuts and the collection is fetched on every sync (#2661 D3). Artwork
-  downloads only for the emitted representatives (+ the bound siblings a collection unit keeps), never eager sibling
-  covers. Steam-collection membership resolves each RomM collection `rom_id` with a **group fallback** — an unbound
-  sibling maps to its group's bound sibling's appId — so collecting or favouriting any version puts the game's single
-  shortcut in the collection.
+  lists the loser, so such a collection is fetched once more before it skips again. Where the version no collection
+  delivers is the one RomM no longer lists as a sibling — deleted, hidden or regrouped — its row is never read again and
+  keeps the group's stored key, so the game keeps both shortcuts and the collection is fetched on every sync (#2661 D3);
+  where the delivered version is the one regrouped, its commit writes its fresh key (`Rom.synced` in
+  `SyncReporter._persist_synced_rom`), the stored keys part, and the collection skips again after one fetch (D5).
+  Artwork downloads only for the emitted representatives (+ the bound siblings a collection unit keeps), never eager
+  sibling covers. Steam-collection membership resolves each RomM collection `rom_id` with a **group fallback** — an
+  unbound sibling maps to its group's bound sibling's appId — so collecting or favouriting any version puts the game's
+  single shortcut in the collection.
 
 **Same-named collections union into one Steam collection (#1503).** RomM enforces name uniqueness only per-table and
 per-`(name, user_id)`, so two enabled collections can share a display name — a standard collection and a smart/virtual
@@ -1307,11 +1314,13 @@ and a rename. A virtual collection's `updated_at` says nothing — `virtual_coll
 compared. Then, for every kind, the scoped `updated_after` probe keyed off `fetch_started_at` less the platform skip's
 ten-minute margin (`domain/platform_skip.py::skip_reference`) must answer a `total` of zero
 (`domain/collection_skip.py::probe_verdict`); it filters with the kind's own collection parameter (`collection_id`,
-`smart_collection_id` or `virtual_collection_id`). The reference is the fetch start for the platform's reason: an edit
-RomM records to a member after the fetch began but before the final chunk committed is newer than it. A stamp without
-both values, which is every stamp written before migration `032`, never skips. A probe that raises, or answers with
-anything but a JSON object whose `total` is an integer, falls open to a fetch. The sync log carries each refusal's
-reason.
+`smart_collection_id` or `virtual_collection_id`). Between the two, a collection holding a member whose game still holds
+more than one bound shortcut on a platform the sync leaves off is fetched without the probe
+(`domain/collection_skip.py::holds_a_game_to_converge`; Sibling groups, "Convergence"). The reference is the fetch start
+for the platform's reason: an edit RomM records to a member after the fetch began but before the final chunk committed
+is newer than it. A stamp without both values, which is every stamp written before migration `032`, never skips. A probe
+that raises, or answers with anything but a JSON object whose `total` is an integer, falls open to a fetch. The sync log
+carries each refusal's reason.
 
 **A hidden member changes the listing's ids, not its `updated_at`** (read at RomM 5.3.1 and 5.4.0). An admin, group or
 platform hide, and in 5.4 the age limit, removes the member from the collection listing's `rom_ids` and `rom_count`
@@ -1329,14 +1338,14 @@ a summary field beside `restamp_platform_count` ("Unstamped-platform re-run" abo
 neither names what it does not hold; the Sync page reads them alike. A fresh stamp settles a missing stamp, one without
 a fetch start or checksum, a listing whose ids or `updated_at` differ, and a member updated after the reference, as for
 a platform: the apply fetches the collection, and its final chunk records what RomM serves, built from the same listing
-the next gate compares. It settles nothing where the probe raised or answered with something the gate could not read, so
-such a collection is fetched but not counted, and a probe that keeps failing does not offer the Apply on every sync
-([#2477](https://github.com/danielcopper/romm-tender/issues/2477) D3). The gate states which it was
-(`domain/collection_skip.py::CollectionSkip`), and the preview counts from that answer rather than judging the stamp
-again, so the two cannot disagree. The apply stamps a collection with members and, for a standard or smart collection,
-an `updated_at` its listing carried (`domain/collection_skip.py::apply_stamps`, which the final chunk's stamp and the
-count both decide by); an empty collection and a standard or smart one whose listing carried no `updated_at` are never
-stamped, so they are not counted.
+the next gate compares. It settles nothing where the probe raised or answered with something the gate could not read, or
+where the collection holds a game still to converge, so such a collection is fetched but not counted, and a probe that
+keeps failing does not offer the Apply on every sync ([#2477](https://github.com/danielcopper/romm-tender/issues/2477)
+D3). The gate states which it was (`domain/collection_skip.py::CollectionSkip`), and the preview counts from that answer
+rather than judging the stamp again, so the two cannot disagree. The apply stamps a collection with members and, for a
+standard or smart collection, an `updated_at` its listing carried (`domain/collection_skip.py::apply_stamps`, which the
+final chunk's stamp and the count both decide by); an empty collection and a standard or smart one whose listing carried
+no `updated_at` are never stamped, so they are not counted.
 
 **A collection stamp is deleted, not revoked, when a local removal, the stale removal or removed-game cleanup's row
 delete reaches one of its members.** A skipped collection replays its `CollectionSyncState`'s `member_rom_ids` and
