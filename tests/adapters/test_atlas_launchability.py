@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -40,6 +41,17 @@ from _vendor.atlas import (
     CAVEAT_ENTRY_FORMAT_CONTENT_UNREAD,
     CAVEAT_ENTRY_FORMAT_UNESTABLISHED,
     CAVEAT_ENTRY_TAKES_NO_DIRECTORY,
+    CAVEAT_OPENS_BOUND_EXCEEDED,
+    CAVEAT_OPENS_CONTENT_UNREAD,
+    CAVEAT_OPENS_FILE_MISSING,
+    CAVEAT_OPENS_FILE_UNREAD,
+    CAVEAT_OPENS_FORMAT_REFUSED,
+    CAVEAT_OPENS_FORMAT_UNREAD,
+    CAVEAT_OPENS_PATH_TOO_LONG,
+    CAVEAT_OPENS_PLAYLIST_REFUSED,
+    CAVEAT_OPENS_SETTING_UNREAD,
+    CAVEAT_OPENS_SHEET_REFUSED,
+    CAVEAT_OPENS_TRACK_REFUSED,
     CAVEAT_ROM_PATH_UNDECLARED,
     CAVEAT_SYSTEM_UNKNOWN,
     VERDICT_ENTRY_NOT_ACCEPTED,
@@ -48,6 +60,7 @@ from _vendor.atlas import (
     VERDICT_UNKNOWN,
 )
 from _vendor.atlas.installations import Installer, LaunchabilityAnswer
+from _vendor.atlas.machine import FixtureMachine
 from _vendor.atlas.placement import Caveat
 
 from adapters.atlas_catalogue import AtlasCatalogueAdapter
@@ -64,6 +77,7 @@ from domain.launchability import (
     EMULATOR_DRIVE_UNKNOWN,
     ENCRYPTION_UNREAD,
     ENTRY_UNKNOWN,
+    FORMAT_REFUSED,
     GAME_KIND_UNFOLLOWED,
     GAME_LIST_UNREAD,
     IMAGE_LAYOUT_UNREAD,
@@ -77,10 +91,20 @@ from domain.launchability import (
     NOT_ESTABLISHED,
     NOT_THIS_EMULATOR,
     NOTHING_TO_START,
+    OPENED_CONTENT_UNREAD,
+    OPENED_FILE_MISSING,
+    OPENED_FILE_UNREAD,
+    OPENED_FORMAT_UNREAD,
+    OPENS_PAST_BOUND,
+    PATCH_SETTING_UNREAD,
+    PATH_TOO_LONG,
+    PLAYLIST_REFUSED,
     SAVESTATE_UNREAD,
+    SHEET_REFUSED,
     STARTS,
     SYSTEM_UNKNOWN,
     TAKES_NO_FOLDER,
+    TRACK_REFUSED,
     VERSION_DEPENDENT,
 )
 
@@ -495,3 +519,165 @@ class TestTheResolversOwnReasonsInTendersWords:
         )
 
         assert result.payload(platform_name="PlayStation 3")["reason"] == TAKES_NO_FOLDER
+
+
+# What the resolver states about the files a disc file opens, in Tender's word
+# (#2698): each failure on a refusal and, where the emulator goes on without the
+# file, on a launchable answer too; a playlist refused only as a stop; and what
+# the reading could not follow, only beside a launchable answer.
+_OPEN_FAILURES = {
+    CAVEAT_OPENS_FILE_MISSING: OPENED_FILE_MISSING,
+    CAVEAT_OPENS_TRACK_REFUSED: TRACK_REFUSED,
+    CAVEAT_OPENS_SHEET_REFUSED: SHEET_REFUSED,
+    CAVEAT_OPENS_FORMAT_REFUSED: FORMAT_REFUSED,
+    CAVEAT_OPENS_PATH_TOO_LONG: PATH_TOO_LONG,
+}
+_OPEN_REFUSALS = {CAVEAT_OPENS_PLAYLIST_REFUSED: PLAYLIST_REFUSED, **_OPEN_FAILURES}
+_OPEN_STOPPED_SHORT = {
+    CAVEAT_OPENS_FORMAT_UNREAD: OPENED_FORMAT_UNREAD,
+    CAVEAT_OPENS_CONTENT_UNREAD: OPENED_CONTENT_UNREAD,
+    CAVEAT_OPENS_FILE_UNREAD: OPENED_FILE_UNREAD,
+    CAVEAT_OPENS_SETTING_UNREAD: PATCH_SETTING_UNREAD,
+    CAVEAT_OPENS_BOUND_EXCEEDED: OPENS_PAST_BOUND,
+    **_OPEN_FAILURES,
+}
+
+_PSX_ENTRY = "Beetle PSX"
+
+
+def _ask_psx(answer: LaunchabilityAnswer, traces: list[str]):
+    installation = _Installation(answer)
+    return _stand_in(installation, traces).launchability("psx", "/roms/psx/Game/Game.cue", label=_PSX_ENTRY)
+
+
+class TestWhatADiscFileOpensInTendersWords:
+    def test_every_opens_code_the_resolver_states_is_worded(self):
+        opens_codes = {getattr(atlas, name) for name in atlas.__all__ if name.startswith("CAVEAT_OPENS_")}
+
+        assert opens_codes == set(_OPEN_REFUSALS) | set(_OPEN_STOPPED_SHORT)
+
+    @pytest.mark.parametrize(("code", "word"), sorted(_OPEN_REFUSALS.items()))
+    def test_an_entry_that_stops_on_what_the_file_opens_names_the_reason(self, code, word, traces):
+        result = _ask_psx(
+            LaunchabilityAnswer(
+                verdict=VERDICT_ENTRY_NOT_ACCEPTED,
+                extension=".cue",
+                alternatives=("SwanStation",),
+                caveats=(_caveat(code, entry=_PSX_ENTRY, file="/roms/psx/Game/Game (Track 2).bin"),),
+            ),
+            traces,
+        )
+
+        assert (result.state, result.reason, result.other_entries) == (NOT_THIS_EMULATOR, word, ("SwanStation",))
+
+    @pytest.mark.parametrize(("code", "word"), sorted(_OPEN_STOPPED_SHORT.items()))
+    def test_a_file_that_starts_names_what_its_opens_were_read_short_of(self, code, word, traces):
+        result = _ask_psx(
+            LaunchabilityAnswer(
+                verdict=VERDICT_LAUNCHABLE,
+                extension=".cue",
+                caveats=(_caveat(code, entry=_PSX_ENTRY), _caveat(CAVEAT_ARRANGEMENT_VERSION_DRIFTED)),
+            ),
+            traces,
+        )
+
+        assert (result.state, result.reason) == (STARTS, word)
+
+    def test_a_playlist_refused_is_the_reason_over_a_disc_the_load_would_go_on_without(self, traces):
+        # Beetle PCE opens a playlist's discs, going on without a missing one,
+        # before it fails the load for the playlist itself.
+        result = _ask_psx(
+            LaunchabilityAnswer(
+                verdict=VERDICT_ENTRY_NOT_ACCEPTED,
+                extension=".m3u",
+                caveats=(
+                    _caveat(CAVEAT_OPENS_FILE_MISSING, entry=_PSX_ENTRY, file="/roms/pce/Game/Game.bin"),
+                    _caveat(CAVEAT_OPENS_PLAYLIST_REFUSED, entry=_PSX_ENTRY, file="/roms/pce/Game/Game.m3u"),
+                ),
+            ),
+            traces,
+        )
+
+        assert (result.state, result.reason) == (NOT_THIS_EMULATOR, PLAYLIST_REFUSED)
+
+    def test_what_the_reading_could_not_follow_is_never_a_refusal_reason(self, traces):
+        result = _ask_psx(
+            LaunchabilityAnswer(
+                verdict=VERDICT_ENTRY_NOT_ACCEPTED,
+                extension=".cue",
+                caveats=(
+                    _caveat(CAVEAT_OPENS_CONTENT_UNREAD, entry=_PSX_ENTRY),
+                    _caveat(CAVEAT_OPENS_TRACK_REFUSED, entry=_PSX_ENTRY),
+                ),
+            ),
+            traces,
+        )
+
+        assert (result.state, result.reason) == (NOT_THIS_EMULATOR, TRACK_REFUSED)
+
+
+_DISC_OPENS = Path(__file__).resolve().parent / "atlas_vectors" / "vectors" / "machines" / "disc-opens.json"
+
+
+def _recorded_machine(inp: dict[str, Any]) -> FixtureMachine:
+    return FixtureMachine(
+        inp["files"],
+        symlinks=inp.get("symlinks"),
+        cores=inp.get("cores"),
+        dirs=inp.get("dirs"),
+        inaccessible=inp.get("inaccessible"),
+        unlistable=inp.get("unlistable"),
+    )
+
+
+def _disc_opens_vectors() -> list[Any]:
+    vectors = json.loads(_DISC_OPENS.read_text(encoding="utf-8"))["vectors"]
+    return [pytest.param(vector, id=vector["name"]) for vector in vectors if "launchable_query" in vector["input"]]
+
+
+class TestTheResolversRecordedDiscMachines:
+    """The release's recorded disc machines, asked through Tender's adapter, read as the resolver answers them."""
+
+    @pytest.fixture(autouse=True)
+    def _no_host_deploy(self):
+        """A recorded machine answers for its own ``/var/lib/flatpak`` deploy; nothing on this host is read."""
+
+    @pytest.mark.parametrize("vector", _disc_opens_vectors())
+    def test_each_answer_names_the_resolvers_reason(self, vector, traces):
+        inp = vector["input"]
+        query = inp["launchable_query"]
+        recorded = vector["expected"]["launchable"]
+        adapter = AtlasCatalogueAdapter(
+            sources=EmulatorSourcesAdapter(
+                user_home=inp["home"], settings={}, log_debug=traces.append, machine=_recorded_machine(inp)
+            ),
+            log_debug=traces.append,
+        )
+
+        result = adapter.launchability(query["system"], query["content_path"], label=recorded["entry"]["label"])
+
+        codes = [caveat["code"] for caveat in recorded["caveats"]]
+        if recorded["verdict"] == VERDICT_ENTRY_NOT_ACCEPTED:
+            stop = CAVEAT_OPENS_PLAYLIST_REFUSED if CAVEAT_OPENS_PLAYLIST_REFUSED in codes else codes[0]
+            assert (result.state, result.reason) == (NOT_THIS_EMULATOR, _OPEN_REFUSALS[stop])
+        else:
+            opens = [code for code in codes if code in _OPEN_STOPPED_SHORT]
+            assert (result.state, result.reason) == (STARTS, _OPEN_STOPPED_SHORT[opens[0]] if opens else None)
+
+    def test_a_pc_engine_cd_playlist_is_refused_for_the_playlist(self, traces):
+        vector = next(
+            v
+            for v in json.loads(_DISC_OPENS.read_text(encoding="utf-8"))["vectors"]
+            if v["name"] == "opens-beetle-pce-a-playlist-is-not-accepted"
+        )
+        inp = vector["input"]
+        adapter = AtlasCatalogueAdapter(
+            sources=EmulatorSourcesAdapter(
+                user_home=inp["home"], settings={}, log_debug=traces.append, machine=_recorded_machine(inp)
+            ),
+            log_debug=traces.append,
+        )
+
+        result = adapter.launchability("pcenginecd", inp["launchable_query"]["content_path"], label="Beetle PCE")
+
+        assert (result.state, result.reason, result.extension) == (NOT_THIS_EMULATOR, PLAYLIST_REFUSED, ".m3u")

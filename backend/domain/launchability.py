@@ -41,6 +41,19 @@ NOT_A_GAME_FILE = "not_a_game_file"
 DISC_NOT_FOUND = "disc_not_found"
 DISC_KEY_MISSING = "disc_key_missing"
 
+# Why the entry does not start a disc file, where the resolver read the files
+# its emulator opens through it (#2698): a file it opens is missing, a track's
+# type or a cue sheet or playlist is refused, a file it names is of no image
+# type the emulator opens, the emulator fails every load from a playlist, or a
+# path is too long to open. All but the playlist's are said beside a launchable
+# verdict too, where the emulator goes on without the file.
+OPENED_FILE_MISSING = "opened_file_missing"
+TRACK_REFUSED = "track_refused"
+SHEET_REFUSED = "sheet_refused"
+FORMAT_REFUSED = "format_refused"
+PLAYLIST_REFUSED = "playlist_refused"
+PATH_TOO_LONG = "path_too_long"
+
 # What could not be established about a file the entry starts, in Tender's
 # words (#2195 D40). Play stays on, with a note naming it.
 CONTENT_MISSING = "content_missing"
@@ -58,6 +71,14 @@ DISC_FOLDER_SET = "disc_folder_set"
 DISC_FOLDER_UNKNOWN = "disc_folder_unknown"
 CONTENT_UNCHECKED = "content_unchecked"
 VERSION_DEPENDENT = "version_dependent"
+# The same, for the files a disc file opens (#2698): a format the reading does
+# not follow, content it does not read, a file it could not read, the setting
+# that loads a patch, or more files than it follows.
+OPENED_FORMAT_UNREAD = "opened_format_unread"
+OPENED_CONTENT_UNREAD = "opened_content_unread"
+OPENED_FILE_UNREAD = "opened_file_unread"
+PATCH_SETTING_UNREAD = "patch_setting_unread"
+OPENS_PAST_BOUND = "opens_past_bound"
 
 
 @dataclass(frozen=True, slots=True)

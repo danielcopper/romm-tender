@@ -94,6 +94,17 @@ from _vendor.atlas import (
     CAVEAT_LAUNCH_PATH_UNESTABLISHED,
     CAVEAT_LAUNCH_RESOLUTION_UNSUPPORTED,
     CAVEAT_LAUNCHER_SCRIPT_MISSING,
+    CAVEAT_OPENS_BOUND_EXCEEDED,
+    CAVEAT_OPENS_CONTENT_UNREAD,
+    CAVEAT_OPENS_FILE_MISSING,
+    CAVEAT_OPENS_FILE_UNREAD,
+    CAVEAT_OPENS_FORMAT_REFUSED,
+    CAVEAT_OPENS_FORMAT_UNREAD,
+    CAVEAT_OPENS_PATH_TOO_LONG,
+    CAVEAT_OPENS_PLAYLIST_REFUSED,
+    CAVEAT_OPENS_SETTING_UNREAD,
+    CAVEAT_OPENS_SHEET_REFUSED,
+    CAVEAT_OPENS_TRACK_REFUSED,
     CAVEAT_PROGRAM_NOT_FOUND,
     CAVEAT_ROM_PATH_UNDECLARED,
     CAVEAT_RUN_GAME_DIFFERS,
@@ -142,6 +153,7 @@ from domain.launchability import (
     EMULATOR_DRIVE_UNKNOWN,
     ENCRYPTION_UNREAD,
     ENTRY_UNKNOWN,
+    FORMAT_REFUSED,
     GAME_KIND_UNFOLLOWED,
     GAME_LIST_UNREAD,
     IMAGE_LAYOUT_UNREAD,
@@ -154,10 +166,20 @@ from domain.launchability import (
     NOT_A_LAUNCH_FILE,
     NOT_THIS_EMULATOR,
     NOTHING_TO_START,
+    OPENED_CONTENT_UNREAD,
+    OPENED_FILE_MISSING,
+    OPENED_FILE_UNREAD,
+    OPENED_FORMAT_UNREAD,
+    OPENS_PAST_BOUND,
+    PATCH_SETTING_UNREAD,
+    PATH_TOO_LONG,
+    PLAYLIST_REFUSED,
     SAVESTATE_UNREAD,
+    SHEET_REFUSED,
     STARTS,
     SYSTEM_UNKNOWN,
     TAKES_NO_FOLDER,
+    TRACK_REFUSED,
     VERSION_DEPENDENT,
     Launchability,
 )
@@ -273,6 +295,18 @@ _NOT_ESTABLISHED_LAUNCH_BECAUSE = (
     (CAVEAT_SYSTEM_UNKNOWN, SYSTEM_UNKNOWN),
 )
 
+# What the resolver's reading of the files a disc file opens found failing
+# (#2698). Each is the emulator's own stop on an entry-not-accepted verdict, and
+# a file the emulator goes on without on a launchable one, so each is said on
+# both — except a playlist refused, which the resolver states only as a stop.
+_OPEN_FAILED_BECAUSE = {
+    CAVEAT_OPENS_FILE_MISSING: OPENED_FILE_MISSING,
+    CAVEAT_OPENS_TRACK_REFUSED: TRACK_REFUSED,
+    CAVEAT_OPENS_SHEET_REFUSED: SHEET_REFUSED,
+    CAVEAT_OPENS_FORMAT_REFUSED: FORMAT_REFUSED,
+    CAVEAT_OPENS_PATH_TOO_LONG: PATH_TOO_LONG,
+}
+
 # Why the entry does not take the file, where the resolver states its own reason
 # on an entry-not-accepted verdict (#2195 D40). An entry's loader card refuses
 # with no code, which reads as no reason.
@@ -282,13 +316,22 @@ _REFUSED_BECAUSE = {
     CAVEAT_BOOT_FILE_UNBOOTABLE: NOT_A_GAME_FILE,
     CAVEAT_BOOT_DISC_ROOT_MISSING: DISC_NOT_FOUND,
     CAVEAT_BOOT_DISC_KEY_MISSING: DISC_KEY_MISSING,
+    CAVEAT_OPENS_PLAYLIST_REFUSED: PLAYLIST_REFUSED,
+    **_OPEN_FAILED_BECAUSE,
 }
+
+# The refusals the resolver states only where the emulator stops. A refused
+# answer may carry, ahead of its stop, a file the emulator would have gone on
+# without — Beetle PCE opens a playlist's discs before it fails the load — so
+# one of these is the reason wherever it stands.
+_STOPS_ONLY = frozenset(_REFUSED_BECAUSE) - frozenset(_OPEN_FAILED_BECAUSE)
 
 # What the resolver's reading of a file the entry starts stopped short of, on a
 # launchable verdict (#2195 D40): the entry's own boot read as far as it goes,
-# a loader that takes the extension and then reads content atlas does not, or
-# an extension the emulator's builds disagree on. None of them refuses the
-# start; each is said beside it.
+# a loader that takes the extension and then reads content atlas does not, an
+# extension the emulator's builds disagree on, or the files a disc file opens
+# read as far as they go (#2698). None of them refuses the start; each is said
+# beside it, as is a file the emulator goes on without.
 _STOPPED_SHORT_BECAUSE = {
     CAVEAT_BOOT_PATH_MISSING: CONTENT_MISSING,
     CAVEAT_BOOT_PATH_UNESTABLISHED: CONTENT_UNREADABLE,
@@ -305,6 +348,12 @@ _STOPPED_SHORT_BECAUSE = {
     CAVEAT_BOOT_DISC_DIR_UNRESOLVED: DISC_FOLDER_UNKNOWN,
     CAVEAT_ENTRY_FORMAT_CONTENT_UNREAD: CONTENT_UNCHECKED,
     CAVEAT_ENTRY_FORMAT_BUILD_DEPENDENT: VERSION_DEPENDENT,
+    CAVEAT_OPENS_FORMAT_UNREAD: OPENED_FORMAT_UNREAD,
+    CAVEAT_OPENS_CONTENT_UNREAD: OPENED_CONTENT_UNREAD,
+    CAVEAT_OPENS_FILE_UNREAD: OPENED_FILE_UNREAD,
+    CAVEAT_OPENS_SETTING_UNREAD: PATCH_SETTING_UNREAD,
+    CAVEAT_OPENS_BOUND_EXCEEDED: OPENS_PAST_BOUND,
+    **_OPEN_FAILED_BECAUSE,
 }
 
 # Codes a launchability answer carries that change nothing Tender says.
@@ -461,7 +510,8 @@ def _launch_reason(answer: Any, state: str) -> str | None:
     """
     codes = _caveat_codes(answer)
     if state == NOT_THIS_EMULATOR:
-        return next((_REFUSED_BECAUSE[code] for code in codes if code in _REFUSED_BECAUSE), None)
+        ordered = (*(code for code in codes if code in _STOPS_ONLY), *codes)
+        return next((_REFUSED_BECAUSE[code] for code in ordered if code in _REFUSED_BECAUSE), None)
     if state == STARTS:
         return next((_STOPPED_SHORT_BECAUSE[code] for code in codes if code in _STOPPED_SHORT_BECAUSE), None)
     if state != LAUNCH_NOT_ESTABLISHED:

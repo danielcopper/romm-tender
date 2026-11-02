@@ -297,6 +297,96 @@ describe("the resolver's own reasons (#2195 D21, D40)", () => {
   });
 });
 
+describe("what a disc file opens, as the resolver read it (#2698)", () => {
+  const disc = (overrides: Partial<GameLaunch>) =>
+    launch({
+      entry: "Beetle PSX",
+      system: "psx",
+      platform_name: "PlayStation",
+      file: "Game.cue",
+      extension: ".cue",
+      ...overrides,
+    });
+
+  it.each([
+    [
+      "opened_file_missing",
+      "Beetle PSX cannot start Game.cue: a file it opens through it is missing.",
+      "a file it opens is missing",
+    ],
+    [
+      "track_refused",
+      "Beetle PSX cannot start Game.cue: it names a track of a type Beetle PSX does not take.",
+      "a track is of a type it does not take",
+    ],
+    [
+      "sheet_refused",
+      "Beetle PSX cannot start Game.cue: it refuses a cue sheet or playlist the game opens.",
+      "refuses the game's cue sheet or playlist",
+    ],
+    [
+      "format_refused",
+      "Beetle PSX cannot start Game.cue: a file it names is not a disc image Beetle PSX opens.",
+      "a file it names is not a disc image it opens",
+    ],
+    [
+      "playlist_refused",
+      "Beetle PSX cannot start Game.cue: it fails every game started from a playlist.",
+      "fails every game started from a playlist",
+    ],
+    [
+      "path_too_long",
+      "Beetle PSX cannot start Game.cue: the path of a file it opens is too long to open.",
+      "a file's path is too long to open",
+    ],
+  ] as const)(
+    "a stop on %s refuses the start with the resolver's reason, not the file's format",
+    (reason, sentence, line) => {
+      const answer = disc({ state: "not_this_emulator", reason });
+      expect(launchRefused(answer)).toBe(true);
+      expect(launchRefusal(answer, true)).toBe(sentence);
+      expect(entryLaunchLine(answer, RETRODECK)).toBe(line);
+      expect(launchNote(answer, RETRODECK)).toBeNull();
+    },
+  );
+
+  it("names the entries that do start it after the reason", () => {
+    expect(
+      launchRefusal(
+        disc({ state: "not_this_emulator", reason: "playlist_refused", other_entries: ["SwanStation"] }),
+        true,
+      ),
+    ).toBe(
+      "Beetle PSX cannot start Game.cue: it fails every game started from a playlist. SwanStation can — choose it in the emulator menu.",
+    );
+  });
+
+  it.each([
+    ["opened_file_missing", "a file it opens through Game.cue is missing, and it goes on without it"],
+    ["track_refused", "a track of Game.cue is of a type it does not take, and it goes on without it"],
+    ["sheet_refused", "it refuses a cue sheet or playlist the game opens, and goes on without it"],
+    ["format_refused", "a file Game.cue names is not a disc image it opens, and it goes on without it"],
+    ["path_too_long", "the path of a file it opens is too long to open, and it goes on without it"],
+    ["opened_format_unread", "a file it opens is in a format whose opening was not followed"],
+    ["opened_content_unread", "what it makes of a file it opens depends on that file's content, which was not read"],
+    ["opened_file_unread", "a file it opens could not be read"],
+    ["patch_setting_unread", "whether it loads a patch for the disc image could not be read"],
+    ["opens_past_bound", "the game opens more files than were followed"],
+  ] as const)("a file that starts keeps Play and says what its opens came to: %s", (reason, why) => {
+    const answer = disc({ state: "starts", reason });
+    expect(launchRefused(answer)).toBe(false);
+    expect(launchRefusal(answer, true)).toBeNull();
+    expect(launchNote(answer, RETRODECK)).toBe(`Whether Beetle PSX starts this game cannot be established: ${why}.`);
+    expect(entryLaunchLine(answer, RETRODECK)).toBe(`whether it starts the game is not established: ${why}`);
+  });
+
+  it("a playlist refused is no note on a file that starts", () => {
+    const answer = disc({ state: "starts", reason: "playlist_refused" });
+    expect(launchNote(answer, RETRODECK)).toBeNull();
+    expect(entryLaunchLine(answer, RETRODECK)).toBe("can start it");
+  });
+});
+
 describe("startCheckFailureSentence — what went wrong with the page's check (#2195 D32, D36)", () => {
   it.each([
     [new TimeoutError(5000), "Tender's backend did not answer in time"],

@@ -2046,12 +2046,15 @@ be baked is the catalogue's statement, never a launchability question.
 
 **Every code the resolver states on the answer is read** (D40): where the entry does not take the file, the verdict
 carries the resolver's reason in Tender's word (`reason` — a folder the entry takes none of, nothing to boot in it, no
-disc image or game program, a disc that cannot be mounted, an encrypted image without its key), and where the file
-starts but the resolver's reading of it stopped short — RPCS3's own boot read as far as it goes, a loader that takes the
-extension and then reads content the resolver does not, an extension the emulator's builds disagree on — the verdict
-still starts and `reason` names what was not established. Which code is which is `adapters/atlas_catalogue.py`'s
-(`_REFUSED_BECAUSE`, `_STOPPED_SHORT_BECAUSE`); the resolver's boot facts themselves (`boots`) are not read until the
-direct start does (D38).
+disc image or game program, a disc that cannot be mounted, an encrypted image without its key, or, where the resolver
+read the files a disc file opens, the file, track, cue sheet, playlist or path its emulator stops on), and where the
+file starts but the resolver's reading of it stopped short — RPCS3's own boot read as far as it goes, a loader that
+takes the extension and then reads content the resolver does not, an extension the emulator's builds disagree on, the
+files a disc file opens read as far as they go — the verdict still starts and `reason` names what was not established. A
+failure among the files a disc file opens that the emulator goes on without is said the same way
+([#2698](https://github.com/danielcopper/romm-tender/issues/2698)). Which code is which is
+`adapters/atlas_catalogue.py`'s (`_REFUSED_BECAUSE`, `_STOPPED_SHORT_BECAUSE`); the resolver's boot facts themselves
+(`boots`) and the files a disc file opens (`opens`) are not read until the direct start does (D38).
 
 **What each verdict does** (D2): which verdicts refuse a start, and each one's words, are
 `frontend/src/utils/gameLaunch.ts`'s. A verdict that refuses disables Play with its own sentence, and Steam's own Play

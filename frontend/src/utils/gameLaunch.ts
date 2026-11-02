@@ -79,6 +79,32 @@ const REFUSED_BECAUSE: Record<
       `${launch.entry} cannot start ${launch.file}: the image is encrypted and no key file for it was found.`,
     line: () => "the image is encrypted and has no key file",
   },
+  opened_file_missing: {
+    page: (launch) => `${launch.entry} cannot start ${launch.file}: a file it opens through it is missing.`,
+    line: () => "a file it opens is missing",
+  },
+  track_refused: {
+    page: (launch) =>
+      `${launch.entry} cannot start ${launch.file}: it names a track of a type ${launch.entry} does not take.`,
+    line: () => "a track is of a type it does not take",
+  },
+  sheet_refused: {
+    page: (launch) => `${launch.entry} cannot start ${launch.file}: it refuses a cue sheet or playlist the game opens.`,
+    line: () => "refuses the game's cue sheet or playlist",
+  },
+  format_refused: {
+    page: (launch) =>
+      `${launch.entry} cannot start ${launch.file}: a file it names is not a disc image ${launch.entry} opens.`,
+    line: () => "a file it names is not a disc image it opens",
+  },
+  playlist_refused: {
+    page: (launch) => `${launch.entry} cannot start ${launch.file}: it fails every game started from a playlist.`,
+    line: () => "fails every game started from a playlist",
+  },
+  path_too_long: {
+    page: (launch) => `${launch.entry} cannot start ${launch.file}: the path of a file it opens is too long to open.`,
+    line: () => "a file's path is too long to open",
+  },
 };
 
 /**
@@ -105,6 +131,16 @@ const STOPPED_SHORT_BECAUSE: Record<LaunchStoppedShortReason, (launch: GameLaunc
   content_unchecked: (launch) =>
     `${launch.extension} files are taken, but the content of ${launch.file} was not checked`,
   version_dependent: (launch) => `whether it reads ${launch.extension} depends on the emulator's version`,
+  opened_file_missing: (launch) => `a file it opens through ${launch.file} is missing, and it goes on without it`,
+  track_refused: (launch) => `a track of ${launch.file} is of a type it does not take, and it goes on without it`,
+  sheet_refused: () => "it refuses a cue sheet or playlist the game opens, and goes on without it",
+  format_refused: (launch) => `a file ${launch.file} names is not a disc image it opens, and it goes on without it`,
+  path_too_long: () => "the path of a file it opens is too long to open, and it goes on without it",
+  opened_format_unread: () => "a file it opens is in a format whose opening was not followed",
+  opened_content_unread: () => "what it makes of a file it opens depends on that file's content, which was not read",
+  opened_file_unread: () => "a file it opens could not be read",
+  patch_setting_unread: () => "whether it loads a patch for the disc image could not be read",
+  opens_past_bound: () => "the game opens more files than were followed",
 };
 
 function refusedBecause(launch: GameLaunch): (typeof REFUSED_BECAUSE)[LaunchRefusalReason] | null {

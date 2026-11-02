@@ -647,6 +647,10 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
   is neither a disc image nor a game program, a disc game whose disc cannot be mounted, or an encrypted disc image
   without its key file. **Play** is off. Where Tender cannot start that emulator yet either, this reason is still the
   one said.
+- **"Beetle PSX cannot start Game.cue: a file it opens through it is missing."** — for a disc game started from a
+  `.cue`, `.ccd` or `.m3u`, the emulator's own opening of its files was followed, and the sentence says where it stops:
+  a missing file, a track or a cue sheet or playlist it refuses, a file of a kind it does not open, a path too long to
+  open, or a playlist where the emulator fails every game started from one, as Beetle PCE does. **Play** is off.
 - **"Tender cannot start RPCS3 Game Serial (Standalone) yet."** — the emulator in effect is one Tender cannot start from
   Steam yet, and nothing else stands in the way. **Play** is off; choose another emulator in the emulator menu.
 - **"Whether Game.sfc starts cannot be established: …"** — the emulator source could not answer, with the reason.
@@ -655,8 +659,9 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
   it starts was not read. **Play** stays on.
 - **"Whether RPCS3 Directory (Standalone) starts this game cannot be established: …"** — nothing is known to stand in
   the way, but the answer could not follow the start all the way, and the sentence says where it stopped: the folder was
-  not found, whether a disc image is encrypted or its key file fits could not be checked, or the emulator's version
-  decides whether it reads that kind of file. **Play** stays on.
+  not found, whether a disc image is encrypted or its key file fits could not be checked, the emulator's version decides
+  whether it reads that kind of file, or a file a disc game opens could not be followed or is one the emulator goes on
+  without. **Play** stays on.
 - **"Whether _emulator_ reads _.ext_ files is not established."** — nobody has established which files the emulator
   reads. **Play** stays on.
 

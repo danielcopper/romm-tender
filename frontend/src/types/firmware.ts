@@ -441,9 +441,22 @@ export interface EmulatorStart {
 /** Why a launch verdict could not be established, in Tender's words. */
 export type LaunchNotEstablishedReason = "system_unknown" | "entry_unknown" | "catalogue_unread" | "no_source";
 
+/**
+ * What the resolver found failing among the files a disc file opens (#2698): the
+ * emulator's stop on `not_this_emulator`, a file it goes on without on `starts`.
+ */
+export type LaunchOpenFailedReason =
+  "opened_file_missing" | "track_refused" | "sheet_refused" | "format_refused" | "path_too_long";
+
 /** Why the entry does not start the file, where the resolver states a reason of its own, in Tender's words. */
 export type LaunchRefusalReason =
-  "takes_no_folder" | "nothing_to_start" | "not_a_game_file" | "disc_not_found" | "disc_key_missing";
+  | "takes_no_folder"
+  | "nothing_to_start"
+  | "not_a_game_file"
+  | "disc_not_found"
+  | "disc_key_missing"
+  | "playlist_refused"
+  | LaunchOpenFailedReason;
 
 /** What could not be established about a file the entry starts, in Tender's words. */
 export type LaunchStoppedShortReason =
@@ -461,7 +474,13 @@ export type LaunchStoppedShortReason =
   | "disc_folder_set"
   | "disc_folder_unknown"
   | "content_unchecked"
-  | "version_dependent";
+  | "version_dependent"
+  | "opened_format_unread"
+  | "opened_content_unread"
+  | "opened_file_unread"
+  | "patch_setting_unread"
+  | "opens_past_bound"
+  | LaunchOpenFailedReason;
 
 /**
  * Whether one installed game's file starts with one emulator entry, as the
