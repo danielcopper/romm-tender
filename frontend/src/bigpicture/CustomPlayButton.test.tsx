@@ -4446,8 +4446,8 @@ describe("CustomPlayButton — Stop Game", () => {
   });
 
   it("passes the rom id so the backend stops THIS game's instance", async () => {
-    // RetroDECK can have several live instances at once; without the rom id the
-    // backend cannot tell them apart and ends all of them (#1619).
+    // Several games can run at once; the rom id is what names the shortcut whose
+    // process tree the backend stops.
     const { menu } = await renderRunningWithMenu();
     const stopItem = await menu.findByText("Stop Game");
 

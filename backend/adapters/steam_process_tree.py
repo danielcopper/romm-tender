@@ -5,12 +5,8 @@ Owns the host-side view of what a shortcut Steam started is running: the
 it, and the signals sent to that tree's processes. Direct file reads and
 ``os.kill`` only — no ``subprocess``.
 
-Steam starts every shortcut as ``steam-launch-wrapper … -- reaper SteamLaunch
-AppId=<appId> -- <exe> <launch options>``, one ``reaper`` per start, so two
-games in the same emulator are two trees and the shortcut's appId names the one
-to stop (docs/architecture/save-file-sync-architecture.md, "Stop Game"). What
-the emulator is — a Flatpak, an AppImage, a native program — does not matter:
-whatever the shortcut's command started stays below its ``reaper``.
+Which tree is the game, and why: docs/architecture/save-file-sync-architecture.md,
+"Stop Game".
 
 Every read is guarded and fail-soft, like ``renderer_rss``: a process that
 vanishes mid-scan is a normal race and is skipped, so one dead pid never blanks

@@ -426,6 +426,19 @@ class TestTargetsOnlyThisGamesTree:
         assert control.kill_calls == []
 
     @pytest.mark.asyncio
+    async def test_a_rom_with_no_row_signals_nothing(self) -> None:
+        control = self._two_trees()
+        service = _make_service(control, uow=_bound_roms({}))
+
+        with pytest.raises(Refused) as refused:
+            await service.stop_running_game(ROM_ID)
+
+        assert refused.value.reason == "not_running"
+        assert control.find_calls == []
+        assert control.stop_calls == []
+        assert control.kill_calls == []
+
+    @pytest.mark.asyncio
     async def test_the_shortcut_is_looked_up_for_the_rom_that_was_passed(self) -> None:
         control = self._two_trees()
         service = _make_service(control, uow=_bound_roms({7: APP_ID, ROM_ID: self.THEIRS}))
