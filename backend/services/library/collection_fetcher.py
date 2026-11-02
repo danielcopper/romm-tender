@@ -18,7 +18,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, NamedTuple
 
-from domain.collection_skip import CollectionSkip, membership_verdict, probe_verdict, recorded_updated_at
+from domain.collection_skip import (
+    CollectionSkip,
+    holds_a_game_to_converge,
+    membership_verdict,
+    probe_verdict,
+    recorded_updated_at,
+)
 from domain.platform_skip import skip_reference
 from domain.sync_stage import SyncStage
 from lib.romm_paging import LIST_PAGE_SIZE
@@ -27,6 +33,7 @@ from services.library._fetch_pages import emit_fetch_page_progress, raise_if_can
 if TYPE_CHECKING:
     import asyncio
     import logging
+    from collections.abc import Collection
 
     from domain.collection_sync_state import CollectionSyncState
     from domain.work_unit import WorkUnit
@@ -101,6 +108,13 @@ class CollectionFetcher:
         with self._uow_factory() as uow:
             return uow.collection_sync_state.get(collection_id, collection_kind)
 
+    def _read_holds_a_game_to_converge(self, unit: WorkUnit, member_rom_ids: Collection[int]) -> bool:
+        """:func:`~domain.collection_skip.holds_a_game_to_converge` over the stored rows, in one short read UoW."""
+        with self._uow_factory() as uow:
+            return holds_a_game_to_converge(
+                uow.roms.iter_all(), member_rom_ids, platform_slugs=set(unit.unwalked_platform_slugs)
+            )
+
     def _reconstruct_collection_members(
         self, member_rom_ids: list[int], already_synced: set[int]
     ) -> list[dict[str, Any]]:
@@ -155,7 +169,11 @@ class CollectionFetcher:
 
         A probe that raises, or answers with something the verdict cannot read,
         falls open to a fetch, mirroring the platform gate; a fresh stamp settles
-        neither.
+        neither. Nor does it settle a collection the listing would let skip that
+        holds a game still holding more than one bound shortcut
+        (``domain/collection_skip.holds_a_game_to_converge``): it is fetched so
+        the convergence reads RomM's current sibling list (#2661 D1, D3), and is
+        asked before the probe, which it makes moot.
         """
         kind = unit.collection_kind
         if kind is None:
@@ -176,6 +194,9 @@ class CollectionFetcher:
             self._logger.info(f"Per-unit fetch {unit.name}: {listing.reason} — fetch")
             return CollectionSkip(None, restamp_settles=listing.restamp_settles)
 
+        if await self._loop.run_in_executor(None, self._read_holds_a_game_to_converge, unit, stamp.member_rom_ids):
+            self._logger.info(f"Per-unit fetch {unit.name}: a game it holds has more than one shortcut — fetch")
+            return CollectionSkip(None)
         try:
             delta_resp: object = await self._loop.run_in_executor(
                 None,

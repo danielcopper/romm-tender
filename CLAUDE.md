@@ -722,7 +722,13 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `domain/sync_diff.py::converge_bound_groups` keeps is removed on a run that was not stopped — never sorted as stale,
   never over an appId the run bound, and never while Steam lists one of the group's shortcuts as running, read at the
   platform unit and again before the removal — with the preview counting the same removals unless a game starts or quits
-  between the preview and the removal (#2645 D5, D6), and no platform whose rows still hold such a group is skipped. A
+  between the preview and the removal (#2645 D5, D6), and no platform whose rows still hold such a group is skipped; on
+  a platform the sync leaves off, the run's collection deliveries converge a group they bring in the same way (#2661),
+  once for the run, over the bound rows they deliver and the bound rows of the same stored key a delivered member lists
+  in `sibling_roms` (`domain/sync_diff.py::brought_in_by_delivery`), a row no collection delivered ranked by its stored
+  version fields and the sibling list's default, while the convergence leaves a bound row no delivered member lists to
+  the stale sort, and no collection holding a member of such a group is skipped; a bound version RomM joined to the game
+  after Tender last read it, its stored key still its old game's, is not brought in and goes the stale way (#2661 D5). A
   row whose shortcut either removes keeps its binding until the panel reports the shortcut gone from Steam, the finalize
   settles the row's stamps whatever its binding by then, and `report_sync_removals` unbinds it only while it still holds
   the reported appId; a removal never reported is emitted and counted by the preview again while the shortcut is in
@@ -753,7 +759,11 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `tests/services/library/test_sync_orchestrator.py::TestAGameWithSeveralShortcutsConverges` and
   `TestAGameASkippedCollectionStillListsConvergesAsThePreviewCounts` for the apply and the preview, and
   `tests/services/library/test_fetcher.py::TestAGroupWithSeveralShortcutsIsFetchedInFull` for the skip;
-  `tests/services/library/test_sync_orchestrator.py::TestARemovalThePanelDidNotReport`,
+  `tests/domain/test_sync_diff.py::TestBroughtInByDelivery` and `TestStoredVersion`,
+  `tests/domain/test_collection_skip.py::TestHoldsAGameToConverge`,
+  `tests/services/library/test_collection_fetcher.py::TestAGameToConvergeRefusesTheSkip` and
+  `tests/services/library/test_sync_orchestrator.py::TestAGameACollectionBringsInConverges` for a game a collection
+  brings in; `tests/services/library/test_sync_orchestrator.py::TestARemovalThePanelDidNotReport`,
   `tests/services/test_shortcut_removal.py::TestReportSyncRemovals`, `frontend/src/utils/syncRemovalReport.test.ts`,
   `frontend/src/utils/steamShortcuts.test.ts` ("shortcutsGoneFromSteam") and `frontend/src/index.test.tsx`'s
   `sync_stale` listener for a removal the panel did not report, and
@@ -768,8 +778,10 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `services/library/_stale_rows.py::with_kept_platform_names` answers hold for its slug, else the slug — an emitted
   entry's and a row left bound's through `domain/sync_diff.py::platform_collection_name`, a kept row's by the same
   lookup in `compute_platform_collection_diff` — which must agree with `RunFinalizer._names_with_bound_platforms_kept`;
-  the preview hands that diff every stale row `settle_stale_rows` neither removes nor keeps; and the preview and the
-  apply both pick the rebuilt rows they file as kept through `domain/sync_diff.py::rebuilt_rows_filed_as_kept`
+  the preview hands that diff every stale row `settle_stale_rows` neither removes nor keeps; the preview and the apply
+  both pick the rebuilt rows they file as kept through `domain/sync_diff.py::rebuilt_rows_filed_as_kept`; and both
+  converge a game a collection brings in through `services/library/_convergence.py::converge_collection_deliveries`,
+  over the ROMs the collection units fetched and never a skipped collection's rebuilt rows
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py`,
   `tests/domain/test_firmware_wants.py` and `tests/services/test_firmware.py::TestCheckPlatformBiosUnknown` (which pins

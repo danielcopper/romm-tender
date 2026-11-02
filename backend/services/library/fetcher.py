@@ -403,7 +403,13 @@ class LibraryFetcher:
         # One short read UoW for every collection at once — after the listing
         # fetches, never across them.
         collection_queue = await self._attach_collection_bound_counts(collection_queue)
-        units.extend(replace(unit, unwalked_platform_ids=unwalked_platform_ids) for unit in collection_queue)
+        unwalked_platform_slugs = tuple(
+            sorted((self._sync_state.run_listed_platform_slugs or frozenset()) - {unit.slug for unit in platform_units})
+        )
+        units.extend(
+            replace(unit, unwalked_platform_ids=unwalked_platform_ids, unwalked_platform_slugs=unwalked_platform_slugs)
+            for unit in collection_queue
+        )
 
         return units
 

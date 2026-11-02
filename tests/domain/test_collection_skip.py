@@ -6,9 +6,16 @@ from datetime import UTC, datetime
 
 import pytest
 
-from domain.collection_skip import apply_stamps, membership_verdict, probe_verdict, recorded_updated_at
+from domain.collection_skip import (
+    apply_stamps,
+    holds_a_game_to_converge,
+    membership_verdict,
+    probe_verdict,
+    recorded_updated_at,
+)
 from domain.collection_sync_state import CollectionSyncState
 from domain.platform_skip import SKIP_REFERENCE_MARGIN, rom_id_checksum, skip_reference
+from domain.rom import Rom
 
 _FETCH_START = "2026-10-19T12:00:00+00:00"
 _UPDATED_AT = "2026-10-01T09:00:00+00:00"
@@ -202,3 +209,47 @@ class TestWhetherAFreshStampSettlesTheRefusal:
 
     def test_a_probe_with_nothing_updated_asks_for_no_stamp(self):
         assert probe_verdict({"total": 0}, _REFERENCE).restamp_settles is False
+
+
+def _row(rom_id: int, *, app_id: int | None, key: str | None = "igdb:300:2", slug: str = "gba") -> Rom:
+    return Rom(
+        rom_id=rom_id,
+        platform_slug=slug,
+        name=f"rom-{rom_id}",
+        fs_name=f"rom-{rom_id}.zip",
+        shortcut_app_id=app_id,
+        last_synced_at="2026-10-01T00:00:00",
+        sibling_group_key=key,
+    )
+
+
+class TestHoldsAGameToConverge:
+    """``holds_a_game_to_converge`` — the collection skip gate's convergence question (#2661 D1, D3)."""
+
+    _OFF = frozenset({"gba"})
+
+    def test_a_member_whose_game_holds_two_bound_shortcuts_refuses_the_skip(self):
+        rows = [_row(30, app_id=6030), _row(31, app_id=6031)]
+        assert holds_a_game_to_converge(rows, [30], platform_slugs=self._OFF) is True
+
+    def test_an_unbound_member_of_such_a_game_refuses_it_too(self):
+        rows = [_row(30, app_id=6030), _row(31, app_id=6031), _row(32, app_id=None)]
+        assert holds_a_game_to_converge(rows, [32], platform_slugs=self._OFF) is True
+
+    def test_a_game_with_one_bound_shortcut_does_not(self):
+        rows = [_row(30, app_id=6030), _row(31, app_id=None)]
+        assert holds_a_game_to_converge(rows, [30, 31], platform_slugs=self._OFF) is False
+
+    def test_a_member_of_another_game_does_not(self):
+        rows = [_row(30, app_id=6030), _row(31, app_id=6031), _row(40, app_id=6040, key="igdb:400:2")]
+        assert holds_a_game_to_converge(rows, [40], platform_slugs=self._OFF) is False
+
+    def test_a_game_on_a_platform_the_sync_does_not_leave_off_does_not(self):
+        # A platform with a unit of its own converges it; a platform RomM no
+        # longer lists is walked by no collection.
+        rows = [_row(30, app_id=6030), _row(31, app_id=6031)]
+        assert holds_a_game_to_converge(rows, [30], platform_slugs=frozenset({"n64"})) is False
+
+    def test_a_null_key_is_never_a_game(self):
+        rows = [_row(30, app_id=6030, key=None), _row(31, app_id=6031, key=None)]
+        assert holds_a_game_to_converge(rows, [30], platform_slugs=self._OFF) is False

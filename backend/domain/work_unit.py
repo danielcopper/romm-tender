@@ -55,6 +55,9 @@ class WorkUnit:
     # this run (a skipped platform has one). They are the ``platform_ids`` a
     # collection's narrowed walk asks for.
     unwalked_platform_ids: tuple[int, ...] = ()
+    # Collection-only, off the wire: the slugs of those platforms, whose rows a
+    # collection's convergence and its skip gate read (#2661).
+    unwalked_platform_slugs: tuple[str, ...] = ()
     # Collection-only: whether the collection is the signed-in user's own
     # (:func:`is_own_collection`). A foreign smart collection's listing is its
     # owner's view, so its ``member_rom_ids`` do not stand for the caller's walk.

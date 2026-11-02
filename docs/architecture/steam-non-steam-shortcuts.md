@@ -234,8 +234,11 @@ a unit the run skipped: the apply moves no binding for a skipped unit, so the pr
 ### A game with more than one shortcut
 
 A sibling group holding more than one bound shortcut converges to one on the next complete-view sync (#2645), unless one
-of its shortcuts is running then; a game only collections bring in, its platform turned off, and a game on a platform
-RomM no longer lists keep theirs, since no platform unit reads them. Which one stays, and how the sync gets there, is
+of its shortcuts is running then. A game a collection brings in, its platform turned off, converges over the versions
+RomM lists as siblings of the one the collection holds (#2661); a version RomM no longer lists as such a sibling is not
+converged — it keeps its shortcut unless the version the collection holds is the one RomM moved to another game, which
+leaves it a game no collection holds that goes the stale way — and a game on a platform RomM no longer lists keeps all
+of them, since nothing reads that platform. Which one stays, and how the sync gets there, is
 [Backend Architecture](backend-architecture.md), "Convergence". The others reach the panel in `sync_stale` like any
 stale shortcut, each entry naming the shortcut its game keeps (`kept_app_id`, `kept_rom_id`), and are removed by the
 same paced `RemoveShortcut` loop. Before that loop, `frontend/src/utils/shortcutCarryOver.ts` hands the kept shortcut
@@ -286,8 +289,8 @@ What is not reported is finished by the next sync, in one of two ways:
 
 - **The shortcut is still in Steam** — the removal was cut short, no panel received the event, or Steam did not remove
   it. The row is still bound, so the next run's stale removal emits it again, or its group still holds two bound
-  shortcuts and converges again (the platform is fetched in full until it has), with the same `kept_*` and a carry-over
-  that adds nothing twice. The preview counts that removal.
+  shortcuts and converges again (the platform, or for a game a collection brings in the collection, is fetched until it
+  has), with the same `kept_*` and a carry-over that adds nothing twice. The preview counts that removal.
 - **The shortcut is gone but the report was lost** — the backend or the panel stopped between the removal and the
   report, or the backend refused it. The next sync's start reconcile (below) unbinds the row, so the run emits nothing
   for it and the preview counts nothing.

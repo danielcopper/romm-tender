@@ -71,6 +71,7 @@ from domain.sync_diff import StaleRow, select_stale_removals
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping, Sequence
 
+    from domain.rom import Rom
     from domain.work_unit import WorkUnit
     from services.protocols import UnitOfWorkFactory
 
@@ -207,6 +208,16 @@ class LocalLibraryReader:
         """
         with self._uow_factory() as uow:
             return {rom_id for rom_id in rom_ids if uow.rom_installs.get(rom_id) is not None}
+
+    def do_read_stored_rows(self, rom_ids: Collection[int]) -> dict[int, Rom]:
+        """The stored ``roms`` row of each of *rom_ids* that has one, by point lookups in one short read UoW.
+
+        The collection deliveries' convergence ranks a bound version no
+        collection delivered by the version fields its last fetch stored
+        (``domain.sync_diff.stored_version``, #2661 D4).
+        """
+        with self._uow_factory() as uow:
+            return {rom.rom_id: rom for rom_id in rom_ids if (rom := uow.roms.get(rom_id)) is not None}
 
     def do_read_resident_group_keys(self) -> dict[int, str]:
         """Read every persisted non-null ``sibling_group_key`` (``rom_id → key``).

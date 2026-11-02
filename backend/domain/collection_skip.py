@@ -7,7 +7,8 @@ listing to match the stamp — the same checksum, and for a standard or smart
 collection the same ``updated_at`` — and then a scoped ``updated_after`` probe
 keyed off the fetch start less the platform skip's margin to answer no ROM. What
 RomM does with a hidden member is docs/architecture/backend-architecture.md,
-"Incremental skip".
+"Incremental skip". A collection holding a game that still has more than one
+bound shortcut on a platform the sync leaves off is not skipped either (#2661).
 """
 
 from __future__ import annotations
@@ -16,12 +17,15 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.platform_skip import rom_id_checksum, skip_reference
+from domain.sync_diff import groups_to_converge
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable
+    from collections.abc import Set as AbstractSet
     from datetime import datetime
 
     from domain.collection_sync_state import CollectionSyncState
+    from domain.rom import Rom
 
 
 @dataclass(frozen=True)
@@ -124,3 +128,25 @@ def probe_verdict(answer: object, reference: datetime) -> CollectionVerdict:
     if total:
         return CollectionVerdict(unchanged=False, reason=f"{total} member(s) updated {after}", restamp_settles=True)
     return CollectionVerdict(unchanged=True, reason=f"no member updated {after}")
+
+
+def holds_a_game_to_converge(
+    rows: Iterable[Rom], member_rom_ids: Collection[int], *, platform_slugs: AbstractSet[str]
+) -> bool:
+    """Whether a version of a game among *member_rom_ids* still holds more than one bound shortcut by its stored key.
+
+    *rows* are the stored ``roms`` rows; only those of *platform_slugs* — the
+    platforms the sync leaves off, which RomM still lists — count, since a
+    platform unit converges its own platform's groups and a platform RomM no
+    longer lists is walked by no collection. A member counts whether bound or
+    not: a collection holding any version brings in the whole game
+    (#2661 D1). Such a collection is fetched rather than skipped, so the
+    convergence reads RomM's current sibling list — on every sync while the
+    version no collection delivers is the one RomM no longer lists as a
+    sibling (D3); where the delivered version is the one regrouped, its fresh
+    key is committed and the stored keys part (D5).
+    """
+    scoped = [row for row in rows if row.platform_slug in platform_slugs]
+    pending = groups_to_converge(row.sibling_group_key for row in scoped if row.shortcut_app_id is not None)
+    members = set(member_rom_ids)
+    return any(row.sibling_group_key in pending for row in scoped if row.rom_id in members)
