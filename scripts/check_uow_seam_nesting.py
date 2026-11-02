@@ -157,7 +157,6 @@ SEAM_METHODS: frozenset[str] = frozenset(
         "active_emulator_for_rom",  # ActiveCoreResolver (services/active_core_resolver.py)
         "has_adoption_candidate",  # RomAdoptionService — via an AdoptionCandidateProbeFn
         "installed_relaunch_items",  # RelaunchOptionsResolver (services/relaunch_options_resolver.py)
-        "launch_path_for_rom",  # RelaunchOptionsResolver (services/relaunch_options_resolver.py)
         # PlatformSystems (services/platform_systems.py), which reads the kept
         # ids in a UoW of its own and then asks the resolver — the disk too.
         "platform_system",

@@ -43,7 +43,7 @@ from fakes.fake_emulator_sources import FakeEmulatorSources
 from fakes.fake_event_sink import FakeEventSink
 from fakes.fake_firmware_file_store import FakeFirmwareFileStore
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
-from fakes.fake_game_process_control import DEFAULT_LAUNCH_PATH, FakeGameProcessControlAdapter
+from fakes.fake_game_process_control import DEFAULT_APP_ID, FakeGameProcessControlAdapter
 from fakes.fake_journal import FakeJournal
 from fakes.fake_migration_file_store import FakeMigrationFileStore
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
@@ -54,7 +54,6 @@ from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_rom_file_store import FakeRomFileStore
-from fakes.fake_rom_launch_path import FakeRomLaunchPathReader
 from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_running_rom_ids import FakeRunningRomIds
 from fakes.fake_save_backup import FakeSaveBackup
@@ -556,14 +555,24 @@ class _YieldingSleeper:
 
 def _dispatcher_over_game_process(control: FakeGameProcessControlAdapter) -> CallDispatcher:
     """The real dispatcher over ``Endpoints`` whose Stop Game is the real service over a fake process table."""
+    uow = FakeUnitOfWork()
+    uow.roms.save(
+        Rom(
+            rom_id=42,
+            platform_slug="snes",
+            name="Game 42",
+            fs_name="game_42.sfc",
+            shortcut_app_id=DEFAULT_APP_ID,
+            last_synced_at="2025-01-01T00:00:00",
+        )
+    )
     service = GameProcessService(
         config=GameProcessServiceConfig(
             game_process=control,
-            launch_path=FakeRomLaunchPathReader({42: DEFAULT_LAUNCH_PATH}),
+            uow_factory=FakeUnitOfWorkFactory(uow),
             sleeper=_YieldingSleeper(),
             logger=LOGGER,
             log_debug=MagicMock(),
-            flatpak_app_id="net.retrodeck.retrodeck",
         )
     )
     endpoints = Endpoints(_make_application(_make_services_bundle(game_process_service=service)), HostStatus())
@@ -571,7 +580,7 @@ def _dispatcher_over_game_process(control: FakeGameProcessControlAdapter) -> Cal
 
 
 class TestTheStopGameRefusalsOnTheWire:
-    """Stop Game's three refusals, raised by the real service, reach the wire with their exact reason and message."""
+    """Stop Game's two refusals, raised by the real service, reach the wire with their exact reason and message."""
 
     async def test_nothing_running(self):
         message = json.loads(
@@ -584,18 +593,6 @@ class TestTheStopGameRefusalsOnTheWire:
             "success": False,
             "reason": "not_running",
             "message": "No running game was found to stop.",
-        }
-
-    async def test_another_game_running(self):
-        control = FakeGameProcessControlAdapter()
-        control.add_instance([201], "/home/deck/retrodeck/roms/snes/someone-elses.sfc")
-
-        message = json.loads(await _dispatcher_over_game_process(control).dispatch(1, "stop_running_game", [42]))
-
-        assert message["result"] == {
-            "success": False,
-            "reason": "game_not_running",
-            "message": "RetroDECK is running, but not this game — nothing was stopped.",
         }
 
     async def test_a_second_press_while_the_first_is_stopping(self):

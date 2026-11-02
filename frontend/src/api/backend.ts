@@ -417,13 +417,11 @@ export type RelaunchOptionsResult =
 export const getRomRelaunchOptions = endpoint<[number], RelaunchOptionsResult>("get_rom_relaunch_options");
 /**
  * `stop_running_game` result. On success the counts describe what the backend's
- * stop ladder did to the instance running the ROM it was called for: `stopped`
+ * stop ladder did to the processes of the ROM it was called for: `stopped`
  * processes received the polite stop request and `force_killed` of them had to
- * be killed after the grace window. Two failures the caller distinguishes:
- * `reason: "not_running"` — nothing of RetroDECK's was alive, which the caller
- * treats as "the overlay was stale", not as an error; and
- * `reason: "game_not_running"` — RetroDECK is alive but no instance is running
- * this ROM, so the backend signalled nothing rather than end another game.
+ * be killed after the grace window. `reason: "not_running"` — nothing runs
+ * under the ROM's shortcut — is the failure the caller treats as "the overlay
+ * was stale", not as an error.
  */
 export interface StopGameResult {
   success: boolean;

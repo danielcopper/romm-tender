@@ -31,7 +31,6 @@ from adapters.debug_logger import SettingsAwareDebugLogger
 from adapters.download_file import DownloadFileAdapter
 from adapters.emulator_sources import EmulatorSourcesAdapter
 from adapters.firmware_file import FirmwareFileAdapter
-from adapters.game_process import GameProcessAdapter
 from adapters.gavel_native import GavelNativeAdapter
 from adapters.github_releases import GithubReleaseAdapter
 from adapters.hostname import HostnameAdapter
@@ -59,6 +58,7 @@ from adapters.save_file import SaveFileAdapter
 from adapters.sgdb_artwork_cache import SgdbArtworkCacheAdapter
 from adapters.sqlite_migrations import MIGRATIONS_DIR, apply_migrations
 from adapters.steam_config import SteamConfigAdapter
+from adapters.steam_process_tree import SteamProcessTreeAdapter
 from adapters.steam_recovery import SteamRecoveryAdapter
 from adapters.steamgriddb import SteamGridDbAdapter
 from adapters.system_clock import SystemClock
@@ -454,7 +454,7 @@ def bootstrap(
     update_staging = UpdateStagingAdapter(directory=os.path.join(directories.cache_dir, UPDATE_DIR_NAME))
     transient_units = SystemdRunAdapter()
     journal = JournalctlAdapter(log_debug=debug_logger)
-    game_process = GameProcessAdapter()
+    game_process = SteamProcessTreeAdapter()
     # The compiled gavel core owns both save-sync decisions — the per-file sync
     # action and the upload-409 resolution. Loaded eagerly so a missing /
     # wrong-architecture artifact is fatal here (like the SQLite migration gate

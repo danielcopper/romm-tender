@@ -551,14 +551,13 @@ class Endpoints:
 
     @route
     async def stop_running_game(self, rom_id):
-        """Terminate the RetroDECK instance running *rom_id*.
+        """Terminate the processes Steam started for *rom_id*'s shortcut.
 
         Backs the game-detail running overlay's Stop Game action, the way out
         where Steam's overlay does not reach — it does not open over a Flatpak
-        game in Desktop Mode. The kill runs backend-side over the flatpak
-        instance's host processes. The ROM is what picks the instance:
-        RetroDECK can have several live at once, and only the one running this
-        ROM may be signalled.
+        game in Desktop Mode. The kill runs backend-side over the host
+        processes. The ROM's shortcut is what picks them: several games can run
+        at once, in the same emulator too, and only this one may be signalled.
         """
         return await self._services.game_process_service.stop_running_game(int(rom_id))
 

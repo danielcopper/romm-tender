@@ -55,7 +55,6 @@ export type WireReason =
   | "emulator_unknown"
   | "file_present"
   | "folder_unreachable"
-  | "game_not_running"
   | "game_running"
   | "headers_not_a_list"
   | "icon_write_failed"

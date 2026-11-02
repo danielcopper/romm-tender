@@ -248,7 +248,7 @@ describe("runningGame", () => {
       setRunning(true);
       vi.mocked(backend.stopRunningGame).mockResolvedValueOnce({
         success: false,
-        reason: "game_not_running",
+        reason: "already_stopping",
         message: "No matching process found",
       });
 
@@ -263,7 +263,7 @@ describe("runningGame", () => {
       expect(onClearOverlay).not.toHaveBeenCalled();
       expect(toast.showToast).toHaveBeenCalledWith("No matching process found");
       expect(backend.debugLog).toHaveBeenCalledWith(
-        expect.stringContaining("testTag: stop_running_game refused for appId=10 — reason=game_not_running"),
+        expect.stringContaining("testTag: stop_running_game refused for appId=10 — reason=already_stopping"),
       );
       expect(stopInFlightRef.current).toBe(false);
     });
