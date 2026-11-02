@@ -79,8 +79,8 @@ async function handleSaveSyncSettingsChange(
 ): Promise<void> {
   const enabled = detail.save_sync_enabled;
   if (!enabled) {
-    // The SAVES tab stays, its pane switched to this device's files, which the
-    // panel reads as the flag goes.
+    // No read here: the panel reads this device's files once the flag lands
+    // (`localSavesShown` in `RomMGameInfoPanel.tsx`).
     ctx.setState((prev) => ({ ...prev, saveSyncEnabled: false }));
     return;
   }
@@ -406,7 +406,8 @@ function dispatchDataChanged(ctx: PanelEventContext, detail: RommDataChangedDeta
 /** Ask again whether the ROM's saves sync once it was downloaded or uninstalled:
  *  a game that is not downloaded is answered about the path it would occupy, so
  *  the answer says which (#2149 D4). Asked only while save sync is on, as the
- *  cached detail says: only the pane the SAVES tab has while save sync is on shows the answer. */
+ *  cached detail says: with it off nothing shows the answer — the SAVES tab
+ *  lists this device's files and carries no mark. */
 async function rereadSaveSyncAnswer(ctx: PanelEventContext, romId: number): Promise<void> {
   const cached = await getCachedGameDetail(ctx.appId).catch(() => null);
   if (cached?.found && cached.save_sync_enabled) await refreshSaveSyncAnswer(bindCurrentRom(ctx, romId), ctx.readSeqs);
