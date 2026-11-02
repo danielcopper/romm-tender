@@ -432,7 +432,11 @@ describe("ensureTrackingConfiguredBigPicture", () => {
   });
 
   it("a configured ROM proceeds without asking for setup", async () => {
-    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "slot1" });
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: true,
+      active_slot: "slot1",
+      setup_needed: false,
+    });
 
     expect(await ensureTrackingConfiguredBigPicture(ROM_ID)).toBe("proceed");
     expect(backend.getSaveSetupInfo).not.toHaveBeenCalled();
@@ -446,7 +450,11 @@ describe("ensureTrackingConfiguredBigPicture", () => {
   });
 
   it("a failed setup read proceeds, switching nothing", async () => {
-    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: false, active_slot: null });
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: false,
+      active_slot: null,
+      setup_needed: true,
+    });
     vi.mocked(backend.getSaveSetupInfo).mockRejectedValue(new Error("net"));
 
     expect(await ensureTrackingConfiguredBigPicture(ROM_ID)).toBe("proceed");
@@ -455,7 +463,11 @@ describe("ensureTrackingConfiguredBigPicture", () => {
   });
 
   it("an adoptable default is adopted and the start proceeds", async () => {
-    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: false, active_slot: null });
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: false,
+      active_slot: null,
+      setup_needed: true,
+    });
     vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(setupInfo());
     vi.mocked(backend.confirmSlotChoice).mockResolvedValue({
       success: true,
@@ -469,7 +481,11 @@ describe("ensureTrackingConfiguredBigPicture", () => {
   });
 
   it("a setup that cannot be settled here aborts with a toast and switches the page to its saves tab", async () => {
-    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: false, active_slot: null });
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: false,
+      active_slot: null,
+      setup_needed: true,
+    });
     vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(setupInfo({ recommended_action: "server_unreachable" }));
 
     expect(await ensureTrackingConfiguredBigPicture(ROM_ID)).toBe("abort");
@@ -479,7 +495,11 @@ describe("ensureTrackingConfiguredBigPicture", () => {
   });
 
   it("a game whose saves no sync carries starts with no setup step and no toast, though RomM holds saves (#2153 D1)", async () => {
-    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: false, active_slot: null });
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: false,
+      active_slot: null,
+      setup_needed: true,
+    });
     vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(
       setupInfo({
         recommended_action: "sync_unavailable",
@@ -496,12 +516,46 @@ describe("ensureTrackingConfiguredBigPicture", () => {
   });
 
   it("a throw from a side effect after the read is not swallowed into proceed", async () => {
-    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: false, active_slot: null });
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: false,
+      active_slot: null,
+      setup_needed: true,
+    });
     vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(setupInfo());
     vi.mocked(backend.confirmSlotChoice).mockRejectedValue(new Error("confirm blew up"));
 
     await expect(ensureTrackingConfiguredBigPicture(ROM_ID)).rejects.toThrow("confirm blew up");
   });
+
+  // What RomM would answer is set up for each case, so a start that asked would act on it.
+  it.each([
+    ["RomM cannot be reached", setupInfo({ recommended_action: "server_unreachable" })],
+    [
+      "RomM holds slots for the game",
+      setupInfo({
+        recommended_action: "show_wizard",
+        has_local_saves: true,
+        server_slots: [{ slot: "slot1", saves: [], count: 1, latest_updated_at: "2026-01-01T00:00:00Z" }],
+      }),
+    ],
+    ["RomM holds no slot and a default would be adopted", setupInfo()],
+  ])(
+    "with save sync off, starts with no setup, no request to RomM, no toast and no slot (#2527): %s",
+    async (_, info) => {
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: false,
+        active_slot: null,
+        setup_needed: false,
+      });
+      vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(info);
+
+      expect(await ensureTrackingConfiguredBigPicture(ROM_ID)).toBe("proceed");
+      expect(backend.getSaveSetupInfo).not.toHaveBeenCalled();
+      expect(backend.confirmSlotChoice).not.toHaveBeenCalled();
+      expect(toaster.toast).not.toHaveBeenCalled();
+      expect(tabSwitch).not.toHaveBeenCalled();
+    },
+  );
 
   describe("past the deadline", () => {
     beforeEach(() => {
@@ -512,7 +566,11 @@ describe("ensureTrackingConfiguredBigPicture", () => {
     });
 
     it("a setup read that never answers is let through as a TimeoutError, not read as proceed", async () => {
-      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: false, active_slot: null });
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: false,
+        active_slot: null,
+        setup_needed: true,
+      });
       vi.mocked(backend.getSaveSetupInfo).mockReturnValue(new Promise(() => {}));
 
       const outcome = expect(ensureTrackingConfiguredBigPicture(ROM_ID)).rejects.toBeInstanceOf(TimeoutError);

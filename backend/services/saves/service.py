@@ -1,7 +1,7 @@
 """Save-sync aggregate root and facade for the save endpoints.
 
-Composes the save-sync sub-services (sync_engine, status, versions, slots,
-rom_info, prune_support, and the save backup and save transfer it builds once
+Composes the save-sync sub-services (sync_engine, status, local_saves,
+versions, slots, rom_info, prune_support, and the save backup and save transfer it builds once
 and hands to those that need them) over the SQLite ``rom_save_sync_states`` aggregate
 (reached through the injected Unit-of-Work factory) and exposes the use cases
 the endpoints call. The five save-sync feature toggles live in
@@ -30,6 +30,7 @@ from services.saves._settings import (
     save_sync_settings_view,
 )
 from services.saves.copies import SaveCopyService, SaveCopyServiceConfig
+from services.saves.local_saves import LocalSaveFiles, LocalSaveFilesConfig
 from services.saves.prune_support import PruneSaveSupport, PruneSaveSupportConfig
 from services.saves.rom_info import RomInfoService, RomInfoServiceConfig
 from services.saves.save_backup import SaveBackup, SaveBackupConfig
@@ -63,8 +64,8 @@ class SaveDeletionIncomplete(PartialFailure):
 class SaveService:
     """Aggregate root for bidirectional save file sync between RetroDECK and RomM.
 
-    Composes the save-sync sub-services (sync_engine, status, versions, slots,
-    rom_info, prune_support) over the SQLite ``rom_save_sync_states``
+    Composes the save-sync sub-services (sync_engine, status, local_saves,
+    versions, slots, rom_info, prune_support) over the SQLite ``rom_save_sync_states``
     aggregate. Exposes the use cases the endpoints on ``Endpoints`` call — every
     public method delegates to a sub-service or reads ``settings.json``. A use
     case an endpoint calls checks its conflict rules at its entry, under that
@@ -185,6 +186,15 @@ class SaveService:
             ),
         )
 
+        self._local_saves = LocalSaveFiles(
+            config=LocalSaveFilesConfig(
+                rom_info=self._rom_info,
+                sync_engine=self._sync_engine,
+                save_file_store=config.save_file_store,
+                loop=config.loop,
+            ),
+        )
+
         self._versions = VersionsService(
             config=VersionsServiceConfig(
                 settings=config.settings,
@@ -302,6 +312,10 @@ class SaveService:
     def check_core_change(self, rom_id: int) -> dict[str, Any]:
         """Check if emulator core changed since last sync for a ROM."""
         return self._status.check_core_change(rom_id)
+
+    async def get_local_save_files(self, rom_id: int) -> dict[str, Any]:
+        """This device's save files for a ROM, or the refusal its sync is refused with, asking RomM nothing."""
+        return await self._local_saves.get_local_save_files(rom_id)
 
     async def check_local_drift(self, rom_id: int) -> dict[str, Any]:
         """Report how the ROM's local save files stand against their last recorded sync.

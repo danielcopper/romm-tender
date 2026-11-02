@@ -602,7 +602,11 @@ describe("launchInterceptor — full funnel watcher", () => {
     beforeEach(async () => {
       const actual = await vi.importActual<typeof import("./launchGate")>("./launchGate");
       vi.mocked(launchGate.runLaunchGate).mockImplementation(actual.runLaunchGate);
-      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "slot1" });
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: true,
+        active_slot: "slot1",
+        setup_needed: false,
+      });
       vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
       vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
       vi.mocked(backend.preLaunchSync).mockResolvedValue({ success: true, message: "" });
@@ -661,7 +665,11 @@ describe("launchInterceptor — full funnel watcher", () => {
     beforeEach(async () => {
       const actual = await vi.importActual<typeof import("./launchGate")>("./launchGate");
       vi.mocked(launchGate.runLaunchGate).mockImplementation(actual.runLaunchGate);
-      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "slot1" });
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: true,
+        active_slot: "slot1",
+        setup_needed: false,
+      });
       vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
       vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
       vi.mocked(backend.preLaunchSync).mockResolvedValue({ success: true, message: "" });
@@ -711,7 +719,11 @@ describe("launchInterceptor — full funnel watcher", () => {
     beforeEach(async () => {
       const actual = await vi.importActual<typeof import("./launchGate")>("./launchGate");
       vi.mocked(launchGate.runLaunchGate).mockImplementation(actual.runLaunchGate);
-      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "slot1" });
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: true,
+        active_slot: "slot1",
+        setup_needed: false,
+      });
       vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
       vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
       vi.mocked(backend.preLaunchSync).mockReturnValue(never());
@@ -806,7 +818,11 @@ describe("launchInterceptor — full funnel watcher", () => {
     beforeEach(async () => {
       const actual = await vi.importActual<typeof import("./launchGate")>("./launchGate");
       vi.mocked(launchGate.runLaunchGate).mockImplementation(actual.runLaunchGate);
-      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "slot1" });
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: true,
+        active_slot: "slot1",
+        setup_needed: false,
+      });
       vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
       vi.mocked(backend.probeReachability).mockReturnValue(new Promise<never>(() => {}));
       // The re-confirm would ask the same silent backend.
@@ -1547,7 +1563,11 @@ describe("launchInterceptor — full funnel watcher", () => {
           return { decision: "allow" };
         },
       );
-      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: false, active_slot: null });
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: false,
+        active_slot: null,
+        setup_needed: true,
+      });
       vi.mocked(backend.getSaveSetupInfo).mockResolvedValue({
         has_local_saves: false,
         local_files: [],
@@ -1761,7 +1781,11 @@ describe("launchInterceptor — full funnel watcher", () => {
     it("ensureTrackingConfigured: already-configured proceeds; a tracking-check throw logs and proceeds", async () => {
       const ops = await captureOps();
 
-      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({ configured: true, active_slot: "slot1" });
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({
+        configured: true,
+        active_slot: "slot1",
+        setup_needed: false,
+      });
       expect(await ops.ensureTrackingConfigured()).toBe("proceed");
 
       vi.mocked(backend.isSaveTrackingConfigured).mockRejectedValueOnce(new Error("net"));
@@ -1769,10 +1793,48 @@ describe("launchInterceptor — full funnel watcher", () => {
       expect(backend.logError).toHaveBeenCalledWith("Watcher tracking check failed (assuming configured): Error: net");
     });
 
+    // What RomM would answer is set up for each case, so a start that asked would act on it.
+    it.each([
+      ["RomM cannot be reached", "server_unreachable" as const, []],
+      [
+        "RomM holds slots for the game",
+        "show_wizard" as const,
+        [{ slot: "slot1", saves: [], count: 1, latest_updated_at: "2026-01-01T00:00:00Z" }],
+      ],
+      ["RomM holds no slot and a default would be adopted", "auto_confirm_default" as const, []],
+    ])(
+      "ensureTrackingConfigured: with save sync off, proceeds with no setup, no request to RomM and no slot (#2527): %s",
+      async (_, recommended_action, server_slots) => {
+        const ops = await captureOps();
+
+        vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({
+          configured: false,
+          active_slot: null,
+          setup_needed: false,
+        });
+        vi.mocked(backend.getSaveSetupInfo).mockResolvedValue({
+          has_local_saves: true,
+          local_files: [],
+          server_slots,
+          default_slot: "slot1",
+          slot_confirmed: false,
+          active_slot: null,
+          recommended_action,
+        });
+        expect(await ops.ensureTrackingConfigured()).toBe("proceed");
+        expect(backend.getSaveSetupInfo).not.toHaveBeenCalled();
+        expect(backend.confirmSlotChoice).not.toHaveBeenCalled();
+      },
+    );
+
     it("ensureTrackingConfigured: a getSaveSetupInfo throw logs and proceeds unconfigured", async () => {
       const ops = await captureOps();
 
-      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({ configured: false, active_slot: null });
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({
+        configured: false,
+        active_slot: null,
+        setup_needed: true,
+      });
       vi.mocked(backend.getSaveSetupInfo).mockRejectedValueOnce(new Error("net"));
       expect(await ops.ensureTrackingConfigured()).toBe("proceed");
       expect(backend.logError).toHaveBeenCalledWith(
@@ -1783,7 +1845,11 @@ describe("launchInterceptor — full funnel watcher", () => {
     it("ensureTrackingConfigured: a game whose saves no sync carries proceeds and confirms nothing (#2153)", async () => {
       const ops = await captureOps();
 
-      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({ configured: false, active_slot: null });
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({
+        configured: false,
+        active_slot: null,
+        setup_needed: true,
+      });
       vi.mocked(backend.getSaveSetupInfo).mockResolvedValueOnce({
         has_local_saves: false,
         local_files: [],
@@ -1802,7 +1868,11 @@ describe("launchInterceptor — full funnel watcher", () => {
     it("ensureTrackingConfigured: an auto-adopt confirmSlotChoice throw logs and still proceeds", async () => {
       const ops = await captureOps();
 
-      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({ configured: false, active_slot: null });
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({
+        configured: false,
+        active_slot: null,
+        setup_needed: true,
+      });
       vi.mocked(backend.getSaveSetupInfo).mockResolvedValueOnce({
         has_local_saves: false,
         local_files: [],
@@ -1841,7 +1911,11 @@ describe("launchInterceptor — full funnel watcher", () => {
           limit: 15000,
           op: "ensureTrackingConfigured",
           arrange: () => {
-            vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: false, active_slot: null });
+            vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+              configured: false,
+              active_slot: null,
+              setup_needed: true,
+            });
             vi.mocked(backend.getSaveSetupInfo).mockReturnValue(never());
           },
         },
@@ -1850,7 +1924,11 @@ describe("launchInterceptor — full funnel watcher", () => {
           limit: 5000,
           op: "ensureTrackingConfigured",
           arrange: () => {
-            vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: false, active_slot: null });
+            vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+              configured: false,
+              active_slot: null,
+              setup_needed: true,
+            });
             vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(AUTO_CONFIRM_SETUP);
             vi.mocked(backend.confirmSlotChoice).mockReturnValue(never());
           },

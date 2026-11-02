@@ -22,7 +22,8 @@ import type { BiosAnswer, CachedGameDetail } from "../api/backend";
 import { HostTransportError } from "../api/host";
 import { setStrandedAnswer } from "../test-utils/stranded-panel";
 import * as cachedStore from "../utils/cachedGameDetailStore";
-import { formatReleaseDate } from "../utils/formatters";
+import { formatReleaseDate, formatTimestamp } from "../utils/formatters";
+import { CONTENT_DIR_HINT } from "../utils/saveSyncStatement";
 import { getBiosStatusShared, _resetSharedReadsForTests } from "../api/sharedReads";
 import * as slotState from "../utils/slotState";
 import { isStopObserved } from "../utils/sessionManager";
@@ -51,6 +52,7 @@ import type {
   InstalledRom,
   SaveStatus,
   SaveSyncAvailability,
+  LocalSaveFiles,
 } from "../types";
 
 // Type-only imports — vi.mock(...) below replaces the runtime impl, but
@@ -363,6 +365,7 @@ describe("RomMGameInfoPanel", () => {
     vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
       configured: false,
       active_slot: null,
+      setup_needed: true,
     });
     vi.mocked(backend.getSaveSlots).mockResolvedValue({
       success: true,
@@ -1141,6 +1144,7 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
         configured: true,
         active_slot: null,
+        setup_needed: false,
       });
       const { queryByTestId } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
@@ -1239,9 +1243,9 @@ describe("RomMGameInfoPanel", () => {
       expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledWith(55);
     });
 
-    it("save_sync_settings enabled=false → no fetch (early return path), saveSyncEnabled flips false", async () => {
+    it("save_sync_settings enabled=false → no status fetch, and SAVES stays", async () => {
       // cached.save_sync_enabled=true so Saves tab is reachable, then we
-      // disable via the event and observe the SAVES tab being hidden.
+      // disable via the event and observe the SAVES tab staying (#2527).
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 55,
@@ -1262,18 +1266,17 @@ describe("RomMGameInfoPanel", () => {
         await Promise.resolve();
       });
       expect(vi.mocked(backend.getSaveStatus)).not.toHaveBeenCalled();
-      // SAVES tab now hidden in the rendered tab row.
-      expect(container.textContent).not.toContain("SAVES");
+      expect(container.textContent).toContain("SAVES");
     });
 
-    // #1748 — the tab strip asks whether save sync is still on, the pane below
-    // it only asks which tab is active. Switching the setting off under an open
-    // SAVES tab is where the two disagree.
-    it("save_sync_settings enabled=false while the SAVES tab is open → falls back to the info tab (#1748)", async () => {
+    // Switching the setting off under an open SAVES tab keeps the tab and
+    // switches its pane to this device's files (#2527).
+    it("save_sync_settings enabled=false while the SAVES tab is open → the tab stays and shows this device's files (#2527)", async () => {
       // configured=true so the open tab is SavesTab itself, not the setup wizard.
       vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
         configured: true,
         active_slot: "main",
+        setup_needed: false,
       });
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
@@ -1300,17 +1303,15 @@ describe("RomMGameInfoPanel", () => {
         await Promise.resolve();
       });
 
-      // The button went with the setting; the pane must go with the button,
-      // leaving the tab every ROM has — asserted on the info tab's BODY (the
-      // RomM game name), not on its button, which is present either way.
-      expect(container.textContent).not.toContain("SAVES");
+      await flushAsync();
+
       expect(queryByTestId("saves-tab")).toBeNull();
-      expect(container.textContent).toContain("Game (USA)");
+      expect(container.querySelector('[data-testid="steam-tab-content"]')?.textContent).toContain("Save sync is off.");
+      expect(vi.mocked(backend.getLocalSaveFiles)).toHaveBeenCalledWith(55);
     });
 
     it("save_sync_settings enabled=false leaves a user standing on another tab where they are", async () => {
-      // The over-fix this invites: only the SAVES tab loses its button, so
-      // nobody else may be moved.
+      // Switching save sync off moves nobody off the tab they stand on.
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(biosNeedingDetail());
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
@@ -1331,7 +1332,6 @@ describe("RomMGameInfoPanel", () => {
         await Promise.resolve();
       });
 
-      expect(container.textContent).not.toContain("SAVES");
       expect(container.textContent).toContain(
         "The launching emulator marks none of its BIOS files as required (1/2 RomM library files)",
       );
@@ -1344,6 +1344,7 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
         configured: true,
         active_slot: "main",
+        setup_needed: false,
       });
       const { container } = await mountWithRomId(55);
       vi.mocked(backend.getSaveStatus).mockRejectedValue(new Error("net"));
@@ -1379,6 +1380,7 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
         configured: true,
         active_slot: "main",
+        setup_needed: false,
       });
       await mountWithRomId(33);
       vi.mocked(backend.getSaveStatus).mockClear();
@@ -1442,7 +1444,11 @@ describe("RomMGameInfoPanel", () => {
     });
 
     it("save_sync: prune-active status preserves the previously displayed save state", async () => {
-      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "main" });
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: true,
+        active_slot: "main",
+        setup_needed: false,
+      });
       await mountWithRomId(33);
       const knownStatus = {
         rom_id: 33,
@@ -2714,7 +2720,7 @@ describe("RomMGameInfoPanel", () => {
       expect(getByText("BIOS", { selector: '[role="tab"]' })).not.toBeNull();
     });
 
-    it("SAVES tab visible only when save_sync_enabled=true", async () => {
+    it("SAVES tab visible with save_sync_enabled=false too", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 1,
@@ -2724,7 +2730,7 @@ describe("RomMGameInfoPanel", () => {
       });
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
-      expect(container.textContent).not.toContain("SAVES");
+      expect(container.querySelector('[data-testid="tab-saves"]')).not.toBeNull();
     });
 
     it("achievements tab activation triggers lazy-load (getAchievements + getAchievementProgress)", async () => {
@@ -3098,6 +3104,7 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
         configured: true,
         active_slot: "main",
+        setup_needed: false,
       });
       render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
@@ -3136,6 +3143,7 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
         configured: true,
         active_slot: "main",
+        setup_needed: false,
       });
       setRommConnectionState("offline");
       const { queryByTestId } = render(<RomMGameInfoPanel appId={testAppId} />);
@@ -3177,6 +3185,7 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
         configured: true,
         active_slot: "main",
+        setup_needed: false,
       });
       setRommConnectionState("offline");
       render(<RomMGameInfoPanel appId={testAppId} />);
@@ -3210,7 +3219,11 @@ describe("RomMGameInfoPanel", () => {
         metadata: makeMetadata(),
         stale_fields: [],
       });
-      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "main" });
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: true,
+        active_slot: "main",
+        setup_needed: false,
+      });
       render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
       capturedSavesTab.length = 0;
@@ -3262,7 +3275,11 @@ describe("RomMGameInfoPanel", () => {
         metadata: makeMetadata(),
         stale_fields: [],
       });
-      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "main" });
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: true,
+        active_slot: "main",
+        setup_needed: false,
+      });
       setServerRetryProgress(null);
       render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
@@ -3338,7 +3355,11 @@ describe("RomMGameInfoPanel", () => {
         metadata: makeMetadata(),
         stale_fields: [],
       });
-      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "main" });
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: true,
+        active_slot: "main",
+        setup_needed: false,
+      });
       render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
 
@@ -3392,7 +3413,11 @@ describe("RomMGameInfoPanel", () => {
         metadata: makeMetadata(),
         stale_fields: [],
       });
-      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "main" });
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: true,
+        active_slot: "main",
+        setup_needed: false,
+      });
       vi.mocked(backend.getSaveSlots).mockResolvedValue(slotsResult);
       render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
@@ -3435,6 +3460,7 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
         configured: false,
         active_slot: null,
+        setup_needed: true,
       });
       const { queryByTestId } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
@@ -3457,6 +3483,7 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
         configured: true,
         active_slot: "main",
+        setup_needed: false,
       });
       const { queryByTestId } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
@@ -3480,6 +3507,7 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
         configured: true,
         active_slot: "main",
+        setup_needed: false,
       });
       render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
@@ -3534,6 +3562,7 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
         configured: false,
         active_slot: null,
+        setup_needed: true,
       });
       const { queryByTestId } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
@@ -3549,6 +3578,7 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
         configured: true,
         active_slot: "default",
+        setup_needed: false,
       });
       const listener = vi.fn();
       globalThis.addEventListener("romm_data_changed", listener);
@@ -4883,6 +4913,7 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
         configured: true,
         active_slot: "main",
+        setup_needed: false,
       });
       render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
@@ -4939,6 +4970,7 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
         configured: true,
         active_slot: "main",
+        setup_needed: false,
       });
       render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
@@ -5003,6 +5035,7 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
         configured: true,
         active_slot: "main",
+        setup_needed: false,
       });
       render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
@@ -5197,6 +5230,7 @@ describe("RomMGameInfoPanel", () => {
         vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
           configured: true,
           active_slot: "main",
+          setup_needed: false,
         });
         vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ ...detailFor(1, true), ...overrides });
         const view = render(<RomMGameInfoPanel appId={testAppId} />);
@@ -5221,39 +5255,16 @@ describe("RomMGameInfoPanel", () => {
         await flushAsync();
       };
 
-      it("leaves the SAVES tab for the info tab when the switched-to detail says save sync is off", async () => {
+      it("stays on the SAVES tab when the switched-to detail says save sync is off, listing the new version's files", async () => {
         const { container, queryByTestId } = await mountOnSavesTab();
 
         await switchToRom2();
 
-        // Asserted on the info tab's BODY (the new version's RomM name), not on
-        // its button, which is present either way.
-        expect(container.textContent).not.toContain("SAVES");
         expect(queryByTestId("saves-tab")).toBeNull();
-        expect(container.textContent).toContain("Game (Japan)");
-      });
-
-      it("lands on the info tab when the switch takes SAVES away, with BIOS still in the bar", async () => {
-        // SAVES loses its button while BIOS keeps its own, which no switch takes
-        // away. The user is on SAVES, so that is the dead end that has to be
-        // caught.
-        const { container, getByText, queryByTestId } = await mountOnSavesTab({
-          bios_status: {
-            platform_slug: "snes",
-            server_count: 2,
-            local_count: 1,
-            ratio_server_count: 2,
-            ratio_local_count: 1,
-            all_downloaded: false,
-          },
-          bios_level: "partial",
-        });
-
-        await switchToRom2();
-
-        expect(getByText("BIOS", { selector: '[role="tab"]' })).not.toBeNull();
-        expect(queryByTestId("saves-tab")).toBeNull();
-        expect(container.textContent).toContain("Game (Japan)");
+        expect(container.querySelector('[data-testid="steam-tab-content"]')?.textContent).toContain(
+          "Save sync is off.",
+        );
+        expect(vi.mocked(backend.getLocalSaveFiles)).toHaveBeenCalledWith(2);
       });
     });
 
@@ -5715,9 +5726,10 @@ describe("RomMGameInfoPanel", () => {
         // slotConfirmed is the SlotSetupWizard-vs-SavesTab gate: a stale
         // "configured" answer replaces the new version's unconfigured wizard
         // with a saves tab it has no slots for.
-        const tracking = holdReadFor<{ configured: boolean; active_slot: string | null }>(1, {
+        const tracking = holdReadFor<{ configured: boolean; active_slot: string | null; setup_needed: boolean }>(1, {
           configured: false,
           active_slot: null,
+          setup_needed: true,
         });
         vi.mocked(backend.isSaveTrackingConfigured).mockImplementation(tracking.impl);
         vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1, { save_sync_enabled: true }));
@@ -5729,7 +5741,7 @@ describe("RomMGameInfoPanel", () => {
         expect(queryByTestId("slot-setup-wizard")).not.toBeNull();
 
         await act(async () => {
-          tracking.release({ configured: true, active_slot: "main" });
+          tracking.release({ configured: true, active_slot: "main", setup_needed: false });
         });
         await flushAsync();
 
@@ -5746,7 +5758,11 @@ describe("RomMGameInfoPanel", () => {
         vi.mocked(slotState.applyRefreshSlotResult).mockImplementation(realSlotState.applyRefreshSlotResult);
         const slots = holdReadFor<backend.SaveSlotsResult>(1, { success: true, slots: [], active_slot: "japan" });
         vi.mocked(backend.getSaveSlots).mockImplementation(slots.impl);
-        vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "main" });
+        vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+          configured: true,
+          active_slot: "main",
+          setup_needed: false,
+        });
         vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1, { save_sync_enabled: true }));
         render(<RomMGameInfoPanel appId={testAppId} />);
         await flushAsync();
@@ -5787,15 +5803,26 @@ describe("RomMGameInfoPanel", () => {
         });
         await flushAsync();
 
-        // The switched-to version has save sync off, so its tab row carries no
-        // SAVES tab — the refused write is what keeps it that way.
-        expect(container.textContent).not.toContain("SAVES");
+        // The switched-to version has save sync off, so its SAVES tab shows this
+        // device's files — the refused write is what keeps it that way.
+        await act(async () => {
+          globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "saves" } }));
+        });
+        await flushAsync();
+        expect(container.querySelector('[data-testid="steam-tab-content"]')?.textContent).toContain(
+          "Save sync is off.",
+        );
+        expect(container.querySelector('[data-testid="saves-tab"]')).toBeNull();
       });
 
       it("does not fold a save-sync read issued for the previous version", async () => {
         const saveStatus = holdReadFor<backend.SaveStatusResult>(1, emptySaveStatus(2));
         vi.mocked(backend.getSaveStatus).mockImplementation(saveStatus.impl);
-        vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "main" });
+        vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+          configured: true,
+          active_slot: "main",
+          setup_needed: false,
+        });
         vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1, { save_sync_enabled: true }));
         render(<RomMGameInfoPanel appId={testAppId} />);
         await flushAsync();
@@ -5873,7 +5900,11 @@ describe("RomMGameInfoPanel", () => {
         // The tab gets no React key, so it survives the version switch holding
         // the callback it was rendered with — which still answers for the
         // previous version's rom (#1754).
-        vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "main" });
+        vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+          configured: true,
+          active_slot: "main",
+          setup_needed: false,
+        });
         vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1, { save_sync_enabled: true }));
         render(<RomMGameInfoPanel appId={testAppId} />);
         await flushAsync();
@@ -5904,7 +5935,11 @@ describe("RomMGameInfoPanel", () => {
         // previous version's `isSaveTrackingConfigured` READ open; this one lets
         // the read answer normally and fires the wizard callback instead, which
         // is the write that reaches `slotConfirmed` without going near a fence.
-        vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: false, active_slot: null });
+        vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+          configured: false,
+          active_slot: null,
+          setup_needed: true,
+        });
         vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1, { save_sync_enabled: true }));
         const { queryByTestId } = render(<RomMGameInfoPanel appId={testAppId} />);
         await flushAsync();
@@ -6156,7 +6191,11 @@ describe("RomMGameInfoPanel", () => {
 
     it("keeps the newest save-status answer when an earlier read lands last", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1, "Game", { save_sync_enabled: true }));
-      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "main" });
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: true,
+        active_slot: "main",
+        setup_needed: false,
+      });
       render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
       await openSavesTab();
@@ -6179,7 +6218,7 @@ describe("RomMGameInfoPanel", () => {
       expect(capturedSavesTab.some((props) => props.saveStatus?.files[0]?.filename === "FIRST.srm")).toBe(false);
     });
 
-    it("does not let a status read issued before save sync was switched off put the tab back", async () => {
+    it("does not let a status read issued before save sync was switched off put the slots back", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1, "Game", { save_sync_enabled: false }));
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
@@ -6193,8 +6232,13 @@ describe("RomMGameInfoPanel", () => {
         enableRead.release(statusWithFile(1, "ANY.srm"));
       });
       await flushAsync();
+      await act(async () => {
+        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "saves" } }));
+      });
+      await flushAsync();
 
-      expect(container.textContent).not.toContain("SAVES");
+      expect(container.querySelector('[data-testid="steam-tab-content"]')?.textContent).toContain("Save sync is off.");
+      expect(container.querySelector('[data-testid="saves-tab"]')).toBeNull();
     });
 
     it("shows the SAVES tab after save sync is switched on even when the status read is overtaken", async () => {
@@ -6226,7 +6270,11 @@ describe("RomMGameInfoPanel", () => {
       // the read is issued has no such gap.
       await useRealSlotHelpers();
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1, "Game", { save_sync_enabled: true }));
-      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "main" });
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: true,
+        active_slot: "main",
+        setup_needed: false,
+      });
       vi.mocked(backend.getSaveSlots).mockResolvedValue({ success: true, slots: [], active_slot: "mount" });
       render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
@@ -6261,7 +6309,11 @@ describe("RomMGameInfoPanel", () => {
       // over the newer read's answer.
       await useRealSlotHelpers();
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1, "Game", { save_sync_enabled: true }));
-      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "main" });
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: true,
+        active_slot: "main",
+        setup_needed: false,
+      });
       vi.mocked(backend.getSaveSlots).mockResolvedValue({ success: true, slots: [], active_slot: "mount" });
       render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
@@ -6308,7 +6360,7 @@ describe("RomMGameInfoPanel", () => {
       // re-issue that read.
       await useRealSlotHelpers();
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1, "Game", { save_sync_enabled: true }));
-      const tracking = heldRead<{ configured: boolean; active_slot: string | null }>();
+      const tracking = heldRead<{ configured: boolean; active_slot: string | null; setup_needed: boolean }>();
       vi.mocked(backend.isSaveTrackingConfigured).mockImplementation(() => tracking.promise);
       vi.mocked(backend.getSaveSlots).mockResolvedValue({ success: true, slots: [], active_slot: "main" });
       const { queryByTestId } = render(<RomMGameInfoPanel appId={testAppId} />);
@@ -6320,7 +6372,7 @@ describe("RomMGameInfoPanel", () => {
       expect(queryByTestId("slot-setup-wizard")).not.toBeNull();
 
       await act(async () => {
-        tracking.release({ configured: true, active_slot: "main" });
+        tracking.release({ configured: true, active_slot: "main", setup_needed: false });
       });
       await flushAsync();
 
@@ -6384,11 +6436,11 @@ describe("RomMGameInfoPanel", () => {
       expect(shownTab(container)).toBe("tab-info");
     });
 
-    it("leaves ACHIEVEMENTS and SAVES out of the tabbed page for a game without an ra_id and with save sync off", async () => {
+    it("leaves ACHIEVEMENTS out of the tabbed page for a game without an ra_id, and keeps SAVES with save sync off", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detail());
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
-      expect(tabIds(container)).toEqual(["tab-info", "tab-bios", "tab-artwork"]);
+      expect(tabIds(container)).toEqual(["tab-info", "tab-saves", "tab-bios", "tab-artwork"]);
     });
 
     it("shows the tab Steam's tabbed page reports shown", async () => {
@@ -6473,13 +6525,13 @@ describe("RomMGameInfoPanel", () => {
         );
       });
       await flushAsync();
-      expect(tabIds(container)).toEqual(["tab-info", "tab-bios", "tab-artwork"]);
+      expect(tabIds(container)).toEqual(["tab-info", "tab-saves", "tab-bios", "tab-artwork"]);
       expect(getByTestId("steam-tabs").getAttribute("data-active-tab")).toBe("info");
 
       await act(async () => {
         pull(playRow(container), R1);
       });
-      expect(shownTab(container)).toBe("tab-bios");
+      expect(shownTab(container)).toBe("tab-saves");
     });
 
     it("shows no achievements of the version switched away from while the new one's cannot load", async () => {
@@ -6835,6 +6887,326 @@ describe("RomMGameInfoPanel", () => {
       await flushAsync();
 
       expect(mark(container)).not.toBeNull();
+    });
+  });
+
+  describe("the SAVES tab with save sync off (#2527)", () => {
+    const FILES: LocalSaveFiles = {
+      available: true,
+      installed: true,
+      files: [
+        {
+          filename: "Game.srm",
+          directory: "/saves/gba",
+          size: 2048,
+          modified_at: "2026-01-02T03:04:05+00:00",
+        },
+      ],
+    };
+    const OTHER_FILES: LocalSaveFiles = {
+      ...FILES,
+      files: [{ filename: "Other.srm", directory: "/saves/gba", size: 512, modified_at: "2026-01-03T00:00:00+00:00" }],
+    };
+    const REFUSED: LocalSaveFiles = {
+      available: false,
+      installed: true,
+      files: [],
+      reason: "savefiles_in_content_dir",
+      message: "Save sync is unavailable: saves are written to the game's content directory.",
+    };
+
+    const detailFor = (romId: number, saveSyncEnabled = false): CachedGameDetail => ({
+      found: true,
+      rom_id: romId,
+      rom_name: `Game ${romId}`,
+      platform_slug: "gba",
+      save_sync_enabled: saveSyncEnabled,
+      metadata: makeMetadata(),
+      stale_fields: [],
+    });
+
+    const openTab = async (container: HTMLElement, tab: string) => {
+      await act(async () => {
+        fireEvent.click(container.querySelector(`[data-testid="tab-${tab}"]`) as HTMLElement);
+      });
+      await flushAsync();
+    };
+
+    const pane = (container: HTMLElement) =>
+      container.querySelector('[data-testid="steam-tab-content"]') as HTMLElement;
+
+    const mount = async (romId = 1, saveSyncEnabled = false) => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(romId, saveSyncEnabled));
+      const view = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      return view;
+    };
+
+    const switchTo = async (romId: number) => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(romId));
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", {
+            detail: { type: "version_switched", app_id: testAppId, rom_id: romId },
+          }),
+        );
+      });
+      await flushAsync();
+    };
+
+    it("lists this device's save files — name, folder, size and last change — under the line, asking RomM nothing", async () => {
+      vi.mocked(backend.getLocalSaveFiles).mockResolvedValue(FILES);
+      const { container } = await mount();
+
+      await openTab(container, "saves");
+
+      expect(vi.mocked(backend.getLocalSaveFiles)).toHaveBeenCalledWith(1);
+      const text = pane(container).textContent;
+      expect(text).toContain("Save sync is off.");
+      expect(text).toContain("Game.srm");
+      expect(text).toContain("/saves/gba");
+      expect(text).toContain("2.0 KB");
+      expect(text).toContain(formatTimestamp("2026-01-02T03:04:05+00:00"));
+      for (const read of [
+        backend.getSaveStatus,
+        backend.getSaveSlots,
+        backend.getSaveSetupInfo,
+        backend.getSaveSyncAvailability,
+        backend.isSaveTrackingConfigured,
+      ]) {
+        expect(vi.mocked(read)).not.toHaveBeenCalled();
+      }
+    });
+
+    it("reads that there is no save on this device where none lies there", async () => {
+      vi.mocked(backend.getLocalSaveFiles).mockResolvedValue({ ...FILES, files: [] });
+      const { container } = await mount();
+
+      await openTab(container, "saves");
+
+      expect(pane(container).textContent).toContain("No save on this device.");
+    });
+
+    it("reads the refusal's sentence for a game whose saves cannot sync, and lists no files", async () => {
+      vi.mocked(backend.getLocalSaveFiles).mockResolvedValue(REFUSED);
+      const { container } = await mount();
+
+      await openTab(container, "saves");
+
+      const text = pane(container).textContent;
+      expect(text).toContain("Save sync is off.");
+      expect(text).toContain(REFUSED.message);
+      expect(text).toContain(CONTENT_DIR_HINT);
+      expect(text).not.toContain("No save on this device.");
+      expect(pane(container).querySelectorAll("button")).toHaveLength(0);
+    });
+
+    it.each([
+      ["whose saves would sync once it is", { available: true, installed: false, files: [] }],
+      ["whose saves would not sync once it is", { ...REFUSED, installed: false }],
+    ] satisfies [string, LocalSaveFiles][])(
+      "reads that a game not downloaded holds no save here, with no refusal sentence (#2527 D5): %s",
+      async (_, answer) => {
+        vi.mocked(backend.getLocalSaveFiles).mockResolvedValue(answer);
+        const { container } = await mount();
+
+        await openTab(container, "saves");
+
+        const text = pane(container).textContent;
+        expect(text).toContain("Save sync is off.");
+        expect(text).toContain("Not downloaded — no save on this device.");
+        expect(text).not.toContain(REFUSED.message);
+      },
+    );
+
+    it("offers no action that needs save sync: no slots, no setup, and nothing on the pane reaches the backend", async () => {
+      vi.mocked(backend.getLocalSaveFiles).mockResolvedValue(FILES);
+      const { container, queryByTestId } = await mount();
+      await openTab(container, "saves");
+
+      expect(queryByTestId("saves-tab")).toBeNull();
+      expect(queryByTestId("slot-setup-wizard")).toBeNull();
+      expect(capturedSavesTab).toHaveLength(0);
+      expect(capturedSlotSetupWizard).toHaveLength(0);
+      const rows = [...pane(container).querySelectorAll("button")];
+      expect(rows).toHaveLength(1);
+      for (const row of rows) {
+        await act(async () => {
+          fireEvent.click(row);
+        });
+      }
+      for (const action of [
+        backend.syncRomSaves,
+        backend.switchSlot,
+        backend.confirmSlotChoice,
+        backend.copySaveToSlot,
+        backend.savesRollbackToVersion,
+        backend.deleteSlot,
+      ]) {
+        expect(vi.mocked(action)).not.toHaveBeenCalled();
+      }
+    });
+
+    it("carries no warning mark while save sync is off, even for a downloaded game whose saves cannot sync", async () => {
+      // The mark stands while save sync is on, from the answer read then; switching it off takes the mark away.
+      vi.mocked(backend.getLocalSaveFiles).mockResolvedValue(REFUSED);
+      vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue({
+        available: false,
+        installed: true,
+        established: true,
+        emulator_label: "mGBA",
+        reason: "savefiles_in_content_dir",
+        message: "Save sync is unavailable: saves are written to the game's content directory.",
+      });
+      const mark = (container: HTMLElement) =>
+        container.querySelector('[data-testid="tab-saves"] [data-testid="saves-tab-warning"]');
+      const { container } = await mount(1, true);
+      expect(mark(container)).not.toBeNull();
+
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", { detail: { type: "save_sync_settings", save_sync_enabled: false } }),
+        );
+      });
+      await flushAsync();
+      await openTab(container, "saves");
+
+      expect(pane(container).textContent).toContain(REFUSED.message);
+      expect(mark(container)).toBeNull();
+    });
+
+    it("shows nothing beneath the line while the files are read", async () => {
+      const read = heldRead<LocalSaveFiles>();
+      vi.mocked(backend.getLocalSaveFiles).mockReturnValue(read.promise);
+      const { container } = await mount();
+
+      await openTab(container, "saves");
+
+      expect(pane(container).textContent).toContain("Save sync is off.");
+      expect(pane(container).textContent).not.toContain("No save on this device.");
+      expect(pane(container).querySelectorAll("button")).toHaveLength(0);
+
+      await act(async () => {
+        read.release(FILES);
+      });
+      await flushAsync();
+      expect(pane(container).textContent).toContain("Game.srm");
+    });
+
+    it("reads again each time the tab opens, keeping the shown files until the new answer lands", async () => {
+      vi.mocked(backend.getLocalSaveFiles).mockResolvedValue(FILES);
+      const { container } = await mount();
+      await openTab(container, "saves");
+      expect(pane(container).textContent).toContain("Game.srm");
+
+      await openTab(container, "info");
+      const reread = heldRead<LocalSaveFiles>();
+      vi.mocked(backend.getLocalSaveFiles).mockReturnValue(reread.promise);
+      await openTab(container, "saves");
+      expect(vi.mocked(backend.getLocalSaveFiles)).toHaveBeenCalledTimes(2);
+      expect(pane(container).textContent).toContain("Game.srm");
+
+      await act(async () => {
+        reread.release(OTHER_FILES);
+      });
+      await flushAsync();
+      expect(pane(container).textContent).toContain("Other.srm");
+      expect(pane(container).textContent).not.toContain("Game.srm");
+    });
+
+    it("drops files read for the version the page has switched away from", async () => {
+      // The switch comes while another tab is open, so no read for the new version overtakes the old one: only the
+      // binding to the ROM keeps the previous version's files off the tab.
+      const first = heldRead<LocalSaveFiles>();
+      const second = heldRead<LocalSaveFiles>();
+      vi.mocked(backend.getLocalSaveFiles).mockImplementation((romId) =>
+        romId === 1 ? first.promise : second.promise,
+      );
+      const { container } = await mount();
+      await openTab(container, "saves");
+      await openTab(container, "info");
+
+      await switchTo(2);
+      await act(async () => {
+        first.release(FILES);
+      });
+      await flushAsync();
+      await openTab(container, "saves");
+
+      expect(vi.mocked(backend.getLocalSaveFiles)).toHaveBeenLastCalledWith(2);
+      expect(pane(container).textContent).not.toContain("Game.srm");
+
+      await act(async () => {
+        second.release(OTHER_FILES);
+      });
+      await flushAsync();
+      expect(pane(container).textContent).toContain("Other.srm");
+    });
+
+    it("shows no files of the version switched away from while the new one's are read", async () => {
+      const second = heldRead<LocalSaveFiles>();
+      vi.mocked(backend.getLocalSaveFiles).mockImplementation((romId) =>
+        romId === 1 ? Promise.resolve(FILES) : second.promise,
+      );
+      const { container } = await mount();
+      await openTab(container, "saves");
+      expect(pane(container).textContent).toContain("Game.srm");
+
+      await switchTo(2);
+
+      expect(pane(container).textContent).toContain("Save sync is off.");
+      expect(pane(container).textContent).not.toContain("Game.srm");
+    });
+
+    it("drops an older read of the same game that lands after a newer one", async () => {
+      const older = heldRead<LocalSaveFiles>();
+      vi.mocked(backend.getLocalSaveFiles).mockReturnValue(older.promise);
+      const { container } = await mount();
+      await openTab(container, "saves");
+      await openTab(container, "info");
+      vi.mocked(backend.getLocalSaveFiles).mockResolvedValue(OTHER_FILES);
+      await openTab(container, "saves");
+
+      await act(async () => {
+        older.release(FILES);
+      });
+      await flushAsync();
+
+      expect(pane(container).textContent).toContain("Other.srm");
+      expect(pane(container).textContent).not.toContain("Game.srm");
+    });
+
+    it("switches the open tab's pane when save sync is switched off, and back when it is switched on", async () => {
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: true,
+        active_slot: "main",
+        setup_needed: false,
+      });
+      vi.mocked(backend.getLocalSaveFiles).mockResolvedValue(FILES);
+      const { container, queryByTestId } = await mount(1, true);
+      await openTab(container, "saves");
+      expect(queryByTestId("saves-tab")).not.toBeNull();
+      expect(vi.mocked(backend.getLocalSaveFiles)).not.toHaveBeenCalled();
+
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", { detail: { type: "save_sync_settings", save_sync_enabled: false } }),
+        );
+      });
+      await flushAsync();
+      expect(queryByTestId("saves-tab")).toBeNull();
+      expect(pane(container).textContent).toContain("Save sync is off.");
+      expect(pane(container).textContent).toContain("Game.srm");
+      expect(vi.mocked(backend.getLocalSaveFiles)).toHaveBeenCalledWith(1);
+
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", { detail: { type: "save_sync_settings", save_sync_enabled: true } }),
+        );
+      });
+      await flushAsync();
+      expect(queryByTestId("saves-tab")).not.toBeNull();
+      expect(pane(container).textContent).not.toContain("Save sync is off.");
     });
   });
 });

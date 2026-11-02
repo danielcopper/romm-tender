@@ -16,15 +16,15 @@ import os
 from typing import TYPE_CHECKING, Any
 
 from domain.iso_time import epoch_to_iso, parse_iso_to_epoch
-from domain.save_answer import SAVE_STATE_UNESTABLISHED, save_finding_details
+from domain.save_answer import SAVE_STATE_UNESTABLISHED
 from domain.save_backup import BACKUP_RETENTION
 from domain.save_slot import save_in_slot
 from lib.errors import NotInstalled, Refused, RommApiError, RommNotFoundError, classify_error
 from services.saves._helpers import newest_server_saves_by_target
 from services.saves._messages import MIGRATION_LOCAL_FILES_FAILED
 from services.saves._save_state import read_save_state, read_save_state_or_new, write_save_state
-from services.saves._settings import autocleanup_limit, resolve_default_slot
-from services.saves.sync_engine._shape_refusal import refuse_unsyncable
+from services.saves._settings import autocleanup_limit, resolve_default_slot, save_sync_enabled
+from services.saves.sync_engine._shape_refusal import refuse_unsyncable, sync_refusal
 
 if TYPE_CHECKING:
     import asyncio
@@ -45,21 +45,6 @@ if TYPE_CHECKING:
     from services.saves.save_backup import SaveBackup
     from services.saves.save_transfer import SaveTransfer
     from services.saves.sync_engine import SyncEngine
-
-
-def _sync_refusal(answer: SaveAnswer | None) -> dict[str, Any] | None:
-    """What a sync of *answer*'s game is refused with, as the panel words it, or ``None`` where it syncs.
-
-    The reason and message, and the finding, source kind and emulator label of
-    a refusal that carries them, so the panel words it as it does a press on
-    the same game.
-    """
-    try:
-        refuse_unsyncable(answer)
-    except Refused as refusal:
-        details = save_finding_details(answer) if answer is not None else {}
-        return {"reason": refusal.reason, "message": refusal.message, **details}
-    return None
 
 
 class SetupWizard:
@@ -100,13 +85,21 @@ class SetupWizard:
         """Check if save slot tracking is configured for a game.
 
         Fast, synchronous check — reads only from local state.
-        Returns {"configured": bool, "active_slot": str|None}
+        Returns {"configured": bool, "active_slot": str|None, "setup_needed": bool}.
+        ``setup_needed`` is what both launch paths act on: a slot is set up
+        before a start only while save sync is on and none is configured. With
+        save sync off nothing syncs, so no setup is needed whatever
+        ``configured`` says.
         """
         rom_id = int(rom_id)
         game_state = read_save_state(self._uow_factory, rom_id)
         configured = bool(game_state.slot_confirmed) if game_state else False
         active_slot = game_state.active_slot if (game_state and configured) else None
-        return {"configured": configured, "active_slot": active_slot}
+        return {
+            "configured": configured,
+            "active_slot": active_slot,
+            "setup_needed": save_sync_enabled(self._settings) and not configured,
+        }
 
     def _setup_query_failed(
         self,
@@ -198,7 +191,7 @@ class SetupWizard:
         reachability verdict differ (#1570).
 
         A game whose saves no sync would carry answers ``sync_unavailable``
-        instead, with the refusal its sync is refused with (``_sync_refusal``)
+        instead, with the refusal its sync is refused with (``sync_refusal``)
         and empty listings: there is no slot to set up, so neither the device
         registration nor the listing is asked for. That is decided off one
         live reading of the save answer, the one the local probe uses too.
@@ -207,7 +200,7 @@ class SetupWizard:
         game_state = await self._loop.run_in_executor(None, read_save_state, self._uow_factory, rom_id)
         default_slot = resolve_default_slot(self._settings)
         save_answer = await self._sync_engine.read_save_answer(rom_id)
-        refusal = _sync_refusal(save_answer)
+        refusal = sync_refusal(save_answer)
         if refusal is not None:
             self._log_debug(f"get_save_setup_info({rom_id}): save sync unavailable ({refusal['reason']})")
             return self._sync_unavailable(refusal, game_state=game_state, default_slot=default_slot)
@@ -327,7 +320,7 @@ class SetupWizard:
         """
         rom_id = int(rom_id)
         answer, label = await self._loop.run_in_executor(None, self._availability_io, rom_id)
-        refusal = _sync_refusal(answer)
+        refusal = sync_refusal(answer)
         base = {
             "available": refusal is None,
             "installed": answer.content_installed,

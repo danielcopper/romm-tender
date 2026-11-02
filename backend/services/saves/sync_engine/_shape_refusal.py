@@ -22,7 +22,7 @@ offline should be told the honest thing rather than "server unreachable".
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from domain.save_answer import (
     BENIGN_SYNC_SKIP_REASONS,
@@ -88,6 +88,21 @@ def refuse_unsyncable(answer: SaveAnswer | None) -> None:
         raise Refused(SAVES_ROOT_MISSING_REASON, save_shape_message(answer), **save_finding_details(answer), synced=0)
     if not answer.syncable:
         raise shape_refusal(answer, synced=0)
+
+
+def sync_refusal(answer: SaveAnswer | None) -> dict[str, Any] | None:
+    """What a sync of *answer*'s game is refused with, as the panel words it, or ``None`` where it syncs.
+
+    The reason and message, and the finding, source kind and emulator label of
+    a refusal that carries them, so the panel words it as it does a press on
+    the same game.
+    """
+    try:
+        refuse_unsyncable(answer)
+    except Refused as refusal:
+        details = save_finding_details(answer) if answer is not None else {}
+        return {"reason": refusal.reason, "message": refusal.message, **details}
+    return None
 
 
 @dataclass

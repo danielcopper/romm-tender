@@ -60,6 +60,7 @@ function basePanelState(romId: number): PanelState {
     coreInfo: null,
     saveSyncEnabled: false,
     saveSyncAnswer: null,
+    localSaves: null,
     saveStatus: null,
     conflicts: [],
     error: false,
@@ -85,7 +86,7 @@ function panelFor(romId: number, coreInfo: CoreInfo | null) {
     romIdRef: { current: romId },
     platformSlugRef: { current: "snes" },
     slotsLoadedRef: { current: false },
-    readSeqs: { current: { detail: 0, saveStatus: 0, slots: 0, slotTracking: 0, saveSync: 0, bios: 0 } },
+    readSeqs: { current: { detail: 0, saveStatus: 0, slots: 0, slotTracking: 0, saveSync: 0, localSaves: 0, bios: 0 } },
     setState: (update: SetStateAction<PanelState>) => {
       state = typeof update === "function" ? update(state) : update;
     },
@@ -135,7 +136,7 @@ describe("the panel's core info", () => {
       () => false,
       { current: null },
       { current: "" },
-      { current: { detail: 0, saveStatus: 0, slots: 0, slotTracking: 0, saveSync: 0, bios: 0 } },
+      { current: { detail: 0, saveStatus: 0, slots: 0, slotTracking: 0, saveSync: 0, localSaves: 0, bios: 0 } },
       (update) => {
         state = typeof update === "function" ? update(state) : update;
       },

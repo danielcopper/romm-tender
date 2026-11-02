@@ -290,6 +290,9 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     # and the pre-launch relaunch re-confirm read. None mutate RetroDECK state, so
     # they are never refused during a migration.
     "check_local_drift",
+    # The SAVES tab's read with save sync off lists local save files and changes no
+    # RetroDECK state; its directory follow checks a pending migration itself.
+    "get_local_save_files",
     "probe_reachability",
     "refresh_save_status",
     "get_rom_relaunch_options",

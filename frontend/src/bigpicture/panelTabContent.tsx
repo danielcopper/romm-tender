@@ -19,6 +19,7 @@ import { GameInfoTab } from "./GameInfoTab";
 import { SavesTab } from "./SavesTab";
 import { SlotSetupWizard } from "./SlotSetupWizard";
 import { SaveSyncRefusal } from "./saves/SaveSyncRefusal";
+import { SyncOffSaves } from "./saves/SyncOffSaves";
 import type { PanelState, RomBinding } from "./panelState";
 import { announceSaveSync } from "../utils/saveSyncEvents";
 import { noSaveLine, notDownloadedStatement, refusalHint, refusesDownloadedGame } from "../utils/saveSyncStatement";
@@ -31,7 +32,7 @@ interface TabContentContext {
   readonly bios: BiosTabState;
 }
 
-/** The mark beside the SAVES tab's title of a game whose saves cannot sync (#2149 D1). */
+/** The mark beside the SAVES tab's title of a game whose saves cannot sync, while save sync is on (#2149 D1, #2527 D3). */
 function savesWarningMark(): ReactElement {
   return (
     <FaExclamationTriangle
@@ -45,9 +46,10 @@ function savesWarningMark(): ReactElement {
 
 /**
  * The tabs shown, in their fixed order. ACHIEVEMENTS is there for a game
- * RetroAchievements knows (an `ra_id`), SAVES while save sync is on; BIOS is
- * there for every game from the moment the page opens, since its answer is read
- * after the page stands and the tab says so while it waits.
+ * RetroAchievements knows (an `ra_id`); SAVES and BIOS are there for every game
+ * from the moment the page opens — SAVES with save sync on or off (#2527), BIOS
+ * though its answer is read after the page stands, which the tab says while it
+ * waits.
  */
 export function buildPanelTabs(ctx: TabContentContext): Tab[] {
   const { state } = ctx;
@@ -55,15 +57,15 @@ export function buildPanelTabs(ctx: TabContentContext): Tab[] {
   if (state.raId) {
     tabs.push({ id: "achievements", title: "ACHIEVEMENTS", content: <AchievementsTab state={ctx.achievements} /> });
   }
-  if (state.saveSyncEnabled) {
-    tabs.push({
+  tabs.push(
+    {
       id: "saves",
       title: "SAVES",
-      content: savesPane(ctx),
-      ...(refusesDownloadedGame(state.saveSyncAnswer) ? { renderTabAddon: savesWarningMark } : {}),
-    });
-  }
-  tabs.push(
+      content: state.saveSyncEnabled ? savesPane(ctx) : <SyncOffSaves key="saves-sync-off" answer={state.localSaves} />,
+      ...(state.saveSyncEnabled && refusesDownloadedGame(state.saveSyncAnswer)
+        ? { renderTabAddon: savesWarningMark }
+        : {}),
+    },
     {
       id: "bios",
       title: "BIOS",
@@ -114,7 +116,7 @@ function infoPane({ appId, binding, state }: TabContentContext): ReactElement {
 }
 
 /**
- * The SAVES pane: a game whose saves cannot sync says why and offers no slots, set up or not (#2149 D5); any other
+ * The SAVES pane while save sync is on: a game whose saves cannot sync says why and offers no slots, set up or not (#2149 D5); any other
  * game shows its slots, or the setup while none is set up, under what a game that is not downloaded reads (D4).
  * While no answer is held the slots or the setup show as they would for a game that syncs.
  */

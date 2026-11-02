@@ -185,6 +185,28 @@ export interface SaveSyncAvailability {
   message?: string;
 }
 
+/** One save file this device holds for a game (backend `get_local_save_files`). */
+export interface LocalSaveFile {
+  filename: string;
+  // The folder it lies in.
+  directory: string;
+  size: number;
+  // When it last changed, as an ISO-8601 time.
+  modified_at: string;
+}
+
+/** This device's save files for a game, read without RomM: what the SAVES tab lists while save sync is off. */
+export interface LocalSaveFiles {
+  // Whether a sync would carry the game's saves; where it would not, the refusal stands beside it and `files` is empty.
+  available: boolean;
+  // Whether the game is downloaded; a game that is not lists no files.
+  installed: boolean;
+  files: LocalSaveFile[];
+  // Present only where `available` is false: the refusal the game's sync is refused with.
+  reason?: SyncRefusalReason;
+  message?: string;
+}
+
 export interface SaveSetupInfo {
   has_local_saves: boolean;
   local_files: Array<{ filename: string; size: number }>;

@@ -629,6 +629,31 @@ class TestSaveTrackingConfigured:
         assert result["configured"] is False
 
 
+class TestWhetherASetupIsNeeded:
+    """``setup_needed``, which both launch paths act on: a slot is set up before a start only while save sync is on."""
+
+    @pytest.mark.parametrize(
+        ("save_sync_on", "confirmed", "setup_needed"),
+        [
+            pytest.param(True, False, True, id="sync-on-not-set-up"),
+            pytest.param(True, True, False, id="sync-on-set-up"),
+            pytest.param(False, False, False, id="sync-off-not-set-up"),
+            pytest.param(False, True, False, id="sync-off-set-up"),
+        ],
+    )
+    def test_only_a_game_not_set_up_with_save_sync_on_needs_one(self, tmp_path, save_sync_on, confirmed, setup_needed):
+        svc, fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = save_sync_on
+        if confirmed:
+            _seed_save_state_dict(svc, 42, {"slot_confirmed": True, "active_slot": "default", "files": {}})
+
+        result = svc.is_save_tracking_configured(42)
+
+        assert result["setup_needed"] is setup_needed
+        assert result["configured"] is confirmed
+        assert fake.call_log == []
+
+
 class TestGetSaveSetupInfo:
     @pytest.mark.asyncio
     async def test_scenario_a_no_local_server_has_saves(self, tmp_path):

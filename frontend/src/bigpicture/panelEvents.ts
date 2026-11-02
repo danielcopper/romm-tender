@@ -33,6 +33,7 @@ import {
   refreshBiosIfStale,
   refreshPanelCoreInfo,
   refreshSaveSyncAnswer,
+  refreshLocalSaves,
   refreshCoverArtInBackground,
   refreshInstalledRomInBackground,
   refreshSlotState,
@@ -80,24 +81,17 @@ async function handleSaveSyncSettingsChange(
   if (!enabled) {
     // Switching save sync off is itself the newest word on it, so it takes the
     // sequence's next ticket: a status read an earlier event left in flight
-    // would otherwise land afterwards and put the SAVES tab back.
+    // would otherwise land afterwards. The SAVES tab stays, its pane switched
+    // to this device's files, which the panel reads as the flag goes.
     takeReadTicket(ctx.readSeqs, "saveStatus");
-    ctx.setState((prev) => ({
-      ...prev,
-      saveSyncEnabled: false,
-      // The SAVES tab goes with the flag. GAME INFO is shown in its place
-      // either way (`GamePageTabs`); storing it too keeps the tab from coming
-      // back to SAVES on its own when save sync is switched on again — the move
-      // `handleVersionSwitched` makes too.
-      activeTab: prev.activeTab === "saves" ? "info" : prev.activeTab,
-    }));
+    ctx.setState((prev) => ({ ...prev, saveSyncEnabled: false }));
     return;
   }
   // Switching save sync ON is a fact about the setting, not an answer about this
   // rom, so it lands before the read and outside its fence. Carried along with
   // the status it would be lost whenever the read is overtaken or fails — and
-  // the SAVES tab, gated on this flag, would stay hidden with nothing left to
-  // re-issue it.
+  // the SAVES tab, whose pane is chosen by this flag, would keep this device's
+  // files with nothing left to re-issue it.
   ctx.setState((prev) => ({ ...prev, saveSyncEnabled: true }));
   const romId = ctx.romIdRef.current;
   if (!romId) return;
@@ -290,41 +284,35 @@ async function handleVersionSwitched(
   // than showing another ROM's.
   const biosFields = biosFieldsFromCache(cached) ?? { biosStatus: null, biosLevel: null };
   const saveSyncEnabled = cached.save_sync_enabled ?? false;
-  ctx.setState((prev) => {
-    // The SAVES tab can go with this switch. GAME INFO is shown in its place
-    // either way (`GamePageTabs`); storing it keeps a later version with save
-    // sync from opening on SAVES by itself.
-    const activeTabGone = prev.activeTab === "saves" && !saveSyncEnabled;
-    return {
-      ...prev,
-      romId: newRomId,
-      romName: cached.rom_name || prev.romName,
-      installed: cached.installed ?? false,
-      // Cleared rather than overwritten: `refreshInstalledRomInBackground`
-      // writes only on a truthy answer, so a failed or empty read would leave
-      // the previous version's file name standing under this version's
-      // `installed` until a remount. The record describes ONE version, and a
-      // sibling download supersedes the install it names without the panel
-      // hearing about it (#1742). Re-read below.
-      installedRom: null,
-      regions: cached.regions ?? [],
-      languages: cached.languages ?? [],
-      // Re-key per-rom tab state so nothing lingers from the previous version.
-      saveSyncEnabled,
-      saveSyncAnswer: null,
-      saveStatus,
-      conflicts: cached.save_status?.conflicts ?? [],
-      raId: cached.ra_id ?? null,
-      activeSlot: "default",
-      activeSlotKnown: false,
-      availableSlots: [],
-      lastKnownSlots: null,
-      slotsLoading: false,
-      ...biosFields,
-      biosReadFailed: false,
-      activeTab: activeTabGone ? "info" : prev.activeTab,
-    };
-  });
+  ctx.setState((prev) => ({
+    ...prev,
+    romId: newRomId,
+    romName: cached.rom_name || prev.romName,
+    installed: cached.installed ?? false,
+    // Cleared rather than overwritten: `refreshInstalledRomInBackground`
+    // writes only on a truthy answer, so a failed or empty read would leave
+    // the previous version's file name standing under this version's
+    // `installed` until a remount. The record describes ONE version, and a
+    // sibling download supersedes the install it names without the panel
+    // hearing about it (#1742). Re-read below.
+    installedRom: null,
+    regions: cached.regions ?? [],
+    languages: cached.languages ?? [],
+    // Re-key per-rom tab state so nothing lingers from the previous version.
+    saveSyncEnabled,
+    saveSyncAnswer: null,
+    localSaves: null,
+    saveStatus,
+    conflicts: cached.save_status?.conflicts ?? [],
+    raId: cached.ra_id ?? null,
+    activeSlot: "default",
+    activeSlotKnown: false,
+    availableSlots: [],
+    lastKnownSlots: null,
+    slotsLoading: false,
+    ...biosFields,
+    biosReadFailed: false,
+  }));
   // Re-fetch slot configuration (slotConfirmed) + slots for the new rom_id,
   // mirroring loadData's save-sync branch — this is the authority that keeps
   // the SlotSetupWizard-vs-SavesTab gate correct across the switch.
@@ -421,7 +409,7 @@ function dispatchDataChanged(ctx: PanelEventContext, detail: RommDataChangedDeta
 /** Ask again whether the ROM's saves sync once it was downloaded or uninstalled:
  *  a game that is not downloaded is answered about the path it would occupy, so
  *  the answer says which (#2149 D4). Asked only while save sync is on, as the
- *  cached detail says, which the SAVES tab is shown for. */
+ *  cached detail says, which the SAVES tab shows it for. */
 async function rereadSaveSyncAnswer(ctx: PanelEventContext, romId: number): Promise<void> {
   const cached = await getCachedGameDetail(ctx.appId).catch(() => null);
   if (cached?.found && cached.save_sync_enabled) await refreshSaveSyncAnswer(bindCurrentRom(ctx, romId), ctx.readSeqs);
@@ -434,6 +422,14 @@ export function rereadSaveSyncOnTabOpen(ctx: PanelEventContext): Promise<void> {
   const romId = ctx.romIdRef.current;
   if (!romId) return Promise.resolve();
   return refreshSaveSyncAnswer(bindCurrentRom(ctx, romId), ctx.readSeqs);
+}
+
+/** Read this device's save files for the ROM as the SAVES tab opens with save
+ *  sync off; the files shown stay until the new answer lands. */
+export function rereadLocalSavesOnTabOpen(ctx: PanelEventContext): Promise<void> {
+  const romId = ctx.romIdRef.current;
+  if (!romId) return Promise.resolve();
+  return refreshLocalSaves(bindCurrentRom(ctx, romId), ctx.readSeqs);
 }
 
 /** Subscribe the panel's event listeners; the returned teardown unsubscribes

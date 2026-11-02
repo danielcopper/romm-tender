@@ -25,6 +25,7 @@ import { bindRomInState, loadData, openingTab, type PanelReadSeqs, type PanelSta
 import {
   announceOwnBiosChange,
   rereadBiosAnswer,
+  rereadLocalSavesOnTabOpen,
   rereadSaveSyncOnTabOpen,
   wirePanelEvents,
   type PanelEventContext,
@@ -68,6 +69,7 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
     coreInfo: null,
     saveSyncEnabled: false,
     saveSyncAnswer: null,
+    localSaves: null,
     saveStatus: null,
     conflicts: [],
     error: false,
@@ -95,7 +97,15 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
   // Read sequences ordering two answers about the same ROM; the rule they
   // enforce is stated at `takeReadTicket`. They live here because the loads, the
   // event lane and the lazy slots lane take tickets from the same counters.
-  const readSeqs = useRef<PanelReadSeqs>({ detail: 0, saveStatus: 0, slots: 0, slotTracking: 0, saveSync: 0, bios: 0 });
+  const readSeqs = useRef<PanelReadSeqs>({
+    detail: 0,
+    saveStatus: 0,
+    slots: 0,
+    slotTracking: 0,
+    saveSync: 0,
+    localSaves: 0,
+    bios: 0,
+  });
   // The event lane's context for the appId shown, which a press on the BIOS tab
   // reads the tab's answer through — bound and ordered like the lane's own reads.
   const eventContext = useRef<PanelEventContext | null>(null);
@@ -147,6 +157,15 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
     const ctx = eventContext.current;
     if (savesShown && ctx !== null) detach(rereadSaveSyncOnTabOpen(ctx));
   }, [savesShown]);
+  // With save sync off the tab lists this device's files instead, read each time
+  // it opens, when save sync is switched off under it, and for the version a
+  // switch shows while it is open.
+  const localSavesShown = state.activeTab === "saves" && !state.saveSyncEnabled;
+  const shownRomId = state.romId;
+  useEffect(() => {
+    const ctx = eventContext.current;
+    if (localSavesShown && shownRomId !== null && ctx !== null) detach(rereadLocalSavesOnTabOpen(ctx));
+  }, [localSavesShown, shownRomId]);
   const achievements = useAchievements(state.romId, state.raId, state.activeTab === "achievements");
   const bios = useBiosTab({
     biosStatus: state.biosStatus,

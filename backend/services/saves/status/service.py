@@ -317,8 +317,8 @@ class StatusService:
         last_sync_check_at = save_state.last_sync_check_at if save_state else None
 
         # Save sync disabled → suppress the conflict signal at the source. The
-        # SAVES tab that would resolve a conflict is hidden while disabled, so a
-        # surfaced conflict is one the user has no UI to clear (#1056). Who reads
+        # SAVES tab offers no conflict resolution while disabled, so a surfaced
+        # conflict is one the user has no UI to clear (#1056). Who reads
         # ``conflicts``: docs/architecture/save-file-sync-architecture.md.
         if not save_sync_enabled(self._settings):
             conflicts = []

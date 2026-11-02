@@ -418,7 +418,7 @@ async def test_get_slot_delete_info_server_failure_shape(harness):
 
 async def test_is_save_tracking_configured_unconfigured_shape(harness):
     result = harness.endpoints.is_save_tracking_configured(42)
-    assert result == {"configured": False, "active_slot": None}
+    assert result == {"configured": False, "active_slot": None, "setup_needed": False}
 
 
 async def test_is_save_tracking_configured_configured_shape(harness):
@@ -426,6 +426,15 @@ async def test_is_save_tracking_configured_configured_shape(harness):
     result = harness.endpoints.is_save_tracking_configured(42)
     assert result["configured"] is True
     assert result["active_slot"] == "main"
+
+
+async def test_is_save_tracking_configured_needs_a_setup_only_with_save_sync_on(harness):
+    assert harness.endpoints.is_save_tracking_configured(42)["setup_needed"] is False
+    enable_save_sync(harness)
+    assert harness.endpoints.is_save_tracking_configured(42)["setup_needed"] is True
+    seed_confirmed_slot(harness, 42, slot="main")
+    assert harness.endpoints.is_save_tracking_configured(42)["setup_needed"] is False
+    assert harness.romm.call_log == []
 
 
 # ── get_save_setup_info ──────────────────────────────────────────────────
@@ -551,6 +560,45 @@ async def test_get_save_sync_availability_of_a_game_not_downloaded_whose_platfor
     assert result["installed"] is False
     assert result["established"] is False
     assert result["reason"] == "save_shape_unsupported"
+    assert harness.romm.call_log == []
+
+
+# ── get_local_save_files ─────────────────────────────────────────────────
+
+
+async def test_get_local_save_files_with_save_sync_off_lists_the_save_asking_romm_nothing(harness):
+    seed_install(harness, 42)
+    _write_local_save(harness, system="gba", filename="game.srm", content=b"\x00" * 512)
+
+    result = await harness.endpoints.get_local_save_files(42)
+
+    assert set(result.keys()) == {"available", "installed", "files"}
+    assert result["available"] is True
+    assert result["installed"] is True
+    [save] = result["files"]
+    assert set(save.keys()) == {"filename", "directory", "size", "modified_at"}
+    assert save["filename"] == "game.srm"
+    assert save["directory"] == os.path.join(harness.saves_root, "gba")
+    assert save["size"] == 512
+    assert harness.romm.call_log == []
+
+
+async def test_get_local_save_files_of_a_game_that_cannot_sync(harness):
+    seed_install(harness, 42)
+    _missing_saves_root(harness, "/run/media/deck/sd/retrodeck/saves")
+
+    result = await harness.endpoints.get_local_save_files(42)
+
+    assert result == {
+        "available": False,
+        "installed": True,
+        "files": [],
+        "reason": "saves_root_missing",
+        "message": "Save sync is unavailable: the saves folder /run/media/deck/sd/retrodeck/saves does not exist.",
+        "finding": {"code": "saves-root-missing", "data": {"path": "/run/media/deck/sd/retrodeck/saves"}},
+        "source": "retrodeck",
+        "emulator": "mGBA",
+    }
     assert harness.romm.call_log == []
 
 
