@@ -152,6 +152,11 @@ CAVEAT_LAUNCHER_SCRIPT_UNPINNED = "launcher-script-unpinned"
 # reading of its distribution's start is pinned — the program itself, or a start
 # file that reading rests on — so what it needs from that start is not stated.
 CAVEAT_LAUNCH_ENVIRONMENT_UNPINNED = "launch-environment-unpinned"
+# A note beside an answered command (#742): a variable the program reads from
+# its distribution's start is stated with no value because a file the value
+# rests on — the app's Flatpak metadata, its runtime's deploy or metadata, the
+# runtime's ldconfig — could not be read.
+CAVEAT_LAUNCH_ENVIRONMENT_UNREAD = "launch-environment-unread"
 # The two notes beside a command that is answered: a placeholder ES-DE leaves
 # in the command as written, and a value ES-DE's own substitution would break,
 # answered as the value instead.

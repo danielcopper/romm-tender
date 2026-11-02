@@ -1255,6 +1255,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "entry-format-content-unread",

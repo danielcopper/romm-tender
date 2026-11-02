@@ -19,9 +19,10 @@ What is read, and from where:
   anything is read, the way ``CDImageCueSheet::OpenAndParse`` opens them
   (``src/util/cd_image_cue.cpp:59-131``): one that will not open stops the open.
   DuckStation's one leniency there — a first file that will not open is looked
-  for again as the cue's own name with ``.bin`` (:107-118) — is not followed,
-  because neither other emulator follows it; such a disc answers as the missing
-  file it names;
+  for again as the cue's own name with ``.bin`` (:105-116) — is not followed,
+  because Beetle does not follow it, although SwanStation does
+  (``src/common/cd_image_cue.cpp:91-102`` at 4d309c0); such a disc answers as
+  the missing file it names;
 - a bare ``.bin``, ``.img`` or ``.iso`` as one raw track of 2352-byte sectors
   from offset 0 (``src/util/cd_image_bin.cpp:46-108``; SwanStation's
   ``src/common/cd_image.cpp:42-45`` takes the same three suffixes). A cooked
@@ -178,6 +179,19 @@ class NotADisc(Exception):
     """The content opens as no disc: a cue sheet the parser refuses, or one whose track 1 is audio."""
 
 
+class NotBinaryFile(NotADisc):
+    """The parser's refusal of a ``FILE`` command whose type is not ``BINARY`` — with the file and the type it names.
+
+    It is a :class:`NotADisc` like every other refusal of the parser; the two
+    names it carries are what :mod:`atlas.disc_opens` states about the refusal.
+    """
+
+    def __init__(self, name: bytes, kind: bytes) -> None:
+        super().__init__("a FILE command is not BINARY (cue_parser.cpp:227-231)")
+        self.name = name
+        self.kind = kind
+
+
 class FormatNotRead(Exception):
     """A disc this module does not read: a suffix it has no reader for, or a layout the three emulators read apart."""
 
@@ -291,7 +305,9 @@ def _number(tokens: list[bytes], index: int) -> int | None:
 
 
 @dataclass
-class _CueTrack:
+class CueTrack:
+    """One track a cue sheet declares: its number, its file as the sheet spells it, its mode and its indices."""
+
     number: int
     file: bytes
     mode: str
@@ -303,9 +319,9 @@ class _CueSheet:
     """DuckStation's cue grammar: the commands of ``CueParser::File`` and the lines it refuses (cue_parser.cpp:53-472)."""
 
     def __init__(self) -> None:
-        self.tracks: list[_CueTrack] = []
+        self.tracks: list[CueTrack] = []
         self._file: bytes | None = None
-        self._track: _CueTrack | None = None
+        self._track: CueTrack | None = None
 
     def line(self, raw: bytes) -> None:
         tokens = _cue_tokens(raw)
@@ -330,7 +346,7 @@ class _CueSheet:
         if not args or not args[0]:
             raise NotADisc("a FILE command names no file (cue_parser.cpp:221-225)")
         if len(args) < 2 or args[1].upper() != b"BINARY":
-            raise NotADisc("a FILE command is not BINARY (cue_parser.cpp:227-231)")
+            raise NotBinaryFile(args[0], args[1] if len(args) > 1 else b"")
         self._file = args[0]
 
     def _track_command(self, args: list[bytes]) -> None:
@@ -343,9 +359,9 @@ class _CueSheet:
         mode = args[1].decode("latin-1").upper() if len(args) > 1 else ""
         if mode not in _CUE_MODES:
             raise NotADisc(f"a TRACK mode the parser refuses ({mode!r}, cue_parser.cpp:263-285)")
-        self._track = _CueTrack(number, self._file, mode, {})
+        self._track = CueTrack(number, self._file, mode, {})
 
-    def _current(self, what: str) -> _CueTrack:
+    def _current(self, what: str) -> CueTrack:
         if self._track is None:
             raise NotADisc(f"{what} stands outside a track (cue_parser.cpp:296-300, :342-346, :374-378)")
         return self._track
@@ -390,7 +406,7 @@ class _CueSheet:
 
 # What ``std::fgets`` reads into the parser's 1024-byte buffer at most
 # (cue_parser.cpp:55-57): a longer line arrives as several.
-_CUE_LINE = 1023
+CUE_LINE = 1023
 
 
 def _fgets_lines(data: bytes) -> list[bytes]:
@@ -403,11 +419,11 @@ def _fgets_lines(data: bytes) -> list[bytes]:
     whole = [piece + b"\n" for piece in pieces[:-1]] + ([pieces[-1]] if pieces[-1] else [])
     lines: list[bytes] = []
     for raw in whole:
-        lines.extend(raw[i : i + _CUE_LINE].split(b"\x00", 1)[0] for i in range(0, len(raw), _CUE_LINE))
+        lines.extend(raw[i : i + CUE_LINE].split(b"\x00", 1)[0] for i in range(0, len(raw), CUE_LINE))
     return lines
 
 
-def parse_cue(data: bytes) -> list[_CueTrack]:
+def parse_cue(data: bytes) -> list[CueTrack]:
     """The tracks a cue sheet declares, or :class:`NotADisc` where DuckStation's parser stops."""
     sheet = _CueSheet()
     for raw in _fgets_lines(data):

@@ -467,6 +467,21 @@ CAVEAT_FILE_NAMES_UNESTABLISHED = "file-names-unestablished"
 # meaning "the tree is empty or not there" and a listing that holds nothing
 # because nothing could be read is never mistaken for one.
 CAVEAT_SAVE_ID_CANDIDATES = "save-id-candidates"
+# Which files of a directory are one game's, decided by bytes inside each file
+# rather than by its name: the answer's ``save_id`` hole is filled, and a file
+# belongs to the game where the bytes at ``offset``, ``length`` long, equal the
+# fill. Dolphin's GCI folder is the case it was added for: the emulator lists
+# every ``.gci`` in the folder whatever its name and hands a running game the
+# files whose header carries its disc's game code. ``data`` carries the ``dir``
+# to list, the ``pattern`` a file's name matches to be listed at all (a glob,
+# not recursive, its extension in any case), ``offset`` and ``length`` in
+# bytes, spelled in decimal, the ``save_id`` fill and its ``save_id_spelling``,
+# ``limits`` — the ways the emulator's handling of the directory reaches past
+# the rule, words of FILE_MEMBERSHIP_LIMITS — and the ``citation`` for the
+# reading. The hole covers the files carrying the disc's own value only: a file
+# holding another game's value is that game's, and atlas keeps no list of games
+# that write under another's.
+CAVEAT_FILE_MEMBERSHIP_BY_HEADER = "file-membership-by-header"
 # A directory under this answer's own root that the card states and the
 # observation did not read. An observed set's groups describe the one directory
 # that was read, so a mode whose parts lie in sibling subdirectories — Kronos's
@@ -867,7 +882,10 @@ REASON_MLC_LAUNCH_FLAG_OUTRANKS_CONFIG = "mlc-launch-flag-outranks-config"
 REASON_VIRTUAL_SD_DISABLED = "virtual-sd-disabled"
 # Which class the loaded content is, where the save story splits on it — no
 # content was named, or its extension is outside every class the card records
-# (``extension`` carries the one seen).
+# (``extension`` carries the one seen). The class can be the console, too: the
+# Dolphin core's tree splits on GameCube and Wii, which the question's system
+# names — unnamed where it named none, unrecorded where it named another
+# (``system`` carries the one named).
 REASON_CONTENT_CLASS_UNNAMED = "content-class-unnamed"
 REASON_CONTENT_CLASS_UNRECORDED = "content-class-unrecorded"
 # Which machine the core emulates decides part of the save story, and here it is
@@ -1317,7 +1335,7 @@ def checked_appendconfig(appendconfig: Sequence[str]) -> tuple[str, ...]:
 # caller checks its value against it before filling (:func:`checked_save_id`):
 # a source that hands over a Wii disc's low word alone is caught as one word
 # short instead of naming a folder the emulator never opens.
-SaveIdSpelling = Literal["title-id-words", "path-segment"]
+SaveIdSpelling = Literal["title-id-words", "path-segment", "game-code"]
 SAVE_ID_SPELLING_TITLE_ID_WORDS: SaveIdSpelling = "title-id-words"
 """The title id as its two words: eight lowercase hex digits for the high word, ``/``, and
 eight for the low word, such as ``00010000/524d4745`` — two path segments, composed the way
@@ -1328,8 +1346,18 @@ SAVE_ID_SPELLING_PATH_SEGMENT: SaveIdSpelling = "path-segment"
 spelled the way the emulator spells it. Never empty, ``.`` or ``..``, and never holding ``/`` or
 a NUL — a value that would leave the directory it is joined below, or end the path early.
 """
-SAVE_ID_SPELLINGS = (SAVE_ID_SPELLING_TITLE_ID_WORDS, SAVE_ID_SPELLING_PATH_SEGMENT)
+SAVE_ID_SPELLING_GAME_CODE: SaveIdSpelling = "game-code"
+"""A GameCube game code: exactly four ASCII characters, each an uppercase letter or a digit,
+such as ``GMSE`` — the first four characters of the disc's six-character game id, compared
+with the four bytes a save file's header begins with.
+"""
+SAVE_ID_SPELLINGS = (
+    SAVE_ID_SPELLING_TITLE_ID_WORDS,
+    SAVE_ID_SPELLING_PATH_SEGMENT,
+    SAVE_ID_SPELLING_GAME_CODE,
+)
 _TITLE_ID_WORD = re.compile(r"[0-9a-f]{8}")
+_GAME_CODE = re.compile(r"[A-Z0-9]{4}")
 # The segments that name no entry of their own: nothing, this directory, its parent.
 _NOT_AN_ENTRY = ("", ".", "..")
 
@@ -1339,8 +1367,9 @@ def checked_save_id(spelling: str, value: str) -> str:
 
     *spelling* is the ``save_id_spelling`` the answer states beside its
     ``save_id`` fill. A value that does not have that shape names no folder
-    the emulator opens — a low word without its high word, an uppercase id,
-    a serial with a ``/`` in it — and a caller joins the value into a path it
+    the emulator opens and no header it matches — a low word without its
+    high word, an uppercase id, a serial with a ``/`` in it, a whole six-
+    character game id — and a caller joins the value into a path it
     then writes below, so ``..`` or a NUL would send that write elsewhere. It
     raises rather than being filled in.
     """
@@ -1356,6 +1385,12 @@ def checked_save_id(spelling: str, value: str) -> str:
             raise ValueError(
                 f"save_id spelled {spelling!r} is one path segment naming an entry of its own — "
                 f"not empty, '.' or '..', and without '/' or a NUL — got {value!r}"
+            )
+    elif spelling == SAVE_ID_SPELLING_GAME_CODE:
+        if not _GAME_CODE.fullmatch(value):
+            raise ValueError(
+                f"save_id spelled {spelling!r} is four characters, each an ASCII uppercase letter "
+                f"or digit, got {value!r}"
             )
     else:
         raise ValueError(f"save_id spelling must be one of {list(SAVE_ID_SPELLINGS)}, got {spelling!r}")
@@ -1415,6 +1450,24 @@ SIZE_FILL_FF: SizeFill = "0xff"
 SIZE_FILL_00: SizeFill = "0x00"
 """Zeroed memory: the fill of a save whose emulator clears it rather than erasing it."""
 SIZE_FILLS = (SIZE_FILL_FF, SIZE_FILL_00)
+
+
+# How far a ``file-membership-by-header`` rule reaches, under its
+# ``data["limits"]``: each word a way the emulator's own handling of the
+# directory differs from "the files whose bytes match are this game's, and
+# nothing else is touched". Closed, because a sync client decides on them
+# what it may delete, restore or compare, and a sentence decides nothing.
+FileMembershipLimit = Literal["other-games-loaded", "maker-code-not-compared"]
+MEMBERSHIP_LIMIT_OTHER_GAMES_LOADED: FileMembershipLimit = "other-games-loaded"
+"""The emulator loads the other games' files from the directory too, beside the running game's,
+so the directory is never one game's alone: a file that does not match is another game's, not a
+stray to remove.
+"""
+MEMBERSHIP_LIMIT_MAKER_CODE_NOT_COMPARED: FileMembershipLimit = "maker-code-not-compared"
+"""Only the bytes the rule names are compared — the game code — and not the maker code the header
+carries beside it, so a file carrying the game code under another maker code is still the game's.
+"""
+FILE_MEMBERSHIP_LIMITS = (MEMBERSHIP_LIMIT_OTHER_GAMES_LOADED, MEMBERSHIP_LIMIT_MAKER_CODE_NOT_COMPARED)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1908,7 +1961,9 @@ class SavefilePlacement:
     """
     needs: tuple[str, ...]
     """The holes a caller fills, the directory template's and a declared file-set
-    template's together — an answer with none is fully resolved.
+    template's together, and a hole no template carries whose use a caveat states,
+    as ``file-membership-by-header`` states the bytes a GCI folder's ``save_id`` is
+    compared with — an answer with none is fully resolved.
     """
     file_set: FileSet
     """The files the save consists of — observed, declared, or unknown, and never
@@ -2185,10 +2240,15 @@ ENUMERATED_DATA: "Mapping[tuple[str, str], tuple[str, ...]]" = MappingProxyType(
         (CAVEAT_FILENAMES_CONTENT_CONDITIONAL, "files_established_for"): (
             FILES_ESTABLISHED_FOR_TOKENS
         ),
-        # The two codes a ``save_id`` fill rides on: a card's or an emulator's
-        # file names keyed by the content's id, and a per-title directory.
+        # The three codes a ``save_id`` fill rides on: a card's or an emulator's
+        # file names keyed by the content's id, a per-title directory, and a
+        # directory whose files are one game's by bytes in their header.
         (CAVEAT_FILENAMES_CONTENT_CONDITIONAL, "save_id_spelling"): SAVE_ID_SPELLINGS,
         (CAVEAT_FILE_NAMES_UNESTABLISHED, "save_id_spelling"): SAVE_ID_SPELLINGS,
+        (CAVEAT_FILE_MEMBERSHIP_BY_HEADER, "save_id_spelling"): SAVE_ID_SPELLINGS,
+        # A list-valued pair: every way the membership rule falls short of
+        # "these files are the game's and the rest are untouched".
+        (CAVEAT_FILE_MEMBERSHIP_BY_HEADER, "limits"): FILE_MEMBERSHIP_LIMITS,
         # A mapping-valued pair: the listing states one reading per kept file,
         # keyed by its path, so the vocabulary closes the mapped words rather
         # than the mapping as a whole.

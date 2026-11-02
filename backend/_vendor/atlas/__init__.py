@@ -65,7 +65,7 @@ from __future__ import annotations
 # tests/test_version.py holds it equal to pyproject — CI's package job holds
 # dist-info to pyproject in a clean venv — so drift is a red test, not a
 # silent fork.
-__version__ = "0.32.0"  # x-release-please-version
+__version__ = "0.33.0"  # x-release-please-version
 
 # --- The two entry points, and the aggregate over them -----------------------
 from .detect import detect
@@ -124,6 +124,27 @@ from .rpcs3_boot import (
     CAVEAT_BOOT_DISC_DIR_CONFIGURED,
     CAVEAT_BOOT_DISC_DIR_UNRESOLVED,
     CAVEAT_ENTRY_TAKES_NO_DIRECTORY,
+)
+
+# What an entry's emulator opens through a launched disc file (issue #716):
+# each file it opens, how it came to be opened, and why a reading refuses or
+# stops short.
+from .disc_opens import (
+    CAVEAT_OPENS_BOUND_EXCEEDED,
+    CAVEAT_OPENS_CONTENT_UNREAD,
+    CAVEAT_OPENS_FILE_MISSING,
+    CAVEAT_OPENS_FILE_UNREAD,
+    CAVEAT_OPENS_FORMAT_REFUSED,
+    CAVEAT_OPENS_FORMAT_UNREAD,
+    CAVEAT_OPENS_PATH_TOO_LONG,
+    CAVEAT_OPENS_PLAYLIST_REFUSED,
+    CAVEAT_OPENS_SETTING_UNREAD,
+    CAVEAT_OPENS_SHEET_REFUSED,
+    CAVEAT_OPENS_TRACK_REFUSED,
+    HOW_NAME_DERIVED,
+    HOW_NAMED,
+    OPENED_HOWS,
+    Opened,
 )
 
 # --- The handles every question is asked of ----------------------------------
@@ -282,6 +303,7 @@ from .find_rules import (
     CAVEAT_FRONTEND_BUILD_SEALED,
     CAVEAT_LAUNCHER_SCRIPT_UNPINNED,
     CAVEAT_LAUNCH_ENVIRONMENT_UNPINNED,
+    CAVEAT_LAUNCH_ENVIRONMENT_UNREAD,
     CAVEAT_LAUNCH_COMMAND_ARGUMENT_BROKEN,
     CAVEAT_LAUNCH_COMMAND_BEYOND_LIMITS,
     CAVEAT_LAUNCH_COMMAND_DESKTOP_FILE,
@@ -634,6 +656,7 @@ from .placement import (
     CAVEAT_FEATURE_SWITCH_ABSENT,
     CAVEAT_FILENAMES_CONTENT_CONDITIONAL,
     CAVEAT_FILENAMES_UNVERIFIED,
+    CAVEAT_FILE_MEMBERSHIP_BY_HEADER,
     CAVEAT_FILE_NAMES_UNESTABLISHED,
     CAVEAT_FILE_SET_ACROSS_SYSTEMS,
     CAVEAT_FILE_SET_CLAIMS_MERGED,
@@ -701,6 +724,7 @@ from .placement import (
     HOLE_ROM_STEM,
     HOLE_SAVE_ID,
     KEYINGS,
+    SAVE_ID_SPELLING_GAME_CODE,
     SAVE_ID_SPELLING_PATH_SEGMENT,
     SAVE_ID_SPELLING_TITLE_ID_WORDS,
     SAVE_ID_SPELLINGS,
@@ -732,6 +756,9 @@ from .placement import (
     SIZE_FILL_00,
     SIZE_FILL_FF,
     SIZE_FILLS,
+    FILE_MEMBERSHIP_LIMITS,
+    MEMBERSHIP_LIMIT_MAKER_CODE_NOT_COMPARED,
+    MEMBERSHIP_LIMIT_OTHER_GAMES_LOADED,
     REASON_ACTIVE_USER_UNRECORDED,
     REASON_ARCHIVE_CONTENT_AMBIGUOUS,
     REASON_ARCHIVE_CONTENT_MIXED,
@@ -935,6 +962,21 @@ __all__ = [
     "CAVEAT_BOOT_DISC_DIR_CONFIGURED",
     "CAVEAT_BOOT_DISC_DIR_UNRESOLVED",
     "CAVEAT_ENTRY_TAKES_NO_DIRECTORY",
+    "Opened",
+    "OPENED_HOWS",
+    "HOW_NAMED",
+    "HOW_NAME_DERIVED",
+    "CAVEAT_OPENS_FILE_MISSING",
+    "CAVEAT_OPENS_TRACK_REFUSED",
+    "CAVEAT_OPENS_SHEET_REFUSED",
+    "CAVEAT_OPENS_FORMAT_REFUSED",
+    "CAVEAT_OPENS_FORMAT_UNREAD",
+    "CAVEAT_OPENS_PLAYLIST_REFUSED",
+    "CAVEAT_OPENS_CONTENT_UNREAD",
+    "CAVEAT_OPENS_FILE_UNREAD",
+    "CAVEAT_OPENS_SETTING_UNREAD",
+    "CAVEAT_OPENS_BOUND_EXCEEDED",
+    "CAVEAT_OPENS_PATH_TOO_LONG",
     "InstallFirstFormat",
     "StandaloneLaunchCard",
     "load_launch_formats",
@@ -1209,6 +1251,10 @@ __all__ = [
     "SIZE_FILL_00",
     "SIZE_FILL_FF",
     "SIZE_FILLS",
+    # The ways a file-membership-by-header rule reaches less far than it reads.
+    "FILE_MEMBERSHIP_LIMITS",
+    "MEMBERSHIP_LIMIT_MAKER_CODE_NOT_COMPARED",
+    "MEMBERSHIP_LIMIT_OTHER_GAMES_LOADED",
     "REASON_ACTIVE_USER_UNRECORDED",
     "REASON_ARCHIVE_CONTENT_AMBIGUOUS",
     "REASON_ARCHIVE_CONTENT_MIXED",
@@ -1296,6 +1342,7 @@ __all__ = [
     "HOLE_SAVE_ID",
     # How a ``save_id`` fill is spelled, and the check a caller runs on a value
     # before filling the hole with it.
+    "SAVE_ID_SPELLING_GAME_CODE",
     "SAVE_ID_SPELLING_PATH_SEGMENT",
     "SAVE_ID_SPELLING_TITLE_ID_WORDS",
     "SAVE_ID_SPELLINGS",
@@ -1435,6 +1482,7 @@ __all__ = [
     "CAVEAT_FRONTEND_BUILD_SEALED",
     "CAVEAT_LAUNCHER_SCRIPT_UNPINNED",
     "CAVEAT_LAUNCH_ENVIRONMENT_UNPINNED",
+    "CAVEAT_LAUNCH_ENVIRONMENT_UNREAD",
     "CAVEAT_LAUNCH_COMMAND_PLACEHOLDER_UNKNOWN",
     "CAVEAT_LAUNCH_COMMAND_ARGUMENT_BROKEN",
     "CAVEAT_LAUNCH_COMMAND_BEYOND_LIMITS",
@@ -1450,6 +1498,7 @@ __all__ = [
     "CAVEAT_FEATURE_SWITCH_ABSENT",
     "CAVEAT_FILENAMES_CONTENT_CONDITIONAL",
     "CAVEAT_FILENAMES_UNVERIFIED",
+    "CAVEAT_FILE_MEMBERSHIP_BY_HEADER",
     "CAVEAT_FILE_NAMES_UNESTABLISHED",
     "CAVEAT_FILE_SET_ACROSS_SYSTEMS",
     "CAVEAT_FILE_SET_CLAIMS_MERGED",

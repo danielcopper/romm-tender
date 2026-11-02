@@ -15,8 +15,9 @@ packaged per launcher (``atlas/data/retrodeck_launchers.json``), keyed by the
 git blob hash of its deployed copy; the reading holds together with the start
 file that defines each variable it reads, pinned by its own blob hash. The
 values are never packaged: a ``line`` variable is read off its assignment in
-the start file (:func:`start_line`), a ``paths`` variable off RetroDECK's
-configuration.
+the start file (:func:`start_line`), expanding the values the sandbox starts
+with that atlas reads on the machine (:func:`start_environment`), a ``paths``
+variable off RetroDECK's configuration.
 
 Left out, because no caller can pass them or none has to: a variable no start
 provides (``ffmpeg_path``, which five launchers read and nothing defines), the
@@ -30,7 +31,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal, cast
 
@@ -100,45 +101,210 @@ class EnvironmentRules:
 # An assignment at the start of a line, as a start file sourced at the top
 # level writes it; the last one of a name is the one that stands.
 _ASSIGNMENT = re.compile(r"^(?P<name>[A-Za-z_]\w*)=(?P<rest>.*)$", re.ASCII)
-# A value the shell takes as written: double quotes around no expansion or
-# escape, single quotes, or a bare word of characters no shell reads specially —
-# each followed by nothing but blanks and a comment.
-_LITERAL = re.compile(
-    r"""^(?:"(?P<double>[^"$`\\]*)"|'(?P<single>[^']*)'|(?P<bare>[\w./:@%+,-]*))[ \t]*(?:#.*)?$""",
+# One piece of an assignment's value, as bash reads the word: a double-quoted
+# run, a single-quoted run, a ``$NAME`` or ``${NAME}`` reference, or bare
+# characters no shell reads specially inside an assignment word (``#`` and
+# ``=`` among them: neither is special there). A double-quoted run is taken
+# whole — any character but ``"``, a backtick and ``\`` — and its ``$`` are
+# read afterwards (:func:`_expanded`): every one must start a reference, so
+# the pattern has one way to match a run and no nested repetition to
+# backtrack through. Then the end of the word: blanks, and a comment only
+# after one.
+_PIECE = re.compile(
+    r""""(?P<double>[^"`\\]*)"|'(?P<single>[^']*)'"""
+    r"""|\$(?P<plain>[A-Za-z_]\w*)|\$\{(?P<braced>[A-Za-z_]\w*)\}|(?P<bare>[\w./:@%+,#=-]+)""",
     re.ASCII,
 )
+_REFERENCE = re.compile(r"\$(?:(?P<plain>[A-Za-z_]\w*)|\{(?P<braced>[A-Za-z_]\w*)\})", re.ASCII)
+_WORD_END = re.compile(r"(?:[ \t]+(?:#.*)?)?$")
 
 
-def start_line(text: str, name: str) -> tuple[int, str | None] | None:
-    """The line of *text* that sets *name* and the value it writes — ``None`` for the value where the line computes
-    it rather than writes it (an expansion, a substitution, an escape), and ``None`` altogether where no line sets it.
+def shell_value(rest: str, known: Mapping[str, str]) -> str | None:
+    """The value bash assigns from *rest*, the text after an assignment's ``=`` — ``None`` where atlas does not read
+    it.
+
+    Read: double quotes, single quotes and bare characters, joined as the shell
+    joins adjacent pieces of one word, and a plain ``$NAME`` or ``${NAME}``
+    whose value *known* holds. Not read, so ``None``: a reference to any other
+    name, a command substitution, an arithmetic expansion, a parameter
+    expansion with an operator, an escape, a tilde, a glob, anything after the
+    word but a comment. This is no shell evaluator; it reads the lines the
+    start writes and refuses the rest.
     """
-    found: tuple[int, str | None] | None = None
+    value: list[str] = []
+    position = 0
+    while position < len(rest):
+        piece = _PIECE.match(rest, position)
+        if piece is None:
+            break
+        position = piece.end()
+        if piece.group("single") is not None:
+            value.append(piece.group("single"))
+        elif piece.group("bare") is not None:
+            value.append(piece.group("bare"))
+        else:
+            expanded = _expanded(piece, known)
+            if expanded is None:
+                return None
+            value.append(expanded)
+    return "".join(value) if _WORD_END.match(rest, position) else None
+
+
+def _expanded(piece: re.Match[str], known: Mapping[str, str]) -> str | None:
+    """A reference or a double-quoted run of *piece* with every reference in it replaced, ``None`` where one names
+    a value *known* does not hold or a ``$`` in the run starts none (``$(``, ``$$``, ``${NAME:-…}``)."""
+    name = _name(piece)
+    if name is not None:
+        return known.get(name)
+    run = piece.group("double")
+    if "$" in _REFERENCE.sub("", run):
+        return None
+    if any(_name(reference) not in known for reference in _REFERENCE.finditer(run)):
+        return None
+    return _REFERENCE.sub(lambda reference: known[cast(str, _name(reference))], run)
+
+
+def _name(match: re.Match[str]) -> str | None:
+    return match.group("plain") or match.group("braced")
+
+
+def shell_references(rest: str) -> frozenset[str]:
+    """Every name a ``$NAME`` or ``${NAME}`` of *rest* reads, up to where :func:`shell_value` stops reading — what
+    *known* has to hold for the value to be stated, where it is one atlas reads at all."""
+    return frozenset(name for _, name in _parts(rest) if name is not None)
+
+
+def _parts(rest: str) -> list[tuple[str, str | None]]:
+    """*rest* as :func:`shell_value` reads it, piece by piece up to where it stops: ``(text, None)`` for a literal,
+    ``("", name)`` for a reference."""
+    parts: list[tuple[str, str | None]] = []
+    position = 0
+    while (piece := _PIECE.match(rest, position)) is not None:
+        position = piece.end()
+        if piece.group("double") is not None:
+            run = piece.group("double")
+            if "$" in _REFERENCE.sub("", run):
+                break
+            start = 0
+            for reference in _REFERENCE.finditer(run):
+                parts.append((run[start : reference.start()], None))
+                parts.append(("", _name(reference)))
+                start = reference.end()
+            parts.append((run[start:], None))
+        elif (name := _name(piece)) is not None:
+            parts.append(("", name))
+        else:
+            parts.append((piece.group("single") or piece.group("bare") or "", None))
+    return parts
+
+
+def is_search_list(rest: str) -> bool:
+    """Whether the value *rest* gives is a search list (#574 D14): a reference to one of :data:`_SEARCH_LISTS`
+    standing as a whole element of the colon-separated value — the value's edge or a ``:`` on either side, as in
+    ``/app/lib:${LD_LIBRARY_PATH}``. ``${LD_LIBRARY_PATH}/lib`` composes a path from one and is no search list."""
+    parts = _parts(rest)
+    return any(
+        name in _SEARCH_LISTS
+        and _meets_an_edge(reversed(parts[:index]), str.endswith)
+        and _meets_an_edge(parts[index + 1 :], str.startswith)
+        for index, (_, name) in enumerate(parts)
+    )
+
+
+def _meets_an_edge(parts: Iterable[tuple[str, str | None]], touches: Callable[[str, str], bool]) -> bool:
+    """Whether the text beside a reference, read away from it across *parts*, reaches a ``:`` or the value's edge
+    before anything else — another reference, another character."""
+    for literal, name in parts:
+        if name is not None:
+            return False
+        if literal:
+            return touches(literal, ":")
+    return True
+
+
+def start_assignment(text: str, name: str) -> tuple[int, str] | None:
+    """The line of *text* that sets *name* and the text after its ``=`` — ``None`` where no line sets it."""
+    found: tuple[int, str] | None = None
     for number, line in enumerate(text.splitlines(), start=1):
         match = _ASSIGNMENT.match(line)
-        if match is None or match.group("name") != name:
-            continue
-        literal = _LITERAL.match(match.group("rest"))
-        value = None if literal is None else next(part for part in literal.groups() if part is not None)
-        found = (number, value)
+        if match is not None and match.group("name") == name:
+            found = (number, match.group("rest"))
     return found
 
 
-def line_variable(name: str, defined_in: str, text: str | None, exists: Callable[[str], bool]) -> DistributionVariable:
+def start_line(text: str, name: str, known: Mapping[str, str] | None = None) -> tuple[int, str | None] | None:
+    """The line of *text* that sets *name* and the value it gives — ``None`` for the value where the line computes
+    it from anything but the values *known* holds (:func:`shell_value`), and ``None`` altogether where no line sets
+    it. Without *known* only a literal is a value.
+    """
+    found = start_assignment(text, name)
+    if found is None:
+        return None
+    line, rest = found
+    return line, shell_value(rest, known or {})
+
+
+# The variables whose value is a colon-separated list of folders to search:
+# a value composed from one names folders to search, none of which has to
+# exist, since the dynamic loader skips a folder that is not there (#574 D14).
+_SEARCH_LISTS = frozenset({"LD_LIBRARY_PATH"})
+
+# The start files RetroDECK's start sources before conf_read runs: global.sh
+# sources all_vars.sh at :116-118 and calls conf_read at :198, :210 and :218
+# (0.10.10b). Every other start file comes after it — the component
+# functions files at :232-233 — or is not known to come before, and is read
+# as coming after.
+_BEFORE_CONF_READ = frozenset({"/app/libexec/all_vars.sh"})
+
+
+def start_environment(
+    defined_in: str, environment: Mapping[str, str], settings: Mapping[str, Any]
+) -> Mapping[str, str]:
+    """What of *environment* — the values the sandbox starts RetroDECK with — still stands when the start file
+    *defined_in* runs, against RetroDECK's *settings* (``retrodeck.json``).
+
+    conf_read exports ``version`` and every key of the settings' ``paths``
+    and ``options`` under the key's own name (``printf -v "$name"`` and
+    ``export``, other_functions.sh:148-190, the assignment at :156-157), so a
+    key that names one of these variables replaces it for every start file
+    after it. Such a name is dropped there, and so is everything where
+    ``paths`` or ``options`` is no object, which conf_read does not read
+    key by key.
+    """
+    if defined_in in _BEFORE_CONF_READ:
+        return environment
+    sections = [settings.get("paths", {}), settings.get("options", {})]
+    if not all(isinstance(section, dict) for section in sections):
+        return {}
+    keys = {"version", *(key for section in sections for key in cast(dict[str, object], section))}
+    return {name: value for name, value in environment.items() if name not in keys}
+
+
+def line_variable(
+    name: str,
+    defined_in: str,
+    text: str | None,
+    exists: Callable[[str], bool],
+    known: Mapping[str, str] | None = None,
+) -> DistributionVariable:
     """*name* as the start file *defined_in* sets it, read off its *text* (``None`` where it could not be read).
 
-    The value is the literal the line writes, ``None`` where the line computes
-    it instead (:func:`start_line`). The installation provides it where the line
-    is there and a path the value names — a literal starting with ``/`` —
-    *exists*; a value that names no path is provided by the line alone. A
-    start file without the line, or one atlas cannot read, provides nothing.
+    The value is what the line gives, ``None`` where the line computes it from
+    anything but the values *known* holds (:func:`shell_value`). The
+    installation provides it where the line is there and a path the value
+    names — a value starting with ``/`` — *exists*; a value that names no path
+    is provided by the line alone, and so is a search list
+    (:func:`is_search_list`), which names folders to search, none of which has
+    to exist (#574 D14).
+    A start file without the line, or one atlas cannot read, provides nothing.
     """
-    found = None if text is None else start_line(text, name)
+    found = None if text is None else start_assignment(text, name)
     if found is None:
         return DistributionVariable(name, None, defined_in, False)
-    line, value = found
+    line, rest = found
+    value = shell_value(rest, known or {})
     set_by = f"{defined_in}:{line}"
-    if value is None or not value.startswith("/"):
+    if value is None or not value.startswith("/") or is_search_list(rest):
         return DistributionVariable(name, value, set_by, True)
     return DistributionVariable(name, value, set_by, exists(value))
 

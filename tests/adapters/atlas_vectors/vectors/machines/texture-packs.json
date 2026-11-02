@@ -3050,6 +3050,69 @@
           ]
         }
       }
+    },
+    {
+      "name": "the-dolphin-core-reads-textures-in-the-user-tree-below-the-sorted-save-directory",
+      "rationale": "The Dolphin core keeps its whole user tree below the save directory RetroArch hands it (Boot.cpp:61-69 at libretro/dolphin fd1aca3a), and its Load tree with it, so its texture packs are read from User/Load/Textures below that directory — sorted by content directory here, saves/gc — the one content-tree root that follows RetroArch's sort redirect. The tree is read from the core's source and not yet from data it wrote, which emulator-read-unestablished states; the option that switches replacement on is stated in no options file here and the core registers none a probe captures, so enabled stays unanswered.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"true\"\nsort_savefiles_enable = \"false\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>gc</name>\n    <path>%ROMPATH%/gc</path>\n    <extension>.rvz .RVZ</extension>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>wii</name>\n    <path>%ROMPATH%/wii</path>\n    <extension>.rvz .RVZ</extension>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n  </system>\n</systemList>\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/bios",
+          "/mnt/sd/retrodeck/saves/gc",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/dolphin_libretro.so": {
+            "library_name": "dolphin-emu",
+            "library_version": "fd1aca3a"
+          }
+        },
+        "texture_query": {
+          "core_so": "dolphin_libretro.so",
+          "content_path": "/mnt/sd/retrodeck/roms/gc/Game (USA).rvz"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "texture_pack_location": {
+          "dir": "/mnt/sd/retrodeck/saves/gc/User/Load/Textures",
+          "needs": [],
+          "physical_dir": null,
+          "enabled": null,
+          "keying": null,
+          "caveats": [
+            {
+              "code": "save-directory-visibility-unestablished",
+              "data": {
+                "app_id": "net.retrodeck.retrodeck"
+              }
+            },
+            {
+              "code": "emulator-read-unestablished",
+              "data": {
+                "core": "dolphin",
+                "verdict": "card"
+              }
+            }
+          ]
+        }
+      }
     }
   ]
 }

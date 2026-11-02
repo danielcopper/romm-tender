@@ -221,7 +221,7 @@
     },
     {
       "name": "a-core-whose-switch-is-an-ini-in-its-own-user-tree",
-      "rationale": "The Dolphin core's mod switch is not a core option: it lives in a GFX.ini inside the user tree the core builds under the root RetroArch hands it. That is emulator-config-unread arriving on a core row for the first time, and the caveat names the file on this machine. The core is also a documented deviation suspect, so the directory carries emulator-read-unestablished beside it — and its .info declares needs_fullpath, so the frontend never patches its content and no soft-patching word rides this answer, which is the other side of the live read the FBNeo row shows.",
+      "rationale": "The Dolphin core's mod switch is not a core option: it lives in a GFX.ini inside the user tree the core builds under the save directory RetroArch hands it, User below that directory (Boot.cpp:61-69 at libretro/dolphin fd1aca3a). That is emulator-config-unread arriving on a core row, and the caveat names the file on this machine. With no sorting stated, RetroArch sorts by the core's name, its own default, so the directory handed is saves/dolphin-emu, which does not exist yet (sorted-dir-missing). The tree is read from the core's source and not yet from data it wrote, so the directory carries emulator-read-unestablished beside it — and its .info declares needs_fullpath, so the frontend never patches its content and no soft-patching word rides this answer, which is the other side of the live read the FBNeo row shows.",
       "input": {
         "home": "/home/deck",
         "files": {
@@ -270,6 +270,13 @@
           "enabled": null,
           "caveats": [
             {
+              "code": "sorted-dir-missing",
+              "data": {
+                "dir": "/mnt/sd/retrodeck/saves/dolphin-emu",
+                "fallback_dir": "/mnt/sd/retrodeck/saves"
+              }
+            },
+            {
               "code": "emulator-config-unread",
               "data": {
                 "core": "dolphin",
@@ -280,7 +287,7 @@
               "code": "emulator-read-unestablished",
               "data": {
                 "core": "dolphin",
-                "verdict": "suspect"
+                "verdict": "card"
               }
             }
           ]

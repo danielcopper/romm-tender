@@ -3721,6 +3721,7 @@
           ],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "emulator-catalogue-sealed",
@@ -3809,6 +3810,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "emulator-catalogue-sealed",
@@ -3871,6 +3873,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "emulator-catalogue-sealed",
@@ -16906,6 +16909,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": []
         }
       }
@@ -16987,6 +16991,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "emulator-config-missing",
@@ -17050,6 +17055,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": []
         }
       }
@@ -17124,6 +17130,7 @@
             }
           ],
           "boots": null,
+          "opens": null,
           "caveats": []
         }
       }
@@ -17204,6 +17211,7 @@
             }
           ],
           "boots": null,
+          "opens": null,
           "caveats": []
         }
       }
@@ -17306,6 +17314,7 @@
             }
           ],
           "boots": null,
+          "opens": null,
           "caveats": []
         }
       }
@@ -17380,6 +17389,7 @@
             }
           ],
           "boots": null,
+          "opens": null,
           "caveats": []
         }
       }
@@ -17463,6 +17473,7 @@
             }
           ],
           "boots": null,
+          "opens": null,
           "caveats": []
         }
       }
@@ -17524,6 +17535,7 @@
           "alternatives": [],
           "installers": [],
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "emulator-catalogue-sealed",
@@ -17602,6 +17614,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": []
         }
       }
@@ -17651,6 +17664,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "emulator-catalogue-sealed",
@@ -17735,6 +17749,7 @@
           ],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": []
         }
       }
@@ -17811,6 +17826,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "archive-contents-unread",
@@ -17897,6 +17913,7 @@
           ],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": []
         }
       }
@@ -17954,6 +17971,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "launch-command-label-unknown",
@@ -18037,6 +18055,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "archive-contents-unread",
@@ -18120,6 +18139,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "entry-format-unclaimed",
@@ -18197,6 +18217,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "entry-format-unestablished",
@@ -18333,6 +18354,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "emulator-catalogue-unavailable",
@@ -25842,6 +25864,777 @@
               }
             ]
           }
+        }
+      }
+    },
+    {
+      "name": "dolphin-core-keeps-a-gamecube-games-gci-folder-in-its-user-tree-below-the-sorted-save-directory",
+      "rationale": "The Dolphin core keeps the standalone emulator's whole user tree below the directory RetroArch hands it as the save directory (Boot.cpp:61-69 at libretro/dolphin fd1aca3a). Content-directory sorting makes that saves/gc, so the tree is saves/gc/User, and with no Dolphin.ini there yet the registered default holds: slot A is a GCI folder, one per region below User/GC, its files named from each save's own entry and given to a game by the game code in their header, slot B empty. The region and the game code are holes, the answer roots at the save directory, and the card is applied without a run on any arrangement, which unverified-version says.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"true\"\nsort_savefiles_enable = \"false\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>gc</name>\n    <path>%ROMPATH%/gc</path>\n    <extension>.rvz .RVZ</extension>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>wii</name>\n    <path>%ROMPATH%/wii</path>\n    <extension>.rvz .RVZ</extension>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n  </system>\n</systemList>\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/bios",
+          "/mnt/sd/retrodeck/saves/gc",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/dolphin_libretro.so": {
+            "library_name": "dolphin-emu",
+            "library_version": "fd1aca3a"
+          }
+        },
+        "entry_savefile_query": {
+          "system": "gc",
+          "content_path": "/mnt/sd/retrodeck/roms/gc/Game (USA).rvz"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_savefile_location": {
+          "dir": "/mnt/sd/retrodeck/saves/gc/User/GC/<region>/Card A",
+          "root_kind": "savefile_directory",
+          "needs": [
+            "region",
+            "save_id"
+          ],
+          "fallback_dir": null,
+          "physical_dir": null,
+          "file_set": {
+            "state": "declared",
+            "files": [],
+            "complete": false,
+            "groups": [
+              {
+                "dir": "/mnt/sd/retrodeck/saves/gc/User/GC/USA/Card A",
+                "files": null,
+                "granularity": "per-game-files",
+                "role": "memory-card",
+                "size_fixed": false
+              },
+              {
+                "dir": "/mnt/sd/retrodeck/saves/gc/User/GC/EUR/Card A",
+                "files": null,
+                "granularity": "per-game-files",
+                "role": "memory-card",
+                "size_fixed": false
+              },
+              {
+                "dir": "/mnt/sd/retrodeck/saves/gc/User/GC/JAP/Card A",
+                "files": null,
+                "granularity": "per-game-files",
+                "role": "memory-card",
+                "size_fixed": false
+              }
+            ]
+          },
+          "caveats": [
+            {
+              "code": "save-directory-visibility-unestablished",
+              "data": {
+                "app_id": "net.retrodeck.retrodeck"
+              }
+            },
+            {
+              "code": "unverified-version",
+              "data": {
+                "core": "dolphin",
+                "arrangement": "retrodeck",
+                "verification": "never-verified"
+              }
+            },
+            {
+              "code": "emulator-config-missing",
+              "data": {
+                "core": "dolphin",
+                "config": "/mnt/sd/retrodeck/saves/gc/User/Config/Dolphin.ini"
+              }
+            },
+            {
+              "code": "file-names-unestablished",
+              "data": {
+                "core": "dolphin",
+                "dir": "/mnt/sd/retrodeck/saves/gc/User/GC/USA/Card A",
+                "role": "memory-card",
+                "citation": "GCMemcardDirectory.cpp:43-62 at libretro/dolphin fd1aca3a"
+              }
+            },
+            {
+              "code": "file-names-unestablished",
+              "data": {
+                "core": "dolphin",
+                "dir": "/mnt/sd/retrodeck/saves/gc/User/GC/EUR/Card A",
+                "role": "memory-card",
+                "citation": "GCMemcardDirectory.cpp:43-62 at libretro/dolphin fd1aca3a"
+              }
+            },
+            {
+              "code": "file-names-unestablished",
+              "data": {
+                "core": "dolphin",
+                "dir": "/mnt/sd/retrodeck/saves/gc/User/GC/JAP/Card A",
+                "role": "memory-card",
+                "citation": "GCMemcardDirectory.cpp:43-62 at libretro/dolphin fd1aca3a"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "core": "dolphin",
+                "dir": "/mnt/sd/retrodeck/saves/gc/User/GC/USA/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:193, FileSearch.h:13-15, FileSearch.cpp:32-63, :86-91, GCMemcardDirectory.cpp:210, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:177-183 at libretro/dolphin fd1aca3a"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "core": "dolphin",
+                "dir": "/mnt/sd/retrodeck/saves/gc/User/GC/EUR/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:193, FileSearch.h:13-15, FileSearch.cpp:32-63, :86-91, GCMemcardDirectory.cpp:210, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:177-183 at libretro/dolphin fd1aca3a"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "core": "dolphin",
+                "dir": "/mnt/sd/retrodeck/saves/gc/User/GC/JAP/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:193, FileSearch.h:13-15, FileSearch.cpp:32-63, :86-91, GCMemcardDirectory.cpp:210, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:177-183 at libretro/dolphin fd1aca3a"
+              }
+            }
+          ],
+          "redirects": null,
+          "granularity": {
+            "value": "per-game-files",
+            "mode": "folder+none",
+            "readings": [
+              {
+                "key": "SlotA",
+                "value": null,
+                "options_file": "/mnt/sd/retrodeck/saves/gc/User/Config/Dolphin.ini"
+              },
+              {
+                "key": "GCIFolderAPath",
+                "value": null,
+                "options_file": "/mnt/sd/retrodeck/saves/gc/User/Config/Dolphin.ini"
+              },
+              {
+                "key": "SlotB",
+                "value": null,
+                "options_file": "/mnt/sd/retrodeck/saves/gc/User/Config/Dolphin.ini"
+              }
+            ],
+            "alternatives": [
+              {
+                "mode": "card+none",
+                "options": {
+                  "SlotA": "1"
+                },
+                "values": [
+                  "shared-file"
+                ],
+                "caveats": []
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "dolphin-core-reads-a-raw-memory-card-from-the-dolphin-ini-in-its-user-tree",
+      "rationale": "The core's own Dolphin.ini, User/Config below the save directory, puts the raw memory card in slot A (SlotA = 1), so the GameCube saves are one card file per region in User/GC, MemoryCardA.<region>.raw, shared by every game; the alternative names the GCI folder the default would give.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"true\"\nsort_savefiles_enable = \"false\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>gc</name>\n    <path>%ROMPATH%/gc</path>\n    <extension>.rvz .RVZ</extension>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>wii</name>\n    <path>%ROMPATH%/wii</path>\n    <extension>.rvz .RVZ</extension>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/saves/gc/User/Config/Dolphin.ini": "[Core]\nSlotA = 1\nSlotB = 255\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/bios",
+          "/mnt/sd/retrodeck/saves/gc",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/dolphin_libretro.so": {
+            "library_name": "dolphin-emu",
+            "library_version": "fd1aca3a"
+          }
+        },
+        "entry_savefile_query": {
+          "system": "gc",
+          "content_path": "/mnt/sd/retrodeck/roms/gc/Game (USA).rvz"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_savefile_location": {
+          "dir": "/mnt/sd/retrodeck/saves/gc/User/GC",
+          "root_kind": "savefile_directory",
+          "needs": [],
+          "fallback_dir": null,
+          "physical_dir": null,
+          "file_set": {
+            "state": "declared",
+            "files": [
+              "MemoryCardA.USA.raw",
+              "MemoryCardA.EUR.raw",
+              "MemoryCardA.JAP.raw"
+            ],
+            "complete": false,
+            "groups": [
+              {
+                "dir": "/mnt/sd/retrodeck/saves/gc/User/GC",
+                "files": [
+                  "MemoryCardA.USA.raw"
+                ],
+                "granularity": "shared-file",
+                "role": "memory-card",
+                "size_fixed": true
+              },
+              {
+                "dir": "/mnt/sd/retrodeck/saves/gc/User/GC",
+                "files": [
+                  "MemoryCardA.EUR.raw"
+                ],
+                "granularity": "shared-file",
+                "role": "memory-card",
+                "size_fixed": true
+              },
+              {
+                "dir": "/mnt/sd/retrodeck/saves/gc/User/GC",
+                "files": [
+                  "MemoryCardA.JAP.raw"
+                ],
+                "granularity": "shared-file",
+                "role": "memory-card",
+                "size_fixed": true
+              }
+            ]
+          },
+          "caveats": [
+            {
+              "code": "save-directory-visibility-unestablished",
+              "data": {
+                "app_id": "net.retrodeck.retrodeck"
+              }
+            },
+            {
+              "code": "unverified-version",
+              "data": {
+                "core": "dolphin",
+                "arrangement": "retrodeck",
+                "verification": "never-verified"
+              }
+            }
+          ],
+          "redirects": null,
+          "granularity": {
+            "value": "shared-file",
+            "mode": "card+none",
+            "readings": [
+              {
+                "key": "SlotA",
+                "value": "1",
+                "options_file": "/mnt/sd/retrodeck/saves/gc/User/Config/Dolphin.ini"
+              },
+              {
+                "key": "MemcardAPath",
+                "value": null,
+                "options_file": "/mnt/sd/retrodeck/saves/gc/User/Config/Dolphin.ini"
+              },
+              {
+                "key": "SlotB",
+                "value": "255",
+                "options_file": "/mnt/sd/retrodeck/saves/gc/User/Config/Dolphin.ini"
+              }
+            ],
+            "alternatives": [
+              {
+                "mode": "folder+none",
+                "options": {
+                  "SlotA": "8"
+                },
+                "values": [
+                  "per-game-files"
+                ],
+                "caveats": []
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "dolphin-core-keeps-a-wii-save-in-its-nand-and-lists-the-titles-already-there",
+      "rationale": "A Wii game's save is its title's data directory in the NAND below User/Wii, title/<hi>/<lo>/data, keyed by the title id the disc's ticket states — the save_id hole, both words. The NAND already holds one title directory, which the answer lists spelled the way the hole is filled.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"true\"\nsort_savefiles_enable = \"false\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>gc</name>\n    <path>%ROMPATH%/gc</path>\n    <extension>.rvz .RVZ</extension>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>wii</name>\n    <path>%ROMPATH%/wii</path>\n    <extension>.rvz .RVZ</extension>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n  </system>\n</systemList>\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/bios",
+          "/mnt/sd/retrodeck/saves/wii",
+          "/mnt/sd/retrodeck/saves/wii/User/Wii/title/00010000/41424344/data",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/dolphin_libretro.so": {
+            "library_name": "dolphin-emu",
+            "library_version": "fd1aca3a"
+          }
+        },
+        "entry_savefile_query": {
+          "system": "wii",
+          "content_path": "/mnt/sd/retrodeck/roms/wii/Game (USA).rvz"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_savefile_location": {
+          "dir": "/mnt/sd/retrodeck/saves/wii/User/Wii/title/<save_id>/data",
+          "root_kind": "savefile_directory",
+          "needs": [
+            "save_id"
+          ],
+          "fallback_dir": null,
+          "physical_dir": null,
+          "file_set": {
+            "state": "declared",
+            "files": [],
+            "complete": false,
+            "groups": [
+              {
+                "dir": "/mnt/sd/retrodeck/saves/wii/User/Wii/title/<save_id>/data",
+                "files": null,
+                "granularity": "per-game-directory",
+                "role": "battery",
+                "size_fixed": false
+              }
+            ]
+          },
+          "caveats": [
+            {
+              "code": "save-directory-visibility-unestablished",
+              "data": {
+                "app_id": "net.retrodeck.retrodeck"
+              }
+            },
+            {
+              "code": "unverified-version",
+              "data": {
+                "core": "dolphin",
+                "arrangement": "retrodeck",
+                "verification": "never-verified"
+              }
+            },
+            {
+              "code": "emulator-config-missing",
+              "data": {
+                "core": "dolphin",
+                "config": "/mnt/sd/retrodeck/saves/wii/User/Config/Dolphin.ini"
+              }
+            },
+            {
+              "code": "file-names-unestablished",
+              "data": {
+                "core": "dolphin",
+                "dir": "/mnt/sd/retrodeck/saves/wii/User/Wii/title/<save_id>/data",
+                "role": "battery",
+                "save_id": "the Wii title id: <high 8 hex>/<low 8 hex>, lowercase",
+                "save_id_spelling": "title-id-words",
+                "citation": "NandPaths.cpp:63-72 and VolumeWii.cpp:270-276 at libretro/dolphin fd1aca3a"
+              }
+            },
+            {
+              "code": "save-id-candidates",
+              "data": {
+                "core": "dolphin",
+                "dir": "/mnt/sd/retrodeck/saves/wii/User/Wii/title",
+                "titles": [
+                  "00010000/41424344"
+                ],
+                "unreadable": [],
+                "citation": "ES.cpp:823-860, Boot_BS2Emu.cpp:616 at libretro/dolphin fd1aca3a"
+              }
+            }
+          ],
+          "redirects": null,
+          "granularity": {
+            "value": "per-game-directory",
+            "mode": "nand",
+            "readings": [
+              {
+                "key": "NANDRootPath",
+                "value": null,
+                "options_file": "/mnt/sd/retrodeck/saves/wii/User/Config/Dolphin.ini"
+              }
+            ],
+            "alternatives": []
+          }
+        }
+      }
+    },
+    {
+      "name": "dolphin-core-keeps-a-wii-save-in-its-nand-with-no-title-there-yet",
+      "rationale": "The same Wii answer on a machine where no disc has been booted yet: the NAND holds no title directory, so nothing is listed beside the hole, and the missing Dolphin.ini is stated as the defaults governing.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"true\"\nsort_savefiles_enable = \"false\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>gc</name>\n    <path>%ROMPATH%/gc</path>\n    <extension>.rvz .RVZ</extension>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>wii</name>\n    <path>%ROMPATH%/wii</path>\n    <extension>.rvz .RVZ</extension>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n  </system>\n</systemList>\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/bios",
+          "/mnt/sd/retrodeck/saves/wii",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/dolphin_libretro.so": {
+            "library_name": "dolphin-emu",
+            "library_version": "fd1aca3a"
+          }
+        },
+        "entry_savefile_query": {
+          "system": "wii",
+          "content_path": "/mnt/sd/retrodeck/roms/wii/Game (USA).rvz"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_savefile_location": {
+          "dir": "/mnt/sd/retrodeck/saves/wii/User/Wii/title/<save_id>/data",
+          "root_kind": "savefile_directory",
+          "needs": [
+            "save_id"
+          ],
+          "fallback_dir": null,
+          "physical_dir": null,
+          "file_set": {
+            "state": "declared",
+            "files": [],
+            "complete": false,
+            "groups": [
+              {
+                "dir": "/mnt/sd/retrodeck/saves/wii/User/Wii/title/<save_id>/data",
+                "files": null,
+                "granularity": "per-game-directory",
+                "role": "battery",
+                "size_fixed": false
+              }
+            ]
+          },
+          "caveats": [
+            {
+              "code": "save-directory-visibility-unestablished",
+              "data": {
+                "app_id": "net.retrodeck.retrodeck"
+              }
+            },
+            {
+              "code": "unverified-version",
+              "data": {
+                "core": "dolphin",
+                "arrangement": "retrodeck",
+                "verification": "never-verified"
+              }
+            },
+            {
+              "code": "emulator-config-missing",
+              "data": {
+                "core": "dolphin",
+                "config": "/mnt/sd/retrodeck/saves/wii/User/Config/Dolphin.ini"
+              }
+            },
+            {
+              "code": "file-names-unestablished",
+              "data": {
+                "core": "dolphin",
+                "dir": "/mnt/sd/retrodeck/saves/wii/User/Wii/title/<save_id>/data",
+                "role": "battery",
+                "save_id": "the Wii title id: <high 8 hex>/<low 8 hex>, lowercase",
+                "save_id_spelling": "title-id-words",
+                "citation": "NandPaths.cpp:63-72 and VolumeWii.cpp:270-276 at libretro/dolphin fd1aca3a"
+              }
+            }
+          ],
+          "redirects": null,
+          "granularity": {
+            "value": "per-game-directory",
+            "mode": "nand",
+            "readings": [
+              {
+                "key": "NANDRootPath",
+                "value": null,
+                "options_file": "/mnt/sd/retrodeck/saves/wii/User/Config/Dolphin.ini"
+              }
+            ],
+            "alternatives": []
+          }
+        }
+      }
+    },
+    {
+      "name": "dolphin-core-follows-the-nandrootpath-its-dolphin-ini-sets",
+      "rationale": "The core's Dolphin.ini sets [General] NANDRootPath, so the NAND — and with it every Wii title's save — lives at that path rather than below User/Wii; the reading names the line it came from.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"true\"\nsort_savefiles_enable = \"false\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>gc</name>\n    <path>%ROMPATH%/gc</path>\n    <extension>.rvz .RVZ</extension>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>wii</name>\n    <path>%ROMPATH%/wii</path>\n    <extension>.rvz .RVZ</extension>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/saves/wii/User/Config/Dolphin.ini": "[General]\nNANDRootPath = \"/mnt/sd/nand\"\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/bios",
+          "/mnt/sd/retrodeck/saves/wii",
+          "/mnt/sd/nand",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/dolphin_libretro.so": {
+            "library_name": "dolphin-emu",
+            "library_version": "fd1aca3a"
+          }
+        },
+        "entry_savefile_query": {
+          "system": "wii",
+          "content_path": "/mnt/sd/retrodeck/roms/wii/Game (USA).rvz"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "entry_savefile_location": {
+          "dir": "/mnt/sd/nand/title/<save_id>/data",
+          "root_kind": "savefile_directory",
+          "needs": [
+            "save_id"
+          ],
+          "fallback_dir": null,
+          "physical_dir": null,
+          "file_set": {
+            "state": "declared",
+            "files": [],
+            "complete": false,
+            "groups": [
+              {
+                "dir": "/mnt/sd/nand/title/<save_id>/data",
+                "files": null,
+                "granularity": "per-game-directory",
+                "role": "battery",
+                "size_fixed": false
+              }
+            ]
+          },
+          "caveats": [
+            {
+              "code": "save-directory-visibility-unestablished",
+              "data": {
+                "app_id": "net.retrodeck.retrodeck"
+              }
+            },
+            {
+              "code": "unverified-version",
+              "data": {
+                "core": "dolphin",
+                "arrangement": "retrodeck",
+                "verification": "never-verified"
+              }
+            },
+            {
+              "code": "file-names-unestablished",
+              "data": {
+                "core": "dolphin",
+                "dir": "/mnt/sd/nand/title/<save_id>/data",
+                "role": "battery",
+                "save_id": "the Wii title id: <high 8 hex>/<low 8 hex>, lowercase",
+                "save_id_spelling": "title-id-words",
+                "citation": "NandPaths.cpp:63-72 and VolumeWii.cpp:270-276 at libretro/dolphin fd1aca3a"
+              }
+            }
+          ],
+          "redirects": null,
+          "granularity": {
+            "value": "per-game-directory",
+            "mode": "nand",
+            "readings": [
+              {
+                "key": "NANDRootPath",
+                "value": "/mnt/sd/nand",
+                "options_file": "/mnt/sd/retrodeck/saves/wii/User/Config/Dolphin.ini"
+              }
+            ],
+            "alternatives": []
+          }
+        }
+      }
+    },
+    {
+      "name": "dolphin-core-asked-without-a-system-states-the-standard-answer",
+      "rationale": "The core's tree splits on the console the disc is for, which the core tells by the disc's header and the question tells by its system. Asked through the core alone, no system is named, so the card's rule cannot decide (core-mode-unestablished, content-class-unnamed) and the standard answer stands, the card never applied.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nsort_savefiles_by_content_enable = \"true\"\nsort_savefiles_enable = \"false\"\nsystem_directory = \"/mnt/sd/retrodeck/bios\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>gc</name>\n    <path>%ROMPATH%/gc</path>\n    <extension>.rvz .RVZ</extension>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>wii</name>\n    <path>%ROMPATH%/wii</path>\n    <extension>.rvz .RVZ</extension>\n    <command label=\"Dolphin\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/dolphin_libretro.so %ROM%</command>\n  </system>\n</systemList>\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/mnt/sd/retrodeck/bios",
+          "/mnt/sd/retrodeck/saves/gc",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/dolphin_libretro.so": {
+            "library_name": "dolphin-emu",
+            "library_version": "fd1aca3a"
+          }
+        },
+        "savefile_query": {
+          "core_so": "dolphin_libretro.so",
+          "content_path": "/mnt/sd/retrodeck/roms/gc/Game (USA).rvz"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "savefile_location": {
+          "dir": "/mnt/sd/retrodeck/saves/gc",
+          "root_kind": "savefile_directory",
+          "needs": [],
+          "fallback_dir": null,
+          "physical_dir": null,
+          "file_set": {
+            "state": "unknown",
+            "files": [],
+            "complete": false,
+            "groups": []
+          },
+          "caveats": [
+            {
+              "code": "save-directory-visibility-unestablished",
+              "data": {
+                "app_id": "net.retrodeck.retrodeck"
+              }
+            },
+            {
+              "code": "unverified-version",
+              "data": {
+                "core": "dolphin",
+                "arrangement": "retrodeck",
+                "verification": "never-verified"
+              }
+            },
+            {
+              "code": "core-mode-unestablished",
+              "data": {
+                "core": "dolphin",
+                "reason": "content-class-unnamed"
+              }
+            }
+          ],
+          "redirects": null,
+          "granularity": null
         }
       }
     }
