@@ -188,7 +188,6 @@ export interface SaveSyncAvailability {
 /** One save file this device holds for a game (backend `get_local_save_files`). */
 export interface LocalSaveFile {
   filename: string;
-  // The folder it lies in.
   directory: string;
   size: number;
   // When it last changed, as an ISO-8601 time.

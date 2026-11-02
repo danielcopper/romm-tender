@@ -220,9 +220,8 @@ function shapePreLaunchAnswer(settled: PreLaunchSyncSettled, options: PreLaunchS
 
 /**
  * The tracking-setup step for a start pressed on Big Picture's game-detail
- * page. Nothing is set up where the backend says none is needed — with save
- * sync off, or a slot already set up (`setup_needed`). What the backend's setup
- * answer does to the start is
+ * page. Nothing is set up where the backend answers that none is needed
+ * (`setup_needed`). What the backend's setup answer does to the start is
  * `applyLaunchGateSetupOutcome`'s. A read that throws proceeds; a read or slot
  * confirm that gets no answer in time is let through for the gate.
  *

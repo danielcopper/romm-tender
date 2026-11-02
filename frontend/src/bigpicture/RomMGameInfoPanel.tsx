@@ -157,15 +157,15 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
     const ctx = eventContext.current;
     if (savesShown && ctx !== null) detach(rereadSaveSyncOnTabOpen(ctx));
   }, [savesShown]);
-  // With save sync off the tab lists this device's files instead, read each time
-  // it opens, when save sync is switched off under it, and for the version a
-  // switch shows while it is open.
   const localSavesShown = state.activeTab === "saves" && !state.saveSyncEnabled;
   const shownRomId = state.romId;
+  const shownInstalled = state.installed;
+  // `shownInstalled` is a dependency so that a download or an uninstall under the
+  // open tab reads the files again.
   useEffect(() => {
     const ctx = eventContext.current;
     if (localSavesShown && shownRomId !== null && ctx !== null) detach(rereadLocalSavesOnTabOpen(ctx));
-  }, [localSavesShown, shownRomId]);
+  }, [localSavesShown, shownRomId, shownInstalled]);
   const achievements = useAchievements(state.romId, state.raId, state.activeTab === "achievements");
   const bios = useBiosTab({
     biosStatus: state.biosStatus,

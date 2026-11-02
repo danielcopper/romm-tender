@@ -7176,6 +7176,50 @@ describe("RomMGameInfoPanel", () => {
       expect(pane(container).textContent).not.toContain("Game.srm");
     });
 
+    it("reads the files again when the game is downloaded under the open tab", async () => {
+      vi.mocked(backend.getLocalSaveFiles).mockResolvedValue({ available: true, installed: false, files: [] });
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ ...detailFor(1), installed: false });
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      await openTab(container, "saves");
+      expect(pane(container).textContent).toContain("Not downloaded — no save on this device.");
+
+      vi.mocked(backend.getLocalSaveFiles).mockResolvedValue(FILES);
+      await act(async () => {
+        emitHostEvent<DownloadCompleteEvent>("download_complete", {
+          rom_id: 1,
+          rom_name: "Game 1",
+          platform_name: "Game Boy Advance",
+          file_path: "/roms/gba/Game.gba",
+          app_id: testAppId,
+          launch_options: "cmd",
+        });
+      });
+      await flushAsync();
+
+      expect(vi.mocked(backend.getLocalSaveFiles)).toHaveBeenCalledTimes(2);
+      expect(pane(container).textContent).toContain("Game.srm");
+    });
+
+    it("reads the files again when the game is uninstalled under the open tab", async () => {
+      vi.mocked(backend.getLocalSaveFiles).mockResolvedValue(FILES);
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ ...detailFor(1), installed: true });
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      await openTab(container, "saves");
+      expect(pane(container).textContent).toContain("Game.srm");
+
+      vi.mocked(backend.getLocalSaveFiles).mockResolvedValue({ available: true, installed: false, files: [] });
+      await act(async () => {
+        globalThis.dispatchEvent(new CustomEvent("romm_rom_uninstalled", { detail: { rom_id: 1 } }));
+      });
+      await flushAsync();
+
+      expect(vi.mocked(backend.getLocalSaveFiles)).toHaveBeenCalledTimes(2);
+      expect(pane(container).textContent).toContain("Not downloaded — no save on this device.");
+      expect(pane(container).textContent).not.toContain("Game.srm");
+    });
+
     it("switches the open tab's pane when save sync is switched off, and back when it is switched on", async () => {
       vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
         configured: true,

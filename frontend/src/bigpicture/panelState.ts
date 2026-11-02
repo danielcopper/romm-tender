@@ -72,7 +72,7 @@ export interface PanelState {
   // nothing and shows the slots or the setup as for a game that syncs.
   saveSyncAnswer: SaveSyncAvailability | null;
   // This device's save files for the ROM (`get_local_save_files`): what the SAVES
-  // tab lists while save sync is off (#2527). `null` while no answer is held —
+  // tab lists while save sync is off (#2527 D1). `null` while no answer is held —
   // not read yet, or the read failed — and the tab then lists nothing.
   localSaves: LocalSaveFiles | null;
   saveStatus: SaveStatus | null;

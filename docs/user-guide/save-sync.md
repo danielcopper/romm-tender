@@ -138,12 +138,14 @@ saves can be synced, its refusal and its mark go the next time you open its **Sa
 ### With save sync off
 
 The **Saves** tab is there with save sync off too. It reads "Save sync is off." and lists the save files this device
-holds for the game — each with the folder it lies in, its size and when it last changed — without asking RomM anything,
-or "No save on this device." where there is none. For a downloaded game whose saves Tender cannot sync it gives the
+holds for the game in the folder its emulator reads now — each with the folder it lies in, its size and when it last
+changed — without asking RomM anything, or "No save on this device." where there is none. Saves a
+[sorting change](#when-you-change-the-sorting) left in a folder the emulator no longer reads are not listed while save
+sync is off: following them is part of save sync. For a downloaded game whose saves Tender cannot sync it gives the
 reason instead, and lists nothing; the tab carries no warning mark while save sync is off. A game that is not downloaded
 reads "Not downloaded — no save on this device." The tab offers no slot, sync, copy or restore, since each of those
-needs save sync. It reads the files again each time you open it, and switching save sync on or off while it is open
-switches what it shows.
+needs save sync. It reads the files again each time you open it and after the game is downloaded or uninstalled, and
+switching save sync on or off while it is open switches what it shows.
 
 With save sync off, **Play** — Tender's, Steam's own, or a link — starts a game without the slot setup: it asks RomM
 nothing, shows no message and sets up no slot, whether RomM can be reached or holds slots for the game.

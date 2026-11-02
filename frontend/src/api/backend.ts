@@ -1454,7 +1454,6 @@ export const switchSlot = endpoint<[number, string], SwitchSlotResult>("switch_s
 export const getSlotDeleteInfo = endpoint<[number, string], SlotDeleteInfo | EndpointFailure>("get_slot_delete_info");
 export const deleteSlot = endpoint<[number, string], DeleteSlotResult | EndpointFailure>("delete_slot");
 
-// `setup_needed` is what both launch paths act on: false with save sync off, whatever `configured` says (#2527 D4).
 export const isSaveTrackingConfigured = endpoint<
   [number],
   { configured: boolean; active_slot: string | null; setup_needed: boolean }

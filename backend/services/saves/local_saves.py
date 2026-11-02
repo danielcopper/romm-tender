@@ -30,9 +30,9 @@ class LocalSaveFilesConfig:
     """Frozen wiring bundle handed to ``LocalSaveFiles.__init__``.
 
     Holds the peer save sub-services (rom_info, whose save answer names the
-    files, and sync_engine, whose ``rom_lock`` and directory follow every path
-    that looks at a game's save files goes through), the save-file store the
-    sizes and modification times are read from, and the backend's event loop.
+    files, and sync_engine, whose ``rom_lock`` the read holds and whose
+    directory follow it calls), the save-file store the sizes and modification
+    times are read from, and the backend's event loop.
     """
 
     rom_info: RomInfoService
@@ -55,17 +55,20 @@ class LocalSaveFiles:
 
         ``available`` is whether a sync would carry the game's saves, worded as
         ``get_save_sync_availability`` words it: where it would not, the
-        refusal's ``reason`` and ``message`` (and the finding it carries) stand
-        beside it and ``files`` is empty. A game that is not installed is asked
+        refusal's ``reason`` and ``message``, and the finding, source kind and
+        emulator label of a refusal that carries them, stand beside it and
+        ``files`` is empty. A game that is not installed is asked
         about the path it would be downloaded to and lists no files;
         ``installed`` says which of the two was asked. Each file carries its
         ``filename``, the ``directory`` it lies in, its ``size`` in bytes and
         its ``modified_at`` as an ISO-8601 time.
 
-        One live reading of the save answer, under the ROM's ``rom_lock``: a
+        One live reading of the save answer, under the ROM's ``rom_lock``. A
         moved save directory is followed before the files are looked for, as
-        on every path that looks at a game's save files, and the follow itself
-        does nothing while save sync is off.
+        the sync's paths do; the follow does nothing while save sync is off, so
+        there the files listed are those in the directory the emulator names
+        now, and saves left in a directory recorded before a sort change are
+        not listed.
         """
         rom_id = int(rom_id)
         async with self._sync_engine.rom_lock(rom_id):

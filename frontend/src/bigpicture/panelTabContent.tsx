@@ -47,7 +47,7 @@ function savesWarningMark(): ReactElement {
 /**
  * The tabs shown, in their fixed order. ACHIEVEMENTS is there for a game
  * RetroAchievements knows (an `ra_id`); SAVES and BIOS are there for every game
- * from the moment the page opens — SAVES with save sync on or off (#2527), BIOS
+ * from the moment the page opens — SAVES with save sync on or off, BIOS
  * though its answer is read after the page stands, which the tab says while it
  * waits.
  */

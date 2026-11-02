@@ -70,7 +70,7 @@ function filesBody(answer: LocalSaveFiles): ReactElement {
 }
 
 interface SyncOffSavesProps {
-  // `null` while no answer is held: the line stands alone until the read lands.
+  // `null` while no answer is held (`PanelState.localSaves`): the line stands alone.
   answer: LocalSaveFiles | null;
 }
 

@@ -1179,7 +1179,8 @@ live reading the caller already took, before the caller looks at any local file:
   the removed-game cleanup and the Saves tab's reminder do not find the new directory empty while the saves still lie in
   the old one;
 - by [the SAVES tab's read with save sync off](#this-devices-save-files-save-sync-off), `get_local_save_files` (for an
-  installed ROM whose saves a sync would carry) — where, save sync being off, the follow does nothing.
+  installed ROM whose saves a sync would carry), which the panel asks only while save sync is off — so there it follows
+  nothing, by the rule below.
 
 The follow belongs to the sync, so it does nothing while save sync is off; a sorting change made meanwhile is followed
 once save sync is on again, for a game whose directory was recorded. It does nothing while an update of Tender is being
@@ -2197,11 +2198,13 @@ written. It takes one live reading of the save answer (`RomInfoService.save_answ
 about the path it would be downloaded to) under the ROM's `rom_lock`, and asks it through the refusal every sync uses
 (`sync_refusal` over `refuse_unsyncable`, `sync_engine/_shape_refusal.py`), worded as `get_save_sync_availability` words
 it. A game whose saves no sync would carry answers that refusal and no files; a game that is not installed answers no
-files; any other game follows a moved save directory first
-([Following a Moved Save Directory](#following-a-moved-save-directory)) and lists the files a sync would look for
-(`find_save_files`) with the folder each lies in, its size and its modification time. The panel asks it each time the
-SAVES tab opens with save sync off, when save sync is switched off under the open tab, and for the version a switch
-shows; it never asks it while save sync is on.
+files; any other game calls the directory follow first
+([Following a Moved Save Directory](#following-a-moved-save-directory)), which does nothing while save sync is off, and
+lists the files a sync would look for (`find_save_files`) in the directory the answer names, with the folder each lies
+in, its size and its modification time — so saves a sorting change left in the recorded directory are not listed. The
+panel asks it each time the SAVES tab opens with save sync off, when save sync is switched off under the open tab, for
+the version a switch shows while the tab is open, and after a download or an uninstall of the game under the open tab;
+it never asks it while save sync is on.
 
 ### Offline queue drain
 

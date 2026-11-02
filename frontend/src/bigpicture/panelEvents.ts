@@ -409,7 +409,7 @@ function dispatchDataChanged(ctx: PanelEventContext, detail: RommDataChangedDeta
 /** Ask again whether the ROM's saves sync once it was downloaded or uninstalled:
  *  a game that is not downloaded is answered about the path it would occupy, so
  *  the answer says which (#2149 D4). Asked only while save sync is on, as the
- *  cached detail says, which the SAVES tab shows it for. */
+ *  cached detail says: only the pane the SAVES tab has while save sync is on shows the answer. */
 async function rereadSaveSyncAnswer(ctx: PanelEventContext, romId: number): Promise<void> {
   const cached = await getCachedGameDetail(ctx.appId).catch(() => null);
   if (cached?.found && cached.save_sync_enabled) await refreshSaveSyncAnswer(bindCurrentRom(ctx, romId), ctx.readSeqs);
