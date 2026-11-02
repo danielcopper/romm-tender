@@ -27,6 +27,7 @@ import os
 
 import pytest
 
+from domain.platform_system import PLATFORM_IDS_KEY, PlatformIds, encode_platform_ids
 from domain.rom_save_sync_state import RomSaveSyncState
 from lib.errors import RommConnectionError, RommNotFoundError
 from lib.list_result import ErrorCode
@@ -506,7 +507,12 @@ async def test_get_save_sync_availability_of_a_game_that_syncs(harness):
     enable_save_sync(harness)
     seed_install(harness, 42)
 
-    assert await harness.endpoints.get_save_sync_availability(42) == {"available": True}
+    assert await harness.endpoints.get_save_sync_availability(42) == {
+        "available": True,
+        "installed": True,
+        "established": True,
+        "emulator_label": None,
+    }
 
 
 async def test_get_save_sync_availability_of_a_game_that_cannot_sync(harness):
@@ -518,12 +524,34 @@ async def test_get_save_sync_availability_of_a_game_that_cannot_sync(harness):
 
     assert result == {
         "available": False,
+        "installed": True,
+        "established": True,
+        "emulator_label": None,
         "reason": "saves_root_missing",
         "message": "Save sync is unavailable: the saves folder /run/media/deck/sd/retrodeck/saves does not exist.",
         "finding": {"code": "saves-root-missing", "data": {"path": "/run/media/deck/sd/retrodeck/saves"}},
         "source": "retrodeck",
         "emulator": "mGBA",
     }
+
+
+async def test_get_save_sync_availability_of_a_game_not_downloaded_whose_platform_ids_are_kept_asks_romm_nothing(
+    harness,
+):
+    # The harness has no RetroDECK to download into, so there is no path to ask about: a refusal, never a guess.
+    enable_save_sync(harness)
+    seed_rom(harness, 42)
+    # The platform's ids were kept by the sync that listed the game.
+    with harness.uow_factory() as uow:
+        uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids({"gba": PlatformIds()}))
+
+    result = await harness.endpoints.get_save_sync_availability(42)
+
+    assert result["available"] is False
+    assert result["installed"] is False
+    assert result["established"] is False
+    assert result["reason"] == "save_shape_unsupported"
+    assert harness.romm.call_log == []
 
 
 # ── get_save_sync_settings ───────────────────────────────────────────────

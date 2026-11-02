@@ -10,6 +10,7 @@ import { getSlotSaves, debugLog, logError } from "../../api/backend";
 import type { SaveStatus, SyncConflict, SaveSlotSummary, SlotSaveFile } from "../../types";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { MUTED_COLOR, computeSyncSummary, displaySlot } from "../../utils/saveHelpers";
+import { NO_SAVE_ON_DEVICE } from "../../utils/saveSyncStatement";
 import { formatSlotDeleteDescription } from "../../utils/saveSlotWording";
 import { executeSlotDelete, executeSlotSwitch, loadSlotDeleteInfo } from "../../utils/saveSlotFlow";
 import { renderSaveFileRow } from "./SaveFileRow";
@@ -108,9 +109,13 @@ function renderActiveSlotBody(
       );
     });
   }
+  // An answered empty status says so on the summary line above, and no status
+  // says nothing; only where RomM could not be asked does the body speak for
+  // this device (#2149 D10).
+  if (!saveStatus?.server_query_failed) return [];
   return [
     <div key="no-files" style={{ fontSize: "13px", color: MUTED_COLOR, fontStyle: "italic" }}>
-      No save files tracked yet
+      {NO_SAVE_ON_DEVICE}
     </div>,
   ];
 }
@@ -123,6 +128,8 @@ interface SlotPanelProps {
   // Active slot data (only set when isActive === true)
   saveStatus: SaveStatus | null;
   conflicts: SyncConflict[];
+  /** What the active slot reads while it holds no save (#2149 D3). */
+  noSaveLine: string;
   isOffline: boolean;
   // Callbacks
   onSlotSwitched: (newSlot: string, newStatus: SaveStatus) => void;
@@ -139,6 +146,7 @@ export const SlotPanel: FC<SlotPanelProps> = ({
   defaultExpanded,
   saveStatus,
   conflicts,
+  noSaveLine,
   isOffline,
   onSlotSwitched,
   onVersionRestored,
@@ -228,7 +236,7 @@ export const SlotPanel: FC<SlotPanelProps> = ({
     }
   };
 
-  const { syncSummaryText, syncSummaryColor } = computeSyncSummary(isActive, saveStatus, conflicts);
+  const { syncSummaryText, syncSummaryColor } = computeSyncSummary(isActive, saveStatus, conflicts, noSaveLine);
 
   // Active slot: prefer the server-side save count (SaveSlotSummary.count, kept
   // fresh by the parent's romm_data_changed → getSaveSlots refresh) so the header

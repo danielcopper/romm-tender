@@ -5,7 +5,8 @@ import type { WideTabsProps } from "../utils/deckyUiInternals";
 /**
  * A stand-in for Steam's tabbed page, which is a webpack probe with no answer
  * under happy-dom: a tab button per tab, marked `aria-selected` while it is the
- * active one, and the active tab's content. Steam's own falls back to the first
+ * active one and holding its title and its `renderTabAddon`, and the active
+ * tab's content. Steam's own falls back to the first
  * tab where the active id names none, and so does this. It takes no L1 or R1.
  *
  * The active id it is handed stands on its root as `data-active-tab`.
@@ -52,6 +53,7 @@ export const StubTabs: FC<WideTabsProps> = ({
             onClick={() => onShowTab(tab.id)}
           >
             {tab.title}
+            {tab.renderTabAddon?.()}
           </button>
         ))}
         <Focusable {...fromContent}>

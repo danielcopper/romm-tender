@@ -1,9 +1,9 @@
 /**
  * RomMPlaySection — the game page's play section, mimicking Steam's native
  * PlaySection: the play row (CustomPlayButton, the disc and version pickers,
- * the info items, and the gear buttons at the far right), under the save
- * content-dir warning and VanishedVersionBanner, which are why the root is a
- * Fragment. The info items, for example:
+ * the info items, and the gear buttons at the far right), with the
+ * VanishedVersionBanner above it and the emulator notes below it as siblings,
+ * which is why the root is a Fragment. The info items, for example:
  *
  *   [▶ Play ▾]   LAST PLAYED    PLAYTIME    ACHIEVEMENTS    BIOS
  *                24. Jan.       14 Hours    🏆 12/40        🔴 <bios_label>
@@ -31,7 +31,6 @@ import { CustomPlayButton } from "./CustomPlayButton";
 import { DiscSelector } from "./DiscSelector";
 import { VersionPicker } from "./VersionPicker";
 import { VanishedVersionBanner } from "./VanishedVersionBanner";
-import { WarningCard } from "./WarningCard";
 import { Muted, SELECTION_ACCENT } from "./layout/pane";
 import { activeEmulatorNote } from "../utils/emulatorInstallation";
 import { useTriggerHandler } from "./emulatorStepping";
@@ -1070,21 +1069,12 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     </Focusable>
   );
 
-  // Content-dir warning (#239) — prominent banner above the play row when the
-  // emulator writes this game's saves beside the game file. The play row still
-  // renders below it: the game remains fully playable, only save sync is
-  // unavailable. The store holds the flag whether or not save sync is on (it is
-  // a fact about the emulator's answer, not about our setting); the banner is
-  // about getting save sync to work, so it is only worth showing to someone who
-  // has save sync on. It names RetroArch's setting only as the usual cause: the
-  // answer can reach the content's directory by another route, so the banner may
-  // not assume the setting is on.
-  //
-  // The banner is a keyed sibling under a Fragment, never a branch returning a
-  // different root: the flag lands a moment after the row first paints, and a
-  // root whose element type changes makes React unmount the whole row — the play
-  // button drops back to "loading" and re-runs its init (#1682). A Fragment adds
-  // no DOM node, so the row stays a direct child of the injected panel either way.
+  // The row and what stands beside it are keyed siblings under a Fragment,
+  // never a branch returning a different root: a sibling that lands a moment
+  // after the row first paints would otherwise change the root's element type,
+  // and React would unmount the whole row — the play button drops back to
+  // "loading" and re-runs its init (#1682). A Fragment adds no DOM node, so the
+  // row stays a direct child of the injected panel either way.
   const emulatorNote = activeEmulatorNote(detail.emulators, detail.activeCoreLabel);
   // The pick that no longer exists and the user's own choice in ES-DE — each
   // said once, under the row.
@@ -1097,13 +1087,6 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         ].filter((line): line is string => line !== null);
   return (
     <Fragment>
-      {detail.savefilesInContentDir === true && detail.saveSyncEnabled ? (
-        <WarningCard
-          key="savefiles-content-dir-warning"
-          title="Save sync off"
-          message="This game's saves are written beside the game file, so they can't be synced. The usual cause is RetroArch's 'Write Saves to Content Directory' (RetroArch › Settings › Saving); if it is on, turning it off lets save sync work again."
-        />
-      ) : null}
       <VanishedVersionBanner key="vanished-version-banner" appId={appId} installed={detail.installed} />
       {playSectionRow}
       {emulatorNote === null ? null : <Muted key="emulator-installation-note">{emulatorNote}</Muted>}

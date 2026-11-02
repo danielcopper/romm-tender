@@ -8,8 +8,9 @@
  * them for a tab nobody opened would fire those requests on every game page.
  */
 
-import type { ReactElement } from "react";
+import { Fragment, type ReactElement } from "react";
 import type { Tab } from "@decky/ui";
+import { FaExclamationTriangle } from "react-icons/fa";
 import { AchievementsTab } from "./AchievementsTab";
 import type { AchievementsLoad } from "../utils/achievements";
 import { ArtworkTab } from "./ArtworkTab";
@@ -17,8 +18,10 @@ import { BiosTab, type BiosTabState } from "./BiosTab";
 import { GameInfoTab } from "./GameInfoTab";
 import { SavesTab } from "./SavesTab";
 import { SlotSetupWizard } from "./SlotSetupWizard";
+import { SaveSyncRefusal } from "./saves/SaveSyncRefusal";
 import type { PanelState, RomBinding } from "./panelState";
 import { announceSaveSync } from "../utils/saveSyncEvents";
+import { noSaveLine, notDownloadedStatement, refusalHint, refusesDownloadedGame } from "../utils/saveSyncStatement";
 
 interface TabContentContext {
   readonly appId: number;
@@ -26,6 +29,18 @@ interface TabContentContext {
   readonly state: PanelState;
   readonly achievements: AchievementsLoad;
   readonly bios: BiosTabState;
+}
+
+/** The mark beside the SAVES tab's title of a game whose saves cannot sync (#2149 D1). */
+function savesWarningMark(): ReactElement {
+  return (
+    <FaExclamationTriangle
+      aria-hidden="true"
+      data-testid="saves-tab-warning"
+      size={12}
+      style={{ color: "#ffaa00", marginLeft: "6px", flexShrink: 0 }}
+    />
+  );
 }
 
 /**
@@ -40,7 +55,14 @@ export function buildPanelTabs(ctx: TabContentContext): Tab[] {
   if (state.raId) {
     tabs.push({ id: "achievements", title: "ACHIEVEMENTS", content: <AchievementsTab state={ctx.achievements} /> });
   }
-  if (state.saveSyncEnabled) tabs.push({ id: "saves", title: "SAVES", content: savesPane(ctx) });
+  if (state.saveSyncEnabled) {
+    tabs.push({
+      id: "saves",
+      title: "SAVES",
+      content: savesPane(ctx),
+      ...(refusesDownloadedGame(state.saveSyncAnswer) ? { renderTabAddon: savesWarningMark } : {}),
+    });
+  }
   tabs.push(
     {
       id: "bios",
@@ -91,11 +113,50 @@ function infoPane({ appId, binding, state }: TabContentContext): ReactElement {
   );
 }
 
-function savesPane({ appId, binding, state }: TabContentContext): ReactElement {
+/**
+ * The SAVES pane: a game whose saves cannot sync says why and offers no slots, set up or not (#2149 D5); any other
+ * game shows its slots, or the setup while none is set up, under what a game that is not downloaded reads (D4).
+ * While no answer is held the slots or the setup show as they would for a game that syncs.
+ */
+function savesPane(ctx: TabContentContext): ReactElement {
+  const answer = ctx.state.saveSyncAnswer;
+  if (answer && refusesDownloadedGame(answer)) {
+    return <SaveSyncRefusal key="saves-refusal" message={answer.message ?? ""} reason={answer.reason} />;
+  }
+  const notDownloaded = notDownloadedStatement(answer);
+  const hint = notDownloaded?.refusal == null ? null : refusalHint(answer?.reason);
+  // Keyed children of one Fragment, so the line arriving after the pane is up
+  // does not remount the setup, which asks RomM again on every mount.
+  return (
+    <Fragment>
+      {notDownloaded === null ? null : (
+        <div key="not-downloaded" data-testid="saves-not-downloaded" style={{ padding: "0 0 12px" }}>
+          <div className="romm-panel-muted" style={{ fontSize: "12px" }}>
+            {notDownloaded.line}
+          </div>
+          {notDownloaded.refusal === null ? null : (
+            <div className="romm-panel-muted" style={{ fontSize: "12px", marginTop: "4px" }}>
+              {notDownloaded.refusal}
+            </div>
+          )}
+          {hint === null ? null : (
+            <div className="romm-panel-muted" style={{ fontSize: "12px", marginTop: "6px" }}>
+              {hint}
+            </div>
+          )}
+        </div>
+      )}
+      {slotsPane(ctx)}
+    </Fragment>
+  );
+}
+
+function slotsPane({ appId, binding, state }: TabContentContext): ReactElement {
   const romId = binding.romId;
   if (!state.slotConfirmed) {
     return (
       <SlotSetupWizard
+        key="saves-setup"
         romId={romId}
         onComplete={() => {
           // Bound for the same reason the slot switch below is: the wizard calls
@@ -112,8 +173,10 @@ function savesPane({ appId, binding, state }: TabContentContext): ReactElement {
 
   return (
     <SavesTab
+      key="saves-slots"
       appId={appId}
       romId={romId}
+      noSaveLine={noSaveLine(state.saveSyncAnswer)}
       saveStatus={state.saveStatus}
       conflicts={state.conflicts}
       activeSlot={state.activeSlot}
