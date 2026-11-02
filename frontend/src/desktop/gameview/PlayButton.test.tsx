@@ -784,6 +784,30 @@ describe("PlayButton", () => {
       expect(screen.getByRole("button", { name: /^PLAY/ })).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /RESOLVE CONFLICT/ })).not.toBeInTheDocument();
     });
+
+    it("holds a conflict cancelled before the new version's save status has landed", async () => {
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(
+        detailState({
+          romId: 200,
+          saveSyncEnabled: true,
+          saveStatus: { rom_id: 100, files: [], conflicts: [] } as unknown as SaveStatus,
+        }),
+      );
+      vi.mocked(backend.preLaunchSync).mockResolvedValueOnce({
+        success: true,
+        synced: 0,
+        uploaded: 0,
+        downloaded: 0,
+        conflicts: [{ ...CONFLICT, rom_id: 200 }],
+      } as never);
+      render(<PlayButton appId={APP_ID} />);
+
+      pressPlay();
+      fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+
+      expect(await screen.findByRole("button", { name: /RESOLVE CONFLICT/ })).toBeInTheDocument();
+      expect(mockRunGame).not.toHaveBeenCalled();
+    });
   });
 
   describe("a game that cannot be played from here yet", () => {

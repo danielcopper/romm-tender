@@ -28,11 +28,12 @@ backend for the migration state again for each game page it is drawn for (`useMi
 `PlayButton` (`frontend/src/desktop/gameview/PlayButton.tsx`) is Tender's Play button in the desktop client. Its presses
 (`frontend/src/desktop/gameview/usePlayLaunch.ts`) are those of Big Picture's `CustomPlayButton`
 (`frontend/src/bigpicture/CustomPlayButton.tsx`): PLAY starts the game through the launch gate
-([Pre-launch sync](save-file-sync-architecture.md#pre-launch-sync)), and Stop and RESOLVE CONFLICT do what they do
-there. It has no RESUME: while the game runs, whatever started it, the button is STOP, as Steam's own Play button in the
-desktop client is, and bringing the game's window to the front is the window manager's. It asks its questions in the
-desktop dialogs, which `useDialogHost` (`frontend/src/desktop/gameview/dialogs/useDialogHost.tsx`) draws into the body
-of the document the button is drawn in. Its save-tracking step is the one the
+([Pre-launch sync](save-file-sync-architecture.md#pre-launch-sync)), STOP does what Big Picture's Stop Game menu entry
+does, and RESOLVE CONFLICT what its Resolve Conflict button does. It has no RESUME: while the game runs, whatever
+started it, the button is STOP, as Steam's own Play button in the desktop client is (seen on CachyOS running Steam
+client build 1792618285), and bringing the game's window to the front is the window manager's. It asks its questions in
+the desktop dialogs, which `useDialogHost` (`frontend/src/desktop/gameview/dialogs/useDialogHost.tsx`) draws into the
+body of the document the button is drawn in. Its save-tracking step is the one the
 [Pre-launch sync](save-file-sync-architecture.md#pre-launch-sync) table names for it. Where the game cannot be played
 from the page — not downloaded, downloading, or its downloaded file gone — it draws a disabled button that says which,
 and where the game cannot start — its emulator cannot, or its file does not start with it — PLAY is disabled with the
