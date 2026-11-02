@@ -10409,7 +10409,7 @@ class TestAGameACollectionBringsInConverges:
         "mine_listing_changed", [True, False], ids=["both-listings-changed", "mine-unchanged-fetched-by-the-gate"]
     )
     async def test_a_game_two_collections_bring_in_converges_once(
-        self, make_library, fake_romm_api, emit, mine_listing_changed
+        self, make_library, fake_romm_api, emit, caplog, mine_listing_changed
     ):
         library = make_library(romm_api=fake_romm_api)
         await self._two_bound(library, fake_romm_api, faves=[30], mine=[31])
@@ -10417,8 +10417,11 @@ class TestAGameACollectionBringsInConverges:
         if mine_listing_changed:
             self._list(fake_romm_api, 8, [31])
 
-        counted, removed, _walks = await self._sync(library, fake_romm_api, emit, "run-2")
+        with caplog.at_level(logging.INFO):
+            counted, removed, _walks = await self._sync(library, fake_romm_api, emit, "run-2")
 
+        fetched_by_the_gate = "Per-unit fetch Mine: a game it holds has more than one shortcut — fetch" in caplog.text
+        assert fetched_by_the_gate is not mine_listing_changed
         assert (counted, [row["rom_id"] for row in removed]) == (1, [31])
         assert self._bound(library) == {30: 6030}
 
@@ -10426,8 +10429,9 @@ class TestAGameACollectionBringsInConverges:
     async def _two_games_romm_then_joins(cls, library, fake_romm_api, *, main):
         """Faves holds 30 and Mine 31, two games each with its own shortcut; then RomM joins 31 to 30's game.
 
-        Only 31's answer moves, so the next sync skips Faves, rebuilding 30's
-        stored row, and fetches Mine. *main* is RomM's default after the join.
+        Only 31's `updated_at` moves, so the next sync skips Faves, rebuilding
+        30's stored row, and fetches Mine. *main* is RomM's default after the
+        join.
         """
         roms = [cls._golf(rom_id, main=None) for rom_id in (30, 31)]
         for rom, igdb in zip(roms, (300, 400), strict=True):
