@@ -79,11 +79,8 @@ async function handleSaveSyncSettingsChange(
 ): Promise<void> {
   const enabled = detail.save_sync_enabled;
   if (!enabled) {
-    // Switching save sync off is itself the newest word on it, so it takes the
-    // sequence's next ticket: a status read an earlier event left in flight
-    // would otherwise land afterwards. The SAVES tab stays, its pane switched
-    // to this device's files, which the panel reads as the flag goes.
-    takeReadTicket(ctx.readSeqs, "saveStatus");
+    // The SAVES tab stays, its pane switched to this device's files, which the
+    // panel reads as the flag goes.
     ctx.setState((prev) => ({ ...prev, saveSyncEnabled: false }));
     return;
   }

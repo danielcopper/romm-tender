@@ -1244,8 +1244,8 @@ describe("RomMGameInfoPanel", () => {
     });
 
     it("save_sync_settings enabled=false → no status fetch, and SAVES stays", async () => {
-      // cached.save_sync_enabled=true so Saves tab is reachable, then we
-      // disable via the event and observe the SAVES tab staying (#2527).
+      // Save sync starts on; the event switches it off. No status is read, and
+      // SAVES stays in the tab row.
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 55,
@@ -1346,7 +1346,7 @@ describe("RomMGameInfoPanel", () => {
         active_slot: "main",
         setup_needed: false,
       });
-      const { container } = await mountWithRomId(55);
+      await mountWithRomId(55);
       vi.mocked(backend.getSaveStatus).mockRejectedValue(new Error("net"));
       capturedSavesTab.length = 0;
       await act(async () => {
@@ -1361,10 +1361,9 @@ describe("RomMGameInfoPanel", () => {
       // Rejection didn't crash the panel and didn't surface debugLog
       // (the inline .catch swallows).
       expect(vi.mocked(backend.debugLog)).not.toHaveBeenCalledWith(expect.stringContaining("onDataChanged error"));
-      // Fallback observable: saveSyncEnabled stays true (SAVES tab still
-      // rendered) AND saveStatus is set to the null fallback. Switch to
-      // saves tab to capture SavesTab props.
-      expect(container.textContent).toContain("SAVES");
+      // Fallback observable: saveStatus is set to the null fallback, as the
+      // SavesTab (rendered only while save sync is on) receives it. Switch to
+      // the saves tab to capture its props.
       await act(async () => {
         globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "saves" } }));
         await Promise.resolve();
@@ -5256,6 +5255,13 @@ describe("RomMGameInfoPanel", () => {
       };
 
       it("stays on the SAVES tab when the switched-to detail says save sync is off, listing the new version's files", async () => {
+        vi.mocked(backend.getLocalSaveFiles).mockResolvedValue({
+          available: true,
+          installed: true,
+          files: [
+            { filename: "Japan.srm", directory: "/saves/snes", size: 8192, modified_at: "2026-01-02T00:00:00+00:00" },
+          ],
+        });
         const { container, queryByTestId } = await mountOnSavesTab();
 
         await switchToRom2();
@@ -5265,6 +5271,7 @@ describe("RomMGameInfoPanel", () => {
           "Save sync is off.",
         );
         expect(vi.mocked(backend.getLocalSaveFiles)).toHaveBeenCalledWith(2);
+        expect(container.querySelector('[data-testid="steam-tab-content"]')?.textContent).toContain("Japan.srm");
       });
     });
 
@@ -5783,12 +5790,17 @@ describe("RomMGameInfoPanel", () => {
       it("does not fold a save-sync-settings read issued for the previous version", async () => {
         const saveStatus = holdReadFor<backend.SaveStatusResult>(1, emptySaveStatus(2));
         vi.mocked(backend.getSaveStatus).mockImplementation(saveStatus.impl);
+        vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+          configured: true,
+          active_slot: "main",
+          setup_needed: false,
+        });
         vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1, { save_sync_enabled: false }));
         const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
         await flushAsync();
 
         // Save sync is switched on globally while rom 1 is showing — the handler
-        // reads rom 1's status to decide what the SAVES tab shows.
+        // reads rom 1's status for the SAVES tab.
         await act(async () => {
           globalThis.dispatchEvent(
             new CustomEvent("romm_data_changed", {
@@ -5796,23 +5808,21 @@ describe("RomMGameInfoPanel", () => {
             }),
           );
         });
-        await switchToRom2({ save_sync_enabled: false });
+        // The switch reads no status for rom 2, and takes no status ticket: only
+        // the binding stands between rom 1's late answer and rom 2's slots.
+        await switchToRom2({ save_sync_enabled: true });
 
         await act(async () => {
           saveStatus.release(emptySaveStatus(1));
         });
         await flushAsync();
-
-        // The switched-to version has save sync off, so its SAVES tab shows this
-        // device's files — the refused write is what keeps it that way.
         await act(async () => {
           globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "saves" } }));
         });
         await flushAsync();
-        expect(container.querySelector('[data-testid="steam-tab-content"]')?.textContent).toContain(
-          "Save sync is off.",
-        );
-        expect(container.querySelector('[data-testid="saves-tab"]')).toBeNull();
+
+        expect(container.querySelector('[data-testid="saves-tab"]')).not.toBeNull();
+        expect(capturedSavesTab.some((props) => props.saveStatus?.rom_id === 1)).toBe(false);
       });
 
       it("does not fold a save-sync read issued for the previous version", async () => {
@@ -6218,32 +6228,15 @@ describe("RomMGameInfoPanel", () => {
       expect(capturedSavesTab.some((props) => props.saveStatus?.files[0]?.filename === "FIRST.srm")).toBe(false);
     });
 
-    it("does not let a status read issued before save sync was switched off put the slots back", async () => {
-      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1, "Game", { save_sync_enabled: false }));
-      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
-      await flushAsync();
-
-      const enableRead = heldRead<backend.SaveStatusResult>();
-      vi.mocked(backend.getSaveStatus).mockImplementationOnce(() => enableRead.promise);
-      await dispatchDataChanged({ type: "save_sync_settings", save_sync_enabled: true });
-      await dispatchDataChanged({ type: "save_sync_settings", save_sync_enabled: false });
-
-      await act(async () => {
-        enableRead.release(statusWithFile(1, "ANY.srm"));
-      });
-      await flushAsync();
-      await act(async () => {
-        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "saves" } }));
-      });
-      await flushAsync();
-
-      expect(container.querySelector('[data-testid="steam-tab-content"]')?.textContent).toContain("Save sync is off.");
-      expect(container.querySelector('[data-testid="saves-tab"]')).toBeNull();
-    });
-
-    it("shows the SAVES tab after save sync is switched on even when the status read is overtaken", async () => {
+    it("shows the slots pane after save sync is switched on even when the status read is overtaken", async () => {
       // The fence orders the status ANSWER. The setting is not an answer, and
-      // nothing re-issues it — swallowing it here hides the tab until remount.
+      // nothing re-issues it — swallowing it here leaves the SAVES tab on this
+      // device's files until remount.
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: true,
+        active_slot: "main",
+        setup_needed: false,
+      });
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1, "Game", { save_sync_enabled: false }));
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
@@ -6260,8 +6253,13 @@ describe("RomMGameInfoPanel", () => {
         enableRead.release(statusWithFile(1, "OVERTAKEN.srm"));
       });
       await flushAsync();
+      await act(async () => {
+        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "saves" } }));
+      });
+      await flushAsync();
 
-      expect(container.textContent).toContain("SAVES");
+      expect(container.querySelector('[data-testid="saves-tab"]')).not.toBeNull();
+      expect(container.textContent).not.toContain("Save sync is off.");
     });
 
     it("keeps the newest slot list when the lazy SAVES load's answer lands last", async () => {
