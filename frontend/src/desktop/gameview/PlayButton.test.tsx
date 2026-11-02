@@ -156,7 +156,11 @@ describe("PlayButton", () => {
     vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState());
     vi.mocked(backend.checkStartSource).mockResolvedValue({ switched_off: null });
     vi.mocked(backend.getInstalledRom).mockResolvedValue({ launchable: true } as never);
-    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "slot1" });
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: true,
+      active_slot: "slot1",
+      setup_needed: false,
+    });
     vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
     vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
     vi.mocked(backend.checkLocalDrift).mockResolvedValue({
@@ -260,7 +264,11 @@ describe("PlayButton", () => {
     });
 
     it("adopts the default slot without asking where that is safe, and starts the game", async () => {
-      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: false, active_slot: null });
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: false,
+        active_slot: null,
+        setup_needed: true,
+      });
       vi.mocked(backend.getSaveSetupInfo).mockResolvedValue({
         recommended_action: "auto_confirm_default",
         default_slot: "default",
@@ -276,8 +284,34 @@ describe("PlayButton", () => {
       expect(toast.showToast).not.toHaveBeenCalled();
     });
 
+    it("with save sync off, starts the game without the slot setup", async () => {
+      // What RomM would answer is set up, so a start that asked would adopt a slot.
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: false,
+        active_slot: null,
+        setup_needed: false,
+      });
+      vi.mocked(backend.getSaveSetupInfo).mockResolvedValue({
+        recommended_action: "auto_confirm_default",
+        default_slot: "default",
+        server_slots: [],
+      } as never);
+      render(<PlayButton appId={APP_ID} />);
+
+      pressPlay();
+
+      await waitFor(() => expect(mockRunGame).toHaveBeenCalledWith("123", "", -1, 100));
+      expect(backend.getSaveSetupInfo).not.toHaveBeenCalled();
+      expect(backend.confirmSlotChoice).not.toHaveBeenCalled();
+      expect(toast.showToast).not.toHaveBeenCalled();
+    });
+
     it("starts the game where a slot is the user's to choose, asking and toasting nothing", async () => {
-      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: false, active_slot: null });
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: false,
+        active_slot: null,
+        setup_needed: true,
+      });
       vi.mocked(backend.getSaveSetupInfo).mockResolvedValue({
         recommended_action: "show_wizard",
         default_slot: "default",
