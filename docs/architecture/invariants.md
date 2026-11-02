@@ -739,10 +739,11 @@ Format: **invariant** — tier — enforced by.
   `tests/services/library/test_sync_orchestrator.py::TestAGameACollectionBringsInConverges` the apply and the preview
   agreeing whichever version a collection holds, for a game split over two collections, an installed version no
   collection delivered, a version RomM no longer lists as a sibling, a skipped collection's row ranked by its stored
-  version, a version RomM joined that no collection brings in, a platform RomM no longer lists, a running game and a
-  stopped run; `tests/domain/test_sync_diff.py::TestConvergeBoundGroups` and `TestCollapseHandedTheConvergedRows` pin
-  the rule and the collapse's side of it, `TestAGroupWithARunningGameIsLeftOut` and `TestWithoutRunningGroups` a group
-  left out while it runs, at the unit and at the finalize,
+  version, a version RomM joined that no collection brings in, a version left behind where RomM regrouped the delivered
+  one, with the skip back a sync later, a platform RomM no longer lists, a running game and a stopped run;
+  `tests/domain/test_sync_diff.py::TestConvergeBoundGroups` and `TestCollapseHandedTheConvergedRows` pin the rule and
+  the collapse's side of it, `TestAGroupWithARunningGameIsLeftOut` and `TestWithoutRunningGroups` a group left out while
+  it runs, at the unit and at the finalize,
   `tests/services/library/test_sync_orchestrator.py::TestAGameWithSeveralShortcutsConverges` the apply and the preview
   agreeing for every install state, an unlisted version and a game RomM lists no version of, the stopped run, the #1036
   guard, the row the kept shortcut moves onto and a running game left for the next sync,

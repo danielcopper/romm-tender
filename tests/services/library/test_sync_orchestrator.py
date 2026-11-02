@@ -10498,6 +10498,40 @@ class TestAGameACollectionBringsInConverges:
             assert (uow.rom_installs.get(31) is not None) is installed
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("installed", [False, True], ids=["not-installed", "installed"])
+    async def test_a_version_left_behind_by_a_regrouped_delivered_one_goes_the_stale_way_then_the_skip_returns(
+        self, make_library, fake_romm_api, emit, caplog, tmp_path, installed
+    ):
+        # D5: RomM moves 30, the version Faves delivers, to another game. Its
+        # fresh key is committed, so 31, bound under the old key and in no
+        # collection, is a game nothing brings in and loses its shortcut the
+        # stale way, carrying nothing over.
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, faves=[30, 31])
+        self._list(fake_romm_api, 7, [30])
+        moved = fake_romm_api.roms[30]
+        moved["igdb_id"] = 500
+        moved["updated_at"] = "2026-01-01T01:00:00+00:00"
+        library.sync._orchestrator._clock.advance(7200)
+        moved["rom_user"] = {"is_main_sibling": False}
+        moved["sibling_roms"] = []
+        for rom in fake_romm_api.roms.values():
+            rom["sibling_roms"] = [stub for stub in rom["sibling_roms"] if stub["id"] != 30]
+        if installed:
+            self._install(library, tmp_path, 31)
+
+        counted, removed, _walks = await self._sync(library, fake_romm_api, emit, "run-2")
+
+        assert (counted, removed) == (1, [{"rom_id": 31, "app_id": 6031}])
+        assert self._bound(library) == {30: 6030}
+        with library.uow as uow:
+            assert uow.roms.get(30).sibling_group_key == "igdb:500:2"
+            assert (uow.rom_installs.get(31) is not None) is installed
+        with caplog.at_level(logging.INFO):
+            assert await self._sync(library, fake_romm_api, emit, "run-3") == (0, [], 0)
+        assert "a game it holds has more than one shortcut" not in caplog.text
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("holds", [[30], [31], [32], [30, 31]], ids=["30", "31", "only-unbound-32", "both"])
     async def test_romm_s_default_keeps_the_shortcut_whichever_version_the_collection_holds(
         self, make_library, fake_romm_api, emit, holds
