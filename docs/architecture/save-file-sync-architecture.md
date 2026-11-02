@@ -1177,7 +1177,10 @@ live reading the caller already took, before the caller looks at any local file:
   folder's files too, and nothing is carried back in by the next path that follows;
 - by [the local-save check](#the-local-save-check), `check_local_drift` (for an installed ROM), so the version switch,
   the removed-game cleanup and the Saves tab's reminder do not find the new directory empty while the saves still lie in
-  the old one.
+  the old one;
+- by [the SAVES tab's read with save sync off](#this-devices-save-files-save-sync-off), `get_local_save_files` (for an
+  installed ROM whose saves a sync would carry), which the panel asks only while save sync is off — so there it follows
+  nothing, by the rule below.
 
 The follow belongs to the sync, so it does nothing while save sync is off; a sorting change made meanwhile is followed
 once save sync is on again, for a game whose directory was recorded. It does nothing while an update of Tender is being
@@ -1440,10 +1443,11 @@ uploads, all under the lock. The lock is held as well by `SaveCopyService.copy_s
 ROM its save inventory names, taken in ascending id order), deleting a ROM's or a platform's local saves and counting a
 platform's (`SaveService._delete_saves_for_roms`, `SaveService.count_platform_saves`), the passes that record each
 installed ROM's save directory (`SyncEngine._record_each_installed_rom`), and the local-save check
-(`StatusService.check_local_drift`) — the count, the record passes and the check hold it for the directory follow, not
-for a write of the save state; following a moved save directory (`SyncEngine.follow_save_directory`) runs inside the
-lock of whichever holder calls it. Different rom_ids have independent locks, so cross-game concurrency (e.g. Sync All
-Saves running concurrently with a resolve on one specific rom) is unaffected. The lock is created lazily on first access
+(`StatusService.check_local_drift`) and the SAVES tab's read with save sync off (`LocalSaveFiles.get_local_save_files`)
+— the count, the record passes, the check and that read hold it for the directory follow, not for a write of the save
+state; following a moved save directory (`SyncEngine.follow_save_directory`) runs inside the lock of whichever holder
+calls it. Different rom_ids have independent locks, so cross-game concurrency (e.g. Sync All Saves running concurrently
+with a resolve on one specific rom) is unaffected. The lock is created lazily on first access
 (`SyncEngine.rom_lock(rom_id)`).
 
 The lock is **not reentrant** (plain `asyncio.Lock`), so a critical section must never call a peer that re-acquires the
@@ -2005,9 +2009,14 @@ The Play button's path:
    check: the page has already decided whether Play can be pressed
    ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D32), and where the page's own check failed, the
    press asks again before the gate runs ([Launch-target validation](backend-architecture.md#launch-target-validation)).
-4. Save tracking: `is_save_tracking_configured`. When it is not set up, `get_save_setup_info` decides between an
-   automatic slot pick (`confirm_slot_choice`) and a toast with a switch to the Saves tab, which ends the press — or,
-   for a game whose saves no sync carries (`sync_unavailable`), neither: the press goes on with nothing set up.
+4. Save tracking: `is_save_tracking_configured`. Its `setup_needed` decides whether there is a setup at all: true only
+   while save sync is on and no slot is set up. With save sync off it is false whatever `configured` says, so the press
+   goes on with no `get_save_setup_info`, no toast and no slot confirmed, whether RomM can be reached or holds slots for
+   the game ([#2527](https://github.com/danielcopper/romm-tender/issues/2527) D2, D4); the launch watcher and, in the
+   desktop dev build, the desktop Play button act on the same answer through `ensureTrackingConfiguredSilently`. Where a
+   setup is needed, `get_save_setup_info` decides between an automatic slot pick (`confirm_slot_choice`) and a toast
+   with a switch to the Saves tab, which ends the press — or, for a game whose saves no sync carries
+   (`sync_unavailable`), neither: the press goes on with nothing set up.
 5. Core change: `check_core_change`. A changed core asks the user in the core-change dialog; Cancel ends the press.
 6. Reachability: `probe_reachability` decides between steps 7 and 8.
 7. Online: `pre_launch_sync` — past its limit, the "Waiting for Save Sync" question above. The button turns into
@@ -2180,6 +2189,23 @@ counterpart of `do_sync_rom_saves` that returns the same `compute_sync_action` d
 I/O. The only mutation it allows is recording the baseline of a `Skip(adopt_baseline=True)` that needs no
 acknowledgement, so future drift detection works; one that must be acknowledged is left to the next sync, and its row
 reads "synced", which is true — the bytes are identical ([Outcomes](#outcomes)).
+
+### This device's save files (save sync off)
+
+While save sync is off the SAVES tab lists what this device holds of a game's saves instead of its slots
+([#2527](https://github.com/danielcopper/romm-tender/issues/2527) D1). `get_local_save_files` (`LocalSaveFiles`,
+`services/saves/local_saves.py`) answers it without RomM: no device registration, no save listing, no save state
+written. It takes one live reading of the save answer (`RomInfoService.save_answer`, for a game that is not installed
+about the path it would be downloaded to) under the ROM's `rom_lock`, and asks it through the refusal every sync uses
+(`sync_refusal` over `refuse_unsyncable`, `sync_engine/_shape_refusal.py`), worded as `get_save_sync_availability` words
+it. A game whose saves no sync would carry answers that refusal and no files; a game that is not installed answers no
+files; any other game calls the directory follow first
+([Following a Moved Save Directory](#following-a-moved-save-directory)), which does nothing while save sync is off, and
+lists the files a sync would look for (`find_save_files`) in the directory the answer names, with the folder each lies
+in, its size and its modification time — so saves a sorting change left in the recorded directory are not listed. The
+panel asks it each time the SAVES tab opens with save sync off, when save sync is switched off under the open tab, for
+the version a switch shows while the tab is open, and after a download or an uninstall of the game under the open tab;
+it never asks it while save sync is on.
 
 ### Offline queue drain
 
@@ -2533,11 +2559,11 @@ The save-sync feature toggles (`save_sync_enabled`, `sync_before_launch`, `sync_
 `save_sync_enabled` is the master feature toggle. When it is off, `pre_launch_sync` returns before it syncs anything, so
 the launch gate has no conflict to map. `get_save_status` returns an empty `conflicts` array as well, so no reader of
 that array — the Play button, the game page (`panelEvents.ts`, `gameDetailStore.ts`) and the `save_status_updated` push
-that `index.tsx` forwards — shows a conflict the user cannot resolve: the SAVES tab where a conflict is resolved is
-hidden while sync is disabled. A stale server-side conflict (e.g. another device moved the save) therefore can't render
-a game unplayable. `sync_before_launch` / `sync_after_exit` gate the automatic pre-launch / post-exit syncs;
-`default_slot` is the slot new games adopt (`"autosave"`, matching the official RomM clients Argosy and Grout);
-`autocleanup_limit` caps retained save versions per slot on the server (10).
+that `index.tsx` forwards — shows a conflict the user cannot resolve: while sync is disabled the SAVES tab lists this
+device's save files and resolves no conflict. A stale server-side conflict (e.g. another device moved the save)
+therefore can't render a game unplayable. `sync_before_launch` / `sync_after_exit` gate the automatic pre-launch /
+post-exit syncs; `default_slot` is the slot new games adopt (`"autosave"`, matching the official RomM clients Argosy and
+Grout); `autocleanup_limit` caps retained save versions per slot on the server (10).
 
 Conflicts are no longer persisted. They are returned ephemerally from `do_sync_rom_saves` and `_get_save_status_io` and
 surfaced via the modal at the moment of the sync. If the user dismisses the modal (Cancel), the conflict re-fires on the

@@ -1010,7 +1010,11 @@ describe("CustomPlayButton — pre-launch savefiles_in_content_dir benign skip (
     vi.mocked(toaster.toast).mockReset();
     // Gate predecessors of runPreLaunchSync: tracking configured + no core change
     // so handlePlay reaches preLaunchSync and then the launch dispatch.
-    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "default" });
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: true,
+      active_slot: "default",
+      setup_needed: false,
+    });
     vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
     // Fresh reachability probe is online → the gate runs the online pre-launch
     // sync branch (not the offline drift check).
@@ -1118,7 +1122,11 @@ describe("CustomPlayButton — already-running guard (#1148 round 2)", () => {
     vi.mocked(readGameRunning).mockReturnValue(NOT_RUNNING);
     // Gate predecessors so the NORMAL path can reach preLaunchSync when the guard
     // is inert; the guard tests assert these are never touched.
-    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "default" });
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: true,
+      active_slot: "default",
+      setup_needed: false,
+    });
     vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
     vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
     vi.mocked(backend.preLaunchSync).mockResolvedValue({
@@ -1877,7 +1885,11 @@ describe("CustomPlayButton — pre-launch failure shapes without an errors array
     vi.mocked(showFallbackLaunchModal).mockReset();
     vi.mocked(backend.preLaunchSync).mockReset();
     // Gate predecessors so handlePlay reaches runPreLaunchSync.
-    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "default" });
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: true,
+      active_slot: "default",
+      setup_needed: false,
+    });
     vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
     // Online probe → the online pre-launch sync branch.
     vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
@@ -2454,7 +2466,11 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
     // Gate predecessors default to "pass": no migration, tracking configured,
     // no core change. Each test overrides the branch it exercises.
     vi.mocked(getMigrationState).mockReturnValue({ pending: false });
-    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "default" });
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: true,
+      active_slot: "default",
+      setup_needed: false,
+    });
     vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
     vi.mocked(backend.preLaunchSync).mockResolvedValue({ success: true, message: "", synced: 0, conflicts: [] });
 
@@ -2976,7 +2992,11 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
     // Unconfigured tracking whose setup needs a user choice (server has saves)
     // → the page-aware ensureTrackingConfigured returns "abort" (routes to the
     // saves tab) → gate `abort`. The funnel never reaches reachability/sync.
-    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: false, active_slot: "default" });
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: false,
+      active_slot: "default",
+      setup_needed: true,
+    });
     vi.mocked(backend.getSaveSetupInfo).mockResolvedValue({
       recommended_action: "needs_user_choice",
       default_slot: "default",
@@ -3071,7 +3091,11 @@ describe("CustomPlayButton — pre-launch relaunch re-confirm (#1150)", () => {
     // Allow-path gate predecessors: online, tracking configured, no core change,
     // clean pre-launch sync → the gate returns "allow" → dispatchLaunch runs.
     vi.mocked(getMigrationState).mockReturnValue({ pending: false });
-    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "default" });
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: true,
+      active_slot: "default",
+      setup_needed: false,
+    });
     vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
     vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
     vi.mocked(backend.preLaunchSync).mockResolvedValue({ success: true, message: "", synced: 0, conflicts: [] });
@@ -3251,7 +3275,11 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
     consumeLaunchSkip(100);
     vi.mocked(getMigrationState).mockReturnValue({ pending: false });
     vi.mocked(backend.getInstalledRom).mockResolvedValue(null);
-    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "default" });
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: true,
+      active_slot: "default",
+      setup_needed: false,
+    });
     vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
     vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
     vi.mocked(backend.preLaunchSync).mockResolvedValue({ success: true, message: "", synced: 0, conflicts: [] });
@@ -3377,7 +3405,11 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
       wait: "get_save_setup_info",
       limit: 15000,
       arrange: () => {
-        vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: false, active_slot: null });
+        vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+          configured: false,
+          active_slot: null,
+          setup_needed: true,
+        });
         vi.mocked(backend.getSaveSetupInfo).mockReturnValue(never());
       },
     },
@@ -3385,7 +3417,11 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
       wait: "confirm_slot_choice",
       limit: 5000,
       arrange: () => {
-        vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: false, active_slot: null });
+        vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+          configured: false,
+          active_slot: null,
+          setup_needed: true,
+        });
         vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(AUTO_CONFIRM_SETUP);
         vi.mocked(backend.confirmSlotChoice).mockReturnValue(never());
       },
@@ -3538,7 +3574,7 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
   });
 
   it("a start whose admission went stale during the check puts the button back on Play", async () => {
-    let answer!: (tracking: { configured: boolean; active_slot: string | null }) => void;
+    let answer!: (tracking: { configured: boolean; active_slot: string | null; setup_needed: boolean }) => void;
     vi.mocked(backend.isSaveTrackingConfigured).mockReturnValue(new Promise((resolve) => (answer = resolve)));
 
     const { getByText, queryByText, rerender } = await pressPlay();
@@ -3549,7 +3585,7 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
     vi.mocked(getCachedGameDetail).mockReturnValue(never());
     rerender(<CustomPlayButton appId={101} />);
     await act(async () => {
-      answer({ configured: true, active_slot: "default" });
+      answer({ configured: true, active_slot: "default", setup_needed: false });
     });
     await advance(0);
 
@@ -3942,7 +3978,11 @@ describe("CustomPlayButton — state-aware Resume (#1313)", () => {
     // Detection defaults: not running (overridden per test).
     vi.mocked(readGameRunning).mockReturnValue(NOT_RUNNING);
     // Gate predecessors so the self-heal fall-through can reach the full funnel.
-    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "default" });
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: true,
+      active_slot: "default",
+      setup_needed: false,
+    });
     vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
     vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
     vi.mocked(backend.preLaunchSync).mockResolvedValue({
@@ -4834,7 +4874,11 @@ describe("CustomPlayButton — Stop Game", () => {
     // The session-start path sets isRunning but leaves state === "launching";
     // clearing only the overlay would expose a stale "Launching..." label.
     vi.mocked(readGameRunning).mockReturnValue(NOT_RUNNING);
-    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "default" });
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: true,
+      active_slot: "default",
+      setup_needed: false,
+    });
     vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
     vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
     vi.mocked(backend.preLaunchSync).mockResolvedValue({
@@ -6025,7 +6069,11 @@ describe("CustomPlayButton — the disabled state buttons' markup", () => {
     vi.mocked(setLaunchOptionsConfirmed).mockResolvedValue(true);
     vi.mocked(backend.removeRom).mockReset();
     vi.mocked(backend.removeRom).mockResolvedValue({ success: true, message: "" });
-    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "default" });
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: true,
+      active_slot: "default",
+      setup_needed: false,
+    });
     vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
     vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
     vi.stubGlobal("SteamClient", { Apps: { RunGame: vi.fn() } });

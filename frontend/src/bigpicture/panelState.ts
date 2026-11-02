@@ -14,6 +14,7 @@ import {
   getArtworkBase64,
   getSaveSlots,
   getSaveSyncAvailability,
+  getLocalSaveFiles,
   isSaveTrackingConfigured,
   debugLog,
 } from "../api/backend";
@@ -29,6 +30,7 @@ import type {
   SyncConflict,
   SaveSlotSummary,
   SaveSyncAvailability,
+  LocalSaveFiles,
   LastKnownSlots,
 } from "../types";
 import { applyRefreshSlotResult } from "../utils/slotState";
@@ -69,6 +71,10 @@ export interface PanelState {
   // answer is held — not read yet, or the read failed — and the tab then marks
   // nothing and shows the slots or the setup as for a game that syncs.
   saveSyncAnswer: SaveSyncAvailability | null;
+  // This device's save files for the ROM (`get_local_save_files`): what the SAVES
+  // tab lists while save sync is off (#2527 D1). `null` while no answer is held —
+  // not read yet, or the read failed — and the tab then lists nothing.
+  localSaves: LocalSaveFiles | null;
   saveStatus: SaveStatus | null;
   conflicts: SyncConflict[];
   // Why there is no detail to show: `failed` for every miss, the game not being
@@ -192,6 +198,8 @@ export interface PanelReadSeqs {
   slotTracking: number;
   /** `get_save_sync_availability`, from {@link refreshSaveSyncAnswer}. */
   saveSync: number;
+  /** `get_local_save_files`, from {@link refreshLocalSaves}. */
+  localSaves: number;
   /** `get_bios_status`, from the live re-read every cached-detail fold issues
    *  when the backend marked its BIOS answer stale and from the `bios` event's
    *  re-read — and claimed by the fold itself, see {@link refreshBiosIfStale}. */
@@ -248,6 +256,20 @@ export async function refreshSaveSyncAnswer(
   }
   if (overtaken()) return;
   binding.write((prev) => ({ ...prev, saveSyncAnswer: answer }));
+}
+
+/** Read this device's save files for the ROM and fold them in. A read that fails
+ *  holds no answer rather than the one from before. */
+export async function refreshLocalSaves(binding: RomBinding, readSeqs: MutableRefObject<PanelReadSeqs>): Promise<void> {
+  const overtaken = takeReadTicket(readSeqs, "localSaves");
+  let answer: LocalSaveFiles | null = null;
+  try {
+    answer = await getLocalSaveFiles(binding.romId);
+  } catch (e) {
+    detach(debugLog(`RomMGameInfoPanel: local save files error: ${e}`));
+  }
+  if (overtaken()) return;
+  binding.write((prev) => ({ ...prev, localSaves: answer }));
 }
 
 /** Fire-and-forget installed-rom fetch. */
@@ -512,6 +534,7 @@ export async function loadData(
       coreInfo: null, // Will be filled by background fetch (get_platform_core_info)
       saveSyncEnabled: cached.save_sync_enabled ?? false,
       saveSyncAnswer: null,
+      localSaves: null,
       saveStatus,
       conflicts,
       error: false,

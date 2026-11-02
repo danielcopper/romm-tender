@@ -623,12 +623,14 @@ Tender's section on a RomM game's page ([frontend-bundles.md](frontend-bundles.m
 is not part of the panel, but its tabs are this same component: **GAME INFO**, **ACHIEVEMENTS**, **SAVES**, **BIOS** and
 **ARTWORK** are Steam's tabbed page (`bigpicture/GamePageTabs.tsx`), in that order (`buildPanelTabs`,
 `bigpicture/panelTabContent.tsx`). So L1 and R1, the wrap-around, the bumper glyphs, a tab switching as soon as focus
-lands on it, and each tab keeping where focus stood are Steam's. ACHIEVEMENTS is handed to it for a game
-RetroAchievements knows (an `ra_id`) and SAVES while save sync is on, so a tab that is not shown is not stepped onto
-either. Steam's own game page steps its own tabs with L1 and R1 the same way; on a RomM game Tender's section takes that
-panel's place, so nothing of Steam's is left handling the bumpers there (#2421 D2). SAVES carries a warning mark beside
-its title (Steam's `renderTabAddon`) for a downloaded game whose saves cannot sync
-([save-file-sync-architecture.md](save-file-sync-architecture.md#where-the-check-happens)).
+lands on it, and each tab keeping where focus stood are Steam's. ACHIEVEMENTS is handed to it only for a game
+RetroAchievements knows (an `ra_id`), so a tab that is not shown is not stepped onto either. SAVES is handed to it with
+save sync on or off: the setting chooses its pane, the slots or this device's save files
+([save-file-sync-architecture.md](save-file-sync-architecture.md#this-devices-save-files-save-sync-off)), and switching
+it while the tab is open switches the pane. Steam's own game page steps its own tabs with L1 and R1 the same way; on a
+RomM game Tender's section takes that panel's place, so nothing of Steam's is left handling the bumpers there (#2421
+D2). SAVES carries a warning mark beside its title (Steam's `renderTabAddon`) for a downloaded game whose saves cannot
+sync, while save sync is on ([save-file-sync-architecture.md](save-file-sync-architecture.md#where-the-check-happens)).
 
 **Height and scrolling are Steam's game page's.** The tabbed page has no height of its own — its tab row and its content
 are positioned absolutely (`steamui/css/sp.css`, `GamepadTabbedPage`) — and Steam's game page passes

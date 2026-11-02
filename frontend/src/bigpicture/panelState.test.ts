@@ -35,7 +35,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 const seqsRef = (): MutableRefObject<PanelReadSeqs> => ({
-  current: { detail: 0, saveStatus: 0, slots: 0, slotTracking: 0, saveSync: 0, bios: 0 },
+  current: { detail: 0, saveStatus: 0, slots: 0, slotTracking: 0, saveSync: 0, localSaves: 0, bios: 0 },
 });
 
 const slot = (name: string): SaveSlotSummary => ({
@@ -61,6 +61,7 @@ function basePanelState(): PanelState {
     coreInfo: null,
     saveSyncEnabled: true,
     saveSyncAnswer: null,
+    localSaves: null,
     saveStatus: null,
     conflicts: [],
     error: false,
@@ -220,7 +221,11 @@ describe("refreshSlotState", () => {
 
   it("folds a slot list and a tracking answer into the panel state", async () => {
     vi.mocked(backend.getSaveSlots).mockResolvedValue({ success: true, slots: [slot("main")], active_slot: "main" });
-    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "main" });
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: true,
+      active_slot: "main",
+      setup_needed: false,
+    });
 
     refreshSlotState(binding, seqsRef());
     await flush();
@@ -237,7 +242,11 @@ describe("refreshSlotState", () => {
     const earlier = deferred<Awaited<ReturnType<typeof backend.getSaveSlots>>>();
     const later = deferred<Awaited<ReturnType<typeof backend.getSaveSlots>>>();
     vi.mocked(backend.getSaveSlots).mockReturnValueOnce(earlier.promise).mockReturnValueOnce(later.promise);
-    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: false, active_slot: null });
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: false,
+      active_slot: null,
+      setup_needed: true,
+    });
     const seqs = seqsRef();
 
     refreshSlotState(binding, seqs);
@@ -262,9 +271,9 @@ describe("refreshSlotState", () => {
     refreshSlotState(binding, seqs);
     refreshSlotState(binding, seqs);
 
-    later.resolve({ configured: false, active_slot: null });
+    later.resolve({ configured: false, active_slot: null, setup_needed: true });
     await flush();
-    earlier.resolve({ configured: true, active_slot: "main" });
+    earlier.resolve({ configured: true, active_slot: "main", setup_needed: false });
     await flush();
 
     // The wizard-vs-tab gate: the earlier "configured" answer would put the
@@ -283,7 +292,7 @@ describe("refreshSlotState", () => {
 
     refreshSlotState(binding, seqs);
     takeReadTicket(seqs, "slots");
-    tracking.resolve({ configured: true, active_slot: "main" });
+    tracking.resolve({ configured: true, active_slot: "main", setup_needed: false });
     await flush();
 
     expect(state.slotConfirmed).toBe(true);

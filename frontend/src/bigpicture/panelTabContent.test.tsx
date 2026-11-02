@@ -40,6 +40,7 @@ function state(overrides: Partial<PanelState> = {}): PanelState {
     coreInfo: null,
     saveSyncEnabled: true,
     saveSyncAnswer: null,
+    localSaves: null,
     saveStatus: null,
     conflicts: [],
     error: false,

@@ -437,10 +437,9 @@ class SyncEngine:
 
         The caller holds ``rom_lock``, hands over the reading it already took,
         and calls this before it looks at any local file. Public (peer-called):
-        the peer services' write, delete, count and status paths and the
-        local-save check follow first as well; ``resolve_sync_conflict`` does
-        so here. It does nothing while
-        save sync is off, an update is being installed, a RetroDECK home
+        who calls it is the list under "Following a Moved Save Directory" in
+        ``docs/architecture/save-file-sync-architecture.md``. It does nothing
+        while save sync is off, an update is being installed, a RetroDECK home
         migration is pending or still running, or the ROM's game is running —
         unless *while_running*: the sync before a start, the one after a game
         and a conflict resolved before a start follow while the game is listed,

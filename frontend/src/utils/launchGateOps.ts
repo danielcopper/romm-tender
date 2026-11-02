@@ -220,7 +220,8 @@ function shapePreLaunchAnswer(settled: PreLaunchSyncSettled, options: PreLaunchS
 
 /**
  * The tracking-setup step for a start pressed on Big Picture's game-detail
- * page. What the backend's setup answer does to the start is
+ * page. Nothing is set up where the backend answers that none is needed
+ * (`setup_needed`). What the backend's setup answer does to the start is
  * `applyLaunchGateSetupOutcome`'s. A read that throws proceeds; a read or slot
  * confirm that gets no answer in time is let through for the gate.
  *
@@ -231,9 +232,9 @@ function shapePreLaunchAnswer(settled: PreLaunchSyncSettled, options: PreLaunchS
  */
 export async function ensureTrackingConfiguredBigPicture(romId: number): Promise<"proceed" | "abort"> {
   const trackingResult = await boundedOr(isSaveTrackingConfigured(romId), LOCAL_CALL_LIMIT_MS, () => ({
-    configured: true,
+    setup_needed: false,
   }));
-  if (trackingResult.configured) return "proceed";
+  if (!trackingResult.setup_needed) return "proceed";
 
   const setupInfo = await boundedOr(getSaveSetupInfo(romId), SERVER_CALL_LIMIT_MS, () => null);
   if (setupInfo === null) return "proceed";
@@ -252,17 +253,18 @@ export async function ensureTrackingConfiguredBigPicture(romId: number): Promise
  * to the saves tab. Instead it silently auto-adopts the default/recommended
  * slot (via `confirmSlotChoice`) and proceeds. A start is never blocked on a
  * setup ANSWER — every answer proceeds; any failure (server unreachable,
- * needs-user-choice, a thrown error) is swallowed. `tag` begins each log line,
- * naming the launch path.
+ * needs-user-choice, a thrown error) is swallowed. Nothing is set up where the
+ * backend answers that none is needed (`setup_needed`). `tag` begins each log
+ * line, naming the launch path.
  * A call that gets no answer within its limit is not a failure: its
  * `TimeoutError` reaches the gate.
  */
 export async function ensureTrackingConfiguredSilently(romId: number, tag: string): Promise<void> {
   const trackingResult = await boundedOr(isSaveTrackingConfigured(romId), LOCAL_CALL_LIMIT_MS, (e) => {
     logError(`${tag} tracking check failed (assuming configured): ${e}`);
-    return { configured: true };
+    return { setup_needed: false };
   });
-  if (trackingResult.configured) return;
+  if (!trackingResult.setup_needed) return;
 
   const setupInfo = await boundedOr(getSaveSetupInfo(romId), SERVER_CALL_LIMIT_MS, (e) => {
     // Network/backend failure — never block a start on setup.
