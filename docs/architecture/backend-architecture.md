@@ -1075,9 +1075,10 @@ game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app
   (`domain/collection_skip.py::holds_a_game_to_converge`, asked after the listing verdict and before the probe, and
   logged): the fetch hands the convergence RomM's current sibling list. The removal drops the stamp of a collection that
   lists the loser, so such a collection is fetched once more before it skips again. Where the version no collection
-  delivers is the one RomM no longer lists as a sibling — deleted, hidden or regrouped — its row is never fetched again
-  and keeps the group's stored key, so the game keeps both shortcuts and the collection is fetched on every sync (#2661
-  D3); where the delivered version is the one regrouped, its commit writes its fresh key (`Rom.synced` in
+  delivers is the one RomM no longer lists as a sibling — deleted, hidden or regrouped — no unit returns its row, so its
+  stored key is never rewritten (the stale removal's question by its id, asked where its route calls for one, records
+  only `roms.gone_from_romm`), the game keeps both shortcuts and the collection is fetched on every sync (#2661 D3);
+  where the delivered version is the one regrouped, its commit writes its fresh key (`Rom.synced` in
   `SyncReporter._persist_synced_rom`), the stored keys part, the row left behind goes the stale way in that run as a
   game no collection holds, without carry-over, and the collection skips again after one fetch (D5). Artwork downloads
   only for the emitted representatives (+ the bound siblings a collection unit keeps), never eager sibling covers.
