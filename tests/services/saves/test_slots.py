@@ -2,11 +2,14 @@
 
 import asyncio
 import hashlib
-from typing import Any, Literal, cast
+from dataclasses import replace
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import pytest
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
+from domain.emulator_choice import GAME_PICK, EmulatorChoice, ResolvedEmulator
+from domain.emulator_commands import PROGRAM, EmulatorOption
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from domain.save_answer import SaveAnswer, saves_root_missing_answer
 from domain.save_backup import BACKUP_DIR_NAME, BACKUP_RETENTION
@@ -47,6 +50,9 @@ from tests.services.saves._helpers import (
     _uow,
     make_service,
 )
+
+if TYPE_CHECKING:
+    from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 
 
 class TestSaveSlots:
@@ -1577,7 +1583,7 @@ class TestAGameWhoseSavesCannotSync:
 
         result = await svc.get_save_sync_availability(42)
 
-        assert result == {"available": True}
+        assert result == {"available": True, "installed": True, "established": True, "emulator_label": None}
         assert fake.call_log == []
 
     @pytest.mark.asyncio
@@ -1592,6 +1598,116 @@ class TestAGameWhoseSavesCannotSync:
         state = _require_save_state(svc, 42)
         assert state.slot_confirmed is True
         assert state.active_slot == "desktop"
+
+
+def _started_with(label: str) -> ResolvedEmulator:
+    """A game that starts with the entry *label*, picked for the game itself."""
+    option = EmulatorOption(
+        label=label,
+        kind=PROGRAM,
+        core_so=None,
+        command="%EMULATOR_MGBA% %ROM%",
+        status="bakeable",
+        reason=None,
+        emulator="mgba",
+    )
+    return ResolvedEmulator(
+        choice=EmulatorChoice(option=option, layer=GAME_PICK, vanished=None),
+        options=[option],
+        invocation=None,
+    )
+
+
+class TestWhetherAGamesSavesSync:
+    """What the SAVES tab is told about a game: whether its saves sync, for an installed game or one not downloaded."""
+
+    @pytest.mark.asyncio
+    async def test_a_game_not_downloaded_is_asked_about_the_path_it_would_be_downloaded_to(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _seed_rom(svc, 42, platform_slug="gba", fs_name="pokemon.gba")
+        reader = cast("FakeSaveLocationReader", svc._rom_info._save_locations)
+
+        result = await svc.get_save_sync_availability(42)
+
+        assert result["available"] is True
+        assert result["installed"] is False
+        assert result["established"] is True
+        assert reader.calls == [("gba", str(tmp_path / "retrodeck" / "roms" / "gba" / "pokemon.gba"), None)]
+        assert fake.call_log == []
+
+    @pytest.mark.asyncio
+    async def test_a_game_not_downloaded_whose_saves_would_not_sync_answers_the_refusal(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _seed_rom(svc, 42, platform_slug="gba", fs_name="pokemon.gba")
+        reader = cast("FakeSaveLocationReader", svc._rom_info._save_locations)
+        reader.answer_with("gba", _SHARED_CARD)
+
+        result = await svc.get_save_sync_availability(42)
+
+        assert result["available"] is False
+        assert result["installed"] is False
+        assert result["established"] is True
+        assert result["reason"] == "save_shape_unsupported"
+        assert result["message"] == _SHARED_CARD_MESSAGE
+        assert len(reader.calls) == 1
+        assert fake.call_log == []
+
+    @pytest.mark.asyncio
+    async def test_a_game_not_downloaded_with_no_path_to_ask_about_establishes_nothing(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _seed_rom(svc, 42, platform_slug="gba", fs_name="")
+        reader = cast("FakeSaveLocationReader", svc._rom_info._save_locations)
+
+        result = await svc.get_save_sync_availability(42)
+
+        assert result["available"] is False
+        assert result["installed"] is False
+        assert result["established"] is False
+        assert reader.calls == []
+        assert fake.call_log == []
+
+    @pytest.mark.asyncio
+    async def test_a_game_not_downloaded_whose_emulator_establishes_nothing_establishes_nothing(self, tmp_path):
+        svc, _fake = make_service(tmp_path)
+        _seed_rom(svc, 42, platform_slug="gba", fs_name="pokemon.gba")
+        reader = cast("FakeSaveLocationReader", svc._rom_info._save_locations)
+        reader.refuse("gba")
+
+        result = await svc.get_save_sync_availability(42)
+
+        assert result["available"] is False
+        assert result["established"] is False
+        assert len(reader.calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_an_installed_game_says_so(self, tmp_path):
+        svc, _fake, _reader = _unsyncable(tmp_path, "shared")
+
+        result = await svc.get_save_sync_availability(42)
+
+        assert result["installed"] is True
+
+    @pytest.mark.asyncio
+    async def test_the_label_is_the_one_of_the_entry_the_game_starts_with(self, tmp_path):
+        svc, _fake = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        # The answer's own ``emulator`` is the identity, which is never the name shown.
+        reader = cast("FakeSaveLocationReader", svc._rom_info._save_locations)
+        reader.answer_with("gba", replace(_SHARED_CARD, state="per_game_files", emulator="mgba"))
+        cast("FakeActiveCoreResolver", svc._rom_info._active_core).resolved[42] = _started_with("mGBA (Standalone)")
+
+        result = await svc.get_save_sync_availability(42)
+
+        assert result["emulator_label"] == "mGBA (Standalone)"
+
+    @pytest.mark.asyncio
+    async def test_a_game_with_no_entry_to_start_with_has_no_label(self, tmp_path):
+        svc, _fake, _reader = _unsyncable(tmp_path, "shared")
+        cast("FakeActiveCoreResolver", svc._rom_info._active_core).resolved[42] = None
+
+        result = await svc.get_save_sync_availability(42)
+
+        assert result["emulator_label"] is None
 
 
 class TestGetSlotSaves:

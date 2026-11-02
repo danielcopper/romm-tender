@@ -141,6 +141,16 @@ class RomInfoService:
             return self._installed_answer(rom_id, installed[0], installed[1])
         return self._uninstalled_answer(rom_id)
 
+    def start_label(self, rom_id: int) -> str | None:
+        """The label of the entry this ROM starts with, as the emulator menu shows it, or ``None`` where it has none.
+
+        Never a name derived from a save answer's ``emulator``, which is the
+        emulator's identity rather than anything a user picked by.
+        """
+        resolved = self._active_core.resolve_rom(int(rom_id))
+        option = resolved.choice.option if resolved is not None else None
+        return option.label if option is not None else None
+
     def _uninstalled_answer(self, rom_id: int) -> SaveAnswer:
         """The answer for a ROM the library holds but the disk does not.
 

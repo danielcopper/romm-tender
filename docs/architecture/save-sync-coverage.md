@@ -82,8 +82,10 @@ probe. A single-ROM sync and a status read each take one, whether or not the ROM
 gate reads the answer to decide whether to refuse at all, and hands that same reading both to the matrix and to the
 negotiate session's inventory rather than letting either take a second. The slot setup's setup info and its slot choice
 take one each as well, the setup info handing it to its local probe and the slot choice to its migration, and so does
-the question the SAVES tab asks while it holds RomM as unreachable (`get_save_sync_availability`). "Ask live" is a rule
-about operations, not about layers.
+the SAVES tab's own question (`get_save_sync_availability`), at the moments
+[save-file-sync-architecture.md](save-file-sync-architecture.md#where-the-check-happens) lists; beside that reading it
+asks the emulator catalogue for the label of the entry the game starts with. "Ask live" is a rule about operations, not
+about layers.
 
 The whole-library sweep is the exception, at **two per confirmed ROM**. It posts one device-wide inventory before its
 per-ROM loop begins, and that inventory walks each confirmed ROM's save files — so it reads every answer once before any
