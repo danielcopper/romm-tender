@@ -24,7 +24,7 @@ from domain.sync_diff import (
     with_kept_rows_rebound,
 )
 from domain.sync_stage import SyncStage
-from services.library._convergence import converge_unless_running
+from services.library._convergence import converge_collection_deliveries, converge_unless_running
 from services.library._followed_keys import with_followed_keys
 from services.library._unit_roms import (
     collection_membership_key,
@@ -133,6 +133,11 @@ class UnitApplier:
         that unit mints it over every member the run delivers. A skipped
         delivery takes part in neither: it holds bound rows only, and its unit
         collapses nothing.
+
+        A game the fetched deliveries bring in that holds more than one bound
+        shortcut converges here, once for the run whichever units hold its
+        versions (#2661): the losers join ``run_converged``, which every
+        collection unit's collapse leaves out and the finalize removes.
         """
         deliveries = await self._collection_fetcher.fetch_collection_units(
             units, synced_rom_ids, progress_step=unit_index + 1, progress_total_steps=total_units
@@ -142,6 +147,20 @@ class UnitApplier:
         stamp_component_group_keys([rom for delivery in fetched for rom in delivery.roms], resident_keys)
         registry = await self._loop.run_in_executor(None, self._local_library_reader.do_read_apply_registry, units[0])
         gathered = gather_unbound_groups([delivery.roms for delivery in fetched], registry)
+        delivered_roms = [rom for delivery in fetched for rom in delivery.roms]
+        converged = await converge_collection_deliveries(
+            # Built for the ranking alone: its version fields, not its launch command.
+            build_shortcuts_data(delivered_roms, self._launcher_exe, {}, {}),
+            {rom["id"]: rom.get("sibling_roms") or [] for rom in delivered_roms},
+            registry,
+            loop=self._loop,
+            local_library_reader=self._local_library_reader,
+            platform_slugs=set(units[0].unwalked_platform_slugs),
+            preferred_region=self._settings.get("preferred_region", AUTO_REGION),
+            running_rom_ids=self._running_rom_ids,
+            logger=self._logger,
+        )
+        self._sync_state.run_converged.update((binding.rom_id, binding) for binding in converged)
         by_key = {collection_membership_key(delivery.unit): delivery for delivery in deliveries}
         for delivery, roms in zip(fetched, gathered, strict=True):
             by_key[collection_membership_key(delivery.unit)] = replace(delivery, roms=roms)
@@ -264,8 +283,8 @@ class UnitApplier:
         preferred_region = self._settings.get("preferred_region", AUTO_REGION)
 
         # A group holding more than one bound shortcut converges in a complete
-        # view (#2645); the finalize of a run that was not stopped removes the
-        # others.
+        # view (#2645), and a collection unit's in :meth:`fetch_collection_units`
+        # (#2661); the finalize of a run that was not stopped removes the others.
         installed = set(installed_paths)
         converged: list[ConvergedBinding] = []
         if complete_view:
@@ -281,7 +300,7 @@ class UnitApplier:
                 running_rom_ids=self._running_rom_ids,
                 logger=self._logger,
             )
-        converged_ids = {binding.rom_id for binding in converged}
+        converged_ids = {binding.rom_id for binding in converged} if complete_view else set(box.run_converged)
 
         # Collapse to one Steam shortcut per sibling group (ADR-0021): only the
         # representative, or the group's bound siblings outside the converged

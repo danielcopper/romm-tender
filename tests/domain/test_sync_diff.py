@@ -6,12 +6,15 @@ from typing import Any
 
 import pytest
 
+from domain.rom import Rom
 from domain.sync_diff import (
     BIND_ROM_ID_KEY,
+    BroughtIn,
     ClassificationResult,
     ConvergedBinding,
     StaleRow,
     StaleSort,
+    brought_in_by_delivery,
     classify_roms,
     collapse_sibling_groups,
     compute_collection_diff,
@@ -27,6 +30,7 @@ from domain.sync_diff import (
     settle_asked_rows,
     should_include_in_platform_collection,
     sort_stale_rows,
+    stored_version,
     with_kept_rows_rebound,
     without_running_groups,
 )
@@ -1925,3 +1929,111 @@ class TestGoneFromRommMarks:
         )
 
         assert sort.gone_from_romm_marks({}, set()) == {}
+
+
+class TestBroughtInByDelivery:
+    """``brought_in_by_delivery`` — the bound rows a collection delivery brings in (#2661 D1)."""
+
+    def test_a_delivered_bound_version_brings_in_a_bound_version_it_lists_as_a_sibling(self):
+        registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
+        brought_in = brought_in_by_delivery([_gsd(1)], {1: [{"id": 2}]}, registry)
+        assert brought_in == BroughtIn(rows=registry, undelivered={2: False})
+
+    def test_an_unbound_delivered_version_brings_in_every_bound_version_it_lists(self):
+        registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
+        brought_in = brought_in_by_delivery([_gsd(3)], {3: [{"id": 1}, {"id": 2}]}, registry)
+        assert brought_in == BroughtIn(rows=registry, undelivered={1: False, 2: False})
+
+    def test_a_bound_version_no_delivered_member_lists_keeps_its_shortcut(self):
+        # Same stored key, but RomM no longer lists it as a sibling: deleted,
+        # hidden or regrouped there (D1, D3).
+        registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
+        assert brought_in_by_delivery([_gsd(1)], {1: []}, registry) == BroughtIn(rows={}, undelivered={})
+
+    def test_siblings_the_agreement_gate_keys_apart_are_another_game(self):
+        registry = {
+            "1": _greg(1, app_id=1001),
+            "2": _greg(2, app_id=1002, group_key="g2"),
+            "3": _greg(3, app_id=1003, group_key="g2"),
+        }
+        brought_in = brought_in_by_delivery([_gsd(1)], {1: [{"id": 2}, {"id": 3}]}, registry)
+        assert brought_in == BroughtIn(rows={}, undelivered={})
+
+    def test_a_sibling_only_another_game_s_member_lists_is_not_brought_in(self):
+        registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
+        delivered = [_gsd(1), _gsd(3, group_key="g2")]
+        assert brought_in_by_delivery(delivered, {1: [], 3: [{"id": 2}]}, registry) == BroughtIn(
+            rows={}, undelivered={}
+        )
+
+    def test_a_delivered_version_is_grouped_by_its_fresh_key(self):
+        registry = {"1": _greg(1, app_id=1001, group_key="old"), "2": _greg(2, app_id=1002)}
+        brought_in = brought_in_by_delivery([_gsd(1)], {1: [{"id": 2}]}, registry)
+        assert set(brought_in.rows) == {"1", "2"}
+
+    @pytest.mark.parametrize(("flag", "main"), [(True, True), (False, False), (None, False), ("yes", False)])
+    def test_romm_s_default_is_read_off_the_sibling_list(self, flag, main):
+        registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
+        stub = {"id": 2} if flag is None else {"id": 2, "is_main_sibling": flag}
+        assert brought_in_by_delivery([_gsd(1)], {1: [stub]}, registry).undelivered == {2: main}
+
+    def test_an_unbound_sibling_is_not_brought_in(self):
+        registry = {"1": _greg(1, app_id=1001), "2": {**_greg(2, app_id=1002), "app_id": None}}
+        assert brought_in_by_delivery([_gsd(1)], {1: [{"id": 2}]}, registry) == BroughtIn(rows={}, undelivered={})
+
+
+def _stored_rom(rom_id: int, **fields: Any) -> Rom:
+    return Rom(
+        rom_id=rom_id,
+        platform_slug="gba",
+        name=f"Golf {rom_id}",
+        fs_name=f"Golf ({rom_id}).zip",
+        shortcut_app_id=6000 + rom_id,
+        last_synced_at="2026-10-01T00:00:00",
+        sibling_group_key="g1",
+        **fields,
+    )
+
+
+class TestStoredVersion:
+    """``stored_version`` — a version no collection delivered, ranked by what its last fetch stored (#2661 D4)."""
+
+    def test_it_carries_the_stored_version_fields_and_the_sibling_list_s_default(self):
+        rom = _stored_rom(30, regions=("USA",), revision="1", tags=("Beta",), has_file_on_disk=False)
+        assert stored_version(rom, is_main_sibling=True) == {
+            "rom_id": 30,
+            "name": "Golf 30",
+            "fs_name_no_ext": "Golf (30)",
+            "platform_slug": "gba",
+            "sibling_group_key": "g1",
+            "regions": ["USA"],
+            "revision": "1",
+            "tags": ["Beta"],
+            "is_main_sibling": True,
+            "has_file_on_disk": False,
+        }
+
+    @pytest.mark.parametrize(
+        ("main", "regions", "removed", "kept"),
+        [(True, ("Japan",), 31, 30), (False, ("USA",), 31, 30), (False, ("Japan",), 30, 31)],
+        ids=["romm-s-default", "preferred-region", "the-region-ranks-the-delivered-one-first"],
+    )
+    def test_the_chain_ranks_it_as_it_ranks_a_delivered_version(self, main, regions, removed, kept):
+        delivered = _gsd(31, fs_name_no_ext="Golf (Europe)", regions=["Europe"])
+        listed = [delivered, stored_version(_stored_rom(30, regions=regions), is_main_sibling=main)]
+        registry = {
+            "30": _greg(30, app_id=6030, platform_slug="gba"),
+            "31": _greg(31, app_id=6031, platform_slug="gba"),
+        }
+        converged = converge_bound_groups(listed, registry, set(), platform_slugs={"gba"}, preferred_region="USA")
+        assert [(binding.rom_id, binding.kept_rom_id) for binding in converged] == [(removed, kept)]
+
+    def test_an_installed_version_still_wins(self):
+        delivered = _gsd(31, fs_name_no_ext="Golf (Europe)", regions=["Europe"])
+        listed = [delivered, stored_version(_stored_rom(30, regions=("USA",)), is_main_sibling=True)]
+        registry = {
+            "30": _greg(30, app_id=6030, platform_slug="gba"),
+            "31": _greg(31, app_id=6031, platform_slug="gba"),
+        }
+        converged = converge_bound_groups(listed, registry, {31}, platform_slugs={"gba"}, preferred_region="USA")
+        assert [(binding.rom_id, binding.kept_rom_id) for binding in converged] == [(30, 31)]

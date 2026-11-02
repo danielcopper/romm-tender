@@ -31,7 +31,7 @@ from domain.sync_run_kind import SyncRunKind
 from domain.sync_stage import SyncStage
 from domain.sync_state import SyncCancelled
 from lib.errors import Refused, classify_error
-from services.library._convergence import converge_unless_running
+from services.library._convergence import converge_collection_deliveries, converge_unless_running
 from services.library._followed_keys import with_followed_keys
 from services.library._preview_union import collapse_counting_platform_rebinds
 from services.library._stale_rows import preview_group_keys, settle_stale_rows, stale_rows_of, with_kept_platform_names
@@ -231,7 +231,9 @@ class SyncPreview:
             # group a platform unit delivers is collapsed as that unit has it.
             # A group holding more than one bound shortcut converges as the
             # apply's platform unit converges it: over that unit's listing, so
-            # only on a platform the preview fetched in full (#2645).
+            # only on a platform the preview fetched in full (#2645); and as the
+            # apply's collection units converge it, over the ROMs they fetched —
+            # never a skipped collection's rebuilt rows (#2661).
             whole_groups = {sd.get("sibling_group_key") for sd in shortcuts_data if sd["rom_id"] in platform_rom_ids}
             preferred_region = self._settings.get("preferred_region", AUTO_REGION)
             converged_ids = {
@@ -246,6 +248,23 @@ class SyncPreview:
                     logger=self._logger,
                 )
             }
+            collection_units = [u for u in work_queue if u.type == "collection"]
+            delivered_ids = {rom["id"] for rom in all_roms} - platform_rom_ids - skipped_rom_ids
+            if collection_units and delivered_ids:
+                converged_ids |= {
+                    binding.rom_id
+                    for binding in await converge_collection_deliveries(
+                        [sd for sd in shortcuts_data if sd["rom_id"] in delivered_ids],
+                        {rom["id"]: rom.get("sibling_roms") or [] for rom in all_roms if rom["id"] in delivered_ids},
+                        registry,
+                        loop=self._loop,
+                        local_library_reader=self._local_library_reader,
+                        platform_slugs=set(collection_units[0].unwalked_platform_slugs),
+                        preferred_region=preferred_region,
+                        running_rom_ids=self._running_rom_ids,
+                        logger=self._logger,
+                    )
+                }
             emitted, classify_skipped = collapse_counting_platform_rebinds(
                 shortcuts_data,
                 lambda entries: collapse_sibling_groups(

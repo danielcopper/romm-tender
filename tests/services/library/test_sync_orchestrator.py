@@ -10270,3 +10270,314 @@ class TestAGameSplitAcrossCollections:
         if frame.get("subStage") == "fetch":
             return part
         return 0
+
+
+_GOLF_REGIONS = {30: "USA", 31: "Europe", 32: "Japan"}
+
+
+class TestAGameACollectionBringsInConverges:
+    """A game a collection brings in that holds more than one bound shortcut keeps one (#2661 D1-D4).
+
+    GBA, whose sync is off, lists Golf (USA) 30, RomM's default, Golf (Europe)
+    31 and Golf (Japan) 32, each listing the others in ``sibling_roms``. Faves
+    (7), and in some cases Mine (8), are standard collections. Run 1 binds what
+    the collections deliver; 31 is then bound as well, a duplicate from before
+    one shortcut per game.
+    """
+
+    @classmethod
+    def _golf(cls, rom_id, *, main: int | None = 30):
+        stem = f"Golf ({_GOLF_REGIONS[rom_id]})"
+        return {
+            "id": rom_id,
+            "name": stem,
+            "fs_name": f"{stem}.zip",
+            "fs_name_no_ext": stem,
+            "regions": [_GOLF_REGIONS[rom_id]],
+            "igdb_id": 300,
+            "updated_at": "2025-01-01T00:00:00+00:00",
+            "rom_user": {"is_main_sibling": rom_id == main},
+            "sibling_roms": [
+                {"id": other, "name": f"Golf ({_GOLF_REGIONS[other]})", "is_main_sibling": other == main}
+                for other in _GOLF_REGIONS
+                if other != rom_id
+            ],
+        }
+
+    @staticmethod
+    def _list(fake_romm_api, collection_id, rom_ids):
+        """Make *collection_id* list *rom_ids* and bump its ``updated_at``, so it is fetched."""
+        entry = next(c for c in fake_romm_api.collections if c["id"] == collection_id)
+        for rom in fake_romm_api.roms.values():
+            rom["collection_ids"] = [cid for cid in rom.get("collection_ids") or [] if cid != collection_id]
+        for rom_id in rom_ids:
+            fake_romm_api.roms[rom_id].setdefault("collection_ids", []).append(collection_id)
+        entry["rom_ids"] = list(rom_ids)
+        entry["rom_count"] = len(rom_ids)
+        entry["updated_at"] = "2030-01-01T00:00:00"
+
+    @classmethod
+    async def _two_bound(cls, library, fake_romm_api, *, faves, mine=None, main: int | None = 30, also_bound=(31,)):
+        _seed_platform(
+            fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[cls._golf(r, main=main) for r in _GOLF_REGIONS]
+        )
+        library.settings["enabled_platforms"] = {"2": False}
+        enabled = {}
+        for collection_id, name, rom_ids in ((7, "Faves", faves), (8, "Mine", mine)):
+            if rom_ids is not None:
+                _seed_collection(fake_romm_api, collection_id=collection_id, name=name, rom_ids=rom_ids)
+                fake_romm_api.collections[-1]["updated_at"] = "2025-01-01T00:00:00"
+                enabled[str(collection_id)] = True
+        library.settings["enabled_collections"] = {"standard": enabled}
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_what_the_unit_emits(_unit, event):
+            event.set()
+            return {str(rid): 6000 + rid for rid in box.pending_sync}
+
+        library.chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
+        assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
+        await library.sync._orchestrator._do_sync_per_unit()
+        with library.uow as uow:
+            for rom_id in also_bound:
+                rom = uow.roms.get(rom_id)
+                rom.bind_shortcut(6000 + rom_id)
+                uow.roms.save(rom)
+                uow.roms.set_applied_launch_options(rom_id, "")
+
+    @staticmethod
+    def _install(library, tmp_path, rom_id):
+        path = tmp_path / f"golf-{rom_id}.zip"
+        path.write_bytes(b"rom")
+        with library.uow:
+            library.uow.rom_installs.save(
+                RomInstall.mark_installed(
+                    rom_id=rom_id,
+                    file_path=str(path),
+                    rom_dir=None,
+                    platform_slug="gba",
+                    system="gba",
+                    installed_at="2025-01-01T00:00:00",
+                )
+            )
+
+    @staticmethod
+    async def _sync(library, fake_romm_api, emit, run_id):
+        """Preview, then apply, then the panel reports; answer the counts, the removals and the walks."""
+        fake_romm_api.call_log.clear()
+        summary = (await library.sync.sync_preview())["summary"]
+        box = library.sync._box
+        box.discard_preview()
+        assert box.try_begin_run(run_id, kind=SyncRunKind.APPLY) is True
+        start = len(emit.call_args_list)
+        await library.sync._orchestrator._do_sync_per_unit()
+        removals = _removals_since(emit, start)
+        await _the_panel_reports(library, removals)
+        walks = sum(1 for name, _args, _kwargs in fake_romm_api.call_log if name == "list_roms_by_collection")
+        return summary["remove_count"], removals, walks
+
+    @staticmethod
+    def _bound(library):
+        with library.uow as uow:
+            return {rom.rom_id: rom.shortcut_app_id for rom in uow.roms.iter_all() if rom.shortcut_app_id}
+
+    @pytest.mark.asyncio
+    async def test_an_unchanged_collection_is_fetched_converges_as_the_preview_counted_then_skips_again(
+        self, make_library, fake_romm_api, emit, caplog
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, faves=[30, 31])
+
+        with caplog.at_level(logging.INFO):
+            counted, removed, walks = await self._sync(library, fake_romm_api, emit, "run-2")
+
+        assert "Per-unit fetch Faves: a game it holds has more than one shortcut — fetch" in caplog.text
+        assert (counted, walks) == (1, 2)
+        assert removed == [{"rom_id": 31, "app_id": 6031, "kept_rom_id": 30, "kept_app_id": 6030}]
+        assert self._bound(library) == {30: 6030}
+        # The removal drops the stamp of the collection listing 31, so one more
+        # fetch re-stamps it before the skip returns.
+        assert (await self._sync(library, fake_romm_api, emit, "run-3"))[2] == 2
+        assert await self._sync(library, fake_romm_api, emit, "run-4") == (0, [], 0)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("mine_fetched", [True, False], ids=["both-fetched", "mine-skipped"])
+    async def test_a_game_two_collections_bring_in_converges_once(
+        self, make_library, fake_romm_api, emit, mine_fetched
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, faves=[30], mine=[31])
+        self._list(fake_romm_api, 7, [30])
+        if mine_fetched:
+            self._list(fake_romm_api, 8, [31])
+
+        counted, removed, _walks = await self._sync(library, fake_romm_api, emit, "run-2")
+
+        assert (counted, [row["rom_id"] for row in removed]) == (1, [31])
+        assert self._bound(library) == {30: 6030}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("holds", [[30], [31], [32], [30, 31]], ids=["30", "31", "only-unbound-32", "both"])
+    async def test_romm_s_default_keeps_the_shortcut_whichever_version_the_collection_holds(
+        self, make_library, fake_romm_api, emit, holds
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, faves=[30, 31])
+        self._list(fake_romm_api, 7, holds)
+
+        counted, removed, _walks = await self._sync(library, fake_romm_api, emit, "run-2")
+
+        assert (counted, [(row["rom_id"], row["kept_rom_id"]) for row in removed]) == (1, [(31, 30)])
+
+    @pytest.mark.asyncio
+    async def test_romm_s_default_is_read_off_the_sibling_list_for_a_version_not_delivered(
+        self, make_library, fake_romm_api, emit
+    ):
+        # 31 is RomM's default here, so run 1 binds it and 30 is the duplicate;
+        # the region ranking alone would keep 30.
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, faves=[30, 31], main=31, also_bound=(30,))
+        self._list(fake_romm_api, 7, [30])
+
+        counted, removed, _walks = await self._sync(library, fake_romm_api, emit, "run-2")
+
+        assert (counted, [(row["rom_id"], row["kept_rom_id"]) for row in removed]) == (1, [(30, 31)])
+
+    @pytest.mark.asyncio
+    async def test_a_shortcut_the_run_removes_is_sent_nothing_first(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, faves=[30, 31])
+        with library.uow as uow:
+            # A launch command recorded that the built one no longer matches.
+            uow.roms.set_applied_launch_options(31, "stale")
+        self._list(fake_romm_api, 7, [30, 31])
+        start = len(emit.call_args_list)
+
+        counted, removed, _walks = await self._sync(library, fake_romm_api, emit, "run-2")
+
+        sent = [
+            shortcut["rom_id"]
+            for call in emit.call_args_list[start:]
+            if call.args and call.args[0] == "sync_apply_unit"
+            for shortcut in call.args[1]["shortcuts"]
+        ]
+        assert (counted, [row["rom_id"] for row in removed]) == (1, [31])
+        assert 31 not in sent
+
+    @pytest.mark.asyncio
+    async def test_with_no_default_the_preferred_region_reads_the_stored_regions_of_a_version_not_delivered(
+        self, make_library, fake_romm_api, emit
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, faves=[30, 31], main=None)
+        library.settings["preferred_region"] = "Europe"
+        self._list(fake_romm_api, 7, [30])
+
+        counted, removed, _walks = await self._sync(library, fake_romm_api, emit, "run-2")
+
+        assert (counted, [(row["rom_id"], row["kept_rom_id"]) for row in removed]) == (1, [(30, 31)])
+        assert self._bound(library) == {31: 6031}
+
+    @pytest.mark.asyncio
+    async def test_an_installed_version_no_collection_delivered_keeps_its_shortcut(
+        self, make_library, fake_romm_api, emit, tmp_path
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, faves=[30, 31])
+        self._install(library, tmp_path, 31)
+        self._list(fake_romm_api, 7, [30])
+
+        counted, removed, _walks = await self._sync(library, fake_romm_api, emit, "run-2")
+
+        assert (counted, [(row["rom_id"], row["kept_rom_id"]) for row in removed]) == (1, [(30, 31)])
+        assert self._bound(library) == {31: 6031}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("change", ["no-longer-a-sibling", "deleted"])
+    async def test_a_version_romm_no_longer_lists_as_a_sibling_keeps_its_shortcut_fetched_every_sync(
+        self, make_library, fake_romm_api, emit, caplog, change
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, faves=[30, 31])
+        self._list(fake_romm_api, 7, [30])
+        if change == "deleted":
+            del fake_romm_api.roms[31]
+        for rom in fake_romm_api.roms.values():
+            rom["sibling_roms"] = [stub for stub in rom["sibling_roms"] if stub["id"] != 31]
+
+        runs = [await self._sync(library, fake_romm_api, emit, "run-2")]
+        with caplog.at_level(logging.INFO):
+            runs += [await self._sync(library, fake_romm_api, emit, f"run-{n}") for n in (3, 4)]
+
+        assert runs == [(0, [], 2)] * 3
+        assert self._bound(library) == {30: 6030, 31: 6031}
+        assert caplog.text.count("Per-unit fetch Faves: a game it holds has more than one shortcut — fetch") == 4
+
+    @pytest.mark.asyncio
+    async def test_a_game_on_a_platform_romm_no_longer_lists_keeps_its_shortcuts(
+        self, make_library, fake_romm_api, emit
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, faves=[30, 31])
+        fake_romm_api.platforms = [platform for platform in fake_romm_api.platforms if platform["id"] != 2]
+
+        assert await self._sync(library, fake_romm_api, emit, "run-2") == (0, [], 0)
+        assert self._bound(library) == {30: 6030, 31: 6031}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("running", [30, 31])
+    async def test_a_running_game_keeps_its_shortcuts_until_it_has_quit(
+        self, make_library, fake_romm_api, emit, running
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, faves=[30, 31])
+        library.running_games.running = {running}
+
+        assert (await self._sync(library, fake_romm_api, emit, "run-2"))[:2] == (0, [])
+        library.running_games.running = set()
+        counted, removed, _walks = await self._sync(library, fake_romm_api, emit, "run-3")
+
+        assert (counted, [row["rom_id"] for row in removed]) == (1, [31])
+        assert self._bound(library) == {30: 6030}
+
+    @pytest.mark.asyncio
+    async def test_a_stopped_run_removes_nothing_and_the_next_converges(
+        self, make_library, fake_romm_api, emit, monkeypatch
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, faves=[30, 31])
+        box = library.sync._box
+        apply_unit = library.unit_applier.apply_unit
+
+        async def stop_after_the_unit(unit, **kwargs):
+            processed = await apply_unit(unit, **kwargs)
+            box.sync_state = SyncState.CANCELLING
+            return processed
+
+        monkeypatch.setattr(library.unit_applier, "apply_unit", stop_after_the_unit)
+        assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
+        start = len(emit.call_args_list)
+        await library.sync._orchestrator._do_sync_per_unit()
+
+        assert _removals_since(emit, start) == []
+        assert self._bound(library) == {30: 6030, 31: 6031}
+        monkeypatch.setattr(library.unit_applier, "apply_unit", apply_unit)
+        assert (await self._sync(library, fake_romm_api, emit, "run-3"))[:2] == (
+            1,
+            [{"rom_id": 31, "app_id": 6031, "kept_rom_id": 30, "kept_app_id": 6030}],
+        )
+
+    @pytest.mark.asyncio
+    async def test_the_steam_collection_keeps_the_game_on_the_shortcut_it_keeps(
+        self, make_library, fake_romm_api, emit
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, faves=[30, 31])
+        self._list(fake_romm_api, 7, [31])
+        start = len(emit.call_args_list)
+
+        await self._sync(library, fake_romm_api, emit, "run-2")
+
+        complete = [c.args[1] for c in emit.call_args_list[start:] if c.args and c.args[0] == "sync_complete"]
+        assert complete[-1]["romm_collection_app_ids"] == {"Faves": [6030]}

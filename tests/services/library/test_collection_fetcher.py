@@ -560,6 +560,48 @@ class TestWhetherAFreshStampSettlesTheRefusal:
         assert (skipped, restamp_settles) == (False, False)
 
 
+class TestAGameToConvergeRefusesTheSkip:
+    """A collection holding a game that still has more than one bound shortcut is fetched (#2661 D1, D3).
+
+    Faves lists 10, bound on GBA, which the sync leaves off; 11 is another
+    bound version of the same game, which Faves does not list.
+    """
+
+    @staticmethod
+    def _seed(library, fake_romm_api, *, second_app_id: int | None = 1011, slug="gba"):
+        _seed_stamp(library.uow, member_rom_ids=(10,))
+        _seed_persisted_rom(library.uow, 10, app_id=1010, group_key="igdb:10:2", platform_slug=slug)
+        _seed_persisted_rom(library.uow, 11, app_id=second_app_id, group_key="igdb:10:2", platform_slug=slug)
+        fake_romm_api.roms = {10: {"id": 10, "collection_ids": [7], "updated_at": "2026-01-01T00:00:00"}}
+        return replace(_user_collection_unit(rom_count=1, member_rom_ids=(10,)), unwalked_platform_slugs=("gba",))
+
+    @pytest.mark.asyncio
+    async def test_it_is_fetched_without_a_probe_and_says_why(self, make_library, fake_romm_api, caplog):
+        library = make_library(romm_api=fake_romm_api)
+        unit = self._seed(library, fake_romm_api)
+
+        with caplog.at_level(logging.INFO):
+            skip = await library.collection_fetcher._try_collection_incremental_skip(unit)
+
+        assert (skip.member_rom_ids, skip.restamp_settles) == (None, False)
+        assert _probes(fake_romm_api) == []
+        assert "Per-unit fetch Faves: a game it holds has more than one shortcut — fetch" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_a_game_with_one_bound_shortcut_skips(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
+        unit = self._seed(library, fake_romm_api, second_app_id=None)
+
+        assert await _skip_members(library, unit) == [10]
+
+    @pytest.mark.asyncio
+    async def test_a_game_on_a_platform_a_unit_reads_skips(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
+        unit = self._seed(library, fake_romm_api, slug="n64")
+
+        assert await _skip_members(library, unit) == [10]
+
+
 class TestFetchCollectionUnitSkip:
     """End-to-end fetch_collection_unit() over the #742 skip — reconstruction + accounting."""
 

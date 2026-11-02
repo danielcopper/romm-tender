@@ -17,6 +17,7 @@ from collections import Counter
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 from domain.collection_name import fold_collection_name
+from domain.main_sibling import main_sibling_flag
 from domain.rom_file import has_file_on_romm
 from domain.sibling_resolution import AUTO_REGION, canonical_group_name, fs_name_stem, resolve_group_representative
 
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping, Sequence
     from collections.abc import Set as AbstractSet
 
-    from domain.rom import DeliveryRoute, GoneEvidence
+    from domain.rom import DeliveryRoute, GoneEvidence, Rom
 
 # Marker key a rebind entry carries so the per-unit commit moves the DB binding
 # from the bound sibling it is keyed by (the entry's ``rom_id``, kept so the
@@ -346,12 +347,91 @@ def groups_to_converge(bound_group_keys: Iterable[str | None]) -> frozenset[str]
 
     The groups :func:`converge_bound_groups` converges, and so the one predicate
     the platform skip gate and its plan-time prediction ask over a platform's
-    stored rows: a platform holding such a group is fetched in full until it
-    has converged. A NULL key relates its row to nothing
+    stored rows, and the collection skip gate over the rows of the platforms the
+    sync leaves off (:func:`domain.collection_skip.holds_a_game_to_converge`): a
+    platform or collection holding such a group is fetched until it has
+    converged. A NULL key relates its row to nothing
     (:func:`domain.sibling_resolution.group_rows`), so it is never a group.
     """
     counts = Counter(key for key in bound_group_keys if key is not None)
     return frozenset(key for key, count in counts.items() if count > 1)
+
+
+class BroughtIn(NamedTuple):
+    """What :func:`brought_in_by_delivery` answers.
+
+    ``rows`` are the bound registry rows, keyed by ``str(rom_id)``, of every
+    group in which a collection delivery brings in more than one;
+    ``undelivered`` maps each of them no collection delivered to whether
+    RomM's sibling list marks it as the default version (``is_main_sibling``).
+    """
+
+    rows: dict[str, dict[str, Any]]
+    undelivered: dict[int, bool]
+
+
+def brought_in_by_delivery(
+    delivered: Sequence[dict[str, Any]],
+    sibling_stubs: Mapping[int, Sequence[Mapping[str, Any]]],
+    registry: dict[str, dict[str, Any]],
+) -> BroughtIn:
+    """The bound rows the run's collection deliveries bring in, in the groups holding more than one (#2661 D1).
+
+    *delivered* is the built entry of every ROM the run's collection units
+    fetched, keyed by its fresh ``sibling_group_key``; *sibling_stubs* maps each
+    one's ``rom_id`` to the ``sibling_roms`` RomM answered with it. A delivered
+    ROM brings in its own bound row, and every bound row of *registry* that it
+    lists as a sibling and whose stored key is its group's: a sibling the
+    agreement gate keys apart is another game (#2625 D2). A bound row of the
+    group that no delivered member lists is not brought in and keeps its
+    shortcut, so a regrouping in RomM never removes a shortcut on a stored key
+    alone.
+    """
+    key_by_id = {entry["rom_id"]: entry.get("sibling_group_key") for entry in delivered}
+    listed_by_key: dict[str | None, dict[int, bool]] = {}
+    for rom_id, key in key_by_id.items():
+        listed = listed_by_key.setdefault(key, {})
+        for stub in sibling_stubs.get(rom_id, ()):
+            sibling_id = int(stub["id"])
+            listed[sibling_id] = listed.get(sibling_id, False) or main_sibling_flag(stub) is True
+    rows: dict[str, dict[str, Any]] = {}
+    undelivered: dict[int, bool] = {}
+    for rid, reg in registry.items():
+        rom_id = int(rid)
+        listed = listed_by_key.get(reg.get("sibling_group_key"), {})
+        if not reg.get("app_id") or (rom_id not in key_by_id and rom_id not in listed):
+            continue
+        rows[rid] = reg
+        if rom_id not in key_by_id:
+            undelivered[rom_id] = listed[rom_id]
+    converging = groups_to_converge(key_by_id.get(int(rid), reg.get("sibling_group_key")) for rid, reg in rows.items())
+    rows = {
+        rid: reg for rid, reg in rows.items() if key_by_id.get(int(rid), reg.get("sibling_group_key")) in converging
+    }
+    return BroughtIn(rows, {rom_id: main for rom_id, main in undelivered.items() if str(rom_id) in rows})
+
+
+def stored_version(rom: Rom, *, is_main_sibling: bool) -> dict[str, Any]:
+    """A bound row no collection delivered, as the member :func:`converge_bound_groups` ranks (#2661 D4).
+
+    Its regions, revision, tags, file and group key are the ones its last fetch
+    stored; whether it is RomM's default comes from the sibling list
+    (:func:`brought_in_by_delivery`). The alphabetical tie-break reads the
+    stored ``fs_name``'s stem, as :func:`domain.shortcut_data.build_shortcuts_data`
+    does where RomM sends no ``fs_name_no_ext``.
+    """
+    return {
+        "rom_id": rom.rom_id,
+        "name": rom.name,
+        "fs_name_no_ext": fs_name_stem(rom.fs_name),
+        "platform_slug": rom.platform_slug,
+        "sibling_group_key": rom.sibling_group_key,
+        "regions": list(rom.regions),
+        "revision": rom.revision,
+        "tags": list(rom.tags),
+        "is_main_sibling": is_main_sibling,
+        "has_file_on_disk": rom.has_file_on_disk,
+    }
 
 
 def converge_bound_groups(
@@ -367,7 +447,10 @@ def converge_bound_groups(
 
     *listed* is the built entry of every ROM the platform listings of
     *platform_slugs* returned — a complete view of those platforms, since a
-    sibling group is per-platform. *registry* is the bound ``roms`` rows as
+    sibling group is per-platform — or, for the run's collection deliveries,
+    every delivered ROM and every bound row they bring in, the latter as
+    :func:`stored_version` shapes it, with *registry* the rows
+    :func:`brought_in_by_delivery` answers (#2661). *registry* is the bound ``roms`` rows as
     :func:`collapse_sibling_groups` takes it, grouped as that collapse groups
     them; a row on another platform is left alone. *installed_rom_ids* must
     cover the bound rows the listings left out as well as the listed ones.
