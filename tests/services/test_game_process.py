@@ -8,24 +8,24 @@ force kill after the grace window. That rule has two halves — no retry inside
 one call, and no second concurrent call — and
 :class:`TestNeverRepeatsTheStopRequest` guards both.
 
-And only the instance running the ROM the stop was pressed for is ever
-signalled: RetroDECK can have several live at once, so signalling an unmatched
-one ends another game mid-save. :class:`TestTargetsOnlyTheMatchedInstance`
-guards that, asserting the OTHER instance's pids reached neither signal.
+And only the tree Steam started for the ROM's shortcut is ever signalled:
+several games can run at once, in the same emulator too, so signalling another
+tree ends another game mid-save. :class:`TestTargetsOnlyThisGamesTree` guards
+that, asserting the OTHER tree's pids reached neither signal.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
-from fakes.fake_game_process_control import DEFAULT_LAUNCH_PATH, FakeGameProcessControlAdapter
-from fakes.fake_rom_launch_path import FakeRomLaunchPathReader
+from fakes.fake_game_process_control import DEFAULT_APP_ID, FakeGameProcessControlAdapter
+from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeSleeper
 
+from domain.rom import Rom
 from lib.errors import Refused
 from services.game_process import (
     _GRACE_POLL_SECONDS,
@@ -34,10 +34,7 @@ from services.game_process import (
     GameProcessServiceConfig,
 )
 
-if TYPE_CHECKING:
-    from domain.game_instance import GameInstance
-
-APP_ID = "net.retrodeck.retrodeck"
+APP_ID = DEFAULT_APP_ID
 ROM_ID = 42
 
 
@@ -59,26 +56,42 @@ class _YieldingSleeper:
         await asyncio.sleep(0)
 
 
+def _bound_roms(bindings: dict[int, int | None]) -> FakeUnitOfWork:
+    """A Unit of Work holding one ROM per *bindings* entry, bound to the shortcut appId it maps to."""
+    uow = FakeUnitOfWork()
+    for rom_id, app_id in bindings.items():
+        uow.roms.save(
+            Rom(
+                rom_id=rom_id,
+                platform_slug="psx",
+                name=f"Game {rom_id}",
+                fs_name=f"game_{rom_id}.chd",
+                shortcut_app_id=app_id,
+                last_synced_at="2025-01-01T00:00:00",
+            )
+        )
+    return uow
+
+
 def _make_service(
     control: FakeGameProcessControlAdapter,
     sleeper: FakeSleeper | _YieldingSleeper | None = None,
-    launch_path: FakeRomLaunchPathReader | None = None,
+    uow: FakeUnitOfWork | None = None,
 ) -> GameProcessService:
-    """Build the service. By default ``ROM_ID`` resolves to the fake's own path.
+    """Build the service. By default ``ROM_ID`` is bound to the fake's own appId.
 
-    The single-instance shorthand (``FakeGameProcessControlAdapter(pids=…)``)
-    puts :data:`DEFAULT_LAUNCH_PATH` on the instance's command line, so the
-    default seam here makes that instance the match and the ladder runs — which
-    is what every test that is about the LADDER rather than the match wants.
+    The single-tree shorthand (``FakeGameProcessControlAdapter(pids=…)``) runs
+    its tree under :data:`DEFAULT_APP_ID`, so the default binding here makes
+    that tree the ROM's and the ladder runs — which is what every test that is
+    about the LADDER rather than the choice of tree wants.
     """
     return GameProcessService(
         config=GameProcessServiceConfig(
             game_process=control,
-            launch_path=launch_path or FakeRomLaunchPathReader({ROM_ID: DEFAULT_LAUNCH_PATH}),
+            uow_factory=FakeUnitOfWorkFactory(uow=uow or _bound_roms({ROM_ID: APP_ID})),
             sleeper=sleeper or FakeSleeper(),
             logger=logging.getLogger("test_game_process"),
             log_debug=MagicMock(),
-            flatpak_app_id=APP_ID,
         ),
     )
 
@@ -107,16 +120,16 @@ class TestNothingRunning:
         assert control.kill_calls == []
 
     @pytest.mark.asyncio
-    async def test_looks_the_game_up_by_the_configured_flatpak_app_id(self) -> None:
-        # The service must ask about RetroDECK, not some other flatpak — a
-        # mismatched id resolves to nothing on the fake.
-        control = FakeGameProcessControlAdapter(pids=[101], app_id="org.videolan.VLC")
-        service = _make_service(control)
+    async def test_looks_the_game_up_by_the_roms_shortcut_app_id(self) -> None:
+        # The service must ask about the ROM's own shortcut — a tree under any
+        # other appId is not this game.
+        control = FakeGameProcessControlAdapter(pids=[101])
+        service = _make_service(control, uow=_bound_roms({ROM_ID: 555}))
 
         with pytest.raises(Refused) as refused:
             await service.stop_running_game(ROM_ID)
 
-        assert control.find_calls == [APP_ID]
+        assert control.find_calls == [555]
         assert refused.value.reason == "not_running"
 
 
@@ -316,17 +329,17 @@ class TestNeverRepeatsTheStopRequest:
         # of the session, so the release must survive an exception.
         control = FakeGameProcessControlAdapter(pids=[101])
         service = _make_service(control)
-        real_find = control.find_game_instances
+        real_find = control.find_game_processes
         find_count = 0
 
-        def _boom_on_first_call(app_id: str) -> list[GameInstance]:
+        def _boom_on_first_call(app_id: int) -> list[int]:
             nonlocal find_count
             find_count += 1
             if find_count == 1:
                 raise RuntimeError("proc exploded")
             return real_find(app_id)
 
-        control.find_game_instances = _boom_on_first_call  # type: ignore[method-assign]
+        control.find_game_processes = _boom_on_first_call  # type: ignore[method-assign]
 
         with pytest.raises(RuntimeError, match="proc exploded"):
             await service.stop_running_game(ROM_ID)
@@ -336,30 +349,28 @@ class TestNeverRepeatsTheStopRequest:
         assert control.stop_calls == [101]
 
 
-class TestTargetsOnlyTheMatchedInstance:
-    """Guard for the second safety invariant: never signal an unmatched instance.
+class TestTargetsOnlyThisGamesTree:
+    """Guard for the second safety invariant: never signal another game's tree.
 
-    RetroDECK is one flatpak app but can have several live instances — a second
-    game launched from another Steam shortcut, ES-DE opened on its own. Before
-    the ROM reached the endpoint every one of them was signalled, so stopping
-    one game ended them all. Each test here asserts the OTHER instance's pids
-    appear in NEITHER ``stop_calls`` nor ``kill_calls``: asserting only that the
-    right pids were signalled would pass just as happily if both were.
+    Steam starts every shortcut under its own process tree, and several can
+    run at once — two games in the same emulator are two trees. Each test here
+    asserts the OTHER tree's pids appear in NEITHER ``stop_calls`` nor
+    ``kill_calls``: asserting only that the right pids were signalled would
+    pass just as happily if both were.
     """
 
-    OURS = "/home/deck/retrodeck/roms/psx/ours.chd"
-    THEIRS = "/home/deck/retrodeck/roms/snes/theirs.sfc"
+    THEIRS = 2157604804
 
-    def _two_instances(self) -> FakeGameProcessControlAdapter:
+    def _two_trees(self) -> FakeGameProcessControlAdapter:
         control = FakeGameProcessControlAdapter()
-        control.add_instance([201, 202], self.THEIRS)
-        control.add_instance([101, 102], self.OURS)
+        control.add_tree(self.THEIRS, [201, 202])
+        control.add_tree(APP_ID, [101, 102])
         return control
 
     @pytest.mark.asyncio
-    async def test_only_the_matching_instances_processes_are_signalled(self) -> None:
-        control = self._two_instances()
-        service = _make_service(control, launch_path=FakeRomLaunchPathReader({ROM_ID: self.OURS}))
+    async def test_only_this_games_tree_is_signalled(self) -> None:
+        control = self._two_trees()
+        service = _make_service(control)
 
         result = await service.stop_running_game(ROM_ID)
 
@@ -371,12 +382,12 @@ class TestTargetsOnlyTheMatchedInstance:
         assert control.kill_calls == []
 
     @pytest.mark.asyncio
-    async def test_the_unmatched_instance_is_not_force_killed_either(self) -> None:
+    async def test_another_games_tree_is_not_force_killed_either(self) -> None:
         # Everything survives the stop request, so the force rung is reached for
-        # real — and it too must stay inside the matched tree.
-        control = self._two_instances()
+        # real — and it too must stay inside this game's tree.
+        control = self._two_trees()
         control.survive_stop = {101, 102, 201, 202}
-        service = _make_service(control, launch_path=FakeRomLaunchPathReader({ROM_ID: self.OURS}))
+        service = _make_service(control)
 
         result = await service.stop_running_game(ROM_ID)
 
@@ -385,137 +396,58 @@ class TestTargetsOnlyTheMatchedInstance:
         assert control.stop_calls == [101, 102]
 
     @pytest.mark.asyncio
-    async def test_a_re_rooted_sandbox_path_still_matches(self) -> None:
-        # The sandbox's command line may expose the ROM under a different
-        # absolute path than the host one the launch command was baked from, so
-        # the path-tail fallback is what makes the stop work at all there.
+    async def test_only_another_games_tree_alive_signals_nothing_and_refuses_with_not_running(self) -> None:
         control = FakeGameProcessControlAdapter()
-        control.add_instance([201], self.THEIRS)
-        control.add_instance([101], "/run/media/mmcblk0p1/roms/psx/ours.chd")
-        service = _make_service(control, launch_path=FakeRomLaunchPathReader({ROM_ID: self.OURS}))
-
-        result = await service.stop_running_game(ROM_ID)
-
-        assert result == {"success": True, "stopped": 1, "force_killed": 0}
-        assert control.stop_calls == [101]
-
-    @pytest.mark.asyncio
-    async def test_an_exact_path_match_wins_over_a_path_tail_match(self) -> None:
-        # Two instances running the same ROM tail: the one running the exact
-        # resolved path is the one that gets signalled.
-        control = FakeGameProcessControlAdapter()
-        control.add_instance([201], "/run/media/mmcblk0p1/roms/psx/ours.chd")
-        control.add_instance([101], self.OURS)
-        service = _make_service(control, launch_path=FakeRomLaunchPathReader({ROM_ID: self.OURS}))
-
-        await service.stop_running_game(ROM_ID)
-
-        assert control.stop_calls == [101]
-
-    @pytest.mark.asyncio
-    async def test_the_same_filename_on_another_platform_is_not_the_match(self) -> None:
-        # One game, two platform directories, one filename — ordinary in a
-        # multi-platform library. Matching on the filename alone would end the
-        # Genesis session while the SNES one was meant.
-        control = FakeGameProcessControlAdapter()
-        control.add_instance([201], "/run/media/mmcblk0p1/roms/genesis/Aladdin.zip")
-        service = _make_service(
-            control,
-            launch_path=FakeRomLaunchPathReader({ROM_ID: "/home/deck/retrodeck/roms/snes/Aladdin.zip"}),
-        )
-
-        with pytest.raises(Refused) as refused:
-            await service.stop_running_game(ROM_ID)
-
-        assert refused.value.reason == "game_not_running"
-        assert control.stop_calls == []
-        assert control.kill_calls == []
-
-    @pytest.mark.asyncio
-    async def test_two_instances_matching_the_same_tail_signal_nothing(self) -> None:
-        # An ambiguous fallback must refuse, not resolve the tie by scan order:
-        # one of the two is another game, and there is no way to tell which.
-        control = FakeGameProcessControlAdapter()
-        control.add_instance([201], "/run/media/sd/roms/psx/ours.chd")
-        control.add_instance([101], "/home/deck/other/roms/psx/ours.chd")
-        service = _make_service(control, launch_path=FakeRomLaunchPathReader({ROM_ID: self.OURS}))
-
-        with pytest.raises(Refused) as refused:
-            await service.stop_running_game(ROM_ID)
-
-        assert refused.value.reason == "game_not_running"
-        assert control.stop_calls == []
-        assert control.kill_calls == []
-
-    @pytest.mark.asyncio
-    async def test_no_matching_instance_signals_nothing_and_refuses(self) -> None:
-        control = self._two_instances()
-        service = _make_service(control, launch_path=FakeRomLaunchPathReader({ROM_ID: "/roms/gb/other.gb"}))
-
-        with pytest.raises(Refused) as refused:
-            await service.stop_running_game(ROM_ID)
-
-        assert refused.value.reason == "game_not_running"
-        assert refused.value.message == "RetroDECK is running, but not this game — nothing was stopped."
-        # Killing the wrong emulator is worse than refusing: nothing was signalled.
-        assert control.stop_calls == []
-        assert control.kill_calls == []
-
-    @pytest.mark.asyncio
-    async def test_game_not_running_is_a_distinct_reason_from_not_running(self) -> None:
-        # Nothing alive at all is a stale overlay the frontend clears; alive but
-        # unmatched is a refusal it must NOT read as "the game ended".
-        control = self._two_instances()
-        matched_none = _make_service(control, launch_path=FakeRomLaunchPathReader({ROM_ID: "/roms/gb/other.gb"}))
-        nothing_alive = _make_service(FakeGameProcessControlAdapter(pids=[]))
-
-        with pytest.raises(Refused) as unmatched:
-            await matched_none.stop_running_game(ROM_ID)
-        with pytest.raises(Refused) as nothing:
-            await nothing_alive.stop_running_game(ROM_ID)
-
-        assert unmatched.value.reason == "game_not_running"
-        assert nothing.value.reason == "not_running"
-
-    @pytest.mark.asyncio
-    async def test_a_rom_with_no_resolvable_launch_path_signals_nothing(self) -> None:
-        # No install row / no bound shortcut → the seam answers None. There is
-        # nothing to match on, and "match everything" is the bug being fixed.
-        control = self._two_instances()
-        seam = FakeRomLaunchPathReader()
-        service = _make_service(control, launch_path=seam)
-
-        with pytest.raises(Refused) as refused:
-            await service.stop_running_game(ROM_ID)
-
-        assert refused.value.reason == "game_not_running"
-        assert seam.calls == [ROM_ID]
-        assert control.stop_calls == []
-        assert control.kill_calls == []
-
-    @pytest.mark.asyncio
-    async def test_the_launch_path_is_asked_for_the_rom_that_was_passed(self) -> None:
-        control = self._two_instances()
-        seam = FakeRomLaunchPathReader({7: self.OURS})
-        service = _make_service(control, launch_path=seam)
-
-        result = await service.stop_running_game(7)
-
-        assert seam.calls == [7]
-        assert result["success"] is True
-        assert control.stop_calls == [101, 102]
-
-    @pytest.mark.asyncio
-    async def test_nothing_alive_never_consults_the_launch_path_seam(self) -> None:
-        # No instances means no match to make; the DB read is skipped entirely.
-        seam = FakeRomLaunchPathReader({ROM_ID: self.OURS})
-        service = _make_service(FakeGameProcessControlAdapter(pids=[]), launch_path=seam)
+        control.add_tree(self.THEIRS, [201, 202])
+        service = _make_service(control)
 
         with pytest.raises(Refused) as refused:
             await service.stop_running_game(ROM_ID)
 
         assert refused.value.reason == "not_running"
-        assert seam.calls == []
+        assert refused.value.message == "No running game was found to stop."
+        # Killing the wrong game is worse than refusing: nothing was signalled.
+        assert control.stop_calls == []
+        assert control.kill_calls == []
+
+    @pytest.mark.asyncio
+    async def test_a_rom_bound_to_no_shortcut_signals_nothing(self) -> None:
+        # No bound shortcut → nothing Steam runs is this ROM's, and "stop
+        # whatever runs" is the bug the ROM id exists to prevent.
+        control = self._two_trees()
+        service = _make_service(control, uow=_bound_roms({ROM_ID: None}))
+
+        with pytest.raises(Refused) as refused:
+            await service.stop_running_game(ROM_ID)
+
+        assert refused.value.reason == "not_running"
+        assert control.find_calls == []
+        assert control.stop_calls == []
+        assert control.kill_calls == []
+
+    @pytest.mark.asyncio
+    async def test_a_rom_with_no_row_signals_nothing(self) -> None:
+        control = self._two_trees()
+        service = _make_service(control, uow=_bound_roms({}))
+
+        with pytest.raises(Refused) as refused:
+            await service.stop_running_game(ROM_ID)
+
+        assert refused.value.reason == "not_running"
+        assert control.find_calls == []
+        assert control.stop_calls == []
+        assert control.kill_calls == []
+
+    @pytest.mark.asyncio
+    async def test_the_shortcut_is_looked_up_for_the_rom_that_was_passed(self) -> None:
+        control = self._two_trees()
+        service = _make_service(control, uow=_bound_roms({7: APP_ID, ROM_ID: self.THEIRS}))
+
+        result = await service.stop_running_game(7)
+
+        assert control.find_calls == [APP_ID]
+        assert result["success"] is True
+        assert control.stop_calls == [101, 102]
 
 
 class TestRacesDuringTheLadder:

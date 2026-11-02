@@ -226,7 +226,7 @@ def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) ->
     # on the actual Steam client mid-test. Swap in fakes: RSS unavailable + no-op
     # GC leave the budget gate inert, so contract sync tests stay deterministic.
     # The game-process seam is faked for the same reason and then some: the real
-    # adapter reads the dev box's flatpak instance registry and would SIGTERM the
+    # adapter reads the dev box's process table and would SIGTERM the
     # developer's actually-running game.
     fake_game_process = FakeGameProcessControlAdapter()
     # The save-location seam is swapped for the same reason, and it is the one

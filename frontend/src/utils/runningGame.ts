@@ -135,8 +135,8 @@ export async function executeStopRunningGame({
     const result = await stopRunningGame(romId);
     if (result.success || result.reason === "not_running") {
       // "not_running" is the same stale-overlay case caught one layer down:
-      // the backend found nothing of RetroDECK's alive. Either way the game is
-      // not running now, so the overlay must come down.
+      // the backend found nothing running under the shortcut. Either way the
+      // game is not running now, so the overlay must come down.
       detach(
         debugLog(
           `${tag}: stop_running_game for appId=${appId} — success=${result.success} ` +
@@ -146,10 +146,8 @@ export async function executeStopRunningGame({
       onClearOverlay();
       return;
     }
-    // Every other failure leaves the overlay UP on purpose. That includes
-    // "game_not_running": RetroDECK is alive but the backend could not tie any
-    // of its instances to this ROM, so it signalled nothing — the game may
-    // well still be running, and Resume has to stay reachable either way.
+    // Every other failure leaves the overlay UP on purpose: the game may well
+    // still be running, and Resume has to stay reachable either way.
     detach(debugLog(`${tag}: stop_running_game refused for appId=${appId} — reason=${result.reason ?? "none"}`));
     showToast(result.message || "Couldn't stop the game");
   } catch (e) {

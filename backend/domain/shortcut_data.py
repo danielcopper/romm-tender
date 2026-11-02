@@ -21,8 +21,8 @@ from domain.user_data_location import LAUNCHER_EXE_SUFFIX
 # Tender. Its plain ``flatpak run … <app>`` form is the emulator invocation prefix
 # the launch command wraps the resolved ROM path with; the folder-boot ``direct``
 # form threads a ``--command=<launcher>`` between the ``flatpak run`` options and
-# the app id (see :func:`resolve_emulator_invocation`). It is also the identity the
-# stop-game path resolves live processes by, so it is public.
+# the app id (see :func:`resolve_emulator_invocation`). The catalogue reader
+# compares a launcher's app id against it, so it is public.
 RETRODECK_APP_ID = "net.retrodeck.retrodeck"
 
 # Without its Wayland socket RetroDECK draws through XWayland, where Steam Input can

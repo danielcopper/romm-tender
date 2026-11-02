@@ -15,7 +15,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from domain.identity import VERSION
-from domain.shortcut_data import RETRODECK_APP_ID
 from lib.background_tasks import BackgroundTasks
 from lib.conflict_rules import ConflictRuleSet
 from lib.late_binding import LateBinding
@@ -807,20 +806,14 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         ),
     )
 
-    # Stop Game (the running-overlay chevron action). The kill is backend-side;
-    # the service owns the escalation policy and takes the RetroDECK app id from
-    # the single domain constant the launch command is built from. The instance the
-    # ladder signals is matched against the launch path from the SAME resolver
-    # that bakes the shortcut's launch command, so the path it compares a live
-    # process against is the path that was launched.
+    # Stop Game (the running-overlay chevron action). The kill is backend-side.
     game_process_service = GameProcessService(
         config=GameProcessServiceConfig(
             game_process=cfg.adapters.game_process,
-            launch_path=relaunch_options_resolver,
+            uow_factory=cfg.callbacks.uow_factory,
             sleeper=cfg.runtime.sleeper,
             logger=cfg.runtime.logger,
             log_debug=cfg.callbacks.log_debug,
-            flatpak_app_id=RETRODECK_APP_ID,
         ),
     )
 

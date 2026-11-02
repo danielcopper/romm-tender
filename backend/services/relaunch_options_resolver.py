@@ -7,12 +7,6 @@ launch-options reconcile (#1043, which heals any drift to the empty
 placeholder) draw their relaunch items from this seam, so the two never carry
 a divergent build of the same list.
 
-It is equally the one place that answers the narrower "what path does this ROM
-launch?" — the bare launch target inside those options, which the stop-game
-match compares a live sandbox instance's command line against. Asking here
-rather than deriving it a second way is what keeps that comparison on the same
-derivation the shortcut was written with.
-
 For every ROM that is both installed (has a ``rom_installs`` row) and bound
 (its ``Rom.shortcut_app_id`` is set), the resolved item composes the full
 Steam-shortcut launch command from the active core and the selected disc
@@ -85,18 +79,6 @@ class RelaunchOptionsResolver:
         self._loop = config.loop
         self._rules = config.conflict_rules
 
-    def _resolve_bake_path(self, rom: Rom, install: RomInstall) -> str:
-        """Resolve the launch target *rom* bakes — the path the emulator receives.
-
-        The one derivation of that path, shared by the launch-options build and
-        the bare-path entry point, so a read-path consumer can never compare
-        against a path that differs from the one actually launched. A multi-disc
-        ROM resolves to its selected disc, a single-disc ROM to its own
-        ``file_path``, through the same ``disc_resolver`` seam every other
-        launch-bake site uses.
-        """
-        return self._disc_resolver.resolve_for_install(install, rom.selected_disc)
-
     def _resolve_item(self, rom: Rom, install: RomInstall) -> dict[str, Any]:
         """Compose one ``{app_id, launch_options}`` item for an installed+bound ROM.
 
@@ -110,7 +92,9 @@ class RelaunchOptionsResolver:
         invocation = resolve_emulator_invocation({"id": rom.rom_id}, emulator)
         return {
             "app_id": rom.shortcut_app_id,
-            "launch_options": build_launch_options(invocation, self._resolve_bake_path(rom, install)),
+            "launch_options": build_launch_options(
+                invocation, self._disc_resolver.resolve_for_install(install, rom.selected_disc)
+            ),
         }
 
     def _bound_install(self, rom_id: int) -> tuple[Rom, RomInstall] | None:
@@ -178,19 +162,3 @@ class RelaunchOptionsResolver:
                 item["success"] = True
                 item["prune_lease_token"] = await self._rules.acquire_lease("launch_reconfirm")
             return item
-
-    def launch_path_for_rom(self, rom_id: int) -> str | None:
-        """Resolve the launch target of one installed+bound ROM, without the command.
-
-        The bare path :meth:`relaunch_item_for_rom` bakes into its
-        ``launch_options`` — same rows, same disc resolution — so a consumer
-        comparing it against a live process's command line compares against the
-        derivation the shortcut was written with rather than a second opinion.
-        It resolves from the CURRENT rows, so a disc switch, version switch or
-        reinstall since the launch yields a path that no longer matches what is
-        running; Stop Game (the consumer) then refuses rather than signalling a
-        tree it could not attribute. ``None`` when the ROM has no install row or
-        no bound shortcut: nothing was ever launched from it.
-        """
-        pair = self._bound_install(rom_id)
-        return self._resolve_bake_path(*pair) if pair is not None else None

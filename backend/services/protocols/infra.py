@@ -18,7 +18,6 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Sequence
     from contextlib import AbstractAsyncContextManager
 
-    from domain.game_instance import GameInstance
     from domain.sync_action import SyncAction
     from domain.update_output import JournalEntry
 
@@ -251,30 +250,27 @@ class JournalEntriesFn(Protocol):
 
 
 class GameProcessControl(Protocol):
-    """Discovery and signalled termination of a flatpak app's host processes.
+    """Discovery and signalled termination of the processes a Steam shortcut started.
 
-    The seam the stop-game ladder acts through: locate the live instances a
-    flatpak app is running, ask one process to exit, ask whether it has, and
-    force it when it has not. POSIX signal numbers and ``/proc`` stay behind this
-    Protocol — a service reasons in instances, ``request_stop`` / ``force_kill``
-    / ``is_alive``, never in ``SIGTERM`` / ``SIGKILL`` — so the escalation policy
+    The seam the stop-game ladder acts through: locate the processes running
+    one shortcut, ask one process to exit, ask whether it has, and force it
+    when it has not. POSIX signal numbers and ``/proc`` stay behind this
+    Protocol — a service reasons in pids, ``request_stop`` / ``force_kill`` /
+    ``is_alive``, never in ``SIGTERM`` / ``SIGKILL`` — so the escalation policy
     stays expressible without raw syscalls in ``services/``.
     """
 
-    def find_game_instances(self, flatpak_app_id: str) -> list[GameInstance]:
-        """Return one entry per live instance of *flatpak_app_id*.
+    def find_game_processes(self, app_id: int) -> list[int]:
+        """Return the processes Steam started for shortcut *app_id*, deepest first.
 
-        An app can be running several instances at once (a second game, ES-DE
-        opened on its own), each an independent process tree — so they are
-        reported separately rather than pooled, and the caller signals only the
-        tree it has identified. Within an instance the pids are ordered
-        **deepest-first**, so the emulator is reached before the shell wrappers
+        Only that shortcut's own process tree: another game running at the
+        same time, in the same emulator or another, is a tree of its own and
+        never reported here. The emulator is reached before the shell wrappers
         that would otherwise tear it down mid-write, and sandbox scaffolding is
-        excluded: every reported pid is a legitimate signal target. Each instance
-        also carries the command-line tokens of those pids, which is what
-        identifies the game it is running. An empty list means the app is not
-        running (or its process table is unreadable, which is indistinguishable
-        from here; both mean "nothing to stop").
+        excluded: every reported pid is a legitimate signal target. An empty
+        list means the shortcut is not running (or the process table is
+        unreadable, which is indistinguishable from here; both mean "nothing to
+        stop").
         """
         ...
 

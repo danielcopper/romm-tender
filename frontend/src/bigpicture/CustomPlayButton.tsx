@@ -725,11 +725,10 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
 
   // Stop the running game. Steam's overlay ends it in Gaming Mode, but in
   // Desktop Mode that overlay does not open over a Flatpak game, so this is the
-  // way out there. The backend owns the kill — it resolves the flatpak
-  // instance's host processes and runs a single-stop-request → grace → force
-  // ladder (`services/game_process.py`). The `romId` is what tells it WHICH instance:
-  // RetroDECK can have several live at once (a second game, ES-DE opened on its
-  // own), and only the one running this ROM may be signalled.
+  // way out there. The backend owns the kill — it finds the processes Steam
+  // started for the shortcut and runs a single-stop-request → grace → force
+  // ladder (`services/game_process.py`). The `romId` is what tells it WHICH game:
+  // several can run at once, and only this one may be signalled.
   const handleStopGame = async () => {
     await executeStopRunningGame({
       appId,
