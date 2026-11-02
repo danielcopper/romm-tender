@@ -313,10 +313,12 @@ now brings in the whole game, as RomM's own game page lists every version whiche
 - **Over what.** Every bound version RomM lists as a sibling of a version the run's collections fetched, in this run's
   answer, whether or not a collection holds it, and keyed into the same group, so the agreement gate of
   [#2625](https://github.com/danielcopper/romm-tender/issues/2625) D2 still keeps two games apart. A bound version RomM
-  no longer lists as such a sibling — deleted, hidden or regrouped there — keeps its shortcut, so a stored key alone
-  never removes one. A bound version RomM joined to the game after Tender last read it still carries its old game's key
-  and is not brought in: on a platform the sync leaves off it goes the stale way, without the keeper order and without
-  carry-over (#2661 D5). A game on a platform RomM no longer lists stays outside, since no collection walk asks for it.
+  no longer lists as such a sibling — deleted, hidden or regrouped there — is not converged, so a stored key alone never
+  converges one away; it keeps its shortcut unless the delivered version is the one regrouped, which leaves it a game no
+  collection holds that goes the stale way. A bound version RomM joined to the game after Tender last read it still
+  carries its old game's key and is not brought in: on a platform the sync leaves off it goes the stale way, without the
+  keeper order and without carry-over (#2661 D5). A game on a platform RomM no longer lists stays outside, since no
+  collection walk asks for it.
 - **Which shortcut stays.** By the order above, every version brought in counting as listed: with none installed, the
   chain's pick, a version no collection fetched ranked by RomM's default as the sibling list states it and by the
   regions, revision and tags its last fetch stored. Which version a collection holds decides neither whether the game
@@ -325,6 +327,7 @@ now brings in the whole game, as RomM's own game page lists every version whiche
   the preview decides over the same fetched versions, never a skipped collection's rebuilt rows. An unchanged collection
   holding a game that still has more than one bound shortcut by its stored key is fetched rather than skipped, and skips
   again once the game has converged — or, while the version no collection delivers is the one RomM no longer lists as a
-  sibling, is fetched on every sync; where the delivered version is the one regrouped, its fresh key is committed and
-  the collection skips again after one fetch ([Backend Architecture](../architecture/backend-architecture.md),
-  "Convergence"). The removal, its carry-over and its safeguards are the ones above.
+  sibling, is fetched on every sync; where the delivered version is the one regrouped, its fresh key is committed, the
+  version left behind goes the stale way in that run, and the collection skips again after one fetch
+  ([Backend Architecture](../architecture/backend-architecture.md), "Convergence"). The removal, its carry-over and its
+  safeguards are the ones above.

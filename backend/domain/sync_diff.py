@@ -383,9 +383,10 @@ def brought_in_by_delivery(
     ROM brings in its own bound row, and every bound row of *registry* that it
     lists as a sibling and whose stored key is its group's: a sibling the
     agreement gate keys apart is another game (#2625 D2). A bound row of the
-    group that no delivered member lists is not brought in and keeps its
-    shortcut, so a regrouping in RomM never removes a shortcut on a stored key
-    alone.
+    group that no delivered member lists is not brought in, so a stored key
+    alone never converges one away: it keeps its shortcut while a ROM the run
+    synced carries its stored key, and goes the stale way where the delivered
+    version is the one regrouped (D5).
     """
     key_by_id = {entry["rom_id"]: entry.get("sibling_group_key") for entry in delivered}
     listed_by_key: dict[str | None, dict[int, bool]] = {}

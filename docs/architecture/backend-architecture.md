@@ -1050,14 +1050,15 @@ game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app
   which shortcut stays. The losers join `run_converged`, which every collection unit's collapse leaves out, so a game
   split over two collections is decided once. A skipped collection's rebuilt rows deliver nothing, and the preview runs
   the same helper over the ROMs its collection units fetched, never over those rows. A bound row of the group that no
-  delivered member lists — deleted, hidden or regrouped in RomM — keeps its shortcut (#2661 D1, D3). A bound row RomM
-  joined to the game after Tender last read it is not brought in either: its stored key is still its old game's, no
-  collection delivers it, and Tender cannot key it without reading it. On a platform the sync leaves off it goes the
-  stale way, as it would without the join, so the game ends with one shortcut, the delivered version's, without the
-  keeper order and without carry-over; its install record stays, and the version picker, which reads the siblings from
-  RomM, still offers it (#2661 D5). A game on a platform RomM no longer lists keeps its shortcuts for good: no platform
-  unit reads that platform and no collection walk asks for it. The panel carries each loser's Steam state over before
-  the removal (`frontend/src/utils/shortcutCarryOver.ts`), then reports the removals Steam no longer lists through
+  delivered member lists — deleted, hidden or regrouped in RomM — is not converged, and keeps its shortcut while a ROM
+  the run synced still carries its stored key (#2661 D1, D3). A bound row RomM joined to the game after Tender last read
+  it is not brought in either: its stored key is still its old game's, no collection delivers it, and Tender cannot key
+  it without reading it. On a platform the sync leaves off it goes the stale way, as it would without the join, so the
+  game ends with one shortcut, the delivered version's, without the keeper order and without carry-over; its install
+  record stays, and the version picker, which reads the siblings from RomM, still offers it (#2661 D5). A game on a
+  platform RomM no longer lists keeps its shortcuts for good: no platform unit reads that platform and no collection
+  walk asks for it. The panel carries each loser's Steam state over before the removal
+  (`frontend/src/utils/shortcutCarryOver.ts`), then reports the removals Steam no longer lists through
   `report_sync_removals`, which unbinds each row, resets the Steam Input setting of the removed appId and deletes its
   grid images, and leaves the per-ROM cover cache.
 - **Downstream group semantics.** The incremental-skip gate compares RomM's whole visible id set — every sibling, bound
@@ -1074,14 +1075,15 @@ game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app
   (`domain/collection_skip.py::holds_a_game_to_converge`, asked after the listing verdict and before the probe, and
   logged): the fetch hands the convergence RomM's current sibling list. The removal drops the stamp of a collection that
   lists the loser, so such a collection is fetched once more before it skips again. Where the version no collection
-  delivers is the one RomM no longer lists as a sibling — deleted, hidden or regrouped — its row is never read again and
-  keeps the group's stored key, so the game keeps both shortcuts and the collection is fetched on every sync (#2661 D3);
-  where the delivered version is the one regrouped, its commit writes its fresh key (`Rom.synced` in
-  `SyncReporter._persist_synced_rom`), the stored keys part, and the collection skips again after one fetch (D5).
-  Artwork downloads only for the emitted representatives (+ the bound siblings a collection unit keeps), never eager
-  sibling covers. Steam-collection membership resolves each RomM collection `rom_id` with a **group fallback** — an
-  unbound sibling maps to its group's bound sibling's appId — so collecting or favouriting any version puts the game's
-  single shortcut in the collection.
+  delivers is the one RomM no longer lists as a sibling — deleted, hidden or regrouped — its row is never fetched again
+  and keeps the group's stored key, so the game keeps both shortcuts and the collection is fetched on every sync (#2661
+  D3); where the delivered version is the one regrouped, its commit writes its fresh key (`Rom.synced` in
+  `SyncReporter._persist_synced_rom`), the stored keys part, the row left behind goes the stale way in that run as a
+  game no collection holds, without carry-over, and the collection skips again after one fetch (D5). Artwork downloads
+  only for the emitted representatives (+ the bound siblings a collection unit keeps), never eager sibling covers.
+  Steam-collection membership resolves each RomM collection `rom_id` with a **group fallback** — an unbound sibling maps
+  to its group's bound sibling's appId — so collecting or favouriting any version puts the game's single shortcut in the
+  collection.
 
 **Same-named collections union into one Steam collection (#1503).** RomM enforces name uniqueness only per-table and
 per-`(name, user_id)`, so two enabled collections can share a display name — a standard collection and a smart/virtual

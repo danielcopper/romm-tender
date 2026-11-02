@@ -141,8 +141,10 @@ def holds_a_game_to_converge(
     longer lists is walked by no collection. A member counts whether bound or
     not: a collection holding any version brings in the whole game
     (#2661 D1). Such a collection is fetched rather than skipped, so the
-    convergence reads RomM's current sibling list — on every sync, where RomM
-    no longer lists the other version as a sibling (D3).
+    convergence reads RomM's current sibling list — on every sync while the
+    version no collection delivers is the one RomM no longer lists as a
+    sibling (D3); where the delivered version is the one regrouped, its fresh
+    key is committed and the stored keys part (D5).
     """
     scoped = [row for row in rows if row.platform_slug in platform_slugs]
     pending = groups_to_converge(row.sibling_group_key for row in scoped if row.shortcut_app_id is not None)

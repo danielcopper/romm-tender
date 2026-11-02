@@ -648,19 +648,19 @@ Format: **invariant** — tier — enforced by.
   a platform the sync leaves off, the run's collection deliveries converge a group they bring in the same way (#2661),
   once for the run, over the bound rows they deliver and the bound rows of the same stored key a delivered member lists
   in `sibling_roms` (`domain/sync_diff.py::brought_in_by_delivery`), a row no collection delivered ranked by its stored
-  version fields and the sibling list's default, while a bound row no delivered member lists keeps its shortcut, and no
-  collection holding a member of such a group is skipped; a bound version RomM joined to the game after Tender last read
-  it, its stored key still its old game's, is not brought in and goes the stale way (#2661 D5). A row whose shortcut
-  either removes keeps its binding until the panel reports the shortcut gone from Steam, the finalize settles the row's
-  stamps whatever its binding by then, and `report_sync_removals` unbinds it only while it still holds the reported
-  appId; a removal never reported is emitted and counted by the preview again while the shortcut is in Steam, and
-  unbound by the next sync's start reconcile where it is gone (#2653 D1). The removed-game cleanup's own proof marks and
-  clears rows too, by its rule in docs/architecture/removed-game-cleanup.md, "Discovery"** — test + prompt-only —
-  `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule (`sort_stale_rows`, `settle_asked_rows`),
-  `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and the
-  preview (a 404 keeps, a found ROM removes, an answer that establishes nothing keeps; a 404 is asked again on the third
-  run, a stopped run leaves the row asked at the next, a row its platform last delivered is removed unasked, and a row
-  with no recorded route is asked only when a collection record lists it),
+  version fields and the sibling list's default, while the convergence leaves a bound row no delivered member lists to
+  the stale sort, and no collection holding a member of such a group is skipped; a bound version RomM joined to the game
+  after Tender last read it, its stored key still its old game's, is not brought in and goes the stale way (#2661 D5). A
+  row whose shortcut either removes keeps its binding until the panel reports the shortcut gone from Steam, the finalize
+  settles the row's stamps whatever its binding by then, and `report_sync_removals` unbinds it only while it still holds
+  the reported appId; a removal never reported is emitted and counted by the preview again while the shortcut is in
+  Steam, and unbound by the next sync's start reconcile where it is gone (#2653 D1). The removed-game cleanup's own
+  proof marks and clears rows too, by its rule in docs/architecture/removed-game-cleanup.md, "Discovery"** — test +
+  prompt-only — `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule (`sort_stale_rows`,
+  `settle_asked_rows`), `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection`
+  for the apply and the preview (a 404 keeps, a found ROM removes, an answer that establishes nothing keeps; a 404 is
+  asked again on the third run, a stopped run leaves the row asked at the next, a row its platform last delivered is
+  removed unasked, and a row with no recorded route is asked only when a collection record lists it),
   `TestDoSyncPerUnit::test_a_game_whose_every_version_is_gone_keeps_its_shortcut` and `TestPlatformTurnedOffAndBackOn`
   for the two ends — a game gone from RomM keeps its shortcut, a platform turned off loses its games, and
   `test_a_platform_still_on_that_romm_no_longer_lists_keeps_its_shortcuts` holds a platform gone from RomM's list apart
@@ -724,14 +724,16 @@ Format: **invariant** — tier — enforced by.
   deliveries converge a group they bring in (#2661 D1): over the bound rows they deliver and the bound rows of the same
   stored key a delivered member lists in `sibling_roms` (`domain/sync_diff.py::brought_in_by_delivery`), decided once
   for the run after every collection unit is fetched, the rows no collection delivered ranked by their stored version
-  fields and the sibling list's default (`stored_version`, D4); a bound row of the group no delivered member lists keeps
-  its shortcut, so a stored key alone never removes one. An unchanged collection holding a member of such a group is
-  fetched rather than skipped (`domain/collection_skip.py::holds_a_game_to_converge`) — on every sync while the version
-  no collection delivers is the one RomM no longer lists as a sibling (D3; where the delivered version is the one
-  regrouped, the skip returns after one fetch: Backend Architecture, "Convergence") — and a bound version RomM joined to
-  the game after Tender last read it, its stored key still its old game's, is not brought in and goes the stale way on a
-  platform the sync leaves off (D5); the preview converges over the ROMs its collection units fetched, never a skipped
-  collection's rebuilt rows; `tests/domain/test_sync_diff.py::TestBroughtInByDelivery`, `TestStoredVersion` and
+  fields and the sibling list's default (`stored_version`, D4); a bound row of the group no delivered member lists is
+  not converged, so a stored key alone never converges one away — it keeps its shortcut while a ROM the run synced
+  carries its stored key, and goes the stale way where the delivered version is the one regrouped. An unchanged
+  collection holding a member of such a group is fetched rather than skipped
+  (`domain/collection_skip.py::holds_a_game_to_converge`) — on every sync while the version no collection delivers is
+  the one RomM no longer lists as a sibling (D3; where the delivered version is the one regrouped, the skip returns
+  after one fetch: Backend Architecture, "Convergence") — and a bound version RomM joined to the game after Tender last
+  read it, its stored key still its old game's, is not brought in and goes the stale way on a platform the sync leaves
+  off (D5); the preview converges over the ROMs its collection units fetched, never a skipped collection's rebuilt rows;
+  `tests/domain/test_sync_diff.py::TestBroughtInByDelivery`, `TestStoredVersion` and
   `tests/domain/test_collection_skip.py::TestHoldsAGameToConverge` pin those rules,
   `tests/services/library/test_collection_fetcher.py::TestAGameToConvergeRefusesTheSkip` the gate, and
   `tests/services/library/test_sync_orchestrator.py::TestAGameACollectionBringsInConverges` the apply and the preview
