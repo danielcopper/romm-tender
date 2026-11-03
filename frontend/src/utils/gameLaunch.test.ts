@@ -305,50 +305,24 @@ describe("what a disc file opens, as the resolver read it (#2698)", () => {
       platform_name: "PlayStation",
       file: "Game.cue",
       extension: ".cue",
+      reason_file: "Game (Track 2).bin",
       ...overrides,
     });
 
   it.each([
-    [
-      "opened_file_missing",
-      "Beetle PSX cannot start Game.cue: a file it opens through it is missing.",
-      "a file it opens is missing",
-    ],
-    [
-      "track_refused",
-      "Beetle PSX cannot start Game.cue: it names a track of a type Beetle PSX does not take.",
-      "a track is of a type it does not take",
-    ],
-    [
-      "sheet_refused",
-      "Beetle PSX cannot start Game.cue: it refuses a cue sheet or playlist the game opens.",
-      "refuses the game's cue sheet or playlist",
-    ],
-    [
-      "format_refused",
-      "Beetle PSX cannot start Game.cue: a file it names is not a disc image Beetle PSX opens.",
-      "a file it names is not a disc image it opens",
-    ],
-    [
-      "playlist_refused",
-      "Beetle PSX cannot start Game.cue: it fails every game started from a playlist.",
-      "fails every game started from a playlist",
-    ],
-    [
-      "path_too_long",
-      "Beetle PSX cannot start Game.cue: the path of a file it opens is too long to open.",
-      "a file's path is too long to open",
-    ],
-  ] as const)(
-    "a stop on %s refuses the start with the resolver's reason, not the file's format",
-    (reason, sentence, line) => {
-      const answer = disc({ state: "not_this_emulator", reason });
-      expect(launchRefused(answer)).toBe(true);
-      expect(launchRefusal(answer, true)).toBe(sentence);
-      expect(entryLaunchLine(answer, RETRODECK)).toBe(line);
-      expect(launchNote(answer, RETRODECK)).toBeNull();
-    },
-  );
+    ["opened_file_missing", "Game (Track 2).bin is missing"],
+    ["track_refused", "Game (Track 2).bin is a track of a type it does not take"],
+    ["sheet_refused", "it refuses the cue sheet or playlist Game (Track 2).bin"],
+    ["format_refused", "Game (Track 2).bin is not a disc image it opens"],
+    ["path_too_long", "the path of Game (Track 2).bin is too long for it to open"],
+    ["playlist_refused", "it starts no game from a playlist"],
+  ] as const)("a stop on %s turns Play off and names the file it stops on", (reason, why) => {
+    const answer = disc({ state: "not_this_emulator", reason });
+    expect(launchRefused(answer)).toBe(true);
+    expect(launchRefusal(answer, true)).toBe(`Beetle PSX cannot start Game.cue: ${why}.`);
+    expect(entryLaunchLine(answer, RETRODECK)).toBe(why);
+    expect(launchNote(answer, RETRODECK)).toBeNull();
+  });
 
   it("names the entries that do start it after the reason", () => {
     expect(
@@ -357,33 +331,53 @@ describe("what a disc file opens, as the resolver read it (#2698)", () => {
         true,
       ),
     ).toBe(
-      "Beetle PSX cannot start Game.cue: it fails every game started from a playlist. SwanStation can — choose it in the emulator menu.",
+      "Beetle PSX cannot start Game.cue: it starts no game from a playlist. SwanStation can — choose it in the emulator menu.",
     );
   });
 
   it.each([
-    ["opened_file_missing", "a file it opens through Game.cue is missing, and it goes on without it"],
-    ["track_refused", "a track of Game.cue is of a type it does not take, and it goes on without it"],
-    ["sheet_refused", "it refuses a cue sheet or playlist the game opens, and goes on without it"],
-    ["format_refused", "a file Game.cue names is not a disc image it opens, and it goes on without it"],
-    ["path_too_long", "the path of a file it opens is too long to open, and it goes on without it"],
-    ["opened_format_unread", "a file it opens is in a format whose opening was not followed"],
-    ["opened_content_unread", "what it makes of a file it opens depends on that file's content, which was not read"],
-    ["opened_file_unread", "a file it opens could not be read"],
+    ["goes_on_file_missing", "it is missing"],
+    ["goes_on_track_refused", "it is a track of a type it does not take"],
+    ["goes_on_sheet_refused", "it refuses this cue sheet or playlist"],
+    ["goes_on_format_refused", "it is not a disc image it opens"],
+    ["goes_on_path_too_long", "its path is too long to open"],
+  ] as const)(
+    "a file the start goes on without (%s) keeps Play on, startable, never not established",
+    (reason, why) => {
+      const answer = disc({ state: "starts", reason });
+      expect(launchRefused(answer)).toBe(false);
+      expect(launchRefusal(answer, true)).toBeNull();
+      expect(launchNote(answer, RETRODECK)).toBe(
+        `Beetle PSX can start this game, but goes on without Game (Track 2).bin: ${why}.`,
+      );
+      expect(entryLaunchLine(answer, RETRODECK)).toBe(`can start it, without Game (Track 2).bin: ${why}`);
+    },
+  );
+
+  it('an entry Tender cannot start yet keeps what its start goes on without, but not its "can start it"', () => {
+    expect(entryLaunchLine(disc({ state: "starts", reason: "goes_on_file_missing" }), RETRODECK, false)).toBe(
+      "without Game (Track 2).bin: it is missing",
+    );
+  });
+
+  it.each([
+    ["opened_format_unread", "how it opens Game (Track 2).bin was not checked"],
+    ["opened_content_unread", "what it makes of Game (Track 2).bin depends on its content, which was not read"],
+    ["opened_file_unread", "Game (Track 2).bin could not be read"],
     ["patch_setting_unread", "whether it loads a patch for the disc image could not be read"],
-    ["opens_past_bound", "the game opens more files than were followed"],
-  ] as const)("a file that starts keeps Play and says what its opens came to: %s", (reason, why) => {
+    ["opens_past_bound", "the game opens more files than were checked"],
+  ] as const)("what the reading could not establish (%s) keeps Play on and says so", (reason, why) => {
     const answer = disc({ state: "starts", reason });
     expect(launchRefused(answer)).toBe(false);
-    expect(launchRefusal(answer, true)).toBeNull();
     expect(launchNote(answer, RETRODECK)).toBe(`Whether Beetle PSX starts this game cannot be established: ${why}.`);
     expect(entryLaunchLine(answer, RETRODECK)).toBe(`whether it starts the game is not established: ${why}`);
   });
 
-  it("a playlist refused is no note on a file that starts", () => {
-    const answer = disc({ state: "starts", reason: "playlist_refused" });
-    expect(launchNote(answer, RETRODECK)).toBeNull();
-    expect(entryLaunchLine(answer, RETRODECK)).toBe("can start it");
+  it("a stop is no note on a file that starts, and a file the start goes on without is no refusal", () => {
+    expect(launchNote(disc({ state: "starts", reason: "playlist_refused" }), RETRODECK)).toBeNull();
+    expect(launchRefusal(disc({ state: "not_this_emulator", reason: "goes_on_file_missing" }), true)).toBe(
+      "Beetle PSX does not start .cue.",
+    );
   });
 });
 

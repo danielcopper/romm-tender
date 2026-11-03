@@ -442,21 +442,32 @@ export interface EmulatorStart {
 export type LaunchNotEstablishedReason = "system_unknown" | "entry_unknown" | "catalogue_unread" | "no_source";
 
 /**
- * What the resolver found failing among the files a disc file opens (#2698): the
- * emulator's stop on `not_this_emulator`, a file it goes on without on `starts`.
+ * Why the entry does not start the file, where the resolver states a reason of its own, in Tender's words —
+ * among them, where it read the files a disc file opens, the failure it states as the stop (#2698).
  */
-export type LaunchOpenFailedReason =
-  "opened_file_missing" | "track_refused" | "sheet_refused" | "format_refused" | "path_too_long";
-
-/** Why the entry does not start the file, where the resolver states a reason of its own, in Tender's words. */
 export type LaunchRefusalReason =
   | "takes_no_folder"
   | "nothing_to_start"
   | "not_a_game_file"
   | "disc_not_found"
   | "disc_key_missing"
-  | "playlist_refused"
-  | LaunchOpenFailedReason;
+  | "opened_file_missing"
+  | "track_refused"
+  | "sheet_refused"
+  | "format_refused"
+  | "path_too_long"
+  | "playlist_refused";
+
+/**
+ * What the emulator is established to do short of the whole start, where the file starts (#2698): a file of
+ * the disc it goes on without. Play stays on.
+ */
+export type LaunchGoesOnReason =
+  | "goes_on_file_missing"
+  | "goes_on_track_refused"
+  | "goes_on_sheet_refused"
+  | "goes_on_format_refused"
+  | "goes_on_path_too_long";
 
 /** What could not be established about a file the entry starts, in Tender's words. */
 export type LaunchStoppedShortReason =
@@ -479,8 +490,7 @@ export type LaunchStoppedShortReason =
   | "opened_content_unread"
   | "opened_file_unread"
   | "patch_setting_unread"
-  | "opens_past_bound"
-  | LaunchOpenFailedReason;
+  | "opens_past_bound";
 
 /**
  * Whether one installed game's file starts with one emulator entry, as the
@@ -496,7 +506,9 @@ export type LaunchStoppedShortReason =
  * `reason` is the resolver's reason in Tender's words, `null` where it named
  * none Tender words: why a verdict was `not_established`, why the entry does not
  * start the file on `not_this_emulator`, and what could not be established
- * about a file that `starts` (#2195 D40). `contents_unread` says the file is an archive whose
+ * about a file that `starts` (#2195 D40) or what its start goes on without (#2698).
+ * `reason_file` is the name of the file that reason is about, where the resolver read
+ * the files a disc file opens; absent or `null` otherwise. `contents_unread` says the file is an archive whose
  * contents were not read; `format_unestablished` that whether the entry reads
  * this format was not established.
  */
@@ -510,7 +522,8 @@ export interface GameLaunch {
   starts_from: string[];
   other_entries: string[];
   install_in: string[] | null;
-  reason: LaunchNotEstablishedReason | LaunchRefusalReason | LaunchStoppedShortReason | null;
+  reason: LaunchNotEstablishedReason | LaunchRefusalReason | LaunchStoppedShortReason | LaunchGoesOnReason | null;
+  reason_file?: string | null;
   contents_unread: boolean;
   format_unestablished: boolean;
 }

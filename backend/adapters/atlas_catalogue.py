@@ -96,6 +96,7 @@ from _vendor.atlas import (
     CAVEAT_LAUNCHER_SCRIPT_MISSING,
     CAVEAT_OPENS_BOUND_EXCEEDED,
     CAVEAT_OPENS_CONTENT_UNREAD,
+    CAVEAT_OPENS_ENTRY_IGNORED,
     CAVEAT_OPENS_FILE_MISSING,
     CAVEAT_OPENS_FILE_UNREAD,
     CAVEAT_OPENS_FORMAT_REFUSED,
@@ -109,6 +110,9 @@ from _vendor.atlas import (
     CAVEAT_ROM_PATH_UNDECLARED,
     CAVEAT_RUN_GAME_DIFFERS,
     CAVEAT_SYSTEM_UNKNOWN,
+    EFFECT_GOES_ON,
+    EFFECT_STOPS,
+    EFFECT_UNESTABLISHED,
     HEALTH_ISSUE_CATALOGUE_INVALID,
     HEALTH_ISSUE_NOT_SET_UP,
     KIND_LIBRETRO,
@@ -156,6 +160,11 @@ from domain.launchability import (
     FORMAT_REFUSED,
     GAME_KIND_UNFOLLOWED,
     GAME_LIST_UNREAD,
+    GOES_ON_FILE_MISSING,
+    GOES_ON_FORMAT_REFUSED,
+    GOES_ON_PATH_TOO_LONG,
+    GOES_ON_SHEET_REFUSED,
+    GOES_ON_TRACK_REFUSED,
     IMAGE_LAYOUT_UNREAD,
     INSIDE_EMULATOR_DRIVE,
     KEY_FOLDER_UNKNOWN,
@@ -173,6 +182,8 @@ from domain.launchability import (
     OPENS_PAST_BOUND,
     PATCH_SETTING_UNREAD,
     PATH_TOO_LONG,
+    PATH_TOO_LONG_UNCHECKED,
+    PLAYLIST_DISCS_PAST_LIMIT,
     PLAYLIST_REFUSED,
     SAVESTATE_UNREAD,
     SHEET_REFUSED,
@@ -295,43 +306,58 @@ _NOT_ESTABLISHED_LAUNCH_BECAUSE = (
     (CAVEAT_SYSTEM_UNKNOWN, SYSTEM_UNKNOWN),
 )
 
-# What the resolver's reading of the files a disc file opens found failing
-# (#2698). Each is the emulator's own stop on an entry-not-accepted verdict, and
-# a file the emulator goes on without on a launchable one, so each is said on
-# both — except a playlist refused, which the resolver states only as a stop.
+# A failure of the open of a disc file's files (#2698), by what the resolver
+# states follows it (its ``effect``, D5): the emulator stops there, which is
+# the refusal behind an entry-not-accepted verdict; it goes on without the
+# file, which a launchable answer says beside the start; or what it does there
+# is not established. A failure whose effect this map does not hold reads as
+# no reason.
 _OPEN_FAILED_BECAUSE = {
-    CAVEAT_OPENS_FILE_MISSING: OPENED_FILE_MISSING,
-    CAVEAT_OPENS_TRACK_REFUSED: TRACK_REFUSED,
-    CAVEAT_OPENS_SHEET_REFUSED: SHEET_REFUSED,
-    CAVEAT_OPENS_FORMAT_REFUSED: FORMAT_REFUSED,
-    CAVEAT_OPENS_PATH_TOO_LONG: PATH_TOO_LONG,
+    EFFECT_STOPS: {
+        CAVEAT_OPENS_FILE_MISSING: OPENED_FILE_MISSING,
+        CAVEAT_OPENS_TRACK_REFUSED: TRACK_REFUSED,
+        CAVEAT_OPENS_SHEET_REFUSED: SHEET_REFUSED,
+        CAVEAT_OPENS_FORMAT_REFUSED: FORMAT_REFUSED,
+        CAVEAT_OPENS_PATH_TOO_LONG: PATH_TOO_LONG,
+        CAVEAT_OPENS_PLAYLIST_REFUSED: PLAYLIST_REFUSED,
+    },
+    EFFECT_GOES_ON: {
+        CAVEAT_OPENS_FILE_MISSING: GOES_ON_FILE_MISSING,
+        CAVEAT_OPENS_TRACK_REFUSED: GOES_ON_TRACK_REFUSED,
+        CAVEAT_OPENS_SHEET_REFUSED: GOES_ON_SHEET_REFUSED,
+        CAVEAT_OPENS_FORMAT_REFUSED: GOES_ON_FORMAT_REFUSED,
+        CAVEAT_OPENS_PATH_TOO_LONG: GOES_ON_PATH_TOO_LONG,
+    },
+    EFFECT_UNESTABLISHED: {
+        CAVEAT_OPENS_PATH_TOO_LONG: PATH_TOO_LONG_UNCHECKED,
+    },
 }
 
 # Why the entry does not take the file, where the resolver states its own reason
-# on an entry-not-accepted verdict (#2195 D40). An entry's loader card refuses
-# with no code, which reads as no reason.
+# on an entry-not-accepted verdict (#2195 D40), beside a failure of the open it
+# states as the stop. An entry's loader card refuses with no code, which reads
+# as no reason.
 _REFUSED_BECAUSE = {
     CAVEAT_ENTRY_TAKES_NO_DIRECTORY: TAKES_NO_FOLDER,
     CAVEAT_BOOT_NOTHING_FOUND: NOTHING_TO_START,
     CAVEAT_BOOT_FILE_UNBOOTABLE: NOT_A_GAME_FILE,
     CAVEAT_BOOT_DISC_ROOT_MISSING: DISC_NOT_FOUND,
     CAVEAT_BOOT_DISC_KEY_MISSING: DISC_KEY_MISSING,
-    CAVEAT_OPENS_PLAYLIST_REFUSED: PLAYLIST_REFUSED,
-    **_OPEN_FAILED_BECAUSE,
 }
 
-# The refusals the resolver states only where the emulator stops. A refused
-# answer may carry, ahead of its stop, a file the emulator would have gone on
-# without — Beetle PCE opens a playlist's discs before it fails the load — so
-# one of these is the reason wherever it stands.
-_STOPS_ONLY = frozenset(_REFUSED_BECAUSE) - frozenset(_OPEN_FAILED_BECAUSE)
+# What the emulator is established to do with the file that is not the whole
+# start, said beside a launchable verdict (#2698): Genesis Plus GX reads no
+# more than four discs from a playlist.
+_STARTS_WITH_A_NOTE_BECAUSE = {
+    CAVEAT_OPENS_ENTRY_IGNORED: PLAYLIST_DISCS_PAST_LIMIT,
+}
 
 # What the resolver's reading of a file the entry starts stopped short of, on a
 # launchable verdict (#2195 D40): the entry's own boot read as far as it goes,
 # a loader that takes the extension and then reads content atlas does not, an
 # extension the emulator's builds disagree on, or the files a disc file opens
 # read as far as they go (#2698). None of them refuses the start; each is said
-# beside it, as is a file the emulator goes on without.
+# beside it.
 _STOPPED_SHORT_BECAUSE = {
     CAVEAT_BOOT_PATH_MISSING: CONTENT_MISSING,
     CAVEAT_BOOT_PATH_UNESTABLISHED: CONTENT_UNREADABLE,
@@ -353,7 +379,6 @@ _STOPPED_SHORT_BECAUSE = {
     CAVEAT_OPENS_FILE_UNREAD: OPENED_FILE_UNREAD,
     CAVEAT_OPENS_SETTING_UNREAD: PATCH_SETTING_UNREAD,
     CAVEAT_OPENS_BOUND_EXCEEDED: OPENS_PAST_BOUND,
-    **_OPEN_FAILED_BECAUSE,
 }
 
 # Codes a launchability answer carries that change nothing Tender says.
@@ -372,6 +397,20 @@ _LAUNCH_NOTES_UNWORDED = frozenset(
         CAVEAT_CORE_FILE_FOREIGN,
         CAVEAT_ARRANGEMENT_VERSION_DRIFTED,
         CAVEAT_ROM_PATH_UNDECLARED,
+    }
+)
+
+# The codes of the reading of the files a disc file opens, each about one file
+# (``data["file"]``), which its sentence names.
+_NAMES_A_FILE = frozenset(
+    {
+        *(code for failures in _OPEN_FAILED_BECAUSE.values() for code in failures),
+        CAVEAT_OPENS_FORMAT_UNREAD,
+        CAVEAT_OPENS_CONTENT_UNREAD,
+        CAVEAT_OPENS_FILE_UNREAD,
+        CAVEAT_OPENS_SETTING_UNREAD,
+        CAVEAT_OPENS_BOUND_EXCEEDED,
+        CAVEAT_OPENS_ENTRY_IGNORED,
     }
 )
 
@@ -502,24 +541,60 @@ def _frontend_choice(entries: tuple[Any, ...]) -> Any:
     return None if declared and first.declared_index == min(declared) else first
 
 
-def _launch_reason(answer: Any, state: str) -> str | None:
-    """The resolver's reason behind *answer*'s verdict, in Tender's words, or ``None`` where Tender words none.
-
-    Why it could not be established, why the entry does not take the file, or
-    what a reading of a file the entry starts stopped short of.
-    """
-    codes = _caveat_codes(answer)
-    if state == NOT_THIS_EMULATOR:
-        ordered = (*(code for code in codes if code in _STOPS_ONLY), *codes)
-        return next((_REFUSED_BECAUSE[code] for code in ordered if code in _REFUSED_BECAUSE), None)
-    if state == STARTS:
-        return next((_STOPPED_SHORT_BECAUSE[code] for code in codes if code in _STOPPED_SHORT_BECAUSE), None)
-    if state != LAUNCH_NOT_ESTABLISHED:
+def _open_failure(caveat: Any, effect: str) -> str | None:
+    """*caveat*'s reason in Tender's word where it is a failure of the open the resolver states *effect* for."""
+    if caveat.data.get("effect") != effect:
         return None
+    return _OPEN_FAILED_BECAUSE[effect].get(caveat.code)
+
+
+def _starts_because(caveat: Any) -> str | None:
+    """What *caveat* says beside a launchable verdict, in Tender's word, or ``None`` where it says nothing Tender words.
+
+    A failure of the open is read by the effect the resolver states for it; any
+    other code by its own word.
+    """
+    for effect in (EFFECT_GOES_ON, EFFECT_UNESTABLISHED):
+        reason = _open_failure(caveat, effect)
+        if reason is not None:
+            return reason
+    return _STOPPED_SHORT_BECAUSE.get(caveat.code) or _STARTS_WITH_A_NOTE_BECAUSE.get(caveat.code)
+
+
+def _named_file(caveat: Any) -> str | None:
+    """The name of the file *caveat* states, without its folder, or ``None`` where it states none."""
+    file = caveat.data.get("file")
+    return os.path.basename(file) if isinstance(file, str) else None
+
+
+def _launch_reason(answer: Any, state: str) -> tuple[str | None, str | None]:
+    """The resolver's reason behind *answer*'s verdict in Tender's word, and the file it names; ``None`` where none.
+
+    Why it could not be established, why the entry does not take the file — the
+    failure of the open the resolver states as the stop (D5), or a reason of its
+    own — or what is said beside a file that starts. Only a failure of the open
+    names a file.
+    """
+    caveats = answer.caveats
+    if state == NOT_THIS_EMULATOR:
+        for caveat in caveats:
+            reason = _open_failure(caveat, EFFECT_STOPS)
+            if reason is not None:
+                return reason, _named_file(caveat)
+        return next((_REFUSED_BECAUSE[c.code] for c in caveats if c.code in _REFUSED_BECAUSE), None), None
+    if state == STARTS:
+        for caveat in caveats:
+            reason = _starts_because(caveat)
+            if reason is not None:
+                return reason, _named_file(caveat) if caveat.code in _NAMES_A_FILE else None
+        return None, None
+    if state != LAUNCH_NOT_ESTABLISHED:
+        return None, None
+    codes = _caveat_codes(answer)
     reason = next((reason for code, reason in _NOT_ESTABLISHED_LAUNCH_BECAUSE if code in codes), None)
     if reason is None and catalogue_refused(answer):
-        return CATALOGUE_UNREAD
-    return reason
+        return CATALOGUE_UNREAD, None
+    return reason, None
 
 
 def _installed_in(installers: Any) -> tuple[str, ...]:
@@ -536,6 +611,7 @@ def _launchability(answer: Any, *, system: str, content_path: str, label: str) -
     """*answer* in Tender's words."""
     state = _LAUNCH_STATES.get(answer.verdict, LAUNCH_NOT_ESTABLISHED)
     codes = set(_caveat_codes(answer))
+    reason, reason_file = _launch_reason(answer, state)
     return Launchability(
         state=state,
         entry=label,
@@ -545,7 +621,8 @@ def _launchability(answer: Any, *, system: str, content_path: str, label: str) -
         starts_from=tuple(answer.accepted),
         other_entries=tuple(answer.alternatives),
         install_in=None if answer.installers is None else _installed_in(answer.installers),
-        reason=_launch_reason(answer, state),
+        reason=reason,
+        reason_file=reason_file,
         contents_unread=CAVEAT_ARCHIVE_CONTENTS_UNREAD in codes,
         format_unestablished=CAVEAT_ENTRY_FORMAT_UNESTABLISHED in codes,
     )

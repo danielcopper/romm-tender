@@ -647,10 +647,14 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
   is neither a disc image nor a game program, a disc game whose disc cannot be mounted, or an encrypted disc image
   without its key file. **Play** is off. Where Tender cannot start that emulator yet either, this reason is still the
   one said.
-- **"Beetle PSX cannot start Game.cue: a file it opens through it is missing."** — for a disc game started from a
-  `.cue`, `.ccd` or `.m3u`, the emulator's own opening of its files was followed, and the sentence says where it stops:
-  a missing file, a track or a cue sheet or playlist it refuses, a file of a kind it does not open, a path too long to
-  open, or a playlist where the emulator fails every game started from one, as Beetle PCE does. **Play** is off.
+- **"Beetle PSX cannot start Game.cue: Game (Track 2).bin is missing."** — for a disc game started from a `.cue`,
+  `.ccd`, `.gdi` or `.m3u`, or a disc image, the emulator's own opening of its files was followed, and the sentence
+  names the file it stops on: a file that is missing, a track or a cue sheet or playlist it refuses, a file that is not
+  a disc image it opens, or a path too long for it to open — or that it starts no game from a playlist, as Beetle PCE
+  does. **Play** is off.
+- **"Beetle Saturn can start this game, but goes on without Game (Track 2).bin: it is a track of a type it does not
+  take."** — the emulator starts the game without a file of the disc, and the sentence names it and why. **Play** stays
+  on.
 - **"Tender cannot start RPCS3 Game Serial (Standalone) yet."** — the emulator in effect is one Tender cannot start from
   Steam yet, and nothing else stands in the way. **Play** is off; choose another emulator in the emulator menu.
 - **"Whether Game.sfc starts cannot be established: …"** — the emulator source could not answer, with the reason.
@@ -660,8 +664,7 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
 - **"Whether RPCS3 Directory (Standalone) starts this game cannot be established: …"** — nothing is known to stand in
   the way, but the answer could not follow the start all the way, and the sentence says where it stopped: the folder was
   not found, whether a disc image is encrypted or its key file fits could not be checked, the emulator's version decides
-  whether it reads that kind of file, or a file a disc game opens could not be followed or is one the emulator goes on
-  without. **Play** stays on.
+  whether it reads that kind of file, or a file a disc game opens could not be checked. **Play** stays on.
 - **"Whether _emulator_ reads _.ext_ files is not established."** — nobody has established which files the emulator
   reads. **Play** stays on.
 
