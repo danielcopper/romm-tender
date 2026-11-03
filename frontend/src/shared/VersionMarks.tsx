@@ -1,14 +1,13 @@
 /**
- * The marks a version picker's row carries after the version's name — its
- * badges and its availability hint — and the palette the picker draws in.
- * Their words are `utils/versionPickerWording.ts`'s.
+ * The marks a version row carries after the version's name in either version
+ * picker — its badges and its availability hint — and the accent and the grey
+ * both pickers draw in. Their words are `utils/versionPickerWording.ts`'s.
  */
 
 import type { FC } from "react";
 import { DISC_ACCENT, DISC_GREY } from "./DiscGlyphs";
 
-// Steam accent blue for the active version, neutral grey otherwise — the disc
-// picker's palette, so the two game-detail pickers read as one system.
+// The disc picker's palette, so the game-detail pickers read as one system.
 export const ACTIVE_ACCENT = DISC_ACCENT;
 export const NEUTRAL_GREY = DISC_GREY;
 
@@ -18,7 +17,7 @@ const BADGE_COLORS: Record<"accent" | "muted" | "good", { bg: string; fg: string
   muted: { bg: "rgba(255, 255, 255, 0.10)", fg: "rgba(255, 255, 255, 0.55)" },
 };
 
-/** The italic inline hint that explains why a version can't be selected. */
+/** The italic availability hint a picker draws beside a version. */
 export const AvailabilityHint: FC<{ text: string }> = ({ text }) => (
   <span style={{ marginLeft: "8px", fontSize: "11px", fontStyle: "italic", color: NEUTRAL_GREY }}>{text}</span>
 );

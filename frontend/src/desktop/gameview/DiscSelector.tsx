@@ -33,6 +33,8 @@ interface DiscSelectorProps {
   ask: AskDialog;
   /** Whether the bound version's file is missing, which leaves its discs out. */
   fileMissing: boolean;
+  /** Whether the Play button's press is under way, which the trigger waits for. */
+  pressUnderWay: boolean;
 }
 
 const LOG_TAG = "DesktopDiscSelector";
@@ -83,7 +85,7 @@ function versionRowCover(base64: string | undefined): ReactNode {
   return <FaCompactDisc size={18} color={DISC_GREY} style={{ flexShrink: 0 }} />;
 }
 
-export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing }) => {
+export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing, pressUnderWay }) => {
   const discLeaseOwner = `desktop-disc-selector:${appId}`;
   const versionLeaseOwner = `desktop-version-picker:${appId}`;
 
@@ -93,7 +95,10 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing })
   const romIdRef = useRef<number | null>(null);
 
   const [versionList, setVersionList] = useState<VersionList | null>(null);
-  // Set while a switch is under way; `executeVersionSwitch` says when it clears.
+  // Set while a switch is under way. One refused, failed or declined at its
+  // question clears it itself (`executeVersionSwitch`); a committed one is
+  // cleared by the list read after its broadcast, and a change of game by the
+  // list effect's cleanup.
   const [switching, setSwitching] = useState(false);
   const [covers, setCovers] = useState<Record<number, string>>({});
   const coversRequested = useRef<Set<number>>(new Set());
@@ -172,10 +177,9 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing })
     };
   }, [appId, discLeaseOwner]);
 
-  // The group's versions, asked again when Big Picture's VersionPicker asks: a
-  // switch, a prune, a member's download completing or failing, a member's
-  // uninstall, and a sync run's end. A failed download counts because the
-  // sibling supersede removes the old install when the download STARTS.
+  // The group's versions, asked again when Big Picture's VersionPicker asks, and
+  // for its reasons: a switch, a prune, a member's download completing or
+  // failing, a member's uninstall, and a sync run's end.
   useEffect(() => {
     mountPruneLeaseOwner(versionLeaseOwner);
     let cancelled = false;
@@ -230,7 +234,9 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing })
 
     return () => {
       cancelled = true;
-      // A switch under way is torn down with this game's lease owner.
+      // A switch under way is cancelled with this game's lease owner, and a
+      // cancelled switch clears no guard (`executeVersionSwitch`), so without
+      // this the next game's trigger would stay disabled.
       setSwitching(false);
       detach(releasePruneLeasesByOwner(versionLeaseOwner));
       if (loadVersionListRef.current?.load === load) loadVersionListRef.current = null;
@@ -292,6 +298,7 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing })
   const offDefault = versions.some((v) => v.is_default) && !(active?.is_default ?? false);
 
   const face = selectorTriggerFace(discDisplayState, offDefault);
+  const disabled = switching || pressUnderWay;
   const buttonTitle = selectorButtonTitle(discDisplayState, hasVersions);
 
   return (
@@ -303,7 +310,7 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing })
         aria-label={buttonTitle}
         aria-haspopup="menu"
         aria-expanded={showMenu}
-        disabled={switching}
+        disabled={disabled}
         style={{
           display: "flex",
           alignItems: "center",
@@ -316,8 +323,8 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing })
           border: "1px solid rgba(255, 255, 255, 0.1)",
           background: "rgba(255, 255, 255, 0.06)",
           color: "#ffffff",
-          cursor: switching ? "default" : "pointer",
-          opacity: switching ? 0.55 : 1,
+          cursor: disabled ? "default" : "pointer",
+          opacity: disabled ? 0.55 : 1,
           boxShadow: "0 1px 4px rgba(0, 0, 0, 0.4)",
           lineHeight: "normal",
           boxSizing: "border-box",

@@ -30,11 +30,15 @@ import { getCachedGameDetail } from "../../utils/cachedGameDetailStore";
 import { applyCommittedVersionSwitch } from "../../utils/versionSwitchApplication";
 
 /** The selector with a dialog host to ask through, as the Play button gives it one. */
-const Selector: FC<{ appId: number; fileMissing?: boolean }> = ({ appId, fileMissing = false }) => {
+const Selector: FC<{ appId: number; fileMissing?: boolean; pressUnderWay?: boolean }> = ({
+  appId,
+  fileMissing = false,
+  pressUnderWay = false,
+}) => {
   const dialogs = useDialogHost();
   return (
     <>
-      <DiscSelector appId={appId} ask={dialogs.ask} fileMissing={fileMissing} />
+      <DiscSelector appId={appId} ask={dialogs.ask} fileMissing={fileMissing} pressUnderWay={pressUnderWay} />
       {dialogs.element}
     </>
   );
@@ -220,6 +224,8 @@ describe("Desktop DiscSelector — multi-disc rendering", () => {
     const r = await renderAndOpen();
 
     expect(r.getByTestId("disc-btn").textContent).toBe("");
+    expect(r.getByTestId("disc-btn")).toHaveAttribute("aria-label", "Select Disc");
+    expect(r.getByTestId("disc-btn")).toHaveAttribute("title", "Select Disc");
     const menu = r.getByTestId("disc-menu");
     const items = within(menu).getAllByRole("menuitem");
     expect(items.map((i) => i.textContent.replace("✓", ""))).toEqual(["All discs (m3u)", "Disc 1", "Disc 2", "Disc 3"]);
@@ -400,7 +406,7 @@ describe("Desktop DiscSelector — multi-version rendering and switching", () =>
     expect(applyCommittedVersionSwitch).toHaveBeenCalledWith(
       expect.objectContaining({ success: true, rom_id: 43 }),
       expect.any(Function),
-      expect.any(Object),
+      expect.objectContaining({ owner: "desktop-version-picker:100" }),
     );
     expect(r.queryByTestId("disc-menu")).toBeNull();
   });
@@ -642,6 +648,12 @@ function versionsWith(over: Partial<VersionInfo>[]): VersionList {
   return multiVersionList({ versions: base.map((v, i) => ({ ...v, ...over[i] })) });
 }
 
+/** A list that turns the version face to the accent, so a test can see it land. */
+const landedMark = versionsWith([{ is_default: false }, { is_default: true }]);
+
+const faceColour = (r: ReturnType<typeof render>): string | undefined =>
+  r.getByTestId("disc-btn").querySelector("svg")?.style.color;
+
 describe("Desktop DiscSelector — what a version row offers", () => {
   beforeEach(() => {
     vi.mocked(getCachedGameDetail).mockReset();
@@ -761,12 +773,16 @@ describe("Desktop DiscSelector — while a switch is under way", () => {
     vi.mocked(backend.fetchCoverBase64).mockReset().mockResolvedValue({ base64: "" });
   });
 
-  it("disables and dims the trigger until the switch is answered, with no throbber", async () => {
+  it("disables and dims the trigger until the switch is answered, adding no stylesheet", async () => {
     mockCachedDetail();
     let answer: (v: Awaited<ReturnType<typeof backend.switchVersion>>) => void = () => {};
     vi.mocked(backend.switchVersion).mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    const sheets = () => document.querySelectorAll("style, link[rel=stylesheet]").length;
+    const before = sheets();
 
     const r = await renderAndOpen();
+    expect(r.getByTestId("disc-btn").ownerDocument).toBe(document);
+    expect(sheets()).toBe(before);
     await act(async () => {
       fireEvent.click(within(r.getByTestId("disc-menu")).getByText("Japan"));
       await Promise.resolve();
@@ -774,12 +790,37 @@ describe("Desktop DiscSelector — while a switch is under way", () => {
 
     expect(r.getByTestId("disc-btn")).toBeDisabled();
     expect(r.getByTestId("disc-btn").style.opacity).toBe("0.55");
-    expect(r.getByTestId("disc-btn").ownerDocument.getElementById("romm-throbber-style")).toBeNull();
+    expect(sheets()).toBe(before);
 
     await act(async () => {
       answer({ success: false, reason: "server_unreachable", message: "offline" });
       await Promise.resolve();
     });
+
+    expect(r.getByTestId("disc-btn")).toBeEnabled();
+    expect(r.getByTestId("disc-btn").style.opacity).toBe("1");
+  });
+});
+
+describe("Desktop DiscSelector — while the Play button's press is under way", () => {
+  beforeEach(() => {
+    vi.mocked(getCachedGameDetail).mockReset();
+    vi.mocked(backend.getDiscSelection).mockReset().mockResolvedValue(m3uSelection);
+    vi.mocked(backend.getVersionList).mockReset().mockResolvedValue(multiVersionList());
+    vi.mocked(backend.fetchCoverBase64).mockReset().mockResolvedValue({ base64: "" });
+  });
+
+  it("disables and dims the trigger, opening no menu, until the press is over", async () => {
+    mockCachedDetail();
+    const r = render(<Selector appId={100} pressUnderWay />);
+    await waitFor(() => expect(r.getByTestId("disc-btn")).toHaveAttribute("aria-label", "Select Disc or Version"));
+
+    expect(r.getByTestId("disc-btn")).toBeDisabled();
+    expect(r.getByTestId("disc-btn").style.opacity).toBe("0.55");
+    fireEvent.click(r.getByTestId("disc-btn"));
+    expect(r.queryByTestId("disc-menu")).toBeNull();
+
+    r.rerender(<Selector appId={100} pressUnderWay={false} />);
 
     expect(r.getByTestId("disc-btn")).toBeEnabled();
     expect(r.getByTestId("disc-btn").style.opacity).toBe("1");
@@ -1313,6 +1354,34 @@ describe("Desktop DiscSelector — after it is gone", () => {
   });
 });
 
+describe("Desktop DiscSelector — a list read that fails after it is gone", () => {
+  beforeEach(() => {
+    vi.mocked(getCachedGameDetail).mockReset();
+    vi.mocked(backend.getDiscSelection).mockReset().mockResolvedValue(m3uSelection);
+    vi.mocked(backend.getVersionList).mockReset();
+    vi.mocked(backend.fetchCoverBase64).mockReset().mockResolvedValue({ base64: "" });
+  });
+
+  it("logs nothing", async () => {
+    mockCachedDetail();
+    const read = deferred<VersionList>();
+    vi.mocked(backend.getVersionList).mockReturnValue(read.promise);
+    const logError = vi.spyOn(backend, "logError").mockImplementation(() => undefined);
+    const r = render(<Selector appId={100} />);
+    await waitFor(() => expect(backend.getVersionList).toHaveBeenCalledTimes(1));
+
+    r.unmount();
+    await act(async () => {
+      read.reject(new Error("down"));
+      await Promise.resolve();
+    });
+    await flushAsync();
+
+    expect(logError).not.toHaveBeenCalled();
+    logError.mockRestore();
+  });
+});
+
 describe("Desktop DiscSelector — the discs across a switch", () => {
   beforeEach(() => {
     vi.mocked(getCachedGameDetail).mockReset();
@@ -1474,8 +1543,9 @@ describe("Desktop DiscSelector — what clears the guard", () => {
 
     await pressJapan(r);
     expect(r.getByTestId("disc-btn")).toBeDisabled();
+    vi.mocked(backend.getVersionList).mockResolvedValueOnce(landedMark);
     await syncFrame({ running: false, stage: "done" });
-    await flushAsync();
+    await waitFor(() => expect(faceColour(r)).toBe(DISC_ACCENT));
 
     expect(r.getByTestId("disc-btn")).toBeDisabled();
   });
@@ -1577,12 +1647,12 @@ describe("Desktop DiscSelector — the binding and the guard across a switch", (
     const r = render(<Selector appId={100} />);
     await r.findByTestId("disc-btn");
 
-    vi.mocked(backend.getVersionList).mockReturnValueOnce(earlier.promise);
+    vi.mocked(backend.getVersionList).mockReturnValueOnce(earlier.promise).mockResolvedValueOnce(landedMark);
     await dataChanged({ type: "version_switched", app_id: 100, rom_id: 42 });
     await pressJapan(r);
     await dataChanged({ type: "version_switched", app_id: 999, rom_id: 7 });
     await syncFrame({ running: false, stage: "done" });
-    await flushAsync();
+    await waitFor(() => expect(faceColour(r)).toBe(DISC_ACCENT));
 
     expect(r.getByTestId("disc-btn")).toBeDisabled();
     await act(async () => {

@@ -903,8 +903,10 @@ Where it does not stand:
   whose run it is ([Library](#library)).
 - **In the desktop client's save conflict dialog** (dev build only): its spin would need a stylesheet on Steam's page
   outside the restoration ledger ([desktop-dom-architecture.md](desktop-dom-architecture.md)), and no shipped bundle
-  carries that surface. For the same reason the desktop disc and version selector's trigger (dev build only) is disabled
-  and dimmed while a version switch is under way, and shows no throbber.
+  carries that surface.
+- **On the desktop client's disc and version selector while a version switch is under way** (dev build only): its spin
+  would need that stylesheet too; [desktop-dom-architecture.md](desktop-dom-architecture.md) says what its trigger shows
+  then.
 - **In a tooltip** — the platform list's "Checking this platform's BIOS files…", the core picker's "Reading the
   emulators for this platform…" — **and on a short settings write** — an emulator source's switch, Tender's folder.
 

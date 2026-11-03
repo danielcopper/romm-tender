@@ -231,7 +231,12 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
   return (
     <div className="tender-desktop-play-btn-container" style={CONTAINER_STYLE}>
       {renderButtonGroup()}
-      <DiscSelector appId={appId} ask={ask} fileMissing={detail.fileMissingAt !== null} />
+      <DiscSelector
+        appId={appId}
+        ask={ask}
+        fileMissing={detail.fileMissingAt !== null}
+        pressUnderWay={pressState !== null}
+      />
     </div>
   );
 };

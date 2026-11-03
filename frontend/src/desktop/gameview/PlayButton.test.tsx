@@ -915,7 +915,12 @@ describe("PlayButton", () => {
 
       const container = screen.getByRole("button", { name: /^PLAY/ }).closest(".tender-desktop-play-btn-container");
       expect(within(container as HTMLElement).getByTestId("disc-selector")).toBeInTheDocument();
-      expect(selectorProps()).toEqual({ appId: APP_ID, ask: expect.any(Function), fileMissing: false });
+      expect(selectorProps()).toEqual({
+        appId: APP_ID,
+        ask: expect.any(Function),
+        fileMissing: false,
+        pressUnderWay: false,
+      });
     });
 
     it("sits beside STOP while the game runs", () => {
@@ -946,6 +951,28 @@ describe("PlayButton", () => {
 
       expect(screen.getByRole("button", { name: /^STOP/ })).toBeInTheDocument();
       expect(selectorMounts.count).toBe(1);
+    });
+
+    it("is told a press is under way while its check runs", async () => {
+      vi.mocked(backend.probeReachability).mockReturnValue(new Promise(() => {}));
+      render(<PlayButton appId={APP_ID} />);
+
+      pressPlay();
+
+      await screen.findByRole("button", { name: /PREPARING\.\.\./ });
+      expect(selectorProps()?.pressUnderWay).toBe(true);
+    });
+
+    it("is told the press is over once the game's session ends", async () => {
+      render(<PlayButton appId={APP_ID} />);
+      pressPlay();
+      await waitFor(() => expect(mockRunGame).toHaveBeenCalled());
+      sessionChanged(true, 100);
+      expect(selectorProps()?.pressUnderWay).toBe(true);
+
+      sessionChanged(false, 100);
+
+      expect(selectorProps()?.pressUnderWay).toBe(false);
     });
 
     it("is told the file is missing", () => {

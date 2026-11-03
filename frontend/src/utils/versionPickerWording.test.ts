@@ -21,7 +21,7 @@ const version = (over: Partial<VersionInfo> = {}): VersionInfo => ({
 });
 
 describe("versionRowHint", () => {
-  it("gives a row that can be switched to no hint", () => {
+  it("gives no hint to a switchable row whose file RomM holds", () => {
     expect(versionRowHint(version())).toBeNull();
   });
 
