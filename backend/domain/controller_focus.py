@@ -30,7 +30,7 @@ BIG_PICTURE_INPUT_ID = 769
 DESKTOP_INPUT_ID = 413080
 
 # Hands the choice back to Steam, which takes effect only at the next focus
-# change; sent once, at stop.
+# change.
 RELEASED_INPUT_ID = 0
 
 # The directory Steam's 64-bit client runs from (``<Steam>/steamrt64/steam``).
@@ -39,7 +39,7 @@ STEAMRT64_DIR = "steamrt64"
 # SteamOS's gamescope session writes this into the environment Steam is started
 # with (``gamescope-session`` -> ``gamescope-environment`` ->
 # ``steam-launcher.service``). The sockets and the environment file it names
-# outlive Game Mode, so their presence on disk says nothing.
+# outlive Gaming Mode, so their presence on disk says nothing.
 GAMESCOPE_DISPLAY_VAR = "GAMESCOPE_WAYLAND_DISPLAY"
 
 _FORCE_INPUT_URL = "steam://forceinputappid/{}"
@@ -101,7 +101,7 @@ def watcher_applies(steam: RunningSteam | None) -> bool:
     """Whether the watcher acts for this Steam run: the 64-bit client, outside gamescope.
 
     ``None`` — no Steam, or one whose process could not be read — never
-    applies. Under the 32-bit client and in Game Mode Steam attributes a
+    applies. Under the 32-bit client and in Gaming Mode Steam attributes a
     game's window itself, and a pin would override that.
     """
     if steam is None or steam.under_gamescope:

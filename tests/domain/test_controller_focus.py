@@ -52,9 +52,9 @@ class TestWhenTheWatcherApplies:
         ("exe", "under_gamescope", "applies"),
         [
             pytest.param(STEAM_64, False, True, id="64-bit-desktop"),
-            pytest.param(STEAM_64, True, False, id="64-bit-game-mode"),
+            pytest.param(STEAM_64, True, False, id="64-bit-gaming-mode"),
             pytest.param(STEAM_32, False, False, id="32-bit-desktop"),
-            pytest.param(STEAM_32, True, False, id="32-bit-game-mode"),
+            pytest.param(STEAM_32, True, False, id="32-bit-gaming-mode"),
         ],
     )
     def test_only_the_64_bit_client_outside_gamescope(self, exe: str, under_gamescope: bool, applies: bool) -> None:

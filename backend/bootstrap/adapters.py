@@ -293,12 +293,12 @@ class BootstrapResult:
 
     The four bundles carry every Protocol-typed seam and live state dict that
     services need, and :attr:`focus_watch` the focus watcher's readers, which
-    reach it only where the entry point switches it on; :attr:`directories` is the set this run was handed, passed
-    back so every consumer reads the same seven fields rather than composing any
-    of them again; :attr:`launcher` is this start's :class:`ShortcutLauncher`;
-    and :attr:`user_agent` is ``<package name>/<version>``, composed once and
-    used both as the outgoing User-Agent and as the identity the host answers
-    under.
+    reach it only where the entry point switches it on; :attr:`directories` is
+    the set this run was handed, passed back so every consumer reads the same
+    seven fields rather than composing any of them again; :attr:`launcher` is
+    this start's :class:`ShortcutLauncher`; and :attr:`user_agent` is
+    ``<package name>/<version>``, composed once and used both as the outgoing
+    User-Agent and as the identity the host answers under.
     """
 
     adapters: AdapterBundle
