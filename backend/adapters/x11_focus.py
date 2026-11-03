@@ -116,7 +116,7 @@ class _QueryExtensionReply(ctypes.Structure):
         ("pad0", ctypes.c_uint8),
         ("sequence", ctypes.c_uint16),
         ("length", ctypes.c_uint32),
-        ("present", ctypes.c_uint8),
+        ("extension_present", ctypes.c_uint8),
         ("major_opcode", ctypes.c_uint8),
         ("first_event", ctypes.c_uint8),
         ("first_error", ctypes.c_uint8),
@@ -348,7 +348,7 @@ class X11FocusAdapter:
             return f"the X server has no screen {screen}"
         self._root = int(iterator.data.contents.root)
         extension = libs.xcb.xcb_get_extension_data(connection, ctypes.byref(libs.res_id))
-        self._has_res = bool(extension) and bool(extension.contents.present)
+        self._has_res = bool(extension) and bool(extension.contents.extension_present)
         cookies = {
             name: libs.xcb.xcb_intern_atom(connection, 0, len(name), name)
             for name in (_ACTIVE_WINDOW, _STEAM_GAME, _STEAM_INPUT_FOCUS)
