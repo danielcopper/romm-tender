@@ -1007,20 +1007,22 @@ Format: **invariant** — tier — enforced by.
   `tests/domain/test_controller_focus.py` (`TestWhenTheWatcherApplies`, `TestWhichIdAWindowGets`, `TestTheSwitch`,
   `TestOnlyTheRulesSpellTheUrl`), `tests/services/test_controller_focus.py` (`TestWhereSteamAttributesWindowsItself`,
   `TestWatching`, `TestSteamRestarts`, `TestReleasingThePin`, `TestSwitchedOff`),
-  `tests/host/test_runtime.py::TestTheStepBeforeTheDetach` for the order at stop and `tests/test_build_backend.py`
-  (`TestWhetherTheFocusWatcherRuns`, `TestTheFocusWatcher::test_the_step_before_the_detach_releases_its_pin`). Unseen by
-  them: what Steam does with a URL (device only), a URL built at run time or named only in a comment or docstring, and
-  the X tier, which skips where Xvfb is missing outside CI. Prompt-only: nothing but the watcher's `release_pin` runs in
-  `BackendBuild.before_detach`. The pin is Steam's own and it outlives its game: while one stands, Steam forces its
-  layout onto every window, Big Picture and other games included, until another id replaces it, and `0` takes effect
-  only at the next focus change. So an id is sent on every focus change rather than a `0` between them, and the `0` at
-  stop has to go out while the attachment it travels over still exists — the host lets go of Steam's debugger before it
-  shuts the application down, so a `0` from `Application.shutdown` would find no connection and leave the pin forcing
-  its layout until Steam restarts. Under the 32-bit client and in Gaming Mode Steam attributes the window itself, and a
-  pin there would override what works. Each URL is built by `force_input_url` from an integer, so nothing but a number
-  reaches Steam. The rules are `domain/controller_focus.py`'s, the watcher is `services/controller_focus.py`, the step
-  before the detach is `BackendBuild.before_detach` in `backend/host/runtime.py`, and the design is
-  [Controller focus in Desktop Mode](controller-focus.md)
+  `tests/host/test_runtime.py::TestTheStepBeforeTheDetach` for the order at stop, `tests/test_build_backend.py`
+  (`TestWhetherTheFocusWatcherRuns`, `TestTheFocusWatcher::test_the_step_before_the_detach_releases_its_pin`),
+  `tests/adapters/test_running_steam.py` (`TestGamingMode`, `TestTheDisplayItWasStartedFrom`) for what the 64-bit client
+  and Gaming Mode are read from, and the X tier, `tests/adapters/test_x11_focus.py::TestAgainstARealServer`, for what a
+  focused window is read as. Unseen by them: what Steam does with a URL (device only), a URL built at run time or named
+  only in a comment or docstring, and the X tier wherever Xvfb is missing outside CI, where it skips. Prompt-only:
+  nothing but the watcher's `release_pin` runs in `BackendBuild.before_detach`. The pin is Steam's own and it outlives
+  its game: while one stands, Steam forces its layout onto every window, Big Picture and other games included, until
+  another id replaces it, and `0` takes effect only at the next focus change. So an id is sent on every focus change
+  rather than a `0` between them, and the `0` at stop has to go out while the attachment it travels over still exists —
+  the host lets go of Steam's debugger before it shuts the application down, so a `0` from `Application.shutdown` would
+  find no connection and leave the pin forcing its layout onto every window. Under the 32-bit client and in Gaming Mode
+  Steam attributes the window itself, and a pin there would override what works. Each URL is built by `force_input_url`
+  from an integer, so nothing but a number reaches Steam. The rules are `domain/controller_focus.py`'s, the watcher is
+  `services/controller_focus.py`, the step before the detach is `BackendBuild.before_detach` in
+  `backend/host/runtime.py`, and the design is [Controller focus in Desktop Mode](controller-focus.md)
 - **No save path but the sync before a start, the one after a game and a conflict resolved before a start changes the
   saves of a game Steam lists as running, the RetroDECK home migration excepted, which
   [#2226](https://github.com/danielcopper/romm-tender/issues/2226) decided to remove: Sync All Saves Now and a

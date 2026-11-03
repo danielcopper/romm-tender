@@ -1349,28 +1349,24 @@ surface** (see **Surface**). _Avoid_: _Desktop Mode_, which on a Steam Deck is t
 
 ### Desktop Mode / Gaming Mode
 
-The two sessions a Steam Deck runs. **Desktop Mode** is the KDE Plasma desktop session, which Steam runs inside as an
-ordinary program. **Gaming Mode**, Valve's word, is the gamescope session, where Steam is the whole interface; _Game
-Mode_ means the same. The words name the session, never Steam's window: Steam's own window outside Big Picture is the
-**desktop client**, and it can be open in either session. Tender reads Gaming Mode off Steam's environment
-(`GAMESCOPE_WAYLAND_DISPLAY`), never off files gamescope leaves on disk.
+The two kinds of session Steam runs in. **Desktop Mode** is a desktop session — on a Steam Deck the KDE Plasma one — in
+which Steam is an ordinary program. **Gaming Mode**, Valve's word, is the gamescope session, where Steam is the whole
+interface; _Game Mode_ means the same. The words name the session, never Steam's window: Steam's own window outside Big
+Picture is the **desktop client**, and it can be open in either session.
 
 ### 64-bit client / 32-bit client
 
-Steam's two builds of its own program. The **64-bit client** runs from `<Steam>/steamrt64/` inside a pressure-vessel
-container; the **32-bit client** runs from `ubuntu12_32/` on the host. Which one runs is read from the executable of the
-running Steam process, never from the opt-in marker file. _Avoid_: _SteamRT3 client_ and _new client_ in Tender's own
-text.
+Steam's two builds of its own program: the **64-bit client** runs from `<Steam>/steamrt64/` inside a pressure-vessel
+container, the **32-bit client** from `ubuntu12_32/` on the host. _Avoid_: _SteamRT3 client_ and _new client_ in
+Tender's own text.
 
 ### Focus watcher / pin (forced input id)
 
 The **focus watcher** (`services/controller_focus.py`) tells Steam which controller layout to load for the focused
 window, because Steam's **64-bit client** cannot attribute a Flatpak's window to its game in **Desktop Mode**. A **pin**
-is what `steam://forceinputappid/<id>` leaves: Steam loads the layout of `<id>` and forces it onto every window until
-another id replaces it. A **release** is `0`, which hands the choice back to Steam and takes effect only at the next
-focus change. The watcher sends a game's app id, Big Picture's `769` or the desktop's `413080` on every focus change,
-and sends a release once, at stop. Detail: [Controller focus in Desktop Mode](docs/architecture/controller-focus.md).
-_Avoid_: _input lock_, _controller override_.
+is what `steam://forceinputappid/<id>` leaves: Steam forces the layout of `<id>` onto every window until another id
+replaces it. A **release** is `0`, which hands the choice back to Steam. Detail:
+[Controller focus in Desktop Mode](docs/architecture/controller-focus.md). _Avoid_: _input lock_, _controller override_.
 
 ### Navigation watcher / restoration ledger
 

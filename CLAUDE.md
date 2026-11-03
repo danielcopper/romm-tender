@@ -859,11 +859,13 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `tests/domain/test_controller_focus.py` (`TestWhenTheWatcherApplies`, `TestWhichIdAWindowGets`, `TestTheSwitch`,
   `TestOnlyTheRulesSpellTheUrl`), `tests/services/test_controller_focus.py` (`TestWhereSteamAttributesWindowsItself`,
   `TestWatching`, `TestSteamRestarts`, `TestReleasingThePin`, `TestSwitchedOff`),
-  `tests/host/test_runtime.py::TestTheStepBeforeTheDetach` for the order at stop and `tests/test_build_backend.py`
-  (`TestWhetherTheFocusWatcherRuns`, `TestTheFocusWatcher::test_the_step_before_the_detach_releases_its_pin`). Unseen by
-  them: what Steam does with a URL (device only), a URL built at run time or named only in a comment or docstring, and
-  the X tier, which skips where Xvfb is missing outside CI. Prompt-only: nothing but the watcher's `release_pin` runs in
-  `BackendBuild.before_detach`
+  `tests/host/test_runtime.py::TestTheStepBeforeTheDetach` for the order at stop, `tests/test_build_backend.py`
+  (`TestWhetherTheFocusWatcherRuns`, `TestTheFocusWatcher::test_the_step_before_the_detach_releases_its_pin`),
+  `tests/adapters/test_running_steam.py` (`TestGamingMode`, `TestTheDisplayItWasStartedFrom`) for what the 64-bit client
+  and Gaming Mode are read from, and the X tier, `tests/adapters/test_x11_focus.py::TestAgainstARealServer`, for what a
+  focused window is read as. Unseen by them: what Steam does with a URL (device only), a URL built at run time or named
+  only in a comment or docstring, and the X tier wherever Xvfb is missing outside CI, where it skips. Prompt-only:
+  nothing but the watcher's `release_pin` runs in `BackendBuild.before_detach`
 - **No save path but the sync before a start, the one after a game and a conflict resolved before a start changes the
   saves of a game Steam lists as running, the RetroDECK home migration excepted, which
   [#2226](https://github.com/danielcopper/romm-tender/issues/2226) decided to remove: Sync All Saves Now and a

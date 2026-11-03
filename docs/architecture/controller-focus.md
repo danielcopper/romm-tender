@@ -51,20 +51,23 @@ Which id a window gets, in this order (`domain/controller_focus.py::input_id_for
 2. The window carries `STEAM_GAME` = `769` **and** a `STEAM_INPUT_FOCUS` property. That is Big Picture, and it gets
    `769`. The desktop client's windows (library, friends list, a properties dialog) carry `STEAM_GAME` = `769` too, but
    not `STEAM_INPUT_FOCUS`. The title is never used, because Steam translates it.
-3. Everything else gets `413080`: no focused window, a compositor's placeholder for a native Wayland window (mutter ≥
-   48.4, KWin ≥ 6.5), a window gone before it could be asked about, and a window whose pid the server cannot give.
+3. Everything else gets `413080`: no focused window, which is also what X reports while a native Wayland window has
+   focus — none, or a placeholder X window of the compositor's — a window gone before it could be asked about, and a
+   window whose pid the server cannot give.
 
 ## When it acts
 
 Only in Desktop Mode under the 64-bit client (`watcher_applies`). Both are read off the running Steam:
 
-- **Which Steam**: the pid in `~/.steam/steam.pid`. It counts only where `/proc/<pid>/comm` is `steam` and
-  `/proc/<pid>/exe` can be read. A stale file, a pid that is some other program now, and a Steam installed as a Flatpak,
-  whose pid file lies elsewhere and names a sandbox pid, all mean no Steam.
+- **Which Steam**: the pid in `~/.steam/steam.pid`. It counts only where `/proc/<pid>/comm` is `steam` and the process's
+  executable link, start time and environment can all be read. A stale file, a pid that is some other program now, and a
+  Steam installed as a Flatpak, whose pid file lies elsewhere and names a sandbox pid, all mean no Steam.
 - **Which client**: the directory the executable resolves into is `steamrt64`. The opt-in marker file is not read,
   because Steam no longer needs it to switch.
-- **Gaming Mode**: Steam's own environment carries `GAMESCOPE_WAYLAND_DISPLAY`. SteamOS's `gamescope-session` writes it
-  into `gamescope-environment`, and `steam-launcher.service` loads that file. The environment file and gamescope's
+- **Gaming Mode**: `GAMESCOPE_WAYLAND_DISPLAY` is in Steam's own environment, or in that of a process above it in the
+  backend's user namespace. SteamOS's `gamescope-session` writes it into `gamescope-environment`, and
+  `steam-launcher.service` loads that file into the host process it starts; whether the 64-bit client's container passes
+  it on to Steam inside is not measured, so the host processes are asked too. The environment file and gamescope's
   sockets stay on disk in Desktop Mode, so their presence says nothing, and neither does `-gamepadui` on the command
   line.
 
@@ -78,22 +81,28 @@ there is never overridden.
 
 Steam learns about focus only through X, so the watcher asks X too. On a Wayland session it asks Xwayland. The root
 window's `_NET_ACTIVE_WINDOW` names the focused window, and a `PropertyNotify` on it marks the change. The backend's
-socket to the X server is watched with `loop.add_reader`, with no thread. Each question, and the walk up `/proc`, runs
-off the loop.
+socket to the X server is watched with `loop.add_reader`, with no thread of its own. Each question, and the walk up
+`/proc`, runs off the loop.
 
 - **Through libxcb, over `ctypes`.** It uses the system's `libxcb.so.1` and `libxcb-res.so.0`: no dependency added,
   nothing vendored. Xlib was not chosen, because its error handlers end the process and its authority lookup is global
   to the process. `xprop` and `xdotool` cannot ask X-Resource. The libraries are loaded on the first connection and
-  never at import, so a missing one costs the watcher and not the backend. On Debian, Ubuntu, Mint and openSUSE,
-  `libxcb-res.so.0` comes in a package of its own, `libxcb-res0`, which an Xfce, MATE or LXDE install may lack.
+  never at import, so a missing one costs the watcher and not the backend. Some distributions ship `libxcb-res.so.0` in
+  a package of its own; which, and how to install it, is in
+  [Troubleshooting](../user-guide/troubleshooting.md#the-controller-acts-as-mouse-and-keyboard-in-a-game-in-desktop-mode).
 - **The display and its cookie come from Steam's session, never from the backend's environment.** The backend's systemd
   unit starts before the desktop session, and its environment outlives a switch between modes. `DISPLAY` and
-  `XAUTHORITY` are read from the first process at or above Steam that shares the backend's user namespace. Inside the
-  64-bit client's container, `XAUTHORITY` names a file only that container can see. The cookie, `MIT-MAGIC-COOKIE-1`, is
-  read out of that authority file and handed to `xcb_connect_to_display_with_auth_info`. The backend's own environment
-  is never changed, and the cookie is never logged.
-- **A reply can bring events with it.** An event read off the socket together with a reply never makes the socket
-  readable again, so every round of questions ends by draining xcb's queue of events already read.
+  `XAUTHORITY` are read from the first process at or above Steam that shares the backend's user namespace **and** names
+  an authority file the backend can read (`~/.Xauthority` where `XAUTHORITY` is unset). The second condition is not a
+  nicety. Measured on a Deck, the chain above the 64-bit client is `steam` and `pv-adverb` inside the container, then
+  `srt-bwrap` on the host, still naming the container's `/run/pressure-vessel/Xauthority`, which does not exist on the
+  host; `srt-client-cont` above it names the session's file. The cookie, `MIT-MAGIC-COOKIE-1`, is read out of that file
+  and handed to `xcb_connect_to_display_with_auth_info`. The backend's own environment is never changed, and the cookie
+  is never logged.
+- **A reply can bring events with it.** An event the server sends while the watcher waits for a reply is read off the
+  socket with the reply and kept in xcb's queue, so the socket never becomes readable for it. Reading the events returns
+  the queued ones first, so after every send that went out the watcher makes one more pass over the events
+  (`services/controller_focus.py`, `_answer_the_focus`).
 
 Where the libraries cannot be loaded, or the display cannot be reached, the watcher says so once for that Steam run and
 tries again at the next reading of Steam.
@@ -111,22 +120,25 @@ Two other ways in were rejected:
   call, and starts Steam when Steam is not running.
 - **`~/.steam/steam.pipe`.** Its format is undocumented.
 
-A URL that cannot go out answers `False`: nothing is attached yet, or the connection was lost. The watcher then tries
-the id of the window focused at that point on its next reading of Steam. A focus change that arrives while a send is in
-flight is not queued, because the next pass reads the window focused by then. With `TENDER_INJECT=off` there is no
-attachment, so the entry point does not start the watcher at all.
+A URL that cannot go out answers `False`: nothing is attached yet, the connection was lost, the page threw (Steam's
+`SteamClient` not there yet, for one), or the injector stopped for good, after
+[the crash watchdog](loading-the-panel.md#the-crash-watchdog) or a press on
+[the load-failure card](loading-the-panel.md#the-load-failure-card) ended it. The watcher then tries the id of the
+window focused at that point on its next reading of Steam, and says once that it could not. A focus change that arrives
+while a send is in flight is not queued, because the next pass reads the window focused by then. With
+`TENDER_INJECT=off` there is no attachment, so the entry point does not start the watcher at all.
 
 ## At stop: the one step before the detach
 
 The host lets go of Steam's debugger before it shuts the application down. A `0` sent from the services' shutdown would
-find no connection, and a pin left standing keeps forcing its layout until Steam restarts. So the host gives the
-application one narrow step before it detaches (`BackendBuild.before_detach`). In that step the watcher, and nothing
-else, sends `0`, and only where this run sent a pin and the Steam it pinned is still running. Every send after it is
-dropped. The rest of the stop keeps its old order.
+find no connection, and a pin left standing keeps forcing its layout onto every window until something replaces it. So
+the host gives the application one narrow step before it detaches (`BackendBuild.before_detach`). In that step the
+watcher, and nothing else, sends `0`, and only where this run sent a pin and the Steam it pinned is still running. Every
+send after it is dropped. The rest of the stop keeps its old order.
 
 Moving the whole detach behind the services' shutdown was rejected: the connection would stay open while every service
-stops, and nothing has examined that. A backend that is killed outright never runs this step, and its pin stands until
-the next backend start sends a fresh id, or until Steam restarts.
+stops, and nothing has examined that. A backend that is killed outright never runs this step, and its pin stands; the
+next backend start sends a fresh id at once.
 
 ## Switching it off
 

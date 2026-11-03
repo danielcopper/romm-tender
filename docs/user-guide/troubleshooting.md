@@ -471,8 +471,10 @@ invisible. Started on Wayland, RetroArch opens such a window, and so can a stand
 Steam cannot tell that it belongs to the running game, and it applies Steam Input's Desktop Layout to every controller:
 the Deck's built-in controls act as mouse and keyboard, and the game gets no controller input at all. So Tender starts
 RetroDECK with `flatpak run --nosocket=wayland`, which leaves it no Wayland connection and makes every emulator draw
-through XWayland, where Steam sees the window and applies the game's controller configuration. In Gaming Mode games
-already draw through gamescope's XWayland, so nothing changes there.
+through XWayland, where Steam sees the window and applies the game's controller configuration. Under Steam's 64-bit
+client Steam sees the window but cannot tell that it belongs to the game; what Tender does about that is under
+[The controller acts as mouse and keyboard in a game in Desktop Mode](#the-controller-acts-as-mouse-and-keyboard-in-a-game-in-desktop-mode).
+In Gaming Mode games already draw through gamescope's XWayland, so nothing changes there.
 
 This is a workaround for a Steam limitation
 ([ValveSoftware/steam-for-linux#8020](https://github.com/ValveSoftware/steam-for-linux/issues/8020)). It will be removed
@@ -487,29 +489,34 @@ carries the new command by its next launch.
 **Symptom**: In Desktop Mode, a game started from Tender is running and its window has focus, but the Deck's controls
 act as mouse and keyboard. The game's buttons do the wrong things, and RetroArch's menu does not open with L3 and R3.
 
-**Why**: Steam's 64-bit client, which Steam now switches to by itself, cannot tell that a window a Flatpak draws belongs
-to the running game, and RetroDECK is a Flatpak. Steam then gives the window its Desktop layout, which turns the
+**Why**: Steam's 64-bit client, which Steam may switch to without being asked, cannot tell that a window a Flatpak draws
+belongs to the running game, and RetroDECK is a Flatpak. Steam then gives the window its Desktop layout, which turns the
 controls into a mouse and a keyboard. Steam's 32-bit client and Gaming Mode are not affected. Valve tracks this in its
 steam-for-linux tracker as issue `13053`.
 
 **What Tender does**: While Steam's 64-bit client runs in Desktop Mode, Tender's backend watches which window has focus
 and tells Steam which controller layout to load. A game's window gets the game's layout, Big Picture gets Big Picture's,
 and every other window gets the desktop's, each at the moment it takes focus. When the backend stops, it hands the
-choice back to Steam. Under the 32-bit client and in Gaming Mode it does nothing. It reaches Steam the same way the
-panel does, so with `TENDER_INJECT=off` it does nothing either. How it works is in
+choice back to Steam. Under the 32-bit client and in Gaming Mode it does nothing. It reaches Steam the same way Tender's
+panel does, so while the panel is not loaded into Steam it does nothing either. How it works is in
 [Controller focus in Desktop Mode](../architecture/controller-focus.md).
 
 If the layout is still wrong, look at the backend's log with
 `journalctl --user -u romm-tender | grep "controller focus"`:
 
-- **"the X libraries could not be loaded"**: on Debian, Ubuntu, Linux Mint and openSUSE, one library Tender needs comes
-  in a package of its own. Install it with `sudo apt install libxcb-res0` or `sudo zypper install libxcb-res0`, then
-  restart the backend with `systemctl --user restart romm-tender`.
+- **"Steam's 64-bit client runs outside gamescope; watching"**: the watcher is at work for the Steam that runs now.
+- **"not watching, the X libraries could not be loaded"**: on Debian, Ubuntu, Linux Mint and openSUSE, one library
+  Tender needs comes in a package of its own. Install it with `sudo apt install libxcb-res0` or
+  `sudo zypper install libxcb-res0`, then restart the backend with `systemctl --user restart romm-tender`.
+- **"not watching, TENDER_FOCUS_WATCHER=off is set"**: you switched it off; see below.
+- **"not watching, the panel is not loaded into Steam"**: the watcher has no way to reach Steam in this run.
 - **"not watching, …"** with any other reason: the backend could not reach the desktop session's display. It tries again
   every few seconds, and again after Steam restarts.
+- **"Steam could not be handed the input id yet; trying again"**: the backend's connection to Steam is not there at the
+  moment. It tries again every few seconds for as long as that lasts.
 
-If the backend was stopped without the chance to clean up, a game's layout can stay on every window until the backend
-starts again or Steam restarts. A restarted backend sets the right layout at once.
+If the backend was stopped without the chance to clean up, a game's layout can stay on every window. The next start of
+the backend sets the right layout at once.
 
 **Switching it off**: To see how things behave without it, switch the watcher off with an override of the backend's
 unit:
@@ -526,13 +533,14 @@ Environment=TENDER_FOCUS_WATCHER=off
 ```
 
 Then restart the backend with `systemctl --user restart romm-tender`. To switch it on again, run
-`systemctl --user revert romm-tender` and restart the backend.
+`systemctl --user edit romm-tender` once more, delete the two lines, save, and restart the backend.
 
 ### The Steam button opens only Steam's main menu in Desktop Mode
 
-**Symptom**: In Desktop Mode, pressing the Steam button while a RetroDECK game is running opens only Steam's main menu.
-There is no in-game overlay and no menu for the game, so there is no **Exit Game** and no controller layout page for it.
-Steam+X opens no on-screen keyboard over the game either.
+**Symptom**: In Desktop Mode, pressing the Steam button while a RetroDECK game is running opens only Steam's main menu,
+and it opens behind the game's window, so nothing seems to happen. There is no in-game overlay and no menu for the game,
+so there is no **Exit Game** and no controller layout page for it. Steam+X opens no on-screen keyboard over the game
+either.
 
 **Why**: Steam's menu for a game follows its in-game overlay, and the overlay cannot work inside a Flatpak sandbox,
 which is how RetroDECK runs: from there it reports the sandbox's own process number, which Steam then looks for among
