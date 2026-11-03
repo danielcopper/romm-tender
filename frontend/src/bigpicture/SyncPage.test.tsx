@@ -1354,6 +1354,33 @@ describe("SyncPage", () => {
       expect(container.querySelector('[data-testid="unit-bar"]')).not.toBeNull();
     });
 
+    it("says a collection the plan expects to skip is expected to skip (#2623)", async () => {
+      seedRunUnits(
+        [
+          planUnit({ id: 1, name: "PlayStation", rom_count: 40, new_shortcut_count: 4 }),
+          planUnit({ type: "collection", id: "7", name: "Favourites", rom_count: 25, predicted_skip: true }),
+        ],
+        "run-live",
+      );
+      await act(async () => {
+        setSyncProgress({
+          running: true,
+          stage: "applying",
+          step: 1,
+          totalSteps: 2,
+          current: 1,
+          total: 4,
+          message: "PlayStation: 1/4",
+          runId: "run-live",
+        });
+      });
+      const { container } = await renderPage();
+
+      const rows = rowTexts(container, "run-unit-");
+      expect(rows[1]).toContain("Favourites");
+      expect(rows[1]).toContain("expected to skip");
+    });
+
     it("sets its rows in the same register the preview's are set in (#1814)", async () => {
       // One register for both tables, so the page reads as one family and the
       // preview's rows are no taller than the plan's.

@@ -174,6 +174,12 @@ class CollectionFetcher:
         (``domain/collection_skip.holds_a_game_to_converge``): it is fetched so
         the convergence reads RomM's current sibling list (#2661 D1, D3), and is
         asked before the probe, which it makes moot.
+
+        This gate is the SOLE skip authority (ADR-0023). The plan-time
+        ``predicted_skip`` rider (``domain/skip_prediction.predict_collection_skip``)
+        replays every condition before the probe, in this order, for the
+        ``sync_plan`` estimate only, so a condition added here is added there;
+        it never feeds this decision.
         """
         kind = unit.collection_kind
         if kind is None:

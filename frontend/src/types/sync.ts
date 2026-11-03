@@ -441,10 +441,11 @@ export interface SyncPlanUnit {
   /** Only present when ``type === "collection"``. Discriminates standard/smart/virtual. */
   collection_kind?: CollectionKind;
   /**
-   * Plan-time prediction of the wholesale incremental skip (#1382) —
+   * Plan-time prediction of the wholesale incremental skip (#1382, #2623) —
    * estimate-only, the fetch-time gate stays the sole skip authority
-   * (ADR-0023). Present on platform units from current backends; absent on
-   * collections and older backends (treat absent as "will not skip").
+   * (ADR-0023). Present on platform and collection units from current
+   * backends; absent where the backend could not read its estimate and on
+   * older backends (treat absent as "will not skip").
    */
   predicted_skip?: boolean;
   /**
@@ -460,7 +461,7 @@ export interface SyncPlanUnit {
    * items take the cheap UPDATE path in the apply loop, so the seed prices them
    * at `UPDATED_ITEM_SEC` and only the remainder at the create rate — without it
    * a re-sync (and every Force Full Sync, which unbinds nothing) is priced as a
-   * fresh import. Unlike its sibling riders this rides BOTH unit kinds. Absent
+   * fresh import. Like `predicted_skip` this rides BOTH unit kinds. Absent
    * on older backends and on unstamped collections (a collection's count is
    * read from its stamp's stored member set only); the seed then prices every
    * item as a create, as before.

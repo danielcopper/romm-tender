@@ -25,7 +25,12 @@ from domain.platform_prefs import materialize_enabled_platforms, resolve_sync_en
 from domain.platform_skip import probe_verdict, stamp_can_match
 from domain.platform_sync_state import stamp_for_skip
 from domain.platform_system import platform_ids_by_slug
-from domain.skip_prediction import collapsed_shortcut_count, new_shortcut_count, predict_unit_skip
+from domain.skip_prediction import (
+    collapsed_shortcut_count,
+    new_shortcut_count,
+    predict_collection_skip,
+    predict_unit_skip,
+)
 from domain.sync_state import SyncCancelled
 from domain.virtual_collection_id import virtual_types_to_list
 from domain.work_unit import WorkUnit, collection_units
@@ -74,6 +79,17 @@ class _PlanEstimate(NamedTuple):
     collapsed_count: int | None
     bound_count: int | None
     new_shortcut_count: int | None
+
+
+class _CollectionEstimate(NamedTuple):
+    """One collection's plan-time estimate riders for the ``sync_plan`` payload.
+
+    Estimate-ONLY (ADR-0023), like :class:`_PlanEstimate`. ``bound_count`` is
+    ``None`` for an unstamped collection (``_read_collection_estimates``).
+    """
+
+    predicted_skip: bool
+    bound_count: int | None
 
 
 class _SkipBaseline(NamedTuple):
@@ -348,9 +364,9 @@ class LibraryFetcher:
         virtual collections) with ROM counts pulled from the listing
         endpoints. No ROMs are fetched here — the queue is a dispatch
         plan, not a payload. Units additionally carry the plan-time estimate
-        riders for the ``sync_plan`` payload — ``predicted_skip`` /
-        ``collapsed_count`` (#1382) and ``new_shortcut_count`` (#1517) on
-        platform units, ``bound_count`` on both kinds (#1511). Estimate-only:
+        riders for the ``sync_plan`` payload — ``collapsed_count`` (#1382) and
+        ``new_shortcut_count`` (#1517) on platform units, ``predicted_skip``
+        (#1382, #2623) and ``bound_count`` (#1511) on both kinds. Estimate-only:
         they never feed the actual skip decision (ADR-0023).
 
         A platform or collection listing that fails raises rather than
@@ -400,16 +416,16 @@ class LibraryFetcher:
             )
         )
         collection_queue.extend(await self._build_virtual_collection_units(enabled_virtual_ids))
-        # One short read UoW for every collection at once — after the listing
-        # fetches, never across them.
-        collection_queue = await self._attach_collection_bound_counts(collection_queue)
         unwalked_platform_slugs = tuple(
             sorted((self._sync_state.run_listed_platform_slugs or frozenset()) - {unit.slug for unit in platform_units})
         )
-        units.extend(
+        collection_queue = [
             replace(unit, unwalked_platform_ids=unwalked_platform_ids, unwalked_platform_slugs=unwalked_platform_slugs)
             for unit in collection_queue
-        )
+        ]
+        # One short read UoW for every collection at once — after the listing
+        # fetches, never across them.
+        units.extend(await self._attach_collection_estimates(collection_queue))
 
         return units
 
@@ -494,37 +510,44 @@ class LibraryFetcher:
             for unit in platform_units
         ]
 
-    async def _attach_collection_bound_counts(self, collection_units: list[WorkUnit]) -> list[WorkUnit]:
-        """Stamp each collection unit with its ``bound_count`` estimate rider (#1511).
+    async def _attach_collection_estimates(self, collection_units: list[WorkUnit]) -> list[WorkUnit]:
+        """Stamp each collection unit with its ``predicted_skip`` and ``bound_count`` estimate riders (#2623, #1511).
 
-        Fail-open like the platform sibling: a failed read leaves the field
+        Fail-open like the platform sibling: a failed read leaves both fields
         ``None``, so the frontend prices the unit exactly as it did before the
-        rider existed rather than the plan failing.
+        riders existed rather than the plan failing.
         """
         if not collection_units:
             return collection_units
         try:
-            counts = await self._loop.run_in_executor(None, self._read_collection_bound_counts, collection_units)
+            estimates = await self._loop.run_in_executor(None, self._read_collection_estimates, collection_units)
         except Exception as e:
-            self._logger.warning(f"Plan-time collection bound-count read failed, pricing as creates: {e}")
+            self._logger.warning(f"Plan-time collection estimate read failed, pricing as creates: {e}")
             return collection_units
         return [
-            replace(unit, bound_count=counts[key]) if (key := (str(unit.id), unit.collection_kind)) in counts else unit
+            replace(unit, predicted_skip=estimates[key].predicted_skip, bound_count=estimates[key].bound_count)
+            if (key := (str(unit.id), unit.collection_kind)) in estimates
+            else unit
             for unit in collection_units
         ]
 
-    def _read_collection_bound_counts(self, units: list[WorkUnit]) -> dict[tuple[str, str | None], int]:
-        """Bound-member count per stamped collection, keyed ``(id, kind)`` (#1511).
+    def _read_collection_estimates(self, units: list[WorkUnit]) -> dict[tuple[str, str | None], _CollectionEstimate]:
+        """The estimate riders per collection unit, keyed ``(id, kind)`` (#2623, #1511).
 
-        The count is read from the completion stamp's stored
-        ``member_rom_ids`` only (the set the skip replays), counting those whose
-        ``roms`` row carries a ``shortcut_app_id``. No ROM
-        fetch, one short read UoW for every collection unit at once.
+        ``predicted_skip`` replays the collection skip gate's local conditions
+        over the unit's listing, its completion stamp and the stored rows
+        (``domain/skip_prediction.predict_collection_skip``, which also names
+        what it does not replay); the unit's ``unwalked_platform_slugs`` must
+        already be set. ``bound_count`` is read from the completion stamp's
+        stored ``member_rom_ids`` only (the set the skip replays), counting
+        those whose ``roms`` row carries a ``shortcut_app_id``. No ROM fetch:
+        one short read UoW for every collection unit at once, reading every
+        stamp and the stored rows once.
 
         Deliberately ASYMMETRIC with the platform rider: a platform with no
         persisted rows reports ``0`` (real knowledge — nothing is mirrored, so
-        every item is a create), whereas an unstamped collection is omitted
-        entirely and so priced as all-creates. The count is read from the
+        every item is a create), whereas an unstamped collection's count is
+        omitted (``None``) and so priced as all-creates. The count is read from the
         stamp's stored member set only, so without a stamp there is no count to
         report, and ``0`` would state one. Absent and ``0`` price identically
         today, but the distinction keeps the field honest for any later
@@ -540,20 +563,21 @@ class LibraryFetcher:
         The stored member set may be STALE (membership can have changed since
         the stamp). That is accepted: the count is estimate-only (ADR-0023).
         """
-        counts: dict[tuple[str, str | None], int] = {}
+        estimates: dict[tuple[str, str | None], _CollectionEstimate] = {}
         with self._uow_factory() as uow:
+            rows = list(uow.roms.iter_all())
+            bound_rom_ids = {row.rom_id for row in rows if row.shortcut_app_id is not None}
             for unit in units:
                 if unit.collection_kind is None:
                     continue
                 stamp = uow.collection_sync_state.get(str(unit.id), unit.collection_kind)
-                if stamp is None:
-                    continue
-                counts[(str(unit.id), unit.collection_kind)] = sum(
-                    1
-                    for rom_id in stamp.member_rom_ids
-                    if (rom := uow.roms.get(rom_id)) is not None and rom.shortcut_app_id is not None
+                estimates[(str(unit.id), unit.collection_kind)] = _CollectionEstimate(
+                    predicted_skip=predict_collection_skip(unit=unit, stamp=stamp, rows=rows),
+                    bound_count=(
+                        None if stamp is None else sum(1 for rom_id in stamp.member_rom_ids if rom_id in bound_rom_ids)
+                    ),
                 )
-        return counts
+        return estimates
 
     def _read_plan_estimates(self, units: list[WorkUnit]) -> dict[str, _PlanEstimate]:
         """Read the plan-time estimate baseline for platform units (#1382).
