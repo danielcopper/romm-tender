@@ -29,16 +29,25 @@ vi.mock("../../utils/versionSwitchApplication", () => ({
 import { getCachedGameDetail } from "../../utils/cachedGameDetailStore";
 import { applyCommittedVersionSwitch } from "../../utils/versionSwitchApplication";
 
+const noop = () => {};
+
 /** The selector with a dialog host to ask through, as the Play button gives it one. */
-const Selector: FC<{ appId: number; fileMissing?: boolean; pressUnderWay?: boolean }> = ({
-  appId,
-  fileMissing = false,
-  pressUnderWay = false,
-}) => {
+const Selector: FC<{
+  appId: number;
+  fileMissing?: boolean;
+  pressUnderWay?: boolean;
+  onSwitchingChange?: (switching: boolean) => void;
+}> = ({ appId, fileMissing = false, pressUnderWay = false, onSwitchingChange = noop }) => {
   const dialogs = useDialogHost();
   return (
     <>
-      <DiscSelector appId={appId} ask={dialogs.ask} fileMissing={fileMissing} pressUnderWay={pressUnderWay} />
+      <DiscSelector
+        appId={appId}
+        ask={dialogs.ask}
+        fileMissing={fileMissing}
+        pressUnderWay={pressUnderWay}
+        onSwitchingChange={onSwitchingChange}
+      />
       {dialogs.element}
     </>
   );
@@ -800,6 +809,30 @@ describe("Desktop DiscSelector — while a switch is under way", () => {
     expect(r.getByTestId("disc-btn")).toBeEnabled();
     expect(r.getByTestId("disc-btn").style.opacity).toBe("1");
   });
+
+  it("tells the Play button when a switch starts and when it is over", async () => {
+    mockCachedDetail();
+    let answer: (v: Awaited<ReturnType<typeof backend.switchVersion>>) => void = () => {};
+    vi.mocked(backend.switchVersion).mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    const onSwitchingChange = vi.fn();
+
+    const r = render(<Selector appId={100} onSwitchingChange={onSwitchingChange} />);
+    await waitFor(() => expect(r.getByTestId("disc-btn")).toHaveAttribute("aria-label", "Select Version"));
+    fireEvent.click(r.getByTestId("disc-btn"));
+    await act(async () => {
+      fireEvent.click(within(r.getByTestId("disc-menu")).getByText("Japan"));
+      await Promise.resolve();
+    });
+
+    expect(onSwitchingChange).toHaveBeenCalledExactlyOnceWith(true);
+
+    await act(async () => {
+      answer({ success: false, reason: "server_unreachable", message: "offline" });
+      await Promise.resolve();
+    });
+
+    expect(onSwitchingChange.mock.calls).toEqual([[true], [false]]);
+  });
 });
 
 describe("Desktop DiscSelector — while the Play button's press is under way", () => {
@@ -824,6 +857,18 @@ describe("Desktop DiscSelector — while the Play button's press is under way", 
 
     expect(r.getByTestId("disc-btn")).toBeEnabled();
     expect(r.getByTestId("disc-btn").style.opacity).toBe("1");
+  });
+
+  it("closes an open menu when a press starts", async () => {
+    mockCachedDetail();
+    const r = await renderAndOpen();
+    expect(r.getByTestId("disc-menu")).toBeInTheDocument();
+
+    r.rerender(<Selector appId={100} pressUnderWay />);
+
+    expect(r.queryByTestId("disc-menu")).toBeNull();
+    expect(r.getByTestId("disc-btn")).toHaveAttribute("aria-expanded", "false");
+    expect(r.getByTestId("disc-btn")).toBeDisabled();
   });
 });
 
@@ -1709,7 +1754,8 @@ describe("Desktop DiscSelector — a change of game and a late read", () => {
   it("enables the trigger for the next game when the game changes while a switch is unanswered", async () => {
     mockCachedDetail();
     vi.mocked(backend.switchVersion).mockReturnValue(new Promise(() => undefined));
-    const r = render(<Selector appId={100} />);
+    const onSwitchingChange = vi.fn();
+    const r = render(<Selector appId={100} onSwitchingChange={onSwitchingChange} />);
     await r.findByTestId("disc-btn");
     fireEvent.click(r.getByTestId("disc-btn"));
     await act(async () => {
@@ -1717,11 +1763,13 @@ describe("Desktop DiscSelector — a change of game and a late read", () => {
       await Promise.resolve();
     });
     expect(r.getByTestId("disc-btn")).toBeDisabled();
+    expect(onSwitchingChange).toHaveBeenCalledExactlyOnceWith(true);
 
-    r.rerender(<Selector appId={101} />);
+    r.rerender(<Selector appId={101} onSwitchingChange={onSwitchingChange} />);
     await flushAsync();
 
     expect(r.getByTestId("disc-btn")).toBeEnabled();
+    expect(onSwitchingChange.mock.calls).toEqual([[true], [false]]);
   });
 
   it("asks for no discs when the detail read lands after it is gone", async () => {

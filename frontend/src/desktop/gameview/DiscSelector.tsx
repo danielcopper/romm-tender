@@ -33,8 +33,10 @@ interface DiscSelectorProps {
   ask: AskDialog;
   /** Whether the bound version's file is missing, which leaves its discs out. */
   fileMissing: boolean;
-  /** Whether the Play button's press is under way, which the trigger waits for. */
+  /** Whether the Play button's check is under way, which the trigger waits for. */
   pressUnderWay: boolean;
+  /** Report whether a version switch is under way, which PLAY and RESOLVE CONFLICT wait for. */
+  onSwitchingChange: (switching: boolean) => void;
 }
 
 const LOG_TAG = "DesktopDiscSelector";
@@ -85,7 +87,7 @@ function versionRowCover(base64: string | undefined): ReactNode {
   return <FaCompactDisc size={18} color={DISC_GREY} style={{ flexShrink: 0 }} />;
 }
 
-export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing, pressUnderWay }) => {
+export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing, pressUnderWay, onSwitchingChange }) => {
   const discLeaseOwner = `desktop-disc-selector:${appId}`;
   const versionLeaseOwner = `desktop-version-picker:${appId}`;
 
@@ -100,6 +102,13 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing, p
   // cleared by the list read after its broadcast, and a change of game by the
   // list effect's cleanup.
   const [switching, setSwitching] = useState(false);
+  const updateSwitching = useCallback(
+    (next: boolean) => {
+      setSwitching(next);
+      onSwitchingChange(next);
+    },
+    [onSwitchingChange],
+  );
   const [covers, setCovers] = useState<Record<number, string>>({});
   const coversRequested = useRef<Set<number>>(new Set());
   const memberIdsRef = useRef<Set<number>>(new Set());
@@ -113,6 +122,7 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing, p
   } | null>(null);
 
   const [showMenu, setShowMenu] = useState(false);
+  if (pressUnderWay && showMenu) setShowMenu(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const closeMenu = useCallback(() => setShowMenu(false), []);
   useOutsideClick(menuRef, closeMenu, showMenu);
@@ -203,7 +213,7 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing, p
         // Only a current read issued after this game's version_switched
         // broadcast clears the in-flight guard: only such a read is known to
         // hold the list the switch left behind.
-        if (switchBroadcastSeenRef.current && isCurrent()) setSwitching(false);
+        if (switchBroadcastSeenRef.current && isCurrent()) updateSwitching(false);
       }
     };
     loadVersionListRef.current = { appId, load };
@@ -237,7 +247,7 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing, p
       // A switch under way is cancelled with this game's lease owner, and a
       // cancelled switch clears no guard (`executeVersionSwitch`), so without
       // this the next game's trigger would stay disabled.
-      setSwitching(false);
+      updateSwitching(false);
       detach(releasePruneLeasesByOwner(versionLeaseOwner));
       if (loadVersionListRef.current?.load === load) loadVersionListRef.current = null;
       globalThis.removeEventListener("romm_data_changed", onDataChanged);
@@ -246,7 +256,7 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing, p
       globalThis.removeEventListener("romm_rom_uninstalled", onUninstalled);
       removeEventListener("sync_progress", syncEnded);
     };
-  }, [appId, versionLeaseOwner]);
+  }, [appId, versionLeaseOwner, updateSwitching]);
 
   useEffect(() => {
     return fetchVersionCovers(versionList?.versions, coversRequested.current, (romId, base64) => {
@@ -283,7 +293,7 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing, p
       askUnsyncedSaves: desktopUnsyncedSavesDialog(ask),
       onCoverResolved: (romId, cover) => setCovers((prev) => ({ ...prev, [romId]: cover })),
       onVanishedRefusal: () => detach(refreshAfterVanishedRefusal()),
-      setSwitching,
+      setSwitching: updateSwitching,
       logTag: LOG_TAG,
     });
   };

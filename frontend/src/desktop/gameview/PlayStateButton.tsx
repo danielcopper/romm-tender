@@ -41,6 +41,7 @@ interface PlayStateButtonProps {
   refusal: string | null;
   /** Whether the page's check of whether the game can start went wrong. */
   checkFailed: boolean;
+  disabled?: boolean;
   onPlay: () => void;
 }
 
@@ -49,12 +50,12 @@ function playStyle(refusal: string | null, checkFailed: boolean): CSSProperties 
   return checkFailed ? CHECK_FAILED_PLAY_BUTTON_STYLE : PLAY_BUTTON_STYLE;
 }
 
-export const PlayStateButton: FC<PlayStateButtonProps> = ({ pressState, refusal, checkFailed, onPlay }) => (
+export const PlayStateButton: FC<PlayStateButtonProps> = ({ pressState, refusal, checkFailed, disabled, onPlay }) => (
   <div className="tender-desktop-play-btn-group" style={BUTTON_GROUP_STYLE}>
     <button
       type="button"
       className="tender-desktop-btn-play"
-      disabled={pressState !== null || refusal !== null}
+      disabled={pressState !== null || refusal !== null || disabled}
       style={playStyle(refusal, checkFailed)}
       {...(refusal === null ? {} : { title: refusal })}
       onClick={onPlay}

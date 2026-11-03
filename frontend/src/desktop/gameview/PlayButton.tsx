@@ -81,6 +81,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
   const stranded = useStrandedAnswer() !== null;
 
   const [pressState, setPressState] = useState<PressState | null>(null);
+  const [switching, setSwitching] = useState(false);
   // The last session start or stop seen for a ROM, whatever made it. A start
   // made elsewhere (Steam's own Play, a context menu, a `steam://` link) changes
   // nothing else this button renders from, so the event is held here.
@@ -207,6 +208,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
           <button
             type="button"
             className="tender-desktop-btn-conflict"
+            disabled={switching}
             style={CONFLICT_BUTTON_STYLE}
             onClick={() => detach(handleResolveConflictClick())}
           >
@@ -223,6 +225,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
         pressState={null}
         refusal={playRefusal}
         checkFailed={startCheckFailed}
+        disabled={switching}
         onPlay={() => detach(handlePlayClick())}
       />
     );
@@ -235,7 +238,8 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
         appId={appId}
         ask={ask}
         fileMissing={detail.fileMissingAt !== null}
-        pressUnderWay={pressState !== null}
+        pressUnderWay={pressState !== null && pressState !== "launching"}
+        onSwitchingChange={setSwitching}
       />
     </div>
   );

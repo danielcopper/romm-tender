@@ -920,6 +920,7 @@ describe("PlayButton", () => {
         ask: expect.any(Function),
         fileMissing: false,
         pressUnderWay: false,
+        onSwitchingChange: expect.any(Function),
       });
     });
 
@@ -963,16 +964,33 @@ describe("PlayButton", () => {
       expect(selectorProps()?.pressUnderWay).toBe(true);
     });
 
-    it("is told the press is over once the game's session ends", async () => {
+    it("is told the press is over once the start is handed to Steam", async () => {
       render(<PlayButton appId={APP_ID} />);
       pressPlay();
       await waitFor(() => expect(mockRunGame).toHaveBeenCalled());
-      sessionChanged(true, 100);
-      expect(selectorProps()?.pressUnderWay).toBe(true);
 
-      sessionChanged(false, 100);
-
+      expect(screen.getByRole("button", { name: /LAUNCHING\.\.\./ })).toBeDisabled();
       expect(selectorProps()?.pressUnderWay).toBe(false);
+    });
+
+    it("disables PLAY and RESOLVE CONFLICT while the selector is switching", () => {
+      const { rerender } = render(<PlayButton appId={APP_ID} />);
+      expect(screen.getByRole("button", { name: /^PLAY/ })).toBeEnabled();
+
+      act(() => selectorProps()!.onSwitchingChange(true));
+      expect(screen.getByRole("button", { name: /^PLAY/ })).toBeDisabled();
+
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(
+        detailState({
+          saveSyncEnabled: true,
+          saveStatus: { rom_id: 100, files: [], conflicts: [CONFLICT] } as unknown as SaveStatus,
+        }),
+      );
+      rerender(<PlayButton appId={APP_ID} />);
+      expect(screen.getByRole("button", { name: /RESOLVE CONFLICT/ })).toBeDisabled();
+
+      act(() => selectorProps()!.onSwitchingChange(false));
+      expect(screen.getByRole("button", { name: /RESOLVE CONFLICT/ })).toBeEnabled();
     });
 
     it("is told the file is missing", () => {

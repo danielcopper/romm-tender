@@ -55,8 +55,9 @@ RomM is listed and offers nothing: Big Picture's way to its removed-game cleanup
 counterpart. A switch that would leave unsynced saves behind asks in a desktop dialog. The selector draws nothing where
 the button draws nothing, and leaves the discs out while the bound version's file is missing. While a switch is under
 way its trigger is disabled and dimmed, with no throbber ([qam-panel.md](qam-panel.md#waiting) lists the waits that show
-none, and why); so it is while the Play button's press is under way, since the two ask through one dialog host, where a
-newer question answers the open one dismissed.
+none, and why), and PLAY and RESOLVE CONFLICT are disabled; while the Play button's check is under way its trigger is
+disabled and dimmed and an open menu closes, since the two ask through one dialog host, where a newer question answers
+the open one dismissed.
 
 Neither the Play button nor the selector adds a stylesheet to Steam's document, so nothing changes on hover on either.
 
