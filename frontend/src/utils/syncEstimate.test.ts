@@ -81,6 +81,15 @@ describe("estimatePlanSeconds", () => {
     expect(seconds).toBeCloseTo(estimateApplySeconds(6, 4));
   });
 
+  it("prices a predicted-skip collection as it prices a predicted-skip platform: at nothing", () => {
+    const rest = unit({ id: 2, slug: "b", rom_count: 10, collapsed_count: 10, bound_count: 4 });
+    const seconds = estimatePlanSeconds([
+      unit({ type: "collection", collection_kind: "standard", rom_count: 300, bound_count: 120, predicted_skip: true }),
+      rest,
+    ]);
+    expect(seconds).toBeCloseTo(estimatePlanSeconds([rest]));
+  });
+
   it("weighs a unit by rom_count when no collapsed count is known", () => {
     const seconds = estimatePlanSeconds([unit({ rom_count: 30, bound_count: 10 })]);
     expect(seconds).toBeCloseTo(estimateApplySeconds(20, 10));
