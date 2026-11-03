@@ -2,6 +2,10 @@
 
 Drives a fake ``/proc`` under ``tmp_path`` by pointing the adapter's ``_PROC``
 module constant at it, and the test's own home holding ``.steam/steam.pid``.
+The 64-bit client's chain is the one measured on a Deck: ``steam`` and
+``pv-adverb`` inside the container's user namespace, then ``srt-bwrap`` on the
+host still naming the container's authority file, then ``srt-client-cont``
+naming the session's, then the host's ``steam`` launch script and its shell.
 """
 
 from __future__ import annotations
@@ -22,7 +26,7 @@ STEAM_64 = "/home/deck/.local/share/Steam/steamrt64/steam"
 STEAM_32 = "/home/deck/.local/share/Steam/ubuntu12_32/steam"
 HOST_NAMESPACE = "user:[4026531837]"
 CONTAINER_NAMESPACE = "user:[4026532901]"
-HOST_AUTHORITY = "/run/user/1000/xauth_QkUzSn"
+GAMESCOPE = {"GAMESCOPE_WAYLAND_DISPLAY": "gamescope-0"}
 
 
 @pytest.fixture
@@ -32,6 +36,21 @@ def proc_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     (root / "self" / "ns" / "user").symlink_to(HOST_NAMESPACE)
     monkeypatch.setattr(running_steam, "_PROC", str(root))
     return root
+
+
+@pytest.fixture
+def session_authority(tmp_path: Path) -> str:
+    """The desktop session's authority file, which the host can read."""
+    path = tmp_path / "run" / "xauth_QkUzSn"
+    path.parent.mkdir()
+    path.write_bytes(b"\x01\x00")
+    return str(path)
+
+
+@pytest.fixture
+def container_authority(tmp_path: Path) -> str:
+    """The authority file the container names, which does not exist on the host."""
+    return str(tmp_path / "pressure-vessel" / "Xauthority")
 
 
 def _write_pid_file(home: Path, text: str) -> None:
@@ -65,33 +84,37 @@ def _make_process(
 
 
 def _steam_in_its_container(
-    proc_root: Path, home: Path, *, exe: str = STEAM_64, environ: dict[str, str] | None = None
+    proc_root: Path,
+    home: Path,
+    *,
+    session_authority: str,
+    container_authority: str,
+    steam_environ: dict[str, str] | None = None,
+    launcher_environ: dict[str, str] | None = None,
 ) -> None:
-    """Steam inside its container, under a launch script on the host that names the session's display."""
+    """The 64-bit client in its container, under the chain measured on a Deck."""
+    container_x = {"DISPLAY": ":0", "XAUTHORITY": container_authority}
+    session_x = {"DISPLAY": ":0", "XAUTHORITY": session_authority}
+    _make_process(proc_root, 3000, comm="bash", parent=1, namespace=HOST_NAMESPACE, environ=session_x)
     _make_process(
         proc_root,
-        4000,
-        comm="steam.sh",
-        parent=1,
+        3500,
+        comm="steam",
+        parent=3000,
         namespace=HOST_NAMESPACE,
-        environ={"DISPLAY": ":0", "XAUTHORITY": HOST_AUTHORITY},
+        environ={**session_x, **(launcher_environ or {})},
     )
-    _make_process(
-        proc_root,
-        4500,
-        comm="pv-adverb",
-        parent=4000,
-        namespace=CONTAINER_NAMESPACE,
-        environ={"DISPLAY": ":0", "XAUTHORITY": "/run/pressure-vessel/Xauthority"},
-    )
+    _make_process(proc_root, 4000, comm="srt-client-cont", parent=3500, namespace=HOST_NAMESPACE, environ=session_x)
+    _make_process(proc_root, 4200, comm="srt-bwrap", parent=4000, namespace=HOST_NAMESPACE, environ=container_x)
+    _make_process(proc_root, 4500, comm="pv-adverb", parent=4200, namespace=CONTAINER_NAMESPACE, environ=container_x)
     _make_process(
         proc_root,
         STEAM_PID,
         comm="steam",
         parent=4500,
         namespace=CONTAINER_NAMESPACE,
-        environ=environ if environ is not None else {"DISPLAY": ":0", "XAUTHORITY": "/run/pressure-vessel/Xauthority"},
-        exe=exe,
+        environ=steam_environ if steam_environ is not None else container_x,
+        exe=STEAM_64,
     )
     _write_pid_file(home, f"{STEAM_PID}\n")
 
@@ -101,24 +124,30 @@ def _read(home: Path) -> RunningSteam | None:
 
 
 class TestTheSteamThatRuns:
-    def test_the_64_bit_client_in_its_container(self, proc_root: Path, home: Path) -> None:
-        _steam_in_its_container(proc_root, home)
+    def test_the_64_bit_client_in_its_container(
+        self, proc_root: Path, home: Path, session_authority: str, container_authority: str
+    ) -> None:
+        _steam_in_its_container(
+            proc_root, home, session_authority=session_authority, container_authority=container_authority
+        )
 
         assert _read(home) == RunningSteam(
             identity=SteamIdentity(pid=STEAM_PID, start_time=1234567),
             exe=STEAM_64,
             under_gamescope=False,
-            display=XDisplay(name=":0", authority_path=HOST_AUTHORITY),
+            display=XDisplay(name=":0", authority_path=session_authority),
         )
 
-    def test_the_32_bit_client_on_the_host_names_its_own_display(self, proc_root: Path, home: Path) -> None:
+    def test_the_32_bit_client_on_the_host_names_its_own_display(
+        self, proc_root: Path, home: Path, session_authority: str
+    ) -> None:
         _make_process(
             proc_root,
             STEAM_PID,
             comm="steam",
             parent=1,
             namespace=HOST_NAMESPACE,
-            environ={"DISPLAY": ":1", "XAUTHORITY": HOST_AUTHORITY},
+            environ={"DISPLAY": ":1", "XAUTHORITY": session_authority},
             exe=STEAM_32,
         )
         _write_pid_file(home, str(STEAM_PID))
@@ -127,26 +156,40 @@ class TestTheSteamThatRuns:
 
         assert steam is not None
         assert steam.exe == STEAM_32
-        assert steam.display == XDisplay(name=":1", authority_path=HOST_AUTHORITY)
+        assert steam.display == XDisplay(name=":1", authority_path=session_authority)
 
-    def test_gamescope_in_steam_s_environment_is_game_mode(self, proc_root: Path, home: Path) -> None:
-        _steam_in_its_container(proc_root, home, environ={"GAMESCOPE_WAYLAND_DISPLAY": "gamescope-0"})
-
-        steam = _read(home)
-
-        assert steam is not None
-        assert steam.under_gamescope is True
-
-    def test_the_authority_comes_from_the_host_process_not_the_container(self, proc_root: Path, home: Path) -> None:
-        _steam_in_its_container(proc_root, home)
+    def test_a_command_with_a_parenthesis_still_yields_its_start_time(
+        self, proc_root: Path, home: Path, session_authority: str, container_authority: str
+    ) -> None:
+        _steam_in_its_container(
+            proc_root, home, session_authority=session_authority, container_authority=container_authority
+        )
+        stat = proc_root / str(STEAM_PID) / "stat"
+        stat.write_text(stat.read_text().replace("(steam)", "(st) eam)"), encoding="utf-8")
 
         steam = _read(home)
 
         assert steam is not None
-        assert steam.display is not None
-        assert steam.display.authority_path == HOST_AUTHORITY
+        assert steam.identity.start_time == 1234567
 
-    def test_no_xauthority_means_the_home_s_file(self, proc_root: Path, home: Path) -> None:
+
+class TestTheDisplayItWasStartedFrom:
+    def test_a_host_process_naming_the_container_s_authority_is_walked_past(
+        self, proc_root: Path, home: Path, session_authority: str, container_authority: str
+    ) -> None:
+        # srt-bwrap is the first host process above Steam, and the file it
+        # names exists only inside the container.
+        _steam_in_its_container(
+            proc_root, home, session_authority=session_authority, container_authority=container_authority
+        )
+
+        steam = _read(home)
+
+        assert steam is not None
+        assert steam.display == XDisplay(name=":0", authority_path=session_authority)
+
+    def test_no_xauthority_means_the_home_s_file_where_it_exists(self, proc_root: Path, home: Path) -> None:
+        (home / ".Xauthority").write_bytes(b"\x01\x00")
         _make_process(
             proc_root,
             STEAM_PID,
@@ -163,7 +206,51 @@ class TestTheSteamThatRuns:
         assert steam is not None
         assert steam.display == XDisplay(name=":0", authority_path=str(home / ".Xauthority"))
 
-    def test_no_display_on_the_host_process_is_no_display(self, proc_root: Path, home: Path) -> None:
+    def test_no_xauthority_and_no_file_in_the_home_is_no_display(self, proc_root: Path, home: Path) -> None:
+        _make_process(
+            proc_root,
+            STEAM_PID,
+            comm="steam",
+            parent=1,
+            namespace=HOST_NAMESPACE,
+            environ={"DISPLAY": ":0"},
+            exe=STEAM_64,
+        )
+        _write_pid_file(home, str(STEAM_PID))
+
+        steam = _read(home)
+
+        assert steam is not None
+        assert steam.display is None
+
+    def test_an_authority_path_that_is_a_directory_is_walked_past(
+        self, proc_root: Path, home: Path, tmp_path: Path, session_authority: str
+    ) -> None:
+        _make_process(
+            proc_root,
+            4000,
+            comm="steam.sh",
+            parent=1,
+            namespace=HOST_NAMESPACE,
+            environ={"DISPLAY": ":0", "XAUTHORITY": session_authority},
+        )
+        _make_process(
+            proc_root,
+            STEAM_PID,
+            comm="steam",
+            parent=4000,
+            namespace=HOST_NAMESPACE,
+            environ={"DISPLAY": ":0", "XAUTHORITY": str(tmp_path)},
+            exe=STEAM_64,
+        )
+        _write_pid_file(home, str(STEAM_PID))
+
+        steam = _read(home)
+
+        assert steam is not None
+        assert steam.display == XDisplay(name=":0", authority_path=session_authority)
+
+    def test_no_display_on_any_host_process_is_no_display(self, proc_root: Path, home: Path) -> None:
         _make_process(proc_root, STEAM_PID, comm="steam", parent=1, namespace=HOST_NAMESPACE, environ={}, exe=STEAM_64)
         _write_pid_file(home, str(STEAM_PID))
 
@@ -206,15 +293,67 @@ class TestTheSteamThatRuns:
         assert steam is not None
         assert steam.display is None
 
-    def test_a_command_with_a_parenthesis_still_yields_its_start_time(self, proc_root: Path, home: Path) -> None:
-        _steam_in_its_container(proc_root, home)
-        stat = proc_root / str(STEAM_PID) / "stat"
-        stat.write_text(stat.read_text().replace("(steam)", "(st) eam)"), encoding="utf-8")
+
+class TestGamingMode:
+    def test_gamescope_in_steam_s_own_environment(
+        self, proc_root: Path, home: Path, session_authority: str, container_authority: str
+    ) -> None:
+        _steam_in_its_container(
+            proc_root,
+            home,
+            session_authority=session_authority,
+            container_authority=container_authority,
+            steam_environ=GAMESCOPE,
+        )
 
         steam = _read(home)
 
         assert steam is not None
-        assert steam.identity.start_time == 1234567
+        assert steam.under_gamescope is True
+
+    def test_gamescope_only_on_a_host_process_above_steam(
+        self, proc_root: Path, home: Path, session_authority: str, container_authority: str
+    ) -> None:
+        # steam-launcher.service hands its host process the variable; the
+        # container may not pass it on.
+        _steam_in_its_container(
+            proc_root,
+            home,
+            session_authority=session_authority,
+            container_authority=container_authority,
+            launcher_environ=GAMESCOPE,
+        )
+
+        steam = _read(home)
+
+        assert steam is not None
+        assert steam.under_gamescope is True
+
+    def test_gamescope_on_a_container_process_above_steam_does_not_count(
+        self, proc_root: Path, home: Path, session_authority: str, container_authority: str
+    ) -> None:
+        _steam_in_its_container(
+            proc_root, home, session_authority=session_authority, container_authority=container_authority
+        )
+        environ = proc_root / "4500" / "environ"
+        environ.write_bytes(environ.read_bytes() + b"GAMESCOPE_WAYLAND_DISPLAY=gamescope-0\0")
+
+        steam = _read(home)
+
+        assert steam is not None
+        assert steam.under_gamescope is False
+
+    def test_no_gamescope_anywhere_is_desktop_mode(
+        self, proc_root: Path, home: Path, session_authority: str, container_authority: str
+    ) -> None:
+        _steam_in_its_container(
+            proc_root, home, session_authority=session_authority, container_authority=container_authority
+        )
+
+        steam = _read(home)
+
+        assert steam is not None
+        assert steam.under_gamescope is False
 
 
 class TestNoSteamToRead:
@@ -255,14 +394,22 @@ class TestNoSteamToRead:
 
         assert _read(home) is None
 
-    def test_a_stat_line_that_cannot_be_read(self, proc_root: Path, home: Path) -> None:
-        _steam_in_its_container(proc_root, home)
+    def test_a_stat_line_that_cannot_be_read(
+        self, proc_root: Path, home: Path, session_authority: str, container_authority: str
+    ) -> None:
+        _steam_in_its_container(
+            proc_root, home, session_authority=session_authority, container_authority=container_authority
+        )
         (proc_root / str(STEAM_PID) / "stat").write_text(f"{STEAM_PID} (steam) S 1\n", encoding="utf-8")
 
         assert _read(home) is None
 
-    def test_a_restarted_steam_is_another_identity(self, proc_root: Path, home: Path) -> None:
-        _steam_in_its_container(proc_root, home)
+    def test_a_restarted_steam_is_another_identity(
+        self, proc_root: Path, home: Path, session_authority: str, container_authority: str
+    ) -> None:
+        _steam_in_its_container(
+            proc_root, home, session_authority=session_authority, container_authority=container_authority
+        )
         first = _read(home)
         stat = proc_root / str(STEAM_PID) / "stat"
         stat.write_text(stat.read_text().replace("1234567", "7654321"), encoding="utf-8")
