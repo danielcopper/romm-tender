@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 from domain.emulator_choice import CANNOT_START_STATE, NO_ENTRY, STARTS, start_payload
 from domain.firmware_store import STORE_FOLDER
 from domain.rom_files import asked_path
+from domain.shortcut_data import shortcut_launch_options
 from domain.start_command import StartRefused
 from lib.errors import Refused
 
@@ -102,7 +103,7 @@ class GameStartService:
             return {
                 "success": True,
                 "app_id": app_id,
-                "launch_options": str(app_id),
+                "launch_options": shortcut_launch_options(app_id),
                 "prune_lease_token": await self._rules.acquire_lease("launch_reconfirm"),
             }
 

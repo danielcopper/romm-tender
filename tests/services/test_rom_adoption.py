@@ -22,13 +22,11 @@ import pytest
 from _factories import (
     _make_conflict_rules,
     _make_prune_conflicts,
-    _record_operations_at_lease,
     _refused_by_conflict_rule,
 )
 from _spawns import record_spawns
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_adoption_move import FakeAdoptionMoveStore
-from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_download_file_store import FakeDownloadFileStore
 from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
@@ -182,8 +180,6 @@ class Harness:
             config=RomInstallRecorderConfig(
                 clock=self.clock,
                 uow_factory=FakeUnitOfWorkFactory(self.uow),
-                active_core=FakeActiveCoreResolver(default=(None, None)),
-                disc_resolver=FakeDiscResolver(),
             ),
         )
         self.paths = FakeRetroDeckFolders(roms=_ROMS, saves=_SAVES)
@@ -479,34 +475,12 @@ class TestReplace:
 
 
 class TestTheAdoptionLease:
-    """A bound ROM's adoption carries an ``adopt_existing_rom`` lease for the frontend's launch-command write.
-
-    An unbound ROM has no shortcut to write to, so its lease would hold off
-    every cleanup until it expired.
-    """
+    """An adoption leaves the prune conflicts as they were, and one its conflict rules refuse records nothing."""
 
     def _stage(self, h, *, app_id: int | None = 1042) -> None:
         h.seed_rom(app_id=app_id)
         h.stage_detail(_single_file_detail())
         h.store.files["/roms/snes/Game.sfc"] = b"x" * 10
-
-    async def test_a_bound_roms_adoption_carries_a_lease(self, h):
-        self._stage(h)
-
-        result = await h.service.adopt_existing_rom(_ROM_ID)
-
-        assert result["success"] is True
-        assert result["prune_lease_token"].startswith("adopt_existing_rom:")
-        assert h.prune_conflicts.conflicting_operations == 1
-
-    async def test_the_lease_is_taken_while_the_adoptions_operation_still_holds(self, h, monkeypatch):
-        """No cleanup can start between the adoption's operation and the lease that outlasts it."""
-        self._stage(h)
-        seen = _record_operations_at_lease(h.prune_conflicts, monkeypatch)
-
-        await h.service.adopt_existing_rom(_ROM_ID)
-
-        assert seen == [["adopt_existing_rom"]]
 
     async def test_an_unbound_roms_adoption_carries_none(self, h):
         self._stage(h, app_id=None)
@@ -587,7 +561,7 @@ class TestAdopt:
 
         assert set(h.store.files) == before
 
-    async def test_a_file_the_system_does_not_start_still_gets_its_launch_command(self, h):
+    async def test_a_file_the_system_does_not_start_is_still_recorded(self, h):
         # Whether it starts is asked when the game's page reads it (#2195 D26, D28).
         h.seed_rom(app_id=1042)
         h.system_extensions = {"snes": frozenset({".sfc", ".smc"})}
@@ -596,21 +570,26 @@ class TestAdopt:
 
         result = await h.service.adopt_existing_rom(_ROM_ID)
 
+        assert result["success"] is True
         assert h.uow.rom_installs.get(_ROM_ID) is not None
-        assert result["launch_options"].endswith("'/roms/snes/Game.pkg'")
 
-    async def test_a_launchable_adopted_install_bakes_the_launch_command(self, h):
+    async def test_an_adoption_answers_its_install_and_records_no_launch_command(self, h):
+        # The shortcut carries its appId; the next start asks with the adopted install.
         h.seed_rom(app_id=1042)
         h.stage_detail(_single_file_detail())
         h.store.files["/roms/snes/Game.sfc"] = b"x"
 
         result = await h.service.adopt_existing_rom(_ROM_ID)
 
-        assert result["app_id"] == 1042
-        assert result["launch_options"].endswith("'/roms/snes/Game.sfc'")
+        assert result == {
+            "success": True,
+            "message": "Using the files already on this device",
+            "file_path": "/roms/snes/Game.sfc",
+            "rom_dir": None,
+        }
         rom = h.uow.roms.get(_ROM_ID)
         assert rom is not None
-        assert rom.applied_launch_options == result["launch_options"]
+        assert rom.applied_launch_options is None
 
     async def test_an_unbound_rom_records_no_applied_launch_options(self, h):
         h.seed_rom(app_id=None)
@@ -619,7 +598,7 @@ class TestAdopt:
 
         result = await h.service.adopt_existing_rom(_ROM_ID)
 
-        assert result["app_id"] is None
+        assert result["success"] is True
         rom = h.uow.roms.get(_ROM_ID)
         assert rom is not None
         assert rom.applied_launch_options is None
@@ -774,11 +753,7 @@ class TestAdopt:
             return recorder_record(**kwargs)
 
         h.service._sibling_supersede = lambda: _record_supersede
-        h.service._install_recorder = SimpleNamespace(
-            do_record_install=_record_install,
-            do_resolve_launch_bake=h.recorder.do_resolve_launch_bake,
-            do_record_applied_launch_options=h.recorder.do_record_applied_launch_options,
-        )
+        h.service._install_recorder = SimpleNamespace(do_record_install=_record_install)
 
         assert (await h.service.adopt_existing_rom(_ROM_ID))["success"] is True
 

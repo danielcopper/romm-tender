@@ -86,12 +86,10 @@ import type {
   UninstallProgressEvent,
 } from "../types";
 import { detach } from "../utils/detach";
-import { setLaunchOptionsConfirmed } from "../utils/steamShortcuts";
 import {
   capturePruneLeaseAdmission,
   isPruneLeaseAdmissionCurrent,
   usePruneLeaseOwner,
-  withPruneLease,
   type PruneLeaseAdmission,
 } from "../utils/pruneLease";
 import { prepareStart, UNKNOWN_GAME_START } from "../utils/launchOptionsReconcile";
@@ -768,7 +766,6 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
       romId,
       romName,
       pageSawCandidate: candidatePresent,
-      leaseOwner,
       logContext: "CustomPlayButton",
       dialogs: {
         showExisting: showAdoptExistingModal,
@@ -827,28 +824,15 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
 
   /**
    * Run a forget of this ROM's install record and, once the backend has answered
-   * success, reset the shortcut's launch command under the removal's lease and
-   * announce the ROM as not installed — the reset `executeRomUninstall` makes after
-   * an uninstall, for the reason given there.
+   * success, announce the ROM as not installed, as `executeRomUninstall` does
+   * after an uninstall.
    */
-  const removeInstallRecord = async <R extends { success: boolean; prune_lease_token?: string }>(
+  const removeInstallRecord = async <R extends { success: boolean }>(
     rid: number,
     remove: () => Promise<R>,
-    context: string,
   ): Promise<R> => {
-    const admission = capturePruneLeaseAdmission(leaseOwner);
     const result = await remove();
     if (result.success) {
-      await withPruneLease(
-        result.prune_lease_token,
-        context,
-        async (signal) => {
-          if (signal.aborted) return;
-          await setLaunchOptionsConfirmed(appId, "").catch(() => false);
-        },
-        leaseOwner,
-        admission,
-      );
       globalThis.dispatchEvent(new CustomEvent("romm_rom_uninstalled", { detail: { rom_id: rid } }));
     }
     return result;
@@ -865,13 +849,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
     setState("uninstall_pending");
     detach(debugLog(`CustomPlayButton: uninstalling romId=${romId}`));
     try {
-      const removed = await executeRomUninstall({
-        romId,
-        appId,
-        romName,
-        leaseOwner,
-        tag: "CustomPlayButton",
-      });
+      const removed = await executeRomUninstall({ romId, romName, leaseOwner, tag: "CustomPlayButton" });
       if (removed) {
         // Dark pulse transition before showing Download button
         setState("uninstalling");
@@ -898,7 +876,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
     forgetPendingRef.current = true;
     setForgetPending(true);
     try {
-      const result = await removeInstallRecord(rid, () => forgetDownload(rid), "Forget download");
+      const result = await removeInstallRecord(rid, () => forgetDownload(rid));
       showToast(result.success ? downloadForgottenToast(romName) : forgetRefusedToast(result));
       if (!result.success && result.reason === "file_present") {
         // The file is back, so the page leaves the missing state now rather

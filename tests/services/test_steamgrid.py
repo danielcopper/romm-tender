@@ -17,10 +17,7 @@ from _factories import (
     _refused_by_conflict_rule,
 )
 from _vendor import vdf
-from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_cover_slot_reader import FakeCoverSlotReader
-from fakes.fake_disc_resolver import FakeDiscResolver
-from fakes.fake_emulator_sources import FakeEmulatorSources
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_running_rom_ids import FakeRunningRomIds
@@ -120,9 +117,6 @@ def steamgrid(sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, uow, emi
             log_debug=debug_logger,
             artwork=FakeArtworkManager(),
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
-            active_core=FakeActiveCoreResolver(default=(None, None)),
-            disc_resolver=FakeDiscResolver(),
-            emulator_sources=FakeEmulatorSources(),
             renderer_rss=FakeRendererRss(),
             renderer_gc=FakeRendererGc(),
             conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
@@ -1178,9 +1172,6 @@ class TestDebugLoggerProtocolSeam:
                 log_debug=capture,
                 artwork=FakeArtworkManager(),
                 uow_factory=FakeUnitOfWorkFactory(),
-                active_core=FakeActiveCoreResolver(default=(None, None)),
-                disc_resolver=FakeDiscResolver(),
-                emulator_sources=FakeEmulatorSources(),
                 renderer_rss=FakeRendererRss(),
                 renderer_gc=FakeRendererGc(),
                 conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),

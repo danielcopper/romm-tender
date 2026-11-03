@@ -836,7 +836,6 @@ describe("VersionPicker — per-version covers (#1346)", () => {
       success: true,
       rom_id: 2,
       target_installed: false,
-      launch_options: "",
       app_id: APP_ID,
     });
     vi.mocked(backend.fetchCoverBase64).mockImplementation(async (romId: number) => ({
@@ -863,7 +862,6 @@ describe("VersionPicker — per-version covers (#1346)", () => {
       success: true,
       rom_id: 2,
       target_installed: false,
-      launch_options: "",
       app_id: APP_ID,
     });
     vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: null });
@@ -890,7 +888,6 @@ describe("VersionPicker — per-version covers (#1346)", () => {
         success: true,
         rom_id: 2,
         target_installed: false,
-        launch_options: "",
         app_id: APP_ID,
       });
       vi.mocked(backend.fetchCoverBase64).mockRejectedValue(new Error("offline"));
@@ -922,7 +919,6 @@ describe("VersionPicker — per-version covers (#1346)", () => {
         success: true,
         rom_id: 2,
         target_installed: false,
-        launch_options: "",
         app_id: APP_ID,
       });
       vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: "JP" });
@@ -952,7 +948,6 @@ describe("VersionPicker — per-version covers (#1346)", () => {
       success: true,
       rom_id: 2,
       target_installed: true,
-      launch_options: "cmd",
       app_id: APP_ID,
       prune_lease_token: "version-lease",
     });
@@ -1054,14 +1049,12 @@ describe("VersionPicker — switching", () => {
     vi.mocked(toaster.toast).mockReset();
   });
 
-  it("switch to a downloaded target confirms its launch command onto the shortcut", async () => {
+  it("switch to a downloaded target writes nothing to the shortcut and publishes the switch", async () => {
     vi.mocked(backend.getVersionList).mockResolvedValue(multiVersionList());
-    const command = 'flatpak run net.retrodeck.retrodeck "/roms/game.iso"';
     vi.mocked(backend.switchVersion).mockResolvedValue({
       success: true,
       rom_id: 2,
       target_installed: true,
-      launch_options: command,
       app_id: APP_ID,
     });
 
@@ -1071,21 +1064,20 @@ describe("VersionPicker — switching", () => {
     });
 
     expect(backend.switchVersion).toHaveBeenCalledWith(APP_ID, 2, false);
-    // The launch command is confirm-written onto the shortcut BEFORE the cache
-    // invalidate + broadcast.
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(APP_ID, command);
+    // The shortcut's launch options stay its appId; the next start asks for
+    // the target's command.
+    expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
     expect(invalidateCachedGameDetail).toHaveBeenCalledWith(APP_ID);
     const versionEvt = dispatched.find((e) => e.detail?.type === "version_switched");
     expect(versionEvt?.detail).toEqual({ type: "version_switched", app_id: APP_ID, rom_id: 2 });
   });
 
-  it("switch to an uninstalled target blanks the shortcut's launch command", async () => {
+  it("switch to an uninstalled target writes nothing to the shortcut either", async () => {
     vi.mocked(backend.getVersionList).mockResolvedValue(multiVersionList());
     vi.mocked(backend.switchVersion).mockResolvedValue({
       success: true,
       rom_id: 2,
       target_installed: false,
-      launch_options: "",
       app_id: APP_ID,
     });
 
@@ -1094,60 +1086,8 @@ describe("VersionPicker — switching", () => {
       await clickRow(menu.container, "Game (Japan)");
     });
 
-    // Blank is applied on purpose so the shortcut never keeps the old command.
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(APP_ID, "");
+    expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
     expect(dispatched.some((e) => e.detail?.type === "version_switched")).toBe(true);
-  });
-
-  it("still invalidates + broadcasts (and warns) when the launch-options confirm resolves false", async () => {
-    vi.mocked(backend.getVersionList).mockResolvedValue(multiVersionList());
-    vi.mocked(backend.switchVersion).mockResolvedValue({
-      success: true,
-      rom_id: 2,
-      target_installed: true,
-      launch_options: "cmd",
-      app_id: APP_ID,
-    });
-    // The write didn't confirm — the backend rebind is already committed, so the
-    // switch must still complete; only the shortcut command is left stale.
-    vi.mocked(setLaunchOptionsConfirmed).mockResolvedValue(false);
-
-    const dispatched = await captureDataChanged(async () => {
-      const { menu } = await renderAndOpen();
-      await clickRow(menu.container, "Game (Japan)");
-    });
-
-    expect(toaster.toast).toHaveBeenCalledWith({ title: "Tender", body: "Switched — re-switch if launch fails" });
-    expect(invalidateCachedGameDetail).toHaveBeenCalledWith(APP_ID);
-    expect(dispatched.some((e) => e.detail?.type === "version_switched")).toBe(true);
-  });
-
-  it("still invalidates + broadcasts when the launch-options confirm THROWS (non-vacuous catch)", async () => {
-    const logErrorSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
-    try {
-      vi.mocked(backend.getVersionList).mockResolvedValue(multiVersionList());
-      vi.mocked(backend.switchVersion).mockResolvedValue({
-        success: true,
-        rom_id: 2,
-        target_installed: true,
-        launch_options: "cmd",
-        app_id: APP_ID,
-      });
-      vi.mocked(setLaunchOptionsConfirmed).mockRejectedValue(new Error("steam down"));
-
-      const dispatched = await captureDataChanged(async () => {
-        const { menu } = await renderAndOpen();
-        await clickRow(menu.container, "Game (Japan)");
-      });
-
-      // A throw is treated like a failed confirm: warn + still complete the switch.
-      expect(logErrorSpy).toHaveBeenCalledWith(expect.stringContaining("launch-options confirm threw"));
-      expect(toaster.toast).toHaveBeenCalledWith({ title: "Tender", body: "Switched — re-switch if launch fails" });
-      expect(invalidateCachedGameDetail).toHaveBeenCalledWith(APP_ID);
-      expect(dispatched.some((e) => e.detail?.type === "version_switched")).toBe(true);
-    } finally {
-      logErrorSpy.mockRestore();
-    }
   });
 
   it("does nothing when the active version is re-selected", async () => {
@@ -1333,7 +1273,6 @@ describe("VersionPicker — switch target liveness (#1570)", () => {
       success: true,
       rom_id: 2,
       target_installed: false,
-      launch_options: "",
       app_id: APP_ID,
     });
 
@@ -1362,7 +1301,6 @@ describe("VersionPicker — switch target liveness (#1570)", () => {
       success: true,
       rom_id: 3,
       target_installed: false,
-      launch_options: "",
       app_id: APP_ID,
     });
 
@@ -1569,7 +1507,7 @@ describe("VersionPicker — unsynced-saves soft-block", () => {
 
     expect(backend.switchVersion).toHaveBeenNthCalledWith(1, APP_ID, 2, false);
     expect(backend.switchVersion).toHaveBeenNthCalledWith(2, APP_ID, 2, true);
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(APP_ID, "");
+    expect(invalidateCachedGameDetail).toHaveBeenCalledWith(APP_ID);
     expect(dispatched.some((e) => e.detail?.type === "version_switched")).toBe(true);
   });
 
@@ -1613,7 +1551,7 @@ describe("VersionPicker — unsynced-saves soft-block", () => {
     expect(backend.syncRomSaves).toHaveBeenCalledWith(1);
     // Second switch is the post-sync retry (allow_stranded still false).
     expect(backend.switchVersion).toHaveBeenNthCalledWith(2, APP_ID, 2, false);
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(APP_ID, "");
+    expect(invalidateCachedGameDetail).toHaveBeenCalledWith(APP_ID);
     expect(dispatched.some((e) => e.detail?.type === "version_switched")).toBe(true);
   });
 
@@ -1695,7 +1633,7 @@ describe("VersionPicker — unsynced-saves soft-block", () => {
     expect(backend.switchVersion).toHaveBeenCalledTimes(3);
     expect(backend.switchVersion).toHaveBeenNthCalledWith(2, APP_ID, 2, false);
     expect(backend.switchVersion).toHaveBeenNthCalledWith(3, APP_ID, 2, true);
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(APP_ID, "");
+    expect(invalidateCachedGameDetail).toHaveBeenCalledWith(APP_ID);
   });
 
   it("routes a version_vanished 'Switch anyway' retry through the common refusal path", async () => {
@@ -2098,7 +2036,6 @@ describe("VersionPicker — in-flight switch guard (#1345 / E)", () => {
       success: true,
       rom_id: 2,
       target_installed: true,
-      launch_options: "",
       app_id: APP_ID,
     });
 
@@ -2131,7 +2068,6 @@ describe("VersionPicker — in-flight switch guard (#1345 / E)", () => {
       success: true,
       rom_id: 2,
       target_installed: true,
-      launch_options: "",
       app_id: APP_ID,
     });
 
@@ -2694,7 +2630,6 @@ describe("VersionPicker — in-flight switch guard (#1345 / E)", () => {
       success: true,
       rom_id: 2,
       target_installed: true,
-      launch_options: "",
       app_id: APP_ID,
     });
 
@@ -2708,7 +2643,6 @@ describe("VersionPicker — in-flight switch guard (#1345 / E)", () => {
       success: true,
       rom_id: 1,
       target_installed: true,
-      launch_options: "",
       app_id: APP_ID,
     });
     await act(async () => {

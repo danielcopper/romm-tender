@@ -440,14 +440,11 @@ list and never the switch mechanism.
 The two path fields on `RomInstall` (`domain/rom_install.py`) answer different questions and must not be conflated:
 
 - **`file_path`** — the **launch file**: the single file that is the ROM's launch identity. Present for every ROM;
-  save-path resolution, ES-DE core resolution, and the displayed filename all derive from it. It is the **default**
-  launch target baked into the Steam shortcut's `launch_options` (`flatpak run … '<file_path>'`, run by the
-  `tender-rom-launcher` exec wrapper per [ADR-0009](docs/adr/0009-launcher-pure-exec-wrapper-baked-launch-options.md),
-  which superseded the dynamic SQLite read of [ADR-0005](docs/adr/0005-launcher-resolves-path-from-sqlite.md)) — but the
-  baked launch **target** may be **overridden at bake time** without rewriting `file_path`: a multi-disc pin bakes the
-  selected disc's path
-  ([ADR-0014](docs/adr/0014-per-game-disc-selection-in-db-applied-as-bake-time-launch-path-override.md)), and a
-  folder-boot system (PS3/RPCS3) bakes the game **directory** rather than the nested launch file
+  save-path resolution, ES-DE core resolution, and the displayed filename all derive from it. It is the **default** path
+  a start is asked with (`domain/rom_files.py::asked_path`) — but the path asked with may differ without rewriting
+  `file_path`: a multi-disc pin asks with the selected disc's path
+  ([ADR-0014](docs/adr/0014-per-game-disc-selection-in-db-applied-as-bake-time-launch-path-override.md)), and a game
+  kept as a folder (PS3/RPCS3) asks with the game **directory** rather than the nested launch file
   ([ADR-0019](docs/adr/0019-folder-as-launch-target.md)). `file_path` stays the launch **file** anchor in every case.
 - **`rom_dir`** — the **dedicated per-ROM directory**, present only for folder-backed ROMs: a multi-file ROM, or a
   single `.zip` unpacked into a folder (**served shape**). **NULL for single-file ROMs** kept as they arrived, which
@@ -976,9 +973,9 @@ A user's per-game pick of **which disc launches** for a multi-disc ROM, stored a
 `roms.selected_disc` (nullable). It mirrors the per-game **emulator override** exactly: NULL means "follow the default"
 (the install's `.m3u` when `file_path` is one, else the first enumerated disc), only `pin_selected_disc` /
 `clear_selected_disc` write it, it is **excluded from the sync UPSERT** so a re-sync never resets it, and it anchors on
-`roms` so it survives uninstall/reinstall and home migration. Applied as a **bake-time launch-path override** — it
-changes only the path baked into the shortcut's `launch_options`, never `RomInstall.file_path`, structurally identical
-to how the override changes the invocation without touching `file_path`
+`roms` so it survives uninstall/reinstall and home migration. Applied as a **launch-path override** — it changes only
+the path a start is asked with, never `RomInstall.file_path`, structurally identical to how the override changes the
+entry without touching `file_path`
 ([ADR-0014](docs/adr/0014-per-game-disc-selection-in-db-applied-as-bake-time-launch-path-override.md)). A stale pin (the
 disc no longer present) degrades to the default with a WARNING, never fatal.
 
@@ -1052,7 +1049,7 @@ never an acceptable stand-in, because it answers a different question in a shape
 So a save state is never reported for a platform, and whatever carries one names the emulator it is about.
 
 This is why the question goes to the **catalogue entry** Tender resolved for this ROM (the label `ActiveCoreResolver`
-produced, which is the label the launch bakes) rather than to a bare core: a standalone emulator answers for itself.
+produced, which is the entry the start asks for) rather than to a bare core: a standalone emulator answers for itself.
 
 ### Answered save directory
 

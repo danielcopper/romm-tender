@@ -97,7 +97,6 @@ const BINDING_MOVES = {
       app_id: APP_ID,
       rom_id: NEW_ROM,
       target_installed: true,
-      launch_options: "new-command",
       prune_lease_token: "",
     });
   },

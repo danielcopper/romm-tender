@@ -887,8 +887,8 @@ The active core name appears on the game detail page's **BIOS** tab (see
    follow your library, which is a different question — see
    [When the requirement is unknown](#when-the-requirement-is-unknown).
 
-Whatever this chain resolves to is the **same core the game launches on** — Tender bakes the resolved core into the
-Steam shortcut, so the core shown for BIOS, saves, and the core badge always matches the core that runs.
+Whatever this chain resolves to is the **same core the game launches on** — every start asks for the resolved core's
+command, so the core shown for BIOS, saves, and the core badge always matches the core that runs.
 
 The detection chain ensures BIOS filtering works even when RetroDECK's configuration files aren't accessible (e.g. after
 an update changes paths). You'll see a "Core: mGBA" badge when detection is working, or no badge when falling back to
@@ -897,8 +897,8 @@ showing all files.
 ## Changing the Active Core
 
 You can change the active emulator core directly from Tender, without leaving Game Mode. There are two scopes, and
-**both are stored by Tender itself** — neither touches ES-DE's `gamelist.xml`. Tender bakes the chosen core directly
-into each game's Steam shortcut, so your choice applies reliably for any ROM filename.
+**both are stored by Tender itself** — neither touches ES-DE's `gamelist.xml`. Every start asks for the chosen core's
+command, so your choice applies reliably for any ROM filename, from the next start on.
 
 - **Per-platform** changes set the core for every game on a platform. Stored in Tender's own settings.
 - **Per-game** changes set the core for a single game and take priority over the platform choice. Stored by Tender on
@@ -954,12 +954,10 @@ actually in effect. Once a sync has run, the page works even when your RomM serv
 status are available, only the download buttons are withdrawn. Before the first sync after an update, a platform needs
 RomM once to learn its system; offline, it says so instead.
 
-!!! note "A RetroDECK default-core change needs a Force Full Sync"
+!!! note "A core change applies at the next start"
 
-    Setting a per-platform core here re-bakes your installed games right away. But if a **RetroDECK
-    update** ships a _new default core_ for a platform (and you have not picked a core yourself), that new default does
-    **not** take effect on a normal sync — a normal sync skips platforms whose games haven't changed, so the
-    previously-baked core stays. Run a **Force Full Sync** to re-bake every game and pick up RetroDECK's new default.
+    Setting a per-platform core here applies to your games from their next start, with no sync. A **RetroDECK update**
+    that ships a _new default core_ for a platform you have not picked a core for applies the same way.
 
 ### Per-Game (Game Detail Page)
 
@@ -1018,9 +1016,9 @@ installed could not be established, the line asks you to choose an emulator, and
 pick you made stands whatever happens to it: only one whose name no longer exists gives way to the default, and the line
 says so.
 
-Per-game cores work for **any ROM filename**. Tender bakes the chosen core directly into the game's launch command, so
-it does not rely on RetroDECK's gamelist lookup (which mishandles parentheses and other special characters in filenames)
-and is not affected by that upstream limitation.
+Per-game cores work for **any ROM filename**. Tender starts the chosen core's command itself, so it does not rely on
+RetroDECK's gamelist lookup (which mishandles parentheses and other special characters in filenames) and is not affected
+by that upstream limitation.
 
 ### Core choices are not migrated from ES-DE
 

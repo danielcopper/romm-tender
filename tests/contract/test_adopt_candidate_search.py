@@ -350,16 +350,21 @@ async def test_another_game_s_save_stays_where_it_is(harness):
     assert stranger.read_bytes() == b"not mine"
 
 
-async def test_an_adopted_candidate_is_launchable_like_a_downloaded_one(harness):
+async def test_an_adopted_candidate_is_the_install_a_start_asks_with(harness):
+    # Like a downloaded game: its install is recorded, and its shortcut, which
+    # carries its appId, is not written to.
     seed_rom(harness, _ROM_ID, platform_slug="gba")
     _stage(harness)
     candidate = _place_candidate(harness)
 
     result = await harness.endpoints.adopt_existing_rom(_ROM_ID, str(candidate), None)
 
-    assert result["app_id"] == _ROM_ID  # seed_rom binds shortcut_app_id to rom_id
-    assert isinstance(result["launch_options"], str)
-    assert isinstance(result["prune_lease_token"], str)
+    assert result["success"] is True
+    assert "launch_options" not in result
+    assert "prune_lease_token" not in result
+    installed = harness.endpoints.get_installed_rom(_ROM_ID)
+    assert installed is not None
+    assert installed["file_path"] == str(_platform_dir(harness) / _CANONICAL)
 
 
 async def test_a_candidate_outside_this_game_s_platform_folder_is_refused(harness):

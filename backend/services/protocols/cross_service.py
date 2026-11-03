@@ -33,14 +33,14 @@ if TYPE_CHECKING:
 
 
 class RomInstallRecorder(Protocol):
-    """The one writer of a ``rom_installs`` row and of the shortcut bake behind it.
+    """The one writer of a ``rom_installs`` row.
 
     Both a completed download and an adoption reach an install through here, so
     the row an adoption writes is derived by exactly the rules a download's is —
     ``file_path``, ``rom_dir`` and ``system`` — rather than by a second
     implementation free to drift from it (ADR-0028).
 
-    Synchronous throughout: every method opens a short write Unit of Work, so
+    Synchronous: it opens a short write Unit of Work, so
     callers on the event loop offload via ``loop.run_in_executor``.
     """
 
@@ -59,18 +59,6 @@ class RomInstallRecorder(Protocol):
         *cleanup* removes the just-placed artifact when the RomM data fails the
         aggregate's invariant and nothing is persisted.
         """
-        ...
-
-    def do_resolve_launch_bake(self, rom_id: int, rom_detail: dict[str, Any], file_path: str) -> tuple[int | None, str]:
-        """Return the ``(shortcut_app_id, launch_options)`` the frontend must write.
-
-        ``app_id`` is ``None`` when the ROM has no Steam shortcut yet — the
-        frontend no-ops and the next sync writes the launch command.
-        """
-        ...
-
-    def do_record_applied_launch_options(self, rom_id: int, launch_options: str) -> None:
-        """Record *launch_options* as this ROM's applied shortcut state. No-op when the row is gone."""
         ...
 
 
@@ -320,36 +308,6 @@ class DiscResolver(Protocol):
     def resolve_for_install(
         self, install: RomInstall, selected_disc: str | None, *, reading: SourcesReading | None = None
     ) -> str: ...
-
-
-class RelaunchOptionsReader(Protocol):
-    """Installed+bound relaunch-items build consumed by the two relaunch sites.
-
-    The composition root satisfies this with ``RelaunchOptionsResolver``. Both
-    the RetroDECK-home migration (re-baking each relocated shortcut to its new
-    path) and the startup launch-options reconcile (#1043, healing drift to the
-    empty placeholder) ask "what is the current ``launch_options`` for every
-    installed and bound ROM?" and forward the returned list to the frontend.
-    Each item is a ``{app_id, launch_options}`` dict; uninstalled and unbound
-    ROMs are skipped by construction, so an empty list means nothing to relaunch.
-    """
-
-    def installed_relaunch_items(self) -> list[dict[str, Any]]: ...
-
-
-class RomRelaunchItemReader(Protocol):
-    """Single installed+bound ROM relaunch-item resolution consumed by VersionSwitchService.
-
-    The composition root satisfies this with ``RelaunchOptionsResolver`` — the
-    same seam the batch ``RelaunchOptionsReader`` draws from, narrowed to one
-    ROM. After a version switch rebinds a *downloaded* target, the picker needs
-    that install's full Steam launch command to write onto the shortcut; this
-    resolves it from the freshly-bound rom_id. Returns ``None`` when the ROM has
-    no install row or no bound shortcut. A UoW-opening seam — the caller resolves
-    it *outside* any open Unit of Work (the nested ``BEGIN IMMEDIATE`` deadlocks).
-    """
-
-    def relaunch_item_for_rom(self, rom_id: int) -> dict[str, Any] | None: ...
 
 
 class SaveDriftProbeFn(Protocol):

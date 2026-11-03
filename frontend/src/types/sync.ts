@@ -287,7 +287,6 @@ export interface SyncAddItem {
   name: string;
   exe: string;
   start_dir: string;
-  launch_options: string;
   platform_name: string;
 }
 

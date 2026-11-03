@@ -3,15 +3,14 @@
 Owns the two use cases behind the disc picker: ``get_disc_selection``
 reports whether a ROM is multi-disc and, if so, the launchable discs plus the
 current and default targets; ``select_disc`` pins a disc (or clears the pin back
-to the default) and returns the freshly-baked launch command for the frontend to
-confirm-set on the live Steam shortcut.
+to the default), which the next start is asked with.
 
 The disc pick lands on the ``Rom`` aggregate via the Unit-of-Work (the pin-only
 ``set_selected_disc`` write path, never the sync UPSERT), mirroring how the
 per-game emulator override is written in :class:`CoreService`. Enumeration and
 launch-path resolution both go through the shared :class:`DiscLaunchResolver`
-seam so the list the picker shows is the list the bake resolves over, and the
-baked launch command never diverges from the picker's selection. The picker only
+seam so the list the picker shows is the list the start resolves over, and the
+disc a start opens never diverges from the picker's selection. The picker only
 ever applies to a folder-backed (multi-file) install — a single-file ROM owns no
 disc folder and reports ``multi_disc: False``.
 """
@@ -22,17 +21,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.disc_selection import default_descriptor
-from domain.shortcut_data import build_launch_options, resolve_emulator_invocation
 from lib.errors import NotInstalled, Refused
 
 if TYPE_CHECKING:
     import asyncio
     import logging
 
-    from domain.disc_selection import Disc
-    from domain.rom_install import RomInstall
     from services.protocols import (
-        ActiveCoreReader,
         ConflictRules,
         DiscResolver,
         UnitOfWorkFactory,
@@ -46,16 +41,13 @@ class DiscServiceConfig:
     Carries the runtime infrastructure (event loop, logger), the SQLite
     Unit-of-Work factory (to read the ROM + its install and write the disc pin),
     the shared per-ROM disc resolver (enumeration + launch-path resolution), and
-    the shared per-ROM active-core resolver (so a re-baked launch command keeps
-    the ROM's full active core, not a plain launch), and the ``ConflictRules``
-    ``select_disc`` checks at its entry and takes its lease through.
+    the ``ConflictRules`` ``select_disc`` checks at its entry.
     """
 
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
     uow_factory: UnitOfWorkFactory
     disc_resolver: DiscResolver
-    active_core: ActiveCoreReader
     conflict_rules: ConflictRules
 
 
@@ -72,7 +64,6 @@ class DiscService:
         self._logger = config.logger
         self._uow_factory = config.uow_factory
         self._disc_resolver = config.disc_resolver
-        self._active_core = config.active_core
         self._rules = config.conflict_rules
 
     async def get_disc_selection(self, rom_id: int) -> dict[str, Any]:
@@ -130,15 +121,11 @@ class DiscService:
         is refused with ``not_installed``, a folder with fewer than two discs
         with ``unsupported``, and nothing is written. On success the
         pick is persisted via the pin-only ``set_selected_disc`` write path and
-        the response carries the freshly-baked ``launch_options`` (the disc's path
-        folded over the ROM's full active core) for the frontend to confirm-set on
-        the live Steam shortcut, plus the now-effective ``selected`` value, and a
-        ``disc_selection`` lease in ``prune_lease_token`` for that write.
+        the response carries the now-effective ``selected`` value; the next start
+        opens that disc.
         """
         async with self._rules.hold("select_disc", update=True, migration=True, prune=True):
-            result = await self._loop.run_in_executor(None, self._select_disc_io, rom_id, filename)
-            result["prune_lease_token"] = await self._rules.acquire_lease("disc_selection")
-            return result
+            return await self._loop.run_in_executor(None, self._select_disc_io, rom_id, filename)
 
     def _select_disc_io(self, rom_id: int, filename: str | None) -> dict[str, Any]:
         with self._uow_factory() as uow:
@@ -162,17 +149,7 @@ class DiscService:
             # removed-game cleanup can retire the ROM between the two
             # transactions, each on its own connection. The install is re-read
             # for the same admission the first transaction applied — it exists
-            # and is folder-backed — but the row is never re-bound: the bake
-            # resolves over ``discs``, which were enumerated from the snapshot
-            # above, and a relocated install paired with that older listing
-            # would resolve a disc to a directory it was never listed in.
-            # That is the accepted cost of the split: a re-install that moves the
-            # ROM in this window still gets its pin, and the returned
-            # ``launch_options`` — which the frontend confirm-sets on the live
-            # shortcut — then names the directory the ROM has left. It is
-            # self-correcting rather than sticky: the startup launch-options
-            # reconcile (#1043) re-bakes every installed+bound ROM from the
-            # current rows on the next panel load.
+            # and is folder-backed.
             rom = uow.roms.get(rom_id)
             current_install = uow.rom_installs.get(rom_id)
             if rom is None or current_install is None or current_install.rom_dir is None:
@@ -183,21 +160,4 @@ class DiscService:
                 rom.pin_selected_disc(filename)
             uow.roms.set_selected_disc(rom_id, rom.selected_disc)
             selected = rom.selected_disc
-        launch_options = self._bake_launch_options(rom_id, install, discs, selected)
-        return {"success": True, "launch_options": launch_options, "selected": selected}
-
-    def _bake_launch_options(
-        self, rom_id: int, install: RomInstall, discs: list[Disc], selected_disc: str | None
-    ) -> str:
-        """Bake the launch command for the now-selected disc + the ROM's active core.
-
-        Resolves the disc-aware bake path over the already-enumerated *discs*
-        (the pin just written, or the default when cleared), then folds it over
-        the ROM's FULL active core so a per-game/per-platform core still bakes its
-        ``-e`` override form rather than a plain launch. Runs after the write UoW
-        has closed: ``active_emulator_for_rom`` opens its own UoW, so resolving
-        here keeps it from nesting on the same SQLite connection.
-        """
-        bake_path = self._disc_resolver.resolve_bake_path(install, discs, selected_disc)
-        emulator = self._active_core.active_emulator_for_rom(rom_id)
-        return build_launch_options(resolve_emulator_invocation({"id": rom_id}, emulator), bake_path)
+        return {"success": True, "selected": selected}

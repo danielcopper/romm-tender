@@ -352,7 +352,7 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "get_app_id_rom_id_map",
     # Read-only startup launch-options reconcile pull (#1043) — heals drifted
     # shortcut launch commands; pure read, never gated.
-    "get_installed_relaunch_options",
+    "get_bound_launch_options",
     # Achievements queries (server-side).
     "get_achievements",
     "get_achievement_progress",

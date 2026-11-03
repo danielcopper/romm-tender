@@ -142,7 +142,6 @@ describe("DataManagementPage", () => {
       success: true,
       removed_count: 0,
       errors: [],
-      app_ids: [],
     });
     vi.mocked(backend.cleanupOrphanedGridImages).mockResolvedValue({ success: true, candidate_count: 0 });
     vi.mocked(setLaunchOptionsConfirmed).mockResolvedValue(true);
@@ -357,7 +356,6 @@ describe("DataManagementPage", () => {
         success: true,
         removed_count: 2,
         errors: [],
-        app_ids: [],
       });
       const view = await pageOn("rom-files");
 
@@ -539,7 +537,6 @@ describe("DataManagementPage", () => {
         success: true,
         removed_count: 2,
         errors: [],
-        app_ids: [],
       });
       const view = await pageOn("rom-files");
 
@@ -553,23 +550,21 @@ describe("DataManagementPage", () => {
       await waitFor(() => expect(view.getByTestId("data-row-rom-files").textContent).toContain("0"));
     });
 
-    it("resets each kept shortcut's launch command to the uninstalled placeholder", async () => {
+    it("leaves each kept shortcut's launch options alone and reports the count", async () => {
+      // The kept shortcuts carry their appIds, installed or not (#2221 D10).
       vi.mocked(backend.getDataInventory).mockResolvedValue(inventory({ installed_roms: 2 }));
       vi.mocked(backend.uninstallAllRoms).mockResolvedValue({
         success: true,
         removed_count: 2,
         errors: [],
-        app_ids: [11, 22],
       });
       const view = await pageOn("rom-files");
 
       fireEvent.click(button(view, "Uninstall all ROM files"));
       await press(button(view, "Delete every downloaded ROM file?"));
 
-      await waitFor(() => {
-        expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(11, "", undefined, expect.any(Function));
-        expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(22, "", undefined, expect.any(Function));
-      });
+      await waitFor(() => expect(view.getByTestId("status-rom-files").textContent).not.toBe("Uninstalling..."));
+      expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
     });
 
     it("resets no launch options when no kept shortcut is bound", async () => {
@@ -616,7 +611,6 @@ describe("DataManagementPage", () => {
         success: false,
         removed_count: 2,
         errors: [{ rom_id: "9", error: "permission denied" }],
-        app_ids: [],
       });
       const view = await pageOn("rom-files");
 
@@ -1838,7 +1832,7 @@ describe("DataManagementPage", () => {
       let release: (() => void) | undefined;
       vi.mocked(backend.uninstallAllRoms).mockReturnValue(
         new Promise((resolve) => {
-          release = () => resolve({ success: true, removed_count: 3, errors: [], app_ids: [] });
+          release = () => resolve({ success: true, removed_count: 3, errors: [] });
         }),
       );
       const view = await pageOn("rom-files");

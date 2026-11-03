@@ -10,10 +10,8 @@ import pytest
 from _factories import (
     _make_conflict_rules,
     _make_prune_conflicts,
-    _record_operations_at_lease,
     _refused_by_conflict_rule,
 )
-from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.uow_open_probe import record_uow_open
@@ -107,7 +105,6 @@ def service(event_loop, uow_factory, disc_resolver, prune_conflicts) -> DiscServ
             logger=logging.getLogger("test_disc"),
             uow_factory=uow_factory,
             disc_resolver=disc_resolver,
-            active_core=FakeActiveCoreResolver(default=(None, None)),
             conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
         ),
     )
@@ -186,14 +183,12 @@ class TestGetDiscSelection:
 
 
 class TestSelectDisc:
-    def test_pin_happy_path_persists_and_bakes(self, event_loop, service, uow):
+    def test_pin_happy_path_persists(self, event_loop, service, uow):
         _seed_rom(uow, rom_id=1, selected_disc=None)
         _seed_install(uow, rom_id=1, rom_dir=_ROM_DIR)
         result = event_loop.run_until_complete(service.select_disc(1, _DISC2))
-        assert result["success"] is True
-        assert result["selected"] == _DISC2
-        # Baked launch_options point at the pinned disc's path.
-        assert f"{_ROM_DIR}/{_DISC2}" in result["launch_options"]
+        # The next start opens the pinned disc; the shortcut is not written to.
+        assert result == {"success": True, "selected": _DISC2}
         # The pin is persisted via the pin-only write path.
         with uow_unwrap(uow) as u:
             assert u.roms.get(1).selected_disc == _DISC2
@@ -202,10 +197,7 @@ class TestSelectDisc:
         _seed_rom(uow, rom_id=1, selected_disc=_DISC2)
         _seed_install(uow, rom_id=1, rom_dir=_ROM_DIR)
         result = event_loop.run_until_complete(service.select_disc(1, None))
-        assert result["success"] is True
-        assert result["selected"] is None
-        # Default (file_path is disc 1, not an m3u) → disc 1 path baked.
-        assert f"{_ROM_DIR}/{_DISC1}" in result["launch_options"]
+        assert result == {"success": True, "selected": None}
         with uow_unwrap(uow) as u:
             assert u.roms.get(1).selected_disc is None
 
@@ -288,24 +280,6 @@ def _retire_between_transactions(uow: FakeUnitOfWork, disc_resolver: FakeDiscRes
     disc_resolver.enumerate_discs = retiring
 
 
-def _relocate_between_transactions(uow: FakeUnitOfWork, disc_resolver: FakeDiscResolver, rom_id: int, *, rom_dir: str):
-    """Move the install to a different directory while the picker enumerates.
-
-    The same window as :func:`_retire_between_transactions`, with the install
-    replaced rather than deleted — a RetroDECK-home migration relocating the
-    ROM. The enumerated disc list still describes the old directory.
-    """
-    enumerate_discs = disc_resolver.enumerate_discs
-
-    def relocating(install, *, reading=None):
-        discs = enumerate_discs(install, reading=reading)
-        with uow:
-            _seed_install(uow, rom_id=rom_id, rom_dir=rom_dir)
-        return discs
-
-    disc_resolver.enumerate_discs = relocating
-
-
 def _unfold_install_between_transactions(uow: FakeUnitOfWork, disc_resolver: FakeDiscResolver, rom_id: int) -> None:
     """Replace the folder-backed install with a single-file one while enumerating.
 
@@ -349,13 +323,11 @@ class TestTransactionBoundary:
         _seed_rom(uow, rom_id=1, selected_disc=None)
         _seed_install(uow, rom_id=1, rom_dir=_ROM_DIR)
         open_at_enumerate = record_uow_open(uow, disc_resolver, "enumerate_discs")
-        open_at_bake = record_uow_open(uow, disc_resolver, "resolve_bake_path")
 
         result = event_loop.run_until_complete(service.select_disc(1, _DISC2))
 
         assert result["success"] is True
         assert open_at_enumerate == [False]
-        assert open_at_bake == [False]
 
     def test_rom_retired_between_transactions_fails_not_installed(self, event_loop, service, uow, disc_resolver):
         _seed_rom(uow, rom_id=1, selected_disc=None)
@@ -368,20 +340,6 @@ class TestTransactionBoundary:
 
         assert refused.value.reason == "not_installed"
         assert refused.value.message
-
-    def test_bake_resolves_over_the_install_the_discs_were_enumerated_from(
-        self, event_loop, service, uow, disc_resolver
-    ):
-        _seed_rom(uow, rom_id=1, selected_disc=None)
-        _seed_install(uow, rom_id=1, rom_dir=_ROM_DIR)
-        _relocate_between_transactions(uow, disc_resolver, 1, rom_dir="/roms/psx/moved")
-
-        result = event_loop.run_until_complete(service.select_disc(1, _DISC2))
-
-        assert result["success"] is True
-        # The bake resolves the pin over the enumerated list, so it must see the
-        # install that list came from — the relocated one was never enumerated.
-        assert disc_resolver.calls[-1] == (_ROM_DIR, _DISC2)
 
     def test_install_retired_between_transactions_fails_not_installed(self, event_loop, service, uow, disc_resolver):
         _seed_rom(uow, rom_id=1, selected_disc=None)
@@ -415,32 +373,11 @@ class TestTransactionBoundary:
             assert u.roms.get(1).selected_disc is None
 
 
-# ── The pick's conflict rules and lease ───────────────────────────────────────
+# ── The pick's conflict rules ─────────────────────────────────────────────────
 
 
 class TestTheDiscSelectionLease:
-    """A pick carries a ``disc_selection`` lease for the frontend's write of the baked launch command."""
-
-    def test_a_pick_carries_a_lease(self, event_loop, service, uow, prune_conflicts):
-        _seed_rom(uow, rom_id=1)
-        _seed_install(uow, rom_id=1, rom_dir=_ROM_DIR)
-
-        result = event_loop.run_until_complete(service.select_disc(1, _DISC2))
-
-        assert result["prune_lease_token"].startswith("disc_selection:")
-        assert prune_conflicts.conflicting_operations == 1
-
-    def test_the_lease_is_taken_while_the_picks_operation_still_holds(
-        self, event_loop, service, uow, prune_conflicts, monkeypatch
-    ):
-        """No cleanup can start between the pick's operation and the lease that outlasts it."""
-        _seed_rom(uow, rom_id=1)
-        _seed_install(uow, rom_id=1, rom_dir=_ROM_DIR)
-        seen = _record_operations_at_lease(prune_conflicts, monkeypatch)
-
-        event_loop.run_until_complete(service.select_disc(1, _DISC2))
-
-        assert seen == [["select_disc"]]
+    """A pick its conflict rules refuse writes nothing and leaves the prune conflicts as they were."""
 
     def test_a_refused_pick_takes_no_lease(self, event_loop, service, prune_conflicts):
         selecting = service.select_disc(1, _DISC2)

@@ -2139,7 +2139,7 @@ describe("Library › Platforms", () => {
       // be read is the one holding no answer at all, which is a different pane
       // and a different sentence.
       mockFirmware([]);
-      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true, rebake_items: [] });
+      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
       expect(container.textContent).toContain("Nothing could be established about what the launching emulator needs");
@@ -2273,7 +2273,7 @@ describe("Library › Platforms", () => {
   // ------------------------------------------------------------------
   describe("changing the core", () => {
     beforeEach(() => {
-      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true, rebake_items: [] });
+      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true });
     });
 
     async function openCoreMenu(container: HTMLElement): Promise<void> {
@@ -2361,7 +2361,7 @@ describe("Library › Platforms", () => {
       // The per-platform core is a setting read when a game is resolved, so it
       // applies to games synced later; choosing it first is the ordinary case.
       vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({ platforms: [] });
-      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true, rebake_items: [] });
+      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -2382,12 +2382,8 @@ describe("Library › Platforms", () => {
       expect(vi.mocked(backend.setSystemCore)).toHaveBeenCalledWith("gba", "");
     });
 
-    it("re-bakes every affected shortcut, re-reads the core and the BIOS state, and tells the game page", async () => {
-      vi.mocked(backend.setSystemCore).mockResolvedValue({
-        success: true,
-        rebake_items: [{ app_id: 7, launch_options: "flatpak run … -e vba_next_libretro" }],
-      });
-      vi.mocked(setLaunchOptionsConfirmed).mockResolvedValue(true);
+    it("re-reads the core and the BIOS state, writes nothing to a shortcut, and tells the game page", async () => {
+      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true });
       const events: CustomEvent[] = [];
       const listener = ((e: Event) => events.push(e as CustomEvent)) as EventListener;
       globalThis.addEventListener("romm_data_changed", listener);
@@ -2399,12 +2395,8 @@ describe("Library › Platforms", () => {
         await pickFromCoreMenu("VBA Next");
         await flushAsync();
 
-        expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(
-          7,
-          "flatpak run … -e vba_next_libretro",
-          undefined,
-          expect.any(Function),
-        );
+        // Every game following the platform asks with the new pick at its next start.
+        expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
         expect(vi.mocked(backend.getPlatformFirmwareStatus).mock.calls.length).toBeGreaterThan(firmwareReadsBefore);
         expect(vi.mocked(backend.getSystemCoreInfo)).toHaveBeenCalledTimes(2);
         expect(events.map((e) => e.detail.type)).toContain("core_changed");
@@ -2528,7 +2520,7 @@ describe("Library › Platforms", () => {
       await pickFromCoreMenu("VBA Next");
       expect(within(container).getByTestId("status-core").textContent).toBe("RetroDECK is not installed");
 
-      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true, rebake_items: [] });
+      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true });
       await openCoreMenu(container);
       await pickFromCoreMenu("VBA Next");
       await flushAsync();
@@ -5489,7 +5481,7 @@ describe("Library › Platforms", () => {
 
     it("brings the links up to date again once the emulator is switched", async () => {
       vi.mocked(backend.updateBiosLinks).mockResolvedValue(linked());
-      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true, rebake_items: [] });
+      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
       await act(async () => {

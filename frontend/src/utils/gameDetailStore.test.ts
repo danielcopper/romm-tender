@@ -106,8 +106,6 @@ const downloadComplete = (romId: number): DownloadCompleteEvent => ({
   rom_name: "Test ROM",
   platform_name: "SNES",
   file_path: "/roms/test.sfc",
-  app_id: null,
-  launch_options: "",
 });
 
 const coreInfo: CoreInfo = coreInfoFixture({

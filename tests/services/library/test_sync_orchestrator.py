@@ -217,23 +217,9 @@ class TestShortcutDataFormat:
 
         launcher = "/home/deck/.local/bin/tender-rom-launcher"
 
-        result = build_shortcuts_data([{"id": 1, "name": "Game"}], launcher, {}, {})
+        result = build_shortcuts_data([{"id": 1, "name": "Game"}], launcher)
 
         assert result[0]["exe"] == launcher
-
-    def test_installed_rom_gets_launch_command(self, library):
-        """An installed ROM's launch_options is the full RetroDECK launch command."""
-        from domain.shortcut_data import build_shortcuts_data
-
-        result = build_shortcuts_data(
-            [{"id": 42, "name": "Game"}],
-            "/data/bin/tender-rom-launcher",
-            {42: "/roms/n64/game.z64"},
-            {},
-        )
-        assert (
-            result[0]["launch_options"] == "flatpak run --nosocket=wayland net.retrodeck.retrodeck '/roms/n64/game.z64'"
-        )
 
     def test_start_dir_is_parent_of_exe(self, library):
         """Start dir must be the directory containing the launcher."""
@@ -241,7 +227,7 @@ class TestShortcutDataFormat:
 
         launcher = "/home/deck/.local/share/romm-tender/bin/tender-rom-launcher"
 
-        result = build_shortcuts_data([{"id": 1, "name": "Game"}], launcher, {}, {})
+        result = build_shortcuts_data([{"id": 1, "name": "Game"}], launcher)
 
         assert result[0]["start_dir"] == os.path.dirname(result[0]["exe"])
 
@@ -2284,13 +2270,8 @@ class TestDoSyncPerUnit:
         assert all(e["run_id"] == "run-abc" for e in unit_events)
 
     @pytest.mark.asyncio
-    async def test_emitted_shortcuts_carry_install_launch_options(self, make_library, fake_romm_api, emit):
-        """Installed ROMs get the full launch command; uninstalled ROMs get ``""``.
-
-        The orchestrator builds the ``{rom_id: file_path}`` map from
-        ``rom_installs`` and passes it to ``build_shortcuts_data`` so the
-        emitted ``sync_apply_unit`` shortcuts carry per-ROM launch options.
-        """
+    async def test_emitted_shortcuts_carry_no_launch_command_installed_or_not(self, make_library, fake_romm_api, emit):
+        """No emitted shortcut carries a launch command: the panel sets every bound one to its appId."""
 
         library = make_library(romm_api=fake_romm_api)
 
@@ -2315,101 +2296,8 @@ class TestDoSyncPerUnit:
         unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert len(unit_events) == 1
         by_rom = {s["rom_id"]: s for s in unit_events[0]["shortcuts"]}
-        assert (
-            by_rom[10]["launch_options"]
-            == "flatpak run --nosocket=wayland net.retrodeck.retrodeck '/roms/n64/installed.z64'"
-        )
-        assert by_rom[11]["launch_options"] == ""
-
-    @pytest.mark.asyncio
-    async def test_apply_bakes_emulator_override_into_launch_options(self, make_library, fake_romm_api, emit):
-        """A pinned ``emulator_override`` bakes the ``-e`` form; a NULL pin stays plain (R6).
-
-        Two installed ROMs on the same platform: rom 10 carries a resolvable
-        override (``-e`` baked), rom 11 has none (plain launch). Proves the
-        sync-apply ``core_overrides`` map drives ``build_shortcuts_data`` per-ROM.
-        """
-
-        library = make_library(romm_api=fake_romm_api)
-        library.core_info.available_cores = [
-            {"core_so": "pcsx_rearmed_libretro", "label": "PCSX ReARMed", "is_default": True},
-        ]
-
-        _seed_platform(
-            fake_romm_api,
-            platform_id=1,
-            name="PSX",
-            slug="psx",
-            roms=[{"id": 10, "name": "Pinned"}, {"id": 11, "name": "Plain"}],
-        )
-        library.settings["enabled_platforms"] = {"1": True}
-        _seed_install(library, 10, file_path="/roms/psx/pinned.chd", platform_slug="psx")
-        _seed_install(library, 11, file_path="/roms/psx/plain.chd", platform_slug="psx")
-        with library.uow:
-            library.uow.roms.set_emulator_override(10, "PCSX ReARMed")
-
-        library.cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
-        library.sync._reporter.commit_unit_results = AsyncMock()  # type: ignore[method-assign]
-        library.sync._box.sync_state = SyncState.RUNNING
-
-        await library.sync._orchestrator._do_sync_per_unit()
-
-        unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
-        by_rom = {s["rom_id"]: s for s in unit_events[0]["shortcuts"]}
-        assert by_rom[10]["launch_options"] == (
-            "flatpak run --nosocket=wayland net.retrodeck.retrodeck "
-            '-e "%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/pcsx_rearmed_libretro.so %ROM%" '
-            "'/roms/psx/pinned.chd'"
-        )
-        assert (
-            by_rom[11]["launch_options"]
-            == "flatpak run --nosocket=wayland net.retrodeck.retrodeck '/roms/psx/plain.chd'"
-        )
-        assert "-e" not in by_rom[11]["launch_options"]
-
-    @pytest.mark.asyncio
-    async def test_apply_stale_override_bakes_plain_with_warning(self, make_library, fake_romm_api, caplog, emit):
-        """A stale override LABEL (no longer in available_cores) bakes PLAIN + WARNs (B4)."""
-
-        library = make_library(romm_api=fake_romm_api)
-        # The options no longer carry the pinned label → label_to_invocation → None.
-        library.core_info.available_cores = [
-            {"core_so": "pcsx_rearmed_libretro", "label": "PCSX ReARMed", "is_default": True},
-        ]
-
-        _seed_platform(
-            fake_romm_api,
-            platform_id=1,
-            name="PSX",
-            slug="psx",
-            roms=[{"id": 10, "name": "Stale"}],
-        )
-        library.settings["enabled_platforms"] = {"1": True}
-        _seed_install(library, 10, file_path="/roms/psx/stale.chd", platform_slug="psx")
-        with library.uow:
-            library.uow.roms.set_emulator_override(10, "Removed Core")
-
-        library.cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
-        library.sync._reporter.commit_unit_results = AsyncMock()  # type: ignore[method-assign]
-        library.sync._box.sync_state = SyncState.RUNNING
-
-        import logging
-
-        with caplog.at_level(logging.WARNING):
-            await library.sync._orchestrator._do_sync_per_unit()
-
-        unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
-        by_rom = {s["rom_id"]: s for s in unit_events[0]["shortcuts"]}
-        # Stale → PLAIN launch, never -e with a bogus core.
-        assert (
-            by_rom[10]["launch_options"]
-            == "flatpak run --nosocket=wayland net.retrodeck.retrodeck '/roms/psx/stale.chd'"
-        )
-        assert "-e" not in by_rom[10]["launch_options"]
-        assert "Removed Core" in caplog.text
-        assert "no longer resolves" in caplog.text
+        assert set(by_rom) == {10, 11}
+        assert all("launch_options" not in shortcut for shortcut in by_rom.values())
 
     @pytest.mark.asyncio
     async def test_skipped_unit_short_circuits_apply(self, make_library, fake_romm_api, emit):
@@ -4436,7 +4324,6 @@ class TestApplyUnitCollectionAndCancel:
 
         await applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4456,11 +4343,9 @@ class TestApplyUnitCollectionAndCancel:
         """A collection unit applies only from what the fetch of every collection unit delivered (#2543 D3)."""
         unit = WorkUnit(type="collection", id="7", name="Faves", slug="faves", rom_count=1, collection_kind="standard")
 
-        sources = library.emulator_sources.read()
         with pytest.raises(ValueError, match="collection unit Faves applied without its delivery"):
             await library.unit_applier.apply_unit(
                 unit,
-                sources=sources,
                 unit_index=0,
                 total_units=1,
                 synced_rom_ids=set(),
@@ -4484,7 +4369,6 @@ class TestApplyUnitCollectionAndCancel:
 
         await applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4526,7 +4410,6 @@ class TestApplyUnitCollectionAndCancel:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
         applied = await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4560,7 +4443,6 @@ class TestApplyUnitCollectionAndCancel:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
         applied = await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4601,7 +4483,6 @@ class TestApplyUnitCollectionAndCancel:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
         processed = await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4638,7 +4519,6 @@ class TestApplyUnitCollectionAndCancel:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
         processed = await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4680,7 +4560,6 @@ class TestApplyUnitCollectionAndCancel:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
         applied = await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4728,7 +4607,6 @@ class TestApplyUnitCollectionAndCancel:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
         applied = await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4793,7 +4671,6 @@ class TestPerUnitMetadataStamping:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
         await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4841,7 +4718,6 @@ class TestPerUnitMetadataStamping:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
         await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4895,7 +4771,6 @@ class TestPerUnitMetadataStamping:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
         await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4946,7 +4821,6 @@ class TestPlatformCompletionStamp:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
         await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4993,7 +4867,6 @@ class TestPlatformCompletionStamp:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
         await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -5042,7 +4915,6 @@ class TestPlatformCompletionStamp:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
         await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -5078,7 +4950,6 @@ class TestPlatformCompletionStamp:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
         await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -5125,7 +4996,6 @@ class TestPlatformCompletionStamp:
         deliveries = await library.unit_applier.fetch_collection_units([unit], set(), unit_index=0, total_units=1)
         await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -5178,7 +5048,6 @@ class TestPlatformCompletionStamp:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
         await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -5234,7 +5103,6 @@ class TestPlatformCompletionStamp:
         deliveries = await library.unit_applier.fetch_collection_units([unit], set(), unit_index=0, total_units=1)
         await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -5291,7 +5159,6 @@ class TestPlatformCompletionStamp:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
         await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -5329,7 +5196,6 @@ class TestPlatformCompletionStamp:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
         await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -5367,7 +5233,6 @@ class TestPlatformCompletionStamp:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
         await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -5399,7 +5264,6 @@ class TestPlatformCompletionStamp:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
         applied = await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -5431,13 +5295,11 @@ class TestPlatformCompletionStamp:
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
-        sources = library.emulator_sources.read()
         synced_rom_ids: set[int] = set()
         platform_rom_ids: set[int] = set()
         with pytest.raises(RuntimeError, match="fetch exploded"):
             await library.unit_applier.apply_unit(
                 unit,
-                sources=sources,
                 unit_index=0,
                 total_units=1,
                 synced_rom_ids=synced_rom_ids,
@@ -9945,82 +9807,6 @@ class TestProcessedGamesNumerator:
         assert progress["total"] == 4
         # The frame's numerator and the paused banner's done counter agree.
         assert library.sync._box.run_done_items == 3
-
-
-class TestOneReadingOfTheSourcesPerRun:
-    """A run resolves every ROM's emulator through ONE reading of the sources.
-
-    The reading keeps the run's answers until it ends, so a system asked about
-    for many ROMs is asked once, and a switch or a move written during the run
-    takes effect from the next one.
-    """
-
-    @staticmethod
-    def _two_platforms(library, fake_romm_api) -> None:
-        _seed_platform(
-            fake_romm_api,
-            platform_id=1,
-            name="N64",
-            slug="n64",
-            roms=[{"id": 1, "name": "Game A", "fs_name": "a.z64"}, {"id": 2, "name": "Game B", "fs_name": "b.z64"}],
-        )
-        _seed_platform(
-            fake_romm_api,
-            platform_id=2,
-            name="SNES",
-            slug="snes",
-            roms=[{"id": 3, "name": "Game C", "fs_name": "c.sfc"}],
-        )
-        library.settings["enabled_platforms"] = {"1": True, "2": True}
-        # A ROM the database knows is one the active-core resolver asks the
-        # catalogue about; an unknown one resolves to nothing before that.
-        _seed_rom_row(library, 1, app_id=1001, platform_slug="n64", name="Game A", fs_name="a.z64")
-        _seed_rom_row(library, 2, app_id=1002, platform_slug="n64", name="Game B", fs_name="b.z64")
-        _seed_rom_row(library, 3, app_id=1003, platform_slug="snes", name="Game C", fs_name="c.sfc")
-
-    @pytest.mark.asyncio
-    async def test_a_preview_resolves_every_rom_through_one_reading(self, make_library, fake_romm_api):
-        library = make_library(romm_api=fake_romm_api)
-        self._two_platforms(library, fake_romm_api)
-
-        assert (await library.sync.sync_preview())["success"] is True
-
-        assert library.emulator_sources.reads == 1
-        (reading,) = library.emulator_sources.taken
-        assert len(library.core_info.readings) == 3
-        assert all(handed is reading for handed in library.core_info.readings)
-        assert len(library.core_info.default_readings) == 3
-        assert all(handed is reading for handed in library.core_info.default_readings)
-
-    @pytest.mark.asyncio
-    async def test_two_previews_take_two_readings(self, make_library, fake_romm_api):
-        library = make_library(romm_api=fake_romm_api)
-        self._two_platforms(library, fake_romm_api)
-
-        await library.sync.sync_preview()
-        await library.sync.sync_preview()
-
-        first, second = library.emulator_sources.taken
-        assert first is not second
-        assert all(handed is first for handed in library.core_info.readings[:3])
-        assert all(handed is second for handed in library.core_info.readings[3:])
-
-    @pytest.mark.asyncio
-    async def test_an_apply_hands_every_unit_the_same_reading(self, make_library, fake_romm_api):
-        library = make_library(romm_api=fake_romm_api)
-        self._two_platforms(library, fake_romm_api)
-        library.cover_preparer._download_artwork = AsyncMock(return_value={})
-        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
-        assert library.sync._box.try_begin_run("run-apply", kind=SyncRunKind.APPLY) is True
-
-        await library.sync._orchestrator._do_sync_per_unit()
-
-        assert library.emulator_sources.reads == 1
-        (reading,) = library.emulator_sources.taken
-        assert len(library.core_info.readings) == 3
-        assert all(handed is reading for handed in library.core_info.readings)
-        assert len(library.core_info.default_readings) == 3
-        assert all(handed is reading for handed in library.core_info.default_readings)
 
 
 class TestTheShortcutArtworkJobAfterARun:

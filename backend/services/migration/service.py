@@ -35,7 +35,6 @@ if TYPE_CHECKING:
         EventEmitter,
         FirmwareResolver,
         MigrationFileStore,
-        RelaunchOptionsReader,
         RetroDeckFolders,
         SaveDirectoriesRecorderProvider,
         SettingsPersister,
@@ -67,16 +66,13 @@ class MigrationServiceConfig:
     Holds the Protocol-typed migration-file adapter, the live settings
     dict, runtime infrastructure, persistence callbacks, event emitter,
     and the provider callables MigrationService needs at construction
-    time. The ``relaunch_options`` seam re-bakes every relocated ROM's full
-    Steam ``launch_options`` (active core + selected disc) from its moved path
-    so the pick survives the home migration. ``firmware_resolver`` names which
+    time. ``firmware_resolver`` names which
     files in a pending home are firmware at all, so the untracked-BIOS sweep
     moves those and leaves everything else alone. ``save_directories`` records
     the installed ROMs' answered save directories afresh once the files are moved.
     Relational migration state (ROM installs, BIOS records, change markers) is
     read through the injected ``uow_factory``. ``conflict_rules`` are what the
-    migration checks at its entry and emits its relaunch items under a lease
-    through.
+    migration checks at its entry.
     """
 
     migration_file_store: MigrationFileStore
@@ -87,7 +83,6 @@ class MigrationServiceConfig:
     emit: EventEmitter
     firmware_resolver: FirmwareResolver
     retrodeck_folders: RetroDeckFolders
-    relaunch_options: RelaunchOptionsReader
     save_directories: SaveDirectoriesRecorderProvider
     uow_factory: UnitOfWorkFactory
     conflict_rules: ConflictRules
@@ -110,7 +105,6 @@ class MigrationService:
         self._emit = config.emit
         self._firmware_resolver = config.firmware_resolver
         self._retrodeck_folders = config.retrodeck_folders
-        self._relaunch_options = config.relaunch_options
         self._save_directories = config.save_directories
         self._uow_factory = config.uow_factory
         self._rules = config.conflict_rules
@@ -579,11 +573,10 @@ class MigrationService:
 
     def _migrate_retrodeck_files_io(
         self, pending_homes, new_home, conflict_strategy, roots: MoveRoots
-    ) -> tuple[dict[str, Any] | MigrationIncomplete, list[dict[str, Any]]]:
+    ) -> dict[str, Any] | MigrationIncomplete:
         """Sync helper for migrate_retrodeck_files — FS traversal + moves in executor.
 
-        Answers the run's result and the relaunch items re-baked after it.
-        ``pending_homes`` is the full pending set; the current home is filtered
+        Answers the run's result. ``pending_homes`` is the full pending set; the current home is filtered
         out defensively so a record already under it is never treated as a move
         source (detection already excludes it, this belts-and-braces that).
         """
@@ -625,27 +618,7 @@ class MigrationService:
         # previous-path marker, all in one short write UoW after the file moves.
         self._apply_relocations(installs, relocations, bios_files, bios_relocations, clear_marker=not errors)
 
-        result = self._mover.build_migration_result(counts, errors)
-        # Re-resolve the launch command for every installed+bound ROM AFTER the
-        # write UoW above has persisted the new paths (ADR-0005/0006): the path
-        # is baked into the Steam shortcut's launch_options, so a relocated ROM
-        # needs its shortcut rewritten or launches break. Read from a fresh UoW
-        # so the relocated rom_installs.file_path is what we build the command
-        # from. Handed back beside the result for the async caller to emit on
-        # the loop.
-        return result, self._build_relaunch_items()
-
-    def _build_relaunch_items(self) -> list[dict[str, Any]]:
-        """Build the ``migration_relaunch_options`` items from the post-move state.
-
-        Delegates to the shared ``relaunch_options`` resolver: it re-bakes every
-        installed+bound ROM's Steam ``launch_options`` from the relocated path
-        (active core + selected disc), snapshotting the rows in one short read
-        UoW it closes before resolving so the nested resolver UoW never deadlocks
-        (#1154). Called after ``_apply_relocations`` has persisted the new paths,
-        so the items carry the relocated ``file_path``.
-        """
-        return self._relaunch_options.installed_relaunch_items()
+        return self._mover.build_migration_result(counts, errors)
 
     def _apply_relocations(self, installs, relocations, bios_files, bios_relocations, *, clear_marker):
         """Persist the relocated install and BIOS records (and optionally clear the markers).
@@ -728,40 +701,16 @@ class MigrationService:
     async def _run_migration(
         self, pending, new_home, conflict_strategy, roots: MoveRoots
     ) -> dict[str, Any] | MigrationIncomplete:
-        """Move the files, re-bake the shortcuts and re-record the save directories, in that order."""
-        result, relaunch_items = await self._loop.run_in_executor(
+        """Move the files, then re-record the save directories.
+
+        No shortcut is touched: a shortcut's launch options are its appId, and
+        the next start asks with the relocated install.
+        """
+        result = await self._loop.run_in_executor(
             None, self._migrate_retrodeck_files_io, pending, new_home, conflict_strategy, roots
         )
-        # Emit the relaunch items, of a partial run too, so the live Steam
-        # shortcuts get their baked launch_options rewritten to the new paths.
-        # Emitted after the executor returns — the relocation write UoW has
-        # already committed, so the items carry the persisted new paths.
-        await self._emit_relaunch_items(relaunch_items)
-        # Record each re-baked command as the shortcut's applied state (the
-        # value the frontend confirm-sets onto the relocated shortcut), so the
-        # next sync skips the now-correct shortcut instead of re-touching it
-        # (delta apply). One of the recorded-state writer sites the invariant
-        # register lists (docs/architecture/invariants.md).
-        await self._loop.run_in_executor(None, self._record_migration_applied_io, relaunch_items)
         await self._rerecord_save_directories()
         return result
-
-    async def _emit_relaunch_items(self, items: list[dict[str, Any]]) -> None:
-        """Emit the re-baked launch commands, under a ``migration_relaunch_options`` lease when there are any.
-
-        The frontend writes them onto Steam's shortcuts once the event
-        arrives, which can outlast this call, so the lease holds off a cleanup
-        until it has. Taken inside the migration's own prune operation, which
-        refuses a cleanup's start until then. An empty list gives the frontend
-        nothing to write.
-        """
-        if items:
-            await self._rules.emit_under_lease(
-                "migration_relaunch_options",
-                lambda token: self._emit("migration_relaunch_options", {"items": items, "prune_lease_token": token}),
-            )
-        else:
-            await self._emit("migration_relaunch_options", {"items": items})
 
     async def _rerecord_save_directories(self) -> None:
         """Record the installed ROMs' save directories afresh, as the new home answers them.
@@ -778,21 +727,6 @@ class MigrationService:
             # records standing, which is what it exists to prevent, but it must
             # not turn a finished migration into a failed endpoint call.
             self._logger.exception("Recording the save directories after the home migration failed")
-
-    def _record_migration_applied_io(self, items: list[dict[str, Any]]) -> None:
-        """Record each relaunch item's ``launch_options`` as its ROM's applied state.
-
-        The relaunch items are keyed by ``app_id``; each is resolved back to its
-        bound ROM (``get_by_app_id``) and its recorded ``applied_launch_options``
-        set to the re-baked command, in one short write UoW. A missing binding
-        (shortcut removed between the re-bake and here) is skipped.
-        """
-        with self._uow_factory() as uow:
-            for item in items:
-                rom = uow.roms.get_by_app_id(int(item["app_id"]))
-                if rom is not None:
-                    rom.record_applied_launch_options(item["launch_options"])
-                    uow.roms.set_applied_launch_options(rom.rom_id, rom.applied_launch_options)
 
     def _get_migration_status_io(self, pending, new_home):
         """Sync helper for get_migration_status — FS traversal in executor.

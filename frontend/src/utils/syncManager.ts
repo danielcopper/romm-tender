@@ -15,6 +15,7 @@ import {
   scanShortcutOwnership,
   addShortcut,
   setLaunchOptionsConfirmed,
+  shortcutLaunchOptions,
   type ShortcutOwnership,
 } from "./steamShortcuts";
 import { updateSyncProgress } from "./syncProgress";
@@ -165,18 +166,17 @@ function takeAdoptableOrphan(pool: Map<string, number[]>, name: string): number 
 }
 
 /**
- * Rewrite an existing shortcut's identity + launch bake in place: name, exe,
- * start dir, then the confirmed launch-options write. Shared by the update path
- * (rom already bound) and the adoption path (reusing an orphan's appId) so the
- * two can't drift. Launch options carry the full RetroDECK command (or ``""``
- * for uninstalled); the confirm-poll verifies the write landed rather than
+ * Rewrite an existing shortcut's identity in place: name, exe, start dir, then
+ * the confirmed write of its launch options, its own appId. Shared by the update
+ * path (rom already bound) and the adoption path (reusing an orphan's appId) so
+ * the two can't drift. The confirm-poll verifies the write landed rather than
  * fire-and-forget, since ``Set*`` returns void.
  */
 async function rewriteShortcutIdentity(appId: number, item: SyncAddItem): Promise<void> {
   SteamClient.Apps.SetShortcutName(appId, item.name);
   SteamClient.Apps.SetShortcutExe(appId, item.exe);
   SteamClient.Apps.SetShortcutStartDir(appId, item.start_dir);
-  await setLaunchOptionsConfirmed(appId, item.launch_options);
+  await setLaunchOptionsConfirmed(appId, shortcutLaunchOptions(appId));
 }
 
 /**

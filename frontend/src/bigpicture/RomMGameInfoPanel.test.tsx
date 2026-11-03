@@ -1090,8 +1090,6 @@ describe("RomMGameInfoPanel", () => {
           rom_name: "Test",
           platform_name: "Super Nintendo",
           file_path: "/roms/test.sfc",
-          app_id: testAppId,
-          launch_options: "cmd",
         });
         await Promise.resolve();
         await Promise.resolve();
@@ -1129,8 +1127,6 @@ describe("RomMGameInfoPanel", () => {
           rom_name: "Other",
           platform_name: "Super Nintendo",
           file_path: "/roms/other.sfc",
-          app_id: 1,
-          launch_options: "cmd",
         });
         await Promise.resolve();
       });
@@ -6877,8 +6873,6 @@ describe("RomMGameInfoPanel", () => {
           rom_name: "Game 1",
           platform_name: "PlayStation 2",
           file_path: "/roms/game.iso",
-          app_id: testAppId,
-          launch_options: "cmd",
         });
       });
       await flushAsync();
@@ -7213,8 +7207,6 @@ describe("RomMGameInfoPanel", () => {
           rom_name: "Game 1",
           platform_name: "Game Boy Advance",
           file_path: "/roms/gba/Game.gba",
-          app_id: testAppId,
-          launch_options: "cmd",
         });
       });
       await flushAsync();

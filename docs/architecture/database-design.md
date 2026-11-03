@@ -909,9 +909,8 @@ The service cutover ([#784](https://github.com/danielcopper/romm-tender/issues/7
 complete. Every slice migrated:
 
 - **firmware** and **downloads** (the launcher's old SQLite read path was since removed — the launcher no longer reads
-  SQLite at all; the launch command is baked into the shortcut's `launch_options` and the `tender-rom-launcher` exec
-  wrapper just runs it, per
-  [ADR-0009](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0009-launcher-pure-exec-wrapper-baked-launch-options.md)).
+  SQLite at all; it runs the command the start check hands it for one start, per
+  [ADR-0044](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0044-every-start-asks-the-resolver.md)).
 - the **saves** vertical.
 - the **library/roms** slice (registry → `roms`, sync lifecycle → `sync_runs`, the platform-name cache → `kv_config`).
 - the **metadata** slice (`rom_metadata` written by the reporter's per-unit commit;

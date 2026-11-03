@@ -318,6 +318,16 @@ async function waitForAppOverview(appId: number, timeoutMs: number): Promise<boo
 }
 
 /**
+ * The launch options a shortcut carries: its own appId, which Steam passes to
+ * the launcher. The backend states the same value for a shortcut it knows
+ * (`backend/domain/shortcut_data.py::shortcut_launch_options`); this is for a
+ * shortcut the panel has just created or rewritten.
+ */
+export function shortcutLaunchOptions(appId: number): string {
+  return String(appId);
+}
+
+/**
  * Add a single Steam shortcut. Returns the new steam app_id, or null on failure.
  */
 export async function addShortcut(data: SyncAddItem): Promise<number | null> {
@@ -338,16 +348,12 @@ export async function addShortcut(data: SyncAddItem): Promise<number | null> {
     SteamClient.Apps.SetShortcutName(appId, data.name);
     SteamClient.Apps.SetShortcutExe(appId, data.exe);
     SteamClient.Apps.SetShortcutStartDir(appId, data.start_dir);
-    // A freshly created shortcut's launch options are already empty. For an
-    // uninstalled ROM (launch_options ""), there is nothing to write or confirm,
-    // so skip both SetAppLaunchOptions and the confirm poll — the confirm poll's
-    // RegisterForAppDetails forces Steam to load+cache a fat AppDetails object
-    // per call, so skipping it for the majority uninstalled case avoids that
-    // heap hit. A non-empty command (installed ROM) still takes the confirmed
-    // write (#827).
-    if (data.launch_options !== "") {
-      await setLaunchOptionsConfirmed(appId, data.launch_options);
-    }
+    // Unconfirmed: the confirm poll's RegisterForAppDetails makes Steam load and
+    // cache a fat AppDetails object per call, which a sync creating hundreds of
+    // shortcuts cannot afford. The reconcile after the sync lists every bound
+    // shortcut whose launch options in Steam's shortcut file are not its appId
+    // and confirm-sets those.
+    SteamClient.Apps.SetAppLaunchOptions(appId, shortcutLaunchOptions(appId));
 
     return appId;
   } catch (e) {

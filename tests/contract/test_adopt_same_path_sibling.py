@@ -102,9 +102,8 @@ async def test_using_the_files_another_version_is_recorded_at_keeps_them_and_ins
         assert uow.rom_installs.get(_OLD_ID) is None
         new_rom = uow.roms.get(_NEW_ID)
     assert new_rom is not None
-    assert result["app_id"] == _APP_ID
-    assert result["launch_options"]
-    assert new_rom.applied_launch_options == result["launch_options"]
+    assert new_rom.shortcut_app_id == _APP_ID
+    assert "launch_options" not in result
 
 
 async def test_control_a_bound_version_with_its_own_file_name_adopts_its_own_file(harness):

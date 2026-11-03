@@ -171,21 +171,12 @@ export async function executeVersionSwitch(options: VersionSwitchOptions): Promi
   setSwitching?.(true);
   const admission = capturePruneLeaseAdmission(leaseOwner);
 
-  // Apply a successful switch: confirm-write the target's launch command onto the
-  // Steam shortcut (blank for an uninstalled target — intended, so the shortcut
-  // never keeps the old version's command), then invalidate the cache and
-  // broadcast the switch so sibling surfaces re-read the new binding.
-  //
-  // The backend rebind is ALREADY committed by the time we get here, so the
-  // cache-invalidate + broadcast run even if the launch-command write fails or
-  // throws. A missed confirm only leaves the shortcut on a stale command; it
-  // self-heals at the next startup/sync reconcile, so we warn and nudge the
-  // user rather than reporting the whole switch as failed.
+  // Apply a successful switch: the target's cover, then the cache invalidated and
+  // the switch broadcast so sibling surfaces re-read the new binding. The
+  // shortcut's launch options stay its appId; the next start asks for the
+  // target's command.
   const applySwitchSuccess = async (result: SwitchVersionSuccess): Promise<void> => {
-    const { confirmed, broadcast } = await applyCommittedVersionSwitch(result, onCoverResolved, admission);
-    if (!confirmed && isPruneLeaseAdmissionCurrent(admission)) {
-      showToast("Switched — re-switch if launch fails");
-    }
+    const broadcast = await applyCommittedVersionSwitch(result, onCoverResolved, admission);
     if (!broadcast && isPruneLeaseAdmissionCurrent(admission)) onUnbroadcastSwitch?.();
   };
 

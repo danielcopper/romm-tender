@@ -1,4 +1,4 @@
-"""Pure functions for building shortcut data dicts and launch commands.
+"""Pure functions for building shortcut data dicts.
 
 No I/O, no imports from services, adapters, or lib.
 """
@@ -6,7 +6,6 @@ No I/O, no imports from services, adapters, or lib.
 from __future__ import annotations
 
 import os
-import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -18,24 +17,21 @@ from domain.sibling_group import compute_sibling_group_key
 from domain.user_data_location import LAUNCHER_EXE_SUFFIX
 
 # RetroDECK's flatpak application id — the single source of the string across
-# Tender. Its plain ``flatpak run … <app>`` form is the emulator invocation prefix
-# the launch command wraps the resolved ROM path with; the folder-boot ``direct``
-# form threads a ``--command=<launcher>`` between the ``flatpak run`` options and
-# the app id (see :func:`resolve_emulator_invocation`). The catalogue reader
-# compares a launcher's app id against it, so it is public.
+# Tender. The catalogue reader compares a launcher's app id against it.
 RETRODECK_APP_ID = "net.retrodeck.retrodeck"
 
-# Without its Wayland socket RetroDECK draws through XWayland, where Steam Input can
-# follow the game's window; why, and when it goes: docs/user-guide/troubleshooting.md,
-# "RetroDECK runs through XWayland in Desktop Mode". It is a ``flatpak run`` option,
-# so it must stand before the app id.
-_RETRODECK_RUN = "flatpak run --nosocket=wayland"
-RETRODECK_INVOCATION = f"{_RETRODECK_RUN} {RETRODECK_APP_ID}"
 
-# The leading ``%EMULATOR_<NAME>%`` binary token and the trailing ``%ROM%`` target
-# of an ES-DE ``<command>`` — stripped from a standalone command to recover the
-# middle launcher args (e.g. ``--no-gui``) for the folder-boot ``direct`` bake.
-_EMULATOR_TOKEN_RE = re.compile(r"%EMULATOR_[A-Z0-9_-]+%")
+def shortcut_launch_options(app_id: int) -> str:
+    """The launch options every bound shortcut carries: its own appId.
+
+    Steam passes them to the launcher as its first argument, and the launcher
+    claims the start hand-over by it; the command itself is asked at each start
+    (``services/game_start.py``). The panel composes the same value for a
+    shortcut it has just created, before Tender knows the appId
+    (``frontend/src/utils/steamShortcuts.ts``).
+    """
+    return str(app_id)
+
 
 # How an invocation is baked: through RetroDECK's ``run_game.sh -e``, by
 # running the emulator's launcher directly in the sandbox (ADR-0019), or not at
@@ -130,81 +126,6 @@ class EmulatorInvocation:
         return cls(form=NOTHING)
 
 
-def resolve_emulator_invocation(rom: dict[str, Any], emulator: EmulatorInvocation | None = None) -> str:
-    """Return the emulator invocation prefix for *rom*.
-
-    With *emulator* unset (``None``) the ROM follows the plain RetroDECK flatpak
-    command: the system lists no entry, no system is found, or the catalogue
-    cannot be read. A :data:`NOTHING` invocation is the empty prefix, which
-    :func:`build_launch_options` bakes to the empty command (#2195 D43). A
-    :data:`RUN_GAME` invocation bakes its command into RetroDECK's ``-e``
-    override: ``flatpak run … -e "<command … %ROM%>"`` (e.g.
-    ``%EMULATOR_RPCS3% --no-gui %ROM%``) — RetroDECK resolves ``%EMULATOR_*%``
-    and substitutes ``%ROM%`` at launch. *rom* is the per-emulator-branch seam
-    and is ignored today.
-    """
-    del rom  # reserved for the future per-emulator branch
-    # Branch explicitly so a half-resolved invocation never reaches the f-string
-    # (no empty -e); anything unrenderable degrades to the plain launch.
-    if emulator is None:
-        return RETRODECK_INVOCATION
-    if emulator.form == NOTHING:
-        return ""
-    if emulator.form == DIRECT and emulator.launcher and emulator.command:
-        # Run the emulator's sandbox launcher directly, bypassing run_game.sh's
-        # directory-as-a-file reinterpretation (ADR-0019). The game folder is
-        # appended by build_launch_options; only the middle args ride here.
-        args = _direct_launch_args(emulator.command)
-        base = f"{_RETRODECK_RUN} --command={emulator.launcher} {RETRODECK_APP_ID}"
-        return f"{base} {args}" if args else base
-    if emulator.form == RUN_GAME and emulator.command:
-        return f'{RETRODECK_INVOCATION} -e "{emulator.command}"'
-    return RETRODECK_INVOCATION
-
-
-def _direct_launch_args(command: str) -> str:
-    """Recover a standalone command's middle launcher args for the ``direct`` bake.
-
-    Strips the leading ``%EMULATOR_<NAME>%`` binary token(s) and the ``%ROM%``
-    target from an ES-DE ``<command>``, collapsing surrounding whitespace, so
-    ``%EMULATOR_RPCS3% --no-gui %ROM%`` yields ``--no-gui`` and
-    ``%EMULATOR_RPCS3% %ROM%`` yields ``""``. Pure text.
-    """
-    stripped = _EMULATOR_TOKEN_RE.sub("", command).replace("%ROM%", "")
-    return " ".join(stripped.split())
-
-
-def build_launch_options(invocation: str, path: str) -> str:
-    """Compose the Steam shortcut launch command from *invocation* and ROM *path*.
-
-    An empty *path* means the ROM is **not downloaded**, and an empty
-    *invocation* that no entry Tender can bake is in effect (#2195 D43); both
-    yield the empty launch command. Composing one anyway would hand the emulator an empty
-    argument — the silent failure this rule exists to prevent. A downloaded ROM
-    always has a path, whether or not its file starts: that is asked when its
-    page reads it (#2195 D26, D28).
-
-    Empty is the established uninstalled state, not a new one invented here:
-    ``addShortcut`` leaves a new shortcut's options untouched when the command
-    is ``""`` (``frontend/src/utils/steamShortcuts.ts``), the sync
-    update/adoption path writes ``""`` explicitly (``rewriteShortcutIdentity``
-    in ``frontend/src/utils/syncManager.ts``), and an uninstall records ``""``
-    as the ROM's ``applied_launch_options`` (``services/rom_removal.py``).
-
-    Steam hands the launch options to a shell, and double quotes would not keep
-    the path literal there (``docs/architecture/steam-non-steam-shortcuts.md``,
-    "Launch options pass through a shell"). So the path is single-quoted, and a
-    ``'`` inside it is written ``'\\''`` — close the quote, an escaped quote,
-    reopen. The program receives the path as one argument, exactly as the file
-    is named. Only the path is quoted — *invocation* is trusted build-time text
-    whose own ``-e "..."`` quoting must survive verbatim.
-    """
-    if not path or not invocation:
-        return ""
-    quoted = path.replace("'", "'\\''")
-    return f"{invocation} '{quoted}'"
-
-
 def extract_version_metadata(rom: dict[str, Any]) -> dict[str, Any]:
     """Extract a raw RomM ROM dict's sibling-group identity + version dimensions.
 
@@ -259,12 +180,7 @@ def select_shortcuts_to_relocate(exes: Mapping[int, str], launcher_exe: str) -> 
     return sorted(selected)
 
 
-def build_shortcuts_data(
-    roms: list[dict[str, Any]],
-    launcher_exe: str,
-    installed_paths: dict[int, str],
-    core_overrides: dict[int, EmulatorInvocation],
-) -> list[dict[str, Any]]:
+def build_shortcuts_data(roms: list[dict[str, Any]], launcher_exe: str) -> list[dict[str, Any]]:
     """Transform ROM list into shortcut data dicts for frontend AddShortcut calls.
 
     *launcher_exe* is the launcher every built shortcut's ``exe`` names, and the
@@ -273,19 +189,10 @@ def build_shortcuts_data(
     program owns, which one start's install settles and only the composition
     root knows.
 
-    *installed_paths* maps ``rom_id`` to the resolved on-disk launch path. An
-    installed ROM gets a full launch command in ``launch_options``; a ROM absent
-    from the map gets ``""`` (empty placeholder) until it is downloaded.
-
-    *core_overrides* maps ``rom_id`` to the **already-resolved**
-    :class:`EmulatorInvocation` the ROM launches with (its full active emulator,
-    folding the per-game/per-platform override over
-    the shipped default). Only ROMs that resolved to an emulator appear (the
-    caller omits the ``(None, None)`` fallback); a ROM absent from the map follows
-    the plain RetroDECK launch, a present ROM bakes its invocation into
-    ``launch_options`` — the ``-e`` form, or the empty command where no entry
-    Tender can bake is in effect (#2195 D43). Required so a new bake site can never silently skip the
-    override.
+    No launch command is built: a shortcut's launch options are its own appId,
+    which Steam assigns when the shortcut is created, so the panel writes them
+    (``frontend/src/utils/steamShortcuts.ts``), and what starts the game is asked
+    at each start (``services/game_start.py``).
 
     The sibling-group key (ADR-0021) and RomM's version dimensions (``regions`` /
     ``languages`` / ``revision`` / ``tags`` / ``is_main_sibling``) are derived
@@ -306,14 +213,6 @@ def build_shortcuts_data(
             "fs_name_no_ext": rom.get("fs_name_no_ext") or os.path.splitext(rom.get("fs_name", ""))[0],
             "exe": launcher_exe,
             "start_dir": start_dir,
-            "launch_options": (
-                build_launch_options(
-                    resolve_emulator_invocation(rom, core_overrides.get(rom["id"])),
-                    installed_paths[rom["id"]],
-                )
-                if rom["id"] in installed_paths
-                else ""
-            ),
             "platform_name": rom.get("platform_name", "Unknown"),
             "platform_slug": rom.get("platform_slug", ""),
             "igdb_id": rom.get("igdb_id"),

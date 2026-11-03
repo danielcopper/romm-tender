@@ -70,22 +70,6 @@ class _FakeReachabilityProbe:
         return {"online": self.online}
 
 
-class _FakeRelaunchResolver:
-    """Stand-in for ``RelaunchOptionsResolver.relaunch_item_for_rom``.
-
-    ``items`` maps rom_id → the ``{app_id, launch_options}`` item (or ``None`` for
-    an unexpected resolver miss / uninstalled ROM). Records each queried rom_id.
-    """
-
-    def __init__(self, *, items: dict[int, dict[str, Any] | None] | None = None) -> None:
-        self.items = items or {}
-        self.calls: list[int] = []
-
-    def relaunch_item_for_rom(self, rom_id: int) -> dict[str, Any] | None:
-        self.calls.append(rom_id)
-        return self.items.get(rom_id)
-
-
 class _FakeActiveDownloads:
     """Stand-in for ``DownloadService.active_download_rom_ids`` (returns a set)."""
 
@@ -178,11 +162,6 @@ def reachability_probe() -> _FakeReachabilityProbe:
 
 
 @pytest.fixture
-def relaunch_resolver() -> _FakeRelaunchResolver:
-    return _FakeRelaunchResolver()
-
-
-@pytest.fixture
 def active_downloads() -> _FakeActiveDownloads:
     return _FakeActiveDownloads()
 
@@ -199,7 +178,6 @@ def service(
     romm,
     drift_probe,
     reachability_probe,
-    relaunch_resolver,
     active_downloads,
     prune_conflicts,
 ) -> VersionSwitchService:
@@ -212,7 +190,6 @@ def service(
             romm_api=romm,
             drift_probe=drift_probe,
             reachability_probe=reachability_probe,
-            relaunch_resolver=relaunch_resolver,
             active_downloads=active_downloads,
             conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
         ),
@@ -848,14 +825,13 @@ class TestTheDefaultReadsTheLiveMainVersionFlag:
 # ── switch_version ───────────────────────────────────────────────────────
 
 
-def _assert_success(result: dict[str, Any], *, rom_id: int, installed: bool, launch_options: str) -> None:
+def _assert_success(result: dict[str, Any], *, rom_id: int, installed: bool) -> None:
     result = dict(result)
     assert result.pop("prune_lease_token").startswith("version_switch:")
     assert result == {
         "success": True,
         "rom_id": rom_id,
         "target_installed": installed,
-        "launch_options": launch_options,
         "app_id": _APP_ID,
     }
 
@@ -1007,7 +983,7 @@ class TestSwitchVersion:
         active_downloads.ids = {999}
 
         result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
-        _assert_success(result, rom_id=2, installed=False, launch_options="")
+        _assert_success(result, rom_id=2, installed=False)
 
     def test_t2_switch_away_synced_saves_is_free(self, event_loop, service, uow, romm, drift_probe, reachability_probe):
         # Bound version installed, saves synced (no drift) → free switch after one
@@ -1017,7 +993,7 @@ class TestSwitchVersion:
         _seed_install(uow, 1)
 
         result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
-        _assert_success(result, rom_id=2, installed=False, launch_options="")
+        _assert_success(result, rom_id=2, installed=False)
         assert drift_probe.calls == [1]  # drift probed on the bound (installed) version
         assert reachability_probe.calls == 0  # no block → no reachability probe
         assert _romm_call_ids(romm, "get_rom_once") == [2]
@@ -1026,7 +1002,7 @@ class TestSwitchVersion:
             assert u.roms.get(2).shortcut_app_id == _APP_ID
             assert u.roms.get(1).shortcut_app_id is None
 
-    def test_local_target_404_refuses_without_mutation(self, event_loop, service, uow, romm, relaunch_resolver):
+    def test_local_target_404_refuses_without_mutation(self, event_loop, service, uow, romm):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID, applied_launch_options="old-command")
         _seed_rom(uow, rom_id=2, app_id=None, applied_launch_options="target-command")
         _seed_install(uow, 2)
@@ -1037,7 +1013,6 @@ class TestSwitchVersion:
         assert (refused.message, refused.details) == ("This version is no longer available on RomM.", {})
         assert _romm_call_ids(romm, "get_rom_once") == [2]
         assert _romm_call_ids(romm, "get_rom") == []
-        assert relaunch_resolver.calls == []
         with uow as current:
             assert current.roms.get(1).shortcut_app_id == _APP_ID
             assert current.roms.get(1).applied_launch_options == "old-command"
@@ -1081,7 +1056,7 @@ class TestSwitchVersion:
         with caplog.at_level(logging.WARNING, logger="test_version_switch"):
             result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
 
-        _assert_success(result, rom_id=2, installed=False, launch_options="")
+        _assert_success(result, rom_id=2, installed=False)
         assert _romm_call_ids(romm, "get_rom_once") == [2]
         assert _romm_call_ids(romm, "get_rom") == []
         assert "target liveness probe failed open for rom 2" in caplog.text
@@ -1107,48 +1082,42 @@ class TestSwitchVersion:
         with caplog.at_level(logging.WARNING, logger="test_version_switch"):
             result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
 
-        _assert_success(result, rom_id=2, installed=False, launch_options="")
+        _assert_success(result, rom_id=2, installed=False)
         assert calls == [2]
         assert _romm_call_ids(romm, "get_rom") == []
         assert "target liveness probe returned an untrustworthy payload for rom 2; failing open" in caplog.text
 
-    def test_records_applied_launch_options_for_installed_target(self, event_loop, service, uow, relaunch_resolver):
-        # Switching onto an installed version re-bakes its launch command (the
-        # frontend writes it onto the sticky shortcut); recording it as the applied
-        # state keeps the next sync from re-touching the now-correct shortcut (#1383).
+    def test_a_switch_onto_an_installed_target_records_no_launch_command(self, event_loop, service, uow):
+        # The sticky shortcut's launch options are its appId; the next start asks
+        # for the target's command, so nothing is written or recorded here.
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
         _seed_rom(uow, rom_id=2, app_id=None)
         _seed_install(uow, 2)
-        relaunch_resolver.items = {2: {"app_id": _APP_ID, "launch_options": "flatpak run … /game_2.sfc"}}
 
         result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
 
-        _assert_success(result, rom_id=2, installed=True, launch_options="flatpak run … /game_2.sfc")
+        _assert_success(result, rom_id=2, installed=True)
         with uow as u:
-            assert u.roms.get(2).applied_launch_options == "flatpak run … /game_2.sfc"
+            assert u.roms.get(2).applied_launch_options is None
 
-    def test_records_empty_applied_for_uninstalled_target(self, event_loop, service, uow):
-        # Switching onto an uninstalled version leaves the shortcut on the empty
-        # placeholder; that placeholder is recorded so the next sync skips it (#1383).
+    def test_a_switch_onto_an_uninstalled_target_records_no_launch_command(self, event_loop, service, uow):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
         _seed_rom(uow, rom_id=2, app_id=None)
 
         result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
 
-        _assert_success(result, rom_id=2, installed=False, launch_options="")
+        _assert_success(result, rom_id=2, installed=False)
         with uow as u:
-            assert u.roms.get(2).applied_launch_options == ""
+            assert u.roms.get(2).applied_launch_options is None
 
-    def test_t3_switch_back_to_installed_returns_launch_options(self, event_loop, service, uow, relaunch_resolver):
-        # Switching onto a still-downloaded version re-bakes its full launch command.
+    def test_t3_switch_back_to_installed_answers_it_installed(self, event_loop, service, uow):
+        # Switching onto a still-downloaded version answers it installed.
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
         _seed_rom(uow, rom_id=2, app_id=None)
         _seed_install(uow, 2)
-        relaunch_resolver.items[2] = {"app_id": _APP_ID, "launch_options": "flatpak run net.retrodeck.retrodeck /x"}
 
         result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
-        _assert_success(result, rom_id=2, installed=True, launch_options="flatpak run net.retrodeck.retrodeck /x")
-        assert relaunch_resolver.calls == [2]
+        _assert_success(result, rom_id=2, installed=True)
 
     def test_t4_unsynced_saves_online_soft_blocks(
         self, event_loop, service, uow, romm, drift_probe, reachability_probe
@@ -1241,7 +1210,7 @@ class TestSwitchVersion:
         romm.get_rom_once_side_effect_by_id[2] = ConnectionError("offline")
 
         result = _run(event_loop, service.switch_version(_APP_ID, 2, True))
-        _assert_success(result, rom_id=2, installed=False, launch_options="")
+        _assert_success(result, rom_id=2, installed=False)
         assert drift_probe.calls == []
         assert reachability_probe.calls == 0
         assert _romm_call_ids(romm, "get_rom_once") == [2]
@@ -1261,7 +1230,7 @@ class TestSwitchVersion:
         drift_probe.drifted = False
         retried = _run(event_loop, service.switch_version(_APP_ID, 2, False))
 
-        _assert_success(retried, rom_id=2, installed=False, launch_options="")
+        _assert_success(retried, rom_id=2, installed=False)
         assert _romm_call_ids(romm, "get_rom_once") == [2]
 
     def test_switch_anyway_retry_probes_target(self, event_loop, service, uow, romm, drift_probe):
@@ -1275,7 +1244,7 @@ class TestSwitchVersion:
 
         forced = _run(event_loop, service.switch_version(_APP_ID, 2, True))
 
-        _assert_success(forced, rom_id=2, installed=False, launch_options="")
+        _assert_success(forced, rom_id=2, installed=False)
         assert _romm_call_ids(romm, "get_rom_once") == [2]
 
     def test_t6_synced_offline_switch_probe_fails_open(
@@ -1291,32 +1260,18 @@ class TestSwitchVersion:
         romm.get_rom_once_side_effect_by_id[2] = ConnectionError("offline")
 
         result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
-        _assert_success(result, rom_id=2, installed=False, launch_options="")
+        _assert_success(result, rom_id=2, installed=False)
         assert reachability_probe.calls == 0
         assert _romm_call_ids(romm, "get_rom_once") == [2]
         assert _romm_call_ids(romm, "get_rom") == []
 
-    def test_switch_to_active_is_noop_success(self, event_loop, service, uow, romm, relaunch_resolver):
+    def test_switch_to_active_is_noop_success(self, event_loop, service, uow, romm):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID, name="Game 1")
         _seed_install(uow, 1)
-        relaunch_resolver.items[1] = {"app_id": _APP_ID, "launch_options": "cmd"}
 
         result = _run(event_loop, service.switch_version(_APP_ID, 1, False))
-        _assert_success(result, rom_id=1, installed=True, launch_options="cmd")
+        _assert_success(result, rom_id=1, installed=True)
         assert _romm_call_ids(romm, "get_rom_once") == []
-
-    def test_resolver_miss_on_installed_target_still_succeeds(self, event_loop, service, uow, relaunch_resolver):
-        # Installed target but the resolver unexpectedly returns nothing: the rebind
-        # is committed, launch_options degrades to "" (logged loudly, not faked as failure).
-        _seed_rom(uow, rom_id=1, app_id=_APP_ID)
-        _seed_rom(uow, rom_id=2, app_id=None)
-        _seed_install(uow, 2)  # relaunch_resolver has no item for 2 → returns None
-
-        result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
-        _assert_success(result, rom_id=2, installed=True, launch_options="")
-        assert relaunch_resolver.calls == [2]
-        with uow as u:
-            assert u.roms.get(2).shortcut_app_id == _APP_ID  # binding committed
 
     def test_a_local_target_without_a_file_that_is_not_installed_is_refused(self, event_loop, service, uow, romm):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
@@ -1464,7 +1419,7 @@ class TestSwitchVersion:
         }
 
         result = _run(event_loop, service.switch_version(_APP_ID, 3, False))
-        _assert_success(result, rom_id=3, installed=False, launch_options="")
+        _assert_success(result, rom_id=3, installed=False)
         assert _romm_call_ids(romm, "get_rom_once") == []
         assert _romm_call_ids(romm, "get_rom") == [3]
         with uow as u:
@@ -1490,7 +1445,7 @@ class TestSwitchVersion:
         romm.get_rom_simple_side_effect = None
         result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
 
-        _assert_success(result, rom_id=2, installed=False, launch_options="")
+        _assert_success(result, rom_id=2, installed=False)
         assert _romm_call_ids(romm, "get_rom_once") == [2]
         with uow as current:
             assert current.roms.get(1).shortcut_app_id is None
@@ -1516,7 +1471,7 @@ class TestSwitchVersion:
 
         result = _run(event_loop, service.switch_version(_APP_ID, 3, False))
 
-        _assert_success(result, rom_id=3, installed=False, launch_options="")
+        _assert_success(result, rom_id=3, installed=False)
         assert _romm_call_ids(romm, "get_rom_once") == []
         assert _romm_call_ids(romm, "get_rom") == [3]
         with uow as current:
@@ -1646,19 +1601,16 @@ class TestSwitchVersion:
 # ── The switch's conflict rules, its lease, and the unchecked twin ────────────
 
 
-def _seed_active_install(uow: FakeUnitOfWork, relaunch_resolver) -> None:
+def _seed_active_install(uow: FakeUnitOfWork) -> None:
     _seed_rom(uow, rom_id=1, app_id=_APP_ID, name="Game 1")
     _seed_install(uow, 1)
-    relaunch_resolver.items[1] = {"app_id": _APP_ID, "launch_options": "cmd"}
 
 
 class TestTheVersionSwitchLease:
     """A switch that succeeded carries a ``version_switch`` lease for the frontend's Steam write."""
 
-    def test_a_switch_that_succeeded_carries_a_lease(
-        self, event_loop, service, uow, relaunch_resolver, prune_conflicts
-    ):
-        _seed_active_install(uow, relaunch_resolver)
+    def test_a_switch_that_succeeded_carries_a_lease(self, event_loop, service, uow, prune_conflicts):
+        _seed_active_install(uow)
 
         result = _run(event_loop, service.switch_version(_APP_ID, 1, False))
 
@@ -1666,10 +1618,10 @@ class TestTheVersionSwitchLease:
         assert prune_conflicts.conflicting_operations == 1
 
     def test_the_lease_is_taken_while_the_switchs_operation_still_holds(
-        self, event_loop, service, uow, relaunch_resolver, prune_conflicts, monkeypatch
+        self, event_loop, service, uow, prune_conflicts, monkeypatch
     ):
         """No cleanup can start between the switch's operation and the lease that outlasts it."""
-        _seed_active_install(uow, relaunch_resolver)
+        _seed_active_install(uow)
         seen = _record_operations_at_lease(prune_conflicts, monkeypatch)
 
         _run(event_loop, service.switch_version(_APP_ID, 1, False))
@@ -1687,9 +1639,9 @@ class TestTheVersionSwitchLease:
         [(True, False, "blocked_by_migration"), (False, True, "prune_active")],
     )
     def test_a_switch_its_rules_refuse_moves_nothing(
-        self, event_loop, service, uow, relaunch_resolver, prune_conflicts, migration_pending, cleanup_running, reason
+        self, event_loop, service, uow, prune_conflicts, migration_pending, cleanup_running, reason
     ):
-        _seed_active_install(uow, relaunch_resolver)
+        _seed_active_install(uow)
         _seed_rom(uow, rom_id=2, app_id=None)
         if cleanup_running:
             prune_conflicts.register_run("held-run")

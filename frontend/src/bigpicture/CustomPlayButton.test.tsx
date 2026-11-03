@@ -1283,16 +1283,16 @@ describe("CustomPlayButton — uninstall resets launch_options (#1051)", () => {
   // is all these two assert on.
   const clickUninstall = async (container: HTMLElement): Promise<void> => (await openUninstallMenu(container, 3))();
 
-  it("clears the shortcut launch command to the uninstalled placeholder on a successful uninstall", async () => {
+  it("leaves the shortcut's launch options alone on a successful uninstall", async () => {
     mockCachedDetail({ rom_id: 42, installed: true });
     const { container, findByText } = render(<CustomPlayButton appId={100} />);
     await findByText("Play");
 
     await clickUninstall(container);
 
-    // Reset to "" for the shortcut's appId so a raced-past not_installed can't
-    // exec a stale command into the deleted path (#1051).
-    expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(100, "");
+    // The shortcut carries its appId, installed or not; a start of a game that
+    // is not installed is refused before anything runs (#2221 D10).
+    expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
     expect(vi.mocked(backend.removeRom)).toHaveBeenCalledWith(42);
   });
 
@@ -1330,41 +1330,8 @@ describe("CustomPlayButton — uninstall resets launch_options (#1051)", () => {
     uninstalls.stop();
   });
 
-  it("announces the uninstall even when leaving the page cuts the launch-command reset short", async () => {
-    let finishReset!: (confirmed: boolean) => void;
-    vi.mocked(setLaunchOptionsConfirmed).mockReturnValue(
-      new Promise<boolean>((resolve) => {
-        finishReset = resolve;
-      }),
-    );
-    vi.mocked(backend.removeRom).mockResolvedValue({
-      success: true,
-      message: "",
-      prune_lease_token: "uninstall-lease",
-    });
-    mockCachedDetail({ rom_id: 42, installed: true });
-    const uninstalls = listenForUninstalls();
-    const { container, findByText, unmount } = render(<CustomPlayButton appId={100} />);
-    await findByText("Play");
-
-    await clickUninstall(container);
-    expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(100, "");
-
-    // Leaving the page aborts the removal's continuation while the reset runs;
-    // the uninstall is announced only once the reset has settled.
-    unmount();
-    expect(uninstalls.romIds).toEqual([]);
-    await act(async () => {
-      finishReset(true);
-      for (let index = 0; index < 10; index++) await Promise.resolve();
-    });
-
-    expect(uninstalls.romIds).toEqual([42]);
-    uninstalls.stop();
-  });
-
-  it("says nothing failed when the page is left before the removal's lease is taken", async () => {
-    let finishRemoval!: (result: { success: true; message: string; prune_lease_token: string }) => void;
+  it("says nothing failed when the page is left before the removal answers", async () => {
+    let finishRemoval!: (result: { success: true; message: string }) => void;
     vi.mocked(backend.removeRom).mockReturnValue(
       new Promise((resolve) => {
         finishRemoval = resolve;
@@ -1375,18 +1342,14 @@ describe("CustomPlayButton — uninstall resets launch_options (#1051)", () => {
     await findByText("Play");
 
     await clickUninstall(container);
-    // The backend removes the ROM after the page has gone, so the reset can no
-    // longer be admitted; the removal itself happened.
+    // The backend removes the ROM after the page has gone; the removal happened.
     unmount();
     await act(async () => {
-      finishRemoval({ success: true, message: "", prune_lease_token: "uninstall-lease" });
+      finishRemoval({ success: true, message: "" });
       for (let index = 0; index < 10; index++) await Promise.resolve();
     });
 
     expect(vi.mocked(toaster.toast)).not.toHaveBeenCalledWith(expect.objectContaining({ body: "Uninstall failed" }));
-    expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(
-      expect.stringContaining("CustomPlayButton: continuation was cancelled"),
-    );
   });
 });
 
@@ -1563,8 +1526,6 @@ describe("CustomPlayButton — completion flashes (#1677)", () => {
     rom_name: "Test ROM",
     platform_name: "PSX",
     file_path: "/roms/psx/game.chd",
-    app_id: 100,
-    launch_options: "run game",
   });
 
   /**
@@ -5402,7 +5363,7 @@ describe("CustomPlayButton — content already on disk (#260)", () => {
     expect(vi.mocked(backend.adoptExistingRom)).not.toHaveBeenCalled();
   });
 
-  it("adopt records the install and writes the launch command onto the shortcut", async () => {
+  it("adopt records the install and writes nothing to the shortcut", async () => {
     mockCachedDetail({ rom_id: 42, installed: false });
     vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
     vi.mocked(showAdoptExistingModal).mockResolvedValue("adopt");
@@ -5411,9 +5372,6 @@ describe("CustomPlayButton — content already on disk (#260)", () => {
       message: "Using the files already on this device",
       file_path: "/roms/n64/game.z64",
       rom_dir: null,
-      app_id: 100,
-      launch_options: 'flatpak run … "/roms/n64/game.z64"',
-      prune_lease_token: "adopt-token",
     });
     const utils = render(<CustomPlayButton appId={100} />);
     const btn = await utils.findByText("Download");
@@ -5425,10 +5383,8 @@ describe("CustomPlayButton — content already on disk (#260)", () => {
     // The shown path as the candidate and a null collision answer: content at the
     // game's own location, with no rename and so nothing to collide.
     expect(vi.mocked(backend.adoptExistingRom)).toHaveBeenCalledWith(42, "/roms/n64/game.z64", null);
-    expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(100, 'flatpak run … "/roms/n64/game.z64"');
-    // The lease the backend issued for this Steam write is given back, not held
-    // to its TTL — the bound branch is the only one that ever receives one.
-    expect(vi.mocked(backend.releasePruneConflictLease)).toHaveBeenCalledWith("adopt-token");
+    // The shortcut carries its appId; the next start asks with the adopted install.
+    expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
     await utils.findByText("Play");
   });
 
@@ -5445,9 +5401,6 @@ describe("CustomPlayButton — content already on disk (#260)", () => {
       message: "ok",
       file_path: "/roms/n64/game.z64",
       rom_dir: null,
-      app_id: null,
-      launch_options: "",
-      prune_lease_token: "stray-token",
     });
     const utils = render(<CustomPlayButton appId={100} />);
     const btn = await utils.findByText("Download");
@@ -5527,8 +5480,6 @@ describe("CustomPlayButton — the same game under another name (#260)", () => {
     message: "Using the files already on this device",
     file_path: "/roms/n64/game (USA).z64",
     rom_dir: null,
-    app_id: 100,
-    launch_options: 'flatpak run … "/roms/n64/game (USA).z64"',
   };
 
   beforeEach(() => {
@@ -5612,11 +5563,11 @@ describe("CustomPlayButton — the same game under another name (#260)", () => {
     ]);
   });
 
-  it("adopting a candidate sends its path, and writes the launch command afterwards", async () => {
+  it("adopting a candidate sends its path and writes nothing to the shortcut", async () => {
     mockCachedDetail({ rom_id: 42, installed: false });
     vi.mocked(backend.startDownload).mockResolvedValue(FOUND);
     vi.mocked(showAdoptExistingModal).mockResolvedValue("adopt");
-    vi.mocked(backend.adoptExistingRom).mockResolvedValue({ ...ADOPTED, prune_lease_token: "adopt-token" });
+    vi.mocked(backend.adoptExistingRom).mockResolvedValue(ADOPTED);
     const utils = render(<CustomPlayButton appId={100} />);
     const btn = await utils.findByText("Download");
 
@@ -5625,7 +5576,7 @@ describe("CustomPlayButton — the same game under another name (#260)", () => {
     });
 
     expect(vi.mocked(backend.adoptExistingRom)).toHaveBeenCalledWith(42, CANDIDATE.path, null);
-    expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(100, ADOPTED.launch_options);
+    expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
   });
 
   it("a collision opens the second dialog and re-sends the same candidate with the answer", async () => {
@@ -6107,8 +6058,6 @@ describe("CustomPlayButton — the disabled state buttons' markup", () => {
           rom_name: "Test ROM",
           platform_name: "PSX",
           file_path: "/roms/psx/game.chd",
-          app_id: 100,
-          launch_options: "run game",
         });
       });
       expect(getByText("Ready!")).toBeInTheDocument();
@@ -6565,7 +6514,7 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
     expect(vi.mocked(backend.forgetDownload)).toHaveBeenCalledWith(42);
   });
 
-  it("forgets the download once confirmed, clears the shortcut's launch command and offers Download", async () => {
+  it("forgets the download once confirmed, leaves the shortcut alone and offers Download", async () => {
     mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
     const { container, findByText, queryByText } = render(<CustomPlayButton appId={100} />);
     await findByText("Download again");
@@ -6573,7 +6522,7 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
     await confirm(await chooseForget(container));
 
     expect(vi.mocked(backend.forgetDownload)).toHaveBeenCalledWith(42);
-    expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(100, "");
+    expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
     expect(await findByText("Download")).toBeInTheDocument();
     expect(queryByText(/File missing/)).toBeNull();
     expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(

@@ -226,23 +226,18 @@ class TestCoreEndpointDelegation:
     async def test_set_game_core_delegates(self, endpoints, services):
         # The per-game pin is keyed by rom_id (the DB anchor), not by
         # platform_slug + rom_path: the override lives on the Rom aggregate.
-        services.core_service.set_game_core = AsyncMock(
-            return_value={"success": True, "launch_options": "flatpak run …", "app_id": 99}
-        )
+        services.core_service.set_game_core = AsyncMock(return_value={"success": True})
         result = await endpoints.set_game_core(42, "Snes9x")
         services.core_service.set_game_core.assert_awaited_once_with(42, "Snes9x")
-        assert result == {"success": True, "launch_options": "flatpak run …", "app_id": 99}
+        assert result == {"success": True}
 
     @pytest.mark.asyncio
     async def test_clear_game_core_delegates(self, endpoints, services):
-        # Reset / Follow default drops the pin; delegates by rom_id and returns
-        # the PLAIN launch options for the live shortcut.
-        services.core_service.clear_game_core = AsyncMock(
-            return_value={"success": True, "launch_options": "flatpak run …", "app_id": 99}
-        )
+        # Reset / Follow default drops the pin; delegates by rom_id.
+        services.core_service.clear_game_core = AsyncMock(return_value={"success": True})
         result = await endpoints.clear_game_core(42)
         services.core_service.clear_game_core.assert_awaited_once_with(42)
-        assert result == {"success": True, "launch_options": "flatpak run …", "app_id": 99}
+        assert result == {"success": True}
 
     @pytest.mark.asyncio
     async def test_get_platform_core_info_delegates(self, endpoints, services):

@@ -32,9 +32,8 @@ transactions actually held the lock.
 
 The established fix is the same for both: snapshot the rows a seam needs
 *inside* one short UoW, close it, then call the seam *outside* any open UoW
-(``services/relaunch_options_resolver.py``, ``services/cores.py``,
-``services/disc.py``, ``services/downloads/service.py``,
-``services/library/shortcut_launch_resolver.py`` are the reference shape).
+(``services/cores.py``, ``services/disc.py``, ``services/game_start.py`` and
+``services/downloads/service.py`` are the reference shape).
 Re-read anything the write then depends on: the second transaction runs on its
 own connection, so the snapshot may have gone stale.
 
@@ -156,11 +155,9 @@ SEAM_METHODS: frozenset[str] = frozenset(
         "active_core_for_rom",  # ActiveCoreResolver (services/active_core_resolver.py)
         "active_emulator_for_rom",  # ActiveCoreResolver (services/active_core_resolver.py)
         "has_adoption_candidate",  # RomAdoptionService — via an AdoptionCandidateProbeFn
-        "installed_relaunch_items",  # RelaunchOptionsResolver (services/relaunch_options_resolver.py)
         # PlatformSystems (services/platform_systems.py), which reads the kept
         # ids in a UoW of its own and then asks the resolver — the disk too.
         "platform_system",
-        "relaunch_item_for_rom",  # RelaunchOptionsResolver (services/relaunch_options_resolver.py)
         "rom_system",  # PlatformSystems (services/platform_systems.py), as platform_system
     }
 )

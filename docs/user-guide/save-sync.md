@@ -268,9 +268,9 @@ The warning shows which core you're switching from and to. You can:
 - **Continue** — launch with the new core (your save may be overwritten)
 - **Cancel** — go back and switch the core back before launching
 
-A per-game core applies for any ROM filename — Tender bakes the chosen core into the game's launch command rather than
-relying on RetroDECK's gamelist lookup. See [Changing the Active Core](bios-management.md#changing-the-active-core) for
-how per-game and per-platform cores work.
+A per-game core applies for any ROM filename — Tender starts the chosen core's command itself rather than relying on
+RetroDECK's gamelist lookup. See [Changing the Active Core](bios-management.md#changing-the-active-core) for how
+per-game and per-platform cores work.
 
 ### Which cores are compatible?
 

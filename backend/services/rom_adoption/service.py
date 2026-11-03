@@ -517,18 +517,12 @@ class RomAdoptionService:
     ) -> dict[str, Any] | AdoptionIncomplete:
         """Adopt content already on disk for the ``adopt_existing_rom`` endpoint.
 
-        :meth:`_adopt_existing_rom` under the endpoint's conflict rules. Only a
-        bound ROM's adoption carries an ``adopt_existing_rom`` lease in
-        ``prune_lease_token``: the lease covers the frontend's write of the
-        launch command onto the shortcut, and an unbound ROM has no shortcut to
-        write to, so its lease would hold off every cleanup until it expired. A
-        download's ``download_complete`` is leased on the same condition.
+        :meth:`_adopt_existing_rom` under the endpoint's conflict rules. It
+        touches no shortcut: the shortcut's launch options are its appId, and the
+        next start asks with the adopted install.
         """
         async with self._rules.hold("adopt_existing_rom", update=True, migration=True, prune=True):
-            result = await self._adopt_existing_rom(rom_id, candidate_path, collision_choice)
-            if isinstance(result, dict) and result["app_id"] is not None:
-                result["prune_lease_token"] = await self._rules.acquire_lease("adopt_existing_rom")
-            return result
+            return await self._adopt_existing_rom(rom_id, candidate_path, collision_choice)
 
     async def _adopt_existing_rom(
         self, rom_id, candidate_path, collision_choice
@@ -686,24 +680,12 @@ class RomAdoptionService:
         )
         if error is not None or recorded is None:
             raise Refused("invalid_install", error or "Could not record the install")
-        app_id, launch_options = self._install_recorder.do_resolve_launch_bake(rom_id, rom_detail, recorded)
-        # Record the freshly baked command as this ROM's applied state (the value
-        # the frontend writes onto the shortcut on this result), so the next sync
-        # skips the now-correct shortcut instead of re-touching it (delta apply,
-        # #1383). Only when the ROM has a bound shortcut — an unbound ROM has none
-        # to record, and the next sync creates + records it. Third of the six
-        # writer sites, immediately after download-complete: the same moment in
-        # the flow, because an adopted install is an install (ADR-0028).
-        if app_id is not None:
-            self._install_recorder.do_record_applied_launch_options(rom_id, launch_options)
         self._logger.info(f"Adopted existing content for rom {rom_id}: {recorded}")
         return {
             "success": True,
             "message": "Using the files already on this device",
             "file_path": recorded,
             "rom_dir": rom_dir,
-            "app_id": app_id,
-            "launch_options": launch_options,
         }
 
     def _adopted_launch_file(self, target: _Target) -> str:

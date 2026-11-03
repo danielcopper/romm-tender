@@ -7,8 +7,8 @@ regression this locks is that the second change used to overwrite the pending
 marker, so ``migrate_retrodeck_files`` found nothing under the (now forgotten)
 home A, stranded the file, and reported success. After the fix the pending set
 accumulates [A, B]; migrating relocates the row's file to C in the real
-database, re-emits ``migration_relaunch_options`` with the C path, and clears
-both pending markers.
+database and clears both pending markers; no shortcut is written to, since its
+launch options are its appId.
 
 ``migrate_retrodeck_files`` is driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``endpoint<[string | null], MigrationResult>`` — a single positional argument,
@@ -49,14 +49,6 @@ def _seed_install_at(harness, rom_id: int, *, file_path: str, app_id: int) -> No
                 installed_at="2026-01-01T00:00:00",
             )
         )
-
-
-def _relaunch_payload(harness):
-    """Return the ``migration_relaunch_options`` payload emitted, or None."""
-    for call in harness.emit.await_args_list:
-        if call.args and call.args[0] == "migration_relaunch_options":
-            return call.args[1]
-    return None
 
 
 async def _detect_at(harness, home: str) -> None:
@@ -110,13 +102,8 @@ async def test_second_home_change_before_migrating_does_not_strand_files(harness
         assert uow.kv_config.get("retrodeck_home_path_previous") is None
         assert uow.kv_config.get("retrodeck_home_path_hops") is None
 
-    # Relaunch options re-emitted with the NEW (C) launch path.
-    payload = _relaunch_payload(harness)
-    assert payload is not None
-    assert len(payload["items"]) == 1
-    assert payload["items"][0]["app_id"] == 4242
-    assert new_rom in payload["items"][0]["launch_options"]
-    assert a not in payload["items"][0]["launch_options"]
+    # Nothing is handed to the panel for Steam: the next start asks with C.
+    assert {call.args[0] for call in harness.emit.await_args_list} == {"retrodeck_path_changed"}
 
 
 async def test_migrate_with_no_pending_returns_canonical_failure_shape(harness):

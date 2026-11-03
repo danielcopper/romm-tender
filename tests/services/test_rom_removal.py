@@ -12,7 +12,6 @@ import pytest
 from _factories import (
     _make_conflict_rules,
     _make_prune_conflicts,
-    _record_operations_at_lease,
     _refused_by_conflict_rule,
 )
 from _spawns import record_spawns
@@ -488,17 +487,18 @@ class TestRemoveRom:
         assert uow.committed is True
 
     @pytest.mark.asyncio
-    async def test_records_empty_applied_launch_options_for_bound_rom(self, service, uow, rom_files):
-        # The frontend resets the kept shortcut's launch command to "" on uninstall
-        # (#1146); the backend records "" so the next sync skips it (#1383).
+    async def test_an_uninstall_leaves_the_shortcut_and_what_the_sync_recorded_alone(self, service, uow, rom_files):
+        # The kept shortcut's launch options are its appId, installed or not, so
+        # an uninstall has nothing to reset and records nothing (#2221 D10).
         rom_path = f"{_ROMS_BASE}/n64/zelda.z64"
         rom_files.files[rom_path] = b"\x00" * 100
         _seed_install(uow, _make_install(42, file_path=rom_path))
         with uow:
-            uow.roms.set_applied_launch_options(42, "flatpak run net.retrodeck.retrodeck /zelda.z64")
+            uow.roms.set_applied_launch_options(42, "")
 
-        await service.remove_rom(42)
+        result = await service.remove_rom(42)
 
+        assert result == {"success": True, "message": "ROM removed"}
         with uow:
             rom = uow.roms.get(42)
         assert rom is not None
@@ -675,10 +675,7 @@ class TestUninstallAllRoms:
         assert list(uow.rom_installs.iter_all()) == []
 
     @pytest.mark.asyncio
-    async def test_records_empty_applied_for_each_bound_deleted_rom(self, service, uow, rom_files):
-        # The frontend resets each kept shortcut's launch command to "" for the
-        # returned app_ids (#1146); the backend records "" so the next sync skips
-        # each now-correct shortcut (#1383).
+    async def test_a_bulk_uninstall_leaves_what_the_sync_recorded_alone(self, service, uow, rom_files):
         file_a = f"{_ROMS_BASE}/n64/game_a.z64"
         file_b = f"{_ROMS_BASE}/n64/game_b.z64"
         rom_files.files[file_a] = b"\x00" * 100
@@ -688,15 +685,14 @@ class TestUninstallAllRoms:
             uow.roms.save(_make_rom(2))
             uow.rom_installs.save(_make_install(1, file_path=file_a))
             uow.rom_installs.save(_make_install(2, file_path=file_b))
-            uow.roms.set_applied_launch_options(1, "flatpak run … /game_a.z64")
-            uow.roms.set_applied_launch_options(2, "flatpak run … /game_b.z64")
+            uow.roms.set_applied_launch_options(1, "")
 
         result = await service.uninstall_all_roms()
 
         assert result["success"] is True
         with uow:
             assert uow.roms.get(1).applied_launch_options == ""
-            assert uow.roms.get(2).applied_launch_options == ""
+            assert uow.roms.get(2).applied_launch_options is None
 
     @pytest.mark.asyncio
     async def test_handles_empty_state(self, service, uow):
@@ -797,8 +793,6 @@ class TestUninstallAllRoms:
             message="1 ROM could not be uninstalled",
             removed_count=2,
             errors=[{"rom_id": "2", "error": f"simulated remove_file failure: {file_b}"}],
-            app_ids=[1001, 1003],
-            prune_lease_token=result.prune_lease_token,
         )
         # Records for successful deletions are cleared; the failing entry survives so the user can retry.
         assert uow.rom_installs.get(1) is None
@@ -833,74 +827,6 @@ class TestUninstallAllRoms:
         assert result["success"] is True
         assert result["removed_count"] == 0
         assert result["errors"] == []
-
-
-class TestUninstallAllRomsAppIds:
-    """The ``app_ids`` field the frontend uses to reset kept shortcuts' launch_options (#1146)."""
-
-    @pytest.mark.asyncio
-    async def test_returns_bound_app_ids_for_deleted_roms(self, service, uow, rom_files):
-        """Happy path: each deleted ROM's bound ``shortcut_app_id`` is returned so the frontend can reset it."""
-        file_a = f"{_ROMS_BASE}/n64/game_a.z64"
-        file_b = f"{_ROMS_BASE}/n64/game_b.z64"
-        rom_files.files[file_a] = b"\x00" * 100
-        rom_files.files[file_b] = b"\x00" * 100
-        with uow:
-            uow.roms.save(_make_rom(1))
-            uow.roms.save(_make_rom(2))
-            uow.rom_installs.save(_make_install(1, file_path=file_a))
-            uow.rom_installs.save(_make_install(2, file_path=file_b))
-
-        result = await service.uninstall_all_roms()
-
-        assert result["success"] is True
-        assert sorted(result["app_ids"]) == [1001, 1002]
-
-    @pytest.mark.asyncio
-    async def test_omits_app_id_for_unbound_rom(self, service, uow, rom_files):
-        """Edge: a deleted ROM with no bound shortcut (``shortcut_app_id`` is None) contributes no app_id."""
-        file_a = f"{_ROMS_BASE}/n64/game_a.z64"
-        file_b = f"{_ROMS_BASE}/n64/game_b.z64"
-        rom_files.files[file_a] = b"\x00" * 100
-        rom_files.files[file_b] = b"\x00" * 100
-        with uow:
-            uow.roms.save(_make_rom(1))  # bound → 1001
-            uow.roms.save(_make_rom(2, bound=False))  # unbound → no app_id
-            uow.rom_installs.save(_make_install(1, file_path=file_a))
-            uow.rom_installs.save(_make_install(2, file_path=file_b))
-
-        result = await service.uninstall_all_roms()
-
-        assert result["success"] is True
-        assert result["app_ids"] == [1001]
-
-    @pytest.mark.asyncio
-    async def test_app_ids_only_for_successfully_deleted(self, service, uow, rom_files):
-        """Bad path: a ROM whose file deletion raised contributes no app_id — only deleted ones are reset."""
-        file_a = f"{_ROMS_BASE}/n64/game_a.z64"
-        file_b = f"{_ROMS_BASE}/n64/game_b.z64"
-        file_c = f"{_ROMS_BASE}/n64/game_c.z64"
-        for p in (file_a, file_b, file_c):
-            rom_files.files[p] = b"\x00" * 100
-        rom_files.remove_file_failures.add(file_b)
-        with uow:
-            for rid, fp in ((1, file_a), (2, file_b), (3, file_c)):
-                uow.roms.save(_make_rom(rid))
-                uow.rom_installs.save(_make_install(rid, file_path=fp))
-
-        result = await service.uninstall_all_roms()
-
-        assert isinstance(result, UninstallIncomplete)
-        # ROM 2's deletion raised → its app_id (1002) is absent; the deleted 1 and 3 are present.
-        assert sorted(result.app_ids) == [1001, 1003]
-
-    @pytest.mark.asyncio
-    async def test_empty_state_returns_empty_app_ids(self, service, uow):
-        """Edge: no installed ROMs → ``app_ids`` is empty."""
-        _ = uow
-        result = await service.uninstall_all_roms()
-
-        assert result["app_ids"] == []
 
 
 class TestDownloadQueueCleanup:
@@ -1592,27 +1518,7 @@ def _seed_installed_file(uow: FakeUnitOfWork, rom_files: FakeRomFileStore, rom_i
 
 
 class TestTheRemoveRomLease:
-    """A removal that succeeded carries a ``rom_uninstall`` lease for the frontend's launch-options reset."""
-
-    async def test_a_removal_that_succeeded_carries_a_lease(self, service, uow, rom_files, prune_conflicts):
-        _seed_installed_file(uow, rom_files, 42)
-
-        result = await service.remove_rom(42)
-
-        assert result["success"] is True
-        assert result["prune_lease_token"].startswith("rom_uninstall:")
-        assert prune_conflicts.conflicting_operations == 1
-
-    async def test_the_lease_is_taken_while_the_removals_operation_still_holds(
-        self, service, uow, rom_files, prune_conflicts, monkeypatch
-    ):
-        """No cleanup can start between the removal's operation and the lease that outlasts it."""
-        _seed_installed_file(uow, rom_files, 42)
-        seen = _record_operations_at_lease(prune_conflicts, monkeypatch)
-
-        await service.remove_rom(42)
-
-        assert seen == [["remove_rom"]]
+    """A removal that did not go ahead removes nothing and leaves the prune conflicts as they were."""
 
     async def test_a_rom_with_nothing_installed_takes_no_lease(self, service, prune_conflicts):
         coro = service.remove_rom(42)
@@ -1655,69 +1561,7 @@ class TestRemoveRomUnchecked:
 
 
 class TestTheBulkUninstallLease:
-    """A bulk uninstall that ran and reports bound ``app_ids`` carries a ``bulk_uninstall`` lease.
-
-    The condition is ``app_ids``, not ``success``: a partial failure still
-    reports the ROMs whose files are gone, and the frontend resets their
-    launch commands under this lease.
-    """
-
-    async def test_a_run_that_reports_bound_app_ids_carries_a_lease(self, service, uow, rom_files, prune_conflicts):
-        _seed_installed_file(uow, rom_files, 1)
-
-        result = await service.uninstall_all_roms()
-
-        assert result["app_ids"] == [1001]
-        assert result["prune_lease_token"].startswith("bulk_uninstall:")
-        assert prune_conflicts.conflicting_operations == 1
-
-    async def test_the_lease_is_taken_while_the_runs_operation_still_holds(
-        self, service, uow, rom_files, prune_conflicts, monkeypatch
-    ):
-        """No cleanup can start between the run's operation and the lease that outlasts it."""
-        _seed_installed_file(uow, rom_files, 1)
-        seen = _record_operations_at_lease(prune_conflicts, monkeypatch)
-
-        await service.uninstall_all_roms()
-
-        assert seen == [["uninstall_all_roms"]]
-
-    async def test_a_partial_failure_that_reports_bound_app_ids_carries_a_lease(
-        self, service, uow, rom_files, prune_conflicts
-    ):
-        _seed_installed_file(uow, rom_files, 1)
-        failing = _seed_installed_file(uow, rom_files, 2)
-        rom_files.remove_file_failures.add(failing)
-
-        result = await service.uninstall_all_roms()
-
-        assert isinstance(result, UninstallIncomplete)
-        assert result.app_ids == [1001]
-        assert result.prune_lease_token is not None
-        assert result.prune_lease_token.startswith("bulk_uninstall:")
-
-    async def test_a_partial_failure_that_reports_no_bound_app_id_carries_none(
-        self, service, uow, rom_files, prune_conflicts
-    ):
-        _seed_installed_file(uow, rom_files, 1, bound=False)
-        failing = _seed_installed_file(uow, rom_files, 2)
-        rom_files.remove_file_failures.add(failing)
-
-        result = await service.uninstall_all_roms()
-
-        assert isinstance(result, UninstallIncomplete)
-        assert (result.app_ids, result.prune_lease_token) == ([], None)
-        assert prune_conflicts.conflicting_operations == 0
-
-    async def test_a_run_that_reports_no_bound_app_id_carries_none(self, service, uow, rom_files, prune_conflicts):
-        _seed_installed_file(uow, rom_files, 1, bound=False)
-
-        result = await service.uninstall_all_roms()
-
-        assert result["success"] is True
-        assert result["app_ids"] == []
-        assert "prune_lease_token" not in result
-        assert prune_conflicts.conflicting_operations == 0
+    """A bulk uninstall that is refused removes nothing and leaves the prune conflicts as they were."""
 
     async def test_the_services_own_refusal_takes_no_lease(self, service, uow, rom_files, prune_conflicts):
         _seed_installed_file(uow, rom_files, 1)
@@ -1768,17 +1612,16 @@ def _seed_missing_download(uow: FakeUnitOfWork, rom_id: int, *, bound: bool = Tr
 class TestForgetDownload:
     """An uninstall without the deletion, for a download whose files are gone (#2188 D28)."""
 
-    async def test_it_drops_the_record_and_records_the_uninstalled_launch_command(self, service, uow, rom_files):
+    async def test_it_drops_the_record_and_leaves_what_the_sync_recorded_alone(self, service, uow, rom_files):
         _seed_missing_download(uow, 42)
 
         result = await service.forget_download(42)
 
-        assert result["success"] is True
-        assert result["message"] == "Download forgotten"
+        assert result == {"success": True, "message": "Download forgotten"}
         assert uow.rom_installs.get(42) is None
         rom = uow.roms.get(42)
         assert rom is not None
-        assert rom.applied_launch_options == ""
+        assert rom.applied_launch_options == f"flatpak run net.retrodeck.retrodeck {_ROMS_BASE}/n64/game_42.z64"
 
     async def test_an_unbound_rom_records_no_launch_command(self, service, uow, rom_files):
         _seed_missing_download(uow, 50, bound=False)
@@ -1936,24 +1779,6 @@ class TestForgetDownload:
         await service.forget_download(42)
 
         assert queue_cleanup.evicted == [42]
-
-    async def test_a_forget_that_succeeded_carries_the_uninstall_lease(self, service, uow, rom_files, prune_conflicts):
-        _seed_missing_download(uow, 42)
-
-        result = await service.forget_download(42)
-
-        assert result["prune_lease_token"].startswith("rom_uninstall:")
-        assert prune_conflicts.conflicting_operations == 1
-
-    async def test_the_lease_is_taken_while_the_forgets_operation_still_holds(
-        self, service, uow, rom_files, prune_conflicts, monkeypatch
-    ):
-        _seed_missing_download(uow, 42)
-        seen = _record_operations_at_lease(prune_conflicts, monkeypatch)
-
-        await service.forget_download(42)
-
-        assert seen == [["forget_download"]]
 
     async def test_a_refused_forget_drops_nothing_and_carries_none(self, service, uow, rom_files, prune_conflicts):
         _seed_missing_download(uow, 42)

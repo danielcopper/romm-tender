@@ -15,12 +15,10 @@ import pytest
 from _factories import (
     _make_conflict_rules,
     _make_prune_conflicts,
-    _record_operations_at_lease,
     _refused_by_conflict_rule,
 )
 from _spawns import record_spawns
 from fakes.fake_core_info_provider import FakeCoreInfoProvider
-from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
@@ -280,8 +278,6 @@ async def make_downloads(emit, logger) -> MakeDownloads:
             config=RomInstallRecorderConfig(
                 clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
                 uow_factory=FakeUnitOfWorkFactory(uow),
-                active_core=active_core,
-                disc_resolver=FakeDiscResolver(),
             ),
         )
         adoption = RomAdoptionService(
@@ -342,8 +338,6 @@ async def make_downloads(emit, logger) -> MakeDownloads:
                 queue=queue,
                 unpacker=unpacker,
                 romm_api=romm_api,
-                install_recorder=install_recorder,
-                conflict_rules=conflict_rules,
                 loop=download_loop,
                 emit=download_emit,
                 logger=logger,
@@ -1782,76 +1776,14 @@ class TestDoDownloadSingleFile:
         payload = emit_calls[0][0][1]
         assert payload["rom_id"] == 42
         assert payload["file_path"] == target_path
-        # app_id carries the ROM's bound shortcut_app_id (seeded as 1000 + rom_id)
-        # so the frontend confirm-sets launch options without a full-library scan.
-        assert payload["app_id"] == 1042
-        # launch_options carries the full RetroDECK launch command for the resolved path.
-        assert payload["launch_options"] == f"flatpak run --nosocket=wayland net.retrodeck.retrodeck '{target_path}'"
+        # Nothing for the shortcut: its launch options are its appId.
+        assert "launch_options" not in payload
         # download_queue status is completed
         assert downloads.queue.entries[42]["status"] == "completed"
 
     @pytest.mark.asyncio
-    async def test_download_complete_app_id_null_when_unbound(self, make_downloads, tmp_path, emit):
-        """A ROM downloaded before it's synced (no Steam shortcut) emits ``app_id: None``.
-
-        The ROM row exists (FK parent for the install) but its
-        ``shortcut_app_id`` is ``None`` — so ``download_complete`` carries
-        ``app_id == None`` and the frontend handler no-ops gracefully.
-        """
-        from unittest.mock import patch
-
-        downloads = make_downloads(
-            retrodeck_folders=FakeRetroDeckFolders(
-                roms=str(tmp_path / "retrodeck" / "roms"),
-                bios=str(tmp_path / "retrodeck" / "bios"),
-            )
-        )
-
-        roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
-        roms_dir.mkdir(parents=True)
-        target_path = str(roms_dir / "metroid.z64")
-
-        rom_detail = {
-            "id": 7,
-            "name": "Metroid",
-            "fs_name": "metroid.z64",
-            "platform_slug": "n64",
-            "platform_name": "Nintendo 64",
-            "has_multiple_files": False,
-        }
-
-        def fake_download(_rom_id, _filename, dest, _progress_callback=None, *, resume=False, on_meta=None):
-            with open(dest, "wb") as f:
-                f.write(b"\x00" * 512)
-
-        # Unbound ROM row (FK parent for the install) — no Steam shortcut yet.
-        with downloads.uow:
-            downloads.uow.roms.save(
-                Rom(
-                    rom_id=7,
-                    platform_slug="n64",
-                    name="Metroid",
-                    fs_name="metroid.z64",
-                    shortcut_app_id=None,
-                    last_synced_at="2025-01-01T00:00:00",
-                )
-            )
-        downloads.queue.enqueue(7, {"rom_id": 7, "status": "downloading", "progress": 0})
-
-        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(
-                7, rom_detail, target_path, "n64", "metroid.z64", _admitted(downloads, 7), platform_name="Nintendo 64"
-            )
-
-        emit_calls = [c for c in emit.call_args_list if c[0][0] == "download_complete"]
-        assert len(emit_calls) == 1
-        assert emit_calls[0][0][1]["app_id"] is None
-
-    @pytest.mark.asyncio
-    async def test_download_complete_records_applied_launch_options_for_bound_rom(self, make_downloads, tmp_path, emit):
-        """A bound ROM's freshly baked launch command (the value the frontend
-        confirm-sets onto its shortcut) is recorded as the applied state, so the
-        next sync skips the now-correct shortcut instead of re-touching it (#1383)."""
+    async def test_a_bound_roms_download_records_no_launch_command(self, make_downloads, tmp_path, emit):
+        """A download writes nothing about the start: the next start asks with the install (#2221 D7)."""
         from unittest.mock import patch
 
         downloads = make_downloads(
@@ -1878,12 +1810,10 @@ class TestDoDownloadSingleFile:
                 42, rom_detail, target_path, "n64", "zelda.z64", _admitted(downloads, 42), platform_name="N64"
             )
 
-        payload = next(c[0][1] for c in emit.call_args_list if c[0][0] == "download_complete")
         with downloads.uow as uow:
             rom = uow.roms.get(42)
         assert rom is not None
-        assert rom.applied_launch_options == payload["launch_options"]
-        assert rom.applied_launch_options == f"flatpak run --nosocket=wayland net.retrodeck.retrodeck '{target_path}'"
+        assert rom.applied_launch_options is None
 
     @pytest.mark.asyncio
     async def test_download_complete_does_not_record_applied_for_unbound_rom(self, make_downloads, tmp_path, emit):
@@ -2035,110 +1965,6 @@ class TestASystemFolderLinkedToAnotherDrive:
         assert drive.is_dir()
 
 
-class TestDoDownloadOverrideRebake:
-    """``download_complete`` re-bakes a per-game ``emulator_override`` into launch_options.
-
-    This is the load-bearing site (B2): the override lives on ``roms`` precisely so
-    it survives uninstall → reinstall, and reinstall flows through ``DownloadTransfer.run``.
-    """
-
-    @staticmethod
-    def _harness(make_downloads, tmp_path):
-        return make_downloads(
-            retrodeck_folders=FakeRetroDeckFolders(
-                roms=str(tmp_path / "retrodeck" / "roms"),
-                bios=str(tmp_path / "retrodeck" / "bios"),
-            )
-        )
-
-    async def _run_single_download(self, downloads, tmp_path, emit, *, rom_id, override):
-        """Download one single-file ROM (bound) with ``override`` pre-pinned; return payload."""
-        from unittest.mock import patch
-
-        roms_dir = tmp_path / "retrodeck" / "roms" / "psx"
-        roms_dir.mkdir(parents=True)
-        target_path = str(roms_dir / "game.chd")
-        rom_detail = {
-            "id": rom_id,
-            "name": "PSX Game",
-            "fs_name": "game.chd",
-            "platform_slug": "psx",
-            "platform_name": "PlayStation",
-            "has_multiple_files": False,
-        }
-
-        def fake_download(_rom_id, _filename, dest, _progress_callback=None, *, resume=False, on_meta=None):
-            with open(dest, "wb") as f:
-                f.write(b"\x00" * 512)
-
-        _seed_rom(downloads.uow, rom_id, platform_slug="psx")
-        if override is not None:
-            with downloads.uow:
-                downloads.uow.roms.set_emulator_override(rom_id, override)
-        downloads.queue.enqueue(rom_id, {"rom_id": rom_id, "status": "downloading", "progress": 0})
-
-        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
-            await downloads.transfer.run(
-                rom_id,
-                rom_detail,
-                target_path,
-                "psx",
-                "game.chd",
-                _admitted(downloads, rom_id),
-                platform_name="PlayStation",
-            )
-
-        emit_calls = [c for c in emit.call_args_list if c[0][0] == "download_complete"]
-        assert len(emit_calls) == 1
-        return emit_calls[0][0][1], target_path
-
-    @pytest.mark.asyncio
-    async def test_reinstall_with_override_rebakes_e_form(self, make_downloads, tmp_path, emit):
-        """An override-set ROM's reinstall emits ``-e`` baked launch_options (B2)."""
-        downloads = self._harness(make_downloads, tmp_path)
-        downloads.core_info.available_cores = [
-            {"core_so": "pcsx_rearmed_libretro", "label": "PCSX ReARMed", "is_default": True},
-        ]
-        payload, target_path = await self._run_single_download(
-            downloads, tmp_path, emit, rom_id=42, override="PCSX ReARMed"
-        )
-        assert payload["app_id"] == 1042
-        assert payload["launch_options"] == (
-            "flatpak run --nosocket=wayland net.retrodeck.retrodeck "
-            '-e "%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/pcsx_rearmed_libretro.so %ROM%" '
-            f"'{target_path}'"
-        )
-
-    @pytest.mark.asyncio
-    async def test_reinstall_without_override_is_plain(self, make_downloads, tmp_path, emit):
-        """A NULL-override ROM's reinstall emits the plain launch — no ``-e`` (B2)."""
-        downloads = self._harness(make_downloads, tmp_path)
-        downloads.core_info.available_cores = [
-            {"core_so": "pcsx_rearmed_libretro", "label": "PCSX ReARMed", "is_default": True},
-        ]
-        payload, target_path = await self._run_single_download(downloads, tmp_path, emit, rom_id=43, override=None)
-        assert payload["launch_options"] == f"flatpak run --nosocket=wayland net.retrodeck.retrodeck '{target_path}'"
-        assert "-e" not in payload["launch_options"]
-
-    @pytest.mark.asyncio
-    async def test_reinstall_with_stale_override_rebakes_plain_and_warns(self, make_downloads, tmp_path, caplog, emit):
-        """A stale override LABEL reinstall emits the PLAIN launch + WARNs (B4)."""
-        downloads = self._harness(make_downloads, tmp_path)
-
-        # available_cores does not carry the pinned label → resolution returns None.
-        downloads.core_info.available_cores = [
-            {"core_so": "pcsx_rearmed_libretro", "label": "PCSX ReARMed", "is_default": True},
-        ]
-        with caplog.at_level(logging.WARNING):
-            payload, target_path = await self._run_single_download(
-                downloads, tmp_path, emit, rom_id=44, override="Removed Core"
-            )
-        assert payload["launch_options"] == f"flatpak run --nosocket=wayland net.retrodeck.retrodeck '{target_path}'"
-        assert "-e" not in payload["launch_options"]
-        assert "Removed Core" in caplog.text
-        assert "no longer resolves" in caplog.text
-
-
 class TestDoDownloadMultiFile:
     """Tests for DownloadTransfer.run happy path — multi-file (ZIP)."""
 
@@ -2210,15 +2036,11 @@ class TestDoDownloadMultiFile:
         # (M3U auto-generated by _maybe_generate_m3u). The launch file lives
         # inside the renamed dir.
         assert installed.file_path == str(extract_dir / "FF7.m3u")
-        # download_complete carries the launch command for the detected launch file.
+        # download_complete names the detected launch file.
         emit_calls = [c for c in emit.call_args_list if c[0][0] == "download_complete"]
         assert len(emit_calls) == 1
         payload = emit_calls[0][0][1]
         assert payload["file_path"] == installed.file_path
-        assert (
-            payload["launch_options"]
-            == f"flatpak run --nosocket=wayland net.retrodeck.retrodeck '{installed.file_path}'"
-        )
         # Status is completed
         assert downloads.queue.entries[55]["status"] == "completed"
 
@@ -7385,79 +7207,6 @@ class TestAStartedDownloadHoldsAnOperation:
 
         assert begun == []
         assert downloads.prune_conflicts.conflicting_operations == 0
-
-
-class TestTheDownloadCompleteLease:
-    """A bound ROM's ``download_complete`` carries a lease for the frontend's write of its launch command.
-
-    An unbound ROM has no shortcut to write to, so its event carries none; a
-    lease on an event nobody heard, or whose emit raised, is given back.
-    """
-
-    @staticmethod
-    async def _finish(downloads, rom_id: int) -> None:
-        downloads.queue.enqueue(rom_id, {"rom_id": rom_id, "status": "downloading", "progress": 0})
-        detail = {"id": rom_id, "name": "Zelda", "fs_name": "zelda.z64", "platform_slug": "n64"}
-        await downloads.transfer._finalize_download_complete(rom_id, detail, "/roms/n64/zelda.z64", "Zelda", "N64")
-
-    @staticmethod
-    def _payload(emit) -> dict[str, Any]:
-        (payload,) = [c.args[1] for c in emit.call_args_list if c.args[0] == "download_complete"]
-        return payload
-
-    async def test_a_bound_roms_event_carries_a_lease(self, downloads, emit):
-        _seed_rom(downloads.uow, 42)
-        emit.return_value = True
-
-        await self._finish(downloads, 42)
-
-        assert self._payload(emit)["prune_lease_token"].startswith("download_complete:")
-        assert downloads.prune_conflicts.conflicting_operations == 1
-
-    async def test_an_unbound_roms_event_carries_none(self, downloads, emit):
-        with downloads.uow:
-            downloads.uow.roms.save(
-                Rom(
-                    rom_id=7,
-                    platform_slug="n64",
-                    name="Metroid",
-                    fs_name="metroid.z64",
-                    shortcut_app_id=None,
-                    last_synced_at="2025-01-01T00:00:00",
-                )
-            )
-
-        await self._finish(downloads, 7)
-
-        assert "prune_lease_token" not in self._payload(emit)
-        assert downloads.prune_conflicts.conflicting_operations == 0
-
-    async def test_an_event_nobody_heard_gives_its_lease_back(self, downloads, emit):
-        _seed_rom(downloads.uow, 42)
-        emit.return_value = False
-
-        await self._finish(downloads, 42)
-
-        assert self._payload(emit)["prune_lease_token"].startswith("download_complete:")
-        assert downloads.prune_conflicts.conflicting_operations == 0
-
-    async def test_the_lease_is_taken_while_the_downloads_operation_still_holds(self, downloads, emit, monkeypatch):
-        """No cleanup can start between the download's own operation and the lease that outlasts it."""
-        _seed_rom(downloads.uow, 42)
-        emit.return_value = True
-        service = downloads.service
-        release = asyncio.Event()
-
-        async def finish(rom_id: int) -> None:
-            await self._finish(downloads, rom_id)
-
-        monkeypatch.setattr(service, "_begin_download", _begin_leaving_a_task(downloads.state, release, finish))
-        seen = _record_operations_at_lease(downloads.prune_conflicts, monkeypatch)
-
-        await service.start_download(42)
-        await _let_the_task_end(downloads.state, 42, downloads.prune_conflicts, release)
-
-        assert seen == [["start_download"]]
 
 
 def _zip_bytes(members: dict[str, bytes]) -> bytes:

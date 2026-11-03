@@ -10,13 +10,12 @@ emulator a game uses, where that decision is stored, and how it is applied at la
 
 The central rule: **the read-path core equals the launched core.** Whatever core Tender reports for a game — in the
 BIOS-requirement filter, the save-directory name, the save-sync core tag, the core-change warning, the game-detail badge
-— is the exact core that game will launch on. A single resolver guarantees that, and the launch command is baked from
-the same resolved emulator. Tender **owns emulator selection end to end**: it reads RetroDECK/ES-DE configuration for
-the default emulator, but its own launches never depend on ES-DE's `gamelist.xml` — it neither reads nor writes that
-file. The **live `es_systems.xml` is the sole source** for the system-layer default and the picker's emulator list;
-there is no bundled snapshot (the curated `core_defaults.json` and its generator were deleted in #1210). What **reads**
-that file is the vendored emu-atlas resolver, through `adapters/atlas_catalogue.py` — Tender's own parser is gone
-(#1840). See
+— is the exact core that game will launch on. A single resolver guarantees that, and every start asks for the command of
+the same resolved entry. Tender **owns emulator selection end to end**: it reads RetroDECK/ES-DE configuration for the
+default emulator, but its own launches never depend on ES-DE's `gamelist.xml` — it neither reads nor writes that file.
+The **live `es_systems.xml` is the sole source** for the system-layer default and the picker's emulator list; there is
+no bundled snapshot (the curated `core_defaults.json` and its generator were deleted in #1210). What **reads** that file
+is the vendored emu-atlas resolver, through `adapters/atlas_catalogue.py` — Tender's own parser is gone (#1840). See
 [ADR-0011](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0011-per-game-core-override-in-db-applied-via-e-flag.md)
 (the per-game DB override + `-e`),
 [ADR-0012](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0012-plugin-owns-core-selection-always-e-no-gamelist.md)
@@ -512,72 +511,25 @@ on its error output (D11 — what it says to the player is #2230's). A refusal o
 `not_found` for a game with no shortcut, `not_installed`, `cannot_start` with the game's `start` where its entry cannot
 start it or the resolver gives no complete command, and `start_unavailable` where the command cannot be handed over.
 
-## Application: baking `-e` into `launch_options`
+## Application: a start asks, a shortcut carries nothing
 
-Per
-[ADR-0009](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0009-launcher-pure-exec-wrapper-baked-launch-options.md),
-the launcher is a pure `exec "$@"` wrapper and the full launch command lives in the Steam shortcut's `launch_options`.
-The pure seam `domain.shortcut_data.resolve_emulator_invocation(rom, emulator)` takes the resolved `EmulatorInvocation`
-and renders the invocation:
+No shortcut carries anything about what starts its game: its launch options are its appId, the same for every bound
+shortcut, installed or not ([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D7, D10). So nothing is
+written to a shortcut when the entry in effect, the disc pick, the install or the RetroDECK home changes; the next start
+asks with what is in effect then ([The start](#the-start-one-command-handed-over-for-one-start) above). A per-game pin,
+a per-platform core, a disc pick and a reinstall therefore apply at the next start, with no sync and no Steam write.
 
-- **`run_game`** invocation → the ES-DE command through `-e`, a core entry's with the resolver's core path in place of
-  `%CORE_RETROARCH%/<core>.so`:
-
-  ```text
-  flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/<core>.so %ROM%"
-  flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "%EMULATOR_RETROARCH% --subsystem neocd -L /var/config/retroarch/cores/fbneo_libretro.so %ROM%"
-  flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "%EMULATOR_RPCS3% --no-gui %ROM%"
-  ```
-
-- `emulator is None` → the plain `flatpak run --nosocket=wayland net.retrodeck.retrodeck`.
-
-Every form, the [folder-boot one](#folder-boot-launch-target) included, starts the Flatpak with `--nosocket=wayland`: a
-`flatpak run` option, so it stands before the app id. Why it is there is under
-[RetroDECK runs through XWayland in Desktop Mode](../user-guide/troubleshooting.md#retrodeck-runs-through-xwayland-in-desktop-mode).
-
-`%EMULATOR_[A-Z0-9_]+%` tokens and `%ROM%` stay as ES-DE placeholders — RetroDECK's `run_game.sh` resolves them, and
-single-quotes the ROM path, at launch, so a ROM path with spaces or parens is handled. `%CORE_RETROARCH%` is the
-exception: `run_game.sh` replaces it with `$ra_cores_path`, which RetroDECK has defined nowhere since 0.10.0b, so it
-would load the core from `/`. Tender therefore writes in the core file the resolver states ES-DE's own core lookup finds
-(`core_path`, spelled where RetroDECK runs it, `/var/config/retroarch/cores/<core>.so` on a stock install) — for every
-core entry, the plain `-L <core> %ROM%` command and one carrying more alike (#2195 D15). An emulator program's command
-carries no `%CORE_RETROARCH%` and bakes as written. The `-e` flag makes RetroDECK skip its gamelist lookup entirely,
-which is why a baked emulator applies for any filename (see
-[Why Tender always bakes the core, never the gamelist](#why-tender-always-bakes-the-core-never-the-gamelist)).
-
-**Always `-e`.** Per
-[ADR-0012](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0012-plugin-owns-core-selection-always-e-no-gamelist.md),
-every installed ROM bakes its **full resolved active emulator** through `-e` — the per-game pin, the per-platform core,
-the es_systems libretro default, or a standalone emulator, whichever the resolver returns. The plain `flatpak run`
-launch is **not** the "no override" case any more; it is reserved for the single fallback where the resolver yields
-`None` (a platform with no resolvable default at all). Baking the default for every ROM is what lets Tender own launch
-selection completely: a launch that is _not_ `-e` would let RetroDECK consult the gamelist, re-coupling Tender to
-ES-DE's state. The cost is that a RetroDECK update changing a platform's default core needs a **Force Full Sync** to
-re-bake — see [A frozen default needs a Force Full Sync](#a-frozen-default-needs-a-force-full-sync).
-
-### The three bake sites
-
-`launch_options` is written wherever a shortcut's command is (re)built. All three resolve the ROM's **full active
-emulator** through the same `ActiveCoreResolver.active_emulator_for_rom` seam and pass the `EmulatorInvocation` into
-`resolve_emulator_invocation`, so the read-path core and the launched emulator cannot diverge:
-
-| Bake site                                            | When it runs                             | How it resolves the emulator                                                             |
-| ---------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `ShortcutLaunchResolver` → `do_build_core_overrides` | every sync (preview + apply)             | each ROM through `active_emulator_for_rom` → `{rom_id: EmulatorInvocation}` for the bake |
-| `RomInstallRecorder` → `do_resolve_launch_bake`      | on download-complete (install/reinstall) | the ROM through `active_emulator_for_rom` in the same flow                               |
-| `MigrationService` → `_build_relaunch_items`         | on RetroDECK-home migration              | each relocated ROM through `active_emulator_for_rom`                                     |
-
-The download-complete bake is the one that re-applies a pin after reinstall — the exact path `roms` storage was chosen
-to protect. Each site bakes `-e` for every ROM that resolves to a concrete emulator (libretro or standalone), the empty
-command for `EmulatorInvocation.nothing()` (D43), and the plain launch only when the resolver returns `None`, where the
-system lists no entry, no system is found, or the catalogue cannot be read. A stale LABEL is handled inside the resolver
-(warn + degrade), so no bake site ever emits `None.so`.
+The one write left is the appId itself. The sync sets it on every shortcut it creates or rewrites
+(`frontend/src/utils/steamShortcuts.ts::shortcutLaunchOptions`), the start check sets it back before each start, and the
+reconcile at panel load and after a sync (`get_bound_launch_options`, `services/startup_healing.py`) lists every bound
+shortcut whose launch options in Steam's shortcut file are anything else — a shortcut an older version wrote a command
+into, or one edited in Steam — and the panel confirm-sets those.
 
 ## Multi-disc selection
 
-A multi-disc game (a PS1 RPG across four CDs, say) installs as a folder of disc images. The same bake that carries the
-core also carries **which disc launches** — a second per-game deviation that follows the core override's structure point
-for point. The decision record is
+A multi-disc game (a PS1 RPG across four CDs, say) installs as a folder of disc images. The same start that asks for the
+core's command also asks with **which disc launches** — a second per-game deviation that follows the core override's
+structure point for point. The decision record is
 [ADR-0014](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0014-per-game-disc-selection-in-db-applied-as-bake-time-launch-path-override.md);
 the user-facing guide is
 [Picking a Disc for Multi-Disc Games](https://github.com/danielcopper/romm-tender/blob/main/docs/user-guide/managing-games.md#picking-a-disc-for-multi-disc-games).
@@ -649,8 +601,8 @@ resolve_for_install(install, selected_disc):
 A **non-multi-disc ROM resolves to its own `file_path`** — zero behavior change for the overwhelming majority of games.
 A **stale pin** (the selected disc no longer present) degrades to the default with a WARNING, never fatal, exactly like
 `ActiveCoreResolver`'s stale-label handling. Crucially, the resolver **never rewrites `file_path`**: it returns the path
-to bake, and `file_path`-derived values (save path, core, displayed filename) stay stable — the same bake-time
-path-override layering the `-e` core override uses.
+a start is asked with (`domain/rom_files.py::asked_path`), and `file_path`-derived values (save path, core, displayed
+filename) stay stable.
 
 ### Folder-boot launch target
 
@@ -703,19 +655,6 @@ RPCS3 look only at the folder and find nothing to boot one level above the game 
 its only entry, so nothing beside it is deleted or left outside the install. An older install is renamed and lifted once
 at start-up (D27, D39; see [Launch-target validation](backend-architecture.md#launch-target-validation)).
 
-### The same three bake sites — disc path composes with the core
-
-The three sites that re-bake the core override re-bake the disc path through this seam, and the two compose: the disc
-resolver yields the **path**, `ActiveCoreResolver` yields the **`EmulatorInvocation`**, and
-`resolve_emulator_invocation(rom, emulator)` + `build_launch_options(invocation, disc_path)` fold them into one command
-— a per-game core (or standalone emulator) and a pinned disc on the same shortcut coexist.
-
-| Bake site                                                                        | How it resolves the disc path                                                             |
-| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `ShortcutLaunchResolver` (`do_scan_installed_paths` / `do_read_installed_paths`) | each installed ROM through `resolve_for_install` → `{rom_id: bake_path}` for the bake     |
-| `RomInstallRecorder.do_resolve_launch_bake`                                      | the freshly-installed ROM through `resolve_for_install` → re-applies the pin on reinstall |
-| `MigrationService._build_relaunch_items`                                         | each relocated ROM through `resolve_for_install` against the moved install directory      |
-
 ### The picker use cases
 
 Two service methods on `DiscService` (`backend/services/disc.py`) drive the inline `DiscSelector` dropdown on the game
@@ -728,11 +667,10 @@ detail page:
   is refused with `not_found` and **nothing is written**; a folder with fewer than two discs is refused with
   `unsupported`; a not-installed or single-file ROM with `not_installed`. Each refusal is raised, and the endpoint
   answers it in the canonical `{success: false, reason, message}` shape. On success it persists the pick via the
-  pin-only `set_selected_disc` write path, bakes the new disc path **folded over the ROM's full active core**, and
-  returns the fresh `launch_options` + the now-effective `selected` for the frontend to confirm-set on the live
-  shortcut. So the picker's selection and the baked launch command cannot diverge.
+  pin-only `set_selected_disc` write path and returns the now-effective `selected`. Every start asks with the pin, so
+  the picker's selection and the disc a start opens cannot diverge.
 
-## Set, clear, and the confirm-before-toast flow
+## Set and clear
 
 ### Per-game (`CoreService`)
 
@@ -740,28 +678,15 @@ The frontend CPU-button menu on the game detail page drives two backend endpoint
 
 - **`set_game_core(rom_id, label)`** checks the LABEL **first** against the ROM platform's classified command list. A
   label the list does not carry, or one whose emulator the resolver states not installed, is refused with
-  `core_unavailable` and **nothing is written**; an entry Tender cannot bake is pinned like any other, and its start is
-  then refused at Play (D7, D23). On success it `pin`s the override, then re-bakes and returns the new `launch_options`
-  (the `-e` override form, or the empty command for an entry Tender cannot bake, D43) + the bound `app_id` for an
-  installed ROM.
+  `core_unavailable` and **nothing is written**; an entry the resolver gives no complete command for is pinned like any
+  other, and its start is then refused at Play. On success it `pin`s the override.
 - **`clear_game_core(rom_id)`** (triggered by picking the **default-marked core** in the menu) `clear`s the override to
-  `NULL`, then re-resolves the ROM's **full active core** through `ActiveCoreResolver` and bakes _that_ — the
-  per-platform core or the default, in `-e` form, **not** an unconditional plain launch. Because Tender always bakes
-  `-e`, "follow the default" still means baking a concrete core, or the empty command for a default Tender cannot bake
-  or none established; the plain launch appears only where the system lists no entry, no system is found, or the
-  catalogue cannot be read. There is no separate "Reset" item — selecting the default-marked entry is the clear path;
-  any other entry pins that core.
+  `NULL`, so the ROM follows the per-platform core or the default from its next start. There is no separate "Reset" item
+  — selecting the default-marked entry is the clear path; any other entry pins that core.
 
 Both refuse a ROM Tender does not track with `not_found`; a pin also refuses with `not_found` when the ROM is retired
-while its label is resolved, and with `core_unavailable` when its platform changed meanwhile.
-
-For an installed + bound ROM the response carries `launch_options` + `app_id`; the frontend then **awaits
-`setLaunchOptionsConfirmed`** (the fire-then-poll `AppDetails` confirm from
-[ADR-0009](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0009-launcher-pure-exec-wrapper-baked-launch-options.md))
-**before toasting success**. If the confirm fails, a distinct "Core saved — restart Steam to apply" toast shows and the
-**DB row is kept** — the next migration/re-sync re-bakes from the pin. An uninstalled or unbound ROM has no live
-shortcut to update: the pin still lands, `launch_options`/`app_id` come back `None`, and the override applies on the
-next download/sync.
+while its label is resolved, and with `core_unavailable` when its platform changed meanwhile. Both answer
+`{success: true}` and write nothing to the shortcut, so the panel toasts success once the backend has answered.
 
 ### Per-platform (`CoreService.set_system_core`)
 
@@ -773,26 +698,18 @@ so every entry renders and is chosen as on a game's page (#1210) — calls
    under the slug (a platform no source answers for refuses with `core_unavailable` and writes nothing), or popping the
    slug when the label is empty (revert to the default) — and persists `settings.json` through the injected
    `SettingsPersister`.
-2. It then **fans out a re-bake**: it iterates every ROM on the platform and, for each that is **installed and
-   shortcut-bound** but does **not** carry a per-game `emulator_override` (the pin wins over the platform default),
-   resolves the ROM's full active core and appends `{app_id, launch_options}` to a `rebake_items` list. ROMs with a
-   per-game pin, uninstalled ROMs, and unbound ROMs are skipped — they have nothing live to rewrite, or their pin
-   already wins.
-3. It returns `{success: true, rebake_items}`. A `settings.json` that cannot be written gives the previous choice back
-   to the live settings, so memory and file agree, and refuses with `save_failed` ("Save failed: …"). Any other failure
-   in either step is a transport error, and one in the fan-out after step 1 leaves the new choice stored and in effect
-   while no shortcut is re-baked: the frontend re-bakes only on success. The write checks no BIOS, so a firmware read
-   cannot add a second way to report a stored switch as failed. The platform detail re-reads the platform once the
-   re-bake is done, and that read answers for the new core's firmware.
+2. It returns `{success: true}`. A `settings.json` that cannot be written gives the previous choice back to the live
+   settings, so memory and file agree, and refuses with `save_failed` ("Save failed: …"). The write checks no BIOS, so a
+   firmware read cannot add a second way to report a stored switch as failed. The platform detail re-reads the platform
+   once the switch is done, and that read answers for the new core's firmware.
 
 `platform_cores` has one more writer: the firmware listing's refiling (`services/firmware/refiling.py`) moves an
 override stored under a server folder name, before a firmware file's platform came from RomM's `platform_id`, to its
 platform's slug, in the same live dict, and gives the move back when `settings.json` cannot be written.
 
-The frontend confirm-sets each `rebake_items` entry on its live Steam shortcut the same way the per-game flow does, so a
-per-platform core change applies **immediately** to every installed game on the platform — no sync required. Because the
-`PlatformCoreReaderAdapter` holds the live settings dict, the fan-out resolves the value just written rather than a
-stale snapshot.
+A per-platform core change applies from the next start of every game on the platform that has no per-game pin — no sync
+and no Steam write required. Because the `PlatformCoreReaderAdapter` holds the live settings dict, the next start
+resolves the value just written rather than a stale snapshot.
 
 The Library page's platform detail reads its core through **`get_system_core_info(platform_slug)`**, a read of its own
 rather than a slice of another payload: `get_platform_core_info` is keyed by ROM and layers that ROM's own pin on top,
@@ -840,28 +757,18 @@ second answer to "which emulator is this".
 `active_core_for_rom`'s `(core_so, label)` is therefore **not** what a payload sends: it answers `None` for a standalone
 pick, which is the degradation this swap removed.
 
-## Why Tender always bakes the core, never the gamelist
+## Why a start never goes through the gamelist
 
 ES-DE stores core choices in `gamelist.xml` — a per-game `<altemulator>` element and a system-level
-`<alternativeEmulator>`. Tender does **not** use that file for its own launches at all (it neither reads nor writes it),
-for reasons grounded in on-device testing:
-
-1. **RetroDECK's gamelist lookup is metacharacter-fragile.** When Tender's Steam shortcut launches a ROM with a plain
-   `flatpak run` command, RetroDECK's `run_game.sh` matches the ROM path against the gamelist using an **awk `~`
-   regex**. Any regex metacharacter in the filename (`(USA)`, `(Disc 1)`, `[!]`, …) breaks the match, and the per-game
-   `<altemulator>` is silently dropped. This is upstream bug
-   [#210](https://github.com/danielcopper/romm-tender/issues/210) /
-   [RetroDECK#1358](https://github.com/RetroDECK/RetroDECK/issues/1358). (ES-DE's _own_ UI resolves `<altemulator>`
-   itself and bypasses the awk — which is why a core choice can look like it works when launched from ES-DE but not from
-   Tender's shortcut.)
-2. **`-e` bypasses the lookup.** RetroDECK's `-e` flag sets the emulator invocation directly and skips the gamelist awk
-   block, so the baked core applies regardless of filename. Tender bakes the resolved core into `-e` for **every**
-   installed ROM and is no longer coupled to either the awk bug or ES-DE's folder-collapse display quirks.
-3. **A plain launch re-couples Tender to ES-DE.** A non-`-e` launch lets RetroDECK consult the gamelist itself, so a
-   core a user set inside ES-DE's UI would silently affect Tender's launch — diverging from the BIOS badge, the per-core
-   save path, and the core-change warning that all follow Tender's resolver. Baking `-e` for every ROM
-   ([ADR-0012](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0012-plugin-owns-core-selection-always-e-no-gamelist.md))
-   closes that path: Tender owns core selection end to end, and an ES-DE-set core never reaches a launch Tender bakes.
+`<alternativeEmulator>`. Tender does **not** use that file for its own launches at all (it neither reads nor writes it).
+Every start runs the command the resolver states for the entry Tender chose, so a core a user set inside ES-DE's UI
+never reaches a start Tender makes, and the BIOS badge, the per-core save path and the core-change warning all follow
+the same choice the start does
+([ADR-0012](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0012-plugin-owns-core-selection-always-e-no-gamelist.md),
+as amended). Before, the command went through RetroDECK's `run_game.sh` with `-e`, which skipped the script's gamelist
+lookup; that lookup matched the ROM path with an awk regex that any metacharacter in a file name broke
+([#210](https://github.com/danielcopper/romm-tender/issues/210) /
+[RetroDECK#1358](https://github.com/RetroDECK/RetroDECK/issues/1358)). A start no longer runs that script at all.
 
 Tender reads what the gamelist states only through the resolver, to show it: the entry the user chose in ES-DE is marked
 beside Tender's own choice ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D7) and never decides a
@@ -882,27 +789,13 @@ multi-root-XML parse failures and folder-collapse ambiguity that the model in wh
 chosen to avoid. Re-apply any per-platform core once through the platform detail's Change core button and it sticks from
 then on.
 
-### A frozen default needs a Force Full Sync
+## What starts is the resolver's command
 
-Because the default is baked literally into every shortcut, a RetroDECK update that ships a **new default core for a
-platform** does **not** take effect on a normal sync — a normal sync skips platforms whose ROM set is unchanged, so the
-previously-baked default survives. A **Force Full Sync** re-bakes every shortcut and picks up the new default. A core
-the user sets through Tender (per-game pin or per-platform picker) re-bakes immediately, so only an externally-changed
-RetroDECK default carries this caveat.
-
-## RetroDECK is the V1 target
-
-The `-e` flag and the `%EMULATOR_RETROARCH%` / `%ROM%` placeholders are **RetroDECK-adapter concerns**, isolated at the
-single seam `resolve_emulator_invocation`; the core path is written into a core entry's command before that, when the
-option becomes an invocation (`domain/emulator_commands.py::_with_core_path`, from `option_to_invocation`). RetroDECK is
-the supported launcher for V1 — this is the correct V1 shape, not a placeholder. The per-ROM **selection** (which
-emulator does this ROM resolve to?) is a service-layer read; the seam only **renders** the chosen `EmulatorInvocation`
-into a command string. Standalone-emulator support ([#129](https://github.com/danielcopper/romm-tender/issues/129)) is
-the first half of the multi-emulator lift: a standalone emulator is still launched **through RetroDECK's `-e`**, so the
-RetroDECK flatpak invocation remains the single seam — every `-e` payload is the entry's ES-DE command, a core entry's
-with its core path written in. The remaining lift ([#918](https://github.com/danielcopper/romm-tender/issues/918)) — a
-non-RetroDECK launcher behind a `Frontend`-style port — is net-new work and is not built until a second launcher is
-concrete.
+What a start runs — the program, its arguments, its environment and the folder it starts in — is the resolver's answer
+for the entry, read in `adapters/atlas_launch.py`; Tender adds only the sandbox grants and the RetroDECK distribution
+environment the resolver states. The per-ROM **selection** (which entry does this ROM start with?) is a service-layer
+read. A launcher other than RetroDECK's ([#918](https://github.com/danielcopper/romm-tender/issues/918)) is one the
+resolver answers for, not a second seam in Tender.
 
 The **core picker now lists standalone emulators alongside libretro cores** (#1210 / ADR-0020) — you _can_ choose
 standalone PCSX2 vs the LRPS2 libretro core in the UI, at both per-game and per-platform scope. **BIOS** is no longer
@@ -917,7 +810,8 @@ standalone system is still its own effort.
 - [Backend Architecture](backend-architecture.md) — service/adapter layering, dependency diagram
 - [Config Source Parsers](config-source-parsers.md) — one-parser-per-source principle; how the live `es_systems.xml` is
   read as the sole core/emulator source (the gamelist and the bundled `core_defaults.json` are no longer read)
-- [Steam Non-Steam Shortcuts](steam-non-steam-shortcuts.md) — AddShortcut API, `launch_options`, app-id derivation
+- [Steam Non-Steam Shortcuts](steam-non-steam-shortcuts.md) — AddShortcut API, launch options (the appId), app-id
+  derivation
 - [Database Design](database-design.md) — the `Rom` aggregate and the `roms` table (incl. `selected_disc`)
 - [BIOS and Emulator Cores](../user-guide/bios-management.md) — the user-facing core-selection guide
 - [Managing Games](../user-guide/managing-games.md#picking-a-disc-for-multi-disc-games) — the user-facing disc picker

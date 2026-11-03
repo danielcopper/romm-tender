@@ -74,4 +74,4 @@ async def test_remove_platform_shortcuts_normal_shape_at_idle(harness):
 async def test_uninstall_all_roms_partial_success_shape_at_idle(harness):
     """IDLE: the endpoint answers its partial-success shape (nothing installed)."""
     result = await harness.endpoints.uninstall_all_roms()
-    assert result == {"success": True, "removed_count": 0, "errors": [], "app_ids": []}
+    assert result == {"success": True, "removed_count": 0, "errors": []}

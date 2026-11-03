@@ -803,9 +803,9 @@ open the page. If the drive or folder comes back, the game is playable again as 
 - **Download again** is an ordinary download of the game, to where every download goes. Until it completes, the game
   stays as it was; a cancelled or failed download leaves it showing **File missing** again.
 - **Forget this download** asks first, naming the game and the path its file was downloaded to. Confirmed, it is an
-  uninstall without the deletion: the game becomes not downloaded and its shortcut's launch command is cleared, as after
-  an uninstall, and no file is touched. It is refused while the file or folder is in fact there: the drive or folder
-  came back, and the page offers **Play** again at once.
+  uninstall without the deletion: the game becomes not downloaded, as after an uninstall, and no file is touched. It is
+  refused while the file or folder is in fact there: the drive or folder came back, and the page offers **Play** again
+  at once.
 
 If RomM has [no file](#downloading-roms) for the game either, there is nothing to download again: the button reads _"No
 file on RomM"_ and is greyed out, and so is **Download again** in the menu. **File missing** and the path stay, as they
@@ -949,17 +949,19 @@ everything already in flight, so a batch of downloads won't overcommit the SD ca
 
 ## Launching Games
 
-Select any installed game in the Steam Library and press **Play**. The full launch command is baked into the Steam
-shortcut when the game is synced or downloaded, so launching just runs that command:
+Select any installed game in the Steam Library and press **Play**. At every start Tender asks which command starts the
+game and hands it to the shortcut for that one start:
 
-1. The shortcut launches RetroDECK with the correct ROM path
-2. RetroDECK auto-detects the system from the ROM's directory path and uses the appropriate emulator
-3. If you picked a [per-game core](bios-management.md#per-game-game-detail-page), the chosen core is baked into the
-   command and used directly
-4. For a multi-disc game, the [disc you picked](#picking-a-disc-for-multi-disc-games) is the one that launches
+1. The emulator is the one in effect for the game — the [per-game core](bios-management.md#per-game-game-detail-page)
+   you picked, else the platform's, else the default
+2. The command is the one RetroDECK's ES-DE runs for that emulator, started directly rather than through RetroDECK's own
+   start script
+3. For a multi-disc game, the [disc you picked](#picking-a-disc-for-multi-disc-games) is the one that launches
 
-If the ROM is not downloaded, pressing Play won't launch a game — download it first from the game's detail panel; the
-shortcut's command is filled in automatically when the download completes.
+Because of that, a game starts only while Tender is running: with Tender stopped, Play on a RomM shortcut starts
+nothing. If the ROM is not downloaded, pressing Play won't launch a game either — download it first from the game's
+detail panel. Where Tender cannot start the emulator in effect yet, the game page and the emulator menu say why, and
+Play says it too ([Play says "Couldn't start the game"](troubleshooting.md#play-says-couldnt-start-the-game)).
 
 If RetroDECK is switched off in **Settings › Emulator sources**, pressing Play won't launch a game either — on the
 game's detail panel or in Steam's own library — and a notification says why; switch RetroDECK on again to play (see

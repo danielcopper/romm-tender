@@ -19,8 +19,6 @@ import {
   startDownload,
 } from "../api/backend";
 import { detach } from "./detach";
-import { capturePruneLeaseAdmission, withPruneLease } from "./pruneLease";
-import { setLaunchOptionsConfirmed } from "./steamShortcuts";
 import { showToast } from "./toast";
 import {
   ADOPT_REFUSED_TOAST,
@@ -111,8 +109,6 @@ export interface DownloadWithAdoption {
    * when its search finds nothing.
    */
   pageSawCandidate: boolean;
-  /** The prune-lease owner the caller mounted; the adopt's Steam write is held under it. */
-  leaseOwner: string;
   /** Prefix for this flow's debug log lines. */
   logContext: string;
   dialogs: AdoptionDialogs;
@@ -294,7 +290,6 @@ async function adopt(
 ): Promise<AdoptionOutcome> {
   const { romId, dialogs, hooks } = flow;
   hooks.setBusy(true);
-  const admission = capturePruneLeaseAdmission(flow.leaseOwner);
   try {
     const result = await adoptExistingRom(romId, candidatePath ?? null, collisionChoice);
     if (isRenameCollisions(result)) {
@@ -307,20 +302,6 @@ async function adopt(
     if (!result.success) {
       showToast(result.message || ADOPT_REFUSED_TOAST);
       return "failed";
-    }
-    const adoptedAppId = result.app_id;
-    if (adoptedAppId != null && result.launch_options !== undefined) {
-      const launchOptions = result.launch_options;
-      await withPruneLease(
-        result.prune_lease_token,
-        "ROM adopt",
-        async (signal) => {
-          if (signal.aborted) return;
-          await setLaunchOptionsConfirmed(adoptedAppId, launchOptions).catch(() => false);
-        },
-        flow.leaseOwner,
-        admission,
-      );
     }
     hooks.setTargetOccupied(false);
     hooks.setCandidatePresent(false);

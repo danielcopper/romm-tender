@@ -5,8 +5,7 @@ apply's units would, and stages the answer in the state box for
 :meth:`SyncOrchestrator.sync_apply_delta` to admit an apply against. It claims
 and releases the run slot itself, through the box's verbs, so a preview and a
 run are never in flight at once. It writes nothing to the database: what it
-knows comes from the fetchers, the :class:`ShortcutLaunchResolver` and
-:class:`LocalLibraryReader`.
+knows comes from the fetchers and the :class:`LocalLibraryReader`.
 """
 
 from __future__ import annotations
@@ -53,7 +52,6 @@ if TYPE_CHECKING:
     from services.library.fetcher import LibraryFetcher
     from services.library.local_library_reader import LocalLibraryReader
     from services.library.session_budget import SessionBudgetMonitor
-    from services.library.shortcut_launch_resolver import ShortcutLaunchResolver
     from services.library.sync_progress import SyncProgress
     from services.protocols import Clock, RunningRomIdsFn, ShortcutArtworkJob, UuidGen
 
@@ -67,8 +65,7 @@ class SyncPreviewConfig:
     snapshot and its deadline are stamped by, the shared
     :class:`LibrarySyncStateBox`, the :class:`LibraryFetcher` and
     :class:`CollectionFetcher` peers every unit is fetched through, the
-    :class:`ShortcutLaunchResolver` that answers each bake's installed path and
-    emulator, the :class:`LocalLibraryReader` every question about this
+    :class:`LocalLibraryReader` every question about this
     device's own record of the library goes to, the :class:`SessionBudgetMonitor`
     the post-preview prognosis is asked of, the :class:`CoverPreparer` that
     counts the cover-only work, the :class:`SyncProgress` the preview's frames go
@@ -86,7 +83,6 @@ class SyncPreviewConfig:
     sync_state_box: LibrarySyncStateBox
     fetcher: LibraryFetcher
     collection_fetcher: CollectionFetcher
-    shortcut_launch_resolver: ShortcutLaunchResolver
     local_library_reader: LocalLibraryReader
     session_budget: SessionBudgetMonitor
     cover_preparer: CoverPreparer
@@ -106,7 +102,6 @@ class SyncPreview:
         self._sync_state = config.sync_state_box
         self._fetcher = config.fetcher
         self._collection_fetcher = config.collection_fetcher
-        self._shortcut_launch_resolver = config.shortcut_launch_resolver
         self._local_library_reader = config.local_library_reader
         self._session_budget = config.session_budget
         self._cover_preparer = config.cover_preparer
@@ -169,12 +164,8 @@ class SyncPreview:
                     progress_total_steps=total_units,
                 )
 
-            sources = await self._loop.run_in_executor(None, self._shortcut_launch_resolver.do_read_sources)
-            installed_paths = await self._loop.run_in_executor(
-                None, self._shortcut_launch_resolver.do_scan_installed_paths, sources
-            )
-            core_overrides = await self._loop.run_in_executor(
-                None, self._shortcut_launch_resolver.do_build_core_overrides, all_roms, sources
+            installed = await self._loop.run_in_executor(
+                None, self._local_library_reader.do_read_every_installed_rom_id
             )
             platform_name_set = {u.name for u in work_queue if u.type == "platform"}
             slug_to_name = {u.slug: u.name for u in work_queue if u.type == "platform" and u.slug}
@@ -204,7 +195,7 @@ class SyncPreview:
             )
             registry = with_followed_keys(registry, followed_keys)
             resident_keys.update(followed_keys)
-            shortcuts_data = build_shortcuts_data(all_roms, self._launcher_exe, installed_paths, core_overrides)
+            shortcuts_data = build_shortcuts_data(all_roms, self._launcher_exe)
             # Enabled platforms whose skip only a fresh stamp can restore: no
             # stamp (#1416 — a late-ack-recovered platform is complete but
             # unstamped), or a full fetch here whose answer the stamp does not
@@ -241,7 +232,7 @@ class SyncPreview:
                 for binding in await converge_unless_running(
                     [sd for sd in shortcuts_data if sd["rom_id"] in listed_ids],
                     registry,
-                    set(installed_paths),
+                    installed,
                     platform_slugs=set(full_fetched_platforms),
                     preferred_region=preferred_region,
                     running_rom_ids=self._running_rom_ids,
@@ -272,7 +263,7 @@ class SyncPreview:
                 lambda entries: collapse_sibling_groups(
                     entries,
                     registry,
-                    set(installed_paths),
+                    installed,
                     complete_group_view=whole_groups,
                     preferred_region=preferred_region,
                     converged=converged_ids,

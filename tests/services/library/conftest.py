@@ -15,8 +15,6 @@ from unittest.mock import MagicMock
 import pytest
 from _factories import _make_conflict_rules, _make_prune_conflicts
 from fakes.fake_core_info_provider import FakeCoreInfoProvider
-from fakes.fake_disc_resolver import FakeDiscResolver
-from fakes.fake_emulator_sources import FakeEmulatorSources
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_platform_systems import FakePlatformSystems
 from fakes.fake_renderer_gc import FakeRendererGc
@@ -41,7 +39,6 @@ from services.library import (
     LibraryService,
     LocalLibraryReader,
     RunFinalizer,
-    ShortcutLaunchResolver,
     SyncRunRecorder,
     UnitApplier,
 )
@@ -62,7 +59,6 @@ class LibraryHarness:
     sync: LibraryService
     local_library_reader: LocalLibraryReader
     collection_fetcher: CollectionFetcher
-    shortcut_launch_resolver: ShortcutLaunchResolver
     run_finalizer: RunFinalizer
     chunk_dispatcher: ChunkDispatcher
     cover_preparer: CoverPreparer
@@ -82,7 +78,6 @@ class LibraryHarness:
     renderer_gc: FakeRendererGc
     prune_conflicts: PruneConflicts
     settings: dict[str, Any]
-    emulator_sources: FakeEmulatorSources
     artwork_job: FakeShortcutArtworkJob
     running_games: FakeRunningRomIds
 
@@ -185,7 +180,6 @@ async def make_library(tmp_path, emit, logger, home) -> MakeLibrary:
         # to drive a pause.
         rss = FakeRendererRss() if renderer_rss is None else renderer_rss
         renderer_gc = FakeRendererGc()
-        emulator_sources = FakeEmulatorSources()
         artwork_job = FakeShortcutArtworkJob()
         running_games = FakeRunningRomIds()
 
@@ -205,9 +199,6 @@ async def make_library(tmp_path, emit, logger, home) -> MakeLibrary:
                 log_debug=lambda msg: None,
                 artwork=artwork_service if artwork is None else artwork,
                 uow_factory=FakeUnitOfWorkFactory(uow=uow),
-                active_core=active_core,
-                disc_resolver=FakeDiscResolver(),
-                emulator_sources=emulator_sources,
                 renderer_rss=rss,
                 renderer_gc=renderer_gc,
                 conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
@@ -232,7 +223,6 @@ async def make_library(tmp_path, emit, logger, home) -> MakeLibrary:
             sync=parts.service,
             local_library_reader=parts.local_library_reader,
             collection_fetcher=parts.collection_fetcher,
-            shortcut_launch_resolver=parts.shortcut_launch_resolver,
             run_finalizer=parts.run_finalizer,
             chunk_dispatcher=parts.chunk_dispatcher,
             cover_preparer=parts.cover_preparer,
@@ -252,7 +242,6 @@ async def make_library(tmp_path, emit, logger, home) -> MakeLibrary:
             renderer_gc=renderer_gc,
             prune_conflicts=prune_conflicts,
             settings=settings,
-            emulator_sources=emulator_sources,
             artwork_job=artwork_job,
             running_games=running_games,
         )

@@ -201,13 +201,23 @@ class LocalLibraryReader:
     def do_read_installed_rom_ids(self, rom_ids: Collection[int]) -> set[int]:
         """The ids among *rom_ids* holding an install record, by point lookups in one short read UoW.
 
-        The apply reads the installs of the ROMs it fetched with their launch
-        paths; this answers the bound rows its fetch left out, which the
-        convergence (``domain.sync_diff.converge_bound_groups``) ranks by their
-        install as well.
+        The apply asks it for the ROMs it fetched and for the bound rows its
+        fetch left out: the collapse and the convergence
+        (``domain.sync_diff.converge_bound_groups``) rank a group's members by
+        their install. Point lookups, because scanning every install once per
+        unit is O(units * all installs) (#797).
         """
         with self._uow_factory() as uow:
             return {rom_id for rom_id in rom_ids if uow.rom_installs.get(rom_id) is not None}
+
+    def do_read_every_installed_rom_id(self) -> set[int]:
+        """The id of every ROM holding an install record, in one scan in one short read UoW.
+
+        The preview builds one shortcut set over the whole library, so one scan
+        answers it more cheaply than a point lookup per ROM.
+        """
+        with self._uow_factory() as uow:
+            return {install.rom_id for install in uow.rom_installs.iter_all()}
 
     def do_read_stored_rows(self, rom_ids: Collection[int]) -> dict[int, Rom]:
         """The stored ``roms`` row of each of *rom_ids* that has one, by point lookups in one short read UoW.

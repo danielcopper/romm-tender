@@ -7,8 +7,6 @@ install through, so these cases hold for both.
 import logging
 
 import pytest
-from fakes.fake_active_core_resolver import FakeActiveCoreResolver
-from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock
 
@@ -39,8 +37,6 @@ class _Harness:
             config=RomInstallRecorderConfig(
                 clock=FakeClock(),
                 uow_factory=FakeUnitOfWorkFactory(self._uow),
-                active_core=FakeActiveCoreResolver(default=(None, None)),
-                disc_resolver=FakeDiscResolver(),
             ),
         )
 
@@ -53,8 +49,7 @@ def harness():
 class TestEveryInstallIsRecordedAndBaked:
     """Whether a file starts is asked when the game's page reads it, never here (#2195 D26, D28).
 
-    So every install is recorded with its files, and gets its launch command,
-    whatever its format.
+    So every install is recorded with its files, whatever its format.
     """
 
     def _record(self, harness, *, file_path, rom_dir, system, cleanup=lambda: None):
@@ -68,7 +63,7 @@ class TestEveryInstallIsRecordedAndBaked:
             cleanup=cleanup,
         )
 
-    def test_a_ps3_pkg_is_recorded_with_its_files_and_gets_a_launch_command(self, harness):
+    def test_a_ps3_pkg_is_recorded_with_its_files(self, harness):
         cleanup_calls = []
 
         file_path, error = self._record(
@@ -78,9 +73,6 @@ class TestEveryInstallIsRecordedAndBaked:
             system="ps3",
             cleanup=lambda: cleanup_calls.append(1),
         )
-        _app_id, launch_options = harness._install_recorder.do_resolve_launch_bake(
-            42, {"platform_slug": "ps3"}, "/roms/ps3/Puppeteer/Puppeteer.pkg"
-        )
 
         assert error is None
         assert file_path == "/roms/ps3/Puppeteer/Puppeteer.pkg"
@@ -88,7 +80,6 @@ class TestEveryInstallIsRecordedAndBaked:
         install = harness._uow.rom_installs.get(42)
         assert install is not None
         assert install.rom_dir == "/roms/ps3/Puppeteer"
-        assert "'/roms/ps3/Puppeteer/Puppeteer.pkg'" in launch_options
 
     def test_a_ps3_folder_bakes_its_directory_end_to_end(self, harness):
         # Recorded, then resolved through the real DiscLaunchResolver the bake

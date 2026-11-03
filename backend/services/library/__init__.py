@@ -6,9 +6,8 @@ post-apply reporting and the ``roms``-derived queries. Its parts — the library
 sync sub-services (:class:`LibraryFetcher`, :class:`CollectionFetcher`,
 :class:`SyncOrchestrator`, :class:`UnitApplier`, :class:`SyncPreview`,
 :class:`SyncProgress`, :class:`SyncReporter`, :class:`RunFinalizer`,
-:class:`SessionBudgetMonitor`, :class:`ShortcutLaunchResolver`,
-:class:`ChunkDispatcher`, :class:`CoverPreparer`, :class:`SyncRunRecorder`,
-:class:`LocalLibraryReader`, :class:`LibraryViews`) over a shared
+:class:`SessionBudgetMonitor`, :class:`ChunkDispatcher`, :class:`CoverPreparer`,
+:class:`SyncRunRecorder`, :class:`LocalLibraryReader`, :class:`LibraryViews`) over a shared
 :class:`LibrarySyncStateBox` — are built only by the composition root, from
 the re-exports below, and handed to the parts that hold them. RomM
 communication goes through Protocol-typed adapters.
@@ -24,7 +23,6 @@ from services.library.reporter import SyncReporter, SyncReporterConfig
 from services.library.run_finalizer import RunFinalizer, RunFinalizerConfig
 from services.library.service import LibraryService, LibraryServiceConfig
 from services.library.session_budget import SessionBudgetMonitor, SessionBudgetMonitorConfig
-from services.library.shortcut_launch_resolver import ShortcutLaunchResolver, ShortcutLaunchResolverConfig
 from services.library.sync_orchestrator import SyncOrchestrator, SyncOrchestratorConfig
 from services.library.sync_preview import SyncPreview, SyncPreviewConfig
 from services.library.sync_progress import SyncProgress, SyncProgressConfig
@@ -52,8 +50,6 @@ __all__ = [
     "RunFinalizerConfig",
     "SessionBudgetMonitor",
     "SessionBudgetMonitorConfig",
-    "ShortcutLaunchResolver",
-    "ShortcutLaunchResolverConfig",
     "SyncOrchestrator",
     "SyncOrchestratorConfig",
     "SyncPreview",

@@ -90,7 +90,7 @@ _CLAIMS_NAMED_BY_A_REASON: Mapping[str, WaitReason] = MappingProxyType(
             ("start_sync", "sync_preview", "sync_apply_delta", "report_unit_results", "sync_complete", "sync_stale"),
             WaitReason.LIBRARY_SYNC,
         ),
-        **dict.fromkeys(("start_download", "resume_download", "download_complete"), WaitReason.ROM_DOWNLOADS),
+        **dict.fromkeys(("start_download", "resume_download"), WaitReason.ROM_DOWNLOADS),
         **dict.fromkeys(
             (
                 "pre_launch_sync",
@@ -108,7 +108,7 @@ _CLAIMS_NAMED_BY_A_REASON: Mapping[str, WaitReason] = MappingProxyType(
             ),
             WaitReason.SAVE_SYNC,
         ),
-        **dict.fromkeys(("migrate_retrodeck_files", "migration_relaunch_options"), WaitReason.RETRODECK_MIGRATION),
+        "migrate_retrodeck_files": WaitReason.RETRODECK_MIGRATION,
         **dict.fromkeys(
             (
                 # Removing games and their shortcuts, and the frontend's Steam
@@ -122,20 +122,15 @@ _CLAIMS_NAMED_BY_A_REASON: Mapping[str, WaitReason] = MappingProxyType(
                 "reconcile_shortcuts",
                 "report_removal_results",
                 "report_sync_removals",
-                "rom_uninstall",
-                "bulk_uninstall",
                 "shortcut_removal",
-                # A game's version, disc, core and adoption, and their launch
-                # commands in Steam.
+                # A game's version, disc, core and adoption, and the launch
+                # options of its shortcut in Steam.
                 "switch_version",
                 "version_switch",
                 "select_disc",
-                "disc_selection",
                 "set_system_core",
                 "set_game_core",
                 "clear_game_core",
-                "system_core",
-                "game_core",
                 "adopt_existing_rom",
                 "installed_reconcile",
                 "launch_reconfirm",
@@ -189,7 +184,7 @@ READ_ONLY_CLAIMS: frozenset[str] = frozenset(
         "fetch_cover_base64",
         "get_artwork_slot_candidates",
         "get_artwork_slots",
-        "get_installed_relaunch_options",
+        "get_bound_launch_options",
         "get_save_slots",
         "get_save_status",
         "get_sgdb_artwork_base64",

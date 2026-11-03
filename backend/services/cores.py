@@ -4,15 +4,14 @@ Owns Tender's two core-selection deviations: the per-platform core (the
 ``settings.json`` ``platform_cores`` map) and the per-game emulator override (the
 ``roms.emulator_override`` pin). Enumerating the cores available for a platform —
 by slug, or for a ROM with its per-game pin layered on top — toggling the
-per-platform default (with the fan-out that re-bakes every affected shortcut),
-and pinning/clearing a per-game core all live here.
+per-platform default and pinning/clearing a per-game core all live here.
 
 Neither selection is written to the retired ES-DE gamelist: the per-platform core
 lands in ``settings.json`` via the injected ``SettingsPersister`` and the per-game
-pin lands on the ``Rom`` aggregate via the Unit-of-Work. The launch command for an
-installed+bound ROM is recomputed from the shared ``ActiveCoreReader`` resolver so
-the read-path core never diverges from the launched core, and the frontend can
-confirm-set the freshly-baked ``launch_options`` on the live Steam shortcut.
+pin lands on the ``Rom`` aggregate via the Unit-of-Work. Neither touches a Steam
+shortcut: the shortcut carries its appId, and the start asks the shared
+``ActiveCoreReader`` for the entry in effect, so a changed selection takes effect
+at the next start.
 """
 
 from __future__ import annotations
@@ -32,7 +31,6 @@ from domain.emulator_choice import (
 from domain.emulator_commands import (
     NOT_INSTALLED,
     default_option,
-    label_to_invocation,
     option_for_label,
     options_to_payload,
     shipped_default,
@@ -40,11 +38,6 @@ from domain.emulator_commands import (
 from domain.emulator_pick import pick_for, platform_pick, platform_pick_value, source_kind
 from domain.platform_names import PLATFORM_NAMES_KEY, platform_display_name
 from domain.rom_files import asked_path
-from domain.shortcut_data import (
-    EmulatorInvocation,
-    build_launch_options,
-    resolve_emulator_invocation,
-)
 from lib.errors import Refused
 
 if TYPE_CHECKING:
@@ -75,10 +68,9 @@ class CoreServiceConfig:
     ``settings`` dict + its persister (where the per-platform core lands), the
     SQLite Unit-of-Work factory (to read the ROM + its install and write the
     per-game pin), the shared per-ROM active-core resolver (the menu's active
-    marker + the source of every re-baked launch command), and the shared
-    per-ROM disc resolver (so a re-baked launch command keeps the ROM's pinned
-    disc rather than reverting to disc 1 / the m3u), and the ``ConflictRules``
-    the three writes check at their entry and take their lease through.
+    marker), the shared per-ROM disc resolver (so a question about the start is
+    asked with the ROM's pinned disc), and the ``ConflictRules`` the three
+    writes check at their entry.
     Bundled here so the ctor stays within the S107 parameter budget.
     """
 
@@ -383,8 +375,8 @@ class CoreService:
             )
         return entries
 
-    def _set_system_core_io(self, platform_slug: str, core_label: str) -> list[dict[str, Any]]:
-        """Write the per-platform core selection and re-bake the affected shortcuts.
+    def _set_system_core_io(self, platform_slug: str, core_label: str) -> None:
+        """Write the per-platform core selection.
 
         Mutates ``settings["platform_cores"]`` — stores ``{label, source}`` under
         *platform_slug* when *core_label* is non-empty, ``source`` the kind of
@@ -392,38 +384,8 @@ class CoreService:
         blank (revert to the default) — and persists ``settings.json`` through
         the injected persister. A label with no source answering for the
         platform is refused with ``core_unavailable`` and nothing is written.
-        The persister holds the same live dict, so the fan-out that follows
-        resolves the freshly-written value.
-
-        Returns one ``{"app_id", "launch_options"}`` entry per installed+bound ROM
-        on the platform whose active core is the new per-platform selection. ROMs
-        with a per-game ``emulator_override`` are skipped (the pin wins over the
-        platform default), as are uninstalled or unbound ROMs (no live shortcut to
-        rewrite). Each entry's ``launch_options`` is the FULL active core baked by
-        the shared resolver — the ``-e`` override form, the empty command for an
-        entry Tender cannot bake or none in effect (#2195 D43), or the plain
-        launch where the system lists no entry, no system is found, or the
-        catalogue cannot be read — over the disc-resolved bake path,
-        so a multi-disc ROM keeps its persisted ``selected_disc`` rather than
-        reverting to disc 1 / the m3u (a single-disc ROM bakes its ``file_path``
-        unchanged).
         """
         self._store_platform_pick(platform_slug, core_label)
-        rebake_items: list[dict[str, Any]] = []
-        for rom, install in self._installed_rows_following_the_platform(platform_slug):
-            emulator = self._active_core.active_emulator_for_rom(rom.rom_id)
-            invocation = resolve_emulator_invocation({}, emulator)
-            # Fold the ROM's persisted disc pick over the install so a
-            # per-platform core change re-bakes the pinned disc, not disc 1 /
-            # the m3u. A single-disc ROM resolves to its own file_path.
-            bake_path = self._disc_resolver.resolve_for_install(install, rom.selected_disc)
-            rebake_items.append(
-                {
-                    "app_id": rom.shortcut_app_id,
-                    "launch_options": build_launch_options(invocation, bake_path),
-                }
-            )
-        return rebake_items
 
     def _store_platform_pick(self, platform_slug: str, core_label: str) -> None:
         """Store *core_label* as the platform's pick, or drop the pick when blank, and persist it.
@@ -449,49 +411,19 @@ class CoreService:
             self._logger.error(f"Failed to set system core: {e}")
             raise Refused("save_failed", f"Save failed: {e}") from e
 
-    def _installed_rows_following_the_platform(self, platform_slug: str) -> list[tuple[Rom, RomInstall]]:
-        """The installed, bound ROMs of *platform_slug* with no per-game pin, with their installs.
-
-        Read in one short UoW that is closed before any ROM's active core is
-        resolved: active_emulator_for_rom opens its own UoW, and the
-        per-connection BEGIN IMMEDIATE write lock is not re-entrant — resolving
-        inside the iteration UoW would block on the lock until busy_timeout then
-        raise "database is locked" (#1134). This read UoW performs no writes.
-        """
-        pending: list[tuple[Rom, RomInstall]] = []
-        with self._uow_factory() as uow:
-            for rom in uow.roms.iter_by_platform(platform_slug):
-                if rom.emulator_override is not None or rom.shortcut_app_id is None:
-                    continue
-                install = uow.rom_installs.get(rom.rom_id)
-                if install is not None:
-                    pending.append((rom, install))
-        return pending
-
     async def set_system_core(self, platform_slug: str, core_label: str) -> dict[str, Any]:
         """Set or clear the per-platform core selection for a platform.
 
         Empty ``core_label`` clears the selection (reverts to the es_systems
         default). On success the per-platform core is written to ``settings.json``
-        and every installed+bound ROM on the platform (minus per-game-overridden
-        ROMs) is re-baked: the response carries ``rebake_items`` (a list of
-        ``{"app_id", "launch_options"}``) the frontend confirm-sets on the live
-        Steam shortcuts, and a ``system_core`` lease in ``prune_lease_token``
-        for those writes when there is any to make. A settings file that cannot
-        be written refuses with ``save_failed`` and leaves the previous selection
-        in effect; a failure after the write keeps the new one.
+        and the answer is ``{"success": True}``; the next start of every game on
+        the platform that follows it asks with the new selection. A settings
+        file that cannot be written refuses with ``save_failed`` and leaves the
+        previous selection in effect.
         """
         async with self._rules.hold("set_system_core", update=True, migration=True, prune=True):
-            rebake_items = await self._loop.run_in_executor(
-                None,
-                self._set_system_core_io,
-                platform_slug,
-                core_label,
-            )
-            result: dict[str, Any] = {"success": True, "rebake_items": rebake_items}
-            if rebake_items:
-                result["prune_lease_token"] = await self._rules.acquire_lease("system_core")
-            return result
+            await self._loop.run_in_executor(None, self._set_system_core_io, platform_slug, core_label)
+            return {"success": True}
 
     async def set_game_core(self, rom_id: int, label: str) -> dict[str, Any]:
         """Pin the per-game emulator override for ``rom_id`` to *label*.
@@ -500,22 +432,14 @@ class CoreService:
         system lists, libretro OR standalone. A label the system does not list,
         one the resolver states not installed (#2195 D9), or one for which no
         emulator source answers is refused with ``core_unavailable`` and
-        **nothing is written**; an entry Tender cannot bake is pinned like any
-        other, and the game page then says Tender cannot start it (D23). An
-        unknown ROM is refused with ``not_found``. On success the pin is written
-        via the Unit-of-Work and the response carries the freshly-baked
-        ``launch_options`` (the ``-e`` override form for an entry Tender can
-        bake) and ``app_id`` for the frontend to confirm-set on the live
-        Steam shortcut. When the ROM is not installed or not bound to a shortcut
-        there is nothing to update live: the pin still lands and
-        ``launch_options``/``app_id`` are ``None`` (the override applies on the
-        next download). A live update carries a ``game_core`` lease in
-        ``prune_lease_token`` for the frontend's write.
+        **nothing is written**; an entry the resolver gives no complete start
+        command for is pinned like any other, and the game page then says Tender
+        cannot start it. An unknown ROM is refused with ``not_found``. On success
+        the pin is written via the Unit-of-Work and the answer is
+        ``{"success": True}``; the next start asks with it.
         """
         async with self._rules.hold("set_game_core", update=True, migration=True, prune=True):
-            result = await self._loop.run_in_executor(None, self._set_game_core_io, rom_id, label)
-            await self._lease_live_update(result)
-            return result
+            return await self._loop.run_in_executor(None, self._set_game_core_io, rom_id, label)
 
     def _set_game_core_io(self, rom_id: int, label: str) -> dict[str, Any]:
         with self._uow_factory() as uow:
@@ -535,8 +459,6 @@ class CoreService:
             # Refuse BEFORE any write — never persist a label the system does not
             # list, or one whose emulator the resolver states not installed.
             raise Refused("core_unavailable", f"Emulator '{label}' is not available for {platform_slug}")
-        # A listed entry Tender cannot bake has no invocation: its shortcut gets the empty command (#2195 D43).
-        invocation = label_to_invocation(options["options"], label) or EmulatorInvocation.nothing()
         with self._uow_factory() as uow:
             # The row is re-read because the label was resolved against a
             # snapshot: a background sync, a finishing download or the
@@ -563,40 +485,18 @@ class CoreService:
             # write path (never the sync UPSERT).
             rom.pin_emulator_override(label, source=source)
             uow.roms.set_emulator_override(rom_id, rom.emulator_override, rom.emulator_override_source)
-            install = uow.rom_installs.get(rom_id)
-        # Bake outside the committed write UoW, uniform with the clear path (the
-        # pinned override is the just-resolved emulator, so there is no resolver
-        # read and no commit-ordering subtlety here).
-        launch_options, app_id = self._launch_options_for(rom, install, invocation)
-        return {"success": True, "launch_options": launch_options, "app_id": app_id}
+        return {"success": True}
 
     async def clear_game_core(self, rom_id: int) -> dict[str, Any]:
         """Clear the per-game override for ``rom_id`` (Follow default / Reset).
 
         Drops the pin (stores SQL NULL) so the ROM follows the per-platform/system
-        default, then returns the recomputed ``launch_options`` and ``app_id`` for
-        an installed+bound ROM so the frontend confirm-sets the now-default launch
-        on the live shortcut. Because the resolved default may itself be a
-        per-platform core, the recomputed command bakes the ROM's FULL active core
-        (the ``-e`` override form, the empty command where the entry in effect is
-        one Tender cannot bake or none is in effect (#2195 D43), or the plain
-        launch where the system lists no entry, no system is found, or the
-        catalogue cannot be read) — never an unconditional plain launch. Clearing is
-        always valid — there is no label to resolve. An unknown ROM is refused
-        with ``not_found``; when it is uninstalled or unbound the NULL still
-        lands and ``launch_options``/``app_id`` are ``None``. A live update
-        carries a ``game_core`` lease in ``prune_lease_token`` for the frontend's
-        write.
+        default from its next start, and answers ``{"success": True}``. Clearing
+        is always valid — there is no label to resolve. An unknown ROM is
+        refused with ``not_found``.
         """
         async with self._rules.hold("clear_game_core", update=True, migration=True, prune=True):
-            result = await self._loop.run_in_executor(None, self._clear_game_core_io, rom_id)
-            await self._lease_live_update(result)
-            return result
-
-    async def _lease_live_update(self, result: dict[str, Any]) -> None:
-        """Put a ``game_core`` lease on a per-game write the frontend applies to a live shortcut."""
-        if result["launch_options"] is not None and result["app_id"] is not None:
-            result["prune_lease_token"] = await self._rules.acquire_lease("game_core")
+            return await self._loop.run_in_executor(None, self._clear_game_core_io, rom_id)
 
     def _clear_game_core_io(self, rom_id: int) -> dict[str, Any]:
         with self._uow_factory() as uow:
@@ -605,53 +505,7 @@ class CoreService:
                 raise Refused("not_found", f"ROM {rom_id} is not tracked")
             rom.clear_emulator_override()
             uow.roms.set_emulator_override(rom_id, rom.emulator_override, rom.emulator_override_source)
-            install = uow.rom_installs.get(rom_id)
-        # Cleared pin → follow the per-platform/system default. The write UoW has
-        # committed, so the resolver's own UoW now reads the landed NULL and
-        # returns the POST-clear core — a per-platform core (or standalone system
-        # default) still bakes its -e form. Resolving here (outside the closed
-        # UoW) is also what keeps active_emulator_for_rom's BEGIN IMMEDIATE from
-        # blocking on our write lock (#1047 / #1134). Skip the resolve entirely
-        # when there is no live shortcut to update.
-        if rom.shortcut_app_id is None or install is None:
-            return {"success": True, "launch_options": None, "app_id": None}
-        emulator = self._active_core.active_emulator_for_rom(rom_id)
-        launch_options, app_id = self._launch_options_for(rom, install, emulator)
-        return {"success": True, "launch_options": launch_options, "app_id": app_id}
-
-    def _launch_options_for(
-        self,
-        rom: Rom,
-        install: RomInstall | None,
-        emulator: EmulatorInvocation | None,
-    ) -> tuple[str | None, int | None]:
-        """Bake the launch command for *rom* with *emulator*, or ``(None, None)``.
-
-        Takes the ROM's ``RomInstall`` snapshot directly (``None`` when
-        uninstalled) so the bake runs with no open Unit of Work — the callers
-        snapshot the install inside their write UoW and close it before baking,
-        since the shared active-core resolver opens its own UoW and the
-        per-connection ``BEGIN IMMEDIATE`` write lock is not re-entrant.
-
-        An installed (``RomInstall`` with a ``file_path``) **and** bound
-        (``shortcut_app_id`` set) ROM gets the full launch command — the ``-e``
-        form for an emulator Tender can bake (libretro core or standalone), the
-        empty command for :meth:`EmulatorInvocation.nothing` (#2195 D43), the
-        plain form for ``None`` — over the disc-resolved bake path (the ROM's persisted
-        ``selected_disc`` for a multi-disc ROM, its ``file_path`` unchanged for a
-        single-disc ROM), paired with its Steam ``app_id``. An uninstalled or
-        unbound ROM has no live shortcut to update, so both are ``None`` and the
-        stored pin/clear applies on the next download/sync.
-        """
-        app_id = rom.shortcut_app_id
-        if app_id is None or install is None:
-            return (None, None)
-        invocation = resolve_emulator_invocation({}, emulator)
-        # Fold the ROM's persisted disc pick over the install so a per-game core
-        # pin/clear re-bakes the pinned disc, not disc 1 / the m3u. A single-disc
-        # ROM resolves to its own file_path.
-        bake_path = self._disc_resolver.resolve_for_install(install, rom.selected_disc)
-        return (build_launch_options(invocation, bake_path), app_id)
+        return {"success": True}
 
     def _platform_name(self, platform_slug: str | None) -> str:
         """The name the game page shows *platform_slug* under, which a launch answer's sentences name (#2195 D36)."""

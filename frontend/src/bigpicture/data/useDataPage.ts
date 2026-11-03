@@ -34,7 +34,6 @@ import type { DataInventory } from "../../types";
 import { clearAllRomMCollections } from "../../utils/collections";
 import { detach } from "../../utils/detach";
 import { formatUninstallStatus } from "../../utils/formatters";
-import { batchConfirmLaunchOptions } from "../../utils/launchOptionsReconcile";
 import {
   capturePruneLeaseAdmission,
   isPruneLeaseCancellation,
@@ -476,32 +475,14 @@ export function useDataPage(): DataPageState {
     await runRemoval("Uninstalling ROM files", async () => {
       try {
         setUninstallStatus("Uninstalling...");
-        const admission = capturePruneLeaseAdmission(DATA_PAGE_LEASE_OWNER);
         const result = await uninstallAllRoms();
-        if (!result.success && result.app_ids === undefined) {
+        if (!result.success && result.removed_count === undefined) {
           // A refusal by the update, migration, sync or prune rule carries no removal
-          // payload — surface its message before touching app_ids. A PARTIAL
-          // failure (success false WITH payload) still falls through to the
-          // launch-options reset + count display below.
+          // payload. A PARTIAL failure (success false WITH payload) still falls
+          // through to the count display below. The kept shortcuts are left as
+          // they are: their launch options are their appIds.
           setUninstallStatus(result.message ?? "Failed to uninstall ROMs");
         } else {
-          // Reset every kept shortcut's now-stale launch command to the uninstalled
-          // "" placeholder so a raced-past not_installed can't exec a stale
-          // `flatpak run … '<deleted path>'` into a deleted path. Batched to avoid
-          // serializing the per-shortcut confirm-poll timeouts; best-effort — a
-          // failed confirm is logged, not fatal.
-          await withPruneLease(
-            result.prune_lease_token,
-            "Bulk uninstall",
-            (signal) =>
-              batchConfirmLaunchOptions(
-                (result.app_ids ?? []).map((appId) => ({ app_id: appId, launch_options: "" })),
-                "uninstall-all",
-                signal,
-              ),
-            DATA_PAGE_LEASE_OWNER,
-            admission,
-          );
           setUninstallStatus(formatUninstallStatus(result.removed_count ?? 0, (result.errors ?? []).length));
           // The files are gone, so the figures the row carried are stale. Re-read
           // rather than subtract: a partial failure left some of them behind.

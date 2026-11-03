@@ -69,18 +69,6 @@ class TestScanSourceViolations:
         assert len(findings) == 1
         assert "active_core_for_rom" in findings[0]
 
-    def test_relaunch_resolver_seam_inside_uow_is_flagged(self):
-        findings = check.scan_source(
-            "class S:\n"
-            "    def go(self):\n"
-            "        with self._uow_factory() as uow:\n"
-            "            items = self._relaunch.installed_relaunch_items()\n"
-            "        return items\n",
-            "svc.py",
-        )
-        assert len(findings) == 1
-        assert "installed_relaunch_items" in findings[0]
-
     def test_a_platforms_system_asked_inside_uow_is_flagged(self):
         # PlatformSystems reads the kept ids in a UoW of its own, so a call
         # inside an open one re-enters the write lock.
@@ -109,18 +97,6 @@ class TestScanSourceViolations:
         )
         assert len(findings) == 1
         assert "rom_system" in findings[0]
-
-    def test_relaunch_item_for_rom_inside_uow_is_flagged(self):
-        findings = check.scan_source(
-            "class S:\n"
-            "    def go(self, rom_id):\n"
-            "        with self._uow_factory() as uow:\n"
-            "            item = self._relaunch.relaunch_item_for_rom(rom_id)\n"
-            "        return item\n",
-            "svc.py",
-        )
-        assert len(findings) == 1
-        assert "relaunch_item_for_rom" in findings[0]
 
     def test_nested_bare_factory_open_is_flagged(self):
         # The #1155 migration shape: a second ``with self._uow_factory()`` nested

@@ -492,9 +492,8 @@ This is a workaround for a Steam limitation
 ([ValveSoftware/steam-for-linux#8020](https://github.com/ValveSoftware/steam-for-linux/issues/8020)). It will be removed
 once Steam handles Wayland windows; that is tracked in [#2271](https://github.com/danielcopper/romm-tender/issues/2271).
 
-Shortcuts an earlier version of Tender made need nothing from you: Tender writes an installed game's launch command
-again when Tender's panel loads, after every sync, and just before the game starts, so an existing shortcut normally
-carries the new command by its next launch.
+Shortcuts an earlier version of Tender made need nothing from you: every start asks for the command afresh, so the next
+start of any game carries it.
 
 ### The controller acts as mouse and keyboard in a game in Desktop Mode
 

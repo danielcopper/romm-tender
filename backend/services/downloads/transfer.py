@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from services.downloads._state import DownloadsStateBox
     from services.downloads.queue import DownloadQueue
     from services.downloads.unpack import DownloadUnpacker
-    from services.protocols import ConflictRules, EventEmitter, RomInstallRecorder, RommRomReader
+    from services.protocols import EventEmitter, RommRomReader
 
 
 @dataclass(frozen=True)
@@ -35,17 +35,13 @@ class DownloadTransferConfig:
 
     ``state`` is the state box the façade shares, ``queue`` holds and reports the
     download's entry and ``unpacker`` turns the finished transfer into an
-    install. ``install_recorder`` resolves the launch command a completed
-    download's ``download_complete`` carries and records it as applied;
-    ``conflict_rules`` lease that event for a bound ROM.
+    install.
     """
 
     state: DownloadsStateBox
     queue: DownloadQueue
     unpacker: DownloadUnpacker
     romm_api: RommRomReader
-    install_recorder: RomInstallRecorder
-    conflict_rules: ConflictRules
     loop: asyncio.AbstractEventLoop
     emit: EventEmitter
     logger: logging.Logger
@@ -59,8 +55,6 @@ class DownloadTransfer:
         self._queue = config.queue
         self._unpacker = config.unpacker
         self._romm_api = config.romm_api
-        self._install_recorder = config.install_recorder
-        self._rules = config.conflict_rules
         self._loop = config.loop
         self._emit = config.emit
         self._logger = config.logger
@@ -104,51 +98,25 @@ class DownloadTransfer:
             reserved_bytes=reserved_bytes,
         )
 
-    async def _finalize_download_complete(self, rom_id, rom_detail, final_path, rom_name, platform_name):
+    async def _finalize_download_complete(self, rom_id, final_path, rom_name, platform_name):
         """Mark the queue entry completed and emit ``download_complete``.
 
-        Resolves the bound Steam ``shortcut_app_id`` for this rom_id (or ``None``
-        when the ROM hasn't been synced yet) plus the ROM's full active core
-        (resolved ``.so`` or ``None``) and the multi-disc launch path so the
-        frontend confirm-sets launch options on the exact shortcut without a
-        full-library scan to re-resolve rom_id→app_id, and the re-bake keeps the
-        per-game/per-platform core AND the selected disc across uninstall →
-        reinstall. Called from the normal success path and from the cancel handler
-        when the install committed before the cancel landed (#1049).
+        The shortcut is not touched: its launch options are its appId whether or
+        not the game is installed, and the next start asks with the new install.
+        Called from the normal success path and from the cancel handler when the
+        install committed before the cancel landed (#1049).
         """
         entry = self._queue.mark_completed(rom_id)
-        app_id, launch_options = await self._loop.run_in_executor(
-            None, self._install_recorder.do_resolve_launch_bake, rom_id, rom_detail, final_path
+        await self._emit(
+            "download_complete",
+            {
+                "rom_id": rom_id,
+                "rom_name": rom_name,
+                "platform_name": platform_name,
+                "file_path": final_path,
+                "resumable": entry.get("resumable", False),
+            },
         )
-        payload = {
-            "rom_id": rom_id,
-            "rom_name": rom_name,
-            "platform_name": platform_name,
-            "file_path": final_path,
-            "app_id": app_id,
-            "launch_options": launch_options,
-            "resumable": entry.get("resumable", False),
-        }
-        # A bound ROM's event carries a lease for the frontend's write of the
-        # launch command onto its shortcut; an unbound ROM has no shortcut to
-        # write to, so its lease would hold off every cleanup until it expired.
-        if app_id is None:
-            await self._emit("download_complete", payload)
-        else:
-            await self._rules.emit_under_lease(
-                "download_complete",
-                lambda token: self._emit("download_complete", {**payload, "prune_lease_token": token}),
-            )
-        # Record the freshly baked launch command as this ROM's applied state (the
-        # value the frontend confirm-sets onto the shortcut), so the next sync
-        # skips the now-correct shortcut instead of re-touching it (delta apply,
-        # #1383). Only when the ROM has a bound shortcut — an unbound ROM has none
-        # to record, and the next sync creates + records it. Second of the six
-        # writer sites.
-        if app_id is not None:
-            await self._loop.run_in_executor(
-                None, self._install_recorder.do_record_applied_launch_options, rom_id, launch_options
-            )
         self._logger.info(f"Download complete: {rom_name} -> {final_path}")
 
     async def _reconcile_post_io(self, post_io_future):
@@ -269,7 +237,7 @@ class DownloadTransfer:
                     # — the guard narrows the type for the launch-command build below.
                     raise ValueError(post_io_error or "install record produced no launch path")
 
-                await self._finalize_download_complete(rom_id, rom_detail, final_path, rom_name, platform_name)
+                await self._finalize_download_complete(rom_id, final_path, rom_name, platform_name)
 
         except asyncio.CancelledError:
             # The cancel/pause may have raced a committing install. Executor
@@ -278,8 +246,7 @@ class DownloadTransfer:
             committed_path, committed = await self._reconcile_post_io(post_io_future)
             if committed:
                 # The ROM IS installed — surface completed, don't tear it down.
-                # This also bakes launch_options for the just-committed install.
-                await self._finalize_download_complete(rom_id, rom_detail, committed_path, rom_name, platform_name)
+                await self._finalize_download_complete(rom_id, committed_path, rom_name, platform_name)
                 self._logger.info(f"Download cancelled after install committed; surfaced as complete: {rom_name}")
             elif control.paused:
                 # PAUSE: keep the partial ``.tmp`` so the transfer can resume from

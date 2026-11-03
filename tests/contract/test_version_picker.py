@@ -343,7 +343,6 @@ async def test_switch_version_happy_moves_binding(harness):
         "success": True,
         "rom_id": 2,
         "target_installed": False,
-        "launch_options": "",
         "app_id": _APP_ID,
     }
     assert [args[0] for name, args, _kwargs in harness.romm.call_log if name == "get_rom_once"] == [2]
@@ -521,8 +520,8 @@ async def test_switch_version_downloaded_synced_is_free(harness):
         assert uow.roms.get(2).shortcut_app_id == _APP_ID
 
 
-async def test_switch_version_switch_back_returns_launch_options(harness):
-    """Switching onto a still-downloaded version returns its full launch command."""
+async def test_switch_version_switch_back_answers_it_installed(harness):
+    """Switching onto a still-downloaded version answers it installed and writes no launch command."""
     seed_group_member(harness, 1, group_key=_GROUP, shortcut_app_id=_APP_ID)  # bound, uninstalled
     seed_group_member(harness, 2, group_key=_GROUP, shortcut_app_id=None, installed=True, file_name="game.gba")
 
@@ -530,9 +529,7 @@ async def test_switch_version_switch_back_returns_launch_options(harness):
     assert result["success"] is True
     assert result["rom_id"] == 2
     assert result["target_installed"] is True
-    # The real relaunch resolver baked the RetroDECK launch command for the install.
-    assert "net.retrodeck.retrodeck" in result["launch_options"]
-    assert "game.gba" in result["launch_options"]
+    assert "launch_options" not in result
 
 
 async def test_switch_version_unsynced_saves_online_soft_blocks(harness):

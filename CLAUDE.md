@@ -523,14 +523,13 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `Application.shutdown` cancels and awaits its tasks there; a task `gather` or `shield` makes from a coroutine its
   caller awaits on the spot is outside the rule, and so are `host/`, `_vendor/` and `native/`** — check —
   `scripts/check_background_tasks.py` (AST call names, no pragma); what it does not see is listed in its docstring
-- **A library-sync seam is held only by the module owning the job it belongs to — in `services/library/`, `active_core`
-  / `disc_resolver` / `emulator_sources` by `shortcut_launch_resolver.py`, `renderer_rss` / `renderer_gc` by
-  `session_budget.py`, and `artwork` by `cover_preparer.py` **and** `reporter.py`, the one confinement with two owners,
-  never a third. No module of the package but a seam's owner names it — `bootstrap/library.py` hands each to its owner's
-  config, so a seam named anywhere else in the package, the façade included, is a finding** — check —
-  `scripts/check_seam_owner.py` (an aliased seam, a `getattr`, or a seam passed positionally into a helper slips past
-  it); unchecked: `shortcut_launch_resolver`'s install-path read UoW is never held across the `active_core` seam's calls
-  (`check_uow_seam_nesting.py` catches only the inline form)
+- **A library-sync seam is held only by the module owning the job it belongs to — in `services/library/`, `renderer_rss`
+  / `renderer_gc` by `session_budget.py` and `artwork` by `cover_preparer.py` **and** `reporter.py`, the one confinement
+  with two owners, never a third; `active_core` / `disc_resolver` / `emulator_sources` by no module, because a shortcut
+  carries nothing about what starts its game. No module of the package but a seam's owner names it —
+  `bootstrap/library.py` hands each to its owner's config, so a seam named anywhere else in the package, the façade
+  included, is a finding** — check — `scripts/check_seam_owner.py` (an aliased seam, a `getattr`, or a seam passed
+  positionally into a helper slips past it)
 - **The resolver's answer is read only in the adapter that asks for it — `adapters/atlas_catalogue.py`,
   `atlas_firmware.py`, `atlas_launch.py`, `atlas_platforms.py`, `atlas_saves.py`, `emulator_sources.py` and
   `retrodeck_folders.py`: only they import the resolver, and only names in `atlas.__all__`; outside them no backend

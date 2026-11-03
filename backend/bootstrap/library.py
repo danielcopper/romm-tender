@@ -32,8 +32,6 @@ from services.library import (
     RunFinalizerConfig,
     SessionBudgetMonitor,
     SessionBudgetMonitorConfig,
-    ShortcutLaunchResolver,
-    ShortcutLaunchResolverConfig,
     SyncOrchestrator,
     SyncOrchestratorConfig,
     SyncPreview,
@@ -53,13 +51,10 @@ if TYPE_CHECKING:
     import logging
 
     from services.protocols import (
-        ActiveCoreReader,
         ArtworkManager,
         Clock,
         ConflictRules,
         DebugLogger,
-        DiscResolver,
-        EmulatorSourcesReader,
         EventEmitter,
         RendererGcFn,
         RendererRssFn,
@@ -97,9 +92,6 @@ class LibraryWiring:
     log_debug: DebugLogger
     artwork: ArtworkManager
     uow_factory: UnitOfWorkFactory
-    active_core: ActiveCoreReader
-    disc_resolver: DiscResolver
-    emulator_sources: EmulatorSourcesReader
     renderer_rss: RendererRssFn
     renderer_gc: RendererGcFn
     conflict_rules: ConflictRules
@@ -117,7 +109,6 @@ class LibraryParts:
     progress: SyncProgress
     fetcher: LibraryFetcher
     collection_fetcher: CollectionFetcher
-    shortcut_launch_resolver: ShortcutLaunchResolver
     session_budget: SessionBudgetMonitor
     reporter: SyncReporter
     run_finalizer: RunFinalizer
@@ -162,15 +153,6 @@ def wire_library(wiring: LibraryWiring) -> LibraryParts:
             sync_state_box=box,
             emit_progress=progress.emit_progress,
             clock=wiring.clock,
-        )
-    )
-
-    shortcut_launch_resolver = ShortcutLaunchResolver(
-        config=ShortcutLaunchResolverConfig(
-            uow_factory=wiring.uow_factory,
-            active_core=wiring.active_core,
-            disc_resolver=wiring.disc_resolver,
-            emulator_sources=wiring.emulator_sources,
         )
     )
 
@@ -250,7 +232,6 @@ def wire_library(wiring: LibraryWiring) -> LibraryParts:
             sync_state_box=box,
             fetcher=fetcher,
             collection_fetcher=collection_fetcher,
-            shortcut_launch_resolver=shortcut_launch_resolver,
             local_library_reader=local_library_reader,
             cover_preparer=cover_preparer,
             chunk_dispatcher=chunk_dispatcher,
@@ -270,7 +251,6 @@ def wire_library(wiring: LibraryWiring) -> LibraryParts:
             sync_state_box=box,
             fetcher=fetcher,
             collection_fetcher=collection_fetcher,
-            shortcut_launch_resolver=shortcut_launch_resolver,
             local_library_reader=local_library_reader,
             session_budget=session_budget,
             cover_preparer=cover_preparer,
@@ -291,7 +271,6 @@ def wire_library(wiring: LibraryWiring) -> LibraryParts:
             fetcher=fetcher,
             unit_applier=unit_applier,
             run_finalizer=run_finalizer,
-            shortcut_launch_resolver=shortcut_launch_resolver,
             local_library_reader=local_library_reader,
             session_budget=session_budget,
             sync_run_recorder=sync_run_recorder,
@@ -322,7 +301,6 @@ def wire_library(wiring: LibraryWiring) -> LibraryParts:
         progress=progress,
         fetcher=fetcher,
         collection_fetcher=collection_fetcher,
-        shortcut_launch_resolver=shortcut_launch_resolver,
         session_budget=session_budget,
         reporter=reporter,
         run_finalizer=run_finalizer,

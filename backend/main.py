@@ -886,12 +886,13 @@ class Endpoints:
         return self._services.metadata_service.get_app_id_rom_id_map()
 
     @route
-    async def get_installed_relaunch_options(self):
-        """Return lease-bearing relaunch items for installed and bound ROMs.
+    async def get_bound_launch_options(self):
+        """Return the lease-bearing items for every bound shortcut whose launch options are not its appId.
 
-        The frontend uses them to heal Steam-shortcut drift at startup (#1043).
+        The frontend sets them at startup and after a sync, so a shortcut edited
+        in Steam or written by an older version carries its appId again (#1043).
         """
-        return await self._services.startup_healing_service.get_installed_relaunch_options()
+        return await self._services.startup_healing_service.get_bound_launch_options()
 
     # ── Achievements delegation to AchievementsService ───────
 

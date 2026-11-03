@@ -605,10 +605,8 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     try {
       await executeRomUninstall({
         romId: detail.romId,
-        appId,
         romName: detail.romName,
         leaseOwner: `game-detail:${appId}`,
-        context: "Game detail uninstall",
         tag: "handleUninstall",
       });
     } finally {

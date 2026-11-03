@@ -812,13 +812,12 @@ describe("getExistingRomMShortcuts", () => {
 describe("addShortcut — overview-readiness poll + empty-launch-options skip", () => {
   const EXE = "/home/deck/.local/bin/tender-rom-launcher";
 
-  function item(launchOptions: string): SyncAddItem {
+  function item(): SyncAddItem {
     return {
       rom_id: 1,
       name: "Test ROM",
       exe: EXE,
       start_dir: "/home/deck",
-      launch_options: launchOptions,
       platform_name: "PSX",
     };
   }
@@ -847,7 +846,7 @@ describe("addShortcut — overview-readiness poll + empty-launch-options skip", 
       },
     });
 
-    const promise = addShortcut(item(""));
+    const promise = addShortcut(item());
     // Advance one poll interval so the second (truthy) overview check runs.
     await vi.advanceTimersByTimeAsync(100);
     const appId = await promise;
@@ -875,7 +874,7 @@ describe("addShortcut — overview-readiness poll + empty-launch-options skip", 
       },
     });
 
-    const promise = addShortcut(item(""));
+    const promise = addShortcut(item());
     // Exhaust the 1000ms readiness budget.
     await vi.advanceTimersByTimeAsync(1000);
     const appId = await promise;
@@ -886,7 +885,7 @@ describe("addShortcut — overview-readiness poll + empty-launch-options skip", 
     expect(logInfoSpy).toHaveBeenCalledWith(expect.stringContaining("not ready"));
   });
 
-  it("skips SetAppLaunchOptions and the confirm poll for an empty launch_options (uninstalled ROM)", async () => {
+  it("writes the new shortcut's appId as its launch options, without the confirm poll", async () => {
     const setLaunchOptions = vi.fn();
     const registerForAppDetails = vi.fn(() => ({ unregister: vi.fn() }));
     // Overview ready immediately, so no timers are involved.
@@ -902,42 +901,13 @@ describe("addShortcut — overview-readiness poll + empty-launch-options skip", 
       },
     });
 
-    const appId = await addShortcut(item(""));
+    const appId = await addShortcut(item());
 
     expect(appId).toBe(9);
-    // Nothing to write or confirm for an empty command — both are skipped, so
-    // the fat-AppDetails-cache hit of the confirm poll is avoided.
-    expect(setLaunchOptions).not.toHaveBeenCalled();
+    // Every shortcut carries its own appId (#2221 D10); the confirm poll's
+    // fat-AppDetails-cache hit is left to the reconcile after the sync.
+    expect(setLaunchOptions).toHaveBeenCalledWith(9, "9");
     expect(registerForAppDetails).not.toHaveBeenCalled();
-  });
-
-  it("takes the confirmed-write path for a non-empty launch_options (installed ROM)", async () => {
-    const cmd = 'flatpak run net.retrodeck.retrodeck "/games/x.bin"';
-    const setLaunchOptions = vi.fn();
-    // RegisterForAppDetails reports the written value back → the confirm matches.
-    const registerForAppDetails = vi.fn((_appId: number, cb: (d: SteamAppDetails | undefined) => void) => {
-      queueMicrotask(() => cb({ strLaunchOptions: cmd }));
-      return { unregister: vi.fn() };
-    });
-    vi.stubGlobal("appStore", { GetAppOverviewByAppID: vi.fn(() => ({ appid: 55 }) as SteamAppOverview), allApps: [] });
-    vi.stubGlobal("SteamClient", {
-      Apps: {
-        AddShortcut: vi.fn().mockResolvedValue(55),
-        SetShortcutName: vi.fn(),
-        SetShortcutExe: vi.fn(),
-        SetShortcutStartDir: vi.fn(),
-        SetAppLaunchOptions: setLaunchOptions,
-        RegisterForAppDetails: registerForAppDetails,
-      },
-    });
-
-    const appId = await addShortcut(item(cmd));
-
-    expect(appId).toBe(55);
-    // Confirmed-write path unchanged: SetAppLaunchOptions fired AND the read-back
-    // was polled via RegisterForAppDetails.
-    expect(setLaunchOptions).toHaveBeenCalledWith(55, cmd);
-    expect(registerForAppDetails).toHaveBeenCalledWith(55, expect.any(Function));
   });
 });
 

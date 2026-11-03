@@ -5,8 +5,8 @@ and ``startDownload`` over the real ``bootstrap()`` + SQLite and real file
 stores under ``tmp_path``; only the RomM transport is the fake.
 
 "Forget this download" is an uninstall without the deletion: the record goes
-through the uninstall's writer of ``applied_launch_options``, no file is
-touched, and it answers to the same conflict rules as ``remove_rom``.
+through the uninstall's writer, no file is touched, the shortcut is left as it
+is, and it answers to the same conflict rules as ``remove_rom``.
 "Download again" is an ordinary download, which leaves the old record in place
 until the new one completes.
 """
@@ -58,13 +58,12 @@ async def test_forget_drops_the_record_through_the_uninstall_writer(harness):
 
     result = await harness.endpoints.forget_download(_ROM_ID)
 
-    assert result["success"] is True
-    assert result["prune_lease_token"].startswith("rom_uninstall:")
+    assert result == {"success": True, "message": "Download forgotten"}
     with harness.uow_factory() as uow:
         assert uow.rom_installs.get(_ROM_ID) is None
         rom = uow.roms.get(_ROM_ID)
     assert rom is not None
-    assert rom.applied_launch_options == ""
+    assert rom.applied_launch_options == _STALE_LAUNCH
 
 
 async def test_forget_deletes_no_file(harness):

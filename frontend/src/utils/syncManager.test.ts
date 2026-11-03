@@ -30,6 +30,7 @@ const getExistingRomMShortcuts = vi.fn();
 const getLiveRomMShortcutAppIds = vi.fn();
 vi.mock("./steamShortcuts", () => ({
   setLaunchOptionsConfirmed: (...args: unknown[]) => setLaunchOptionsConfirmed(...args),
+  shortcutLaunchOptions: (appId: number) => String(appId),
   addShortcut: (...args: unknown[]) => addShortcut(...args),
   getExistingRomMShortcuts: (...args: unknown[]) => getExistingRomMShortcuts(...args),
   getLiveRomMShortcutAppIds: (...args: unknown[]) => getLiveRomMShortcutAppIds(...args),
@@ -43,7 +44,7 @@ vi.mock("./rommAppIds", () => ({
 
 import { initUnitSyncManager, requestSyncCancel, resetSyncCancel, isCancelRequested } from "./syncManager";
 
-function unit(launchOptions: string, runId = "run-1"): SyncApplyUnitData {
+function unit(_launchOptions: string, runId = "run-1"): SyncApplyUnitData {
   return {
     run_id: runId,
     unit_type: "platform",
@@ -62,7 +63,6 @@ function unit(launchOptions: string, runId = "run-1"): SyncApplyUnitData {
         name: "Test ROM",
         exe: "/home/deck/.local/bin/tender-rom-launcher",
         start_dir: "/home/deck",
-        launch_options: launchOptions,
         platform_name: "PSX",
       },
     ],
@@ -95,7 +95,8 @@ describe("syncManager — existing-shortcut update uses confirm-poll", () => {
       );
     });
 
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(5000, cmd);
+    // The existing shortcut is set back to its own appId (#2221 D10).
+    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(5000, "5000");
     expect(addShortcut).not.toHaveBeenCalled();
   });
 });
@@ -135,7 +136,6 @@ describe("syncManager — group-aware emit: one Steam shortcut per game (ADR-002
       name: "Game",
       exe: EXE,
       start_dir: "/home/deck",
-      launch_options: "",
       platform_name: "N64",
       ...overrides,
     };
@@ -147,7 +147,6 @@ describe("syncManager — group-aware emit: one Steam shortcut per game (ADR-002
     // that shortcut by rom_id, so a rebind lands on the update path.
     getExistingRomMShortcuts.mockResolvedValue(new Map<number, number>([[1, 5000]]));
     vi.mocked(backend.getArtworkBase64).mockClear();
-    const jpCmd = 'flatpak run net.retrodeck.retrodeck "/games/zelda_jp.z64"';
     const data: SyncApplyUnitData = {
       run_id: "run-rebind",
       unit_type: "platform",
@@ -160,7 +159,7 @@ describe("syncManager — group-aware emit: one Steam shortcut per game (ADR-002
       chunk_offset: 0,
       unit_total: 1,
       icon_placeholder_path: null,
-      shortcuts: [groupItem({ rom_id: 1, name: "Zelda (USA)", launch_options: jpCmd })],
+      shortcuts: [groupItem({ rom_id: 1, name: "Zelda (USA)" })],
     };
 
     const applyUnit = initUnitSyncManager();
@@ -168,9 +167,9 @@ describe("syncManager — group-aware emit: one Steam shortcut per game (ADR-002
       await applyUnit(data);
     });
 
-    // Reused via the existing-shortcut update path — launch options re-baked to
-    // the representative's path via the confirm-poll; never a second AddShortcut.
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(5000, jpCmd);
+    // Reused via the existing-shortcut update path — its launch options stay
+    // its appId, confirmed; never a second AddShortcut.
+    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(5000, "5000");
     expect(addShortcut).not.toHaveBeenCalled();
     expect(vi.mocked(backend.reportUnitResults)).toHaveBeenCalledWith({ "1": 5000 }, "run-rebind", 1, 0);
     // Covers are applied to CREATES only. A rebind is an update (existing shortcut),
@@ -251,7 +250,6 @@ describe("syncManager — registers resolved appIds as RomM-owned at ack time (#
       name: "Game",
       exe: EXE,
       start_dir: "/home/deck",
-      launch_options: "",
       platform_name: "PSX",
       ...overrides,
     };
@@ -558,7 +556,6 @@ describe("syncManager — chunked apply (#1025)", () => {
       name: `ROM ${romId}`,
       exe: EXE,
       start_dir: "/home/deck",
-      launch_options: "",
       platform_name: "PSX",
     };
   }
@@ -812,7 +809,6 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
       name: `ROM ${romId}`,
       exe: EXE,
       start_dir: "/home/deck",
-      launch_options: "",
       platform_name: "PSX",
     };
   }
@@ -1289,7 +1285,6 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
       name: "Game",
       exe: EXE,
       start_dir: "/home/deck",
-      launch_options: "",
       platform_name: "PSX",
       ...overrides,
     };
@@ -1332,7 +1327,7 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
     expect(setShortcutName).toHaveBeenCalledWith(9000, "Test ROM");
     expect(setShortcutExe).toHaveBeenCalledWith(9000, EXE);
     expect(setShortcutStartDir).toHaveBeenCalledWith(9000, "/home/deck");
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(9000, cmd);
+    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(9000, "9000");
     // The reused appId is registered RomM-owned and reported back for rom 42.
     expect(registerRomMAppId).toHaveBeenCalledWith(9000);
     expect(vi.mocked(backend.reportUnitResults)).toHaveBeenCalledWith({ "42": 9000 }, "run-adopt-happy", 1, 0);
