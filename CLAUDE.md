@@ -808,8 +808,10 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `tests/services/test_version_switch.py::TestAVersionTheUserHidInRomm`,
   `tests/services/prune/test_service.py::TestAGameTheUserHidInRomm` and, for the fake telling the two kinds apart,
   `tests/fakes/test_fake_romm_api.py::TestTheTwoKindsOfHide`. Prompt-only: no reader takes `rom_user.hidden` off an
-  exact-id answer or a list item for what is hidden; within a run the set is read only off
-  `LibrarySyncStateBox.run_hidden_rom_ids`; a new reader of what is hidden asks the same request
+  exact-id answer or a list item for what is hidden (`hidden_rom_ids` reads the first item's only to tell which list
+  came back); within a run the set is read only off `LibrarySyncStateBox.run_hidden_rom_ids`; no module but
+  `adapters/romm/romm_api.py` calls `list_hidden_roms`, and a new reader of what is hidden goes through
+  `read_hidden_rom_ids`
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py`,
   `tests/domain/test_firmware_wants.py` and `tests/services/test_firmware.py::TestCheckPlatformBiosUnknown` (which pins

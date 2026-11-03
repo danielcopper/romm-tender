@@ -455,9 +455,10 @@ def converge_bound_groups(
     cover the bound rows the listings left out as well as the listed ones. For
     the run's collection deliveries (#2661), *listed* is every delivered ROM
     plus, as :func:`stored_version` shapes it, every bound row they bring in
-    that no collection delivered, and *registry* the rows
-    :func:`brought_in_by_delivery` answers, so every row of a group it
-    converges is listed.
+    that no collection delivered and the user did not hide, and *registry* the
+    rows :func:`brought_in_by_delivery` answers, so every row of a group it
+    converges is listed but one the user hid, which ranks as unlisted (#2502
+    D8).
 
     A group :func:`groups_to_converge` names keeps the shortcut bound to, in
     order: an installed listed version, the resolution chain ranking several;

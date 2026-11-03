@@ -1499,12 +1499,12 @@ Steam" ("1 version" on either half) — "version" is the glossary's word for one
 count on the Remove button. `M` is not claimed to be a part of `N`, because it need not be one (below). `N` is RomM's
 own `rom_count` for the platform; `M` is `reachable_count` — the platform's reachable ROMs (every member of a sibling
 group that holds a binding, because one shortcut serves the group (ADR-0021 §2) and the game's page switches versions
-across it), less the versions RomM no longer serves (below). `M` is **not** the number of shortcuts: a fully-synced
-665-ROM platform behind 458 shortcuts reads `665 · 665`, where counting bindings read `665 · 458` and so reported 207
-games as missing when none was. The number of shortcuts is `count` on the same payload, and it is what the Remove group
-says and acts on — the two must not be folded, or the button offers to remove more shortcuts than exist. Where a whole
-game never reached Steam the two halves genuinely differ (`3084 versions on RomM · 8 versions in Steam` for a platform
-with one applied game), and that difference is the line doing its job.
+across it), less the versions RomM's listings no longer return (below). `M` is **not** the number of shortcuts: a
+fully-synced 665-ROM platform behind 458 shortcuts reads `665 · 665`, where counting bindings read `665 · 458` and so
+reported 207 games as missing when none was. The number of shortcuts is `count` on the same payload, and it is what the
+Remove group says and acts on — the two must not be folded, or the button offers to remove more shortcuts than exist.
+Where a whole game never reached Steam the two halves genuinely differ (`3084 versions on RomM · 8 versions in Steam`
+for a platform with one applied game), and that difference is the line doing its job.
 
 Two things the line does not claim. The halves count **different populations** — the left is what RomM holds now, the
 right is what our own rows say — so ROMs added on RomM since the last sync widen the gap, and equality means "nothing
@@ -1513,11 +1513,14 @@ reachable but not counted**: nothing deletes such a row — ADR-0007 keeps it as
 removed-game cleanup removes one — and its group's shortcut still reaches it (GLOSSARY.md → Reachable), but the right
 half does not count a version RomM has stopped serving as in Steam. `reachable_count` is the reachable rows less the
 ones the cleanup's own discovery lists — `domain/fetch_generation.py::gone_from_romm_ids` answers for both, so the count
-leaves out the same versions the Gone from RomM list shows: every row not carrying the fetch generation the platform's
+leaves out every version the Gone from RomM list shows: every row not carrying the fetch generation the platform's
 completion stamp recorded, a row carrying none included, and every row carrying a gone-from-RomM mark
-(`roms.gone_from_romm`, [Removed-game cleanup](removed-game-cleanup.md#discovery)). Where no usable stamp exists — none,
-one with no generation, or one recording an empty fetch — the stamp names nothing and only the marked rows are left out,
-so the exclusion's worst case is the number printed before it.
+(`roms.gone_from_romm`, [Removed-game cleanup](removed-game-cleanup.md#discovery)). A version the user hid in RomM is
+left out too, though RomM still serves it: no listing returns it, so from the first apply of its platform after the hide
+its row no longer carries the generation the stamp recorded. The Gone from RomM list leaves it out only because its scan
+asks RomM for the hidden list ([#2502](https://github.com/danielcopper/romm-tender/issues/2502) D5); this read asks RomM
+nothing (D10). Where no usable stamp exists — none, one with no generation, or one recording an empty fetch — the stamp
+names nothing and only the marked rows are left out, so the exclusion's worst case is the number printed before it.
 
 **That leaves one window in which the line can read right > left.** A ROM deleted on RomM drops out of the left number
 at once, while its row, where its group holds a binding, still carries the generation the stamp recorded and so still
@@ -1534,11 +1537,13 @@ offline, and that is what keeps the pane useful with RomM unreachable.
 
 The exclusion also means **`reachable_count` is not bounded below by `count`**: a _bound_ row the stamp's fetch did not
 return raises the shortcut count without raising the header, so a pane can read
-`2 versions on RomM · 3 versions in Steam` beside `Remove 4 shortcuts`. Two shapes reach it — a bound version deleted on
-RomM, which the stale removal keeps bound, and a collection-added row on an already-stamped platform, which commits with
-no generation, so the exclusion leaves out a row RomM still serves. The second heals at the platform's next commit. The
-first lasts until the user switches the game to another version or removes the gone one with this cleanup. The direction
-is a conservative under-count, which is why it is recorded rather than guarded.
+`2 versions on RomM · 3 versions in Steam` beside `Remove 4 shortcuts`. Three shapes reach it — a bound version deleted
+on RomM, which the stale removal keeps bound; a bound version the user hid beside a visible one, which it keeps bound
+too; and a collection-added row on an already-stamped platform, which commits with no generation, so the exclusion
+leaves out a row RomM still serves. The second heals at the platform's next commit. The first lasts until the user
+switches the game to another version or removes the gone one with this cleanup. The second lasts until the user unhides
+it in RomM or switches the game to another version. The direction is a conservative under-count, which is why it is
+recorded rather than guarded.
 
 **The BIOS ratio is not on the second line** — it was, and its width is what wrapped the line three times on a platform
 with a long name and a long core label. It is stated once instead, beside `BIOS FILES` eight pixels below, in the colour

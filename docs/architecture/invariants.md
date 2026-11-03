@@ -515,14 +515,15 @@ Format: **invariant** — tier — enforced by.
   offer "Resume Sync" on the strength of stamps that save the next run nothing. A raw reader moved behind the helper
   blinds removed-game discovery, the canaries a 404 round asks first, or the reachable count on every platform a removal
   touched, and for a platform whose sync stays off it stays blind, since no new complete fetch comes. A stale removal
-  that revoked on a processed platform would take the skip from the stamp that same run just wrote; it removes no
-  shortcut there today — a skipped platform rebuilds every bound row and a row missing from a platform the run read is
-  kept — so the cost would land with the first rule that does; one that skipped an unprocessed platform brings the
-  turned-off-and-back-on gap back. **What nothing checks**: a new skip-side reader calling `platform_sync_state.get` raw
-  passes every test above, because each test pins one existing call site; the recovery snapshot's raw read has no test,
-  so moving it behind the helper would drop a revoked stamp from a sealed bundle unnoticed; and `has_any`'s
-  `WHERE skip_revoked = 0` and `stamp_for_skip` state the one rule twice — each is pinned alone and nothing holds them
-  equal
+  that revoked on a processed platform would take the skip from the stamp that same run just wrote; there it removes
+  only the shortcut of a game the user hid in RomM — a skipped platform rebuilds every other bound row, and a row
+  missing from a platform the run read is kept — which the next skip leaves out of its rebuild as well and whose unhide
+  changes the checksum, so the cost would land with the first rule that removes anything else; one that skipped an
+  unprocessed platform brings the turned-off-and-back-on gap back. **What nothing checks**: a new skip-side reader
+  calling `platform_sync_state.get` raw passes every test above, because each test pins one existing call site; the
+  recovery snapshot's raw read has no test, so moving it behind the helper would drop a revoked stamp from a sealed
+  bundle unnoticed; and `has_any`'s `WHERE skip_revoked = 0` and `stamp_for_skip` state the one rule twice — each is
+  pinned alone and nothing holds them equal
 - **A platform's completion stamp records what the skip compares RomM's answer with, and the gate and the preview's
   re-stamp count read it through one comparison: the checksum is over exactly the ids of the unit's full fetch
   (`ChunkDispatcher._build_final_platform_stamp`, over every chunk's ROMs), `fetch_started_at` is Tender's clock read
@@ -530,8 +531,8 @@ Format: **invariant** — tier — enforced by.
   (`domain/platform_skip.py::skip_reference`), and the gate's `probe_verdict` and the count's `restamp_due` both decide
   through `domain/platform_skip.py::_compare`** — test + prompt-only — the checksum by
   `tests/services/library/test_sync_orchestrator.py::TestOnlyAFreshStampRestoresTheSkip::test_a_hidden_rom_with_a_shortcut_is_fetched_in_full_once_then_skipped`,
-  whose second apply has no shortcut to change and still stamps the ids its fetch returned, leaving out the hidden ROM
-  that stays bound; the stored fetch start by that class's
+  whose second apply has no shortcut to change and still stamps the ids its fetch returned, leaving out the ROM an admin
+  hid, which stays bound; the stored fetch start by that class's
   `test_a_rom_edited_while_the_run_applied_is_fetched_in_full_next_sync` (the fetch's start, not the run's end, and an
   edit between the two is seen next sync) and `test_a_stamp_without_a_checksum_is_fetched_in_full_once_then_skipped`; a
   unit applied in more than one chunk by
@@ -694,17 +695,18 @@ Format: **invariant** — tier — enforced by.
   mark is the removed-game cleanup's only evidence for it (D6). The group keys come from
   `domain/sync_diff.py::group_keys_of` over the ROMs the run counts as synced, which the apply reads off the rows its
   commits upserted and the preview lays the keys its fetch stamped over the same read. A skipped platform rebuilds every
-  bound row, so only a fetched one can leave a bound row out, and RomM is then the only thing that dropped it. A
-  platform the run did not read says nothing about RomM; the route the row's last commit recorded tells a game reached
-  through a collection from one reached through its platform. A collection's completion stamp cannot carry that, because
-  every collection apply rewrites its members from RomM's current membership: a game the collection dropped is off the
-  stamp after the run that asked about it, and a route recorded only at a unit's commit is untouched by the question, so
-  a 404 is asked again on every later run. A row with no recorded route falls back to the collection records, read
-  before the run's first unit rewrites any of them (`LocalLibraryReader.do_read_collection_listed_rom_ids`). A platform
-  RomM no longer lists is read off the run's own platform listing (`LibrarySyncStateBox.run_listed_platform_slugs`),
-  never off the kept ids under `platform_ids`, which a game page's read can widen during the run; which platforms are on
-  in Tender is keyed by a RomM id such a platform no longer has, so the route stands in for it. Only a 404 is evidence
-  of absence, so every other answer keeps the shortcut. The apply's finalize writes what it established onto the row
+  bound row but a hidden one whose game it holds no version of, which the hidden rule removes, so only a fetched one can
+  leave any other bound row out, and RomM is then the only thing that dropped it. A platform the run did not read says
+  nothing about RomM; the route the row's last commit recorded tells a game reached through a collection from one
+  reached through its platform. A collection's completion stamp cannot carry that, because every collection apply
+  rewrites its members from RomM's current membership: a game the collection dropped is off the stamp after the run that
+  asked about it, and a route recorded only at a unit's commit is untouched by the question, so a 404 is asked again on
+  every later run. A row with no recorded route falls back to the collection records, read before the run's first unit
+  rewrites any of them (`LocalLibraryReader.do_read_collection_listed_rom_ids`). A platform RomM no longer lists is read
+  off the run's own platform listing (`LibrarySyncStateBox.run_listed_platform_slugs`), never off the kept ids under
+  `platform_ids`, which a game page's read can widen during the run; which platforms are on in Tender is keyed by a RomM
+  id such a platform no longer has, so the route stands in for it. Only a 404 is evidence of absence, so every other
+  answer keeps the shortcut. The apply's finalize writes what it established onto the row
   (`StaleSort.gone_from_romm_marks`, written by `RunFinalizer.finalize_per_unit_run`), which is the only evidence the
   removed-game cleanup has for a version reached through a collection or kept on a platform RomM no longer lists, since
   no platform stamp names either; `tests/domain/test_sync_diff.py::TestGoneFromRommMarks` pins which answer writes what,
@@ -740,10 +742,10 @@ Format: **invariant** — tier — enforced by.
   deliveries converge a group they bring in (#2661 D1): over the bound rows they deliver and the bound rows of the same
   stored key a delivered member lists in `sibling_roms` (`domain/sync_diff.py::brought_in_by_delivery`), decided once
   for the run after every collection unit is fetched, the rows no collection delivered ranked by their stored version
-  fields and the sibling list's default (`stored_version`, D4); a bound row of the group no delivered member lists is
-  not converged, so a stored key alone never converges one away — it keeps its shortcut while a ROM the run synced
-  carries its stored key, and goes the stale way where the delivered version is the one regrouped. An unchanged
-  collection holding a member of such a group is fetched rather than skipped
+  fields (one the user hid ranks as unlisted, #2502 D8) and the sibling list's default (`stored_version`, D4); a bound
+  row of the group no delivered member lists is not converged, so a stored key alone never converges one away — it keeps
+  its shortcut while a ROM the run synced carries its stored key, and goes the stale way where the delivered version is
+  the one regrouped. An unchanged collection holding a member of such a group is fetched rather than skipped
   (`domain/collection_skip.py::holds_a_game_to_converge`) — on every sync while the version no collection delivers is
   the one RomM no longer lists as a sibling (D3; where the delivered version is the one regrouped, the skip returns
   after one fetch: Backend Architecture, "Convergence") — and a bound version RomM joined to the game after Tender last
@@ -830,9 +832,11 @@ Format: **invariant** — tier — enforced by.
   be read, taken for a set anyway, removes shortcuts on a guess; `rom_user.hidden` read off the exact-id answers the
   sync already gets is blind on the platform route and on a skipped collection, so the same hide would remove the game
   on one route and keep it on another; a picker or a cleanup reading another source disagrees with the sync about the
-  same version. **What nothing checks**: that no reader takes `rom_user.hidden` off an exact-id answer or a list item;
-  that within a run the set is read only off `LibrarySyncStateBox.run_hidden_rom_ids`; and that a new reader of what is
-  hidden asks the same request
+  same version. **What nothing checks**: that no reader takes `rom_user.hidden` off an exact-id answer or a list item
+  for what is hidden (`hidden_rom_ids` reads the first item's only to tell which list came back); that within a run the
+  set is read only off `LibrarySyncStateBox.run_hidden_rom_ids`; that no module but `adapters/romm/romm_api.py` calls
+  `list_hidden_roms`, and that a new reader of what is hidden goes through `read_hidden_rom_ids`; and the guard's blind
+  spot: a RomM that ignored `statuses` passes it when the first ROM in its order is one the user hid
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py` pins the adapter's degradation (a
   raising resolver, a missing installation, an answer with no root all come back with `resolved` clear, never as an

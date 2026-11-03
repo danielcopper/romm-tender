@@ -415,9 +415,9 @@ solo groups). Key derivation: `domain/sibling_group.py`, persisted as `roms.sibl
   of bindings is what it states about shortcuts (a platform states both, and they need not agree); a group with no
   binding raises neither (`reachable_count` vs. `count`, `services/library/views.py`). The platform count
   (`reachable_count`) is the reachable versions less those the fetch the platform's completion stamp records did not
-  return and those carrying a gone-from-RomM mark, which it leaves out because RomM no longer serves them (the exact
-  rule: [qam-panel.md § Library](docs/architecture/qam-panel.md#library)); the collection count (`in_steam_count`) is
-  the reachable versions as the sync's collection filing resolves them, with no such exclusion. Both start from one
+  return and those carrying a gone-from-RomM mark (the exact rule, and why:
+  [qam-panel.md § Library](docs/architecture/qam-panel.md#library)); the collection count (`in_steam_count`) is the
+  reachable versions as the sync's collection filing resolves them, with no such exclusion. Both start from one
   computation, `domain/sibling_resolution.py`'s `reachable_rom_ids`.
 - **Stranded version** — an installed version whose local saves the stranding verdict answers `unsynced`, or `unchecked`
   where the check could not tell, so leaving it strands them: the active version a switch would leave, or an inactive

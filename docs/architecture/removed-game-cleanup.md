@@ -148,9 +148,10 @@ a game gone from RomM"): `roms.gone_from_romm` is `not_found` where RomM answere
 through a collection with a proven 404, and `delisted` where the version was kept on a platform RomM no longer lists. A
 row it removes because the user hid it in RomM has its mark cleared, since RomM still serves it. A preview asks the same
 questions and writes none of the answers. Discovery adds every marked row to the candidates the stamps give
-(`domain/fetch_generation.py::gone_from_romm_ids`), and the Library page's `reachable_count` leaves out the same rows.
-The mark is discovery only, never deletion authority: the run proves every exact id again, with its liveness tiers,
-before anything is removed.
+(`domain/fetch_generation.py::gone_from_romm_ids`), and the Library page's `reachable_count` leaves out the same rows,
+and also, from the first apply of its platform after the hide, a version the user hid, which the scan subtracts. The
+mark is discovery only, never deletion authority: the run proves every exact id again, with its liveness tiers, before
+anything is removed.
 
 **The cleanup's own run marks too.** It probes every version of each group it plans, candidates or not, so it can prove
 a version gone that no stamp and no sync named — an unbound sibling on a platform with no stamp, say, or the version the

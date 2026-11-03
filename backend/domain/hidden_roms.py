@@ -16,10 +16,11 @@ def hidden_rom_ids(answer: object) -> frozenset[int] | None:
     """The id of every ROM *answer* names as hidden by the user; ``None`` when it cannot be read.
 
     *answer* is RomM's ``/api/roms?statuses=hidden`` list answer. An answer
-    that is not a mapping, has no id index, or holds an id that is not an int
-    establishes nothing, so nothing is taken for hidden. Neither does one whose
-    first item is not marked hidden: a RomM that ignored ``statuses`` would
-    answer every ROM, and only that item shows which list came back.
+    that is not a mapping, has no item list or no id index, or holds an id that
+    is not an int establishes nothing, so nothing is taken for hidden. Neither
+    does one whose first item is not marked hidden: a RomM that ignored
+    ``statuses`` would answer every ROM, and only that item shows which list
+    came back.
     """
     if not isinstance(answer, dict):
         return None
