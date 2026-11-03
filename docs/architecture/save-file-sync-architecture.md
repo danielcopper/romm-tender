@@ -1288,8 +1288,9 @@ all server saves in the slot.
 
 ### Frontend
 
-The delete button appears in inactive slot bodies alongside "Activate Slot". It is hidden on the active slot. Gamepad
-navigation between the buttons uses `Focusable` with `flow-children="right"` for proper DPad left/right traversal.
+The delete button appears in inactive slot bodies alongside "Activate Slot". It is hidden on the active slot. The two
+buttons are one `Focusable` with `flow-children="row"`, so the D-pad steps between them left and right (the values a
+focus group takes: [QAM panel, Focus groups](qam-panel.md#focus-groups)).
 
 A surface reaches steps 1 and 3 through `loadSlotDeleteInfo` and `executeSlotDelete` in
 `frontend/src/utils/saveSlotFlow.ts`: the first toasts a failure, the second its answer either way, and the surface

@@ -1003,10 +1003,8 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       {/* The controls on one line; why the game cannot start goes on its own
           line under them, inside the same band. The controls are a focus group
           of their own so left and right step through them while the band is a
-          column. Steam's parser of `flow-children` (steamui/sp.js) knows
-          `column`, `column-reverse`, `row`, `row-reverse`, `grid` and
-          `geometric`; any other value is no layout, and Steam then takes the
-          group's direction from its CSS flex direction. */}
+          column; the values a group takes: docs/architecture/qam-panel.md,
+          "Focus groups". */}
       <Focusable
         data-testid="play-row-controls"
         flow-children="row"

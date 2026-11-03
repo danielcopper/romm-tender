@@ -123,7 +123,7 @@ const SourceCard: FC<SourceCardProps> = ({ source, index, last, busy, cardRef, o
             >
               {name}
             </span>
-            <Focusable flow-children="horizontal" style={{ display: "flex", gap: "4px", flex: "0 0 auto" }}>
+            <Focusable flow-children="row" style={{ display: "flex", gap: "4px", flex: "0 0 auto" }}>
               {arrow("up", index === 0)}
               {arrow("down", index === last)}
             </Focusable>

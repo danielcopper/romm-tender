@@ -41,7 +41,7 @@ export const PlaytimeScopeBanner: FC<{ onOpenConnections: () => void }> = ({ onO
           {/* Two buttons on one row rather than two full-width rows: Main is the
               narrow page, and a notice that costs three rows pushes the status
               block it sits above off the screen. */}
-          <Focusable flow-children="horizontal" style={{ display: "flex", gap: "8px" }}>
+          <Focusable flow-children="row" style={{ display: "flex", gap: "8px" }}>
             <DialogButton style={{ flex: "1 1 auto", minWidth: 0 }} onClick={onOpenConnections}>
               Open Connections
             </DialogButton>

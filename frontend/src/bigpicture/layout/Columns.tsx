@@ -43,7 +43,7 @@ export interface ColumnsProps {
 
 export const Columns: FC<ColumnsProps> = ({ columns, onButtonDown }) => (
   <Focusable
-    flow-children="horizontal"
+    flow-children="row"
     style={{ display: "flex", gap: "12px", height: "100%", minHeight: 0 }}
     {...(onButtonDown ? { onButtonDown } : {})}
   >

@@ -363,10 +363,10 @@ export const ConnectModal: FC<ConnectModalProps> = ({ closeModal, onConnect, onC
             here within 60 seconds. Tender fetches the token itself — nothing to copy or paste.
           </div>
           <div style={codeLabelStyle}>Pairing code</div>
-          {/* Focusable + flow-children="horizontal" tells Steam's gamepad nav to
-                step between the boxes left/right (the analog stick/d-pad), not
-                up/down — a plain div defaults to vertical traversal. */}
-          <Focusable flow-children="horizontal" ref={codeRowRef} style={codeRowStyle} data-testid="pairing-code-row">
+          {/* A focus group of its own, so the stick and the d-pad step between
+                the boxes left and right rather than up and down; the values a
+                group takes: docs/architecture/qam-panel.md, "Focus groups". */}
+          <Focusable flow-children="row" ref={codeRowRef} style={codeRowStyle} data-testid="pairing-code-row">
             {CODE_INDICES.map((i) => (
               <Fragment key={i}>
                 {i === CODE_GROUP && <span style={codeSeparatorStyle}>-</span>}
