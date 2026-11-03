@@ -5979,6 +5979,54 @@
           "whdload-disabled": "[D] Read from source at 58527ce, the revision the shipped binary names. Not live-observed: no Amiga content and no Amiga save exists on the machine the audit ran on."
         }
       }
+    },
+    "dolphin": {
+      "identifiers": {
+        "library_name": [
+          "dolphin-emu"
+        ]
+      },
+      "saves": {
+        "governing_rule": {
+          "options": []
+        },
+        "modes": {
+          "gamecube": {
+            "root": "savefile_directory",
+            "groups": [
+              {
+                "subdir": "User",
+                "granularity": "per-game-files",
+                "role": "memory-card",
+                "unnamed": "the core keeps the standalone Dolphin's user tree below the save directory, and a GameCube game's saves are the memory card its Dolphin.ini puts in each slot — by default a GCI folder below GC/<region>/Card A whose .gci files are named from each save's own directory entry — so the tree below User is stated by the code that reads that ini, not by this card (Boot.cpp:61-69, MainSettings.cpp:122-125, :734-782, GCMemcardDirectory.cpp:43-62 at fd1aca3a)"
+              }
+            ]
+          },
+          "wii": {
+            "root": "savefile_directory",
+            "groups": [
+              {
+                "subdir": "User",
+                "granularity": "per-game-directory",
+                "role": "battery",
+                "unnamed": "the core keeps the standalone Dolphin's user tree below the save directory, and a Wii game's save is its title's data directory in the NAND below User/Wii, keyed by the title id the disc's ticket states, unless Dolphin.ini's NANDRootPath moves the NAND — so the tree below User is stated by the code that reads that ini, not by this card (Boot.cpp:61-69, NandPaths.cpp:63-72, VolumeWii.cpp:270-276 at fd1aca3a)"
+              }
+            ]
+          }
+        },
+        "anchors": {
+          "User": {
+            "unprotected": "the core joins the save directory with DIR_SEP \"User\" (Boot.cpp:67 at fd1aca3a), and the linker stores that '/User' as the tail of the system-directory fallback's '/dolphin-emu/User' (:69), which is the one whole NUL-delimited string in the shipped .so — a suffix no whole-string check can pin"
+          }
+        }
+      },
+      "provenance": {
+        "source": "libretro/dolphin at fd1aca3a (fd1aca3af7db75504ed7512406d8a4cf4187110a), the revision the shipped binary names in its library_version. retro_load_game asks RetroArch for the save directory and keeps the emulator's whole user tree below it, <save dir>/User — the system directory's dolphin-emu/User only where the save directory is empty, which RetroArch never hands a core (Boot.cpp:61-69) — and creates the tree at every load (UICommon::CreateDirectories, :93). The directory it is handed is the standard rule's, redirected: sorted by content directory or core name, or the content's own directory, exactly as RetroArch resolves it for every core (runloop.c:2001, :8977). Inside it the standalone layout holds: User/Config/Dolphin.ini is the configuration's base layer (UICommon.cpp:142), and the core's own option handling sets no key that places a save (Boot.cpp:115-345), so the slot devices, the card and folder paths and NANDRootPath are read from that ini exactly as the standalone emulator reads them — SlotA defaults to a GCI folder at User/GC/<region>/Card A and SlotB to nothing (MainSettings.cpp:122-125, :734-744), a raw card is User/GC/MemoryCardA.<region>.raw (:668-683), a Wii title's save is title/<hi>/<lo>/data below User/Wii unless NANDRootPath moves it (NandPaths.cpp:63-72, FileUtil.cpp:865, UICommon.cpp:108-110). Both per-game ini layers are installed for the running disc (ConfigManager.cpp:270-271): the user's below User/GameSettings and the build's below <system dir>/dolphin-emu/Sys/GameSettings (GameConfigLoader.cpp:187-199, Boot.cpp:71-72). Three things differ from the standalone reading at this revision: a configured GCI folder is stripped of /USA, /JPN or /EUR and rewritten to the Modern region directory, USA, EUR or JPN (MainSettings.cpp:756-781), a configured raw card of .USA, .JAP or .EUR (:697-715), and the core links the plain strtoll rather than C23's, so a slot value spelled 0b... does not parse and the slot's default governs. retro_get_memory_data and _size answer system RAM alone, so RetroArch writes no .srm. Not yet observed: that RetroArch's redirected save directory reaches the core on a running machine, which card mode a first run takes, the .gci name and header and the Wii data contents the core writes, and that no .srm appears — no GameCube or Wii content and no save the core wrote was on the machine the audit ran on, so these wait for a later round with data.",
+        "status": {
+          "gamecube": "[D] Read from source at fd1aca3a, the revision the shipped binary names, and the unfiltered strings of the deployed .so. Not live-observed.",
+          "wii": "[D] Read from source at fd1aca3a, the revision the shipped binary names, and the unfiltered strings of the deployed .so. Not live-observed."
+        }
+      }
     }
   }
 }

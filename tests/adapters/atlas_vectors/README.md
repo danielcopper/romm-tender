@@ -1,16 +1,18 @@
 # emu-atlas recorded machines — vendored
 
 `vectors/` is [emu-atlas](https://github.com/danielcopper/emu-atlas)'s `vectors/` folder, copied verbatim from the
-release asset `emu-atlas-vectors-v0.32.0.tar.gz`
-(`sha256:7de70c6f9195b59522b1234a6c4f0b68a6e8f78461f1f86d1b0ae35a4a30edda`). It is the same release as the resolver
+release asset `emu-atlas-vectors-v0.34.0.tar.gz`
+(`sha256:a35fa29d6bfa20a9cde0928d4bd84ad1b1cf1e75b50fa288ca7b246e8bb6fa4b`). It is the same release as the resolver
 vendored at `backend/_vendor/atlas/`, and upstream's release manifest, vendored verbatim as
 `backend/_vendor/atlas.SHA256SUMS`, lists that digest for that asset.
 
 Each vector is a whole machine the resolver is run against — files, folders, links and what each core answers — and the
 answer it must give there. `tests/services/test_firmware_vectors.py` runs the firmware questions among them
 (`machines/firmware.json`, `machines/disc-region.json` and `machines/named-cases.json`) through Tender's BIOS reading
-and compares the level with the resolver's verdict; its docstring says what it compares and what it leaves out. The
-other files come along because the folder is copied whole.
+and compares the level with the resolver's verdict, and `tests/adapters/test_launch_vectors.py` runs every launch
+question among them through Tender's launch reading; each docstring says what it compares and what it leaves out.
+`tests/adapters/test_atlas_launchability.py` asks a few of the launch machines (`machines/disc-opens.json`) one by one.
+The other files come along because the folder is copied whole.
 
 The copy lives under `tests/` rather than `backend/_vendor/`, because everything under `backend/` ships to users
 ([#2585](https://github.com/danielcopper/romm-tender/issues/2585) D1). It is licensed as the resolver is, MIT
@@ -57,8 +59,10 @@ Together with the resolver, never on its own: the vectors are the answers of one
    ```
 
 4. Put the new asset name and its digest in the release line above.
-5. Compare `fixture_machine` and `_target` in `tests/services/test_firmware_vectors.py` with `fixture_machine` and
-   `_select` in the new release's `tests/test_machine_vectors.py`, and bring them and the line numbers they cite up to
-   date: a machine built differently from upstream's is not the machine the vector recorded.
-6. Run `python scripts/check_vendored_trees.py` and `tests/services/test_firmware_vectors.py`. A new release may answer
-   differently; what that test's list of known mismatches may then do is its module docstring's.
+5. Compare `fixture_machine` and `select` in `tests/_atlas_machines.py` with `fixture_machine` and `_select` in the new
+   release's `tests/test_machine_vectors.py`, and bring them and the line numbers they cite up to date: a machine built
+   differently from upstream's is not the machine the vector recorded.
+6. Run `python scripts/check_vendored_trees.py`, `tests/services/test_firmware_vectors.py` and
+   `tests/adapters/test_launch_vectors.py`. A new release may answer differently; what the firmware test's list of known
+   mismatches may then do is its module docstring's, and a launch answer Tender reads otherwise than the resolver states
+   it is a finding.

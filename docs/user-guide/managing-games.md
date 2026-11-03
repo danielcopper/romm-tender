@@ -647,6 +647,15 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
   is neither a disc image nor a game program, a disc game whose disc cannot be mounted, or an encrypted disc image
   without its key file. **Play** is off. Where Tender cannot start that emulator yet either, this reason is still the
   one said.
+- **"Beetle PSX cannot start Game.cue: Game (Track 2).bin is missing."** — for a disc game started from a `.cue`,
+  `.ccd`, `.gdi` or `.m3u`, or a disc image, the emulator's own opening of its files was followed, and the sentence
+  names the file it stops on: a file that is missing, a track or a cue sheet or playlist it refuses, a file that is not
+  a disc image it opens, or a path too long for it to open — or that it starts no game from a playlist, as Beetle PCE
+  does. After it come each file it would have gone on without, what else it is known to do, such as not reading every
+  disc a playlist lists, and each thing that could not be established, a format among them. **Play** is off.
+- **"Beetle Saturn can start this game, but goes on without Game (Track 2).bin: it is a track of a type it does not
+  take."** — the emulator starts the game without a file it opens, and the sentence names it and why. Genesis Plus GX
+  says the same way that it does not read every disc a playlist lists. **Play** stays on.
 - **"Tender cannot start RPCS3 Game Serial (Standalone) yet."** — the emulator in effect is one Tender cannot start from
   Steam yet, and nothing else stands in the way. **Play** is off; choose another emulator in the emulator menu.
 - **"Whether Game.sfc starts cannot be established: …"** — the emulator source could not answer, with the reason.
@@ -655,10 +664,13 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
   it starts was not read. **Play** stays on.
 - **"Whether RPCS3 Directory (Standalone) starts this game cannot be established: …"** — nothing is known to stand in
   the way, but the answer could not follow the start all the way, and the sentence says where it stopped: the folder was
-  not found, whether a disc image is encrypted or its key file fits could not be checked, or the emulator's version
-  decides whether it reads that kind of file. **Play** stays on.
+  not found, whether a disc image is encrypted or its key file fits could not be checked, the emulator's version decides
+  whether it reads that kind of file, or a file a disc game opens could not be checked. **Play** stays on.
 - **"Whether _emulator_ reads _.ext_ files is not established."** — nobody has established which files the emulator
   reads. **Play** stays on.
+
+Where the answer says several of these beside a start, each stands under **Play** as its own line, in the order the
+answer states them; the emulator menu shows the first and how many more there are ("+1 more").
 
 Where **Play** is off, Steam's own **Play** on the game's shortcut is refused with the same words. While the page is
 still asking, **Play** is grey and reads **Checking...** beside the same spinning circle "Preparing..." shows. Where the

@@ -9,11 +9,13 @@ not reach cheaply.
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 from typing import Any
 
 import pytest
+from _atlas_machines import fixture_machine, vectors_asking
 from _vendor import atlas
 from _vendor.atlas import (
     CAVEAT_ARCHIVE_CONTENTS_UNREAD,
@@ -40,14 +42,31 @@ from _vendor.atlas import (
     CAVEAT_ENTRY_FORMAT_CONTENT_UNREAD,
     CAVEAT_ENTRY_FORMAT_UNESTABLISHED,
     CAVEAT_ENTRY_TAKES_NO_DIRECTORY,
+    CAVEAT_OPENS_BOUND_EXCEEDED,
+    CAVEAT_OPENS_CONTENT_UNREAD,
+    CAVEAT_OPENS_ENTRY_IGNORED,
+    CAVEAT_OPENS_FILE_MISSING,
+    CAVEAT_OPENS_FILE_UNREAD,
+    CAVEAT_OPENS_FORMAT_REFUSED,
+    CAVEAT_OPENS_FORMAT_UNREAD,
+    CAVEAT_OPENS_PATH_TOO_LONG,
+    CAVEAT_OPENS_PLAYLIST_REFUSED,
+    CAVEAT_OPENS_SETTING_UNREAD,
+    CAVEAT_OPENS_SHEET_REFUSED,
+    CAVEAT_OPENS_TRACK_REFUSED,
     CAVEAT_ROM_PATH_UNDECLARED,
     CAVEAT_SYSTEM_UNKNOWN,
+    EFFECT_GOES_ON,
+    EFFECT_STOPS,
+    EFFECT_UNESTABLISHED,
+    OPENS_EFFECTS,
     VERDICT_ENTRY_NOT_ACCEPTED,
     VERDICT_LAUNCHABLE,
     VERDICT_NEEDS_INSTALLATION,
     VERDICT_UNKNOWN,
 )
 from _vendor.atlas.installations import Installer, LaunchabilityAnswer
+from _vendor.atlas.opens_codes import OPENS_FAILURE_CODES
 from _vendor.atlas.placement import Caveat
 
 from adapters.atlas_catalogue import AtlasCatalogueAdapter
@@ -57,6 +76,7 @@ from domain.launchability import (
     CONTENT_MISSING,
     CONTENT_UNCHECKED,
     CONTENT_UNREADABLE,
+    CONTENTS_UNREAD,
     DISC_FOLDER_SET,
     DISC_FOLDER_UNKNOWN,
     DISC_KEY_MISSING,
@@ -64,8 +84,15 @@ from domain.launchability import (
     EMULATOR_DRIVE_UNKNOWN,
     ENCRYPTION_UNREAD,
     ENTRY_UNKNOWN,
+    FORMAT_REFUSED,
+    FORMAT_UNESTABLISHED,
     GAME_KIND_UNFOLLOWED,
     GAME_LIST_UNREAD,
+    GOES_ON_FILE_MISSING,
+    GOES_ON_FORMAT_REFUSED,
+    GOES_ON_PATH_TOO_LONG,
+    GOES_ON_SHEET_REFUSED,
+    GOES_ON_TRACK_REFUSED,
     IMAGE_LAYOUT_UNREAD,
     INSIDE_EMULATOR_DRIVE,
     KEY_FOLDER_UNKNOWN,
@@ -77,11 +104,24 @@ from domain.launchability import (
     NOT_ESTABLISHED,
     NOT_THIS_EMULATOR,
     NOTHING_TO_START,
+    OPENED_CONTENT_UNREAD,
+    OPENED_FILE_MISSING,
+    OPENED_FILE_UNREAD,
+    OPENED_FORMAT_UNREAD,
+    OPENS_PAST_BOUND,
+    PATCH_SETTING_UNREAD,
+    PATH_TOO_LONG,
+    PATH_TOO_LONG_UNCHECKED,
+    PLAYLIST_DISCS_PAST_LIMIT,
+    PLAYLIST_REFUSED,
     SAVESTATE_UNREAD,
+    SHEET_REFUSED,
     STARTS,
     SYSTEM_UNKNOWN,
     TAKES_NO_FOLDER,
+    TRACK_REFUSED,
     VERSION_DEPENDENT,
+    LaunchStatement,
 )
 
 _LINUX_SYSTEMS_SUFFIX = os.path.join(
@@ -495,3 +535,382 @@ class TestTheResolversOwnReasonsInTendersWords:
         )
 
         assert result.payload(platform_name="PlayStation 3")["reason"] == TAKES_NO_FOLDER
+
+
+# What the resolver states about the files a disc file opens, in Tender's word
+# (#2698 D7): a failure of the open by the effect it states for it (#2698 D5), and what
+# the reading could not follow.
+_STOPS = {
+    CAVEAT_OPENS_FILE_MISSING: OPENED_FILE_MISSING,
+    CAVEAT_OPENS_TRACK_REFUSED: TRACK_REFUSED,
+    CAVEAT_OPENS_SHEET_REFUSED: SHEET_REFUSED,
+    CAVEAT_OPENS_FORMAT_REFUSED: FORMAT_REFUSED,
+    CAVEAT_OPENS_PATH_TOO_LONG: PATH_TOO_LONG,
+    CAVEAT_OPENS_PLAYLIST_REFUSED: PLAYLIST_REFUSED,
+}
+_GOES_ON = {
+    CAVEAT_OPENS_FILE_MISSING: GOES_ON_FILE_MISSING,
+    CAVEAT_OPENS_TRACK_REFUSED: GOES_ON_TRACK_REFUSED,
+    CAVEAT_OPENS_SHEET_REFUSED: GOES_ON_SHEET_REFUSED,
+    CAVEAT_OPENS_FORMAT_REFUSED: GOES_ON_FORMAT_REFUSED,
+    CAVEAT_OPENS_PATH_TOO_LONG: GOES_ON_PATH_TOO_LONG,
+}
+_UNESTABLISHED = {CAVEAT_OPENS_PATH_TOO_LONG: PATH_TOO_LONG_UNCHECKED}
+_NOT_FOLLOWED = {
+    CAVEAT_OPENS_FORMAT_UNREAD: OPENED_FORMAT_UNREAD,
+    CAVEAT_OPENS_CONTENT_UNREAD: OPENED_CONTENT_UNREAD,
+    CAVEAT_OPENS_FILE_UNREAD: OPENED_FILE_UNREAD,
+    CAVEAT_OPENS_SETTING_UNREAD: PATCH_SETTING_UNREAD,
+    CAVEAT_OPENS_BOUND_EXCEEDED: OPENS_PAST_BOUND,
+}
+
+_PSX_ENTRY = "Beetle PSX"
+_TRACK = "/roms/psx/Game/Game (Track 2).bin"
+
+
+def _ask_psx(answer: LaunchabilityAnswer, traces: list[str]):
+    installation = _Installation(answer)
+    return _stand_in(installation, traces).launchability("psx", "/roms/psx/Game/Game.cue", label=_PSX_ENTRY)
+
+
+def _opens(code: str, effect: str | None = None, file: str = _TRACK) -> Caveat:
+    if effect is None:
+        return _caveat(code, entry=_PSX_ENTRY, file=file)
+    return _caveat(code, entry=_PSX_ENTRY, file=file, effect=effect)
+
+
+class TestWhatADiscFileOpensInTendersWords:
+    def test_every_opens_code_the_resolver_states_is_worded(self):
+        opens_codes = {getattr(atlas, name) for name in atlas.__all__ if name.startswith("CAVEAT_OPENS_")}
+
+        assert opens_codes == set(_STOPS) | set(_NOT_FOLLOWED) | {CAVEAT_OPENS_ENTRY_IGNORED}
+
+    def test_every_failure_is_read_by_each_effect_the_resolver_states_for_it(self):
+        assert set(OPENS_EFFECTS) == {EFFECT_STOPS, EFFECT_GOES_ON, EFFECT_UNESTABLISHED}
+        assert set(_STOPS) == set(OPENS_FAILURE_CODES)
+        assert set(_GOES_ON) == set(OPENS_FAILURE_CODES) - {CAVEAT_OPENS_PLAYLIST_REFUSED}
+
+    @pytest.mark.parametrize(("code", "word"), sorted(_STOPS.items()))
+    def test_the_stop_is_the_refusal_s_reason_and_names_its_file(self, code, word, traces):
+        result = _ask_psx(
+            LaunchabilityAnswer(
+                verdict=VERDICT_ENTRY_NOT_ACCEPTED,
+                extension=".cue",
+                alternatives=("SwanStation",),
+                caveats=(_opens(code, EFFECT_STOPS),),
+            ),
+            traces,
+        )
+
+        assert (result.state, result.reason, result.reason_file, result.other_entries) == (
+            NOT_THIS_EMULATOR,
+            word,
+            "Game (Track 2).bin",
+            ("SwanStation",),
+        )
+
+    def test_a_file_the_load_goes_on_without_ahead_of_the_stop_is_not_the_reason(self, traces):
+        # A playlist's missing disc the core goes on without, stated before the
+        # recursion it stops on (Beetle PSX HW: a missing playlist, then one that names itself).
+        result = _ask_psx(
+            LaunchabilityAnswer(
+                verdict=VERDICT_ENTRY_NOT_ACCEPTED,
+                extension=".m3u",
+                caveats=(
+                    _opens(CAVEAT_OPENS_FILE_MISSING, EFFECT_GOES_ON, "/roms/psx/Game/Missing.m3u"),
+                    _opens(CAVEAT_OPENS_SHEET_REFUSED, EFFECT_STOPS, "/roms/psx/Game/Loop.m3u"),
+                ),
+            ),
+            traces,
+        )
+
+        assert (result.state, result.reason, result.reason_file) == (NOT_THIS_EMULATOR, SHEET_REFUSED, "Loop.m3u")
+
+    @pytest.mark.parametrize(("code", "word"), sorted(_GOES_ON.items()))
+    def test_a_file_the_start_goes_on_without_is_said_beside_it_and_named(self, code, word, traces):
+        result = _ask_psx(
+            LaunchabilityAnswer(
+                verdict=VERDICT_LAUNCHABLE,
+                extension=".cue",
+                caveats=(_opens(code, EFFECT_GOES_ON), _caveat(CAVEAT_ARRANGEMENT_VERSION_DRIFTED)),
+            ),
+            traces,
+        )
+
+        assert (result.state, result.reason, result.reason_file) == (STARTS, word, "Game (Track 2).bin")
+
+    @pytest.mark.parametrize(
+        ("code", "effect", "word"),
+        [
+            *((code, None, word) for code, word in sorted(_NOT_FOLLOWED.items())),
+            *((code, EFFECT_UNESTABLISHED, word) for code, word in sorted(_UNESTABLISHED.items())),
+        ],
+    )
+    def test_what_could_not_be_established_is_said_beside_the_start_and_named(self, code, effect, word, traces):
+        result = _ask_psx(
+            LaunchabilityAnswer(verdict=VERDICT_LAUNCHABLE, extension=".cue", caveats=(_opens(code, effect),)),
+            traces,
+        )
+
+        assert (result.state, result.reason, result.reason_file) == (STARTS, word, "Game (Track 2).bin")
+
+    def test_a_playlist_s_discs_past_the_limit_are_said_beside_the_start(self, traces):
+        result = _ask_psx(
+            LaunchabilityAnswer(
+                verdict=VERDICT_LAUNCHABLE,
+                extension=".m3u",
+                caveats=(_opens(CAVEAT_OPENS_ENTRY_IGNORED, file="/roms/megacd/Game/Game.m3u"),),
+            ),
+            traces,
+        )
+
+        assert (result.state, result.reason, result.reason_file) == (STARTS, PLAYLIST_DISCS_PAST_LIMIT, "Game.m3u")
+
+    def test_a_failure_without_an_effect_names_no_reason(self, traces):
+        refused = _ask_psx(
+            LaunchabilityAnswer(
+                verdict=VERDICT_ENTRY_NOT_ACCEPTED, extension=".cue", caveats=(_opens(CAVEAT_OPENS_FILE_MISSING),)
+            ),
+            traces,
+        )
+        starts = _ask_psx(
+            LaunchabilityAnswer(
+                verdict=VERDICT_LAUNCHABLE, extension=".cue", caveats=(_opens(CAVEAT_OPENS_FILE_MISSING),)
+            ),
+            traces,
+        )
+
+        assert (refused.reason, starts.reason) == (None, None)
+
+    def test_what_the_reading_could_not_follow_is_never_a_refusal_reason(self, traces):
+        result = _ask_psx(
+            LaunchabilityAnswer(
+                verdict=VERDICT_ENTRY_NOT_ACCEPTED,
+                extension=".cue",
+                caveats=(_opens(CAVEAT_OPENS_CONTENT_UNREAD), _opens(CAVEAT_OPENS_TRACK_REFUSED, EFFECT_STOPS)),
+            ),
+            traces,
+        )
+
+        assert (result.state, result.reason) == (NOT_THIS_EMULATOR, TRACK_REFUSED)
+
+    def test_a_reason_of_the_resolver_s_own_names_no_file(self, traces):
+        result = _ask_ps3(
+            LaunchabilityAnswer(
+                verdict=VERDICT_ENTRY_NOT_ACCEPTED,
+                extension=".ps3",
+                caveats=(_caveat(CAVEAT_ENTRY_TAKES_NO_DIRECTORY, file="/roms/ps3/Game.ps3"),),
+            ),
+            traces,
+        )
+
+        assert (result.reason, result.reason_file) == (TAKES_NO_FOLDER, None)
+
+    def test_the_payload_carries_the_file_the_reason_names(self, traces):
+        result = _ask_psx(
+            LaunchabilityAnswer(
+                verdict=VERDICT_LAUNCHABLE,
+                extension=".cue",
+                caveats=(_opens(CAVEAT_OPENS_FILE_MISSING, EFFECT_GOES_ON),),
+            ),
+            traces,
+        )
+
+        assert result.payload(platform_name="PlayStation")["reason_file"] == "Game (Track 2).bin"
+
+
+def _disc_opens_vector(name: str) -> dict[str, Any]:
+    return next(
+        vector for stem, vector in vectors_asking("launchable") if stem == "disc-opens" and vector["name"] == name
+    )
+
+
+def _through_tender(inp: dict[str, Any], traces: list[str], label: str = "Genesis Plus GX"):
+    """The recorded machine's question asked live and read through Tender's reading module."""
+    adapter = AtlasCatalogueAdapter(
+        sources=EmulatorSourcesAdapter(
+            user_home=inp["home"], settings={}, log_debug=traces.append, machine=fixture_machine(inp)
+        ),
+        log_debug=traces.append,
+    )
+    query = inp["launchable_query"]
+    return adapter.launchability(query["system"], query["content_path"], label=label)
+
+
+class TestGenesisPlusGxNotesOnlyWhereTheyHold:
+    """Both notes stand only where the resolver states their case, over its recorded machines (#2698 D7)."""
+
+    @pytest.fixture(autouse=True)
+    def _no_host_deploy(self):
+        """A recorded machine answers for its own ``/var/lib/flatpak`` deploy; nothing on this host is read."""
+
+    def test_a_playlist_past_four_discs_says_so(self, traces):
+        inp = _disc_opens_vector("opens-genesis-plus-gx-a-playlist-past-four-discs-ignores-the-rest")["input"]
+
+        result = _through_tender(inp, traces)
+
+        assert (result.state, result.reason, result.reason_file) == (STARTS, PLAYLIST_DISCS_PAST_LIMIT, "Game.m3u")
+
+    def test_a_playlist_of_four_discs_says_nothing(self, traces):
+        inp = copy.deepcopy(
+            _disc_opens_vector("opens-genesis-plus-gx-a-playlist-past-four-discs-ignores-the-rest")["input"]
+        )
+        playlist = inp["launchable_query"]["content_path"]
+        inp["files"][playlist] = "".join(inp["files"][playlist].splitlines(keepends=True)[:4])
+
+        result = _through_tender(inp, traces)
+
+        assert (result.state, result.reason) == (STARTS, None)
+
+    def test_a_sheet_path_of_255_bytes_is_not_established(self, traces):
+        inp = _disc_opens_vector("opens-genesis-plus-gx-a-sheet-path-of-255-bytes-is-not-established")["input"]
+
+        result = _through_tender(inp, traces)
+
+        assert (result.state, result.reason, result.reason_file) == (STARTS, PATH_TOO_LONG_UNCHECKED, "Game.cue")
+
+    def test_a_sheet_path_under_255_bytes_says_nothing(self, traces):
+        inp = copy.deepcopy(
+            _disc_opens_vector("opens-genesis-plus-gx-a-sheet-path-of-255-bytes-is-not-established")["input"]
+        )
+        long_folder = os.path.dirname(inp["launchable_query"]["content_path"])
+        short_folder = os.path.join(os.path.dirname(long_folder), "Game")
+        inp["files"] = {path.replace(long_folder, short_folder): text for path, text in inp["files"].items()}
+        inp["launchable_query"]["content_path"] = inp["launchable_query"]["content_path"].replace(
+            long_folder, short_folder
+        )
+
+        result = _through_tender(inp, traces)
+
+        assert (result.state, result.reason) == (STARTS, None)
+
+
+class TestEveryStatementIsSaid:
+    """Every statement the resolver makes beside a verdict is carried, in its order (#2698 D8)."""
+
+    @pytest.fixture(autouse=True)
+    def _no_host_deploy(self):
+        """A recorded machine answers for its own ``/var/lib/flatpak`` deploy; nothing on this host is read."""
+
+    def test_beside_a_start_each_statement_is_carried_in_the_resolver_s_order(self, traces):
+        missing = _opens(CAVEAT_OPENS_FILE_MISSING, EFFECT_GOES_ON, "/roms/psx/Game/Disc 2.cue")
+        unread = _opens(CAVEAT_OPENS_FORMAT_UNREAD, file="/roms/psx/Game/Disc 3.chd")
+
+        first = _ask_psx(
+            LaunchabilityAnswer(verdict=VERDICT_LAUNCHABLE, extension=".m3u", caveats=(missing, unread)), traces
+        )
+        swapped = _ask_psx(
+            LaunchabilityAnswer(verdict=VERDICT_LAUNCHABLE, extension=".m3u", caveats=(unread, missing)), traces
+        )
+
+        assert first.statements == (
+            LaunchStatement(GOES_ON_FILE_MISSING, "Disc 2.cue"),
+            LaunchStatement(OPENED_FORMAT_UNREAD, "Disc 3.chd"),
+        )
+        assert swapped.statements == tuple(reversed(first.statements))
+        assert (first.reason, swapped.reason) == (GOES_ON_FILE_MISSING, OPENED_FORMAT_UNREAD)
+
+    def test_beside_a_refusal_every_statement_but_the_stop_is_carried_in_the_resolver_s_order(self, traces):
+        result = _ask_psx(
+            LaunchabilityAnswer(
+                verdict=VERDICT_ENTRY_NOT_ACCEPTED,
+                extension=".m3u",
+                caveats=(
+                    _opens(CAVEAT_OPENS_FILE_MISSING, EFFECT_GOES_ON, "/roms/pce/Game/Disc 2.cue"),
+                    _opens(CAVEAT_OPENS_CONTENT_UNREAD, file="/roms/pce/Game/Disc 1.cue"),
+                    _opens(CAVEAT_OPENS_PLAYLIST_REFUSED, EFFECT_STOPS, "/roms/pce/Game/Game.m3u"),
+                ),
+            ),
+            traces,
+        )
+
+        assert (result.reason, result.reason_file) == (PLAYLIST_REFUSED, "Game.m3u")
+        assert result.statements == (
+            LaunchStatement(GOES_ON_FILE_MISSING, "Disc 2.cue"),
+            LaunchStatement(OPENED_CONTENT_UNREAD, "Disc 1.cue"),
+        )
+
+    def test_beside_a_refusal_a_disc_whose_opening_was_not_checked_is_said(self, traces):
+        # The recorded Beetle PCE playlist whose second disc is missing, with
+        # that disc a .chd: the core's open of it is not followed, and the load
+        # fails for the playlist.
+        inp = copy.deepcopy(
+            _disc_opens_vector("opens-beetle-pce-a-playlist-missing-its-second-disc-states-which-caveat-stops")["input"]
+        )
+        folder = os.path.dirname(inp["launchable_query"]["content_path"])
+        inp["files"][f"{folder}/Game.m3u"] = "Game (Disc 1).cue\nGame (Disc 2).chd\n"
+        inp["files"][f"{folder}/Game (Disc 2).chd"] = {"size": 4096}
+
+        result = _through_tender(inp, traces, label="Beetle PCE")
+
+        assert (result.state, result.reason, result.reason_file) == (NOT_THIS_EMULATOR, PLAYLIST_REFUSED, "Game.m3u")
+        assert result.statements == (LaunchStatement(OPENED_FORMAT_UNREAD, "Game (Disc 2).chd"),)
+
+    def test_beside_a_refusal_a_playlist_s_discs_past_the_limit_are_said(self, traces):
+        # The recorded Genesis Plus GX playlist past four discs, its first disc
+        # gone: the load stops there, and the lines past the fourth disc are
+        # still not read.
+        inp = copy.deepcopy(
+            _disc_opens_vector("opens-genesis-plus-gx-a-playlist-past-four-discs-ignores-the-rest")["input"]
+        )
+        for path in [path for path in inp["files"] if "(Disc 1)" in path]:
+            del inp["files"][path]
+
+        result = _through_tender(inp, traces)
+
+        assert (result.state, result.reason, result.reason_file) == (
+            NOT_THIS_EMULATOR,
+            OPENED_FILE_MISSING,
+            "Game (Disc 1).cue",
+        )
+        assert result.statements == (LaunchStatement(PLAYLIST_DISCS_PAST_LIMIT, "Game.m3u"),)
+
+    def test_the_format_and_archive_notes_are_statements_of_their_own(self, traces):
+        result = _ask_psx(
+            LaunchabilityAnswer(
+                verdict=VERDICT_LAUNCHABLE,
+                extension=".zip",
+                caveats=(
+                    _caveat(CAVEAT_ENTRY_FORMAT_UNESTABLISHED),
+                    _opens(CAVEAT_OPENS_SETTING_UNREAD),
+                    _caveat(CAVEAT_ARCHIVE_CONTENTS_UNREAD),
+                ),
+            ),
+            traces,
+        )
+
+        assert result.statements == (
+            LaunchStatement(FORMAT_UNESTABLISHED),
+            LaunchStatement(PATCH_SETTING_UNREAD, "Game (Track 2).bin"),
+            LaunchStatement(CONTENTS_UNREAD),
+        )
+        assert (result.format_unestablished, result.contents_unread) == (True, True)
+
+    def test_a_core_that_cannot_be_read_keeps_its_statement_beside_the_setting(self, traces):
+        inp = _disc_opens_vector("opens-swanstation-a-core-that-cannot-be-read-keeps-its-statement")["input"]
+
+        result = _through_tender(inp, traces, label="SwanStation")
+
+        assert result.statements == (LaunchStatement(PATCH_SETTING_UNREAD), LaunchStatement(FORMAT_UNESTABLISHED))
+
+    def test_a_path_that_names_a_folder_is_named_by_its_folder(self, traces):
+        inp = _disc_opens_vector("opens-genesis-plus-gx-a-blank-playlist-line-is-a-disc-at-the-directory")["input"]
+
+        result = _through_tender(inp, traces)
+
+        assert result.statements == (LaunchStatement(OPENED_FILE_UNREAD, "Game"),)
+
+    def test_the_payload_carries_every_statement(self, traces):
+        result = _ask_psx(
+            LaunchabilityAnswer(
+                verdict=VERDICT_LAUNCHABLE,
+                extension=".cue",
+                caveats=(_opens(CAVEAT_OPENS_FILE_MISSING, EFFECT_GOES_ON), _caveat(CAVEAT_ENTRY_FORMAT_UNESTABLISHED)),
+            ),
+            traces,
+        )
+
+        assert result.payload(platform_name="PlayStation")["statements"] == [
+            {"reason": GOES_ON_FILE_MISSING, "file": "Game (Track 2).bin"},
+            {"reason": FORMAT_UNESTABLISHED, "file": None},
+        ]

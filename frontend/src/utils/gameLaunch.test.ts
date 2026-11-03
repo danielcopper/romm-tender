@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { AnsweringSource, GameLaunch } from "../types";
 import { HostTransportError } from "../api/host";
-import { entryLaunchLine, launchNote, launchRefusal, launchRefused, startCheckFailureSentence } from "./gameLaunch";
+import {
+  entryLaunchLine,
+  launchNote,
+  launchNotes,
+  launchRefusal,
+  launchRefused,
+  startCheckFailureSentence,
+} from "./gameLaunch";
 import { TimeoutError } from "./withTimeout";
 
 function launch(overrides: Partial<GameLaunch> = {}): GameLaunch {
@@ -294,6 +301,273 @@ describe("the resolver's own reasons (#2195 D21, D40)", () => {
     const answer = stoppedShort("takes_no_folder");
     expect(launchNote(answer, RETRODECK)).toBeNull();
     expect(entryLaunchLine(answer, RETRODECK)).toBe("can start it");
+  });
+});
+
+describe("what a disc file opens, as the resolver read it (#2698 D5, D7)", () => {
+  const disc = (overrides: Partial<GameLaunch>) =>
+    launch({
+      entry: "Beetle PSX",
+      system: "psx",
+      platform_name: "PlayStation",
+      file: "Game.cue",
+      extension: ".cue",
+      reason_file: "Game (Track 2).bin",
+      ...overrides,
+    });
+
+  it.each([
+    ["opened_file_missing", "Game (Track 2).bin is missing"],
+    ["track_refused", "Game (Track 2).bin is a track of a type it does not take"],
+    ["sheet_refused", "it refuses the cue sheet or playlist Game (Track 2).bin"],
+    ["format_refused", "Game (Track 2).bin is not a disc image it opens"],
+    ["path_too_long", "the path of Game (Track 2).bin is too long for it to open"],
+    ["playlist_refused", "it starts no game from a playlist"],
+  ] as const)("a stop on %s turns Play off and names the file it stops on", (reason, why) => {
+    const answer = disc({ state: "not_this_emulator", reason });
+    expect(launchRefused(answer)).toBe(true);
+    expect(launchRefusal(answer, true)).toBe(`Beetle PSX cannot start Game.cue: ${why}.`);
+    expect(entryLaunchLine(answer, RETRODECK)).toBe(why);
+    expect(launchNote(answer, RETRODECK)).toBeNull();
+  });
+
+  it("names the entries that do start it after the reason", () => {
+    expect(
+      launchRefusal(
+        disc({ state: "not_this_emulator", reason: "playlist_refused", other_entries: ["SwanStation"] }),
+        true,
+      ),
+    ).toBe(
+      "Beetle PSX cannot start Game.cue: it starts no game from a playlist. SwanStation can — choose it in the emulator menu.",
+    );
+  });
+
+  it.each([
+    ["goes_on_file_missing", "it is missing"],
+    ["goes_on_track_refused", "it is a track of a type it does not take"],
+    ["goes_on_sheet_refused", "it refuses this cue sheet or playlist"],
+    ["goes_on_format_refused", "it is not a disc image it opens"],
+    ["goes_on_path_too_long", "its path is too long for it to use in full"],
+  ] as const)(
+    "a file the start goes on without (%s) keeps Play on, startable, never not established",
+    (reason, why) => {
+      const answer = disc({ state: "starts", reason });
+      expect(launchRefused(answer)).toBe(false);
+      expect(launchRefusal(answer, true)).toBeNull();
+      expect(launchNote(answer, RETRODECK)).toBe(
+        `Beetle PSX can start this game, but goes on without Game (Track 2).bin: ${why}.`,
+      );
+      expect(entryLaunchLine(answer, RETRODECK)).toBe(`can start it, without Game (Track 2).bin: ${why}`);
+    },
+  );
+
+  it('an entry Tender cannot start yet keeps what its start goes on without, but not its "can start it"', () => {
+    expect(entryLaunchLine(disc({ state: "starts", reason: "goes_on_file_missing" }), RETRODECK, false)).toBe(
+      "without Game (Track 2).bin: it is missing",
+    );
+  });
+
+  it.each([
+    ["opened_format_unread", "how it opens Game (Track 2).bin was not checked"],
+    ["opened_content_unread", "what it makes of Game (Track 2).bin is not established"],
+    ["opened_file_unread", "Game (Track 2).bin could not be checked"],
+    ["patch_setting_unread", "whether it loads a patch for the disc image could not be read"],
+    [
+      "opens_past_bound",
+      "the check stopped at one of its limits at Game (Track 2).bin, so what it opens past that was not checked",
+    ],
+  ] as const)("what the reading could not establish (%s) keeps Play on and says so", (reason, why) => {
+    const answer = disc({ state: "starts", reason });
+    expect(launchRefused(answer)).toBe(false);
+    expect(launchNote(answer, RETRODECK)).toBe(`Whether Beetle PSX starts this game cannot be established: ${why}.`);
+    expect(entryLaunchLine(answer, RETRODECK)).toBe(`whether it starts the game is not established: ${why}`);
+  });
+
+  it("a playlist past the discs the emulator reads keeps Play on and says it does not read every disc", () => {
+    const answer = disc({
+      entry: "Genesis Plus GX",
+      state: "starts",
+      reason: "playlist_discs_past_limit",
+      file: "Game.m3u",
+      reason_file: "Game.m3u",
+    });
+    expect(launchRefused(answer)).toBe(false);
+    expect(launchNote(answer, RETRODECK)).toBe(
+      "Genesis Plus GX can start this game, but does not read every disc Game.m3u lists.",
+    );
+    expect(entryLaunchLine(answer, RETRODECK)).toBe("can start it, but does not read every disc Game.m3u lists");
+    expect(entryLaunchLine(answer, RETRODECK, false)).toBe("does not read every disc Game.m3u lists");
+  });
+
+  it("a sheet path too long for the emulator to read in full keeps Play on and says what was not checked", () => {
+    const answer = disc({
+      entry: "Genesis Plus GX",
+      state: "starts",
+      reason: "path_too_long_unchecked",
+      reason_file: "Game.cue",
+    });
+    expect(launchRefused(answer)).toBe(false);
+    expect(launchNote(answer, RETRODECK)).toBe(
+      "Whether Genesis Plus GX starts this game cannot be established: the path of Game.cue is too long for it to read in full, and what it does then was not checked.",
+    );
+  });
+
+  it("a stop is no note on a file that starts, and a file the start goes on without is no refusal", () => {
+    expect(launchNote(disc({ state: "starts", reason: "playlist_refused" }), RETRODECK)).toBeNull();
+    expect(launchRefusal(disc({ state: "not_this_emulator", reason: "goes_on_file_missing" }), true)).toBe(
+      "Beetle PSX does not start .cue.",
+    );
+  });
+});
+
+describe("every statement the resolver makes, each in its own words (#2698 D8)", () => {
+  const playlist = (overrides: Partial<GameLaunch>) =>
+    launch({
+      entry: "SwanStation",
+      system: "psx",
+      platform_name: "PlayStation",
+      file: "Game.m3u",
+      extension: ".m3u",
+      ...overrides,
+    });
+  const missingDisc2 = { reason: "goes_on_file_missing", file: "Disc 2.cue" } as const;
+  const disc3Unread = { reason: "opened_format_unread", file: "Disc 3.chd" } as const;
+
+  it("the page lists every statement in the resolver's order, none weighed against another", () => {
+    const answer = playlist({
+      state: "starts",
+      reason: "goes_on_file_missing",
+      statements: [missingDisc2, disc3Unread],
+    });
+    expect(launchNotes(answer, RETRODECK)).toEqual([
+      "SwanStation can start this game, but goes on without Disc 2.cue: it is missing.",
+      "Whether SwanStation starts this game cannot be established: how it opens Disc 3.chd was not checked.",
+    ]);
+    const swapped = playlist({
+      state: "starts",
+      reason: "opened_format_unread",
+      statements: [disc3Unread, missingDisc2],
+    });
+    expect(launchNotes(swapped, RETRODECK)).toEqual([
+      "Whether SwanStation starts this game cannot be established: how it opens Disc 3.chd was not checked.",
+      "SwanStation can start this game, but goes on without Disc 2.cue: it is missing.",
+    ]);
+    expect(launchRefused(answer)).toBe(false);
+  });
+
+  it("the menu shows the first statement and how many more there are", () => {
+    const answer = playlist({
+      state: "starts",
+      reason: "goes_on_file_missing",
+      statements: [missingDisc2, disc3Unread],
+    });
+    expect(entryLaunchLine(answer, RETRODECK)).toBe("can start it, without Disc 2.cue: it is missing +1 more");
+    expect(entryLaunchLine(answer, RETRODECK, false)).toBe("without Disc 2.cue: it is missing +1 more");
+  });
+
+  it("the format and archive notes are statements of their own, in their place", () => {
+    const answer = playlist({
+      state: "starts",
+      reason: "patch_setting_unread",
+      format_unestablished: true,
+      statements: [
+        { reason: "patch_setting_unread", file: null },
+        { reason: "format_unestablished", file: null },
+      ],
+    });
+    expect(launchNotes(answer, RETRODECK)).toEqual([
+      "Whether SwanStation starts this game cannot be established: whether it loads a patch for the disc image could not be read.",
+      "Whether SwanStation reads .m3u files is not established.",
+    ]);
+    expect(entryLaunchLine(answer, RETRODECK)).toBe(
+      "whether it starts the game is not established: whether it loads a patch for the disc image could not be read +1 more",
+    );
+  });
+
+  it("a refusal names the stop first, then each file the emulator would have gone on without", () => {
+    const answer = playlist({
+      entry: "Beetle PCE",
+      state: "not_this_emulator",
+      reason: "playlist_refused",
+      reason_file: "Game.m3u",
+      other_entries: ["Beetle PCE Fast"],
+      statements: [missingDisc2],
+    });
+    expect(launchRefusal(answer, true)).toBe(
+      "Beetle PCE cannot start Game.m3u: it starts no game from a playlist. It would go on without Disc 2.cue: it is missing. Beetle PCE Fast can — choose it in the emulator menu.",
+    );
+    expect(entryLaunchLine(answer, RETRODECK)).toBe("it starts no game from a playlist +1 more");
+    expect(launchNotes(answer, RETRODECK)).toEqual([]);
+  });
+
+  it("a refusal then says each thing the resolver could not establish, after the files it would go on without", () => {
+    const answer = playlist({
+      entry: "Beetle PCE",
+      state: "not_this_emulator",
+      reason: "playlist_refused",
+      reason_file: "Game.m3u",
+      other_entries: ["Beetle PCE Fast"],
+      statements: [{ reason: "opened_format_unread", file: "Game (Disc 2).chd" }],
+    });
+    expect(launchRefusal(answer, true)).toBe(
+      "Beetle PCE cannot start Game.m3u: it starts no game from a playlist. How it opens Game (Disc 2).chd was not checked. Beetle PCE Fast can — choose it in the emulator menu.",
+    );
+    const both = playlist({
+      ...answer,
+      statements: [{ reason: "opened_format_unread", file: "Game (Disc 2).chd" }, missingDisc2],
+    });
+    expect(launchRefusal(both, false)).toBe(
+      "Beetle PCE cannot start Game.m3u: it starts no game from a playlist. It would go on without Disc 2.cue: it is missing. How it opens Game (Disc 2).chd was not checked.",
+    );
+    expect(entryLaunchLine(both, RETRODECK)).toBe("it starts no game from a playlist +2 more");
+  });
+
+  it("a refusal says what else the emulator is established to do, between the files it goes on without and the rest", () => {
+    const answer = playlist({
+      entry: "Genesis Plus GX",
+      state: "not_this_emulator",
+      reason: "opened_file_missing",
+      reason_file: "Game (Disc 1).cue",
+      statements: [
+        { reason: "opened_format_unread", file: "Game (Disc 6).chd" },
+        { reason: "playlist_discs_past_limit", file: "Game.m3u" },
+        missingDisc2,
+      ],
+    });
+    expect(launchRefusal(answer, false)).toBe(
+      "Genesis Plus GX cannot start Game.m3u: Game (Disc 1).cue is missing. It would go on without Disc 2.cue: it is missing. It does not read every disc Game.m3u lists. How it opens Game (Disc 6).chd was not checked.",
+    );
+    expect(entryLaunchLine(answer, RETRODECK)).toBe("Game (Disc 1).cue is missing +3 more");
+  });
+
+  it("a sentence that begins with a file's name keeps the name as it is", () => {
+    const answer = playlist({
+      entry: "SwanStation",
+      file: "ff7 (disc 1).cue",
+      state: "not_this_emulator",
+      reason: "opened_file_missing",
+      reason_file: "ff7 (disc 1).bin",
+      statements: [
+        { reason: "opened_file_unread", file: "ff7 (disc 2).cue" },
+        { reason: "content_missing", file: null },
+      ],
+    });
+    expect(launchRefusal(answer, false)).toBe(
+      "SwanStation cannot start ff7 (disc 1).cue: ff7 (disc 1).bin is missing. ff7 (disc 2).cue could not be checked. ff7 (disc 1).cue was not found.",
+    );
+  });
+
+  it("an answer that carries no statements says its reason and its two notes", () => {
+    const answer = playlist({
+      state: "starts",
+      reason: "goes_on_file_missing",
+      reason_file: "Disc 2.cue",
+      contents_unread: true,
+    });
+    expect(launchNotes(answer, RETRODECK)).toEqual([
+      "SwanStation can start this game, but goes on without Disc 2.cue: it is missing.",
+      "What is inside Game.m3u was not read, so whether SwanStation finds a game in it cannot be established.",
+    ]);
   });
 });
 

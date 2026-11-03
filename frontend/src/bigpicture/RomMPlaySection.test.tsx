@@ -5311,6 +5311,30 @@ describe("RomMPlaySection", () => {
       expect(capturedPlayButton[capturedPlayButton.length - 1]!.emulatorRefusal).toBeNull();
     });
 
+    it("lists every statement beside a start under the row, each in its own words (#2698 D8)", async () => {
+      const { container } = await mountWith({
+        gameLaunch: {
+          ...LAUNCH,
+          entry: "SwanStation",
+          file: "Game.m3u",
+          extension: ".m3u",
+          reason: "goes_on_file_missing",
+          reason_file: "Disc 2.cue",
+          statements: [
+            { reason: "goes_on_file_missing", file: "Disc 2.cue" },
+            { reason: "opened_format_unread", file: "Disc 3.chd" },
+          ],
+        },
+      });
+
+      const notes = [...container.querySelectorAll<HTMLElement>('.romm-play-section-row [data-testid="start-note"]')];
+      expect(notes.map((note) => note.textContent)).toEqual([
+        "SwanStation can start this game, but goes on without Disc 2.cue: it is missing.",
+        "Whether SwanStation starts this game cannot be established: how it opens Disc 3.chd was not checked.",
+      ]);
+      expect(capturedPlayButton[capturedPlayButton.length - 1]!.emulatorRefusal).toBeNull();
+    });
+
     it("tells Play while the page's check still runs (#2195 D32)", async () => {
       await mountWith({ startCheck: { state: "checking" } });
       expect(capturedPlayButton[capturedPlayButton.length - 1]!.startChecking).toBe(true);

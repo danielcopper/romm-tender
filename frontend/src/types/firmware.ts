@@ -441,9 +441,39 @@ export interface EmulatorStart {
 /** Why a launch verdict could not be established, in Tender's words. */
 export type LaunchNotEstablishedReason = "system_unknown" | "entry_unknown" | "catalogue_unread" | "no_source";
 
-/** Why the entry does not start the file, where the resolver states a reason of its own, in Tender's words. */
+/**
+ * Why the entry does not start the file, where the resolver states a reason of its own, in Tender's words —
+ * among them, where it read the files a disc file opens, the failure it states as the stop (#2698 D5).
+ */
 export type LaunchRefusalReason =
-  "takes_no_folder" | "nothing_to_start" | "not_a_game_file" | "disc_not_found" | "disc_key_missing";
+  | "takes_no_folder"
+  | "nothing_to_start"
+  | "not_a_game_file"
+  | "disc_not_found"
+  | "disc_key_missing"
+  | "opened_file_missing"
+  | "track_refused"
+  | "sheet_refused"
+  | "format_refused"
+  | "path_too_long"
+  | "playlist_refused";
+
+/** A file the emulator opens and goes on without, where the file starts (#2698 D7). */
+export type LaunchGoesOnReason =
+  | "goes_on_file_missing"
+  | "goes_on_track_refused"
+  | "goes_on_sheet_refused"
+  | "goes_on_format_refused"
+  | "goes_on_path_too_long";
+
+/** What else the emulator is established to do short of the whole start: not read every disc a playlist lists (#2698 D7). */
+export type LaunchNoteReason = "playlist_discs_past_limit";
+
+/** One statement said beside a verdict (#2698 D8): its word, and the name of the file it is about, or `null`. */
+export interface LaunchStatement {
+  reason: LaunchStoppedShortReason | LaunchGoesOnReason | LaunchNoteReason | "format_unestablished" | "contents_unread";
+  file: string | null;
+}
 
 /** What could not be established about a file the entry starts, in Tender's words. */
 export type LaunchStoppedShortReason =
@@ -461,7 +491,13 @@ export type LaunchStoppedShortReason =
   | "disc_folder_set"
   | "disc_folder_unknown"
   | "content_unchecked"
-  | "version_dependent";
+  | "version_dependent"
+  | "opened_format_unread"
+  | "opened_content_unread"
+  | "opened_file_unread"
+  | "patch_setting_unread"
+  | "opens_past_bound"
+  | "path_too_long_unchecked";
 
 /**
  * Whether one installed game's file starts with one emulator entry, as the
@@ -477,7 +513,15 @@ export type LaunchStoppedShortReason =
  * `reason` is the resolver's reason in Tender's words, `null` where it named
  * none Tender words: why a verdict was `not_established`, why the entry does not
  * start the file on `not_this_emulator`, and what could not be established
- * about a file that `starts` (#2195 D40). `contents_unread` says the file is an archive whose
+ * about a file that `starts` (#2195 D40), what its start goes on without, or that the emulator does not read
+ * every disc a playlist lists (#2698 D7); on a start, the first such statement, the format and archive notes left
+ * out — what a start says is `statements`.
+ * `reason_file` is the name of the file that reason is about, where the resolver names one; absent or `null`
+ * otherwise. `statements` is everything said beside the verdict, in the resolver's order (#2698 D8): each
+ * statement beside a start, and beside a refused start each file it would have gone on without, what else it is
+ * established to do, and each thing the resolver could not establish; an answer without it is read from `reason` and
+ * the two notes below.
+ * `contents_unread` says the file is an archive whose
  * contents were not read; `format_unestablished` that whether the entry reads
  * this format was not established.
  */
@@ -491,7 +535,15 @@ export interface GameLaunch {
   starts_from: string[];
   other_entries: string[];
   install_in: string[] | null;
-  reason: LaunchNotEstablishedReason | LaunchRefusalReason | LaunchStoppedShortReason | null;
+  reason:
+    | LaunchNotEstablishedReason
+    | LaunchRefusalReason
+    | LaunchStoppedShortReason
+    | LaunchGoesOnReason
+    | LaunchNoteReason
+    | null;
+  reason_file?: string | null;
+  statements?: LaunchStatement[];
   contents_unread: boolean;
   format_unestablished: boolean;
 }

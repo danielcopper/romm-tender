@@ -36,6 +36,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Mapping, Sequence, TypeVar
 
+from .disc_opens import Opened
 from .distribution_labels import distribution_label
 from .every_installation import InstallationAnswer
 from .firmware import (
@@ -766,7 +767,11 @@ def launchable_contract(answer: LaunchabilityAnswer) -> dict[str, Any]:
     or EmuDeck sets up installs it. ``boots`` is ``launchable``'s alone, and
     only where atlas read the judged entry's own boot of the file: the
     ``file`` the emulator's loader is handed and the ``disc_root`` it mounts,
-    ``null`` for a game that boots without one. ``accepted`` stays the declared tokens
+    ``null`` for a game that boots without one. ``opens`` travels with the two
+    verdicts that name an entry, and only where atlas read what the entry's
+    emulator opens through the file: each file in the order it is opened, how
+    it came to be opened, the file that names it or whose name it derives from,
+    and whether it is there. ``accepted`` stays the declared tokens
     verbatim, the same non-vocabulary the ROM placement's ``extensions``
     field carries.
     """
@@ -778,8 +783,14 @@ def launchable_contract(answer: LaunchabilityAnswer) -> dict[str, Any]:
         "alternatives": list(answer.alternatives),
         "installers": None if answer.installers is None else [_installer_body(i) for i in answer.installers],
         "boots": None if answer.boots is None else _boot_body(answer.boots),
+        "opens": None if answer.opens is None else [_opened_body(opened) for opened in answer.opens],
         "caveats": _caveats_contract(answer.caveats),
     }
+
+
+def _opened_body(opened: Opened) -> dict[str, Any]:
+    """One file the entry's emulator opens: its path, how it came to be opened, by which file, whether it is there."""
+    return {"path": opened.path, "how": opened.how, "by": opened.by, "present": opened.present}
 
 
 def _boot_body(boot: Boot) -> dict[str, Any]:

@@ -405,7 +405,7 @@
       },
       "textures": {
         "root": "savefile_directory",
-        "subdir": "dolphin-emu/User/Load/Textures",
+        "subdir": "User/Load/Textures",
         "replacement_option": {
           "setting": "dolphin_load_custom_textures",
           "values": {
@@ -415,7 +415,7 @@
         }
       },
       "provenance": {
-        "source": "[D] dolphin_libretro.so (fd1aca3a) carries \"/dolphin-emu/User\" and \"Load/\" as NUL-delimited literals and the option key \"dolphin_load_custom_textures\" beside the menu path \"Graphics > Enhancements > Load Custom Textures\"; the final \"Textures\" component is upstream Dolphin's own Load-directory layout and is not a literal here. This core registers no options a probe can capture, so a machine whose options file does not state the key leaves 'enabled' unanswered rather than defaulted. [O] the root is the same open question as azahar's (core_audit.json: dolphin, verdict 'suspect') — RetroDECK 0.10.10b prepares the link under the config tree's saves directory (components/retroarch/component_prepare.sh:168) and nothing has been observed reading it."
+        "source": "[V-source/D] libretro/dolphin at fd1aca3a, the revision dolphin_libretro.so names in its library_version: retro_load_game joins the emulator's whole user tree to the save directory RetroArch hands it, <save dir>/User (Boot.cpp:61-69), and the Load tree and its Textures directory hang off that user directory (FileUtil.cpp:878-879) — so the root is the save directory as RetroArch hands it, sorting applied, the exception atlas/installations.py's content-tree root makes for this core alone (#616 D2). The shipped binary carries \"/dolphin-emu/User\", \"Load/\" and \"Textures\" as raw bytes; the first is the system-directory fallback's spelling, whose tail is the only copy of the save-directory join's \"/User\". The option key \"dolphin_load_custom_textures\" sits beside the menu path \"Graphics > Enhancements > Load Custom Textures\". This core registers no options a probe can capture, so a machine whose options file does not state the key leaves 'enabled' unanswered rather than defaulted. [O] no data the core wrote has confirmed the tree, which emulator-read-unestablished states; RetroDECK 0.10.10b prepares its link below the config tree's saves directory instead (components/retroarch/component_prepare.sh:168), a directory the core does not reach with RetroDECK's shipped configuration."
       },
       "anchors": {
         "names": {
@@ -427,9 +427,6 @@
           },
           "User": {
             "literal": "User"
-          },
-          "dolphin-emu": {
-            "literal": "dolphin-emu"
           },
           "dolphin_load_custom_textures": {
             "literal": "dolphin_load_custom_textures"

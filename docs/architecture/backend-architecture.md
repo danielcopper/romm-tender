@@ -2053,9 +2053,26 @@ carries the resolver's reason in Tender's word (`reason` — a folder the entry 
 disc image or game program, a disc that cannot be mounted, an encrypted image without its key), and where the file
 starts but the resolver's reading of it stopped short — RPCS3's own boot read as far as it goes, a loader that takes the
 extension and then reads content the resolver does not, an extension the emulator's builds disagree on — the verdict
-still starts and `reason` names what was not established. Which code is which is `adapters/atlas_catalogue.py`'s
-(`_REFUSED_BECAUSE`, `_STOPPED_SHORT_BECAUSE`); the resolver's boot facts themselves (`boots`) are not read until the
-direct start does (D38).
+still starts and `reason` names what was not established.
+
+**Where the resolver reads the files a disc file opens**, each failure of that open carries the course the resolver
+states for it (`effect`), and Tender reads it by that alone
+([#2698](https://github.com/danielcopper/romm-tender/issues/2698) D5, D7): the failure it states as the stop is the
+refusal's reason, a file the emulator goes on without is said as one it goes on without — never as not established — and
+a failure whose course is not established is said as not established, as is anything else that reading could not follow.
+Genesis Plus GX not reading every disc a playlist lists is said beside the start the same way.
+
+**Every statement is said** (#2698 D8): beside a start, `statements` carries each one Tender words, in the resolver's
+caveat order — the format not established (#2195 D41) and the archive whose contents were not read among them; beside a
+refusal, whose stop is `reason`, it carries each file the emulator would have gone on without, what else it is
+established to do, and each thing the resolver could not establish, in the same order. On a start `reason` holds the
+first statement but the format and archive notes; what a start says is `statements`. Which code is which is
+`adapters/atlas_catalogue.py`'s (`_REFUSED_BECAUSE`, `_OPEN_FAILED_BECAUSE`, `_STOPPED_SHORT_BECAUSE`,
+`_STARTS_WITH_A_NOTE_BECAUSE`, `_STARTS_ALSO_SAYS`), and so is which statement names a file. The resolver's boot facts
+themselves (`boots`) are not read until the direct start does (D38), and the list of files a disc file opens (`opens`)
+is not read at all. Every recorded launch machine of the resolver is run through this reading by
+`tests/adapters/test_launch_vectors.py` (#2698 D6), which holds Tender's judgement to the resolver's verdict and stated
+`effect`.
 
 **What each verdict does** (D2): which verdicts refuse a start, and each one's words, are
 `frontend/src/utils/gameLaunch.ts`'s. A verdict that refuses disables Play with its own sentence, and Steam's own Play
