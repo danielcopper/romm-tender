@@ -625,6 +625,34 @@ def _statements(answer: Any, state: str) -> tuple[LaunchStatement, ...]:
     )
 
 
+def _stop_reason(answer: Any) -> tuple[str | None, str | None]:
+    """Why the entry does not take the file, and the file it names: the failure of the open the resolver states as
+    the stop (#2698 D5), else a reason of its own, which names no file."""
+    for caveat in answer.caveats:
+        reason = _open_failure(caveat, EFFECT_STOPS)
+        if reason is not None:
+            return reason, _named_file(caveat)
+    return next((_REFUSED_BECAUSE[c.code] for c in answer.caveats if c.code in _REFUSED_BECAUSE), None), None
+
+
+def _first_said_beside_a_start(answer: Any) -> tuple[str | None, str | None]:
+    """The first thing said beside a file that starts, and the file it names where it is one of the opens codes."""
+    for caveat in answer.caveats:
+        reason = _starts_because(caveat)
+        if reason is not None:
+            return reason, _named_file(caveat) if caveat.code in _NAMES_A_FILE else None
+    return None, None
+
+
+def _not_established_reason(answer: Any) -> str | None:
+    """Why the verdict could not be established, in Tender's word."""
+    codes = _caveat_codes(answer)
+    reason = next((reason for code, reason in _NOT_ESTABLISHED_LAUNCH_BECAUSE if code in codes), None)
+    if reason is None and catalogue_refused(answer):
+        return CATALOGUE_UNREAD
+    return reason
+
+
 def _launch_reason(answer: Any, state: str) -> tuple[str | None, str | None]:
     """The resolver's reason behind *answer*'s verdict in Tender's word, and the file it names; ``None`` where none.
 
@@ -633,26 +661,13 @@ def _launch_reason(answer: Any, state: str) -> tuple[str | None, str | None]:
     own — or what is said beside a file that starts. Only a failure of the open
     names a file.
     """
-    caveats = answer.caveats
     if state == NOT_THIS_EMULATOR:
-        for caveat in caveats:
-            reason = _open_failure(caveat, EFFECT_STOPS)
-            if reason is not None:
-                return reason, _named_file(caveat)
-        return next((_REFUSED_BECAUSE[c.code] for c in caveats if c.code in _REFUSED_BECAUSE), None), None
+        return _stop_reason(answer)
     if state == STARTS:
-        for caveat in caveats:
-            reason = _starts_because(caveat)
-            if reason is not None:
-                return reason, _named_file(caveat) if caveat.code in _NAMES_A_FILE else None
-        return None, None
-    if state != LAUNCH_NOT_ESTABLISHED:
-        return None, None
-    codes = _caveat_codes(answer)
-    reason = next((reason for code, reason in _NOT_ESTABLISHED_LAUNCH_BECAUSE if code in codes), None)
-    if reason is None and catalogue_refused(answer):
-        return CATALOGUE_UNREAD, None
-    return reason, None
+        return _first_said_beside_a_start(answer)
+    if state == LAUNCH_NOT_ESTABLISHED:
+        return _not_established_reason(answer), None
+    return None, None
 
 
 def _installed_in(installers: Any) -> tuple[str, ...]:
