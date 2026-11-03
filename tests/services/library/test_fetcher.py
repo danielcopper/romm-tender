@@ -2606,6 +2606,24 @@ class TestAHiddenGameIsLeftOutOfAPlatformSkip:
         assert sorted(rom["id"] for rom in rebuilt) == [10, 11]
 
     @pytest.mark.asyncio
+    async def test_a_platform_whose_every_bound_row_is_left_out_still_skips(self, make_library, fake_romm_api):
+        """The bound-row guard counts the rows left out: the platform skips and rebuilds nothing, so 11 goes stale."""
+        library = make_library(romm_api=fake_romm_api)
+        uow = library.uow
+        _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=1, fetch_id="run-new", rom_ids=(10,))
+        _seed_persisted_rom(uow, 10, app_id=None, group_key="igdb:10:1", fetch_id="run-new")
+        _seed_persisted_rom(uow, 11, app_id=1011, group_key="igdb:11:1", fetch_id="run-old")
+        for rom_id in (10, 11):
+            fake_romm_api.roms[rom_id] = {"id": rom_id, "platform_id": 1, "updated_at": _OLD_UPDATED_AT}
+        fake_romm_api.hidden_rom_ids = {11}
+        library.sync._box.run_hidden_rom_ids = frozenset({11})
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+
+        rebuilt = await library.sync._fetcher._try_unit_incremental_skip(unit)
+
+        assert rebuilt == []
+
+    @pytest.mark.asyncio
     async def test_without_a_hidden_set_every_bound_row_is_rebuilt(self, make_library, fake_romm_api):
         library = make_library(romm_api=fake_romm_api)
         self._seed(library, fake_romm_api, hidden_key="igdb:11:1", sibling=())
