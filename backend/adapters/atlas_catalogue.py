@@ -479,11 +479,13 @@ def _caveat_codes(answer: Any) -> tuple[str, ...]:
     return tuple(caveat.code for caveat in answer.caveats)
 
 
-def _installation(entry: Any) -> str | None:
+def installation_word(entry: Any) -> str | None:
     """Tender's word for what the resolver states about *entry*'s program, ``None`` where it states it startable.
 
     Anything but ``startable`` and ``not-installed`` reads as not established —
-    the resolver's own rule for a value a client does not know.
+    the resolver's own rule for a value a client does not know. Public for
+    :mod:`adapters.atlas_launch`, which words a launch command refused for the
+    entry's installation the same way.
     """
     if entry.availability == AVAILABILITY_STARTABLE:
         return None
@@ -530,7 +532,7 @@ def _classify_entry(entry: Any, *, chosen_in_frontend: bool) -> EmulatorOption:
         core_so=_own_core_so(entry.core_so) if entry.core_so else None,
         core_path=entry.core_path,
         emulator=emulator_identity(entry),
-        installation=_installation(entry),
+        installation=installation_word(entry),
         launcher=_sandbox_launcher(entry),
         start_script_runs_nothing=_start_script_runs_nothing(entry),
         declared_index=entry.declared_index,

@@ -459,6 +459,39 @@ off with the verdict's sentence — the resolver's refusal of the file where it 
 cannot start _entry_ yet." (D42, `frontend/src/utils/emulatorStart.ts::startRefusal`). What a game's own entry answers,
 and what each answer does to a start, is [Launch-target validation](backend-architecture.md#launch-target-validation).
 
+## Starting a game: the resolver's command
+
+A game starts with the command the resolver gives for it
+([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D1):
+`launch_command(system, path, label=<entry in effect>)`, asked of the answering source with the game's own path, the
+path the launch verdict is asked with (D3). `adapters/atlas_launch.py` is the one module that reads that answer, into
+`domain/start_command.py`'s view: a complete command as Tender runs it, or why the resolver gives none (D2).
+
+A command is complete where nothing in it is missing: the resolver answers one, states what the program reads from its
+distribution's own start (`distribution_environment`; not stated is `launch-environment-unpinned`), gives every variable
+there a value (D13 — `""` is a value, passed on as set and empty), and places the folder the command starts in on the
+host where it names one. Whether a variable is `provided` gates nothing; it is passed on as stated.
+
+For a Flatpak program Tender runs
+`flatpak run --nosocket=wayland --filesystem=<game folder> --filesystem=<firmware store>:ro --env=… --command=<program> <app id> <arguments…>`:
+the socket is left out as before (D18, the reason under
+[RetroDECK runs through XWayland in Desktop Mode](../user-guide/troubleshooting.md#retrodeck-runs-through-xwayland-in-desktop-mode)),
+the game's folder is granted writable and Tender's firmware store read-only for this start only (D4), the distribution's
+variables are set first and the command's own `env` after them, so the command wins on a shared name, and a `:` or `\`
+in a granted folder is escaped as Flatpak reads it. An AppImage or a native program runs as the file the resolver names,
+through `env` where it is started with variables. Nothing else of the command is Tender's: the program, its arguments
+and their order are the resolver's, every placeholder already resolved, so an environment prefix such as Dolphin's
+`QT_QPA_PLATFORM=xcb` is set rather than passed as an argument.
+
+Why there is no complete command reads, in Tender's words: how ES-DE starts it could not be read, it starts through a
+`.desktop` file, a file its command reads in could not be read, its command names no program, where its games are kept
+could not be established, its command is longer than can be read, which ES-DE build the source ships could not be read,
+what it needs from RetroDECK's start could not be read or is not known yet, or the folder it starts in could not be
+placed; an entry the resolver does not state startable reads as its installation does. Beside a command that starts, a
+placeholder ES-DE leaves in the command as written is named; a value ES-DE's own substitution would break is passed as
+the resolver answers it, and nothing is said. `tests/adapters/test_launch_command_vectors.py` runs every recorded
+launch-command machine of the vendored resolver through this reading.
+
 ## Application: baking `-e` into `launch_options`
 
 Per
