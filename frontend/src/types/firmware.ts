@@ -443,7 +443,7 @@ export type LaunchNotEstablishedReason = "system_unknown" | "entry_unknown" | "c
 
 /**
  * Why the entry does not start the file, where the resolver states a reason of its own, in Tender's words —
- * among them, where it read the files a disc file opens, the failure it states as the stop (#2698).
+ * among them, where it read the files a disc file opens, the failure it states as the stop (#2698 D5).
  */
 export type LaunchRefusalReason =
   | "takes_no_folder"
@@ -458,10 +458,7 @@ export type LaunchRefusalReason =
   | "path_too_long"
   | "playlist_refused";
 
-/**
- * What the emulator is established to do short of the whole start, where the file starts (#2698): a file of
- * the disc it goes on without. Play stays on.
- */
+/** A file the emulator opens and goes on without, where the file starts (#2698 D7). */
 export type LaunchGoesOnReason =
   | "goes_on_file_missing"
   | "goes_on_track_refused"
@@ -469,8 +466,14 @@ export type LaunchGoesOnReason =
   | "goes_on_format_refused"
   | "goes_on_path_too_long";
 
-/** What the emulator is established to do short of the whole start that is not a file it goes on without (#2698). */
+/** What else the emulator is established to do short of the whole start: not read every disc a playlist lists (#2698 D7). */
 export type LaunchNoteReason = "playlist_discs_past_limit";
+
+/** One statement said beside a verdict (#2698 D8): its word, and the name of the file it is about, or `null`. */
+export interface LaunchStatement {
+  reason: LaunchStoppedShortReason | LaunchGoesOnReason | LaunchNoteReason | "format_unestablished" | "contents_unread";
+  file: string | null;
+}
 
 /** What could not be established about a file the entry starts, in Tender's words. */
 export type LaunchStoppedShortReason =
@@ -510,9 +513,11 @@ export type LaunchStoppedShortReason =
  * `reason` is the resolver's reason in Tender's words, `null` where it named
  * none Tender words: why a verdict was `not_established`, why the entry does not
  * start the file on `not_this_emulator`, and what could not be established
- * about a file that `starts` (#2195 D40) or what its start goes on without (#2698).
- * `reason_file` is the name of the file that reason is about, where the resolver read
- * the files a disc file opens; absent or `null` otherwise. `contents_unread` says the file is an archive whose
+ * about a file that `starts` (#2195 D40) — there, the first of its statements.
+ * `reason_file` is the name of the file that reason is about, where the resolver names one; absent or `null`
+ * otherwise. `statements` is everything said beside the verdict, in the resolver's order (#2698 D8): each
+ * statement beside a start, and each file a refused start would have gone on without; an answer without it is read
+ * from `reason` and the two notes below. `contents_unread` says the file is an archive whose
  * contents were not read; `format_unestablished` that whether the entry reads
  * this format was not established.
  */
@@ -534,6 +539,7 @@ export interface GameLaunch {
     | LaunchNoteReason
     | null;
   reason_file?: string | null;
+  statements?: LaunchStatement[];
   contents_unread: boolean;
   format_unestablished: boolean;
 }

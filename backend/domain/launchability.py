@@ -42,11 +42,10 @@ DISC_NOT_FOUND = "disc_not_found"
 DISC_KEY_MISSING = "disc_key_missing"
 
 # Why the entry does not start a disc file, where the resolver read the files
-# its emulator opens through it and states where the open stops (#2698): a
+# its emulator opens through it and states where the open stops (#2698 D5): a
 # file it opens is missing, it refuses a track's type or a cue sheet or
 # playlist, a file is not a disc image it opens, a path is too long for it to
-# open, or it starts no game from a playlist. Each names the file
-# (:attr:`Launchability.reason_file`).
+# open, or it starts no game from a playlist.
 OPENED_FILE_MISSING = "opened_file_missing"
 TRACK_REFUSED = "track_refused"
 SHEET_REFUSED = "sheet_refused"
@@ -55,9 +54,8 @@ PLAYLIST_REFUSED = "playlist_refused"
 PATH_TOO_LONG = "path_too_long"
 
 # What the emulator is established to do short of the whole start, where the
-# file starts (#2698). Play stays on, with a note naming the file: it goes on
-# without a file it opens, for each failure above but the playlist's, or it
-# reads no more than four discs from a playlist.
+# file starts (#2698 D7): it goes on without a file it opens, for each failure
+# above but the playlist's, or it does not read every disc a playlist lists.
 GOES_ON_FILE_MISSING = "goes_on_file_missing"
 GOES_ON_TRACK_REFUSED = "goes_on_track_refused"
 GOES_ON_SHEET_REFUSED = "goes_on_sheet_refused"
@@ -66,7 +64,7 @@ GOES_ON_PATH_TOO_LONG = "goes_on_path_too_long"
 PLAYLIST_DISCS_PAST_LIMIT = "playlist_discs_past_limit"
 
 # What could not be established about a file the entry starts, in Tender's
-# words (#2195 D40). Play stays on, with a note naming it.
+# words (#2195 D40).
 CONTENT_MISSING = "content_missing"
 CONTENT_UNREADABLE = "content_unreadable"
 GAME_LIST_UNREAD = "game_list_unread"
@@ -82,16 +80,34 @@ DISC_FOLDER_SET = "disc_folder_set"
 DISC_FOLDER_UNKNOWN = "disc_folder_unknown"
 CONTENT_UNCHECKED = "content_unchecked"
 VERSION_DEPENDENT = "version_dependent"
-# The same, for the files a disc file opens (#2698): a format the reading does
-# not follow, content it does not read, a file it could not read, the setting
-# that loads a patch, more files than it follows, or a path too long for what
-# the emulator does with it to be established. Each names the file.
+# The same, for the files a disc file opens (#2698 D7): a format the reading
+# does not follow, content it does not read, a file it could not check, the
+# setting that loads a patch, a limit of the reading reached, or a path too long
+# for what the emulator does with it to be established.
 OPENED_FORMAT_UNREAD = "opened_format_unread"
 OPENED_CONTENT_UNREAD = "opened_content_unread"
 OPENED_FILE_UNREAD = "opened_file_unread"
 PATCH_SETTING_UNREAD = "patch_setting_unread"
 OPENS_PAST_BOUND = "opens_past_bound"
 PATH_TOO_LONG_UNCHECKED = "path_too_long_unchecked"
+
+# Said beside a start as statements of their own (#2698 D8): whether the entry
+# reads the format was not established (#2195 D41), and an archive's contents
+# were not read.
+FORMAT_UNESTABLISHED = "format_unestablished"
+CONTENTS_UNREAD = "contents_unread"
+
+
+@dataclass(frozen=True, slots=True)
+class LaunchStatement:
+    """One statement said beside a verdict: its word, and the name of the file it is about where it names one."""
+
+    reason: str
+    file: str | None = None
+
+    def payload(self) -> dict[str, Any]:
+        """The statement as the panel reads it."""
+        return {"reason": self.reason, "file": self.file}
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,9 +127,12 @@ class Launchability:
     (:data:`SYSTEM_UNKNOWN` …), why the entry does not start the file on
     :data:`NOT_THIS_EMULATOR` (:data:`TAKES_NO_FOLDER` …), and what could not be
     established about a file that :data:`STARTS` (:data:`CONTENT_MISSING` …)
-    or what is said beside its start (:data:`GOES_ON_FILE_MISSING` …).
-    ``reason_file`` is the name of the file the reason is about, where the
-    resolver read the files a disc file opens, and ``None`` otherwise.
+    or what is said beside its start (:data:`GOES_ON_FILE_MISSING` …) — on a
+    start, the first of its ``statements``. ``reason_file`` is the name of the
+    file the reason is about, where the resolver names one, and ``None``
+    otherwise. ``statements`` is everything said beside the verdict, in the
+    resolver's order (#2698 D8): each statement beside a start, and beside a
+    refusal each file the emulator would have gone on without.
     ``contents_unread`` says the file is an archive whose contents were not
     read; ``format_unestablished`` that whether the entry reads this format was
     not established.
@@ -129,6 +148,7 @@ class Launchability:
     install_in: tuple[str, ...] | None = None
     reason: str | None = None
     reason_file: str | None = None
+    statements: tuple[LaunchStatement, ...] = ()
     contents_unread: bool = False
     format_unestablished: bool = False
 
@@ -150,6 +170,7 @@ class Launchability:
             "install_in": None if self.install_in is None else list(self.install_in),
             "reason": self.reason,
             "reason_file": self.reason_file,
+            "statements": [statement.payload() for statement in self.statements],
             "contents_unread": self.contents_unread,
             "format_unestablished": self.format_unestablished,
         }

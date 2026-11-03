@@ -3,7 +3,7 @@
 Shared by the tests that run the vendored copy's vectors
 (``tests/adapters/atlas_vectors/``) through Tender's reading of an answer. A
 machine built differently from upstream's is not the machine the vector
-recorded, so both functions follow emu-atlas ``tests/test_machine_vectors.py``
+recorded, so the machine and the installation asked follow emu-atlas ``tests/test_machine_vectors.py``
 at the release the copy's README names.
 """
 

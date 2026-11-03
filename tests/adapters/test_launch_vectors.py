@@ -12,21 +12,20 @@ code:
   it on, and only a verdict the resolver could not establish reads as not
   established;
 - the ``effect`` it states for a failure of the open: the stop is the refusal's
-  reason and names its file, and beside a launchable answer a file the emulator
-  goes on without reads as said beside the start, never as not established,
-  while an effect not established reads as not established.
+  reason and names its file, and every other failure the answer states is said
+  among Tender's statements (#2698 D8), in the resolver's order, in its own
+  group — a file the emulator goes on without as said beside the start or the
+  refusal, never as not established, and an effect not established as not
+  established.
 
 Its limit: a note whose being "not established" the resolver states only
 through what its code means — ``entry-format-unestablished``, the boot codes,
 the opens reading's unread codes — carries no such data, so the test does not
 judge it; the reading module's classification and its own tests stand for it.
-The test grows to cover those once emu-atlas states the take on every launch
-caveat.
 """
 
 from __future__ import annotations
 
-import dataclasses
 import os
 from typing import Any
 
@@ -83,7 +82,6 @@ _GOES_ON_WORDS = {
     GOES_ON_PATH_TOO_LONG,
 }
 _NOT_ESTABLISHED_WORDS = {PATH_TOO_LONG_UNCHECKED}
-_GROUP_OF_EFFECT = {EFFECT_GOES_ON: _GOES_ON_WORDS, EFFECT_UNESTABLISHED: _NOT_ESTABLISHED_WORDS}
 
 _VECTORS = vectors_asking("launchable")
 
@@ -169,21 +167,29 @@ class TestTendersJudgementIsTheResolvers:
 
         if answer.verdict == VERDICT_ENTRY_NOT_ACCEPTED and stops:
             assert result.reason in _STOP_WORDS
-            assert result.reason_file == os.path.basename(stops[0].data["file"])
+            assert result.reason_file == _named(stops[0].data["file"])
         else:
             assert not stops
             assert result.reason not in _STOP_WORDS
 
-    def test_beside_a_start_each_effect_reads_as_its_own_group(self, vector):
+    def test_every_other_stated_failure_is_said_in_its_own_group_in_order(self, vector):
         kind, answer, query, label = _asked(vector)
-        stated = _effect_caveats(answer)
-        if answer.verdict != VERDICT_LAUNCHABLE or not stated:
-            return
+        stated = [caveat for caveat in _effect_caveats(answer) if caveat.data["effect"] != EFFECT_STOPS]
 
-        # Only what the resolver states as data: the answer with its stated
-        # effects alone, read through Tender's reading module.
-        result = _read(kind, dataclasses.replace(answer, caveats=tuple(stated)), query, label)
+        result = _read(kind, answer, query, label)
 
-        assert result.state == STARTS
-        assert result.reason in _GROUP_OF_EFFECT[stated[0].data["effect"]]
-        assert result.reason_file == os.path.basename(stated[0].data["file"])
+        said = [
+            statement for statement in result.statements if statement.reason in _GOES_ON_WORDS | _NOT_ESTABLISHED_WORDS
+        ]
+        assert [(_group_of(statement.reason), statement.file) for statement in said] == [
+            (caveat.data["effect"], _named(caveat.data["file"])) for caveat in stated
+        ]
+
+
+def _group_of(reason: str) -> str:
+    return EFFECT_GOES_ON if reason in _GOES_ON_WORDS else EFFECT_UNESTABLISHED
+
+
+def _named(file: str) -> str:
+    """A file as the sentences name it: its name, a folder's own name for a path that names a folder."""
+    return os.path.basename(file.rstrip("/")) or file

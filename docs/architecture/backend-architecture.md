@@ -2051,16 +2051,22 @@ starts but the resolver's reading of it stopped short — RPCS3's own boot read 
 extension and then reads content the resolver does not, an extension the emulator's builds disagree on — the verdict
 still starts and `reason` names what was not established.
 
-**Where the resolver reads the files a disc file opens**
-([#2698](https://github.com/danielcopper/romm-tender/issues/2698)), each failure of that open carries the course the
-resolver states for it (`effect`), and Tender reads it by that alone (D5): the failure it states as the stop is the
-refusal's reason, a file the emulator goes on without is said beside a start that goes ahead — never as not established
-— and a failure whose course is not established is said as not established, as is anything else that reading could not
-follow. Each of these names the file the resolver states it about (`reason_file`, the name without its folder). Which
-code is which is `adapters/atlas_catalogue.py`'s (`_REFUSED_BECAUSE`, `_OPEN_FAILED_BECAUSE`, `_STOPPED_SHORT_BECAUSE`);
-the resolver's boot facts themselves (`boots`) are not read until the direct start does (D38), and the list of files a
-disc file opens (`opens`) is not read at all. Every recorded launch machine of the resolver is run through this reading
-by `tests/adapters/test_launch_vectors.py` (D6), which holds Tender's judgement to the resolver's verdict and stated
+**Where the resolver reads the files a disc file opens**, each failure of that open carries the course the resolver
+states for it (`effect`), and Tender reads it by that alone
+([#2698](https://github.com/danielcopper/romm-tender/issues/2698) D5, D7): the failure it states as the stop is the
+refusal's reason, a file the emulator goes on without is said beside a start that goes ahead or beside the refusal —
+never as not established — and a failure whose course is not established is said as not established, as is anything else
+that reading could not follow. Genesis Plus GX not reading every disc a playlist lists is said beside the start the same
+way.
+
+**Every statement is said** (#2698 D8): `statements` carries each one Tender words, in the resolver's caveat order — the
+format not established (#2195 D41) and the archive whose contents were not read among them — and `reason` stays the
+first; beside a refusal, `statements` carries the files the emulator would have gone on without. Which code is which is
+`adapters/atlas_catalogue.py`'s (`_REFUSED_BECAUSE`, `_OPEN_FAILED_BECAUSE`, `_STOPPED_SHORT_BECAUSE`,
+`_STARTS_WITH_A_NOTE_BECAUSE`, `_STARTS_ALSO_SAYS`), and so is which statement names a file. The resolver's boot facts
+themselves (`boots`) are not read until the direct start does (D38), and the list of files a disc file opens (`opens`)
+is not read at all. Every recorded launch machine of the resolver is run through this reading by
+`tests/adapters/test_launch_vectors.py` (#2698 D6), which holds Tender's judgement to the resolver's verdict and stated
 `effect`.
 
 **What each verdict does** (D2): which verdicts refuse a start, and each one's words, are

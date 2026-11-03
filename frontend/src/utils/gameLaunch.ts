@@ -6,11 +6,13 @@
  * Three states refuse a start: the game has to be installed in an emulator
  * first, the file is not one the system starts from, or the entry does not
  * start it, with the resolver's reason where it states one. The other two let
- * it go ahead: it starts, which says nothing unless the resolver's reading of
- * the file stopped short of something, its format included, the file is an
- * archive whose contents were not read, or the start goes on without a file of
- * the disc (#2698), or whether it starts could not be established, which says
- * so (#2195 D40, D41). This is the one home of that rule.
+ * it go ahead: it starts, which says nothing unless the resolver states
+ * something beside it — its reading of the file stopped short of something, its
+ * format included, the file is an archive whose contents were not read, the
+ * start goes on without a file it opens, or the emulator does not read every
+ * disc a playlist lists — each said in its own words (#2195 D40, D41; #2698 D7,
+ * D8); or whether it starts could not be established, which says so. This is
+ * the one home of that rule.
  *
  * Beside them are the notifications for a page whose check of whether the game
  * can start went wrong, and for a start pressed after it that then fails.
@@ -23,6 +25,7 @@ import type {
   LaunchGoesOnReason,
   LaunchNoteReason,
   LaunchRefusalReason,
+  LaunchStatement,
   LaunchStoppedShortReason,
 } from "../types";
 import { sourceName } from "./emulatorSourceWording";
@@ -88,27 +91,28 @@ const REFUSED_BECAUSE: Record<
     line: () => "the image is encrypted and has no key file",
   },
   opened_file_missing: {
-    page: (launch) => `${launch.entry} cannot start ${launch.file}: ${namedFile(launch)} is missing.`,
-    line: (launch) => `${namedFile(launch)} is missing`,
+    page: (launch) => `${launch.entry} cannot start ${launch.file}: ${refusalFile(launch)} is missing.`,
+    line: (launch) => `${refusalFile(launch)} is missing`,
   },
   track_refused: {
     page: (launch) =>
-      `${launch.entry} cannot start ${launch.file}: ${namedFile(launch)} is a track of a type it does not take.`,
-    line: (launch) => `${namedFile(launch)} is a track of a type it does not take`,
+      `${launch.entry} cannot start ${launch.file}: ${refusalFile(launch)} is a track of a type it does not take.`,
+    line: (launch) => `${refusalFile(launch)} is a track of a type it does not take`,
   },
   sheet_refused: {
     page: (launch) =>
-      `${launch.entry} cannot start ${launch.file}: it refuses the cue sheet or playlist ${namedFile(launch)}.`,
-    line: (launch) => `it refuses the cue sheet or playlist ${namedFile(launch)}`,
+      `${launch.entry} cannot start ${launch.file}: it refuses the cue sheet or playlist ${refusalFile(launch)}.`,
+    line: (launch) => `it refuses the cue sheet or playlist ${refusalFile(launch)}`,
   },
   format_refused: {
-    page: (launch) => `${launch.entry} cannot start ${launch.file}: ${namedFile(launch)} is not a disc image it opens.`,
-    line: (launch) => `${namedFile(launch)} is not a disc image it opens`,
+    page: (launch) =>
+      `${launch.entry} cannot start ${launch.file}: ${refusalFile(launch)} is not a disc image it opens.`,
+    line: (launch) => `${refusalFile(launch)} is not a disc image it opens`,
   },
   path_too_long: {
     page: (launch) =>
-      `${launch.entry} cannot start ${launch.file}: the path of ${namedFile(launch)} is too long for it to open.`,
-    line: (launch) => `the path of ${namedFile(launch)} is too long for it to open`,
+      `${launch.entry} cannot start ${launch.file}: the path of ${refusalFile(launch)} is too long for it to open.`,
+    line: (launch) => `the path of ${refusalFile(launch)} is too long for it to open`,
   },
   playlist_refused: {
     page: (launch) => `${launch.entry} cannot start ${launch.file}: it starts no game from a playlist.`,
@@ -118,9 +122,10 @@ const REFUSED_BECAUSE: Record<
 
 /**
  * What could not be established about a file the entry starts (#2195 D40), as
- * the page's note and the menu's line both finish their sentence.
+ * the page's note and the menu's line both finish their sentence. `file` is the
+ * file the statement is about.
  */
-const STOPPED_SHORT_BECAUSE: Record<LaunchStoppedShortReason, (launch: GameLaunch) => string> = {
+const STOPPED_SHORT_BECAUSE: Record<LaunchStoppedShortReason, (launch: GameLaunch, file: string) => string> = {
   content_missing: (launch) => `${launch.file} was not found`,
   content_unreadable: () => "what RPCS3 would look at could not be read",
   game_list_unread: () => "the emulator's own list of installed games was not read",
@@ -140,50 +145,125 @@ const STOPPED_SHORT_BECAUSE: Record<LaunchStoppedShortReason, (launch: GameLaunc
   content_unchecked: (launch) =>
     `${launch.extension} files are taken, but the content of ${launch.file} was not checked`,
   version_dependent: (launch) => `whether it reads ${launch.extension} depends on the emulator's version`,
-  opened_format_unread: (launch) => `how it opens ${namedFile(launch)} was not checked`,
-  opened_content_unread: (launch) => `what it makes of ${namedFile(launch)} depends on its content, which was not read`,
-  opened_file_unread: (launch) => `${namedFile(launch)} could not be read`,
+  opened_format_unread: (_launch, file) => `how it opens ${file} was not checked`,
+  opened_content_unread: (_launch, file) => `what it makes of ${file} is not established`,
+  opened_file_unread: (_launch, file) => `${file} could not be checked`,
   patch_setting_unread: () => "whether it loads a patch for the disc image could not be read",
-  opens_past_bound: () => "the game opens more files than were checked",
-  path_too_long_unchecked: (launch) =>
-    `the path of ${namedFile(launch)} is too long for it to read in full, and what it does then was not checked`,
+  opens_past_bound: (_launch, file) =>
+    `the check stopped at one of its limits at ${file}, so what it opens past that was not checked`,
+  path_too_long_unchecked: (_launch, file) =>
+    `the path of ${file} is too long for it to read in full, and what it does then was not checked`,
 };
 
 /**
- * What a start goes on without (#2698): a file of the disc the emulator opens without it, as the page's note and
- * the menu's line both finish their sentence. Play stays on.
+ * What a start goes on without (#2698 D7): a file the emulator opens, which it goes on without, as the page's note
+ * and the menu's line both finish their sentence.
  */
 const GOES_ON_BECAUSE: Record<LaunchGoesOnReason, string> = {
   goes_on_file_missing: "it is missing",
   goes_on_track_refused: "it is a track of a type it does not take",
   goes_on_sheet_refused: "it refuses this cue sheet or playlist",
   goes_on_format_refused: "it is not a disc image it opens",
-  goes_on_path_too_long: "its path is too long to open",
+  goes_on_path_too_long: "its path is too long for it to use in full",
 };
 
 /**
- * What else the emulator is established to do short of the whole start (#2698), as the page's note and the menu's
- * line both finish their sentence after "can start …, but". Play stays on.
+ * What else the emulator is established to do short of the whole start (#2698 D7), as the page's note and the
+ * menu's line both finish their sentence after "can start …, but".
  */
-const STARTS_WITH_A_NOTE_BECAUSE: Record<LaunchNoteReason, (launch: GameLaunch) => string> = {
-  playlist_discs_past_limit: (launch) => `reads no more than four discs from ${namedFile(launch)}`,
+const STARTS_WITH_A_NOTE_BECAUSE: Record<LaunchNoteReason, (file: string) => string> = {
+  playlist_discs_past_limit: (file) => `does not read every disc ${file} lists`,
 };
 
-function startsWithANoteBecause(launch: GameLaunch): string | null {
-  return launch.state === "starts" && launch.reason !== null && launch.reason in STARTS_WITH_A_NOTE_BECAUSE
-    ? STARTS_WITH_A_NOTE_BECAUSE[launch.reason as LaunchNoteReason](launch)
-    : null;
+/** One statement as the page's note says it and as the emulator menu's line says it. */
+interface Said {
+  note: string;
+  line: string;
 }
 
-/** The file the resolver's reason is about, named as the sentences name it: its name, else the game's own file. */
-function namedFile(launch: GameLaunch): string {
+/**
+ * *statement* in its own group's words (#2698 D8), or `null` where Tender words none. `tenderStarts` false drops
+ * the menu's "can start it" (#2195 D42) and keeps the rest of the line.
+ */
+function said(launch: GameLaunch, statement: LaunchStatement, tenderStarts: boolean): Said | null {
+  const file = statement.file ?? launch.file;
+  const reason = statement.reason;
+  if (reason in STOPPED_SHORT_BECAUSE) {
+    const why = STOPPED_SHORT_BECAUSE[reason as LaunchStoppedShortReason](launch, file);
+    return {
+      note: `Whether ${launch.entry} starts this game cannot be established: ${why}.`,
+      line: `whether it starts the game is not established: ${why}`,
+    };
+  }
+  if (reason in GOES_ON_BECAUSE) {
+    const without = `without ${file}: ${GOES_ON_BECAUSE[reason as LaunchGoesOnReason]}`;
+    return {
+      note: `${launch.entry} can start this game, but goes on ${without}.`,
+      line: tenderStarts ? `can start it, ${without}` : without,
+    };
+  }
+  if (reason in STARTS_WITH_A_NOTE_BECAUSE) {
+    const note = STARTS_WITH_A_NOTE_BECAUSE[reason as LaunchNoteReason](file);
+    return {
+      note: `${launch.entry} can start this game, but ${note}.`,
+      line: tenderStarts ? `can start it, but ${note}` : note,
+    };
+  }
+  if (reason === "format_unestablished") {
+    return {
+      note: `Whether ${launch.entry} reads ${launch.extension} files is not established.`,
+      line: `whether it reads ${launch.extension} is not established`,
+    };
+  }
+  if (reason === "contents_unread") {
+    return {
+      note: `What is inside ${launch.file} was not read, so whether ${launch.entry} finds a game in it cannot be established.`,
+      line: `what is inside ${launch.file} was not read`,
+    };
+  }
+  return null;
+}
+
+/**
+ * Everything said beside the verdict, in the resolver's order (#2698 D8): the answer's `statements`, or, on an
+ * answer that carries none, its reason and its two notes.
+ */
+function statementsOf(launch: GameLaunch): LaunchStatement[] {
+  if (launch.statements !== undefined) return launch.statements;
+  if (launch.state !== "starts") return [];
+  const statements: LaunchStatement[] = [];
+  if (launch.reason !== null) {
+    // On a start the reason is a statement's word; one Tender words none of is left unsaid by `said`.
+    statements.push({ reason: launch.reason as LaunchStatement["reason"], file: launch.reason_file ?? null });
+  }
+  if (launch.format_unestablished) statements.push({ reason: "format_unestablished", file: null });
+  if (launch.contents_unread) statements.push({ reason: "contents_unread", file: null });
+  return statements;
+}
+
+/** Every statement beside the verdict that Tender words, in order. */
+function allSaid(launch: GameLaunch, tenderStarts: boolean): Said[] {
+  return statementsOf(launch).flatMap((statement) => said(launch, statement, tenderStarts) ?? []);
+}
+
+/** The file the refusal's reason is about, named as the sentences name it: its name, else the game's own file. */
+function refusalFile(launch: GameLaunch): string {
   return launch.reason_file ?? launch.file;
 }
 
-function goesOnBecause(launch: GameLaunch): string | null {
-  return launch.state === "starts" && launch.reason !== null && launch.reason in GOES_ON_BECAUSE
-    ? GOES_ON_BECAUSE[launch.reason as LaunchGoesOnReason]
-    : null;
+/**
+ * The files a refused start would have gone on without (#2698 D8), each as a sentence after the refusal's own.
+ */
+function wouldGoOnWithout(launch: GameLaunch): string {
+  return statementsOf(launch)
+    .flatMap((statement) =>
+      statement.reason in GOES_ON_BECAUSE
+        ? [
+            ` It would go on without ${statement.file ?? launch.file}: ${GOES_ON_BECAUSE[statement.reason as LaunchGoesOnReason]}.`,
+          ]
+        : [],
+    )
+    .join("");
 }
 
 function refusedBecause(launch: GameLaunch): (typeof REFUSED_BECAUSE)[LaunchRefusalReason] | null {
@@ -192,10 +272,9 @@ function refusedBecause(launch: GameLaunch): (typeof REFUSED_BECAUSE)[LaunchRefu
     : null;
 }
 
-function stoppedShortBecause(launch: GameLaunch): string | null {
-  return launch.state === "starts" && launch.reason !== null && launch.reason in STOPPED_SHORT_BECAUSE
-    ? STOPPED_SHORT_BECAUSE[launch.reason as LaunchStoppedShortReason](launch)
-    : null;
+/** A menu line with the count of the statements it does not show (#2698 D8). */
+function withMore(line: string, more: number): string {
+  return more > 0 ? `${line} +${more} more` : line;
 }
 
 /**
@@ -249,10 +328,11 @@ export function launchRefusal(launch: GameLaunch | null, canPick: boolean): stri
       return `${launch.file} is not the file ${launch.platform_name} starts from; it starts from ${listedExtensions(launch.starts_from)}.`;
     case "not_this_emulator": {
       const refused = refusedBecause(launch);
-      if (refused !== null) return `${refused.page(launch)}${otherEntriesPointer(launch, canPick)}`;
-      if (launch.other_entries.length === 0) return `${launch.entry} does not start ${launch.extension}.`;
+      const goesOn = wouldGoOnWithout(launch);
+      if (refused !== null) return `${refused.page(launch)}${goesOn}${otherEntriesPointer(launch, canPick)}`;
+      if (launch.other_entries.length === 0) return `${launch.entry} does not start ${launch.extension}.${goesOn}`;
       const pointer = canPick ? " Choose another emulator in the emulator menu." : "";
-      return `${launch.entry} does not start ${launch.extension}; other emulators of this system do.${pointer}`;
+      return `${launch.entry} does not start ${launch.extension}; other emulators of this system do.${goesOn}${pointer}`;
     }
     default:
       return null;
@@ -260,40 +340,33 @@ export function launchRefusal(launch: GameLaunch | null, canPick: boolean): stri
 }
 
 /**
- * What the page says about a verdict that lets the game start, or `null` where
- * there is nothing to say: whether it starts could not be established, what the
- * reading of the file stopped short of, what its start goes on without
- * (#2698), whether the entry reads its format (#2195 D41), or that the file is
- * an archive whose contents were not read.
- * `source` is the source the answer came from.
+ * Everything the page says under Play about a verdict that lets the game start, in order, each in its own group's
+ * words and none of them weighed against another (#2698 D8): whether it starts could not be established, what the
+ * reading of the file stopped short of, what its start goes on without or what else it is established to do short
+ * of the whole start, whether the entry reads its format (#2195 D41), and that the file is an archive whose
+ * contents were not read. Empty where there is nothing to say. `source` is the source the answer came from.
  */
-export function launchNote(launch: GameLaunch | null, source: AnsweringSource | null): string | null {
-  if (launch === null) return null;
+export function launchNotes(launch: GameLaunch | null, source: AnsweringSource | null): string[] {
+  if (launch === null) return [];
   if (launch.state === "not_established") {
-    return `Whether ${launch.file} starts cannot be established: ${notEstablishedBecause(launch, source)}.`;
+    return [`Whether ${launch.file} starts cannot be established: ${notEstablishedBecause(launch, source)}.`];
   }
-  const stoppedShort = stoppedShortBecause(launch);
-  if (stoppedShort !== null) return `Whether ${launch.entry} starts this game cannot be established: ${stoppedShort}.`;
-  const goesOn = goesOnBecause(launch);
-  if (goesOn !== null)
-    return `${launch.entry} can start this game, but goes on without ${namedFile(launch)}: ${goesOn}.`;
-  const note = startsWithANoteBecause(launch);
-  if (note !== null) return `${launch.entry} can start this game, but ${note}.`;
-  if (launch.state === "starts" && launch.format_unestablished) {
-    return `Whether ${launch.entry} reads ${launch.extension} files is not established.`;
-  }
-  if (launch.state === "starts" && launch.contents_unread) {
-    return `What is inside ${launch.file} was not read, so whether ${launch.entry} finds a game in it cannot be established.`;
-  }
-  return null;
+  if (launch.state !== "starts") return [];
+  return allSaid(launch, true).map((each) => each.note);
+}
+
+/** The first of {@link launchNotes}, or `null` where there is nothing to say. */
+export function launchNote(launch: GameLaunch | null, source: AnsweringSource | null): string | null {
+  return launchNotes(launch, source)[0] ?? null;
 }
 
 /**
  * The short line the emulator menu shows under an entry for its verdict on the
- * game (#2195 D22, D29, D36), or `null` where there is nothing to say: a plain
- * "can start it" for an entry Tender cannot start (`tenderStarts` false), which
- * its row already says it cannot (D42) — beside what its start goes on without,
- * only the "can start it" goes. `source` is the source the answer came from.
+ * game (#2195 D22, D29, D36), or `null` where there is nothing to say: the first
+ * statement, with how many more there are (#2698 D8), or a plain "can start it"
+ * — none for an entry Tender cannot start (`tenderStarts` false), which its row
+ * already says it cannot (D42); beside a statement, only the "can start it"
+ * goes. `source` is the source the answer came from.
  */
 export function entryLaunchLine(
   launch: GameLaunch,
@@ -305,22 +378,15 @@ export function entryLaunchLine(
       return "cannot start it: the game has to be installed first";
     case "not_a_launch_file":
       return `${launch.platform_name} does not start from ${launch.extension}`;
-    case "not_this_emulator":
-      return refusedBecause(launch)?.line(launch) ?? `cannot start ${launch.extension} files`;
+    case "not_this_emulator": {
+      const goesOn = statementsOf(launch).filter((statement) => statement.reason in GOES_ON_BECAUSE).length;
+      return withMore(refusedBecause(launch)?.line(launch) ?? `cannot start ${launch.extension} files`, goesOn);
+    }
     case "not_established":
       return `whether it starts cannot be established: ${notEstablishedBecause(launch, source)}`;
     default: {
-      const stoppedShort = stoppedShortBecause(launch);
-      if (stoppedShort !== null) return `whether it starts the game is not established: ${stoppedShort}`;
-      const goesOn = goesOnBecause(launch);
-      if (goesOn !== null) {
-        const without = `without ${namedFile(launch)}: ${goesOn}`;
-        return tenderStarts ? `can start it, ${without}` : without;
-      }
-      const note = startsWithANoteBecause(launch);
-      if (note !== null) return tenderStarts ? `can start it, but ${note}` : note;
-      if (launch.format_unestablished) return `whether it reads ${launch.extension} is not established`;
-      if (launch.contents_unread) return `what is inside ${launch.file} was not read`;
+      const lines = allSaid(launch, tenderStarts).map((each) => each.line);
+      if (lines.length > 0) return withMore(lines[0]!, lines.length - 1);
       return tenderStarts ? "can start it" : null;
     }
   }

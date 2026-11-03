@@ -150,6 +150,7 @@ from domain.launchability import (
     CONTENT_MISSING,
     CONTENT_UNCHECKED,
     CONTENT_UNREADABLE,
+    CONTENTS_UNREAD,
     DISC_FOLDER_SET,
     DISC_FOLDER_UNKNOWN,
     DISC_KEY_MISSING,
@@ -158,6 +159,7 @@ from domain.launchability import (
     ENCRYPTION_UNREAD,
     ENTRY_UNKNOWN,
     FORMAT_REFUSED,
+    FORMAT_UNESTABLISHED,
     GAME_KIND_UNFOLLOWED,
     GAME_LIST_UNREAD,
     GOES_ON_FILE_MISSING,
@@ -193,6 +195,7 @@ from domain.launchability import (
     TRACK_REFUSED,
     VERSION_DEPENDENT,
     Launchability,
+    LaunchStatement,
 )
 from domain.launchability import NOT_ESTABLISHED as LAUNCH_NOT_ESTABLISHED
 from domain.shortcut_data import RETRODECK_APP_ID
@@ -306,8 +309,8 @@ _NOT_ESTABLISHED_LAUNCH_BECAUSE = (
     (CAVEAT_SYSTEM_UNKNOWN, SYSTEM_UNKNOWN),
 )
 
-# A failure of the open of a disc file's files (#2698), by what the resolver
-# states follows it (its ``effect``, D5): the emulator stops there, which is
+# A failure of the open of a disc file's files, by what the resolver states
+# follows it (its ``effect``, #2698 D5, D7): the emulator stops there, which is
 # the refusal behind an entry-not-accepted verdict; it goes on without the
 # file, which a launchable answer says beside the start; or what it does there
 # is not established. A failure whose effect this map does not hold reads as
@@ -346,8 +349,8 @@ _REFUSED_BECAUSE = {
 }
 
 # What the emulator is established to do with the file that is not the whole
-# start, said beside a launchable verdict (#2698): Genesis Plus GX reads no
-# more than four discs from a playlist.
+# start, said beside a launchable verdict (#2698 D7): Genesis Plus GX does not
+# read every disc a playlist lists.
 _STARTS_WITH_A_NOTE_BECAUSE = {
     CAVEAT_OPENS_ENTRY_IGNORED: PLAYLIST_DISCS_PAST_LIMIT,
 }
@@ -356,7 +359,7 @@ _STARTS_WITH_A_NOTE_BECAUSE = {
 # launchable verdict (#2195 D40): the entry's own boot read as far as it goes,
 # a loader that takes the extension and then reads content atlas does not, an
 # extension the emulator's builds disagree on, or the files a disc file opens
-# read as far as they go (#2698). None of them refuses the start; each is said
+# read as far as they go (#2698 D7). None of them refuses the start; each is said
 # beside it.
 _STOPPED_SHORT_BECAUSE = {
     CAVEAT_BOOT_PATH_MISSING: CONTENT_MISSING,
@@ -400,8 +403,16 @@ _LAUNCH_NOTES_UNWORDED = frozenset(
     }
 )
 
-# The codes of the reading of the files a disc file opens, each about one file
-# (``data["file"]``), which its sentence names.
+# Beside a start, the format the entry was not established to read (#2195 D41)
+# and an archive whose contents were not read, each a statement of its own
+# beside the rest (#2698 D8).
+_STARTS_ALSO_SAYS = {
+    CAVEAT_ENTRY_FORMAT_UNESTABLISHED: FORMAT_UNESTABLISHED,
+    CAVEAT_ARCHIVE_CONTENTS_UNREAD: CONTENTS_UNREAD,
+}
+
+# The codes of the reading of the files a disc file opens. Each sentence names
+# the file the resolver states it about (``data["file"]``), where it states one.
 _NAMES_A_FILE = frozenset(
     {
         *(code for failures in _OPEN_FAILED_BECAUSE.values() for code in failures),
@@ -562,16 +573,48 @@ def _starts_because(caveat: Any) -> str | None:
 
 
 def _named_file(caveat: Any) -> str | None:
-    """The name of the file *caveat* states, without its folder, or ``None`` where it states none."""
+    """The name of the file *caveat* states, without its folder, or ``None`` where it states none.
+
+    A path that names a folder (a playlist's blank line is the folder it sits in)
+    is named by its last folder, and a path with no name of its own as it is.
+    """
     file = caveat.data.get("file")
-    return os.path.basename(file) if isinstance(file, str) else None
+    if not isinstance(file, str):
+        return None
+    return os.path.basename(file.rstrip("/")) or file
+
+
+def _statement(caveat: Any, reason: str) -> LaunchStatement:
+    """*caveat* said as *reason*, naming its file where it is one of the opens reading's codes."""
+    return LaunchStatement(reason, _named_file(caveat) if caveat.code in _NAMES_A_FILE else None)
+
+
+def _statements(answer: Any, state: str) -> tuple[LaunchStatement, ...]:
+    """Every statement Tender says beside *answer*'s verdict, in the resolver's caveat order (#2698 D8).
+
+    Beside a start, each one Tender words; beside a refusal, each file the
+    emulator would have gone on without, the stop being the verdict's reason.
+    """
+    if state == NOT_THIS_EMULATOR:
+        return tuple(
+            _statement(caveat, reason)
+            for caveat in answer.caveats
+            if (reason := _open_failure(caveat, EFFECT_GOES_ON)) is not None
+        )
+    if state != STARTS:
+        return ()
+    return tuple(
+        _statement(caveat, reason)
+        for caveat in answer.caveats
+        if (reason := _starts_because(caveat) or _STARTS_ALSO_SAYS.get(caveat.code)) is not None
+    )
 
 
 def _launch_reason(answer: Any, state: str) -> tuple[str | None, str | None]:
     """The resolver's reason behind *answer*'s verdict in Tender's word, and the file it names; ``None`` where none.
 
     Why it could not be established, why the entry does not take the file — the
-    failure of the open the resolver states as the stop (D5), or a reason of its
+    failure of the open the resolver states as the stop (#2698 D5), or a reason of its
     own — or what is said beside a file that starts. Only a failure of the open
     names a file.
     """
@@ -623,6 +666,7 @@ def _launchability(answer: Any, *, system: str, content_path: str, label: str) -
         install_in=None if answer.installers is None else _installed_in(answer.installers),
         reason=reason,
         reason_file=reason_file,
+        statements=_statements(answer, state),
         contents_unread=CAVEAT_ARCHIVE_CONTENTS_UNREAD in codes,
         format_unestablished=CAVEAT_ENTRY_FORMAT_UNESTABLISHED in codes,
     )

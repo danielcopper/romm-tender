@@ -9,8 +9,10 @@ vendored at `backend/_vendor/atlas/`, and upstream's release manifest, vendored 
 Each vector is a whole machine the resolver is run against — files, folders, links and what each core answers — and the
 answer it must give there. `tests/services/test_firmware_vectors.py` runs the firmware questions among them
 (`machines/firmware.json`, `machines/disc-region.json` and `machines/named-cases.json`) through Tender's BIOS reading
-and compares the level with the resolver's verdict; its docstring says what it compares and what it leaves out. The
-other files come along because the folder is copied whole.
+and compares the level with the resolver's verdict, and `tests/adapters/test_launch_vectors.py` runs every launch
+question among them through Tender's launch reading; each docstring says what it compares and what it leaves out.
+`tests/adapters/test_atlas_launchability.py` asks a few of the launch machines (`machines/disc-opens.json`) one by one.
+The other files come along because the folder is copied whole.
 
 The copy lives under `tests/` rather than `backend/_vendor/`, because everything under `backend/` ships to users
 ([#2585](https://github.com/danielcopper/romm-tender/issues/2585) D1). It is licensed as the resolver is, MIT
