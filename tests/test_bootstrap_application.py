@@ -42,6 +42,7 @@ _REPAIRS = [
     "record_save_directories",
     "run_due_update_checks",
     "shortcut_artwork",
+    "controller_focus",
 ]
 
 
@@ -108,6 +109,14 @@ class _Recorded:
 
         return wait_for_a_panel()
 
+    def _controller_focus(self) -> Any:
+        self.calls.append("controller_focus")
+
+        async def watch() -> None:
+            await asyncio.Event().wait()
+
+        return watch()
+
     def bundle(self) -> ServicesBundle:
         return _make_services_bundle(
             update_outcome_service=MagicMock(note_start=self._step("note_update_outcome")),
@@ -145,6 +154,7 @@ class _Recorded:
             download_service=MagicMock(shutdown=self._async_step("download_service.shutdown")),
             session_lifecycle_service=MagicMock(shutdown=self._async_step("session_lifecycle_service.shutdown")),
             playtime_service=MagicMock(shutdown=self._async_step("playtime_service.shutdown")),
+            controller_focus_service=MagicMock(run=self._controller_focus),
         )
 
 
@@ -281,6 +291,15 @@ def _directories_at(tmp_path) -> AppDirectories:
     )
 
 
+class _RecordedSteamUrls:
+    def __init__(self) -> None:
+        self.urls: list[str] = []
+
+    async def execute_steam_url(self, url: str, /) -> bool:
+        self.urls.append(url)
+        return True
+
+
 class TestBuildApplication:
     @staticmethod
     def _build(tmp_path, emit, *, panel_connected: Any = None) -> Application:
@@ -303,6 +322,37 @@ class TestBuildApplication:
         app = self._build(tmp_path, FakeEventSink().emit)
 
         assert isinstance(app.services.sync_service, LibraryService)
+
+    async def test_left_out_the_focus_watcher_is_off(self, tmp_path):
+        app = self._build(tmp_path, FakeEventSink().emit)
+
+        await asyncio.wait_for(app.services.controller_focus_service.run(), 5)
+
+    async def test_switched_on_the_focus_watcher_runs_and_sends_through_the_host(self, tmp_path):
+        urls = _RecordedSteamUrls()
+        app = build_application(
+            directories=_directories_at(tmp_path),
+            update_source=_UPDATE_SOURCE,
+            installer_environment=(),
+            user_home=str(tmp_path / "home"),
+            logger=LOGGER,
+            loop=asyncio.get_running_loop(),
+            emit=FakeEventSink().emit,
+            steam=FakeSteamInterface(),
+            panel_connected=lambda: False,
+            focus_watcher=True,
+            steam_urls=urls,
+        )
+        service = app.services.controller_focus_service
+        watching = asyncio.ensure_future(service.run())
+        try:
+            await asyncio.sleep(0.2)
+            assert not watching.done()
+        finally:
+            watching.cancel()
+            await asyncio.gather(watching, return_exceptions=True)
+        assert service._watch is not None
+        assert service._watch._steam_urls is urls
 
     async def test_it_answers_under_the_program_s_identity(self, tmp_path):
         app = self._build(tmp_path, FakeEventSink().emit)

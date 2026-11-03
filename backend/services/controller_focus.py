@@ -23,8 +23,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from domain.controller_focus import (
-    FOCUS_WATCHER_ENV,
-    FOCUS_WATCHER_OFF,
     RELEASED_INPUT_ID,
     force_input_url,
     input_id_for,
@@ -50,21 +48,29 @@ POLL_SECONDS = 3.0
 
 
 @dataclass(frozen=True)
-class ControllerFocusServiceConfig:
-    """Frozen wiring bundle handed to ``ControllerFocusService.__init__``.
+class ControllerFocusSeams:
+    """What the watcher reads and sends through; a watcher switched off has none.
 
-    *watch* is the switch, read once at start; off, the service opens nothing
-    and sends nothing. The readers are the running Steam, the X connection and
-    the walk from a process to its Steam launch; *steam_urls* is how a URL
-    reaches Steam. The loop runs the readers off itself and watches the X
-    socket; the sleeper paces the reading of Steam.
+    The readers are the running Steam, the X connection and the walk from a
+    process to its Steam launch; *steam_urls* is how a URL reaches Steam.
     """
 
-    watch: bool
     running_steam: RunningSteamReader
     focused_window: FocusedWindowReader
     steam_launch: SteamLaunchReader
     steam_urls: SteamUrlControl
+
+
+@dataclass(frozen=True)
+class ControllerFocusServiceConfig:
+    """Frozen wiring bundle handed to ``ControllerFocusService.__init__``.
+
+    *seams* is ``None`` where the entry point switched the watcher off; then
+    the service opens nothing and sends nothing. The loop runs the readers off
+    itself and watches the X socket; the sleeper paces the reading of Steam.
+    """
+
+    seams: ControllerFocusSeams | None
     loop: asyncio.AbstractEventLoop
     sleeper: Sleeper
     logger: logging.Logger
@@ -75,15 +81,54 @@ class ControllerFocusService:
     """Keeps Steam's controller layout on the focused window where Steam cannot attribute it itself."""
 
     def __init__(self, *, config: ControllerFocusServiceConfig) -> None:
-        self._watch = config.watch
-        self._running_steam = config.running_steam
-        self._source = config.focused_window
-        self._steam_launch = config.steam_launch
-        self._steam_urls = config.steam_urls
-        self._loop = config.loop
-        self._sleeper = config.sleeper
-        self._logger = config.logger
-        self._log_debug = config.log_debug
+        self._watch = (
+            _FocusWatch(
+                seams=config.seams,
+                loop=config.loop,
+                sleeper=config.sleeper,
+                logger=config.logger,
+                log_debug=config.log_debug,
+            )
+            if config.seams is not None
+            else None
+        )
+
+    async def run(self) -> None:
+        """Follow Steam and the focused window until cancelled; switched off, return at once."""
+        if self._watch is not None:
+            await self._watch.run()
+
+    async def release_pin(self) -> None:
+        """Hand the input choice back to Steam, once: ``0``, only where this run pinned and that Steam still runs.
+
+        Every send after this is dropped, so nothing pins again behind the
+        release. Called by the host before it detaches from Steam's debugger,
+        which the send needs. Switched off, it sends nothing.
+        """
+        if self._watch is not None:
+            await self._watch.release_pin()
+
+
+class _FocusWatch:
+    """The watcher itself, which exists only where it is switched on."""
+
+    def __init__(
+        self,
+        *,
+        seams: ControllerFocusSeams,
+        loop: asyncio.AbstractEventLoop,
+        sleeper: Sleeper,
+        logger: logging.Logger,
+        log_debug: DebugLogger,
+    ) -> None:
+        self._running_steam = seams.running_steam
+        self._source = seams.focused_window
+        self._steam_launch = seams.steam_launch
+        self._steam_urls = seams.steam_urls
+        self._loop = loop
+        self._sleeper = sleeper
+        self._logger = logger
+        self._log_debug = log_debug
         self._wake = asyncio.Event()
         # Every use of the X connection, opening and closing it included.
         self._source_lock = asyncio.Lock()
@@ -98,10 +143,6 @@ class ControllerFocusService:
         self._released = False
 
     async def run(self) -> None:
-        """Follow Steam and the focused window until cancelled; with the switch off, return at once."""
-        if not self._watch:
-            self._logger.info(f"controller focus: not watching, {FOCUS_WATCHER_ENV}={FOCUS_WATCHER_OFF} is set")
-            return
         try:
             await asyncio.gather(self._follow_steam(), self._follow_focus())
         finally:
@@ -109,12 +150,6 @@ class ControllerFocusService:
                 await self._close_source()
 
     async def release_pin(self) -> None:
-        """Hand the input choice back to Steam, once: ``0``, only where this run pinned and that Steam still runs.
-
-        Every send after this is dropped, so nothing pins again behind the
-        release. Called by the host before it detaches from Steam's debugger,
-        which the send needs.
-        """
         async with self._send_lock:
             self._released = True
             pinned, self._pinned_for = self._pinned_for, None

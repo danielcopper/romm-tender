@@ -16,7 +16,12 @@ from typing import TYPE_CHECKING
 import pytest
 
 from domain.controller_focus import FocusedWindow, RunningSteam, SteamIdentity, XDisplay
-from services.controller_focus import POLL_SECONDS, ControllerFocusService, ControllerFocusServiceConfig
+from services.controller_focus import (
+    POLL_SECONDS,
+    ControllerFocusSeams,
+    ControllerFocusService,
+    ControllerFocusServiceConfig,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
@@ -187,11 +192,14 @@ class Watcher:
         self.debug: list[str] = []
         self.service = ControllerFocusService(
             config=ControllerFocusServiceConfig(
-                watch=watch,
-                running_steam=self.steam,
-                focused_window=self.x,
-                steam_launch=self.launch,
-                steam_urls=self.urls,
+                seams=ControllerFocusSeams(
+                    running_steam=self.steam,
+                    focused_window=self.x,
+                    steam_launch=self.launch,
+                    steam_urls=self.urls,
+                )
+                if watch
+                else None,
                 loop=asyncio.get_running_loop(),
                 sleeper=self.sleeper,
                 logger=logger,
@@ -248,15 +256,6 @@ class TestSwitchedOff:
             assert watcher.steam.reads == 0
             assert watcher.x.connected_to == []
             assert watcher.urls.urls == []
-
-    async def test_it_says_so_once(self, make_watcher, caplog: pytest.LogCaptureFixture) -> None:
-        caplog.set_level(logging.INFO)
-        async with make_watcher(watch=False) as watcher:
-            await asyncio.wait_for(watcher.service.run(), 5)
-
-        assert [r.getMessage() for r in caplog.records] == [
-            "controller focus: not watching, TENDER_FOCUS_WATCHER=off is set"
-        ]
 
 
 class TestWhereSteamAttributesWindowsItself:

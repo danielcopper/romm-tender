@@ -4,6 +4,7 @@ import inspect
 import logging
 import os
 import sys
+from collections.abc import Mapping
 from dataclasses import asdict
 from typing import Any
 
@@ -18,6 +19,7 @@ _CODE_DIR_FALLBACK = os.path.dirname(backend_dir)
 
 from bootstrap import Application, build_application
 from domain.app_directories import AppDirectories, resolve_directories
+from domain.controller_focus import FOCUS_WATCHER_ENV, FOCUS_WATCHER_OFF, focus_watcher_on
 from domain.identity import VERSION
 from domain.refusal import DomainRefused
 from domain.update_install import installer_environment
@@ -1240,11 +1242,14 @@ async def build_backend(
     logger: logging.Logger,
     status: HostStatus,
     events: EventSink,
+    focus_watcher: bool = False,
 ) -> BackendBuild:
     """Build the :class:`Application`, run its start-up repairs, and answer with what the host needs of it.
 
     A start-up repair that fails is recorded on *status*, which is where
-    ``get_host_status`` reads it from.
+    ``get_host_status`` reads it from. *focus_watcher* is the focus watcher's
+    switch, which sends through the host's attachment to Steam and releases
+    its pin in the host's step before that attachment ends.
     """
     app = build_application(
         directories=directories,
@@ -1256,6 +1261,8 @@ async def build_backend(
         emit=events.emit,
         steam=status.steam,
         panel_connected=lambda: events.connected,
+        focus_watcher=focus_watcher,
+        steam_urls=status.steam_urls,
     )
     app.run_startup_repairs(status.record_failed_step)
     logger.info("Tender backend loaded")
@@ -1263,7 +1270,24 @@ async def build_backend(
         dispatcher=CallDispatcher(Endpoints(app, status), logger),
         server_identity=app.user_agent,
         shutdown=app.shutdown,
+        before_detach=app.services.controller_focus_service.release_pin,
     )
+
+
+def watches_focus(environ: Mapping[str, str], injection: InjectionSetup, logger: logging.Logger) -> bool:
+    """Whether the focus watcher runs: its switch on, and the panel loaded into Steam.
+
+    With the panel not loaded there is no attachment to Steam to hand it an
+    input id through, so the watcher would only open the X display and send
+    nothing; it is switched off instead, and says why.
+    """
+    if not focus_watcher_on(environ):
+        logger.info(f"controller focus: not watching, {FOCUS_WATCHER_ENV}={FOCUS_WATCHER_OFF} is set")
+        return False
+    if not injection.loads_the_panel:
+        logger.info("controller focus: not watching, the panel is not loaded into Steam, so nothing can reach it")
+        return False
+    return True
 
 
 def run() -> int:
@@ -1290,6 +1314,19 @@ def run() -> int:
     logger.info(f"host: code {directories.code_dir}, data {directories.data_dir}, cache {directories.cache_dir}")
     status = HostStatus()
     events = EventSink(logger)
+    # Handed in, never searched for: a host that looked for its own build
+    # output relative to ``__file__`` would be the only part of this backend
+    # that knew the repository's layout. Resolved once here because the
+    # server serves this directory and the injector hashes the bundles in
+    # it, and two spellings of one directory are free to drift apart.
+    static_root = os.path.join(directories.code_dir, "dist")
+    injection = InjectionSetup.from_environment(
+        os.environ,
+        static_root=static_root,
+        state_dir=directories.state_dir,
+        user_home=user_home,
+        version=VERSION,
+    )
     build = functools.partial(
         build_backend,
         directories=directories,
@@ -1299,14 +1336,9 @@ def run() -> int:
         logger=logger,
         status=status,
         events=events,
+        focus_watcher=watches_focus(os.environ, injection, logger),
     )
 
-    # Handed in, never searched for: a host that looked for its own build
-    # output relative to ``__file__`` would be the only part of this backend
-    # that knew the repository's layout. Resolved once here because the
-    # server serves this directory and the injector hashes the bundles in
-    # it, and two spellings of one directory are free to drift apart.
-    static_root = os.path.join(directories.code_dir, "dist")
     try:
         asyncio.run(
             run_backend(
@@ -1319,13 +1351,7 @@ def run() -> int:
                 port_file_path=os.path.join(directories.runtime_dir, PORT_FILENAME),
                 logger=logger,
                 token=token,
-                injection=InjectionSetup.from_environment(
-                    os.environ,
-                    static_root=static_root,
-                    state_dir=directories.state_dir,
-                    user_home=user_home,
-                    version=VERSION,
-                ),
+                injection=injection,
             )
         )
     except AlreadyRunningError as exc:
