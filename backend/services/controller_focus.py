@@ -1,11 +1,13 @@
 """The focus watcher: tells Steam which controller layout the focused window gets.
 
-Contract: while Steam's 64-bit client runs outside gamescope, every change of
-the focused window is answered with ``steam://forceinputappid/<id>`` — the id of
-the Steam launch the window's process runs under, Big Picture's, or the
-desktop's — and the pin it leaves is released with ``0`` once, at stop, through
-:meth:`ControllerFocusService.release_pin`, which the host calls before it lets
-go of Steam's debugger. Anywhere else, and with the switch off, it sends nothing.
+Contract: while Steam's 64-bit client runs outside gamescope, a focused window
+Steam cannot attribute itself is pinned with ``steam://forceinputappid/<id>`` —
+the id of the Steam launch its process runs under — on every focus change onto
+it; focus leaving a standing pin gets Steam's own choice for the new window and
+then ``0``; with no pin standing nothing is sent. A pin still standing at stop
+is released with ``0`` through :meth:`ControllerFocusService.release_pin`, which
+the host calls before it lets go of Steam's debugger. Anywhere else, and with
+the switch off, it sends nothing.
 The rules are ``domain/controller_focus.py``'s; why the watcher exists, and what
 each id does inside Steam, is docs/architecture/controller-focus.md.
 
@@ -24,8 +26,8 @@ from typing import TYPE_CHECKING
 
 from domain.controller_focus import (
     RELEASED_INPUT_ID,
+    answer_focus,
     force_input_url,
-    input_id_for,
     watcher_applies,
 )
 
@@ -99,7 +101,7 @@ class ControllerFocusService:
             await self._watch.run()
 
     async def release_pin(self) -> None:
-        """Hand the input choice back to Steam, once: ``0``, only where this run pinned and that Steam still runs.
+        """Hand the input choice back to Steam, once: ``0``, only where a pin stands and its Steam still runs.
 
         Every send after this is dropped, so nothing pins again behind the
         release. Called by the host before it detaches from Steam's debugger,
@@ -132,12 +134,13 @@ class _FocusWatch:
         self._wake = asyncio.Event()
         # Every use of the X connection, opening and closing it included.
         self._source_lock = asyncio.Lock()
-        # A send, and the release that must come after every send.
+        # A send, the pin it leaves, and the release that must come after every send.
         self._send_lock = asyncio.Lock()
         self._steam: SteamIdentity | None = None
         self._fd: int | None = None
         self._send_due = False
-        self._pinned_for: SteamIdentity | None = None
+        # The id pinned and the Steam run it stands in; a new run carries no pin.
+        self._pin: tuple[int, SteamIdentity] | None = None
         self._unreachable_said_for: SteamIdentity | None = None
         self._send_failure_said = False
         self._released = False
@@ -152,11 +155,11 @@ class _FocusWatch:
     async def release_pin(self) -> None:
         async with self._send_lock:
             self._released = True
-            pinned, self._pinned_for = self._pinned_for, None
-            if pinned is None:
+            pin, self._pin = self._pin, None
+            if pin is None:
                 return
             steam = await self._loop.run_in_executor(None, self._running_steam.read)
-            if steam is None or steam.identity != pinned:
+            if steam is None or steam.identity != pin[1]:
                 self._log_debug("controller focus: the Steam that carried the pin is gone; nothing to release")
                 return
             if await self._steam_urls.execute_steam_url(force_input_url(RELEASED_INPUT_ID)):
@@ -253,8 +256,7 @@ class _FocusWatch:
             self._send_due = False
             window = await self._loop.run_in_executor(None, self._source.focused_window)
             steam = self._steam
-        input_id = input_id_for(window, await self._launched_app_id(window))
-        if await self._send(input_id, steam):
+        if await self._send(window, await self._launched_app_id(window), steam):
             # A change the server sent while the window was being read is
             # taken off the socket with the replies and waits in xcb's queue,
             # so the socket never becomes readable for it; one more pass reads
@@ -267,18 +269,28 @@ class _FocusWatch:
             return None
         return await self._loop.run_in_executor(None, self._steam_launch.launched_app_id, window.host_pid)
 
-    async def _send(self, input_id: int, steam: SteamIdentity | None) -> bool:
-        """Hand Steam *input_id* for the run *steam*; answer whether it went out."""
+    async def _send(
+        self, window: FocusedWindow | None, launched_app_id: int | None, steam: SteamIdentity | None
+    ) -> bool:
+        """Send what the focused window asks for in the run *steam*; answer whether all of it went out.
+
+        The pin standing changes only once every id went out; one that did not
+        leaves it as it was, and the next reading of Steam asks again.
+        """
         async with self._send_lock:
-            if self._released:
+            if self._released or steam is None:
                 return False
-            if await self._steam_urls.execute_steam_url(force_input_url(input_id)):
-                self._pinned_for = steam
-                self._send_failure_said = False
+            standing = self._pin[0] if self._pin is not None and self._pin[1] == steam else None
+            answer = answer_focus(standing, window, launched_app_id)
+            for input_id in answer.sends:
+                if not await self._steam_urls.execute_steam_url(force_input_url(input_id)):
+                    self._send_due = True
+                    if not self._send_failure_said:
+                        self._send_failure_said = True
+                        self._logger.info("controller focus: Steam could not be handed the input id yet; trying again")
+                    return False
                 self._log_debug(f"controller focus: input id {input_id}")
-                return True
-            self._send_due = True
-            if not self._send_failure_said:
-                self._send_failure_said = True
-                self._logger.info("controller focus: Steam could not be handed the input id yet; trying again")
-            return False
+            if answer.sends:
+                self._send_failure_said = False
+            self._pin = (answer.pin, steam) if answer.pin is not None else None
+            return True

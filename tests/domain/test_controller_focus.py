@@ -1,4 +1,4 @@
-"""The focus watcher's rules: when it acts, which input id a window gets, and the URL that carries it."""
+"""The focus watcher's rules: when it acts, which window it pins, what leaving a pin sends, and the URL."""
 
 from __future__ import annotations
 
@@ -10,13 +10,16 @@ import pytest
 from domain.controller_focus import (
     BIG_PICTURE_INPUT_ID,
     DESKTOP_INPUT_ID,
+    FocusAnswer,
     FocusedWindow,
     RunningSteam,
     SteamIdentity,
     XDisplay,
+    answer_focus,
     focus_watcher_on,
     force_input_url,
-    input_id_for,
+    pin_for,
+    steam_choice_for,
     watcher_applies,
 )
 
@@ -71,35 +74,95 @@ def _window(*, steam_game: int | None = None, input_focus: bool = False, pid: in
     return FocusedWindow(host_pid=pid, steam_game=steam_game, steam_input_focus=input_focus)
 
 
-class TestWhichIdAWindowGets:
-    def test_a_window_under_a_steam_launch_gets_that_launch_s_app_id(self) -> None:
-        assert input_id_for(_window(), GAME_APP_ID) == GAME_APP_ID
+NATIVE_GAME_APP_ID = 1663850
+BIG_PICTURE = _window(steam_game=BIG_PICTURE_INPUT_ID, input_focus=True)
+DESKTOP_CLIENT = _window(steam_game=BIG_PICTURE_INPUT_ID, input_focus=False)
+RETROARCH = _window()
+NATIVE_GAME = _window(steam_game=NATIVE_GAME_APP_ID)
 
-    def test_the_launch_wins_over_big_picture_s_properties(self) -> None:
-        window = _window(steam_game=BIG_PICTURE_INPUT_ID, input_focus=True)
 
-        assert input_id_for(window, GAME_APP_ID) == GAME_APP_ID
+class TestWhichWindowIsPinned:
+    def test_a_window_under_a_steam_launch_without_steam_game_is_pinned_to_the_launch(self) -> None:
+        assert pin_for(RETROARCH, GAME_APP_ID) == GAME_APP_ID
 
+    def test_a_window_steam_attributes_itself_is_never_pinned(self) -> None:
+        # A native game's window: Steam set its own STEAM_GAME, and a pin would
+        # keep the game's overlay from taking the controller.
+        assert pin_for(NATIVE_GAME, NATIVE_GAME_APP_ID) is None
+
+    def test_big_picture_under_a_launch_is_not_pinned(self) -> None:
+        assert pin_for(BIG_PICTURE, GAME_APP_ID) is None
+
+    def test_a_window_under_no_launch_is_not_pinned(self) -> None:
+        assert pin_for(RETROARCH, None) is None
+
+    def test_no_focused_window_is_not_pinned(self) -> None:
+        assert pin_for(None, GAME_APP_ID) is None
+
+    def test_a_launch_id_of_zero_is_no_pin(self) -> None:
+        assert pin_for(RETROARCH, 0) is None
+
+
+class TestWhatSteamWouldChooseItself:
     def test_big_picture_needs_both_properties(self) -> None:
-        assert input_id_for(_window(steam_game=BIG_PICTURE_INPUT_ID, input_focus=True), None) == BIG_PICTURE_INPUT_ID
+        assert steam_choice_for(BIG_PICTURE) == BIG_PICTURE_INPUT_ID
 
     def test_the_desktop_client_s_window_carries_steam_game_alone_and_gets_the_desktop(self) -> None:
-        assert input_id_for(_window(steam_game=BIG_PICTURE_INPUT_ID, input_focus=False), None) == DESKTOP_INPUT_ID
+        assert steam_choice_for(DESKTOP_CLIENT) == DESKTOP_INPUT_ID
 
-    def test_input_focus_on_another_steam_game_value_gets_the_desktop(self) -> None:
-        assert input_id_for(_window(steam_game=12345, input_focus=True), None) == DESKTOP_INPUT_ID
+    def test_a_game_window_gets_the_game_steam_attributes_it_to(self) -> None:
+        assert steam_choice_for(NATIVE_GAME) == NATIVE_GAME_APP_ID
 
     def test_any_other_window_gets_the_desktop(self) -> None:
-        assert input_id_for(_window(), None) == DESKTOP_INPUT_ID
+        assert steam_choice_for(RETROARCH) == DESKTOP_INPUT_ID
 
     def test_no_focused_window_gets_the_desktop(self) -> None:
-        assert input_id_for(None, None) == DESKTOP_INPUT_ID
+        assert steam_choice_for(None) == DESKTOP_INPUT_ID
 
-    def test_a_window_whose_pid_could_not_be_given_gets_the_desktop(self) -> None:
-        assert input_id_for(_window(pid=None), None) == DESKTOP_INPUT_ID
+    def test_a_steam_game_of_zero_gets_the_desktop(self) -> None:
+        assert steam_choice_for(_window(steam_game=0)) == DESKTOP_INPUT_ID
 
-    def test_a_launch_id_of_zero_never_releases_the_pin(self) -> None:
-        assert input_id_for(_window(), 0) == DESKTOP_INPUT_ID
+
+class TestWhatAFocusChangeSends:
+    def test_a_window_to_pin_is_pinned_and_the_pin_stands(self) -> None:
+        assert answer_focus(None, RETROARCH, GAME_APP_ID) == FocusAnswer(sends=(GAME_APP_ID,), pin=GAME_APP_ID)
+
+    def test_the_same_pin_is_sent_again(self) -> None:
+        assert answer_focus(GAME_APP_ID, RETROARCH, GAME_APP_ID) == FocusAnswer(sends=(GAME_APP_ID,), pin=GAME_APP_ID)
+
+    def test_another_window_to_pin_replaces_the_pin(self) -> None:
+        assert answer_focus(GAME_APP_ID, RETROARCH, 7) == FocusAnswer(sends=(7,), pin=7)
+
+    @pytest.mark.parametrize(
+        ("window", "choice"),
+        [
+            pytest.param(BIG_PICTURE, BIG_PICTURE_INPUT_ID, id="big-picture"),
+            pytest.param(DESKTOP_CLIENT, DESKTOP_INPUT_ID, id="desktop-client"),
+            pytest.param(NATIVE_GAME, NATIVE_GAME_APP_ID, id="native-game"),
+            pytest.param(_window(pid=None), DESKTOP_INPUT_ID, id="other-window"),
+            pytest.param(None, DESKTOP_INPUT_ID, id="no-window"),
+        ],
+    )
+    def test_focus_leaving_a_pin_sends_steam_s_choice_then_the_release(
+        self, window: FocusedWindow | None, choice: int
+    ) -> None:
+        launched = NATIVE_GAME_APP_ID if window is NATIVE_GAME else None
+
+        assert answer_focus(GAME_APP_ID, window, launched) == FocusAnswer(sends=(choice, 0), pin=None)
+
+    @pytest.mark.parametrize(
+        "window",
+        [
+            pytest.param(BIG_PICTURE, id="big-picture"),
+            pytest.param(DESKTOP_CLIENT, id="desktop-client"),
+            pytest.param(NATIVE_GAME, id="native-game"),
+            pytest.param(None, id="no-window"),
+        ],
+    )
+    def test_with_no_pin_standing_nothing_is_sent(self, window: FocusedWindow | None) -> None:
+        launched = NATIVE_GAME_APP_ID if window is NATIVE_GAME else None
+
+        assert answer_focus(None, window, launched) == FocusAnswer(sends=(), pin=None)
 
 
 class TestTheUrl:

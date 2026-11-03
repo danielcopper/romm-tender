@@ -1,7 +1,8 @@
 """Which controller layout Steam is told to load for the focused window.
 
-Contract: the pure rules of the focus watcher — when it acts at all, which input
-id a focused window gets, and the one URL that carries that id to Steam. Nothing
+Contract: the pure rules of the focus watcher — when it acts at all, which
+window it pins and what it sends when focus leaves a pin, and the one URL that
+carries an id to Steam. Nothing
 here reads a process, a window or the environment; the readings arrive as
 values, which is what makes every rule checkable against a table.
 
@@ -30,7 +31,7 @@ BIG_PICTURE_INPUT_ID = 769
 DESKTOP_INPUT_ID = 413080
 
 # Hands the choice back to Steam, which takes effect only at the next focus
-# change.
+# change; the id sent just before it decides the window focused now.
 RELEASED_INPUT_ID = 0
 
 # The directory Steam's 64-bit client runs from (``<Steam>/steamrt64/steam``).
@@ -109,21 +110,60 @@ def watcher_applies(steam: RunningSteam | None) -> bool:
     return posixpath.basename(posixpath.dirname(steam.exe)) == STEAMRT64_DIR
 
 
-def input_id_for(window: FocusedWindow | None, launched_app_id: int | None) -> int:
-    """The input id for the focused window, in the order the rules are tried.
+def pin_for(window: FocusedWindow | None, launched_app_id: int | None) -> int | None:
+    """The id to pin on the focused window, or ``None`` where Steam attributes it itself.
 
-    *launched_app_id* is the app id of the Steam launch the window's process
-    descends from, ``None`` where it descends from none. That wins; then a
-    window carrying ``STEAM_GAME`` = 769 and ``STEAM_INPUT_FOCUS`` is Big
-    Picture — the desktop client's windows carry ``STEAM_GAME`` = 769 without
-    ``STEAM_INPUT_FOCUS``; everything else, no focused window included, gets
-    the desktop's id.
+    Only a window Steam cannot attribute is pinned: its process descends from
+    a Steam launch (*launched_app_id*, ``None`` where it descends from none)
+    and it carries no ``STEAM_GAME``. A native game's window carries its own
+    app id there, and a pin on it would keep the game's in-game overlay, drawn
+    inside the same window, from taking the controller.
     """
-    if launched_app_id is not None and launched_app_id > 0:
-        return launched_app_id
-    if window is not None and window.steam_game == BIG_PICTURE_INPUT_ID and window.steam_input_focus:
-        return BIG_PICTURE_INPUT_ID
-    return DESKTOP_INPUT_ID
+    if window is None or window.steam_game is not None:
+        return None
+    if launched_app_id is None or launched_app_id <= 0:
+        return None
+    return launched_app_id
+
+
+def steam_choice_for(window: FocusedWindow | None) -> int:
+    """The id Steam's own choice would be for the focused window.
+
+    ``STEAM_GAME`` = 769 with ``STEAM_INPUT_FOCUS`` is Big Picture; the desktop
+    client's windows carry ``STEAM_GAME`` = 769 without ``STEAM_INPUT_FOCUS``
+    and get the desktop's id. Any other ``STEAM_GAME`` is the game Steam
+    attributes the window to. Everything else, no focused window and a
+    ``STEAM_GAME`` of 0 included, gets the desktop's id.
+    """
+    if window is None or window.steam_game is None or window.steam_game <= 0:
+        return DESKTOP_INPUT_ID
+    if window.steam_game == BIG_PICTURE_INPUT_ID:
+        return BIG_PICTURE_INPUT_ID if window.steam_input_focus else DESKTOP_INPUT_ID
+    return window.steam_game
+
+
+@dataclass(frozen=True)
+class FocusAnswer:
+    """What to send for one focus change, in order, and the pin standing once all of it went out."""
+
+    sends: tuple[int, ...]
+    pin: int | None
+
+
+def answer_focus(standing: int | None, window: FocusedWindow | None, launched_app_id: int | None) -> FocusAnswer:
+    """What the watcher sends for the focused window, given the pin *standing* before it (``None`` for none).
+
+    A window to pin gets its id, an unchanged one included, and the pin
+    stands. Focus leaving a standing pin gets Steam's own choice for the new
+    window and then :data:`RELEASED_INPUT_ID`, so Steam decides every later
+    change itself. With no pin standing, nothing is sent.
+    """
+    pin = pin_for(window, launched_app_id)
+    if pin is not None:
+        return FocusAnswer(sends=(pin,), pin=pin)
+    if standing is None:
+        return FocusAnswer(sends=(), pin=None)
+    return FocusAnswer(sends=(steam_choice_for(window), RELEASED_INPUT_ID), pin=None)
 
 
 def force_input_url(input_id: int) -> str:
