@@ -154,6 +154,7 @@ modules =
     services.active_core_resolver
     services.artwork
     services.connection
+    services.controller_focus
     services.cores
     services.data_inventory
     services.disc

@@ -999,6 +999,38 @@ Format: **invariant** — tier — enforced by.
   Launching, Running or Terminating, or a status that could not be read. `TestEachEntryNamesItsApp` runs the expression
   under node for the id and pins the reading's parse; `tests/services/test_running_games.py` pins the match, and that no
   reading — or a reader that raised — is nothing running
+- **The focus watcher sends `steam://forceinputappid` only while Steam runs the 64-bit client outside gamescope, and
+  pins only a window Steam cannot attribute itself — one under a `reaper SteamLaunch AppId=<id>` that carries no
+  `STEAM_GAME` — with its id, on every focus change onto it, an unchanged one included; focus leaving a standing pin
+  gets once the id Steam's own choice would be and right after it `0`, and so does the first answer in a Steam run for a
+  window not to pin, once per run; otherwise, with no pin standing, it sends nothing; `0` at stop goes out once, through
+  the host's step before it detaches from Steam's debugger, and only where a pin stands and its Steam still runs;
+  switched off (`TENDER_FOCUS_WATCHER=off`, or `TENDER_INJECT=off`) it opens nothing and sends nothing; and no module
+  but `domain/controller_focus.py` spells the URL** — test + prompt-only — `tests/domain/test_controller_focus.py`
+  (`TestWhenTheWatcherApplies`, `TestWhichWindowIsPinned`, `TestWhatSteamWouldChooseItself`,
+  `TestWhatAFocusChangeSends`, `TestTheSwitch`, `TestOnlyTheRulesSpellTheUrl`),
+  `tests/services/test_controller_focus.py` (`TestWhereSteamAttributesWindowsItself`, `TestWatching`,
+  `TestSteamRestarts`, `TestReleasingThePin`, `TestSwitchedOff`),
+  `tests/host/test_runtime.py::TestTheStepBeforeTheDetach` for the order at stop, `tests/test_build_backend.py`
+  (`TestWhetherTheFocusWatcherRuns`, `TestTheFocusWatcher::test_the_step_before_the_detach_releases_its_pin`),
+  `tests/adapters/test_running_steam.py` (`TestGamingMode`, `TestTheDisplayItWasStartedFrom`) for what the 64-bit client
+  and Gaming Mode are read from, and the X tier, `tests/adapters/test_x11_focus.py::TestAgainstARealServer`, for what a
+  focused window is read as. Unseen by them: what Steam does with a URL (device only), a URL built at run time or named
+  only in a comment or docstring, and the X tier wherever Xvfb is missing outside CI, where it skips. Prompt-only:
+  nothing but the watcher's `release_pin` runs in `BackendBuild.before_detach`. The pin is Steam's own and it outlives
+  its game: while one stands, Steam forces its layout onto every window, Big Picture and other games included, until
+  another id replaces it, and `0` takes effect only at the next focus change. A pin on a native game's window also kept
+  that game's in-game overlay, drawn inside the same window, from taking the controller. So only a window Steam cannot
+  attribute is pinned; leaving it sends Steam's own choice, which sets the window focused now at once, and then the `0`,
+  which leaves every later change to Steam; and the `0` at stop has to go out while the attachment it travels over still
+  exists — the host lets go of Steam's debugger before it shuts the application down, so a `0` from
+  `Application.shutdown` would find no connection and leave the pin forcing its layout onto every window. A backend that
+  did not stop cleanly leaves its pin, which the next backend cannot know about, so the first answer in a Steam run
+  treats one as standing. Under the 32-bit client and in Gaming Mode Steam attributes the window itself, and a pin there
+  would override what works. Each URL is built by `force_input_url` from an integer, so nothing but a number reaches
+  Steam. The rules are `domain/controller_focus.py`'s, the watcher is `services/controller_focus.py`, the step before
+  the detach is `BackendBuild.before_detach` in `backend/host/runtime.py`, and the design is
+  [Controller focus in Desktop Mode](controller-focus.md)
 - **No save path but the sync before a start, the one after a game and a conflict resolved before a start changes the
   saves of a game Steam lists as running, the RetroDECK home migration excepted, which
   [#2226](https://github.com/danielcopper/romm-tender/issues/2226) decided to remove: Sync All Saves Now and a

@@ -962,7 +962,7 @@ in-game save may be lost.
 In Gaming Mode, Steam can end these games itself: **Exit Game** in Steam's overlay ends a RetroDECK game the way it ends
 any other. Tender's Stop Game is the way where that overlay does not reach — in Desktop Mode it does not open over a
 RetroDECK game at all (see
-[The Steam button opens no overlay in Desktop Mode](troubleshooting.md#the-steam-button-opens-no-overlay-in-desktop-mode))
+[The Steam button opens only Steam's main menu in Desktop Mode](troubleshooting.md#the-steam-button-opens-only-steams-main-menu-in-desktop-mode))
 — and whenever Steam's Exit Game ends nothing on your setup. Tender's Stop Game finds the emulator itself and ends it.
 
 It ends **only the game you pressed it for**. More than one game can run at a time, in the same emulator too, and Steam

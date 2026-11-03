@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 import logging
 import os
 import signal
@@ -469,6 +470,89 @@ class TestLoadingThePanelIntoSteam:
             assert recorder.steps == ["build", "shutdown"]
         finally:
             await debugger.stop()
+
+
+class TestTheStepBeforeTheDetach:
+    """The application's one step at stop that still needs Steam's debugger, and its place in the order."""
+
+    @staticmethod
+    async def _run_with_step(tmp_path, recorder, status, before_detach) -> FakeDebugger:
+        page = FakePage(
+            marker_expression=marker_present_expression(MARKER),
+            ready_expression=choose_bundles(decky_is_serving=False).ready_when,
+        )
+        debugger = FakeDebugger(page)
+        await debugger.start()
+        debugger.targets = [FakeTarget(id="renderer", title="SharedJSContext")]
+        debugger.handlers["Page.enable"] = lambda _params: {}
+        static_root = tmp_path / "dist"
+        static_root.mkdir(exist_ok=True)
+        for name in (GLOBALS_BUNDLE, STANDALONE_PANEL, COEXISTENCE_PANEL):
+            (static_root / name).write_text(f"// {name}\n", encoding="utf-8")
+        build = recorder.build
+
+        async def build_with_step() -> BackendBuild:
+            return dataclasses.replace(await build(), before_detach=before_detach)
+
+        async def while_running() -> None:
+            async with asyncio.timeout(10):
+                while not page.bootstraps:
+                    await asyncio.sleep(0.01)
+            os.kill(os.getpid(), signal.SIGTERM)
+
+        recorder.build = build_with_step  # type: ignore[method-assign]
+        recorder.while_running = while_running  # type: ignore[method-assign]
+        try:
+            await asyncio.wait_for(
+                _run(
+                    tmp_path,
+                    recorder,
+                    status,
+                    free_port(),
+                    injection=InjectionSetup(
+                        static_root=str(static_root),
+                        state_dir=str(tmp_path / "state"),
+                        user_home=str(tmp_path / "home"),
+                        version="0.0.0-test",
+                        debugger_port=debugger.port,
+                        decky_port=free_port(),
+                    ),
+                ),
+                20,
+            )
+        finally:
+            await debugger.stop()
+        return debugger
+
+    async def test_it_runs_while_steam_is_attached_and_before_the_shutdown(self, tmp_path, recorder, default_sigterm):
+        status = HostStatus()
+        sent: list[bool] = []
+
+        async def before_detach() -> None:
+            recorder.steps.append("before_detach")
+            # True only while the injector is still attached to the renderer.
+            sent.append(await status.steam_urls.execute_steam_url("steam://forceinputappid/0"))
+
+        debugger = await self._run_with_step(tmp_path, recorder, status, before_detach)
+
+        assert recorder.steps == ["build", "before_detach", "shutdown"]
+        assert sent == [True]
+        assert debugger.page is not None
+        assert 'SteamClient.URL.ExecuteSteamURL("steam://forceinputappid/0")' in debugger.page.evaluated
+        assert debugger.connections == 0
+
+    async def test_one_that_fails_stops_nothing_else(self, tmp_path, recorder, default_sigterm):
+        async def before_detach() -> None:
+            recorder.steps.append("before_detach")
+            raise RuntimeError("the step broke")
+
+        await self._run_with_step(tmp_path, recorder, HostStatus(), before_detach)
+
+        assert recorder.steps == ["build", "before_detach", "shutdown"]
+        assert recorder.port_file.read() is None
+        contender = SingleInstanceLock(recorder.lock_path, retry_seconds=0.0)
+        assert contender.acquire()
+        contender.release()
 
 
 class TestSteamsDebuggerMarker:

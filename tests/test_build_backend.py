@@ -13,7 +13,7 @@ from _factories import _make_services_bundle
 import main
 from domain.app_directories import AppDirectories
 from domain.update_release import UpdateSource
-from host import EventSink, HostStatus
+from host import EventSink, HostStatus, InjectionSetup
 from host.dispatch import route_names
 from main import Endpoints, build_backend
 
@@ -99,6 +99,8 @@ class TestBuildBackend:
                 "loop": asyncio.get_running_loop(),
                 "emit": events.emit,
                 "steam": status.steam,
+                "focus_watcher": False,
+                "steam_urls": status.steam_urls,
             }
         ]
         assert panel_connected() is False
@@ -139,3 +141,88 @@ class TestBuildBackend:
         assert built.dispatcher.method_names == route_names(Endpoints)
         assert service_answer["result"] == {"success": True}
         assert host_answer["result"]["failed_startup_steps"] == ["prune_orphaned_cover_cache"]
+
+
+class TestTheFocusWatcher:
+    async def test_its_switch_reaches_the_application(self, tmp_path, monkeypatch: pytest.MonkeyPatch):
+        asked: list[dict[str, Any]] = []
+
+        def stub_build_application(**kwargs: Any) -> _StubApplication:
+            asked.append(kwargs)
+            return _StubApplication()
+
+        monkeypatch.setattr(main, "build_application", stub_build_application)
+        status = HostStatus()
+
+        await build_backend(
+            directories=_directories_at(tmp_path),
+            update_source=_UPDATE_SOURCE,
+            installer_environment=_INSTALLER_ENVIRONMENT,
+            user_home=str(tmp_path / "home"),
+            logger=LOGGER,
+            status=status,
+            events=EventSink(LOGGER),
+            focus_watcher=True,
+        )
+
+        assert asked[0]["focus_watcher"] is True
+        assert asked[0]["steam_urls"] is status.steam_urls
+
+    async def test_the_step_before_the_detach_releases_its_pin(self, tmp_path, monkeypatch: pytest.MonkeyPatch):
+        app = _StubApplication()
+        monkeypatch.setattr(main, "build_application", lambda **_kwargs: app)
+
+        built = await build_backend(
+            directories=_directories_at(tmp_path),
+            update_source=_UPDATE_SOURCE,
+            installer_environment=_INSTALLER_ENVIRONMENT,
+            user_home=str(tmp_path / "home"),
+            logger=LOGGER,
+            status=HostStatus(),
+            events=EventSink(LOGGER),
+        )
+
+        assert built.before_detach is app.services.controller_focus_service.release_pin
+
+
+def _injection(environ: dict[str, str]) -> InjectionSetup:
+    return InjectionSetup.from_environment(
+        environ, static_root="/dist", state_dir="/state", user_home="/home", version="1"
+    )
+
+
+class TestWhetherTheFocusWatcherRuns:
+    def test_by_default_it_runs_and_says_nothing(
+        self, logger: logging.Logger, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.INFO, logger=logger.name)
+
+        assert main.watches_focus({}, _injection({}), logger) is True
+        assert [r for r in caplog.records if r.name == logger.name] == []
+
+    def test_its_switch_turns_it_off_and_it_says_so(
+        self, logger: logging.Logger, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.INFO, logger=logger.name)
+        environ = {"TENDER_FOCUS_WATCHER": "off"}
+
+        assert main.watches_focus(environ, _injection(environ), logger) is False
+        assert [r.getMessage() for r in caplog.records if r.name == logger.name] == [
+            "controller focus: not watching, TENDER_FOCUS_WATCHER=off is set"
+        ]
+
+    def test_with_the_panel_not_loaded_it_does_not_run_and_says_why(
+        self, logger: logging.Logger, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.INFO, logger=logger.name)
+        environ = {"TENDER_INJECT": "off"}
+
+        assert main.watches_focus(environ, _injection(environ), logger) is False
+        assert [r.getMessage() for r in caplog.records if r.name == logger.name] == [
+            "controller focus: not watching, the panel is not loaded into Steam, so nothing can reach it"
+        ]
+
+    def test_forcing_the_panel_in_leaves_it_running(self, logger: logging.Logger) -> None:
+        environ = {"TENDER_INJECT": "force"}
+
+        assert main.watches_focus(environ, _injection(environ), logger) is True

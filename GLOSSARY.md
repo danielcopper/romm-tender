@@ -1347,6 +1347,28 @@ Steam's own window outside Big Picture: the library window a keyboard and mouse 
 under a name starting with `SP Desktop`. It is Steam's, not Tender's; what Tender draws into it is the **desktop
 surface** (see **Surface**). _Avoid_: _Desktop Mode_, which on a Steam Deck is the KDE session, not Steam's client.
 
+### Desktop Mode / Gaming Mode
+
+The two kinds of session Steam runs in. **Desktop Mode** is a desktop session — on a Steam Deck the KDE Plasma one — in
+which Steam is an ordinary program. **Gaming Mode**, Valve's word, is the gamescope session, where Steam is the whole
+interface; _Game Mode_ means the same. The words name the session, never Steam's window: Steam's own window outside Big
+Picture is the **desktop client**, and it can be open in either session.
+
+### 64-bit client / 32-bit client
+
+Steam's two builds of its own program: the **64-bit client** runs from `<Steam>/steamrt64/` inside a pressure-vessel
+container, the **32-bit client** from `ubuntu12_32/` on the host. _Avoid_: _SteamRT3 client_ and _new client_ in
+Tender's own text.
+
+### Focus watcher / pin (forced input id)
+
+The **focus watcher** (`services/controller_focus.py`) tells Steam which controller layout to load for a focused window
+Steam cannot attribute itself, because Steam's **64-bit client** cannot attribute a Flatpak's window to its game in
+**Desktop Mode**, and hands the choice back once focus leaves it. A **pin** is what `steam://forceinputappid/<id>`
+leaves: Steam forces the layout of `<id>` onto every window until another id replaces it. A **release** is `0`, which
+hands the choice back to Steam. Detail: [Controller focus in Desktop Mode](docs/architecture/controller-focus.md).
+_Avoid_: _input lock_, _controller override_.
+
 ### Navigation watcher / restoration ledger
 
 The **navigation watcher** (`frontend/src/desktop/navigationWatcher.ts`) is what the desktop surface adapts Steam's game

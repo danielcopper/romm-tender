@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import os
 import secrets
 from dataclasses import dataclass
@@ -161,6 +162,11 @@ class InjectionSetup:
     debugger_port: int = DEBUGGER_PORT
     decky_port: int = DECKY_LOADER_PORT
 
+    @property
+    def loads_the_panel(self) -> bool:
+        """Whether the switch leaves loading the panel into Steam on."""
+        return self.override != INJECT_OFF
+
     @classmethod
     def from_environment(
         cls,
@@ -231,6 +237,19 @@ class PanelInjector:
     async def running_apps(self) -> tuple[ListedApp, ...] | None:
         """Steam's running apps, one reading; ``None`` where it could not be taken."""
         return (await read_running_apps(self._evaluate_attached)).apps
+
+    async def execute_steam_url(self, url: str) -> bool:
+        """Have Steam execute *url* in the context attached right now; answer whether it went out.
+
+        ``False`` where nothing is attached, the connection was lost, or the
+        page threw — the caller decides whether to try again. *url* reaches
+        the expression only as a JSON string literal.
+        """
+        try:
+            await self._evaluate_attached(f"SteamClient.URL.ExecuteSteamURL({json.dumps(url)})")
+        except (CdpConnectionLost, CdpUnavailableError, TimeoutError):
+            return False
+        return True
 
     async def reload_frees_at(self) -> float | None:
         """When Steam's interface may be taken down once more; ``None`` while it may be now.

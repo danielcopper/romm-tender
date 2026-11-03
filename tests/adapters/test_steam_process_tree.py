@@ -310,6 +310,139 @@ class TestIsAlive:
         assert SteamProcessTreeAdapter().is_alive(900) is False
 
 
+# ── launched_app_id ──────────────────────────────────────────────────────────
+
+
+def _set_parent(proc_root: Path, pid: int, parent: int) -> None:
+    """Write a fake ``/proc/<pid>/status`` naming *parent* on its ``PPid:`` line."""
+    (proc_root / str(pid) / "status").write_text(
+        f"Name:\tx\nState:\tS (sleeping)\nTgid:\t{pid}\nPid:\t{pid}\nPPid:\t{parent}\n", encoding="utf-8"
+    )
+
+
+def _chain(proc_root: Path, *processes: tuple[int, str, list[str] | None]) -> None:
+    """Write *processes* as a parent chain, the first the topmost, each child of the one before it."""
+    parent = 1
+    for pid, comm, argv in processes:
+        _make_process(proc_root, pid, comm, [], argv)
+        _set_parent(proc_root, pid, parent)
+        parent = pid
+
+
+def _launched(pid: int) -> int | None:
+    return SteamProcessTreeAdapter().launched_app_id(pid)
+
+
+class TestTheLaunchAProcessRunsUnder:
+    def test_the_walk_up_through_the_sandbox_finds_the_reaper_s_app_id(self, proc_root: Path) -> None:
+        # reaper(1000) → bwrap(1001) → bwrap(1002) → launcher(1003) → retroarch(1004).
+        _chain(
+            proc_root,
+            (1000, "reaper", _reaper_argv(APP_ID)),
+            (1001, "bwrap", None),
+            (1002, "bwrap", None),
+            (1003, "component_launc", None),
+            (1004, "retroarch", None),
+        )
+
+        assert _launched(1004) == APP_ID
+
+    def test_any_game_s_launch_counts_not_only_a_shortcut_s(self, proc_root: Path) -> None:
+        steam_game = 1663850
+        _chain(proc_root, (1000, "reaper", _reaper_argv(steam_game)), (1001, "game", None))
+
+        assert _launched(1001) == steam_game
+
+    def test_a_process_under_no_reaper_runs_under_no_launch(self, proc_root: Path) -> None:
+        _chain(proc_root, (900, "plasmashell", None), (901, "konsole", None))
+
+        assert _launched(901) is None
+
+    def test_a_reaper_of_another_user_is_not_this_user_s_launch(
+        self, proc_root: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _chain(proc_root, (1000, "reaper", _reaper_argv(APP_ID)), (1001, "retroarch", None))
+        foreign_uid = (proc_root / "1000").stat().st_uid + 1
+        monkeypatch.setattr(steam_process_tree.os, "getuid", lambda: foreign_uid)
+
+        assert _launched(1001) is None
+
+    def test_a_reaper_without_steam_launch_is_no_launch(self, proc_root: Path) -> None:
+        _chain(
+            proc_root,
+            (1000, "reaper", ["/usr/bin/reaper", "Other", f"AppId={APP_ID}", "--", LAUNCHER]),
+            (1001, "retroarch", None),
+        )
+
+        assert _launched(1001) is None
+
+    def test_an_app_id_after_the_end_of_the_reaper_s_options_is_ignored(self, proc_root: Path) -> None:
+        argv = ["/home/deck/.local/share/Steam/steamrt64/reaper", "SteamLaunch", "--", LAUNCHER, f"AppId={APP_ID}"]
+        _chain(proc_root, (1000, "reaper", argv), (1001, "retroarch", None))
+
+        assert _launched(1001) is None
+
+    def test_a_process_that_only_carries_the_reaper_s_command_line_is_not_one(self, proc_root: Path) -> None:
+        _chain(
+            proc_root,
+            (1000, "steam-launch-wr", ["steam-launch-wrapper", "--", *_reaper_argv(APP_ID)]),
+            (1001, "retroarch", None),
+        )
+
+        assert _launched(1001) is None
+
+    def test_the_nearest_reaper_answers(self, proc_root: Path) -> None:
+        _chain(
+            proc_root,
+            (1000, "reaper", _reaper_argv(OTHER_APP_ID)),
+            (1001, "reaper", _reaper_argv(APP_ID)),
+            (1002, "retroarch", None),
+        )
+
+        assert _launched(1002) == APP_ID
+
+    def test_a_parent_that_vanished_ends_the_walk(self, proc_root: Path) -> None:
+        _make_process(proc_root, 1001, "retroarch", [])
+        _set_parent(proc_root, 1001, 1000)
+
+        assert _launched(1001) is None
+
+    def test_a_status_without_a_ppid_line_ends_the_walk(self, proc_root: Path) -> None:
+        _make_process(proc_root, 1001, "retroarch", [])
+        (proc_root / "1001" / "status").write_text("Name:\tretroarch\nState:\tS\n", encoding="utf-8")
+
+        assert _launched(1001) is None
+
+    def test_a_pid_with_no_proc_entry_runs_under_no_launch(self, proc_root: Path) -> None:
+        assert _launched(4321) is None
+
+    def test_the_walk_stops_at_the_depth_cap(self, proc_root: Path) -> None:
+        depth = steam_process_tree._MAX_DEPTH
+        _chain(
+            proc_root,
+            (1000, "reaper", _reaper_argv(APP_ID)),
+            *[(1000 + offset, f"level{offset}", None) for offset in range(1, depth + 1)],
+        )
+
+        assert _launched(1000 + depth - 1) == APP_ID
+        assert _launched(1000 + depth) is None
+
+    def test_a_parent_loop_terminates(self, proc_root: Path) -> None:
+        _make_process(proc_root, 1000, "a", [])
+        _make_process(proc_root, 1001, "b", [])
+        _set_parent(proc_root, 1000, 1001)
+        _set_parent(proc_root, 1001, 1000)
+
+        assert _launched(1001) is None
+
+    @pytest.mark.parametrize("app_id", ["0", "", "12ab", "-5"])
+    def test_an_app_id_that_is_no_positive_number_names_no_launch(self, proc_root: Path, app_id: str) -> None:
+        argv = ["/home/deck/.local/share/Steam/steamrt64/reaper", "SteamLaunch", f"AppId={app_id}", "--", LAUNCHER]
+        _chain(proc_root, (1000, "reaper", argv), (1001, "retroarch", None))
+
+        assert _launched(1001) is None
+
+
 # ── Flatpak's instance registry ──────────────────────────────────────────────
 
 _BACKEND = Path(__file__).resolve().parents[2] / "backend"
