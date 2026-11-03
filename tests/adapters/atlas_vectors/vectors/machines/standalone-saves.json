@@ -6,7 +6,7 @@
   "vectors": [
     {
       "name": "dolphin-keeps-one-gci-folder-per-region-and-the-region-is-a-hole",
-      "rationale": "The GCI-folder device sits in slot A (Dolphin.ini [Core] SlotA = 8, the registered default), so a GameCube save is one .gci file in <GC user>/<region>/Card A — named from the save's own directory entry, which no read of the content path recovers. The answer's dir keeps the <region> segment as a hole a caller with metadata fills, while the groups list all three region trees so a caller without it still sees the whole candidate set. RetroDECK reroutes the region trees with symlinks; the emulator-view dirs are the answer's.",
+      "rationale": "The GCI-folder device sits in slot A (Dolphin.ini [Core] SlotA = 8, the registered default), so a GameCube save is one .gci file in <GC user>/<region>/Card A — named from the save's own directory entry, which no read of the content path recovers. Which files are one game's is decided by the game code the first four bytes of each file's header carry, so the answer holds that code as a save_id hole beside the region and states, per region folder, how a caller fills it (file-membership-by-header: list *.gci, compare four bytes at offset 0). The answer's dir keeps the <region> segment as a hole a caller with metadata fills, while the groups list all three region trees so a caller without it still sees the whole candidate set. RetroDECK reroutes the region trees with symlinks; the emulator-view dirs are the answer's.",
       "input": {
         "home": "/home/deck",
         "files": {
@@ -48,7 +48,8 @@
           "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/<region>/Card A",
           "root_kind": "emulator_directory",
           "needs": [
-            "region"
+            "region",
+            "save_id"
           ],
           "fallback_dir": null,
           "physical_dir": null,
@@ -102,7 +103,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -111,7 +112,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -120,7 +121,58 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
               }
             },
             {
@@ -323,7 +375,8 @@
           "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/<region>/Card A",
           "root_kind": "emulator_directory",
           "needs": [
-            "region"
+            "region",
+            "save_id"
           ],
           "fallback_dir": null,
           "physical_dir": null,
@@ -384,7 +437,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -393,7 +446,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -402,7 +455,58 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
               }
             },
             {
@@ -10768,7 +10872,8 @@
           "dir": "/home/deck/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/GC/<region>/Card A",
           "root_kind": "emulator_directory",
           "needs": [
-            "region"
+            "region",
+            "save_id"
           ],
           "fallback_dir": null,
           "physical_dir": null,
@@ -10822,7 +10927,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/GC/USA/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -10831,7 +10936,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/GC/EUR/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -10840,7 +10945,58 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/GC/JAP/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/GC/USA/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/GC/EUR/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/GC/JAP/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
               }
             },
             {
@@ -11091,7 +11247,7 @@
     },
     {
       "name": "a-fork-answers-the-gamecube-cards-it-inherits",
-      "rationale": "PrimeHack is Dolphin with a different name for its own directory, so one reading serves both and the answer is Dolphin's: slot A holds the GCI folder its build registers as the default, slot B holds nothing, and the folder's .gci names come from each save's own directory entry. What the card supplies is the evidence — every line number here is the fork's own revision, not the Dolphin release beside it, which is why a shared reading may be shared at all.",
+      "rationale": "PrimeHack is Dolphin with a different name for its own directory, so one reading serves both and the answer is Dolphin's: slot A holds the GCI folder its build registers as the default, slot B holds nothing, and the folder's .gci names come from each save's own directory entry, while the files one game owns are the ones whose header carries its game code, the save_id hole beside the region. What the card supplies is the evidence — every line number here is the fork's own revision, not the Dolphin release beside it, which is why a shared reading may be shared at all.",
       "input": {
         "home": "/home/deck",
         "files": {
@@ -11126,7 +11282,8 @@
           "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/primehack/GC/<region>/Card A",
           "root_kind": "emulator_directory",
           "needs": [
-            "region"
+            "region",
+            "save_id"
           ],
           "fallback_dir": null,
           "physical_dir": null,
@@ -11199,6 +11356,57 @@
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/primehack/GC/JAP/Card A",
                 "role": "memory-card",
                 "citation": "GCMemcardDirectory.cpp:54-62 at shiiion/dolphin 81bfb96"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "PRIMEHACK",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/primehack/GC/USA/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:193, FileSearch.h:13-15, FileSearch.cpp:42-63, GCMemcardDirectory.cpp:210, GCMemcard.h:246-247, EXI_DeviceMemoryCard.cpp:176-184 at shiiion/dolphin 81bfb96"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "PRIMEHACK",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/primehack/GC/EUR/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:193, FileSearch.h:13-15, FileSearch.cpp:42-63, GCMemcardDirectory.cpp:210, GCMemcard.h:246-247, EXI_DeviceMemoryCard.cpp:176-184 at shiiion/dolphin 81bfb96"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "PRIMEHACK",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/primehack/GC/JAP/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:193, FileSearch.h:13-15, FileSearch.cpp:42-63, GCMemcardDirectory.cpp:210, GCMemcard.h:246-247, EXI_DeviceMemoryCard.cpp:176-184 at shiiion/dolphin 81bfb96"
               }
             },
             {
@@ -11579,7 +11787,8 @@
           "dir": "/home/deck/.var/app/io.github.shiiion.primehack/data/dolphin-emu/GC/<region>/Card A",
           "root_kind": "emulator_directory",
           "needs": [
-            "region"
+            "region",
+            "save_id"
           ],
           "fallback_dir": null,
           "physical_dir": null,
@@ -11652,6 +11861,57 @@
                 "dir": "/home/deck/.var/app/io.github.shiiion.primehack/data/dolphin-emu/GC/JAP/Card A",
                 "role": "memory-card",
                 "citation": "GCMemcardDirectory.cpp:52-60 at shiiion/dolphin 53f53e0"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "PRIMEHACK",
+                "dir": "/home/deck/.var/app/io.github.shiiion.primehack/data/dolphin-emu/GC/USA/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:191, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:208, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at shiiion/dolphin 53f53e0"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "PRIMEHACK",
+                "dir": "/home/deck/.var/app/io.github.shiiion.primehack/data/dolphin-emu/GC/EUR/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:191, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:208, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at shiiion/dolphin 53f53e0"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "PRIMEHACK",
+                "dir": "/home/deck/.var/app/io.github.shiiion.primehack/data/dolphin-emu/GC/JAP/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:191, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:208, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at shiiion/dolphin 53f53e0"
               }
             },
             {
@@ -13050,7 +13310,8 @@
           "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/<region>/Card B",
           "root_kind": "emulator_directory",
           "needs": [
-            "region"
+            "region",
+            "save_id"
           ],
           "fallback_dir": null,
           "physical_dir": null,
@@ -13135,7 +13396,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card B",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -13144,7 +13405,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card B",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -13153,7 +13414,58 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card B",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card B",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card B",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card B",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
               }
             },
             {
@@ -17324,7 +17636,8 @@
           "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/<region>/Card B",
           "root_kind": "emulator_directory",
           "needs": [
-            "region"
+            "region",
+            "save_id"
           ],
           "fallback_dir": null,
           "physical_dir": null,
@@ -17378,7 +17691,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card B",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -17387,7 +17700,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card B",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -17396,7 +17709,58 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card B",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card B",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card B",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card B",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
               }
             },
             {
@@ -17586,7 +17950,8 @@
           "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/<region>/Card B",
           "root_kind": "emulator_directory",
           "needs": [
-            "region"
+            "region",
+            "save_id"
           ],
           "fallback_dir": null,
           "physical_dir": null,
@@ -17649,7 +18014,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card B",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -17658,7 +18023,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card B",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -17667,7 +18032,58 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card B",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card B",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card B",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card B",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
               }
             },
             {
@@ -17852,7 +18268,8 @@
           "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/<region>/Card A",
           "root_kind": "emulator_directory",
           "needs": [
-            "region"
+            "region",
+            "save_id"
           ],
           "fallback_dir": null,
           "physical_dir": null,
@@ -17935,7 +18352,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -17944,7 +18361,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -17953,7 +18370,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -17962,7 +18379,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card B",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -17971,7 +18388,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card B",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -17980,7 +18397,109 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card B",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card B",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card B",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card B",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
               }
             },
             {
@@ -18171,7 +18690,8 @@
           "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/<region>/Card A",
           "root_kind": "emulator_directory",
           "needs": [
-            "region"
+            "region",
+            "save_id"
           ],
           "fallback_dir": null,
           "physical_dir": null,
@@ -18246,7 +18766,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -18255,7 +18775,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -18264,7 +18784,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -18273,7 +18793,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card B",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -18282,7 +18802,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card B",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -18291,7 +18811,109 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card B",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card B",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card B",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card B",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
               }
             },
             {
@@ -18724,7 +19346,8 @@
           "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/<region>/Card A",
           "root_kind": "emulator_directory",
           "needs": [
-            "region"
+            "region",
+            "save_id"
           ],
           "fallback_dir": null,
           "physical_dir": null,
@@ -18778,7 +19401,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -18787,7 +19410,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -18796,7 +19419,58 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
               }
             },
             {
@@ -19538,7 +20212,8 @@
           "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/<region>/Card A",
           "root_kind": "emulator_directory",
           "needs": [
-            "region"
+            "region",
+            "save_id"
           ],
           "fallback_dir": null,
           "physical_dir": null,
@@ -19599,7 +20274,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -19608,7 +20283,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -19617,7 +20292,58 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
               }
             },
             {
@@ -23322,7 +24048,8 @@
           "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/<region>/Card A",
           "root_kind": "emulator_directory",
           "needs": [
-            "region"
+            "region",
+            "save_id"
           ],
           "fallback_dir": null,
           "physical_dir": null,
@@ -23376,7 +24103,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -23385,7 +24112,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -23394,7 +24121,58 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
               }
             },
             {
@@ -23590,7 +24368,8 @@
           "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/<region>/Card A",
           "root_kind": "emulator_directory",
           "needs": [
-            "region"
+            "region",
+            "save_id"
           ],
           "fallback_dir": null,
           "physical_dir": null,
@@ -23644,7 +24423,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -23653,7 +24432,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -23662,7 +24441,58 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
               }
             },
             {
@@ -28998,7 +29828,8 @@
           "dir": "/mnt/sd/retrodeck/saves/gc/folders/<region>",
           "root_kind": "emulator_directory",
           "needs": [
-            "region"
+            "region",
+            "save_id"
           ],
           "fallback_dir": null,
           "physical_dir": null,
@@ -29052,7 +29883,7 @@
                 "token": "DOLPHIN",
                 "dir": "/mnt/sd/retrodeck/saves/gc/folders/USA",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -29061,7 +29892,7 @@
                 "token": "DOLPHIN",
                 "dir": "/mnt/sd/retrodeck/saves/gc/folders/EUR",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -29070,7 +29901,58 @@
                 "token": "DOLPHIN",
                 "dir": "/mnt/sd/retrodeck/saves/gc/folders/JAP",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/mnt/sd/retrodeck/saves/gc/folders/USA",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/mnt/sd/retrodeck/saves/gc/folders/EUR",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/mnt/sd/retrodeck/saves/gc/folders/JAP",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
               }
             },
             {
@@ -29292,7 +30174,8 @@
           "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/<region>/Card A",
           "root_kind": "emulator_directory",
           "needs": [
-            "region"
+            "region",
+            "save_id"
           ],
           "fallback_dir": null,
           "physical_dir": null,
@@ -29346,7 +30229,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -29355,7 +30238,7 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
               }
             },
             {
@@ -29364,7 +30247,58 @@
                 "token": "DOLPHIN",
                 "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
                 "role": "memory-card",
-                "citation": "GCMemcardDirectory.cpp:57-61 at dolphin 2609"
+                "citation": "GCMemcardDirectory.cpp:53-61 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/USA/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/EUR/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
+              }
+            },
+            {
+              "code": "file-membership-by-header",
+              "data": {
+                "token": "DOLPHIN",
+                "dir": "/home/deck/.var/app/net.retrodeck.retrodeck/data/dolphin-emu/GC/JAP/Card A",
+                "pattern": "*.gci",
+                "offset": "0",
+                "length": "4",
+                "save_id": "the disc's game code: the first four characters of its game id, as the disc header states it",
+                "save_id_spelling": "game-code",
+                "limits": [
+                  "other-games-loaded",
+                  "maker-code-not-compared"
+                ],
+                "citation": "GCMemcardDirectory.cpp:192, FileSearch.h:32-36, FileSearch.cpp:34-55, GCMemcardDirectory.cpp:209, GCMemcard.h:245-246, EXI_DeviceMemoryCard.cpp:173-181 at dolphin 2609"
               }
             },
             {

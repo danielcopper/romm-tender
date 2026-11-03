@@ -147,6 +147,11 @@ class RuleReading:
     relative tree there instead of leaving it unresolvable, and says so in
     ``ModeChoice.reads_cwd``; PUAE's member check resolves against the same
     directory and does not take it yet (``_puae_class_of``, #597).
+
+    ``system`` is the content's system in ES-DE's vocabulary where the asker
+    named one — the catalogue routes always do — and ``None`` where it did
+    not: the Dolphin core keeps a GameCube game's saves and a Wii game's in
+    different parts of one tree, and only the system says which.
     """
 
     option_values: Mapping[str, str | None]
@@ -164,6 +169,7 @@ class RuleReading:
     archive_members: Callable[[], ArchiveListResult]
     whdload_slave: Callable[[], WhdloadSlaveResult]
     cwd: str | None = None
+    system: str | None = None
 
 
 # What a rule fills no template with — the state of every mode whose names
@@ -2593,6 +2599,52 @@ def _pcee2(reading: RuleReading) -> ModeChoice:
     )
 
 
+# ---------------------------------------------------------------------------
+# dolphin — the libretro Dolphin core keeps one user tree below the save
+# directory (Boot.cpp:61-69 at libretro/dolphin fd1aca3a), and which part of it
+# a game saves into is the console its disc is for: a GameCube game into the
+# memory-card tree, a Wii game into the NAND. The core tells the two apart by
+# the disc's own header, which nothing here reads, so the rule takes the system
+# the question names. The tree below each part is stated in code
+# (atlas.installations), because the card format cannot carry a NAND path keyed
+# by a title id or a card folder keyed by a region.
+# ---------------------------------------------------------------------------
+
+_DOLPHIN_CORE_MODES = {"gc": "gamecube", "wii": "wii"}
+
+
+def _dolphin(reading: RuleReading) -> ModeChoice:
+    system = reading.system
+    if system is None:
+        return ModeChoice(
+            None,
+            caveats=(
+                _mode_unestablished(
+                    "dolphin",
+                    REASON_CONTENT_CLASS_UNNAMED,
+                    "which part of the core's user tree a game saves into depends on the console "
+                    "its disc is for (the GameCube memory cards or the Wii NAND), and the question "
+                    "named no system",
+                ),
+            ),
+        )
+    mode = _DOLPHIN_CORE_MODES.get(system)
+    if mode is None:
+        return ModeChoice(
+            None,
+            caveats=(
+                _mode_unestablished(
+                    "dolphin",
+                    REASON_CONTENT_CLASS_UNRECORDED,
+                    f"the system {system!r} is neither of the two consoles the core's tree is "
+                    "recorded for (gc, wii)",
+                    system=system,
+                ),
+            ),
+        )
+    return ModeChoice(mode)
+
+
 # The registry the card loader validates against: a card stating a
 # ``governing_rule`` must have its function here, and the test suite holds
 # the mirror claim — a rule with no card would be code describing nothing.
@@ -2609,4 +2661,5 @@ RULES: Mapping[str, Callable[[RuleReading], ModeChoice]] = {
     "puae2021": _puae_rule("puae2021"),
     "opera": _opera,
     "pcee2": _pcee2,
+    "dolphin": _dolphin,
 }

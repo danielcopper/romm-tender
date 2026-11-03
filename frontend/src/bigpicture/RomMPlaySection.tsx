@@ -67,7 +67,7 @@ import {
 } from "../utils/pruneLease";
 import { executeGameCoreChange } from "../utils/coreOverride";
 import { frontendChoiceSentence, gameCanPickAnother, startRefusal, vanishedPickSentence } from "../utils/emulatorStart";
-import { launchNote } from "../utils/gameLaunch";
+import { launchNotes } from "../utils/gameLaunch";
 import { askEntryLaunches } from "../utils/emulatorLaunches";
 import { useGamePlaytime } from "../utils/playtimeReconcile";
 import { buildEmulatorMenu } from "../utils/emulatorMenu";
@@ -957,8 +957,8 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     stranded || fileMissing || startCheckFailed || detail.emulatorStart === null
       ? null
       : startRefusal(detail.emulatorStart, gameLaunch, canPick);
-  const startNote =
-    stranded || fileMissing || startCheckFailed || emulatorRefusal !== null ? null : launchNote(gameLaunch, detail.emulatorSource);
+  const startNotes =
+    stranded || fileMissing || startCheckFailed || emulatorRefusal !== null ? [] : launchNotes(gameLaunch, detail.emulatorSource);
 
   const warningLine = (testId: string, text: string) => (
     <div
@@ -1065,7 +1065,9 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         )}
       </div>
       {emulatorRefusal === null ? null : warningLine("emulator-refusal", emulatorRefusal)}
-      {startNote === null ? null : warningLine("start-note", startNote)}
+      {startNotes.map((note, index) => (
+        <Fragment key={`${index}:${note}`}>{warningLine("start-note", note)}</Fragment>
+      ))}
     </Focusable>
   );
 

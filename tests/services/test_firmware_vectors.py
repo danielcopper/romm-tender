@@ -55,10 +55,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from _atlas_machines import fixture_machine, select
 from _factories import _make_conflict_rules
 from _vendor import atlas
 from _vendor.atlas.contract import firmware_contract
-from _vendor.atlas.machine import FixtureMachine
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, standalone_option
 from fakes.fake_firmware_file_store import FakeFirmwareFileStore
@@ -262,42 +262,14 @@ def _firmware_vectors() -> list[tuple[str, dict[str, Any]]]:
 _VECTORS = _firmware_vectors()
 
 
-def fixture_machine(inp: dict[str, Any]) -> FixtureMachine:
-    """The vector's machine, built as upstream's runner builds it.
-
-    emu-atlas ``tests/test_machine_vectors.py`` at the release the copy's README
-    names, lines 68-84.
-    """
-    return FixtureMachine(
-        inp["files"],
-        symlinks=inp.get("symlinks"),
-        cores=inp.get("cores"),
-        dirs=inp.get("dirs"),
-        inaccessible=inp.get("inaccessible"),
-        unlistable=inp.get("unlistable"),
-        appimages=inp.get("appimages"),
-        appimage_stamps=inp.get("appimage_stamps"),
-        ps2_bios_headers=inp.get("ps2_bios_headers"),
-        ps3_files=inp.get("ps3_files"),
-        disc_identities=inp.get("disc_identities"),
-        archive_texts=inp.get("archive_texts"),
-        archives=inp.get("archives"),
-        whdload_slaves=inp.get("whdload_slaves"),
-    )
-
-
 def _target(inp: dict[str, Any]) -> tuple[Any, tuple[str, ...]]:
     """The installation the vector's question names, else the first detected; and every kind detected.
 
-    The selection is upstream's ``_select``, the same file, lines 87-94.
+    The selection is ``_atlas_machines.select``, upstream's ``_select``.
     """
     installs = atlas.detect(inp["home"], fixture_machine(inp))
-    selector = inp["firmware_query"].get("installation")
     kinds = tuple(install.kind for install in installs)
-    if selector is None:
-        assert installs, "no installation detected to answer the query"
-        return installs[0], kinds
-    return next(install for install in installs if install.kind == selector), kinds
+    return select(installs, inp["firmware_query"].get("installation")), kinds
 
 
 def _systems(inp: dict[str, Any], installation: Any) -> list[str]:

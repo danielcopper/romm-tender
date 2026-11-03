@@ -93,6 +93,7 @@
             "file": "/mnt/sd/retrodeck/roms/ps3/Game.ps3/PS3_GAME/USRDIR/EBOOT.BIN",
             "disc_root": "/mnt/sd/retrodeck/roms/ps3/Game.ps3"
           },
+          "opens": null,
           "caveats": []
         }
       }
@@ -179,6 +180,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-disc-root-missing",
@@ -277,6 +279,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-disc-root-missing",
@@ -374,6 +377,7 @@
             "file": "/mnt/sd/retrodeck/roms/ps3/Game.ps3/USRDIR/EBOOT.BIN",
             "disc_root": null
           },
+          "opens": null,
           "caveats": []
         }
       }
@@ -459,6 +463,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-nothing-found",
@@ -548,6 +553,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-file-unbootable",
@@ -637,6 +643,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-registry-unread",
@@ -733,6 +740,7 @@
             "file": "/mnt/sd/retrodeck/roms/ps3/Game.iso",
             "disc_root": "/mnt/sd/retrodeck/roms/ps3/Game.iso"
           },
+          "opens": null,
           "caveats": []
         }
       }
@@ -821,6 +829,7 @@
             "file": "/mnt/sd/retrodeck/roms/ps3/Game.iso",
             "disc_root": "/mnt/sd/retrodeck/roms/ps3/Game.iso"
           },
+          "opens": null,
           "caveats": []
         }
       }
@@ -906,6 +915,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-iso-encryption-unread",
@@ -999,6 +1009,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-iso-regions-invalid",
@@ -1093,6 +1104,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-registry-unread",
@@ -1187,6 +1199,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-category-unestablished",
@@ -1279,6 +1292,7 @@
             "file": "/mnt/sd/retrodeck/roms/ps3/Game.ps3/USRDIR/EBOOT.BIN",
             "disc_root": null
           },
+          "opens": null,
           "caveats": []
         }
       }
@@ -1372,6 +1386,7 @@
           ],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "entry-takes-no-directory",
@@ -1455,6 +1470,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-path-missing",
@@ -1547,6 +1563,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-path-unestablished",
@@ -1641,6 +1658,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-inside-internal-drive",
@@ -1738,6 +1756,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-drive-unresolved",
@@ -1827,6 +1846,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-savestate-unread",
@@ -1927,6 +1947,7 @@
             "file": "/mnt/sd/retrodeck/roms/ps3/Outer/PS3_GAME/Inner.ps3/PS3_GAME/USRDIR/EBOOT.BIN",
             "disc_root": "/mnt/sd/retrodeck/roms/ps3/Outer"
           },
+          "opens": null,
           "caveats": []
         }
       }
@@ -2015,6 +2036,7 @@
             "file": "/mnt/sd/retrodeck/roms/ps3/Disc/PS3_GM01/Part.ps3/EBOOT.BIN",
             "disc_root": "/mnt/sd/retrodeck/roms/ps3/Disc"
           },
+          "opens": null,
           "caveats": []
         }
       }
@@ -2103,6 +2125,7 @@
             "file": "/mnt/sd/retrodeck/roms/ps3/Disc/PS3_GM٠١/Part.ps3/EBOOT.BIN",
             "disc_root": null
           },
+          "opens": null,
           "caveats": []
         }
       }
@@ -2200,6 +2223,7 @@
             "file": "/mnt/sd/retrodeck/roms/ps3/Game.ps3/EBOOT.BIN",
             "disc_root": null
           },
+          "opens": null,
           "caveats": []
         }
       }
@@ -2289,6 +2313,7 @@
             "file": "/mnt/sd/retrodeck/roms/ps3/Game.iso",
             "disc_root": "/mnt/sd/retrodeck/roms/ps3/Game.iso"
           },
+          "opens": null,
           "caveats": []
         }
       }
@@ -2375,6 +2400,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-disc-key-missing",
@@ -2470,6 +2496,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-iso-key-untested",
@@ -2565,6 +2592,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-iso-key-untested",
@@ -2662,6 +2690,7 @@
             "file": "/mnt/sd/retrodeck/roms/ps3/Game.iso",
             "disc_root": "/mnt/sd/retrodeck/roms/ps3/Game.iso"
           },
+          "opens": null,
           "caveats": []
         }
       }
@@ -2751,6 +2780,7 @@
             "file": "/mnt/sd/retrodeck/roms/ps3/Game.iso",
             "disc_root": "/mnt/sd/retrodeck/roms/ps3/Game.iso"
           },
+          "opens": null,
           "caveats": []
         }
       }
@@ -2834,6 +2864,7 @@
             "file": "/home/deck/Emulation/roms/ps3/Game.ps3/USRDIR/EBOOT.BIN",
             "disc_root": null
           },
+          "opens": null,
           "caveats": [
             {
               "code": "emulator-catalogue-sealed",
@@ -2923,6 +2954,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-savestate-unread",
@@ -3022,6 +3054,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-disc-dir-configured",
@@ -3120,6 +3153,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-disc-dir-configured",
@@ -3218,6 +3252,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-disc-dir-configured",
@@ -3313,6 +3348,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-disc-dir-unresolved",
@@ -3407,6 +3443,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-disc-dir-unresolved",
@@ -3501,6 +3538,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-disc-dir-unresolved",
@@ -3589,6 +3627,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "entry-format-unestablished",
@@ -3676,6 +3715,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "emulator-catalogue-sealed",
@@ -3767,6 +3807,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "emulator-catalogue-sealed",
@@ -3866,6 +3907,7 @@
           "alternatives": [],
           "installers": null,
           "boots": null,
+          "opens": null,
           "caveats": [
             {
               "code": "boot-disc-dir-unresolved",

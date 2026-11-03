@@ -448,13 +448,16 @@ menu opens at once with every entry choosable, and the rows wait together on Pla
 one request that answers them all; an answer that lands after the page moved to another version, or after the menu
 closed, is dropped (`utils/emulatorLaunches.ts`). Each line says what the resolver states: an entry that refuses the
 file names the resolver's reason where it gives one — RPCS3 Shortcut "cannot start a game installed as a folder" for a
-game kept as a `<game>.ps3` folder — and an entry that starts it says what the resolver's reading of the file could not
-establish, where it stopped short (D40). An entry Tender cannot start yet says so on its row and gets no "can start it"
-under it; every other line of the resolver's stays (D42). The menu's answer never moves the pick; a pick of an entry
-that cannot start the game is the user's, and Play is then off with the verdict's sentence — the resolver's refusal of
-the file where it states one, before Tender's own "Tender cannot start _entry_ yet." (D42,
-`frontend/src/utils/emulatorStart.ts::startRefusal`). What a game's own entry answers, and what each answer does to a
-start, is [Launch-target validation](backend-architecture.md#launch-target-validation).
+game kept as a `<game>.ps3` folder, Beetle PCE "it starts no game from a playlist" for a `.m3u`
+([#2698](https://github.com/danielcopper/romm-tender/issues/2698) D7) — and an entry that starts it says what the
+resolver's reading of the file could not establish, where it stopped short (D40), a file its start goes on without, with
+"can start it, without _file_: …", or what else it is established to do short of the whole start, with "can start it,
+but …". Where the answer says more than one thing, the line is the first with "+_N_ more" (#2698 D8). An entry Tender
+cannot start yet says so on its row and gets no "can start it" under it; every other line of the resolver's stays (D42).
+The menu's answer never moves the pick; a pick of an entry that cannot start the game is the user's, and Play is then
+off with the verdict's sentence — the resolver's refusal of the file where it states one, before Tender's own "Tender
+cannot start _entry_ yet." (D42, `frontend/src/utils/emulatorStart.ts::startRefusal`). What a game's own entry answers,
+and what each answer does to a start, is [Launch-target validation](backend-architecture.md#launch-target-validation).
 
 ## Application: baking `-e` into `launch_options`
 

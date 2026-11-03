@@ -345,15 +345,16 @@
       ]
     },
     "dolphin": {
-      "verdict": "suspect",
-      "per_game_capable": null,
-      "note": "[O] RetroDECK's prepared dolphin-emu save subtree suggests a different root; no core-written save has been observed.",
+      "verdict": "card",
+      "per_game_capable": true,
+      "note": "[V-source/binary] libretro/dolphin at fd1aca3a, the revision the shipped binary names in its library_version: the core keeps the standalone Dolphin's user tree below the save directory RetroArch hands it, <save dir>/User (Boot.cpp:61-69), and reads User/Config/Dolphin.ini as its base layer (UICommon.cpp:142) — no core option places a save (Boot.cpp:115-345) — so GameCube saves are the slot devices that ini names, by default a GCI folder at User/GC/<region>/Card A with SlotB empty (MainSettings.cpp:122-125, :734-744), and a Wii title's save is title/<hi>/<lo>/data below User/Wii unless NANDRootPath moves the NAND (NandPaths.cpp:63-72). The answer is built in code over the standalone readings (atlas/installations.py), because the card format cannot carry a NAND path keyed by a title id or a folder keyed by a region. RetroDECK's prepared <retroarch config dir>/saves/dolphin-emu/User/Load is texture and mod plumbing (components/retroarch/component_prepare.sh:168-169, component_prepare.sh:226, component_prepare.sh:239), a user tree only a save directory of <retroarch config dir>/saves/dolphin-emu would reach — sorting by core name below RetroArch's default saves directory — while RetroDECK's shipped retroarch.cfg names its own saves directory and sorts by content directory (rd_config/retroarch.cfg:3233, retroarch.cfg:3275-3276), so it is no save root. retro_get_memory_* answers system RAM alone, so no .srm. The core registers its options in retro_load_game, after a probe of retro_set_environment listens, so no registration was captured. Not yet observed: the redirected directory reaching the core, the first run's card mode, the .gci name and header, the Wii data contents, no .srm.",
       "verified": {
         "retrodeck": null,
         "emudeck": null,
         "bare": null
       },
-      "kind": "libretro"
+      "kind": "libretro",
+      "registration": "not-captured"
     },
     "dosbox_pure": {
       "verdict": "card",

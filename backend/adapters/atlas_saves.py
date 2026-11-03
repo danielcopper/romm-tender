@@ -46,6 +46,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from _vendor.atlas import (
+    CAVEAT_FILE_MEMBERSHIP_BY_HEADER,
     CAVEAT_REDIRECT_OUTRANKED,
     CAVEAT_SAVE_FILES_SHARED_WITH_CORE,
     HEALTH_ISSUE_NOT_SET_UP,
@@ -84,8 +85,13 @@ if TYPE_CHECKING:
 # directory. ``save-files-shared-with-core`` says another core writes the same
 # card folder; every save mode atlas packages for the two cores that keeps
 # cards in that folder states it with granularity ``shared-card``, which Tender
-# refuses as shared whatever the note says.
-_NOTES_THAT_CHANGE_NOTHING = frozenset({CAVEAT_REDIRECT_OUTRANKED, CAVEAT_SAVE_FILES_SHARED_WITH_CORE})
+# refuses as shared whatever the note says. ``file-membership-by-header`` says
+# which of a folder's files belong to the game is read off each file's header;
+# it stands beside a folder whose path still needs the game's region and save
+# id, so the answer is a hole Tender refuses before the note matters (#2698 D3).
+_NOTES_THAT_CHANGE_NOTHING = frozenset(
+    {CAVEAT_REDIRECT_OUTRANKED, CAVEAT_SAVE_FILES_SHARED_WITH_CORE, CAVEAT_FILE_MEMBERSHIP_BY_HEADER}
+)
 
 
 class AtlasSaveLocationAdapter:

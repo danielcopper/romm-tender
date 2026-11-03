@@ -740,6 +740,7 @@ class TestEveryLaunchLookupCodeIsClassified:
             "CAVEAT_FRONTEND_BUILD_SEALED",
             "CAVEAT_LAUNCHER_SCRIPT_UNPINNED",
             "CAVEAT_LAUNCH_ENVIRONMENT_UNPINNED",
+            "CAVEAT_LAUNCH_ENVIRONMENT_UNREAD",
         }
         lookup = {
             value

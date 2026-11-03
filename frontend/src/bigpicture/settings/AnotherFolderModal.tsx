@@ -32,7 +32,7 @@ import { ValidatingModalShell } from "./ValidatingModalShell";
 
 type Shown =
   | { kind: "refusal"; sentence: string }
-  | { kind: "named"; typed: string; asks: TenderPlaceAsks }
+  | { kind: "tender_named"; typed: string; asks: TenderPlaceAsks }
   | { kind: "missing"; typed: string; asks: TenderPlaceAsks };
 
 interface AnotherFolderModalProps {
@@ -109,7 +109,7 @@ export const AnotherFolderModal: FC<AnotherFolderModalProps> = ({
       return;
     }
     if (named(asks)) {
-      setShown({ kind: "named", typed, asks });
+      setShown({ kind: "tender_named", typed, asks });
       return;
     }
     await proceed(typed, asks, edited);
@@ -152,7 +152,7 @@ export const AnotherFolderModal: FC<AnotherFolderModalProps> = ({
           {shown.sentence}
         </div>
       )}
-      {shown?.kind === "named" && shown.asks.tender_parent !== null && (
+      {shown?.kind === "tender_named" && shown.asks.tender_parent !== null && (
         <div data-testid="another-folder-question">
           <div style={questionStyle}>{tenderNamedQuestion(shown.asks.place, shown.asks.tender_parent)}</div>
           <Focusable flow-children="horizontal" style={buttonRowStyle}>

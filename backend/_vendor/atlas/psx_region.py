@@ -58,7 +58,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Iterable, Literal
+from typing import TYPE_CHECKING, Callable, Iterable, Iterator, Literal
 
 from . import psx_chd, psx_disc, psx_pbp, qt_ini
 from .content_path import is_compressed_file, path_extension
@@ -391,20 +391,20 @@ _RULES = {
 
 # The most a playlist may hold for atlas to read it. The emulators read any
 # length; a playlist over this is answered as one atlas did not read.
-_PLAYLIST_LIMIT = 4 * 1024 * 1024
+PLAYLIST_LIMIT = 4 * 1024 * 1024
 
 
-def _read_playlist(machine: Machine, playlist: str) -> ReadResult:
+def read_playlist(machine: Machine, playlist: str) -> ReadResult:
     """A playlist's text exactly as written: no newline translation, because both readers split on ``\\n`` alone.
 
     A machine that cannot bound its read answers through :meth:`read_text`
     after a size check, the way :mod:`atlas.installations` falls back.
     """
     if isinstance(machine, BoundedReadingMachine):
-        read = machine.read_text_within(playlist, _PLAYLIST_LIMIT)
+        read = machine.read_text_within(playlist, PLAYLIST_LIMIT)
         return ReadResult(READ_UNREADABLE) if read is None else read
     size = machine.file_size(playlist)
-    if size is not None and size > _PLAYLIST_LIMIT:
+    if size is not None and size > PLAYLIST_LIMIT:
         return ReadResult(READ_UNREADABLE)
     return machine.read_text(playlist)
 
@@ -414,18 +414,41 @@ def _beside(playlist: str, entry: str) -> str:
     return entry if entry.startswith("/") else os.path.join(os.path.dirname(playlist), entry)
 
 
+def _lines_of(text: str) -> Iterator[str]:
+    """``text.split("\\n")`` one line at a time, so a reader that needs the first entries holds no others."""
+    start = 0
+    while True:
+        end = text.find("\n", start)
+        if end < 0:
+            yield text[start:]
+            return
+        yield text[start:end]
+        start = end + 1
+
+
 def duckstation_playlist_entries(text: str, playlist: str) -> list[str]:
-    """``CDImageM3u::Open``'s entries (cd_image_m3u.cpp:76-112 at 1f6de046b; :64-100 at 4d309c0).
+    """Every entry :func:`iter_duckstation_playlist_entries` reads out of *text*."""
+    return list(iter_duckstation_playlist_entries(text, playlist))
+
+
+def iter_duckstation_playlist_entries(
+    text: str, playlist: str, on_line: Callable[[], None] | None = None
+) -> Iterator[str]:
+    """``CDImageM3u::Open``'s entries (cd_image_m3u.cpp:76-112 at 1f6de046b; :64-100 at 4d309c0), as it reaches them.
 
     One line per ``\\n`` — ``std::getline``'s only delimiter, so a ``\\r``
     stays inside the line and is trimmed only where it trails; leading space skipped, then a ``#`` or nothing left
     skips the line; trailing space trimmed down to the first character, and a
     line whose start and end then meet — one character — skipped too.
     DuckStation also folds repeated ``/`` (``Path::ToNativePath``), which the
-    machine's path walk makes no difference to.
+    machine's path walk makes no difference to. The entry is opened through
+    its C string (``CDImage::Open(entry.filename.c_str())``, :146 / :131), so
+    whatever stands after a NUL in it never reaches the open. *on_line* is
+    called for every line read, entry or not.
     """
-    entries: list[str] = []
-    for line in text.split("\n"):
+    for line in _lines_of(text):
+        if on_line is not None:
+            on_line()
         start = len(line) - len(line.lstrip(_C_SPACE))
         if start == len(line) or line[start] == "#":
             continue
@@ -434,24 +457,23 @@ def duckstation_playlist_entries(text: str, playlist: str) -> list[str]:
             end -= 1
         if start == end:
             continue
-        entries.append(_beside(playlist, line[start : end + 1]))
-    return entries
+        yield _beside(playlist, line[start : end + 1]).split("\x00", 1)[0]
 
 
-def _beetle_lines(text: str) -> list[str]:
+def _beetle_lines(text: str) -> Iterator[str]:
     """``filestream_gets`` into a 2048-byte buffer: a line ends at ``\\n`` or after 2047 bytes, whichever is first.
 
-    Only ``\\n`` ends a line, as ``fgets`` ends one; a ``\\r`` stays inside it.
+    Only ``\\n`` ends a line, as ``fgets`` ends one; a ``\\r`` stays inside it. The lines come one at a
+    time, so a reader holds none it has passed.
     """
-    pieces = text.split("\n")
-    lines: list[str] = []
-    for raw in [piece + "\n" for piece in pieces[:-1]] + ([pieces[-1]] if pieces[-1] else []):
+    start = 0
+    while start < len(text):
+        end = text.find("\n", start)
+        raw = text[start:] if end < 0 else text[start : end + 1]
+        start = len(text) if end < 0 else end + 1
         encoded = raw.encode("utf-8", "surrogateescape")
-        lines.extend(
-            encoded[i : i + _BEETLE_LINE].decode("utf-8", "surrogateescape")
-            for i in range(0, len(encoded), _BEETLE_LINE)
-        )
-    return lines
+        for i in range(0, len(encoded), _BEETLE_LINE):
+            yield encoded[i : i + _BEETLE_LINE].decode("utf-8", "surrogateescape")
 
 
 class BeetleCycle(Exception):
@@ -470,7 +492,7 @@ def _beetle_entries(
     archive, before the core saw it.
     """
     if text is None:
-        read = _read_playlist(machine, playlist)
+        read = read_playlist(machine, playlist)
         if read.status != READ_OK:
             return None if not stack else []
         assert read.text is not None
@@ -478,16 +500,29 @@ def _beetle_entries(
     return _beetle_walk(machine, playlist, stack, text)
 
 
+def iter_beetle_playlist_lines(text: str, playlist: str, on_line: Callable[[], None] | None = None) -> Iterator[str]:
+    """The entries one playlist's *text* names as ``ReadM3U`` reads its lines, nothing followed (libretro.cpp:4060-4070).
+
+    A line starting with ``#`` is skipped, the rest — a C string, so ending at
+    its first NUL — is trimmed on the right and an empty one skipped, and what
+    is left is joined onto the playlist's directory unless it is absolute — so
+    a nested playlist is one of these entries, which the caller follows.
+    *on_line* is called for every line read, entry or not.
+    """
+    for raw in _beetle_lines(text):
+        if on_line is not None:
+            on_line()
+        if raw.startswith("#"):
+            continue
+        line = raw.split("\x00", 1)[0].rstrip(_C_SPACE)
+        if line:
+            yield _beside(playlist, line)
+
+
 def _beetle_walk(machine: Machine, playlist: str, stack: tuple[str, ...], text: str) -> list[str]:
     """The lines of one playlist's *text* as ``ReadM3U`` takes them, nested playlists followed (libretro.cpp:4059-4088)."""
     entries: list[str] = []
-    for raw in _beetle_lines(text):
-        if raw.startswith("#"):
-            continue
-        line = raw.rstrip(_C_SPACE)
-        if not line:
-            continue
-        entry = _beside(playlist, line)
+    for entry in iter_beetle_playlist_lines(text, playlist):
         if not entry.endswith(PLAYLIST_SUFFIX):
             entries.append(entry)
             continue
@@ -619,7 +654,7 @@ def _written_entry_region(
     beside = emulator == EMULATOR_BEETLE or _extension(written) in (PLAYLIST_SUFFIX, psx_disc.CUE_SUFFIX)
     if not placed and beside:
         return DiscRegionReading(reason=REASON_DISC_UNREAD, disc=shown, status=DISC_UNREAD_UNREADABLE)
-    toc = _beetle_toc(machine, written) if emulator == EMULATOR_BEETLE else None
+    toc = beetle_toc(machine, written) if emulator == EMULATOR_BEETLE else None
     if toc is not None:
         return _format_unread(toc)
     if _extension(written) == PLAYLIST_SUFFIX:
@@ -639,7 +674,7 @@ def _extracted_playlist_region(
     extracted without its data file (D2 of #691).
     """
     shown = f"{extracted.archive}#{extracted.entry}"
-    read = machine.read_archive_text(extracted.archive, extracted.entry, _PLAYLIST_LIMIT)
+    read = machine.read_archive_text(extracted.archive, extracted.entry, PLAYLIST_LIMIT)
     if read is not None and read.status == READ_MISSING:
         return DiscRegionReading(reason=REASON_DISC_UNREAD, disc=shown, status=DISC_UNREAD_MISSING)
     if read is None or read.status != READ_OK or read.text is None:
@@ -687,7 +722,7 @@ def _format_unread(path: str) -> DiscRegionReading:
     return DiscRegionReading(reason=REASON_DISC_FORMAT_UNREAD, disc=path, extension=_stated_extension(path))
 
 
-def _beetle_toc(machine: Machine, path: str) -> str | None:
+def beetle_toc(machine: Machine, path: str) -> str | None:
     """The ``.toc`` Beetle PSX opens in place of the content at *path*, or ``None`` where it opens *path* itself.
 
     ``retro_load_game`` (libretro.cpp:4280-4288 at d6383bf) joins the
@@ -710,7 +745,7 @@ def _beetle_toc(machine: Machine, path: str) -> str | None:
 
 def _playlist_entries(machine: Machine, emulator: str, playlist: str) -> list[str] | DiscRegionReading:
     """The entries *emulator* reads out of *playlist*, or why it reads none."""
-    read = _read_playlist(machine, playlist)
+    read = read_playlist(machine, playlist)
     if read.status == READ_MISSING:
         return DiscRegionReading(reason=REASON_DISC_UNREAD, disc=playlist, status=DISC_UNREAD_MISSING)
     if read.status != READ_OK or read.text is None:
@@ -828,7 +863,7 @@ def read_disc_region(
     """
     if emulator != EMULATOR_DUCKSTATION and is_compressed_file(content_path):
         return _archive_region(machine, emulator, content_path, hands)
-    toc = _beetle_toc(machine, content_path) if emulator == EMULATOR_BEETLE else None
+    toc = beetle_toc(machine, content_path) if emulator == EMULATOR_BEETLE else None
     if toc is not None:
         return _format_unread(toc)
     first = _first_disc(machine, emulator, content_path)

@@ -289,17 +289,17 @@
         "root": "savefile_directory",
         "trees": [
           {
-            "subdir": "dolphin-emu/User/Load/GraphicMods",
+            "subdir": "User/Load/GraphicMods",
             "keying": null
           }
         ],
         "option": null,
         "config": {
-          "path": "dolphin-emu/User/Config/GFX.ini"
+          "path": "User/Config/GFX.ini"
         }
       },
       "provenance": {
-        "source": "[V-binary/O-root] dolphin_libretro.so (fd1aca3a) carries \"/dolphin-emu/User\" (0xfc9d8b), \"Load/\" (0x10dda26), \"GFX.ini\" (0x10ddb3f) and the switch key \"EnableMods\" (0xfccdd3) as whole NUL-delimited runs; the \"GraphicMods\" component has no run of its own — it survives only inside the tail-merged \"Load/GraphicModsCustom Uber Pixel Shader\" (0x103f110), the third trap in docs/research/core-audit.md — and the path is the standalone Dolphin line's own layout, which RetroDECK links for this core at components/retroarch/component_prepare.sh:169, component_prepare.sh:239. THE SWITCH IS NOT A CORE OPTION: a sweep of all 67 dolphin_* option keys in the shipped build finds dolphin_load_custom_textures, dolphin_cache_custom_textures and dolphin_cheats_enabled and nothing for mods, so EnableMods is read from the GFX.ini inside the user tree this core builds — an ordinary ini that would answer, which atlas does not read. That is why this row carries emulator-config-unread, a caveat that until now only ever rode a standalone emulator's answer. [O] the root is the same open question as azahar's (core_audit.json: dolphin, verdict 'suspect')."
+        "source": "[V-source/V-binary/O-root] libretro/dolphin at fd1aca3a, the revision dolphin_libretro.so names in its library_version: retro_load_game joins the emulator's whole user tree to the save directory RetroArch hands it, <save dir>/User (Boot.cpp:61-69), and GraphicMods below Load and GFX.ini below Config hang off that user directory (FileUtil.cpp:878, :901, :910) — so the root is the save directory as RetroArch hands it, sorting applied, the exception atlas/installations.py's content-tree root makes for this core alone (#616 D2). The shipped binary carries \"/dolphin-emu/User\" (0xfc9d8b), \"Load/\" (0x10dda26), \"GFX.ini\" (0x10ddb3f) and the switch key \"EnableMods\" (0xfccdd3) as whole NUL-delimited runs; the first is the system-directory fallback's spelling, whose tail is the only copy of the save-directory join's \"/User\", and the \"GraphicMods\" component has no run of its own — it survives only inside the tail-merged \"Load/GraphicModsCustom Uber Pixel Shader\" (0x103f110), the third trap in docs/research/core-audit.md. THE SWITCH IS NOT A CORE OPTION: a sweep of all 67 dolphin_* option keys in the shipped build finds dolphin_load_custom_textures, dolphin_cache_custom_textures and dolphin_cheats_enabled and nothing for mods, so EnableMods is read from the GFX.ini inside the user tree this core builds — an ordinary ini that would answer, which atlas does not read. That is why this row carries emulator-config-unread, a caveat that until now only ever rode a standalone emulator's answer. [O] no data the core wrote has confirmed the tree, which emulator-read-unestablished states; RetroDECK links GraphicMods below the config tree's saves directory instead (components/retroarch/component_prepare.sh:169, component_prepare.sh:239), a directory the core does not reach with RetroDECK's shipped configuration."
       },
       "anchors": {
         "names": {
@@ -314,9 +314,6 @@
           },
           "User": {
             "literal": "User"
-          },
-          "dolphin-emu": {
-            "literal": "dolphin-emu"
           }
         }
       }

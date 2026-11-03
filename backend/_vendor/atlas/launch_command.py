@@ -381,14 +381,17 @@ class DistributionVariable:
     name: str
     """The variable's name, as the start file and the program spell it."""
     value: str | None
-    """Its value as the start sets it — ``null`` where the start computes it rather than writes it (a line that is no
-    literal), or where the setting it comes from is not there as a string."""
+    """Its value as the start sets it — a line that computes it from what the sandbox starts with that atlas reads on
+    the machine (its config home, its library path) carries what that gives; ``null`` where the line computes it from
+    anything else or a file the value rests on cannot be read (``launch-environment-unread``), or where the setting it
+    comes from is not there as a string."""
     set_by: str
     """The start file and line that set it, in the sandbox's spelling (``/app/libexec/all_vars.sh:49``) — the file
     alone where it holds no line that sets it."""
     provided: bool
     """Whether this installation provides it: the start file defines it, and a path it names is there as the sandbox
-    reaches it — ``false`` where it is not, or where atlas cannot see it."""
+    reaches it — ``false`` where it is not, or where atlas cannot see it. A library search list is provided by its line alone: it names folders to search, none
+    of which has to exist (#574 D14)."""
 
 
 @dataclass(frozen=True, slots=True)
