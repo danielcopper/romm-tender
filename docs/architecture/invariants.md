@@ -2306,11 +2306,13 @@ Format: **invariant** — tier — enforced by.
   `frontend/src/eslintNoClassHashes.test.ts` keeps the rule reporting, and holds that the block, which replaces the
   package-wide `no-restricted-syntax` options for those files, still carries the rule that no name calls Tender a
   plugin. What it misses is listed at the rule's entry in `CLAUDE.md`'s register, its one home
-- **Every `flow-children` in `frontend/src/` is one of the six values Steam's parser knows, written as a string
-  literal** — check — Steam's parser drops any other value, and the group then takes its direction from its CSS each
-  time it is asked, so a value such as `horizontal` steers the way it reads only while the group's CSS points the same
-  way, and turns with the CSS without an error. The frontend suite cannot see the difference: happy-dom has no nav tree,
-  so every value renders alike. `tender/flow-children-value` in `frontend/eslint.config.js` fails a value outside the
-  six and a value it cannot read as a string literal, in every file under `frontend/src/`, tests included;
-  `frontend/src/eslintFlowChildren.test.ts` keeps it reporting. What it misses is listed at the rule's entry in
-  `CLAUDE.md`'s register, its one home. Detail: `docs/architecture/qam-panel.md`, "Focus groups"
+- **Every `flow-children` in a `.ts` or `.tsx` file under `frontend/src/` is one of the values Steam's parser knows,
+  written as a string literal** — check — Steam's parser drops any other value, and the group then takes its direction
+  from its CSS each time it is asked, so a value such as `horizontal` steers the way it reads only while the group's CSS
+  points the same way, and turns with the CSS with no sign of it but a failed assertion in Steam's console. The frontend
+  suite does not navigate: happy-dom has no nav tree, so a test sees a group's value only where it reads it off the
+  props or the element, as the tests of the play row, the BIOS tab and the settings dialogs' footer do, and never the
+  way focus moves. `tender/flow-children-value` in `frontend/eslint.config.js` fails a value outside the values Steam
+  knows and a value it cannot read as a string literal, in every `.ts` and `.tsx` file under `frontend/src/`, tests
+  included; `frontend/src/eslintFlowChildren.test.ts` keeps it reporting. What it misses is listed at the rule's entry
+  in `CLAUDE.md`'s register, its one home. Detail: `docs/architecture/qam-panel.md`, "Focus groups"

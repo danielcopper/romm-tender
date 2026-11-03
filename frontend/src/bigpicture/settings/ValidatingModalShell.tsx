@@ -80,11 +80,6 @@ export const ValidatingModalShell: FC<ValidatingModalShellProps> = ({
           {error}
         </div>
       )}
-      {/* The two buttons sit side by side, so the stick and the d-pad step
-          between them left and right; the values a group takes:
-          docs/architecture/qam-panel.md, "Focus groups". Nothing in the
-          frontend suite can see the difference — happy-dom has no nav tree,
-          so every value renders alike. */}
       <Focusable flow-children="row" style={footerStyle}>
         <DialogButton style={footerButtonStyle} disabled={submitDisabled} onClick={onSubmit}>
           <ThrobberLabel busy={submitting}>{submitLabel}</ThrobberLabel>

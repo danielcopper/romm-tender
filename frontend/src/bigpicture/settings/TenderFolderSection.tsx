@@ -238,7 +238,7 @@ const TileStop: FC<{ tile: Tile; busy: boolean }> = ({ tile, busy }) => {
   );
 };
 
-/** Two tiles to a row: one horizontal focus group per row, so the pad moves across a row and down to the next. */
+/** Two tiles to a row, each row a focus group of its own, so the pad moves across a row and down to the next. */
 function tileRows(tiles: Tile[], busy: boolean): ReactNode[] {
   const rows: ReactNode[] = [];
   for (let index = 0; index < tiles.length; index += 2) {

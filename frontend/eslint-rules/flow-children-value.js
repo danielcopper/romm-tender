@@ -28,8 +28,8 @@ export default {
     },
     schema: [],
     messages: {
-      unknownValue: `flow-children="{{value}}" is not a value Steam's parser knows: it takes column, column-reverse, row, row-reverse, grid or geometric, and drops any other (${HOME}).`,
-      notALiteral: `flow-children takes a string literal here, so that it can be checked against the six values Steam's parser knows (${HOME}).`,
+      unknownValue: `flow-children="{{value}}" is not a value Steam's parser knows: it takes ${[...KNOWN_VALUES].join(", ")}, and drops any other (${HOME}).`,
+      notALiteral: `flow-children takes a string literal here, so that it can be checked against the values Steam's parser knows (${HOME}).`,
     },
   },
   create(context) {

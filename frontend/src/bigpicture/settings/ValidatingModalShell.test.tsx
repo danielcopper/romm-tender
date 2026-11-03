@@ -191,10 +191,10 @@ describe("ValidatingModalShell", () => {
     expect(() => fireEvent.click(getByText("Cancel"))).not.toThrow();
   });
 
-  it("asks for horizontal traversal across the two footer buttons", () => {
-    // The buttons sit side by side, and a plain container answers to up/down —
-    // which is what this footer did on the device until it became a Focusable.
-    // Every modal using this shell inherits the answer, so it is pinned here.
+  it("lays the two footer buttons out as a row", () => {
+    // Every modal built on this shell inherits the footer's direction, so it is
+    // pinned here; happy-dom has no nav tree, so the value is what a test can
+    // read (docs/architecture/qam-panel.md, "Focus groups").
     const { getByTestId } = render(
       <ValidatingModalShell
         title="My Title"
