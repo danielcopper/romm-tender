@@ -190,6 +190,44 @@ async def injecting(tmp_path):
             await running.debugger.stop()
 
 
+class TestWhatItSendsForTheApplication:
+    """The one thing the host does in Steam for the application: execute a ``steam://`` URL."""
+
+    async def test_a_url_is_executed_in_the_attached_renderer(self, injecting):
+        running = await injecting()
+        await wait_until(lambda: running.page.marker)
+
+        sent = await running.injector.execute_steam_url("steam://forceinputappid/769")
+
+        assert sent is True
+        assert running.page.evaluated[-1] == 'SteamClient.URL.ExecuteSteamURL("steam://forceinputappid/769")'
+
+    async def test_the_url_reaches_the_expression_only_as_a_json_string(self, injecting):
+        running = await injecting()
+        await wait_until(lambda: running.page.marker)
+        url = 'steam://x/"); window.evil("'
+
+        await running.injector.execute_steam_url(url)
+
+        assert running.page.evaluated[-1] == f"SteamClient.URL.ExecuteSteamURL({json.dumps(url)})"
+        assert running.page.evaluated[-1] == 'SteamClient.URL.ExecuteSteamURL("steam://x/\\"); window.evil(\\"")'
+
+    async def test_a_page_that_throws_is_a_url_that_did_not_go_out(self, injecting):
+        running = await injecting()
+        await wait_until(lambda: running.page.marker)
+        # The fake page throws for every expression it does not recognise once this is set.
+        running.page.bootstrap_raises = True
+
+        assert await running.injector.execute_steam_url("steam://forceinputappid/769") is False
+
+    async def test_with_the_panel_not_loaded_at_all_nothing_goes_out(self, injecting):
+        running = await injecting(override=INJECT_OFF)
+        await running.task
+
+        assert await running.injector.execute_steam_url("steam://forceinputappid/769") is False
+        assert running.page.evaluated == []
+
+
 class TestWhatItReadsForTheApplication:
     """The two readings the host hands on: Steam's running apps, and when the reload limit frees up."""
 

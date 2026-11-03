@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from host.inject.recovery import ListedApp
-from host.status import HostStatus, SteamReadings
+from host.status import HostStatus, SteamReadings, SteamUrls
 
 
 class TestSteamReadings:
@@ -32,3 +32,28 @@ class TestSteamReadings:
 
         assert isinstance(first.steam, SteamReadings)
         assert first.steam is not second.steam
+
+
+class TestSteamUrls:
+    async def test_before_the_injector_exists_nothing_goes_out(self):
+        assert await SteamUrls().execute_steam_url("steam://forceinputappid/769") is False
+
+    async def test_once_attached_it_sends_through_the_injector_and_answers_with_it(self):
+        urls = SteamUrls()
+        sent: list[str] = []
+
+        async def execute_steam_url(url: str) -> bool:
+            sent.append(url)
+            return len(sent) == 1
+
+        urls.attach(execute_steam_url=execute_steam_url)
+
+        assert await urls.execute_steam_url("steam://forceinputappid/769") is True
+        assert await urls.execute_steam_url("steam://forceinputappid/0") is False
+        assert sent == ["steam://forceinputappid/769", "steam://forceinputappid/0"]
+
+    async def test_every_host_status_carries_one_of_its_own(self):
+        first, second = HostStatus(), HostStatus()
+
+        assert isinstance(first.steam_urls, SteamUrls)
+        assert first.steam_urls is not second.steam_urls
