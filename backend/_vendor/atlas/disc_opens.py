@@ -11,12 +11,15 @@ first file is looked for as). Every lookup goes to the filesystem the emulator
 opens it on, exactly as spelled — on Linux's own filesystems that is case
 sensitive, as ``fopen`` is, and atlas asks the same filesystem.
 
-Two readings serve this cut. Every citation is at the build atlas pins for
+Four readings are served. Every citation is at the build atlas pins for
 that emulator elsewhere — DuckStation at RetroDECK/Duckstation@1f6de046b,
 SwanStation at libretro/swanstation@4d309c0, Beetle PSX at
 libretro/beetle-psx-libretro@d6383bf, Beetle Saturn at ccba526, Beetle PCE at
-9a301c0 and Beetle PC-FX at dd04cef — save Beetle PCE Fast, which atlas pins
-nowhere else: its citations are at 7e9b257, pinned here first.
+9a301c0, Beetle PC-FX at dd04cef, Flycast at flyinghead/flycast@1dac369 and
+Genesis Plus GX at libretro/Genesis-Plus-GX@46a5521 — save Beetle PCE Fast,
+which atlas pins nowhere else: its citations are at 7e9b257, pinned here
+first. RetroArch's part, where a core's reading depends on it, is cited at
+libretro/RetroArch@a79435a.
 
 **DuckStation and SwanStation** share one open (``CDImage::Open``,
 DuckStation ``src/util/cd_image.cpp:53-138``, SwanStation
@@ -60,6 +63,51 @@ after its own sections (``CDAccess_CCD.cpp:79-288``). An ``.m3u`` is read by
 Beetle PSX loads the ``.toc`` of the content's name in place of the content
 where one is there (:func:`atlas.psx_region.beetle_toc`).
 
+**Flycast** reads its own three formats (``retro_load_game``,
+``libretro.cpp:2100-2307``). A ``.gdi`` (``gdi.cpp:6-116``) is a stream of
+whitespace-separated fields: a track count, then per track its number, start,
+control, sector size, a name quoted or one token, and an offset; a track's
+file is opened only where its sector size is not 0, and a sheet of fewer than
+three tracks fails after its files opened. A ``.cue`` (``cue.cpp:46-250``) is
+read a line at a time: the ``FILE`` type is never checked, the track's file is
+opened at its ``INDEX 01`` and the track mode checked after it, and a sheet
+without a ``REM SESSION`` line needs three tracks. Either sheet's file is
+joined onto its directory with a ``/`` whatever the name, an absolute one
+too, and a sheet past 8192 bytes (``.gdi``) or 65535 (``.cue``) is refused by
+its size. A parser that reads a variable it never set — a ``.gdi`` declaring
+more tracks than it holds, a line that ends where a field is read — is
+undefined from there; a quoted name no quote ends loops forever. An ``.m3u``
+is taken as a playlist only where the file's name, cut to 127 bytes, ends in
+``.m3u`` or ``.M3U`` (``libretro.cpp:2117``, :2159-2187); ``read_m3u``
+(:3740-3792) skips a ``#`` in the first column, ends a line at its first
+``\r`` or ``\n``, drops one leading and one trailing ``"``, and joins a
+relative line onto the content's directory cut to 1023 bytes. Its first disc
+is opened at launch through ``Emulator::loadGame`` (``emulator.cpp:547-621``),
+which takes an arcade or executable name as no disc; every other one only on
+a disc switch, through ``OpenDisc`` alone (``common.cpp:86-97``, :366-369).
+
+**Genesis Plus GX** opens everything through ``cdd_load``
+(``cdd.c:390-1304``). A path whose last three characters are ``cue`` or
+``CUE`` is a cue sheet, read in 127-byte pieces: only spaces lead a line, a
+``FILE`` name is written after the last separator of the path built before it
+and cut where the whole reaches 255 bytes, a file that will not open ends the
+parse, and a type other than ``BINARY`` or ``MOTOROLA`` is decided by the
+file's bytes; a track ends at an ``INDEX 01`` line, 99 at most. The ``.sub``
+it looks for is the last path built with its last four bytes replaced. Any
+other file is a CD data track or a cartridge by its first bytes, and the
+``.cue`` of its name is looked for either way (:586-660); where no track
+mounts, ``load_rom`` loads the file it was handed as a cartridge
+(``loadrom.c:579-597``), up to 10 MiB. Without that ``.cue``, a file a
+cartridge load takes therefore launches whatever its bytes are; a disc
+switch runs ``cdd_load`` alone (``libretro.c:2817``), so there a file that
+mounts no track fails the switch. A first track with no ``FILE`` opened
+for it crashes the core, which reads or seeks on a stream it never opened
+(cdd.c:826-836, :949-951). An ``.m3u`` — by any case, since RetroArch hands
+the extension over lowercased — names at most four discs
+(``libretro.c:2762``, :3563-3633), each joined onto the content's directory
+with a ``/``, a blank line too; the first is loaded at launch and the
+others on a disc switch.
+
 The cores part on what happens when the open fails, and that is what the
 verdict follows (D4 and D5 of #716). Beetle PSX checks each ``FILE`` open
 (``CDAccess_Image.cpp:642-643``) and the result of the sheet for a directly launched file
@@ -71,7 +119,14 @@ on without whatever is missing or refused. DuckStation and SwanStation stop
 where the disc opened at launch fails, and only there. Beetle PCE and PCE
 Fast set the result of a load only in their single-disc branch, so every
 ``.m3u`` fails after its discs were opened (PCE ``libretro.cpp:685-722``,
-PCE Fast :1420-1458).
+PCE Fast :1420-1458). Flycast stops where the disc it opens at launch fails,
+and goes on where a disc switch fails. Genesis Plus GX stops where no track of
+the disc loaded at launch mounts — its first file missing, a sheet with no
+track, a file that is no cue sheet and no CD — since it then loads that file
+as a cartridge instead, and where a sheet it parses at launch crashes it, the
+``.cue`` of a cartridge's name included; a later track missing leaves the disc
+mounted with the tracks before it, and a disc switch that fails leaves the
+launch as it was.
 
 What atlas does not read is stated rather than guessed: a file whose bytes
 decide (an audio track a reader opens, an ``.mds`` or ``.ccd`` descriptor, a
@@ -103,13 +158,14 @@ cue sheet's bound is :data:`atlas.psx_disc.MAX_CUE_BYTES`, a playlist's
 it, every disc path a mednafen playlist names while its list is read, every
 playlist entry, sheet track and refused sheet's file and type DuckStation and
 SwanStation keep, and every caveat and source is charged to the output bound,
-and a caveat is stated once per code and file — remembered by its path, or
-past :data:`MAX_SHOWN` characters by the shown form and a digest, which is
-charged with it. So what one reading holds is bounded three ways: the texts on
-its current path of reads, at most :data:`MAX_READ_BYTES` of file bytes
-together (up to four times that in memory for text outside Latin-1); its
-answer with everything it remembers to build it, at most :data:`MAX_OUTPUT`
-characters; and one parse at a time of at most :data:`MAX_STEPS` lines.
+and a caveat is stated once per code, file and effect — remembered by its
+path, or past :data:`MAX_SHOWN` characters by the shown form and a digest,
+which is charged with it. So what one reading holds is bounded three ways:
+the texts on its current path of reads, at most :data:`MAX_READ_BYTES` of
+file bytes together (up to four times that in memory for text outside
+Latin-1); its answer with everything it remembers to build it, at most
+:data:`MAX_OUTPUT` characters; and one parse at a time of at most
+:data:`MAX_STEPS` lines.
 
 A NUL cannot reach a path: both emulators hand a name on as a C string, so a
 playlist entry ends at its first NUL (:mod:`atlas.psx_region`) and a cue
@@ -127,6 +183,24 @@ from typing import Final, Literal
 
 from . import psx_disc, psx_region
 from .machine import KIND_FILE, KIND_MISSING, READ_OK, BoundedReadingMachine, Machine, ReadResult
+from .opens_codes import (
+    CAVEAT_OPENS_BOUND_EXCEEDED,
+    CAVEAT_OPENS_CONTENT_UNREAD,
+    CAVEAT_OPENS_ENTRY_IGNORED,
+    CAVEAT_OPENS_FILE_MISSING,
+    CAVEAT_OPENS_FILE_UNREAD,
+    CAVEAT_OPENS_FORMAT_REFUSED,
+    CAVEAT_OPENS_FORMAT_UNREAD,
+    CAVEAT_OPENS_PATH_TOO_LONG,
+    CAVEAT_OPENS_PLAYLIST_REFUSED,
+    CAVEAT_OPENS_SETTING_UNREAD,
+    CAVEAT_OPENS_SHEET_REFUSED,
+    CAVEAT_OPENS_TRACK_REFUSED,
+    EFFECT_GOES_ON,
+    EFFECT_STOPS,
+    EFFECT_UNESTABLISHED,
+    OpensEffect,
+)
 from .placement import Caveat
 
 OpenedHow = Literal["named", "name-derived"]
@@ -174,20 +248,6 @@ ACCEPTS: Outcome = "accepts"
 REFUSES: Outcome = "refuses"
 UNESTABLISHED: Outcome = "unestablished"
 
-# The reasons, one code each. A refusal is the emulator's own stop; the same
-# code on a launchable answer is a file the emulator goes on without.
-CAVEAT_OPENS_FILE_MISSING: Final = "opens-file-missing"
-CAVEAT_OPENS_TRACK_REFUSED: Final = "opens-track-refused"
-CAVEAT_OPENS_SHEET_REFUSED: Final = "opens-sheet-refused"
-CAVEAT_OPENS_FORMAT_REFUSED: Final = "opens-format-refused"
-CAVEAT_OPENS_PLAYLIST_REFUSED: Final = "opens-playlist-refused"
-CAVEAT_OPENS_FORMAT_UNREAD: Final = "opens-format-unread"
-CAVEAT_OPENS_CONTENT_UNREAD: Final = "opens-content-unread"
-CAVEAT_OPENS_FILE_UNREAD: Final = "opens-file-unread"
-CAVEAT_OPENS_SETTING_UNREAD: Final = "opens-setting-unread"
-CAVEAT_OPENS_BOUND_EXCEEDED: Final = "opens-bound-exceeded"
-CAVEAT_OPENS_PATH_TOO_LONG: Final = "opens-path-too-long"
-
 # atlas's own bounds on a walk the content drives: the files one reading lists,
 # how deep playlists may nest, the tracks one sheet may declare (a disc holds
 # at most 99, and DuckStation's parser counts none — cue_parser.cpp:238-261
@@ -217,6 +277,11 @@ _TOO_LONG = "opens {file}, a path longer than the system opens (4095 bytes in al
 _MISSING = "opens {file}, which is not there"
 _UNTOLD = "whether {file} can be opened cannot be told"
 _UNREAD = "{file} could not be read"
+# What the readers say of a companion whose presence cannot be told, of a
+# format they do not follow, and of a cue sheet that did not read as one.
+_UNTOLD_THERE = "whether {file} is there cannot be told"
+_NOT_FOLLOWED = "{file} is a format this reading does not follow"
+_NOT_A_SHEET = "{file} could not be read as a cue sheet"
 
 
 @dataclass(frozen=True, slots=True)
@@ -343,8 +408,29 @@ BEETLE_PCFX: Final = MednafenProfile(
     checks_sbi=True,
 )
 
+
+
+@dataclass(frozen=True, slots=True)
+class FlycastProfile:
+    """Flycast's libretro open of a ``.gdi``, a ``.cue`` and an ``.m3u``."""
+
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
+class GpgxProfile:
+    """Genesis Plus GX's libretro open of a ``.cue``, an ``.m3u`` and a bare image."""
+
+    name: str
+
+
+FLYCAST: Final = FlycastProfile("Flycast 1dac369")
+GENESIS_PLUS_GX: Final = GpgxProfile("Genesis Plus GX 46a5521")
+
+Profile = DuckProfile | MednafenProfile | FlycastProfile | GpgxProfile
+
 # The libretro cores read here, by their ``.so`` file name.
-CORE_PROFILES: Final[dict[str, DuckProfile | MednafenProfile]] = {
+CORE_PROFILES: Final[dict[str, Profile]] = {
     "swanstation_libretro.so": SWANSTATION,
     "mednafen_psx_libretro.so": BEETLE_PSX,
     "mednafen_psx_hw_libretro.so": BEETLE_PSX,
@@ -352,6 +438,8 @@ CORE_PROFILES: Final[dict[str, DuckProfile | MednafenProfile]] = {
     "mednafen_pce_libretro.so": BEETLE_PCE,
     "mednafen_pce_fast_libretro.so": BEETLE_PCE_FAST,
     "mednafen_pcfx_libretro.so": BEETLE_PCFX,
+    "flycast_libretro.so": FLYCAST,
+    "genesis_plus_gx_libretro.so": GENESIS_PLUS_GX,
 }
 
 PatchReader = Callable[[], PatchSetting]
@@ -446,7 +534,8 @@ class _Walk:
         self.steps = 0
         self.bytes_read = 0
         self.output = 0
-        self._said: set[tuple[str, str]] = set()
+        # What each code and file was stated as: once per effect.
+        self._said: dict[tuple[str, str], set[OpensEffect | None]] = {}
 
     def charge(self, path: str, size: int) -> None:
         """*size* characters more in the answer; past :data:`MAX_OUTPUT` the walk stops short."""
@@ -507,28 +596,42 @@ class _Walk:
         return found
 
     def caveat(
-        self, code: str, path: str, message: str, kind: str | None = None, *, free: bool = False, key: str | None = None
+        self,
+        code: str,
+        path: str,
+        message: str,
+        kind: str | None = None,
+        *,
+        free: bool = False,
+        key: str | None = None,
+        effect: OpensEffect | None = None,
     ) -> None:
-        """One caveat about *path*, once per code and file; *kind* is the track type a refusal names (``type``).
+        """One caveat about *path*, once per code, file and effect; *kind* is the track type a refusal names (``type``).
 
         *message* spells the file ``{file}``, which becomes the path as shown
         (:func:`_shown`) — so a path longer than that is never copied whole.
         Each is charged to :data:`MAX_OUTPUT`, save the one statement that the
         walk stopped at a bound (*free*). A reading remembers which it stated
-        by the path's :func:`_said_key`, or by *key* where only that is kept.
+        by the path's :func:`_said_key`, or by *key* where only that is kept,
+        and by its *effect*, so a stop is stated even where the same file went
+        on under the same code before it (D2 of #750).
         """
         said = (code, key or _said_key(path))
-        if said in self._said:
+        effects = self._said.setdefault(said, set())
+        if effect in effects:
             return
         shown = _shown(path)
         message = message.replace("{file}", shown)
         if not free:
-            self.charge(path, len(message) + len(shown) + len(self.label) + len(kind or "") + len(said[1]))
-        self._said.add(said)
-        if kind is None:
-            self.caveats.append(Caveat(code, message, {"entry": self.label, "file": shown}))
-        else:
-            self.caveats.append(Caveat(code, message, {"entry": self.label, "file": shown, "type": kind}))
+            size = len(message) + len(shown) + len(self.label) + len(kind or "") + len(said[1]) + len(effect or "")
+            self.charge(path, size)
+        effects.add(effect)
+        data: dict[str, str] = {"entry": self.label, "file": shown}
+        if kind is not None:
+            data["type"] = kind
+        if effect is not None:
+            data["effect"] = effect
+        self.caveats.append(Caveat(code, message, data))
 
     def fail(
         self, mode: _Mode, code: str, path: str, what: str, kind: str | None = None, *, key: str | None = None
@@ -543,18 +646,22 @@ class _Walk:
             code, what = CAVEAT_OPENS_PATH_TOO_LONG, _TOO_LONG
         if mode.stops:
             self.caveat(code, path, f"{self.emulator} {what}, and its open stops there — {self.label!r} does not "
-                        "launch this set", kind, key=key)
+                        "launch this set", kind, key=key, effect=EFFECT_STOPS)
             self.refused = True
         else:
-            self.caveat(code, path, f"{self.emulator} {what}, and {mode.goes_on}", kind, key=key)
+            self.caveat(code, path, f"{self.emulator} {what}, and {mode.goes_on}", kind, key=key, effect=EFFECT_GOES_ON)
 
-    def unsure(self, mode: _Mode, code: str, path: str, what: str) -> None:
-        """Something the take depends on that atlas does not read; it decides the take where the mode says so."""
+    def unsure(self, mode: _Mode, code: str, path: str, what: str, *, effect: OpensEffect | None = None) -> None:
+        """Something the take depends on that atlas does not read; it decides the take where the mode says so.
+
+        *effect* is stated where *code* is one a failure of the open is stated
+        under (:data:`~atlas.opens_codes.OPENS_FAILURE_CODES`).
+        """
         if mode.decisive:
             self.unestablished = True
         if code == CAVEAT_OPENS_FILE_UNREAD and path == self.launched:
             self.launched_unread = True
-        self.caveat(code, path, f"{what} — what {self.emulator} makes of it is not established here")
+        self.caveat(code, path, f"{what} — what {self.emulator} makes of it is not established here", effect=effect)
 
     def reading(self) -> OpensReading:
         outcome = ACCEPTS
@@ -603,9 +710,25 @@ def _unreadable(path: str, label: str, emulator: str) -> OpensReading:
     )
 
 
+def _reader(
+    machine: Machine, profile: Profile, label: str, content_path: str, patches: PatchReader | None
+) -> _DuckReader | _MednafenReader | _FlycastReader | _GpgxReader | None:
+    """The reader of *profile*'s open of *content_path*, or ``None`` where this reading covers no file of its kind."""
+    if isinstance(profile, DuckProfile):
+        if _duck_kind(content_path) not in _DUCK_LAUNCHED:
+            return None
+        return _DuckReader(machine, profile, label, content_path, patches)
+    if isinstance(profile, MednafenProfile):
+        reads = _mednafen_reads(profile, content_path)
+        return _MednafenReader(machine, profile, label, content_path) if reads else None
+    if isinstance(profile, FlycastProfile):
+        return _FlycastReader(machine, profile, label, content_path) if _flycast_reads(content_path) else None
+    return _GpgxReader(machine, profile, label, content_path) if _gpgx_reads(content_path) else None
+
+
 def read_opens(
     machine: Machine,
-    profile: DuckProfile | MednafenProfile,
+    profile: Profile,
     label: str,
     content_path: str,
     patches: PatchReader | None = None,
@@ -616,14 +739,9 @@ def read_opens(
     emulator; the entry is then judged as it was before. *patches* reads the
     setting that loads ``.ppf`` patches, asked only where a reading needs it.
     """
-    if isinstance(profile, DuckProfile):
-        if _duck_kind(content_path) not in _DUCK_LAUNCHED:
-            return None
-        reader: _DuckReader | _MednafenReader = _DuckReader(machine, profile, label, content_path, patches)
-    else:
-        if not _mednafen_reads(profile, content_path):
-            return None
-        reader = _MednafenReader(machine, profile, label, content_path)
+    reader = _reader(machine, profile, label, content_path, patches)
+    if reader is None:
+        return None
     if _presence(machine, content_path) is not True:
         return _unreadable(content_path, label, profile.name)
     walk = reader.walk
@@ -746,7 +864,7 @@ class _DuckReader:
         elif kind == "bin":
             opened = self._companions(path)
         elif kind == "unread":
-            self.walk.unsure(mode, CAVEAT_OPENS_FORMAT_UNREAD, path, "{file} is a format this reading does not follow")
+            self.walk.unsure(mode, CAVEAT_OPENS_FORMAT_UNREAD, path, _NOT_FOLLOWED)
             return False
         else:
             self.walk.fail(mode, CAVEAT_OPENS_FORMAT_REFUSED, path, "opens no image of this name's suffix")
@@ -791,7 +909,7 @@ class _DuckReader:
         if path not in self._sheets:
             text = self.walk.text(path, playlist=False)
             if text is None:
-                self.walk.unsure(mode, CAVEAT_OPENS_FILE_UNREAD, path, "{file} could not be read as a cue sheet")
+                self.walk.unsure(mode, CAVEAT_OPENS_FILE_UNREAD, path, _NOT_A_SHEET)
                 return False
             # The parser takes the sheet whole: every line of it a step, and every
             # 1023-byte piece fgets cuts a longer line into, counted from above.
@@ -891,7 +1009,7 @@ class _DuckReader:
     def _companion(self, path: str, image: str) -> bool | None:
         present = self.walk.list(path, HOW_NAME_DERIVED, image)
         if present is None:
-            self.walk.caveat(CAVEAT_OPENS_FILE_UNREAD, path, "whether {file} is there cannot be told")
+            self.walk.caveat(CAVEAT_OPENS_FILE_UNREAD, path, _UNTOLD_THERE)
         return present
 
     def _ppf(self, image: str, mode: _Mode) -> None:
@@ -1091,7 +1209,7 @@ class _MednafenReader:
         elif _suffix(path).lower() == ".cue":
             _MednafenSheet(self, path, mode).open()
         else:
-            self.walk.unsure(mode, CAVEAT_OPENS_FORMAT_UNREAD, path, "{file} is a format this reading does not follow")
+            self.walk.unsure(mode, CAVEAT_OPENS_FORMAT_UNREAD, path, _NOT_FOLLOWED)
 
     def _ccd(self, path: str, mode: _Mode) -> None:
         """``CDAccess_CCD::Load``: the sections first, then the ``.img`` and the ``.sub`` of its name."""
@@ -1248,8 +1366,7 @@ class _MednafenSheet:
     def open(self) -> None:
         text = self.walk.text(self.path, playlist=False)
         if text is None:
-            self.walk.unsure(self.mode, CAVEAT_OPENS_FILE_UNREAD, self.path,
-                             "{file} could not be read as a cue sheet")
+            self.walk.unsure(self.mode, CAVEAT_OPENS_FILE_UNREAD, self.path, _NOT_A_SHEET)
             return
         for line in _mednafen_lines(text, lambda: self.walk.step(self.path)):
             command, args, count = _command(line)
@@ -1328,7 +1445,984 @@ class _MednafenSheet:
         sbi = f"{self.base}/{stem}.{_cased(_suffix(self.path), 'sbi')}"
         present = self.walk.list(sbi, HOW_NAME_DERIVED, self.path)
         if present is None:
-            self.walk.caveat(CAVEAT_OPENS_FILE_UNREAD, sbi, "whether {file} is there cannot be told")
+            self.walk.caveat(CAVEAT_OPENS_FILE_UNREAD, sbi, _UNTOLD_THERE)
         elif present and self.profile.checks_sbi:
             self.walk.unsure(self.mode, CAVEAT_OPENS_CONTENT_UNREAD, sbi, "{file} is read by its bytes, which atlas "
                              "does not read, and one the core refuses ends the open")
+
+
+# ── Byte-level helpers the two newer readers share ─────────────────────────
+
+
+def _bytes(path: str) -> bytes:
+    """*path* as the bytes a C string holds."""
+    return path.encode("utf-8", "surrogateescape")
+
+
+def _path(raw: bytes) -> str:
+    """A C string's bytes as a path."""
+    return raw.decode("utf-8", "surrogateescape")
+
+
+def _ascii_lower(text: str) -> str:
+    """``tolower`` in the C locale: ``A-Z`` only."""
+    return "".join(chr(ord(c) + 32) if "A" <= c <= "Z" else c for c in text)
+
+
+def _gets(data: bytes, size: int) -> Iterator[bytes]:
+    """``fgets`` into a *size*-byte buffer: a piece ends after ``\\n`` or after *size* - 1 bytes, whichever is first."""
+    start = 0
+    while start < len(data):
+        newline = data.find(b"\n", start, start + size - 1)
+        end = start + size - 1 if newline < 0 else newline + 1
+        yield data[start:end]
+        start = end
+
+
+def _c_string(piece: bytes) -> bytes:
+    """What a C string holds of *piece*: everything before its first NUL."""
+    return piece.split(b"\x00", 1)[0]
+
+
+# ── Flycast ────────────────────────────────────────────────────────────────
+
+# The sizes from which Flycast refuses a sheet as too big (gdi.cpp:18-24,
+# cue.cpp:62-68 at 1dac369), measured by the file's size before any read.
+_GDI_LIMIT: Final = 8193
+_FLYCAST_CUE_LIMIT: Final = 64 << 10
+# What retro_load_game keeps of the content's file name and directory
+# (g_base_name[128], game_dir[1024], libretro.cpp:204-205), and read_m3u's
+# buffer for a line and for a disc's path (line[PATH_MAX], name[PATH_MAX]).
+_FLYCAST_NAME: Final = 127
+_FLYCAST_DIR: Final = 1023
+_FLYCAST_LINE: Final = 4096
+# The name extensions loadGame takes as an arcade cartridge (getGamePlatform,
+# emulator.cpp:526-545; naomi_cart_GetPlatform never answers Dreamcast).
+_FLYCAST_ARCADE = frozenset({"zip", "7z", "bin", "dat", "lst"})
+# The track modes cue_parse gives a sector size; any other fails the open
+# after its file opened (getSectorSize, cue.cpp:25-44, :188-194).
+_FLYCAST_MODES = frozenset(
+    {b"AUDIO", b"CDG", b"MODE1/2048", b"MODE1/2352", b"MODE2/2336", b"MODE2/2352", b"CDI/2336", b"CDI/2352"}
+)
+_FLYCAST_LEAST_TRACKS: Final = 3
+_DIGITS: Final = b"0123456789"
+# Single-class runs, matched at a position, so a long field is scanned at C speed.
+_SPACE_RUN = re.compile(rb"[ \t\n\v\f\r]*")
+_TOKEN_RUN = re.compile(rb"[^ \t\n\v\f\r]*")
+_DIGIT_RUN = re.compile(rb"\d*")  # a bytes pattern: \d is the ten ASCII digits alone
+# What a parser that reads a variable it never set is said to do, and one that
+# reads a quoted name no quote ends.
+_UNDEFINED = "{file} leaves the parser reading a value it never set, so what it reads next is undefined"
+_UNENDING = "reads a quoted name in {file} that no quote ends, and its parser loops on it without end"
+
+
+def _flycast_extension(path: str) -> str:
+    """``get_file_extension`` (stdclass.h:125-133): after the last ``.`` of the whole path, lowercased."""
+    dot = path.rfind(".")
+    return "" if dot < 0 else _ascii_lower(path[dot + 1 :])
+
+
+def _flycast_driver(path: str) -> str | None:
+    """The driver of ``OpenDisc`` that takes *path*, in its order (common.cpp:18-27, :86-97).
+
+    The libretro build's CHD test is the path's last three characters exactly
+    (chd.cpp:252-254); the others compare the lowercased extension.
+    """
+    if path.endswith("chd"):
+        return "chd"
+    extension = _flycast_extension(path)
+    return extension if extension in ("gdi", "cdi", "cue") else None
+
+
+def _flycast_playlist(path: str) -> bool:
+    """retro_load_game's playlist test: ``.m3u`` or ``.M3U`` from the last ``.`` of the name cut to 127 bytes.
+
+    ``extract_basename`` keeps the first 127 bytes of the file name
+    (libretro.cpp:1889-1899, :2117) and ``strrchr`` finds the extension in
+    what it kept (:2159, :2187).
+    """
+    name = _bytes(path[path.rfind("/") + 1 :])[:_FLYCAST_NAME]
+    dot = name.rfind(b".")
+    return dot >= 0 and name[dot:] in (b".m3u", b".M3U")
+
+
+def _flycast_reads(path: str) -> bool:
+    """Whether this cut reads Flycast's open of a launched *path*: a ``.gdi``, a ``.cue`` or a playlist."""
+    return _flycast_playlist(path) or _flycast_driver(path) in ("gdi", "cue") or _flycast_extension(path) == "m3u"
+
+
+def _flycast_roms_dir(playlist: str) -> bytes:
+    """``g_roms_dir``: the directory of the path cut to 1023 bytes, and a ``/`` (libretro.cpp:1353-1363, :2118-2121)."""
+    kept = _bytes(playlist)[:_FLYCAST_DIR]
+    slash = kept.rfind(b"/")
+    return (kept[:slash] if slash >= 0 else b".") + b"/"
+
+
+def _flycast_parent(path: str) -> str:
+    """``getParentPath`` (storage.cpp:145-168) for a directory it may read: up to the last ``/``."""
+    slash = path.rfind("/")
+    if slash == 0:
+        return "/"
+    return "./" if slash < 0 else path[:slash]
+
+
+def _flycast_entries(data: bytes, roms_dir: bytes, on_line: Callable[[], None]) -> Iterator[str]:
+    """``read_m3u`` (libretro.cpp:3740-3792): its discs as it reads them, every ``fgets`` piece a line.
+
+    A ``#`` in the first column skips the line; the line ends at its first
+    ``\\r``, then its first ``\\n``; one leading and one trailing ``"`` go. An
+    entry that is not absolute joins ``g_roms_dir``, and the disc's path is
+    cut to 4095 bytes. A line left empty is no disc — the trailing-quote test
+    then reads the byte before the buffer, which decides nothing about it.
+    """
+    for piece in _gets(data, _FLYCAST_LINE):
+        on_line()
+        line = _c_string(piece)
+        if line[:1] == b"#":
+            continue
+        line = line.split(b"\r", 1)[0].split(b"\n", 1)[0]
+        line = line.removeprefix(b'"')
+        line = line.removesuffix(b'"')
+        if line:
+            name = line if line[:1] == b"/" else roms_dir + line
+            yield _path(name[: _FLYCAST_LINE - 1])
+
+
+class _CppStream:
+    """An ``std::istream`` over a sheet's bytes in the C locale, as far as Flycast's parsers use one (libstdc++).
+
+    ``failed`` is the stream's fail state: once set, every extraction fails
+    and leaves its target as it was.
+    """
+
+    def __init__(self, data: bytes) -> None:
+        self.data = data
+        self.at = 0
+        self.failed = False
+
+    def _sentry(self) -> bool:
+        """``skipws`` and the sentry: whitespace skipped, and a stream at its end fails."""
+        if not self.failed:
+            self.at = _run_end(_SPACE_RUN, self.data, self.at)
+            self.failed = self.at >= len(self.data)
+        return not self.failed
+
+    def char(self) -> bytes | None:
+        """``>> char``: the next byte that is no space, or ``None`` where the extraction fails."""
+        if not self._sentry():
+            return None
+        self.at += 1
+        return self.data[self.at - 1 : self.at]
+
+    def word(self) -> bytes | None:
+        """``>> std::string``: the next run of bytes that are no space, or ``None`` where the extraction fails."""
+        if not self._sentry():
+            return None
+        start = self.at
+        self.at = _run_end(_TOKEN_RUN, self.data, start)
+        return self.data[start : self.at]
+
+    def quoted(self) -> bytes | None:
+        """``noskipws`` reads up to the closing ``"``; ``None`` where none comes, which the parsers loop on forever."""
+        end = self.data.find(b'"', self.at)
+        if end < 0:
+            return None
+        name = self.data[self.at : end]
+        self.at = end + 1
+        return name
+
+    def number(self, bits: int, *, signed: bool) -> int | None:
+        """``>> u32`` or ``>> s32``: ``None`` where the sentry fails and the target keeps its value.
+
+        A field with no digit stores 0 and fails the stream; one past the
+        type's range stores the nearest limit and fails it. An unsigned field
+        takes a ``-`` and wraps.
+        """
+        if not self._sentry():
+            return None
+        negative = self.data[self.at : self.at + 1] == b"-"
+        if self.data[self.at : self.at + 1] in (b"+", b"-"):
+            self.at += 1
+        start = self.at
+        self.at = _run_end(_DIGIT_RUN, self.data, start)
+        if self.at == start:
+            self.failed = True
+            return 0
+        value, fits = _cpp_value(self.data[start : self.at], negative, bits, signed=signed)
+        self.failed = not fits
+        return value
+
+
+def _run_end(run: re.Pattern[bytes], data: bytes, at: int) -> int:
+    """Where a run of one byte class starting at *at* ends."""
+    match = run.match(data, at)
+    return at if match is None else match.end()
+
+
+def _cpp_value(digits: bytes, negative: bool, bits: int, *, signed: bool) -> tuple[int, bool]:
+    """``num_get``'s stored value for a field's digits, and whether it fit: past the range, the nearest limit."""
+    digits = digits.lstrip(b"0") or b"0"
+    highest = (1 << bits) - 1
+    if signed:
+        highest = (1 << (bits - 1)) - (0 if negative else 1)
+    if len(digits) > len(str(highest)) or int(digits) > highest:
+        return (-highest if signed and negative else highest), False
+    value = -int(digits) if negative else int(digits)
+    return (value if signed else value % (1 << bits)), True
+
+
+def _cpp_lines(data: bytes) -> Iterator[bytes]:
+    """``std::getline``'s lines: each ended by ``\\n``, the last one only where it holds a byte."""
+    start = 0
+    while start < len(data):
+        end = data.find(b"\n", start)
+        if end < 0:
+            yield data[start:]
+            return
+        yield data[start:end]
+        start = end + 1
+
+
+class _FlycastReader:
+    """Flycast's open of one launched file (retro_load_game, libretro.cpp:2100-2307 at 1dac369)."""
+
+    def __init__(self, machine: Machine, profile: FlycastProfile, label: str, launched: str) -> None:
+        self.machine = machine
+        self.profile = profile
+        self.walk = _Walk(machine, label, profile.name, launched)
+
+    def read(self, path: str) -> None:
+        self.walk.source(
+            f"entry {self.walk.label!r}: {self.profile.name} opens {path} through retro_load_game "
+            "(libretro.cpp:2100-2307)"
+        )
+        if _flycast_playlist(path):
+            self._playlist(path)
+        elif _flycast_extension(path) == "m3u":
+            self.walk.fail(
+                _AT_LAUNCH,
+                CAVEAT_OPENS_FORMAT_REFUSED,
+                path,
+                "takes a playlist only where the file's name, cut to its first 127 bytes, ends in .m3u or .M3U "
+                "(libretro.cpp:2117, :2159-2187), and opens no disc image of this name's extension",
+            )
+        else:
+            self._disc(path, _AT_LAUNCH)
+
+    def _playlist(self, path: str) -> None:
+        """``read_m3u``, then its first disc at launch; every other one is opened only on a disc switch."""
+        text = self.walk.text(path, playlist=True)
+        if text is None:
+            self.walk.unsure(_AT_LAUNCH, CAVEAT_OPENS_FILE_UNREAD, path, _UNREAD)
+            return
+        entries = _flycast_entries(_bytes(text), _flycast_roms_dir(path), lambda: self.walk.step(path))
+        first = next(entries, None)
+        if first is None:
+            self.walk.fail(_AT_LAUNCH, CAVEAT_OPENS_SHEET_REFUSED, path,
+                           "reads no disc from this playlist (read_m3u, libretro.cpp:3740-3792)")
+            return
+        if not self._launch_entry(first, path):
+            return
+        for entry in entries:
+            self._switch_entry(entry, path)
+
+    def _launch_entry(self, entry: str, playlist: str) -> bool:
+        """``Emulator::loadGame``: the disc stated, its platform picked by name, then opened (emulator.cpp:547-621)."""
+        present = self.walk.list(entry, HOW_NAMED, playlist)
+        if present is None:
+            self.walk.unsure(_AT_LAUNCH, CAVEAT_OPENS_FILE_UNREAD, entry, _UNTOLD)
+            return False
+        if not present:
+            self.walk.fail(_AT_LAUNCH, CAVEAT_OPENS_FILE_MISSING, entry, _MISSING)
+            return False
+        if _flycast_extension(entry[entry.rfind("/") + 1 :]) in _FLYCAST_ARCADE or _flycast_extension(entry) == "elf":
+            self.walk.unsure(_AT_LAUNCH, CAVEAT_OPENS_FORMAT_UNREAD, entry,
+                             "{file} is loaded as an arcade cartridge or an executable, which this reading does "
+                             "not follow")
+            return False
+        return self._disc(entry, _AT_LAUNCH)
+
+    def _switch_entry(self, entry: str, playlist: str) -> None:
+        """A disc switch: ``OpenDisc`` alone (``gdr::insertDisk``, common.cpp:366-369), a failure the launch survives.
+
+        A disc of no extension a driver takes is refused whether it is there or not.
+        """
+        present = self.walk.list(entry, HOW_NAMED, playlist)
+        if _flycast_driver(entry) is not None and present is None:
+            self.walk.unsure(_ON_SWITCH, CAVEAT_OPENS_FILE_UNREAD, entry, _UNTOLD)
+        elif _flycast_driver(entry) is not None and not present:
+            self.walk.fail(_ON_SWITCH, CAVEAT_OPENS_FILE_MISSING, entry, _MISSING)
+        else:
+            self._disc(entry, _ON_SWITCH)
+
+    def _disc(self, path: str, mode: _Mode) -> bool:
+        """``OpenDisc``: the first driver whose extension matches opens the image (common.cpp:86-97)."""
+        driver = _flycast_driver(path)
+        if driver == "gdi":
+            return _FlycastGdi(self, path, mode).open()
+        if driver == "cue":
+            return _FlycastCue(self, path, mode).open()
+        if driver is not None:
+            self.walk.unsure(mode, CAVEAT_OPENS_FORMAT_UNREAD, path, _NOT_FOLLOWED)
+            return False
+        self.walk.fail(mode, CAVEAT_OPENS_FORMAT_REFUSED, path,
+                       "opens no disc image of this name's extension (OpenDisc's \"Unknown disk format\", "
+                       "common.cpp:86-97)")
+        return False
+
+    def sheet(self, path: str, mode: _Mode, limit: int, cited: str) -> bytes | None:
+        """A ``.gdi``'s or ``.cue``'s bytes up to its first NUL, as the ``istringstream`` over its buffer holds them.
+
+        A sheet of *limit* bytes or more is refused before it is read.
+        """
+        size = self.machine.file_size(path)
+        if size is None or size < limit:
+            text = self.walk.text(path, playlist=False)
+            if text is None:
+                self.walk.unsure(mode, CAVEAT_OPENS_FILE_UNREAD, path, "{file} could not be read as a disc sheet")
+                return None
+            data = _bytes(text)
+            if len(data) < limit:
+                return _c_string(data)
+        self.walk.fail(mode, CAVEAT_OPENS_SHEET_REFUSED, path,
+                       f"refuses {{file}}, a disc sheet of {limit} bytes or more ({cited})")
+        return None
+
+    def track(self, sheet: str, parent: str, name: bytes, mode: _Mode) -> str | None:
+        """One track file opened: the sheet's directory, ``/`` and the name, absolute or not (storage.cpp:170-174)."""
+        path = f"{parent}/{_path(name)}"
+        present = self.walk.list(path, HOW_NAMED, sheet)
+        if present is None:
+            self.walk.unsure(mode, CAVEAT_OPENS_FILE_UNREAD, path, _UNTOLD)
+            return None
+        if not present:
+            self.walk.fail(mode, CAVEAT_OPENS_FILE_MISSING, path, _MISSING)
+            return None
+        return path
+
+
+class _FlycastGdi:
+    """``load_gdi`` (gdi.cpp:6-116): a track count, then ``TRACK FAD CTRL SSIZE <name> OFFSET`` per track.
+
+    A track is opened only where its sector size is not 0; a sheet of fewer
+    than three tracks is refused after its files opened.
+    """
+
+    def __init__(self, reader: _FlycastReader, path: str, mode: _Mode) -> None:
+        self.reader = reader
+        self.walk = reader.walk
+        self.path = path
+        self.mode = mode
+        self.parent = _flycast_parent(path)
+
+    def open(self) -> bool:
+        data = self.reader.sheet(self.path, self.mode, _GDI_LIMIT, "\"GDI file too big\", gdi.cpp:18-24")
+        if data is None:
+            return False
+        stream = _CppStream(data)
+        declared = stream.number(32, signed=False) or 0
+        if declared == 0:
+            self.walk.fail(self.mode, CAVEAT_OPENS_SHEET_REFUSED, self.path,
+                           "refuses {file}: it declares no track (\"empty or invalid GDI file\", gdi.cpp:32-35)")
+            return False
+        for track in range(declared):
+            if track >= MAX_TRACKS:
+                raise _Bounded(self.path)
+            self.walk.step(self.path)
+            if not self._track(stream):
+                return False
+        if declared < _FLYCAST_LEAST_TRACKS:
+            self.walk.fail(self.mode, CAVEAT_OPENS_SHEET_REFUSED, self.path,
+                           "refuses {file}: it holds fewer than three tracks (gdi.cpp:107-110)")
+            return False
+        return True
+
+    def _track(self, stream: _CppStream) -> bool:
+        """One track's fields (gdi.cpp:46-105); a stream already failed leaves ``last`` unset when it is tested."""
+        for _field in range(3):
+            stream.number(32, signed=False)
+        size = stream.number(32, signed=False)
+        last = None if stream.failed else stream.char()
+        if last is None:
+            self.walk.unsure(self.mode, CAVEAT_OPENS_CONTENT_UNREAD, self.path, _UNDEFINED)
+            return False
+        if last == b'"':
+            name = stream.quoted()
+            if name is None:
+                self.walk.fail(self.mode, CAVEAT_OPENS_SHEET_REFUSED, self.path, _UNENDING)
+                return False
+        else:
+            name = last + (stream.word() or b"")
+        stream.number(32, signed=True)
+        return size == 0 or self.reader.track(self.path, self.parent, name, self.mode) is not None
+
+
+class _FlycastCue:
+    """``cue_parse`` (cue.cpp:46-250): a line at a time, each track's file opened at its ``INDEX 01``.
+
+    The ``FILE`` type is never checked; the track mode is, after the file
+    opened. A quoted name is added to the one before it until an ``INDEX 01``
+    clears it. Without a ``REM SESSION`` a sheet needs three tracks.
+    """
+
+    def __init__(self, reader: _FlycastReader, path: str, mode: _Mode) -> None:
+        self.reader = reader
+        self.walk = reader.walk
+        self.path = path
+        self.mode = mode
+        self.parent = _flycast_parent(path)
+        self.name = b""
+        self.kind = b""
+        self.session = 0
+        self.tracks = 0
+
+    def open(self) -> bool:
+        data = self.reader.sheet(self.path, self.mode, _FLYCAST_CUE_LIMIT, "\"CUE file too big\", cue.cpp:62-68")
+        if data is None:
+            return False
+        for line in _cpp_lines(data):
+            self.walk.step(self.path)
+            ended = self._line(_CppStream(line))
+            if ended is not None:
+                return ended
+        if self.tracks == 0:
+            self.walk.fail(self.mode, CAVEAT_OPENS_SHEET_REFUSED, self.path,
+                           "finds no track in {file} (cue.cpp:224-228)")
+            return False
+        if self.session == 0 and self.tracks < _FLYCAST_LEAST_TRACKS:
+            self.walk.fail(self.mode, CAVEAT_OPENS_SHEET_REFUSED, self.path,
+                           "finds fewer than three tracks in {file} and no REM SESSION line (cue.cpp:230-235)")
+            return False
+        return True
+
+    def _line(self, stream: _CppStream) -> bool | None:
+        """One line: ``None`` to read on, or whether the open stands where the sheet's read ends here."""
+        command = stream.word()
+        if command == b"FILE":
+            return self._file(stream)
+        if command == b"INDEX":
+            return self._index(stream)
+        if command == b"REM":
+            return self._rem(stream)
+        if command == b"TRACK" and stream.number(32, signed=False) is not None and not stream.failed:
+            self.kind = stream.word() or self.kind
+        return None
+
+    def _rem(self, stream: _CppStream) -> bool | None:
+        if stream.word() != b"SESSION":
+            return None
+        session = stream.number(32, signed=False)
+        if session is None:
+            self.walk.unsure(self.mode, CAVEAT_OPENS_CONTENT_UNREAD, self.path, _UNDEFINED)
+            return False
+        self.session = session or self.session
+        return None
+
+    def _file(self, stream: _CppStream) -> bool | None:
+        last = stream.char()
+        if last is None:
+            self.walk.unsure(self.mode, CAVEAT_OPENS_CONTENT_UNREAD, self.path, _UNDEFINED)
+            return False
+        if last == b'"':
+            quoted = stream.quoted()
+            if quoted is None:
+                self.walk.fail(self.mode, CAVEAT_OPENS_SHEET_REFUSED, self.path, _UNENDING)
+                return False
+            self.name += quoted
+        else:
+            word = stream.word()
+            self.name = last + (self.name if word is None else word)
+        return None
+
+    def _index(self, stream: _CppStream) -> bool | None:
+        number = stream.number(32, signed=False)
+        if number is None:
+            self.walk.unsure(self.mode, CAVEAT_OPENS_CONTENT_UNREAD, self.path, _UNDEFINED)
+            return False
+        if number != 1:
+            return None
+        path = self.reader.track(self.path, self.parent, self.name, self.mode)
+        if path is None:
+            return False
+        if self.kind not in _FLYCAST_MODES:
+            kind = _path(self.kind)
+            self.walk.fail(self.mode, CAVEAT_OPENS_TRACK_REFUSED, path,
+                           f"takes no track of mode {kind!r} (getSectorSize, cue.cpp:25-44, :188-194)", kind)
+            return False
+        self.tracks += 1
+        if self.tracks > MAX_TRACKS:
+            raise _Bounded(self.path)
+        self.name = self.kind = b""
+        return None
+
+
+# ── Genesis Plus GX ────────────────────────────────────────────────────────
+
+# What the core keeps of a path: retro_load_game's content_path and
+# g_rom_dir, and cdd_load's copy fname, which also holds one byte past them it
+# never sets (libretro.c:154, :3423; cdd.c:392, :583-584 at 46a5521).
+_GPGX_PATH: Final = 255
+# cdd_load's line buffer (cdd.c:393, read through rfgets), and the M3U reader's
+# (libretro.c:3570-3571).
+_GPGX_LINE: Final = 128
+_GPGX_LIST_LINE: Final = 512
+# MAX_DISKS (libretro.c:2762), and the tracks a sheet mounts (cdd.c:975-976).
+_GPGX_DISCS: Final = 4
+_GPGX_TRACKS: Final = 99
+# The largest file the core loads as a cartridge (MAXROMSIZE, loadrom.h:44).
+_GPGX_ROM_LIMIT: Final = 10 << 20
+# RetroArch's directory buffer the content's directory is cut to (DIR_MAX_LENGTH
+# in retro_miscellaneous.h at a79435a).
+_RETROARCH_DIR: Final = 1023
+_GPGX_MAGIC: Final = b"SEGADISCSYSTEM"
+_GPGX_SYNC: Final = b"\x00" + b"\xff" * 10 + b"\x00"
+_GPGX_INDEX_00: Final = (b"INDEX 00 %02d:%02d:%02d", b"INDEX 0 %02d:%02d:%02d")
+_GPGX_INDEX_01: Final = (b"INDEX 01 %02d:%02d:%02d", b"INDEX 1 %02d:%02d:%02d")
+_C_WS: Final = b" \t\n\v\f\r"
+_GPGX_LATER = _Mode(stops=False, decisive=False, goes_on="the disc mounts with the tracks read before it")
+_GPGX_CARTRIDGE = _Mode(
+    stops=False,
+    decisive=False,
+    goes_on="the core loads the file it was handed as a cartridge whatever this sheet holds",
+)
+_GPGX_AS_CARTRIDGE = "loads the cue sheet itself as a cartridge (cdd.c:1286-1303, loadrom.c:579-597)"
+# A disc switch runs cdd_load alone and fails where no track mounts.
+_GPGX_SWITCH_FAILS = "the disc switch fails (disk_set_image_index, libretro.c:2817-2820)"
+_GPGX_CRASH = (
+    "reaches a line of {file} that reads or seeks on the stream of a first track no FILE line opened, and crashes "
+    "(cdd.c:826-836, :949-951)"
+)
+_GPGX_MODES = (b"MODE1/2048", b"MODE1/2352", b"MODE2/2352")
+
+
+def _gpgx_playlist(path: str) -> bool:
+    """retro_load_game's ``m3u`` test (libretro.c:3564) of the extension RetroArch hands over.
+
+    RetroArch lowercases the extension after the name's last ``.``
+    (task_content.c:546-554 at a79435a), and the core keeps seven characters
+    of it (``content_ext[8]``, libretro.c:3446-3447), a cut that leaves no
+    longer extension equal to ``m3u`` for its ``strcmp``.
+    """
+    name = path[path.rfind("/") + 1 :]
+    dot = name.rfind(".")
+    return dot >= 0 and _ascii_lower(name[dot + 1 :]) == "m3u"
+
+
+def _gpgx_sheet_route(path: str) -> bool:
+    """``cdd_load``'s cue test: the path's last three characters ``cue`` or ``CUE`` (cdd.c:587)."""
+    return _bytes(path)[-3:] in (b"cue", b"CUE")
+
+
+def _gpgx_reads(path: str) -> bool:
+    """Whether this cut reads the core's open of a launched *path*: a playlist, a cue sheet, a ``.bin`` or ``.iso``."""
+    name = path[path.rfind("/") + 1 :]
+    dot = name.rfind(".")
+    suffix = _ascii_lower(name[dot:]) if dot >= 0 else ""
+    return _gpgx_playlist(path) or _gpgx_sheet_route(path) or suffix in (".bin", ".iso", ".cue")
+
+
+def _gpgx_stem_cue(path: str) -> str:
+    """The ``.cue`` a file that is no cue sheet looks for (cdd.c:655-659): fname to a ``.`` at byte 251 or before."""
+    kept = _bytes(path)[:_GPGX_PATH]
+    end = len(kept)
+    while (end and (end >= len(kept) or kept[end] != 0x2E)) or end > _GPGX_PATH - 4:
+        end -= 1
+    return _path(kept[:end] + b".cue")
+
+
+def _gpgx_base(fname: bytes) -> bytes:
+    """What a ``FILE`` name is written after (cdd.c:697-700): fname to its last ``/`` or ``\\`` past its first byte."""
+    cut = max(fname.rfind(b"/"), fname.rfind(b"\\"))
+    return fname[: cut + 1] if cut > 0 else b""
+
+
+def _gpgx_name(rest: bytes, stop: bytes, room: int) -> tuple[bytes, bytes | None]:
+    """A ``FILE`` name copied up to *stop* or *room* bytes (cdd.c:710-723), and the line after it.
+
+    The copy does not stop at the line's end: a name no *stop* ends within it
+    runs on into the buffer's stale bytes, so the C string holds the rest of
+    the line and what follows it — the type it is read for — is unknown
+    (``None``).
+    """
+    end = rest.find(stop)
+    if 0 <= end <= room:
+        return rest[:end], rest[end:]
+    if len(rest) >= room:
+        return rest[:room], rest[room:]
+    return rest, None
+
+
+def _gpgx_rom_dir(playlist: str) -> bytes | None:
+    """``g_rom_dir``: RetroArch's directory of the content, cut to 1023 then 255 bytes — ``None`` for none at all.
+
+    ``fill_pathname_parent_dir`` and the trailing ``/`` removed
+    (task_content.c:592-611 at a79435a); a file in ``/`` leaves no directory,
+    which the core copies from a null pointer.
+    """
+    kept = _bytes(playlist)[:_RETROARCH_DIR]
+    slash = kept.rfind(b"/")
+    directory = kept[:slash] if slash >= 0 else b"."
+    return directory[:_GPGX_PATH] or None
+
+
+def _gpgx_entries(data: bytes, directory: bytes, on_line: Callable[[], None]) -> tuple[list[str], bool]:
+    """The M3U reader (libretro.c:3563-3606): up to four discs, and whether a line past the fourth was left unread.
+
+    A ``#`` in the first column skips the line; one ``\\n`` then one ``\\r``
+    go from its end, and what is left — nothing included — joins the
+    directory with a ``/``, absolute or not.
+    """
+    entries: list[str] = []
+    for piece in _gets(data, _GPGX_LIST_LINE):
+        on_line()
+        if len(entries) == _GPGX_DISCS:
+            return entries, True
+        line = _c_string(piece)
+        if line[:1] == b"#" or not line:
+            continue
+        entries.append(_path(directory + b"/" + line.removesuffix(b"\n").removesuffix(b"\r")))
+    return entries, False
+
+
+def _skip_c_spaces(text: bytes, at: int) -> int:
+    """Where *text* goes on past the C spaces at *at*."""
+    while at < len(text) and text[at] in _C_WS:
+        at += 1
+    return at
+
+
+def _scan_two_digits(text: bytes, at: int) -> int | None:
+    """``%02d`` past its leading spaces: a sign and digits within two bytes — where they end, ``None`` for no digit."""
+    sign = 1 if text[at : at + 1] in (b"+", b"-") else 0
+    end = at + sign
+    while end < min(at + 2, len(text)) and text[end] in _DIGITS:
+        end += 1
+    return None if end == at + sign else end
+
+
+def _scanf_directives(fmt: bytes) -> Iterator[bytes]:
+    """A format's directives: ``%02d``, a space, or one literal byte."""
+    index = 0
+    while index < len(fmt):
+        size = 4 if fmt.startswith(b"%02d", index) else 1
+        yield fmt[index : index + size]
+        index += size
+
+
+def _scanf_step(text: bytes, at: int, directive: bytes) -> int | None:
+    """One directive matched at *at*: where the input goes on, -1 where it ended first, ``None`` on a mismatch."""
+    if directive == b" ":
+        return _skip_c_spaces(text, at)
+    if directive == b"%02d":
+        at = _skip_c_spaces(text, at)
+    if at >= len(text):
+        return -1
+    if directive == b"%02d":
+        return _scan_two_digits(text, at)
+    return at + 1 if text[at] == directive[0] else None
+
+
+def _scanf_count(text: bytes, fmt: bytes) -> int:
+    """``sscanf``'s return for a format of literal bytes, spaces and ``%02d`` alone.
+
+    The conversions made, or -1 where the input ends before the first.
+    """
+    at: int | None = 0
+    count = 0
+    for directive in _scanf_directives(fmt):
+        at = _scanf_step(text, at, directive)
+        if at is None:
+            return count
+        if at < 0:
+            return count or -1
+        count += directive == b"%02d"
+    return count
+
+
+def _gpgx_track_index(line: bytes) -> bool:
+    """Whether a line ends a track: ``INDEX 01`` where no earlier test of the chain took it (cdd.c:802-894)."""
+    if b"REM LOOP" in line or b"REM NOLOOP" in line:
+        return False
+    if any(_scanf_count(line, fmt) == 3 for fmt in _GPGX_INDEX_00):
+        return False
+    return any(_scanf_count(line, fmt) == 3 for fmt in _GPGX_INDEX_01)
+
+
+def _gpgx_crashes(line: bytes) -> bool:
+    """Whether a line reads or seeks on the first track's stream, a crash while no ``FILE`` has opened it.
+
+    A ``TRACK`` line naming ``MODE1/2048``, ``MODE1/2352`` or ``MODE2/2352``,
+    the modes that set a sector size, reads the header through it
+    (cdd.c:802-837); no other mode does. An ``INDEX 01`` seeks to its end
+    (:893-951).
+    """
+    track = _scanf_count(line, b"TRACK %02d") != 0 and any(mode in line for mode in _GPGX_MODES)
+    return track or _gpgx_track_index(line)
+
+
+def _switching(mode: _Mode) -> bool:
+    """Whether *mode* is a disc switch, where Genesis Plus GX runs ``cdd_load`` alone and loads no cartridge."""
+    return mode is _ON_SWITCH
+
+
+def _gpgx_no_track(mode: _Mode) -> str:
+    """What follows where no track of a disc mounts: the switch fails, or at launch the sheet loads as a cartridge."""
+    return _GPGX_SWITCH_FAILS if _switching(mode) else f"the core {_GPGX_AS_CARTRIDGE}"
+
+
+def _gpgx_may_be_cd(header: bytes) -> bool:
+    """Whether a file's first 16 bytes may make it a CD data track (cdd.c:593-620).
+
+    A file shorter than the test leaves stale bytes in the buffer, so a
+    prefix that agrees with either pattern so far may still pass.
+    """
+    magic = header[:14] == _GPGX_MAGIC[: len(header[:14])]
+    sync = header[:12] == _GPGX_SYNC[: len(header[:12])] and (len(header) < 16 or header[15] in (1, 2))
+    return magic or sync
+
+
+class _GpgxReader:
+    """Genesis Plus GX's open of one launched file (retro_load_game, libretro.c:3413-3646 at 46a5521)."""
+
+    def __init__(self, machine: Machine, profile: GpgxProfile, label: str, launched: str) -> None:
+        self.machine = machine
+        self.profile = profile
+        self.walk = _Walk(machine, label, profile.name, launched)
+
+    def read(self, path: str) -> None:
+        self.walk.source(
+            f"entry {self.walk.label!r}: {self.profile.name} opens {path} through retro_load_game and cdd_load "
+            "(libretro.c:3413-3646, cdd.c:390-1304)"
+        )
+        if len(_bytes(path)) > _GPGX_PATH:
+            self.walk.fail(_AT_LAUNCH, CAVEAT_OPENS_PATH_TOO_LONG, path,
+                           "keeps the first 255 bytes of {file} (content_path, libretro.c:3423, :3463) and opens "
+                           "that other path")
+        elif _gpgx_playlist(path):
+            self._playlist(path)
+        else:
+            self._load(path, _AT_LAUNCH)
+
+    def list(self, path: str, how: OpenedHow, by: str) -> bool | None:
+        """List *path*; one that is not absolute is opened against a working directory nothing here records."""
+        return self.walk.list(path, how, by, None, known=not path.startswith("/"))
+
+    def _playlist(self, path: str) -> None:
+        """The M3U reader, the first disc loaded at launch, the others only on a disc switch (libretro.c:2801-2824)."""
+        text = self.walk.text(path, playlist=True)
+        if text is None:
+            self.walk.unsure(_AT_LAUNCH, CAVEAT_OPENS_FILE_UNREAD, path, _UNREAD)
+            return
+        directory = _gpgx_rom_dir(path)
+        if directory is None:
+            self.walk.unsure(_AT_LAUNCH, CAVEAT_OPENS_CONTENT_UNREAD, path,
+                             "{file} lies in the root directory, which RetroArch hands the core as no directory")
+            return
+        entries, ignored = _gpgx_entries(_bytes(text), directory, lambda: self.walk.step(path))
+        if ignored:
+            self.walk.caveat(
+                CAVEAT_OPENS_ENTRY_IGNORED,
+                path,
+                f"{self.profile.name} reads no more than four discs from {{file}} (MAX_DISKS, libretro.c:2762, "
+                ":3571), so its lines past the fourth disc are never read",
+            )
+        if not entries:
+            self.walk.fail(_AT_LAUNCH, CAVEAT_OPENS_SHEET_REFUSED, path,
+                           "reads no disc from this playlist (libretro.c:3609-3633)")
+            return
+        if not self._entry(entries[0], path, _AT_LAUNCH):
+            return
+        for entry in entries[1:]:
+            self._entry(entry, path, _ON_SWITCH)
+
+    def _entry(self, entry: str, playlist: str, mode: _Mode) -> bool:
+        """One disc of the playlist, loaded as ``load_rom`` loads any content (loadrom.c:554-617)."""
+        present = self.list(entry, HOW_NAMED, playlist)
+        if present is None:
+            self.walk.unsure(mode, CAVEAT_OPENS_FILE_UNREAD, entry, _UNTOLD)
+            return False
+        if not present:
+            self.walk.fail(mode, CAVEAT_OPENS_FILE_MISSING, entry, _MISSING)
+            return False
+        return self._load(entry, mode)
+
+    def _load(self, path: str, mode: _Mode) -> bool:
+        """``cdd_load``'s three routes: a CHD, a cue sheet, and any other file (cdd.c:413-660)."""
+        tail = _bytes(path)[-3:]
+        if tail in (b"chd", b"CHD"):
+            self.walk.unsure(mode, CAVEAT_OPENS_FORMAT_UNREAD, path, _NOT_FOLLOWED)
+            return False
+        if not _gpgx_sheet_route(path):
+            return self._image(path, mode)
+        if len(_bytes(path)) >= _GPGX_PATH:
+            # The sheet itself opens whole (cdd.c:405) — a playlist's disc keeps its
+            # full path (libretro.c:3594-3598), a launched one 255 bytes of it
+            # (:3423, :3463) — but the copy its track paths are built from does not.
+            # A disc switch that does not mount leaves the launch as it was.
+            self.walk.unsure(mode, CAVEAT_OPENS_PATH_TOO_LONG, path,
+                             "{file} is 255 bytes or longer, and the copy cdd_load builds its track paths from "
+                             "keeps 255 of them and one byte it never sets (cdd.c:583-584)",
+                             effect=EFFECT_GOES_ON if _switching(mode) else EFFECT_UNESTABLISHED)
+            return False
+        return _GpgxSheet(self, path, mode).open()
+
+    def _image(self, path: str, mode: _Mode) -> bool:
+        """A file that is no cue sheet: its first bytes decide CD or cartridge, then the cue of its name is opened."""
+        cue = _gpgx_stem_cue(path)
+        present = self.list(cue, HOW_NAME_DERIVED, path)
+        if present is None:
+            self.walk.caveat(CAVEAT_OPENS_FILE_UNREAD, cue, _UNTOLD_THERE)
+        header = self._header(path)
+        if header is None or _gpgx_may_be_cd(header):
+            return self._either(path, mode, cue_absent=present is False)
+        if present:
+            # No cartridge loads on a disc switch, and a crash stops the core whichever it is.
+            sheet = _GpgxSheet(self, cue, mode if _switching(mode) else _GPGX_CARTRIDGE, cartridge=True, crash=mode)
+            sheet.open()
+            if sheet.crashed:
+                return False
+        if _switching(mode):
+            self.walk.fail(mode, CAVEAT_OPENS_FORMAT_REFUSED, path,
+                           "takes a cue sheet only by a cue or CUE suffix and finds no CD data track in {file}: a "
+                           "disc switch to it mounts the tracks of the .cue of its name where that holds any, and "
+                           f"otherwise {_GPGX_SWITCH_FAILS}")
+        else:
+            self.walk.fail(mode, CAVEAT_OPENS_FORMAT_REFUSED, path,
+                           "takes a cue sheet only by a cue or CUE suffix and loads {file} as a cartridge "
+                           "(cdd.c:586-653, loadrom.c:579-597)")
+        return False
+
+    def _either(self, path: str, mode: _Mode, *, cue_absent: bool) -> bool:
+        """A file whose first bytes, unread here, make it a CD data track or a cartridge.
+
+        Without a ``.cue`` of its name both load: a data track mounts alone,
+        with simulated audio tracks (cdd.c:620-645, :1006-1281, :1286-1300), and
+        a cartridge of 1 to 10 MiB loads as one (loadrom.c:593-617,
+        load_archive's ``MAXROMSIZE``, libretro.c:375-390, :420-428). So the bytes
+        decide what the content is, not whether it launches — stated, and not
+        deciding the take. Where a ``.cue`` is there, or a cartridge that size
+        would not load, they decide what opens or whether it launches.
+        """
+        if _switching(mode):
+            self.walk.unsure(mode, CAVEAT_OPENS_CONTENT_UNREAD, path,
+                             "{file} is a CD data track or not by its first bytes, which atlas does not read, and "
+                             "a disc switch to it mounts no cartridge: it fails where neither the file nor the .cue "
+                             "of its name mounts a track (disk_set_image_index, libretro.c:2817-2820)")
+            return False
+        size = self.machine.file_size(path)
+        if cue_absent and size is not None and 0 < size <= _GPGX_ROM_LIMIT:
+            self.walk.caveat(
+                CAVEAT_OPENS_CONTENT_UNREAD,
+                path,
+                f"{self.profile.name} takes {{file}} as a CD data track or as a cartridge by its first bytes, which "
+                "atlas does not read, and loads it either way; as a data track it also looks for audio tracks of "
+                "its name (<stem>01.ogg, <stem> 01.wav and the like, cdd.c:1006-1176) and a .sub (:1294-1296), "
+                "which this reading does not list",
+            )
+            return True
+        self.walk.unsure(mode, CAVEAT_OPENS_CONTENT_UNREAD, path,
+                         "{file} is taken as a CD data track or a cartridge by its first bytes, which atlas "
+                         "does not read")
+        return False
+
+    def _header(self, path: str) -> bytes | None:
+        """The first 16 bytes of a file atlas reads as text (a ``.cue`` or ``.m3u`` by any case), else ``None``."""
+        name = path[path.rfind("/") + 1 :]
+        if "." not in name or _ascii_lower(name[name.rfind(".") :]) not in (".cue", ".m3u"):
+            return None
+        text = self.walk.text(path, playlist=False)
+        return None if text is None else _bytes(text)[:16]
+
+
+class _GpgxSheet:
+    """``cdd_load``'s parse of one cue sheet (cdd.c:662-1005), its files opened as its ``FILE`` lines reach them.
+
+    A line is a 127-byte piece; only spaces lead it. A ``FILE`` name is
+    written after the last separator of the path built before it, cut where
+    the whole reaches 255 bytes; a file that will not open ends the parse. A
+    type other than ``BINARY`` or ``MOTOROLA`` is decided by the file's bytes.
+    The ``.sub`` looked for is the last path built with its last four bytes
+    replaced (cdd.c:1294-1296).
+    """
+
+    def __init__(
+        self, reader: _GpgxReader, path: str, mode: _Mode, *, cartridge: bool = False, crash: _Mode | None = None
+    ) -> None:
+        self.reader = reader
+        self.walk = reader.walk
+        self.path = path
+        self.mode = mode
+        self.cartridge = cartridge
+        # How a crash counts: as the load this sheet is read for, a cartridge's too.
+        self.crash = crash or mode
+        self.crashed = False
+        self.fname = _bytes(path)
+        self.tracks = 0
+        self.stopped = False
+        # Whether a FILE line opened the first track's stream (tracks[0].fd).
+        self.first_open = False
+
+    def open(self) -> bool:
+        """Whether a track mounts, as far as atlas reads it."""
+        text = self.walk.text(self.path, playlist=False)
+        if text is None:
+            self.walk.unsure(self.mode, CAVEAT_OPENS_FILE_UNREAD, self.path, _NOT_A_SHEET)
+            return False
+        for piece in _gets(_bytes(text), _GPGX_LINE):
+            self.walk.step(self.path)
+            if not self._line(_c_string(piece).lstrip(b" ")):
+                break
+        if self.tracks == 0:
+            if not (self.stopped or self.cartridge):
+                what = f"finds no track in {{file}}, so {_gpgx_no_track(self.mode)}"
+                self.walk.fail(self.mode, CAVEAT_OPENS_SHEET_REFUSED, self.path, what)
+            return False
+        self._sub()
+        return True
+
+    def _line(self, line: bytes) -> bool:
+        """One piece: whether the parse reads on."""
+        if line.startswith(b"FILE"):
+            return self._file(line)
+        if self.tracks == 0 and not self.first_open and _gpgx_crashes(line):
+            self.walk.fail(self.crash, CAVEAT_OPENS_SHEET_REFUSED, self.path, _GPGX_CRASH)
+            self.stopped = self.crashed = True
+            return False
+        if _gpgx_track_index(line):
+            self.tracks += 1
+            return self.tracks < _GPGX_TRACKS
+        return True
+
+    def _file(self, line: bytes) -> bool:
+        uri = b"://" in line
+        base = b"" if uri else _gpgx_base(self.fname)
+        rest = line[4:].lstrip(b" ")
+        quoted = rest[:1] == b'"'
+        name, after = _gpgx_name(rest[1:] if quoted else rest, b'"' if quoted else b" ", _GPGX_PATH - len(base))
+        self.fname = base + name
+        path = _path(self.fname)
+        present = self.walk.list(path, HOW_NAMED, self.path, None, known=uri or not path.startswith("/"))
+        mode = self.mode if self.tracks == 0 or self.cartridge else _GPGX_LATER
+        if present is None:
+            self.walk.unsure(mode, CAVEAT_OPENS_FILE_UNREAD, path, _UNTOLD)
+            self.stopped = True
+            return False
+        if not present:
+            first = self.tracks == 0 and not self.cartridge
+            what = f"opens {{file}}, which is not there, so no track mounts and {_gpgx_no_track(mode)}"
+            self.walk.fail(mode, CAVEAT_OPENS_FILE_MISSING, path, what if first else _MISSING)
+            self.stopped = True
+            return False
+        self.first_open = self.first_open or self.tracks == 0
+        if after is None or (b"BINARY" not in after and b"MOTOROLA" not in after):
+            self.walk.unsure(mode, CAVEAT_OPENS_CONTENT_UNREAD, path,
+                             "{file} is a track the core takes by its bytes, as RIFF/WAVE or Ogg Vorbis audio, "
+                             "which atlas does not read")
+        return True
+
+    def _sub(self) -> None:
+        """The subcode file of the last path built (cdd.c:1294-1296)."""
+        sub = _path(self.fname[:-4] + b".sub")
+        present = self.reader.list(sub, HOW_NAME_DERIVED, _path(self.fname))
+        if present is None:
+            self.walk.caveat(CAVEAT_OPENS_FILE_UNREAD, sub, _UNTOLD_THERE)

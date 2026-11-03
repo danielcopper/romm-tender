@@ -2,7 +2,7 @@
   "family": "machines",
   "schema": 5,
   "spec": "atlas/disc_opens.py; atlas/installations.py; docs/how-to-use.md",
-  "description": "What an entry's emulator opens through a launched disc file (#716): whole fixture machines in, the launchability verdict out with the files DuckStation, SwanStation and the mednafen cores open through a cue sheet, a .ccd or a playlist, read as each emulator opens them, and the refusals where the emulator stops.",
+  "description": "What an entry's emulator opens through a launched disc file (#716): whole fixture machines in, the launchability verdict out with the files DuckStation, SwanStation, the mednafen cores, Flycast and Genesis Plus GX open through a cue sheet, a .gdi, a .ccd, a bare image or a playlist, read as each emulator opens them, and the refusals where the emulator stops.",
   "vectors": [
     {
       "name": "opens-swanstation-a-cue-opens-its-two-tracks",
@@ -726,7 +726,8 @@
               "code": "opens-file-missing",
               "data": {
                 "entry": "Beetle PSX",
-                "file": "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).bin"
+                "file": "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).bin",
+                "effect": "stops"
               }
             }
           ]
@@ -996,7 +997,8 @@
               "data": {
                 "entry": "SwanStation",
                 "file": "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).wav",
-                "type": "WAVE"
+                "type": "WAVE",
+                "effect": "stops"
               }
             }
           ]
@@ -1285,7 +1287,8 @@
               "data": {
                 "entry": "Beetle PSX",
                 "file": "/mnt/sd/retrodeck/roms/psx/Game/Game (Track 2).mp3",
-                "type": "MP3"
+                "type": "MP3",
+                "effect": "stops"
               }
             }
           ]
@@ -1554,7 +1557,8 @@
               "data": {
                 "entry": "Beetle Saturn",
                 "file": "/mnt/sd/retrodeck/roms/saturn/Game/Game (Track 2).mp3",
-                "type": "MP3"
+                "type": "MP3",
+                "effect": "goes-on"
               }
             }
           ]
@@ -3132,7 +3136,8 @@
               "code": "opens-path-too-long",
               "data": {
                 "entry": "SwanStation",
-                "file": "/mnt/sd/retrodeck/roms/psx/Game/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn…"
+                "file": "/mnt/sd/retrodeck/roms/psx/Game/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn…",
+                "effect": "stops"
               }
             }
           ]
@@ -3386,7 +3391,8 @@
               "code": "opens-file-missing",
               "data": {
                 "entry": "Beetle PSX",
-                "file": "/mnt/sd/retrodeck/roms/psx/Game/game.bin"
+                "file": "/mnt/sd/retrodeck/roms/psx/Game/game.bin",
+                "effect": "stops"
               }
             }
           ]
@@ -3672,7 +3678,8 @@
               "code": "opens-file-missing",
               "data": {
                 "entry": "SwanStation",
-                "file": "/mnt/sd/retrodeck/roms/psx/Game/Game (Disc 2).cue"
+                "file": "/mnt/sd/retrodeck/roms/psx/Game/Game (Disc 2).cue",
+                "effect": "goes-on"
               }
             }
           ]
@@ -3918,7 +3925,8 @@
               "code": "opens-sheet-refused",
               "data": {
                 "entry": "SwanStation",
-                "file": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue"
+                "file": "/mnt/sd/retrodeck/roms/psx/Game/Game.cue",
+                "effect": "stops"
               }
             }
           ]
@@ -4178,7 +4186,8 @@
               "code": "opens-format-refused",
               "data": {
                 "entry": "SwanStation",
-                "file": "/mnt/sd/retrodeck/roms/psx/Game/Game.txt"
+                "file": "/mnt/sd/retrodeck/roms/psx/Game/Game.txt",
+                "effect": "stops"
               }
             }
           ]
@@ -4691,7 +4700,160 @@
               "code": "opens-file-missing",
               "data": {
                 "entry": "Beetle PSX HW",
-                "file": "/mnt/sd/retrodeck/roms/psx/Game/Game (Disc 2).bin"
+                "file": "/mnt/sd/retrodeck/roms/psx/Game/Game (Disc 2).bin",
+                "effect": "goes-on"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "opens-beetle-psx-hw-a-loop-after-a-missing-nested-playlist-states-which-caveat-stops",
+      "rationale": "ReadM3U follows a nested playlist in place (libretro.cpp:4059-4088 at d6383bf). Missing.m3u is not there, and Beetle PSX HW loads a playlist's discs whether each opened or not, so it goes on from it (opens-file-missing, effect goes-on); Loop.m3u names the top playlist again, a recursion the core never returns from, so the open stops there (opens-sheet-refused, effect stops). The caveat said first is not the refusal: the effect tells which is.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.bin .BIN .ccd .CCD .chd .CHD .cue .CUE .m3u .M3U .mds .MDS</extension>\n    <command label=\"SwanStation\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/swanstation_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX HW\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_hw_libretro.so %ROM%</command>\n    <command label=\"PCSX ReARMed\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/pcsx_rearmed_libretro.so %ROM%</command>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <command label=\"DuckStation (Fullscreen)\">%EMULATOR_DUCKSTATION% -fullscreen %ROM%</command>\n  </system>\n  <system>\n    <name>saturn</name>\n    <path>%ROMPATH%/saturn</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle Saturn\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_saturn_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcenginecd</name>\n    <path>%ROMPATH%/pcenginecd</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PCE\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_libretro.so %ROM%</command>\n    <command label=\"Beetle PCE FAST\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_fast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcfx</name>\n    <path>%ROMPATH%/pcfx</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PC-FX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pcfx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/psx/Game/Game.m3u": "Missing.m3u\nLoop.m3u\n",
+          "/mnt/sd/retrodeck/roms/psx/Game/Loop.m3u": "Game.m3u\n"
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/swanstation_libretro.so": {
+            "library_name": "SwanStation",
+            "valid_extensions": "exe|psexe|cue|bin|img|iso|chd|pbp|ecm|mds|psf|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_psx_libretro.so": {
+            "library_name": "Beetle PSX",
+            "valid_extensions": "cue|toc|m3u|ccd|exe|pbp|chd"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_psx_hw_libretro.so": {
+            "library_name": "Beetle PSX HW",
+            "valid_extensions": "cue|toc|m3u|ccd|exe|pbp|chd"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/pcsx_rearmed_libretro.so": {
+            "library_name": "PCSX-ReARMed",
+            "valid_extensions": "bin|cue|img|mdf|pbp|toc|cbn|m3u|ccd|chd|iso|exe"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_saturn_libretro.so": {
+            "library_name": "Beetle Saturn",
+            "valid_extensions": "ccd|chd|cue|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pce_libretro.so": {
+            "library_name": "Beetle PCE",
+            "valid_extensions": "pce|sgx|cue|ccd|chd|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pce_fast_libretro.so": {
+            "library_name": "Beetle PCE Fast",
+            "valid_extensions": "pce|cue|ccd|chd|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pcfx_libretro.so": {
+            "library_name": "Beetle PC-FX",
+            "valid_extensions": "cue|ccd|toc|chd"
+          }
+        },
+        "launchable_query": {
+          "system": "psx",
+          "content_path": "/mnt/sd/retrodeck/roms/psx/Game/Game.m3u",
+          "label": "Beetle PSX HW"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "entry-not-accepted",
+          "extension": ".m3u",
+          "accepted": [
+            ".bin",
+            ".BIN",
+            ".ccd",
+            ".CCD",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".m3u",
+            ".M3U",
+            ".mds",
+            ".MDS"
+          ],
+          "entry": {
+            "system": "psx",
+            "label": "Beetle PSX HW",
+            "kind": "libretro",
+            "core_so": "mednafen_psx_hw_libretro.so",
+            "emulator": "mednafen_psx_hw_libretro.so",
+            "declared_index": 2,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [
+            "PCSX ReARMed"
+          ],
+          "installers": null,
+          "boots": null,
+          "opens": [
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Missing.m3u",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.m3u",
+              "present": false
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Loop.m3u",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Game.m3u",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/psx/Game/Game.m3u",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/psx/Game/Loop.m3u",
+              "present": true
+            }
+          ],
+          "caveats": [
+            {
+              "code": "opens-file-missing",
+              "data": {
+                "entry": "Beetle PSX HW",
+                "file": "/mnt/sd/retrodeck/roms/psx/Game/Missing.m3u",
+                "effect": "goes-on"
+              }
+            },
+            {
+              "code": "opens-sheet-refused",
+              "data": {
+                "entry": "Beetle PSX HW",
+                "file": "/mnt/sd/retrodeck/roms/psx/Game/Game.m3u",
+                "effect": "stops"
               }
             }
           ]
@@ -5090,7 +5252,8 @@
               "code": "opens-playlist-refused",
               "data": {
                 "entry": "Beetle PCE FAST",
-                "file": "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game.m3u"
+                "file": "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game.m3u",
+                "effect": "stops"
               }
             }
           ]
@@ -5229,7 +5392,162 @@
               "code": "opens-playlist-refused",
               "data": {
                 "entry": "Beetle PCE",
-                "file": "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game.m3u"
+                "file": "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game.m3u",
+                "effect": "stops"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "opens-beetle-pce-a-playlist-missing-its-second-disc-states-which-caveat-stops",
+      "rationale": "Beetle PCE opens every disc the playlist names and goes on past the second, which is not there (opens-file-missing, effect goes-on), then fails the load, because its loader marks a load good only in its single-disc branch (libretro.cpp:685-722 at 9a301c0). The refusal is opens-playlist-refused, effect stops, stated after the go-on caveat: the order of the caveats does not tell the stop, the effect does.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>psx</name>\n    <path>%ROMPATH%/psx</path>\n    <extension>.bin .BIN .ccd .CCD .chd .CHD .cue .CUE .m3u .M3U .mds .MDS</extension>\n    <command label=\"SwanStation\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/swanstation_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_libretro.so %ROM%</command>\n    <command label=\"Beetle PSX HW\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_psx_hw_libretro.so %ROM%</command>\n    <command label=\"PCSX ReARMed\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/pcsx_rearmed_libretro.so %ROM%</command>\n    <command label=\"DuckStation (Legacy) (Standalone)\">%EMULATOR_DUCKSTATION% -batch %ROM%</command>\n    <command label=\"DuckStation (Fullscreen)\">%EMULATOR_DUCKSTATION% -fullscreen %ROM%</command>\n  </system>\n  <system>\n    <name>saturn</name>\n    <path>%ROMPATH%/saturn</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle Saturn\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_saturn_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcenginecd</name>\n    <path>%ROMPATH%/pcenginecd</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PCE\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_libretro.so %ROM%</command>\n    <command label=\"Beetle PCE FAST\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pce_fast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>pcfx</name>\n    <path>%ROMPATH%/pcfx</path>\n    <extension>.ccd .CCD .chd .CHD .cue .CUE .m3u .M3U</extension>\n    <command label=\"Beetle PC-FX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mednafen_pcfx_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game.m3u": "Game (Disc 1).cue\nGame (Disc 2).cue\n",
+          "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game (Disc 1).cue": "FILE \"Game (Disc 1).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n",
+          "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game (Disc 1).bin": {
+            "size": 2352
+          }
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/swanstation_libretro.so": {
+            "library_name": "SwanStation",
+            "valid_extensions": "exe|psexe|cue|bin|img|iso|chd|pbp|ecm|mds|psf|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_psx_libretro.so": {
+            "library_name": "Beetle PSX",
+            "valid_extensions": "cue|toc|m3u|ccd|exe|pbp|chd"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_psx_hw_libretro.so": {
+            "library_name": "Beetle PSX HW",
+            "valid_extensions": "cue|toc|m3u|ccd|exe|pbp|chd"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/pcsx_rearmed_libretro.so": {
+            "library_name": "PCSX-ReARMed",
+            "valid_extensions": "bin|cue|img|mdf|pbp|toc|cbn|m3u|ccd|chd|iso|exe"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_saturn_libretro.so": {
+            "library_name": "Beetle Saturn",
+            "valid_extensions": "ccd|chd|cue|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pce_libretro.so": {
+            "library_name": "Beetle PCE",
+            "valid_extensions": "pce|sgx|cue|ccd|chd|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pce_fast_libretro.so": {
+            "library_name": "Beetle PCE Fast",
+            "valid_extensions": "pce|cue|ccd|chd|toc|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/mednafen_pcfx_libretro.so": {
+            "library_name": "Beetle PC-FX",
+            "valid_extensions": "cue|ccd|toc|chd"
+          }
+        },
+        "launchable_query": {
+          "system": "pcenginecd",
+          "content_path": "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game.m3u"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "entry-not-accepted",
+          "extension": ".m3u",
+          "accepted": [
+            ".ccd",
+            ".CCD",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".m3u",
+            ".M3U"
+          ],
+          "entry": {
+            "system": "pcenginecd",
+            "label": "Beetle PCE",
+            "kind": "libretro",
+            "core_so": "mednafen_pce_libretro.so",
+            "emulator": "mednafen_pce_libretro.so",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "opens": [
+            {
+              "path": "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game (Disc 1).cue",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game.m3u",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game (Disc 1).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game (Disc 1).cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game (Disc 1).sbi",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game (Disc 1).cue",
+              "present": false
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game (Disc 2).cue",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game.m3u",
+              "present": false
+            }
+          ],
+          "caveats": [
+            {
+              "code": "opens-file-missing",
+              "data": {
+                "entry": "Beetle PCE",
+                "file": "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game (Disc 2).cue",
+                "effect": "goes-on"
+              }
+            },
+            {
+              "code": "opens-playlist-refused",
+              "data": {
+                "entry": "Beetle PCE",
+                "file": "/mnt/sd/retrodeck/roms/pcenginecd/Game/Game.m3u",
+                "effect": "stops"
               }
             }
           ]
@@ -5648,6 +5966,1976 @@
               }
             }
           ]
+        }
+      }
+    },
+    {
+      "name": "opens-flycast-a-gdi-opens-its-three-tracks",
+      "rationale": "Flycast, RetroDECK's dreamcast default, reads a .gdi as a stream of fields: the track count, then per track its number, start, control, sector size, name and offset (gdi.cpp:6-116 at 1dac369). Each track with a sector size is opened as the sheet's directory, a slash and its name.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>dreamcast</name>\n    <path>%ROMPATH%/dreamcast</path>\n    <extension>.cdi .CDI .chd .CHD .cue .CUE .gdi .GDI .m3u .M3U</extension>\n    <command label=\"Flycast\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/flycast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>segacd</name>\n    <path>%ROMPATH%/segacd</path>\n    <extension>.bin .BIN .chd .CHD .cue .CUE .iso .ISO .m3u .M3U</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n    <command label=\"PicoDrive\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/picodrive_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.gdi": "3\n1 0 4 2352 \"Game (Track 1).bin\" 0\n2 756 0 2352 \"Game (Track 2).bin\" 0\n3 45000 4 2352 \"Game (Track 3).bin\" 0\n",
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 1).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 2).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 3).bin": {
+            "size": 2352
+          }
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "valid_extensions": "chd|cdi|elf|bin|cue|gdi|lst|zip|dat|7z|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/genesis_plus_gx_libretro.so": {
+            "library_name": "Genesis Plus GX",
+            "valid_extensions": "mdx|md|smd|gen|bin|cue|iso|sms|bms|gg|sg|68k|sgd|chd|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/picodrive_libretro.so": {
+            "library_name": "PicoDrive",
+            "valid_extensions": "bin|gen|smd|md|32x|cue|iso|chd|sms|gg|sg|sc|m3u|68k|sgd|pco"
+          }
+        },
+        "launchable_query": {
+          "system": "dreamcast",
+          "content_path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.gdi"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "launchable",
+          "extension": ".gdi",
+          "accepted": [
+            ".cdi",
+            ".CDI",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".gdi",
+            ".GDI",
+            ".m3u",
+            ".M3U"
+          ],
+          "entry": {
+            "system": "dreamcast",
+            "label": "Flycast",
+            "kind": "libretro",
+            "core_so": "flycast_libretro.so",
+            "emulator": "flycast_libretro.so",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "opens": [
+            {
+              "path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 1).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.gdi",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 2).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.gdi",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 3).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.gdi",
+              "present": true
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "opens-flycast-a-gdi-missing-a-track-is-not-accepted",
+      "rationale": "The sheet's second track file is not there; Flycast throws on the open (gdi.cpp:89-95) and retro_load_game fails (libretro.cpp:1258-1267), so the entry does not launch this set and opens names the file it stopped at.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>dreamcast</name>\n    <path>%ROMPATH%/dreamcast</path>\n    <extension>.cdi .CDI .chd .CHD .cue .CUE .gdi .GDI .m3u .M3U</extension>\n    <command label=\"Flycast\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/flycast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>segacd</name>\n    <path>%ROMPATH%/segacd</path>\n    <extension>.bin .BIN .chd .CHD .cue .CUE .iso .ISO .m3u .M3U</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n    <command label=\"PicoDrive\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/picodrive_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.gdi": "3\n1 0 4 2352 \"Game (Track 1).bin\" 0\n2 756 0 2352 \"Game (Track 2).bin\" 0\n3 45000 4 2352 \"Game (Track 3).bin\" 0\n",
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 1).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 3).bin": {
+            "size": 2352
+          }
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "valid_extensions": "chd|cdi|elf|bin|cue|gdi|lst|zip|dat|7z|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/genesis_plus_gx_libretro.so": {
+            "library_name": "Genesis Plus GX",
+            "valid_extensions": "mdx|md|smd|gen|bin|cue|iso|sms|bms|gg|sg|68k|sgd|chd|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/picodrive_libretro.so": {
+            "library_name": "PicoDrive",
+            "valid_extensions": "bin|gen|smd|md|32x|cue|iso|chd|sms|gg|sg|sc|m3u|68k|sgd|pco"
+          }
+        },
+        "launchable_query": {
+          "system": "dreamcast",
+          "content_path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.gdi"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "entry-not-accepted",
+          "extension": ".gdi",
+          "accepted": [
+            ".cdi",
+            ".CDI",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".gdi",
+            ".GDI",
+            ".m3u",
+            ".M3U"
+          ],
+          "entry": {
+            "system": "dreamcast",
+            "label": "Flycast",
+            "kind": "libretro",
+            "core_so": "flycast_libretro.so",
+            "emulator": "flycast_libretro.so",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "opens": [
+            {
+              "path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 1).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.gdi",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 2).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.gdi",
+              "present": false
+            }
+          ],
+          "caveats": [
+            {
+              "code": "opens-file-missing",
+              "data": {
+                "entry": "Flycast",
+                "file": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 2).bin",
+                "effect": "stops"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "opens-flycast-a-gdi-track-of-sector-size-zero-is-not-opened",
+      "rationale": "A track whose sector size is 0 is declared but its file is never opened (gdi.cpp:87), so it is not listed and its absence decides nothing.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>dreamcast</name>\n    <path>%ROMPATH%/dreamcast</path>\n    <extension>.cdi .CDI .chd .CHD .cue .CUE .gdi .GDI .m3u .M3U</extension>\n    <command label=\"Flycast\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/flycast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>segacd</name>\n    <path>%ROMPATH%/segacd</path>\n    <extension>.bin .BIN .chd .CHD .cue .CUE .iso .ISO .m3u .M3U</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n    <command label=\"PicoDrive\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/picodrive_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.gdi": "3\n1 0 4 2352 \"Game (Track 1).bin\" 0\n2 756 0 0 \"Game (Track 2).bin\" 0\n3 45000 4 2352 \"Game (Track 3).bin\" 0\n",
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 1).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 3).bin": {
+            "size": 2352
+          }
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "valid_extensions": "chd|cdi|elf|bin|cue|gdi|lst|zip|dat|7z|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/genesis_plus_gx_libretro.so": {
+            "library_name": "Genesis Plus GX",
+            "valid_extensions": "mdx|md|smd|gen|bin|cue|iso|sms|bms|gg|sg|68k|sgd|chd|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/picodrive_libretro.so": {
+            "library_name": "PicoDrive",
+            "valid_extensions": "bin|gen|smd|md|32x|cue|iso|chd|sms|gg|sg|sc|m3u|68k|sgd|pco"
+          }
+        },
+        "launchable_query": {
+          "system": "dreamcast",
+          "content_path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.gdi"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "launchable",
+          "extension": ".gdi",
+          "accepted": [
+            ".cdi",
+            ".CDI",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".gdi",
+            ".GDI",
+            ".m3u",
+            ".M3U"
+          ],
+          "entry": {
+            "system": "dreamcast",
+            "label": "Flycast",
+            "kind": "libretro",
+            "core_so": "flycast_libretro.so",
+            "emulator": "flycast_libretro.so",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "opens": [
+            {
+              "path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 1).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.gdi",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 3).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.gdi",
+              "present": true
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "opens-flycast-a-cue-opens-each-track-at-its-index",
+      "rationale": "Flycast's own cue parser opens a track's file at its INDEX 01 line, beside the sheet, and checks the track mode after (cue.cpp:167-213 at 1dac369); without a REM SESSION line it needs three tracks.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>dreamcast</name>\n    <path>%ROMPATH%/dreamcast</path>\n    <extension>.cdi .CDI .chd .CHD .cue .CUE .gdi .GDI .m3u .M3U</extension>\n    <command label=\"Flycast\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/flycast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>segacd</name>\n    <path>%ROMPATH%/segacd</path>\n    <extension>.bin .BIN .chd .CHD .cue .CUE .iso .ISO .m3u .M3U</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n    <command label=\"PicoDrive\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/picodrive_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.cue": "REM SINGLE-DENSITY AREA\nFILE \"Game (Track 1).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\nFILE \"Game (Track 2).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 00 00:00:00\n    INDEX 01 00:02:00\nREM HIGH-DENSITY AREA\nFILE \"Game (Track 3).bin\" BINARY\n  TRACK 03 MODE1/2352\n    INDEX 01 00:00:00\n",
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 1).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 2).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 3).bin": {
+            "size": 2352
+          }
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "valid_extensions": "chd|cdi|elf|bin|cue|gdi|lst|zip|dat|7z|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/genesis_plus_gx_libretro.so": {
+            "library_name": "Genesis Plus GX",
+            "valid_extensions": "mdx|md|smd|gen|bin|cue|iso|sms|bms|gg|sg|68k|sgd|chd|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/picodrive_libretro.so": {
+            "library_name": "PicoDrive",
+            "valid_extensions": "bin|gen|smd|md|32x|cue|iso|chd|sms|gg|sg|sc|m3u|68k|sgd|pco"
+          }
+        },
+        "launchable_query": {
+          "system": "dreamcast",
+          "content_path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.cue"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "launchable",
+          "extension": ".cue",
+          "accepted": [
+            ".cdi",
+            ".CDI",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".gdi",
+            ".GDI",
+            ".m3u",
+            ".M3U"
+          ],
+          "entry": {
+            "system": "dreamcast",
+            "label": "Flycast",
+            "kind": "libretro",
+            "core_so": "flycast_libretro.so",
+            "emulator": "flycast_libretro.so",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "opens": [
+            {
+              "path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 1).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 2).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 3).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.cue",
+              "present": true
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "opens-flycast-a-playlist-of-two-gdi-discs",
+      "rationale": "read_m3u joins each relative line onto the content's directory (libretro.cpp:3740-3792). The first disc is opened at launch through loadGame, the second only when the player switches discs, through OpenDisc alone.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>dreamcast</name>\n    <path>%ROMPATH%/dreamcast</path>\n    <extension>.cdi .CDI .chd .CHD .cue .CUE .gdi .GDI .m3u .M3U</extension>\n    <command label=\"Flycast\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/flycast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>segacd</name>\n    <path>%ROMPATH%/segacd</path>\n    <extension>.bin .BIN .chd .CHD .cue .CUE .iso .ISO .m3u .M3U</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n    <command label=\"PicoDrive\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/picodrive_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.m3u": "Game (Disc 1).gdi\nGame (Disc 2).gdi\n",
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Disc 1).gdi": "3\n1 0 4 2352 \"Game (Track 1).bin\" 0\n2 756 0 2352 \"Game (Track 2).bin\" 0\n3 45000 4 2352 \"Game (Track 3).bin\" 0\n",
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Disc 2).gdi": "3\n1 0 4 2352 \"Game (Disc 2 Track 1).bin\" 0\n2 756 0 2352 \"Game (Disc 2 Track 2).bin\" 0\n3 45000 4 2352 \"Game (Disc 2 Track 3).bin\" 0\n",
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 1).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 2).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 3).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Disc 2 Track 1).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Disc 2 Track 2).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Disc 2 Track 3).bin": {
+            "size": 2352
+          }
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "valid_extensions": "chd|cdi|elf|bin|cue|gdi|lst|zip|dat|7z|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/genesis_plus_gx_libretro.so": {
+            "library_name": "Genesis Plus GX",
+            "valid_extensions": "mdx|md|smd|gen|bin|cue|iso|sms|bms|gg|sg|68k|sgd|chd|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/picodrive_libretro.so": {
+            "library_name": "PicoDrive",
+            "valid_extensions": "bin|gen|smd|md|32x|cue|iso|chd|sms|gg|sg|sc|m3u|68k|sgd|pco"
+          }
+        },
+        "launchable_query": {
+          "system": "dreamcast",
+          "content_path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.m3u"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "launchable",
+          "extension": ".m3u",
+          "accepted": [
+            ".cdi",
+            ".CDI",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".gdi",
+            ".GDI",
+            ".m3u",
+            ".M3U"
+          ],
+          "entry": {
+            "system": "dreamcast",
+            "label": "Flycast",
+            "kind": "libretro",
+            "core_so": "flycast_libretro.so",
+            "emulator": "flycast_libretro.so",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "opens": [
+            {
+              "path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Disc 1).gdi",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.m3u",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 1).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Disc 1).gdi",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 2).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Disc 1).gdi",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Track 3).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Disc 1).gdi",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Disc 2).gdi",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game.m3u",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Disc 2 Track 1).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Disc 2).gdi",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Disc 2 Track 2).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Disc 2).gdi",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Disc 2 Track 3).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/dreamcast/Game/Game (Disc 2).gdi",
+              "present": true
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "opens-genesis-plus-gx-a-cue-opens-its-tracks-and-the-last-ones-sub",
+      "rationale": "Genesis Plus GX, RetroDECK's segacd default, parses a cue sheet in cdd_load (cdd.c:662-1005 at 46a5521): each FILE line opens its file, written after the directory of the path built before it. After the tracks it looks for a .sub, the last path built with its last four bytes replaced (cdd.c:1294-1296).",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>dreamcast</name>\n    <path>%ROMPATH%/dreamcast</path>\n    <extension>.cdi .CDI .chd .CHD .cue .CUE .gdi .GDI .m3u .M3U</extension>\n    <command label=\"Flycast\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/flycast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>segacd</name>\n    <path>%ROMPATH%/segacd</path>\n    <extension>.bin .BIN .chd .CHD .cue .CUE .iso .ISO .m3u .M3U</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n    <command label=\"PicoDrive\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/picodrive_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game.cue": "FILE \"Game (Track 01).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\nFILE \"Game (Track 02).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 00 00:00:00\n    INDEX 01 00:02:00\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 01).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 02).bin": {
+            "size": 2352
+          }
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "valid_extensions": "chd|cdi|elf|bin|cue|gdi|lst|zip|dat|7z|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/genesis_plus_gx_libretro.so": {
+            "library_name": "Genesis Plus GX",
+            "valid_extensions": "mdx|md|smd|gen|bin|cue|iso|sms|bms|gg|sg|68k|sgd|chd|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/picodrive_libretro.so": {
+            "library_name": "PicoDrive",
+            "valid_extensions": "bin|gen|smd|md|32x|cue|iso|chd|sms|gg|sg|sc|m3u|68k|sgd|pco"
+          }
+        },
+        "launchable_query": {
+          "system": "segacd",
+          "content_path": "/mnt/sd/retrodeck/roms/segacd/Game/Game.cue"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "launchable",
+          "extension": ".cue",
+          "accepted": [
+            ".bin",
+            ".BIN",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".iso",
+            ".ISO",
+            ".m3u",
+            ".M3U"
+          ],
+          "entry": {
+            "system": "segacd",
+            "label": "Genesis Plus GX",
+            "kind": "libretro",
+            "core_so": "genesis_plus_gx_libretro.so",
+            "emulator": "genesis_plus_gx_libretro.so",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "opens": [
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 01).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game.cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 02).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game.cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 02).sub",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 02).bin",
+              "present": false
+            }
+          ],
+          "caveats": []
+        }
+      }
+    },
+    {
+      "name": "opens-genesis-plus-gx-a-missing-first-file-is-not-accepted",
+      "rationale": "The first FILE does not open, so the parse ends with no track and cdd_load answers that the file is no CD (cdd.c:726-731, :1286-1303); load_rom then loads the cue sheet itself as a cartridge (loadrom.c:579-597). The set never mounts.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>dreamcast</name>\n    <path>%ROMPATH%/dreamcast</path>\n    <extension>.cdi .CDI .chd .CHD .cue .CUE .gdi .GDI .m3u .M3U</extension>\n    <command label=\"Flycast\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/flycast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>segacd</name>\n    <path>%ROMPATH%/segacd</path>\n    <extension>.bin .BIN .chd .CHD .cue .CUE .iso .ISO .m3u .M3U</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n    <command label=\"PicoDrive\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/picodrive_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game.cue": "FILE \"Game (Track 01).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\nFILE \"Game (Track 02).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 00 00:00:00\n    INDEX 01 00:02:00\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 02).bin": {
+            "size": 2352
+          }
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "valid_extensions": "chd|cdi|elf|bin|cue|gdi|lst|zip|dat|7z|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/genesis_plus_gx_libretro.so": {
+            "library_name": "Genesis Plus GX",
+            "valid_extensions": "mdx|md|smd|gen|bin|cue|iso|sms|bms|gg|sg|68k|sgd|chd|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/picodrive_libretro.so": {
+            "library_name": "PicoDrive",
+            "valid_extensions": "bin|gen|smd|md|32x|cue|iso|chd|sms|gg|sg|sc|m3u|68k|sgd|pco"
+          }
+        },
+        "launchable_query": {
+          "system": "segacd",
+          "content_path": "/mnt/sd/retrodeck/roms/segacd/Game/Game.cue"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "entry-not-accepted",
+          "extension": ".cue",
+          "accepted": [
+            ".bin",
+            ".BIN",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".iso",
+            ".ISO",
+            ".m3u",
+            ".M3U"
+          ],
+          "entry": {
+            "system": "segacd",
+            "label": "Genesis Plus GX",
+            "kind": "libretro",
+            "core_so": "genesis_plus_gx_libretro.so",
+            "emulator": "genesis_plus_gx_libretro.so",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [
+            "PicoDrive"
+          ],
+          "installers": null,
+          "boots": null,
+          "opens": [
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 01).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game.cue",
+              "present": false
+            }
+          ],
+          "caveats": [
+            {
+              "code": "opens-file-missing",
+              "data": {
+                "entry": "Genesis Plus GX",
+                "file": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 01).bin",
+                "effect": "stops"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "opens-genesis-plus-gx-a-first-track-with-no-file-crashes-the-core",
+      "rationale": "The sheet starts its first track before any FILE line opened a file for it. Its TRACK line names MODE1/2352, one of the three modes that set a sector size (cdd.c:807-825), so cdd_load seeks on the first track's stream to read the disc header (cdd.c:826-836), a null stream, and the core crashes: the entry does not launch this set.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>dreamcast</name>\n    <path>%ROMPATH%/dreamcast</path>\n    <extension>.cdi .CDI .chd .CHD .cue .CUE .gdi .GDI .m3u .M3U</extension>\n    <command label=\"Flycast\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/flycast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>segacd</name>\n    <path>%ROMPATH%/segacd</path>\n    <extension>.bin .BIN .chd .CHD .cue .CUE .iso .ISO .m3u .M3U</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n    <command label=\"PicoDrive\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/picodrive_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game.cue": "  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\nFILE \"Game (Track 01).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\nFILE \"Game (Track 02).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 00 00:00:00\n    INDEX 01 00:02:00\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 01).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 02).bin": {
+            "size": 2352
+          }
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "valid_extensions": "chd|cdi|elf|bin|cue|gdi|lst|zip|dat|7z|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/genesis_plus_gx_libretro.so": {
+            "library_name": "Genesis Plus GX",
+            "valid_extensions": "mdx|md|smd|gen|bin|cue|iso|sms|bms|gg|sg|68k|sgd|chd|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/picodrive_libretro.so": {
+            "library_name": "PicoDrive",
+            "valid_extensions": "bin|gen|smd|md|32x|cue|iso|chd|sms|gg|sg|sc|m3u|68k|sgd|pco"
+          }
+        },
+        "launchable_query": {
+          "system": "segacd",
+          "content_path": "/mnt/sd/retrodeck/roms/segacd/Game/Game.cue"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "entry-not-accepted",
+          "extension": ".cue",
+          "accepted": [
+            ".bin",
+            ".BIN",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".iso",
+            ".ISO",
+            ".m3u",
+            ".M3U"
+          ],
+          "entry": {
+            "system": "segacd",
+            "label": "Genesis Plus GX",
+            "kind": "libretro",
+            "core_so": "genesis_plus_gx_libretro.so",
+            "emulator": "genesis_plus_gx_libretro.so",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [
+            "PicoDrive"
+          ],
+          "installers": null,
+          "boots": null,
+          "opens": [],
+          "caveats": [
+            {
+              "code": "opens-sheet-refused",
+              "data": {
+                "entry": "Genesis Plus GX",
+                "file": "/mnt/sd/retrodeck/roms/segacd/Game/Game.cue",
+                "effect": "stops"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "opens-genesis-plus-gx-a-bin-opens-the-cue-of-its-name",
+      "rationale": "A launched .bin is no cue sheet: cdd_load reads its first bytes to tell a CD data track from a cartridge, then opens the .cue of its name either way (cdd.c:586-660). atlas does not read the image's bytes, so what follows is not established.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>dreamcast</name>\n    <path>%ROMPATH%/dreamcast</path>\n    <extension>.cdi .CDI .chd .CHD .cue .CUE .gdi .GDI .m3u .M3U</extension>\n    <command label=\"Flycast\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/flycast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>segacd</name>\n    <path>%ROMPATH%/segacd</path>\n    <extension>.bin .BIN .chd .CHD .cue .CUE .iso .ISO .m3u .M3U</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n    <command label=\"PicoDrive\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/picodrive_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 01).cue": "FILE \"Game (Track 01).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\nFILE \"Game (Track 02).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 00 00:00:00\n    INDEX 01 00:02:00\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 01).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 02).bin": {
+            "size": 2352
+          }
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "valid_extensions": "chd|cdi|elf|bin|cue|gdi|lst|zip|dat|7z|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/genesis_plus_gx_libretro.so": {
+            "library_name": "Genesis Plus GX",
+            "valid_extensions": "mdx|md|smd|gen|bin|cue|iso|sms|bms|gg|sg|68k|sgd|chd|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/picodrive_libretro.so": {
+            "library_name": "PicoDrive",
+            "valid_extensions": "bin|gen|smd|md|32x|cue|iso|chd|sms|gg|sg|sc|m3u|68k|sgd|pco"
+          }
+        },
+        "launchable_query": {
+          "system": "segacd",
+          "content_path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 01).bin"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "launchable",
+          "extension": ".bin",
+          "accepted": [
+            ".bin",
+            ".BIN",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".iso",
+            ".ISO",
+            ".m3u",
+            ".M3U"
+          ],
+          "entry": {
+            "system": "segacd",
+            "label": "Genesis Plus GX",
+            "kind": "libretro",
+            "core_so": "genesis_plus_gx_libretro.so",
+            "emulator": "genesis_plus_gx_libretro.so",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "opens": [
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 01).cue",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 01).bin",
+              "present": true
+            }
+          ],
+          "caveats": [
+            {
+              "code": "opens-content-unread",
+              "data": {
+                "entry": "Genesis Plus GX",
+                "file": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 01).bin"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "opens-genesis-plus-gx-a-bin-without-a-cue-launches-either-way",
+      "rationale": "With no .cue of its name, a launched .bin loads whatever its first bytes say: as a CD data track it mounts alone (cdd.c:620-645, :1286-1300), and as a cartridge of up to 10 MiB it loads as one (loadrom.c:593-617, libretro.c:375-428). The bytes decide what the content is, not whether the entry takes it, so the answer stays launchable with the .cue's lookup listed and a caveat saying what is not read.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>dreamcast</name>\n    <path>%ROMPATH%/dreamcast</path>\n    <extension>.cdi .CDI .chd .CHD .cue .CUE .gdi .GDI .m3u .M3U</extension>\n    <command label=\"Flycast\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/flycast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>segacd</name>\n    <path>%ROMPATH%/segacd</path>\n    <extension>.bin .BIN .chd .CHD .cue .CUE .iso .ISO .m3u .M3U</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n    <command label=\"PicoDrive\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/picodrive_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game.bin": {
+            "size": 1048576
+          }
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "valid_extensions": "chd|cdi|elf|bin|cue|gdi|lst|zip|dat|7z|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/genesis_plus_gx_libretro.so": {
+            "library_name": "Genesis Plus GX",
+            "valid_extensions": "mdx|md|smd|gen|bin|cue|iso|sms|bms|gg|sg|68k|sgd|chd|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/picodrive_libretro.so": {
+            "library_name": "PicoDrive",
+            "valid_extensions": "bin|gen|smd|md|32x|cue|iso|chd|sms|gg|sg|sc|m3u|68k|sgd|pco"
+          }
+        },
+        "launchable_query": {
+          "system": "segacd",
+          "content_path": "/mnt/sd/retrodeck/roms/segacd/Game/Game.bin"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "launchable",
+          "extension": ".bin",
+          "accepted": [
+            ".bin",
+            ".BIN",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".iso",
+            ".ISO",
+            ".m3u",
+            ".M3U"
+          ],
+          "entry": {
+            "system": "segacd",
+            "label": "Genesis Plus GX",
+            "kind": "libretro",
+            "core_so": "genesis_plus_gx_libretro.so",
+            "emulator": "genesis_plus_gx_libretro.so",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "opens": [
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game.cue",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game.bin",
+              "present": false
+            }
+          ],
+          "caveats": [
+            {
+              "code": "opens-content-unread",
+              "data": {
+                "entry": "Genesis Plus GX",
+                "file": "/mnt/sd/retrodeck/roms/segacd/Game/Game.bin"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "opens-genesis-plus-gx-a-playlist-past-four-discs-ignores-the-rest",
+      "rationale": "The M3U reader stops at four discs (MAX_DISKS, libretro.c:2762, :3571), so the fifth line is never read. The first disc is loaded at launch and the others only on a disc switch.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>dreamcast</name>\n    <path>%ROMPATH%/dreamcast</path>\n    <extension>.cdi .CDI .chd .CHD .cue .CUE .gdi .GDI .m3u .M3U</extension>\n    <command label=\"Flycast\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/flycast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>segacd</name>\n    <path>%ROMPATH%/segacd</path>\n    <extension>.bin .BIN .chd .CHD .cue .CUE .iso .ISO .m3u .M3U</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n    <command label=\"PicoDrive\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/picodrive_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game.m3u": "Game (Disc 1).cue\nGame (Disc 2).cue\nGame (Disc 3).cue\nGame (Disc 4).cue\nGame (Disc 5).cue\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 1).cue": "FILE \"Game (Disc 1) (Track 01).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\nFILE \"Game (Disc 1) (Track 02).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 00 00:00:00\n    INDEX 01 00:02:00\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 2).cue": "FILE \"Game (Disc 2) (Track 01).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\nFILE \"Game (Disc 2) (Track 02).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 00 00:00:00\n    INDEX 01 00:02:00\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 3).cue": "FILE \"Game (Disc 3) (Track 01).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\nFILE \"Game (Disc 3) (Track 02).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 00 00:00:00\n    INDEX 01 00:02:00\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 4).cue": "FILE \"Game (Disc 4) (Track 01).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\nFILE \"Game (Disc 4) (Track 02).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 00 00:00:00\n    INDEX 01 00:02:00\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 5).cue": "FILE \"Game (Disc 5) (Track 01).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\nFILE \"Game (Disc 5) (Track 02).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 00 00:00:00\n    INDEX 01 00:02:00\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 1) (Track 01).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 1) (Track 02).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 2) (Track 01).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 2) (Track 02).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 3) (Track 01).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 3) (Track 02).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 4) (Track 01).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 4) (Track 02).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 5) (Track 01).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 5) (Track 02).bin": {
+            "size": 2352
+          }
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "valid_extensions": "chd|cdi|elf|bin|cue|gdi|lst|zip|dat|7z|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/genesis_plus_gx_libretro.so": {
+            "library_name": "Genesis Plus GX",
+            "valid_extensions": "mdx|md|smd|gen|bin|cue|iso|sms|bms|gg|sg|68k|sgd|chd|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/picodrive_libretro.so": {
+            "library_name": "PicoDrive",
+            "valid_extensions": "bin|gen|smd|md|32x|cue|iso|chd|sms|gg|sg|sc|m3u|68k|sgd|pco"
+          }
+        },
+        "launchable_query": {
+          "system": "segacd",
+          "content_path": "/mnt/sd/retrodeck/roms/segacd/Game/Game.m3u"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "launchable",
+          "extension": ".m3u",
+          "accepted": [
+            ".bin",
+            ".BIN",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".iso",
+            ".ISO",
+            ".m3u",
+            ".M3U"
+          ],
+          "entry": {
+            "system": "segacd",
+            "label": "Genesis Plus GX",
+            "kind": "libretro",
+            "core_so": "genesis_plus_gx_libretro.so",
+            "emulator": "genesis_plus_gx_libretro.so",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "opens": [
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 1).cue",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game.m3u",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 1) (Track 01).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 1).cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 1) (Track 02).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 1).cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 1) (Track 02).sub",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 1) (Track 02).bin",
+              "present": false
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 2).cue",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game.m3u",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 2) (Track 01).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 2).cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 2) (Track 02).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 2).cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 2) (Track 02).sub",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 2) (Track 02).bin",
+              "present": false
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 3).cue",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game.m3u",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 3) (Track 01).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 3).cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 3) (Track 02).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 3).cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 3) (Track 02).sub",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 3) (Track 02).bin",
+              "present": false
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 4).cue",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game.m3u",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 4) (Track 01).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 4).cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 4) (Track 02).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 4).cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 4) (Track 02).sub",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Disc 4) (Track 02).bin",
+              "present": false
+            }
+          ],
+          "caveats": [
+            {
+              "code": "opens-entry-ignored",
+              "data": {
+                "entry": "Genesis Plus GX",
+                "file": "/mnt/sd/retrodeck/roms/segacd/Game/Game.m3u"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "opens-genesis-plus-gx-a-blank-playlist-line-is-a-disc-at-the-directory",
+      "rationale": "A blank line keeps nothing once its line end is removed, and the reader still joins it onto the directory with a slash (libretro.c:3576-3599): a second disc that is the directory itself, whose open atlas cannot tell.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>dreamcast</name>\n    <path>%ROMPATH%/dreamcast</path>\n    <extension>.cdi .CDI .chd .CHD .cue .CUE .gdi .GDI .m3u .M3U</extension>\n    <command label=\"Flycast\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/flycast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>segacd</name>\n    <path>%ROMPATH%/segacd</path>\n    <extension>.bin .BIN .chd .CHD .cue .CUE .iso .ISO .m3u .M3U</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n    <command label=\"PicoDrive\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/picodrive_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game.m3u": "Game.cue\n\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game.cue": "FILE \"Game (Track 01).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\nFILE \"Game (Track 02).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 00 00:00:00\n    INDEX 01 00:02:00\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 01).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 02).bin": {
+            "size": 2352
+          }
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "valid_extensions": "chd|cdi|elf|bin|cue|gdi|lst|zip|dat|7z|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/genesis_plus_gx_libretro.so": {
+            "library_name": "Genesis Plus GX",
+            "valid_extensions": "mdx|md|smd|gen|bin|cue|iso|sms|bms|gg|sg|68k|sgd|chd|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/picodrive_libretro.so": {
+            "library_name": "PicoDrive",
+            "valid_extensions": "bin|gen|smd|md|32x|cue|iso|chd|sms|gg|sg|sc|m3u|68k|sgd|pco"
+          }
+        },
+        "launchable_query": {
+          "system": "segacd",
+          "content_path": "/mnt/sd/retrodeck/roms/segacd/Game/Game.m3u"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "launchable",
+          "extension": ".m3u",
+          "accepted": [
+            ".bin",
+            ".BIN",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".iso",
+            ".ISO",
+            ".m3u",
+            ".M3U"
+          ],
+          "entry": {
+            "system": "segacd",
+            "label": "Genesis Plus GX",
+            "kind": "libretro",
+            "core_so": "genesis_plus_gx_libretro.so",
+            "emulator": "genesis_plus_gx_libretro.so",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "opens": [
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game.cue",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game.m3u",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 01).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game.cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 02).bin",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game.cue",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 02).sub",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 02).bin",
+              "present": false
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game.m3u",
+              "present": null
+            }
+          ],
+          "caveats": [
+            {
+              "code": "opens-file-unread",
+              "data": {
+                "entry": "Genesis Plus GX",
+                "file": "/mnt/sd/retrodeck/roms/segacd/Game/"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "opens-genesis-plus-gx-a-track-path-past-255-bytes-is-cut",
+      "rationale": "The FILE name is copied until the whole path reaches 255 bytes (cdd.c:714-723), so a longer path is opened cut short — a file that is not there, at the sheet's first track.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>dreamcast</name>\n    <path>%ROMPATH%/dreamcast</path>\n    <extension>.cdi .CDI .chd .CHD .cue .CUE .gdi .GDI .m3u .M3U</extension>\n    <command label=\"Flycast\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/flycast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>segacd</name>\n    <path>%ROMPATH%/segacd</path>\n    <extension>.bin .BIN .chd .CHD .cue .CUE .iso .ISO .m3u .M3U</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n    <command label=\"PicoDrive\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/picodrive_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/segacd/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn/Game.cue": "FILE \"Game (Track 01) xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\nFILE \"Game (Track 02).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 00 00:00:00\n    INDEX 01 00:02:00\n",
+          "/mnt/sd/retrodeck/roms/segacd/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn/Game (Track 01) xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.bin": {
+            "size": 2352
+          }
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "valid_extensions": "chd|cdi|elf|bin|cue|gdi|lst|zip|dat|7z|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/genesis_plus_gx_libretro.so": {
+            "library_name": "Genesis Plus GX",
+            "valid_extensions": "mdx|md|smd|gen|bin|cue|iso|sms|bms|gg|sg|68k|sgd|chd|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/picodrive_libretro.so": {
+            "library_name": "PicoDrive",
+            "valid_extensions": "bin|gen|smd|md|32x|cue|iso|chd|sms|gg|sg|sc|m3u|68k|sgd|pco"
+          }
+        },
+        "launchable_query": {
+          "system": "segacd",
+          "content_path": "/mnt/sd/retrodeck/roms/segacd/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn/Game.cue"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "entry-not-accepted",
+          "extension": ".cue",
+          "accepted": [
+            ".bin",
+            ".BIN",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".iso",
+            ".ISO",
+            ".m3u",
+            ".M3U"
+          ],
+          "entry": {
+            "system": "segacd",
+            "label": "Genesis Plus GX",
+            "kind": "libretro",
+            "core_so": "genesis_plus_gx_libretro.so",
+            "emulator": "genesis_plus_gx_libretro.so",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [
+            "PicoDrive"
+          ],
+          "installers": null,
+          "boots": null,
+          "opens": [
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn/Game (Track 01) xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/segacd/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn/Game.cue",
+              "present": false
+            }
+          ],
+          "caveats": [
+            {
+              "code": "opens-file-missing",
+              "data": {
+                "entry": "Genesis Plus GX",
+                "file": "/mnt/sd/retrodeck/roms/segacd/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn/Game (Track 01) xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                "effect": "stops"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "opens-genesis-plus-gx-a-sheet-path-of-255-bytes-is-not-established",
+      "rationale": "A launched .cue of 255 bytes opens whole (cdd.c:405), but the copy cdd_load builds its track paths from keeps 255 of them and one byte it never sets (cdd.c:583-584), so what the core opens next is undefined: the take is not established, and opens-path-too-long states it with effect unestablished — neither the refusal (stops) nor a file the core goes on without (goes-on).",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>dreamcast</name>\n    <path>%ROMPATH%/dreamcast</path>\n    <extension>.cdi .CDI .chd .CHD .cue .CUE .gdi .GDI .m3u .M3U</extension>\n    <command label=\"Flycast\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/flycast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>segacd</name>\n    <path>%ROMPATH%/segacd</path>\n    <extension>.bin .BIN .chd .CHD .cue .CUE .iso .ISO .m3u .M3U</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n    <command label=\"PicoDrive\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/picodrive_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/segacd/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn/Game.cue": "FILE \"Game (Track 01).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n",
+          "/mnt/sd/retrodeck/roms/segacd/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn/Game (Track 01).bin": {
+            "size": 2352
+          }
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "valid_extensions": "chd|cdi|elf|bin|cue|gdi|lst|zip|dat|7z|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/genesis_plus_gx_libretro.so": {
+            "library_name": "Genesis Plus GX",
+            "valid_extensions": "mdx|md|smd|gen|bin|cue|iso|sms|bms|gg|sg|68k|sgd|chd|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/picodrive_libretro.so": {
+            "library_name": "PicoDrive",
+            "valid_extensions": "bin|gen|smd|md|32x|cue|iso|chd|sms|gg|sg|sc|m3u|68k|sgd|pco"
+          }
+        },
+        "launchable_query": {
+          "system": "segacd",
+          "content_path": "/mnt/sd/retrodeck/roms/segacd/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn/Game.cue"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "launchable",
+          "extension": ".cue",
+          "accepted": [
+            ".bin",
+            ".BIN",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".iso",
+            ".ISO",
+            ".m3u",
+            ".M3U"
+          ],
+          "entry": {
+            "system": "segacd",
+            "label": "Genesis Plus GX",
+            "kind": "libretro",
+            "core_so": "genesis_plus_gx_libretro.so",
+            "emulator": "genesis_plus_gx_libretro.so",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "opens": [],
+          "caveats": [
+            {
+              "code": "opens-path-too-long",
+              "data": {
+                "entry": "Genesis Plus GX",
+                "file": "/mnt/sd/retrodeck/roms/segacd/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn/Game.cue",
+                "effect": "unestablished"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "opens-genesis-plus-gx-a-mixed-case-cue-is-loaded-as-a-cartridge",
+      "rationale": "ES-DE accepts no .Cue for segacd, but a playlist may name one. Only a path ending in cue or CUE takes the cue route (cdd.c:587), so the .Cue is read as any other file: its first bytes are no CD, the .cue of its name is looked for, and load_rom loads the .Cue itself as a cartridge (loadrom.c:579-597) — the set never mounts.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>dreamcast</name>\n    <path>%ROMPATH%/dreamcast</path>\n    <extension>.cdi .CDI .chd .CHD .cue .CUE .gdi .GDI .m3u .M3U</extension>\n    <command label=\"Flycast\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/flycast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>segacd</name>\n    <path>%ROMPATH%/segacd</path>\n    <extension>.bin .BIN .chd .CHD .cue .CUE .iso .ISO .m3u .M3U</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n    <command label=\"PicoDrive\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/picodrive_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game.m3u": "Game.Cue\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game.Cue": "FILE \"Game (Track 01).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\nFILE \"Game (Track 02).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 00 00:00:00\n    INDEX 01 00:02:00\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 01).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 02).bin": {
+            "size": 2352
+          }
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "valid_extensions": "chd|cdi|elf|bin|cue|gdi|lst|zip|dat|7z|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/genesis_plus_gx_libretro.so": {
+            "library_name": "Genesis Plus GX",
+            "valid_extensions": "mdx|md|smd|gen|bin|cue|iso|sms|bms|gg|sg|68k|sgd|chd|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/picodrive_libretro.so": {
+            "library_name": "PicoDrive",
+            "valid_extensions": "bin|gen|smd|md|32x|cue|iso|chd|sms|gg|sg|sc|m3u|68k|sgd|pco"
+          }
+        },
+        "launchable_query": {
+          "system": "segacd",
+          "content_path": "/mnt/sd/retrodeck/roms/segacd/Game/Game.m3u"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "entry-not-accepted",
+          "extension": ".m3u",
+          "accepted": [
+            ".bin",
+            ".BIN",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".iso",
+            ".ISO",
+            ".m3u",
+            ".M3U"
+          ],
+          "entry": {
+            "system": "segacd",
+            "label": "Genesis Plus GX",
+            "kind": "libretro",
+            "core_so": "genesis_plus_gx_libretro.so",
+            "emulator": "genesis_plus_gx_libretro.so",
+            "declared_index": 0,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [
+            "PicoDrive"
+          ],
+          "installers": null,
+          "boots": null,
+          "opens": [
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game.Cue",
+              "how": "named",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game.m3u",
+              "present": true
+            },
+            {
+              "path": "/mnt/sd/retrodeck/roms/segacd/Game/Game.cue",
+              "how": "name-derived",
+              "by": "/mnt/sd/retrodeck/roms/segacd/Game/Game.Cue",
+              "present": false
+            }
+          ],
+          "caveats": [
+            {
+              "code": "opens-format-refused",
+              "data": {
+                "entry": "Genesis Plus GX",
+                "file": "/mnt/sd/retrodeck/roms/segacd/Game/Game.Cue",
+                "effect": "stops"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "opens-picodrive-is-not-read",
+      "rationale": "PicoDrive's open is not read in this cut (#736), so its answer keeps the core's claims and opens is null.",
+      "input": {
+        "home": "/home/deck",
+        "files": {
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": "{\"paths\": {\"rd_home_path\": \"/mnt/sd/retrodeck\", \"saves_path\": \"/mnt/sd/retrodeck/saves\"}}",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg": "savefile_directory = \"/mnt/sd/retrodeck/saves\"\nlibretro_directory = \"/app/cores\"\n",
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml": "<?xml version=\"1.0\"?>\n<systemList>\n  <system>\n    <name>dreamcast</name>\n    <path>%ROMPATH%/dreamcast</path>\n    <extension>.cdi .CDI .chd .CHD .cue .CUE .gdi .GDI .m3u .M3U</extension>\n    <command label=\"Flycast\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/flycast_libretro.so %ROM%</command>\n  </system>\n  <system>\n    <name>segacd</name>\n    <path>%ROMPATH%/segacd</path>\n    <extension>.bin .BIN .chd .CHD .cue .CUE .iso .ISO .m3u .M3U</extension>\n    <command label=\"Genesis Plus GX\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genesis_plus_gx_libretro.so %ROM%</command>\n    <command label=\"PicoDrive\">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/picodrive_libretro.so %ROM%</command>\n  </system>\n</systemList>\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game.cue": "FILE \"Game (Track 01).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\nFILE \"Game (Track 02).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 00 00:00:00\n    INDEX 01 00:02:00\n",
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 01).bin": {
+            "size": 2352
+          },
+          "/mnt/sd/retrodeck/roms/segacd/Game/Game (Track 02).bin": {
+            "size": 2352
+          }
+        },
+        "dirs": [
+          "/mnt/sd/retrodeck/saves",
+          "/home/deck/.var/app/net.retrodeck.retrodeck/config/ROMs",
+          "/mnt/sd/retrodeck/bios"
+        ],
+        "cores": {
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/flycast_libretro.so": {
+            "library_name": "Flycast",
+            "valid_extensions": "chd|cdi|elf|bin|cue|gdi|lst|zip|dat|7z|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/genesis_plus_gx_libretro.so": {
+            "library_name": "Genesis Plus GX",
+            "valid_extensions": "mdx|md|smd|gen|bin|cue|iso|sms|bms|gg|sg|68k|sgd|chd|m3u"
+          },
+          "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/cores/picodrive_libretro.so": {
+            "library_name": "PicoDrive",
+            "valid_extensions": "bin|gen|smd|md|32x|cue|iso|chd|sms|gg|sg|sc|m3u|68k|sgd|pco"
+          }
+        },
+        "launchable_query": {
+          "system": "segacd",
+          "content_path": "/mnt/sd/retrodeck/roms/segacd/Game/Game.cue",
+          "label": "PicoDrive"
+        }
+      },
+      "expected": {
+        "installations": [
+          {
+            "kind": "retrodeck",
+            "label": "RetroDECK",
+            "kinds": [
+              "retrodeck"
+            ],
+            "root": "/mnt/sd/retrodeck",
+            "health": []
+          }
+        ],
+        "launchable": {
+          "verdict": "launchable",
+          "extension": ".cue",
+          "accepted": [
+            ".bin",
+            ".BIN",
+            ".chd",
+            ".CHD",
+            ".cue",
+            ".CUE",
+            ".iso",
+            ".ISO",
+            ".m3u",
+            ".M3U"
+          ],
+          "entry": {
+            "system": "segacd",
+            "label": "PicoDrive",
+            "kind": "libretro",
+            "core_so": "picodrive_libretro.so",
+            "emulator": "picodrive_libretro.so",
+            "declared_index": 1,
+            "selection": null,
+            "availability": "unestablished",
+            "launcher": null,
+            "core_path": null,
+            "caveats": [
+              {
+                "code": "find-rules-unreadable",
+                "data": {
+                  "layer": "bundled"
+                }
+              }
+            ]
+          },
+          "alternatives": [],
+          "installers": null,
+          "boots": null,
+          "opens": null,
+          "caveats": []
         }
       }
     }

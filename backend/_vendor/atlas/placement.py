@@ -71,6 +71,7 @@ from .find_rules import (
     SHELL_CONSTRUCTS,
 )
 from .machine import CORE_UNANSWERED_STATUSES
+from .opens_codes import OPENS_EFFECTS, OPENS_FAILURE_CODES
 from .retroarch_cfg import CFG_LAYER_KINDS, CFG_LAYER_OVERRIDE_KINDS, RetroArchCfg
 from .standalone_saves import REDIRECT_VIAS, SaveRedirect
 from .system_firmware import CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE, STATED_EVIDENCE_WORDS
@@ -2278,6 +2279,10 @@ ENUMERATED_DATA: "Mapping[tuple[str, str], tuple[str, ...]]" = MappingProxyType(
         # own spelling wherever no catalogue declares one.
         (CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE, "evidence"): STATED_EVIDENCE_WORDS,
         (UNRESOLVED_EMULATOR_CONFIG_UNREADABLE, "reason"): EMULATOR_CONFIG_UNREADABLE_REASONS,
+        # Whether the emulator stops at a failure of the open or goes on
+        # without the file, on every code a failure is stated under: the words
+        # are decided in atlas/opens_codes.py beside the codes they ride.
+        **{(code, "effect"): OPENS_EFFECTS for code in OPENS_FAILURE_CODES},
     }
 )
 
