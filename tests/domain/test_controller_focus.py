@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import ast
+from pathlib import Path
+
 import pytest
 
 from domain.controller_focus import (
@@ -116,3 +119,57 @@ class TestTheUrl:
     def test_anything_but_a_non_negative_int_is_refused(self, value: object) -> None:
         with pytest.raises(ValueError, match="non-negative int"):
             force_input_url(value)  # pyright: ignore[reportArgumentType]
+
+
+_BACKEND = Path(__file__).resolve().parents[2] / "backend"
+
+
+def _docstrings(tree: ast.AST) -> set[int]:
+    """The ids of the string nodes that are docstrings, which describe the URL rather than send it."""
+    found: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.body:
+            first = node.body[0]
+            if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant):
+                found.add(id(first.value))
+    return found
+
+
+def _modules_spelling_the_url(root: Path) -> list[str]:
+    """Every backend module, the vendored trees aside, whose code holds a string naming ``forceinputappid``.
+
+    Docstrings are left out; comments are not code and never seen.
+    """
+    hits: list[str] = []
+    for path in sorted(root.rglob("*.py")):
+        relative = path.relative_to(root)
+        if relative.parts[0] in {"_vendor", "native"}:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        docstrings = _docstrings(tree)
+        if any(
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and "forceinputappid" in node.value
+            and id(node) not in docstrings
+            for node in ast.walk(tree)
+        ):
+            hits.append(str(relative))
+    return hits
+
+
+class TestOnlyTheRulesSpellTheUrl:
+    """Every pin goes through ``force_input_url``, so no other module can send Steam an id of its own choosing."""
+
+    def test_no_backend_module_but_the_rules_names_it(self) -> None:
+        assert _modules_spelling_the_url(_BACKEND) == ["domain/controller_focus.py"]
+
+    def test_the_scan_sees_a_module_that_does(self, tmp_path: Path) -> None:
+        # The control: a scan that never matched would pass the test above too.
+        (tmp_path / "services").mkdir()
+        (tmp_path / "services" / "pinning.py").write_text('URL = "steam://forceinputappid/769"\n', encoding="utf-8")
+        (tmp_path / "services" / "described.py").write_text(
+            '"""Sends ``steam://forceinputappid/<id>``."""\n', encoding="utf-8"
+        )
+
+        assert _modules_spelling_the_url(tmp_path) == ["services/pinning.py"]
