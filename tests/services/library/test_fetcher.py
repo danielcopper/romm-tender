@@ -2511,3 +2511,107 @@ class TestAskRommForRoms:
 
         assert await library.sync._fetcher.ask_romm_for_roms([]) == {}
         assert fake_romm_api.call_log == []
+
+
+class TestTheHiddenSet:
+    """Each sync asks RomM once for every ROM the user hid, and the collection units follow it (#2502 D2, D4)."""
+
+    @staticmethod
+    def _seed(library, fake_romm_api):
+        fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 2}]
+        fake_romm_api.roms = {rid: {"id": rid, "platform_id": 1, "collection_ids": [7]} for rid in (10, 11)}
+        fake_romm_api.collections = [{"id": 7, "name": "Faves", "rom_count": 2}]
+        library.settings["enabled_platforms"] = {"1": False}
+        library.settings["enabled_collections"] = {"standard": {"7": True}, "smart": {}, "virtual": {}}
+
+    @pytest.mark.asyncio
+    async def test_the_work_queue_asks_once_and_the_run_holds_the_answer(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
+        self._seed(library, fake_romm_api)
+        fake_romm_api.hidden_rom_ids = {11}
+
+        await library.sync._fetcher.build_work_queue()
+
+        assert [c[0] for c in fake_romm_api.call_log].count("list_hidden_roms") == 1
+        assert library.sync._box.run_hidden_rom_ids == frozenset({11})
+
+    @pytest.mark.asyncio
+    async def test_a_collection_unit_s_members_are_its_listing_less_the_hidden_ones(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
+        self._seed(library, fake_romm_api)
+        fake_romm_api.hidden_rom_ids = {11}
+
+        units = await library.sync._fetcher.build_work_queue()
+
+        assert [u.member_rom_ids for u in units if u.type == "collection"] == [(10,)]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("unreadable", ["raises", "no-index"])
+    async def test_an_answer_that_cannot_be_read_establishes_nothing(
+        self, make_library, fake_romm_api, caplog, unreadable
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        self._seed(library, fake_romm_api)
+        fake_romm_api.hidden_rom_ids = {11}
+        if unreadable == "raises":
+            fake_romm_api.list_hidden_roms_side_effect = RommApiError("boom")
+        else:
+            fake_romm_api.list_hidden_roms_answer = {"items": [], "total": 1}
+
+        with caplog.at_level(logging.WARNING):
+            units = await library.sync._fetcher.build_work_queue()
+
+        assert library.sync._box.run_hidden_rom_ids is None
+        assert [u.member_rom_ids for u in units if u.type == "collection"] == [(10, 11)]
+        assert "hidden" in caplog.text
+
+
+class TestAHiddenGameIsLeftOutOfAPlatformSkip:
+    """A skipped platform never rebuilds a version the user hid whose game no version of the last fetch holds (D2)."""
+
+    @staticmethod
+    def _seed(library, fake_romm_api, *, hidden_key, sibling):
+        uow = library.uow
+        _seed_platform_stamp(
+            uow, "n64", at="2025-01-01T00:00:00", rom_count=2, fetch_id="run-new", rom_ids=(10, *sibling)
+        )
+        _seed_persisted_rom(uow, 10, app_id=1010, group_key="igdb:10:1", fetch_id="run-new")
+        _seed_persisted_rom(uow, 11, app_id=1011, group_key=hidden_key, fetch_id="run-old")
+        for rom_id in sibling:
+            _seed_persisted_rom(uow, rom_id, app_id=None, group_key=hidden_key, fetch_id="run-new")
+        for rom_id in (10, 11, *sibling):
+            fake_romm_api.roms[rom_id] = {"id": rom_id, "platform_id": 1, "updated_at": _OLD_UPDATED_AT}
+        fake_romm_api.hidden_rom_ids = {11}
+        library.sync._box.run_hidden_rom_ids = frozenset({11})
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("hidden_key", ["igdb:11:1", None], ids=["its-own-game", "no-group-key"])
+    async def test_a_game_whose_every_version_is_hidden_is_not_rebuilt(self, make_library, fake_romm_api, hidden_key):
+        library = make_library(romm_api=fake_romm_api)
+        self._seed(library, fake_romm_api, hidden_key=hidden_key, sibling=())
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+
+        rebuilt = await library.sync._fetcher._try_unit_incremental_skip(unit)
+
+        assert [rom["id"] for rom in rebuilt] == [10]
+
+    @pytest.mark.asyncio
+    async def test_a_hidden_version_whose_game_the_last_fetch_returned_is_rebuilt(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
+        self._seed(library, fake_romm_api, hidden_key="igdb:11:1", sibling=(12,))
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+
+        rebuilt = await library.sync._fetcher._try_unit_incremental_skip(unit)
+
+        assert sorted(rom["id"] for rom in rebuilt) == [10, 11]
+
+    @pytest.mark.asyncio
+    async def test_without_a_hidden_set_every_bound_row_is_rebuilt(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
+        self._seed(library, fake_romm_api, hidden_key="igdb:11:1", sibling=())
+        library.sync._box.run_hidden_rom_ids = None
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+
+        rebuilt = await library.sync._fetcher._try_unit_incremental_skip(unit)
+
+        assert sorted(rom["id"] for rom in rebuilt) == [10, 11]

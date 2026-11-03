@@ -301,6 +301,7 @@ class UnitApplier:
                 preferred_region=preferred_region,
                 running_rom_ids=self._running_rom_ids,
                 logger=self._logger,
+                hidden_rom_ids=box.run_hidden_rom_ids or frozenset(),
             )
         converged_ids = {binding.rom_id for binding in converged} if complete_view else set(box.run_converged)
 

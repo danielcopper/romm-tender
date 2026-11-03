@@ -606,6 +606,24 @@ class TestListRomsNewestFirst:
         assert api.list_roms_newest_first(5) == answer
 
 
+class TestListHiddenRoms:
+    """The one request a sync asks for every ROM the user hid (#2502 D2)."""
+
+    def test_query_string_is_pinned(self):
+        api, client = _make_api()
+        client.request.return_value = {"items": [], "total": 0, "rom_id_index": []}
+        api.list_hidden_roms()
+        client.request.assert_called_once_with(
+            "/api/roms?statuses=hidden&limit=1&with_char_index=false&with_filter_values=false"
+        )
+
+    def test_returns_romm_s_answer_unchanged(self):
+        api, client = _make_api()
+        answer = {"items": [{"id": 3}], "total": 2, "rom_id_index": [3, 4]}
+        client.request.return_value = answer
+        assert api.list_hidden_roms() == answer
+
+
 class TestListCollectionRomsUpdatedAfter:
     def test_user_collection_uses_collection_id_param(self):
         api, client = _make_api()

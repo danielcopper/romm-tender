@@ -5960,8 +5960,9 @@ class TestOnlyAFreshStampRestoresTheSkip:
         await self._apply(library, "run-1")
         assert self._stamp(library).rom_id_checksum == rom_id_checksum([1, 2])
 
-        # Hidden in RomM: gone from the list and the id index, no updated_at moved.
-        fake_romm_api.hidden_rom_ids = {2}
+        # Hidden from this user by an admin: gone from the list and the id index,
+        # no updated_at moved, and answered 404 as a deleted ROM is (#2502 D3).
+        fake_romm_api.admin_hidden_rom_ids = {2}
         fake_romm_api.call_log.clear()
         preview = await library.sync.sync_preview()
 
@@ -7136,9 +7137,11 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
     """The preview counts the same-dump rebind a platform unit makes for a member a skipped collection still lists.
 
     GBA is synced and holds Golf (USA), 20, which the first run binds, beside
-    Golf (Europe), 22, and Golf (Japan), 23. Faves lists 20 and is skipped as
-    unchanged on the second run, so the skip hands the preview 20's stored row
-    while GBA's fetch no longer returns 20. Each case runs the preview, then the
+    Golf (Europe), 22, and Golf (Japan), 23. Faves lists 20, and GBA's fetch on
+    the second run no longer returns it. Where the user hid 20, the hide changes
+    Faves' membership as Tender sees it, so the second run fetches Faves (#2502
+    D4); where 20 is gone from RomM, Faves is skipped as unchanged and the skip
+    hands the preview 20's stored row. Each case runs the preview, then the
     apply it would start, so the two answer over the same library.
     """
 
@@ -7175,12 +7178,12 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
         assert cls._bindings(library) == {20: 6020}
 
     @classmethod
-    async def _preview_then_apply(cls, library, emit, monkeypatch):
+    async def _preview_then_apply(cls, library, emit, monkeypatch, *, faves_skipped: bool = False):
         """The preview's summary and the ids it classified as skipped, then its apply's outcome.
 
         The outcome is ``(sent, removals, bindings)`` and the platform
         collections the apply sends. Asserts that the preview took Faves as
-        skipped.
+        skipped where *faves_skipped*, else as fetched.
         """
         import services.library.sync_preview as preview_module
 
@@ -7204,7 +7207,7 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
             patch.setattr(fetcher, "fetch_collection_unit", recording_fetch_collection_unit)
             patch.setattr(preview_module, "classify_roms", recording_classify_roms)
             summary = (await library.sync.sync_preview())["summary"]
-        assert collection_skips == [True]
+        assert collection_skips == [faves_skipped]
         box = library.sync._box
         box.discard_preview()
         assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
@@ -7261,7 +7264,7 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
         assert fake_romm_api.list_collections()[0]["rom_ids"] == [20]
 
         summary, classified_as_skipped, applied, platform_collections = await self._preview_then_apply(
-            library, emit, monkeypatch
+            library, emit, monkeypatch, faves_skipped=True
         )
 
         assert (self._counted(summary), applied) == ((0, 1, 0), ([20], [], {24: 6020}))
@@ -7273,10 +7276,11 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
     async def test_a_hidden_member_without_a_same_stem_copy_keeps_its_binding(
         self, make_library, fake_romm_api, emit, monkeypatch, platform_groups
     ):
-        """The binding stays, and 20 keeps its place in the preview's union, so both collection diffs are the apply's.
+        """The binding stays, and both collection diffs are the apply's.
 
-        GBA's fetch no longer returns 20, which Faves' skip rebuilds, so GBA's
-        collection files it as a kept row whatever the setting.
+        20's game is on GBA, so 20 keeps its binding and GBA's collection files
+        it as a kept row whatever the setting. Faves lists only the hidden
+        version, so it leaves Steam's collections (#2502 D4).
         """
         library = make_library(romm_api=fake_romm_api)
         await self._bind_20(library, fake_romm_api)
@@ -7290,16 +7294,16 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
         assert (self._counted(summary), applied) == ((0, 0, 0), ([], [], {20: 6020}))
         assert platform_collections == {"GBA"}
         assert summary["platform_collection_diff"] == {"has_changes": False, "added_count": 0, "removed_count": 0}
-        assert summary["collection_diff"] == {"has_changes": True, "added": [], "removed": []}
-        assert classified_as_skipped == [frozenset({20})]
+        assert summary["collection_diff"] == {"has_changes": True, "added": [], "removed": ["Faves"]}
+        assert classified_as_skipped == [frozenset()]
 
 
 class TestAGameASkippedCollectionStillListsConvergesAsThePreviewCounts:
     """A version hidden on its synced platform that a skipped collection still lists converges as unlisted (#2645).
 
     The setup of the class above; then 22 is bound as well, a duplicate from
-    before one shortcut per game, and 20 is hidden on GBA while Faves, skipped
-    as unchanged, still hands the preview 20's stored row.
+    before one shortcut per game, and 20 is hidden on GBA, so Faves, which lists
+    it, is fetched (#2502 D4).
     """
 
     _bind_20 = TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt._bind_20
@@ -7338,9 +7342,10 @@ class TestAHiddenVersionKeepsItsPlatformCollectionWhetherItsCollectionIsSkippedO
 
     GBA is synced and holds Golf (USA), 20, which the first run binds, beside
     Golf (Europe), 22, and Golf (Japan), 23. The user then hides 20 in RomM, so
-    GBA's fetch no longer returns it, while Faves still lists it. Faves is
-    skipped as unchanged, or fetched because its listing changed for another
-    reason. Each case runs the preview, then the apply it would start.
+    GBA's fetch no longer returns it, while Faves still lists it. The hide
+    changes Faves' membership as Tender sees it, so Faves is fetched whether its
+    ``updated_at`` moved or not (#2502 D4). Each case runs the preview, then the
+    apply it would start.
     """
 
     _bind_20 = TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt._bind_20
@@ -7371,7 +7376,7 @@ class TestAHiddenVersionKeepsItsPlatformCollectionWhetherItsCollectionIsSkippedO
         return faves_skips, summary["platform_collection_diff"], platform_app_ids
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("faves_skipped", [True, False], ids=["faves-skipped", "faves-fetched"])
+    @pytest.mark.parametrize("faves_skipped", [True, False], ids=["faves-unchanged", "faves-updated"])
     @pytest.mark.parametrize("platform_groups", [False, True], ids=["platform-groups-off", "platform-groups-on"])
     async def test_the_game_stays_in_its_platform_s_collection(
         self, make_library, fake_romm_api, emit, monkeypatch, faves_skipped, platform_groups
@@ -7387,7 +7392,7 @@ class TestAHiddenVersionKeepsItsPlatformCollectionWhetherItsCollectionIsSkippedO
             library, emit, monkeypatch
         )
 
-        assert faves_skips == [faves_skipped, faves_skipped]
+        assert faves_skips == [False, False]
         assert platform_collection_diff == {"has_changes": False, "added_count": 0, "removed_count": 0}
         assert platform_app_ids == {"GBA": [6020]}
 
@@ -7523,7 +7528,7 @@ class TestThePreviewNamesAPlatformCollectionAsTheApplyDoes:
         return faves_skips, summary["platform_collection_diff"], applied, platform_app_ids
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("faves_skipped", [True, False], ids=["faves-skipped", "faves-fetched"])
+    @pytest.mark.parametrize("faves_skipped", [True, False], ids=["faves-unchanged", "faves-updated"])
     async def test_a_member_a_collection_rebuilt_is_named_as_the_apply_names_it(
         self, make_library, fake_romm_api, emit, monkeypatch, faves_skipped
     ):
@@ -7538,7 +7543,7 @@ class TestThePreviewNamesAPlatformCollectionAsTheApplyDoes:
             library, emit, monkeypatch
         )
 
-        assert faves_skips == [faves_skipped, faves_skipped]
+        assert faves_skips == [False, False]
         assert platform_app_ids == {"Nintendo 64": [6020]}
         assert platform_collection_diff == applied
 
@@ -8639,7 +8644,7 @@ class TestAGameWithSeveralShortcutsConverges:
             "platform_name": "GBA",
             "platform_slug": "gba",
         }
-        fake_romm_api.hidden_rom_ids = {30, 31}
+        fake_romm_api.admin_hidden_rom_ids = {30, 31}
         gone = 31 if kept == 30 else 30
 
         summary = (await library.sync.sync_preview())["summary"]

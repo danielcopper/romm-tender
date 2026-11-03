@@ -254,6 +254,11 @@ class LibrarySyncStateBox:
     # whether its sync is on or not. Empty until the run has listed. Reset by
     # ``try_begin_run``.
     run_listed_platform_names: dict[str, str] = field(default_factory=dict)
+    # Every ROM the user hid in RomM (``domain.hidden_roms.hidden_rom_ids``), read
+    # once by the run's work queue: the run's only source of what is hidden.
+    # ``None`` until the run has read it, and when RomM's answer could not be
+    # read, which takes nothing for hidden. Reset by ``try_begin_run``.
+    run_hidden_rom_ids: frozenset[int] | None = None
     # Every bound row a skipped unit of the apply rebuilt from its stored row,
     # by ``rom_id`` to its platform slug, for the finalize's
     # ``domain.sync_diff.rebuilt_rows_filed_as_kept``. Reset by ``try_begin_run``.
@@ -341,6 +346,7 @@ class LibrarySyncStateBox:
         self.run_kind = kind
         self.run_listed_platform_slugs = None
         self.run_listed_platform_names = {}
+        self.run_hidden_rom_ids = None
         self.run_skip_rebuilt_rows = {}
         self.run_converged = {}
         # Bounded stash lifetime: a heartbeat-timed-out chunk whose late ack

@@ -184,6 +184,10 @@ class RommApiAdapter:
             f"/api/roms?platform_ids={platform_id}&limit=1{_NEWEST_FIRST}{_LIST_AGGREGATIONS_DISABLED}"
         )
 
+    def list_hidden_roms(self) -> dict[str, Any]:
+        """RomM's list of the ROMs this user hid, one item at most; its ``rom_id_index`` names every one."""
+        return self._client.request(f"/api/roms?statuses=hidden&limit=1{_LIST_AGGREGATIONS_DISABLED}")
+
     def download_rom_content(
         self,
         rom_id: int,

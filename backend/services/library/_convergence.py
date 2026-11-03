@@ -18,7 +18,7 @@ from domain.sync_diff import brought_in_by_delivery, converge_bound_groups, stor
 if TYPE_CHECKING:
     import asyncio
     import logging
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Collection, Mapping, Sequence
     from collections.abc import Set as AbstractSet
 
     from domain.sync_diff import ConvergedBinding
@@ -35,6 +35,7 @@ async def converge_unless_running(
     preferred_region: str,
     running_rom_ids: RunningRomIdsFn,
     logger: logging.Logger,
+    hidden_rom_ids: Collection[int] = frozenset(),
 ) -> list[ConvergedBinding]:
     """:func:`~domain.sync_diff.converge_bound_groups`, leaving out a group whose shortcut Steam lists as running.
 
@@ -43,7 +44,12 @@ async def converge_unless_running(
     is and converges on a later run (#2645 D5).
     """
     converged = converge_bound_groups(
-        listed, registry, installed_rom_ids, platform_slugs=platform_slugs, preferred_region=preferred_region
+        listed,
+        registry,
+        installed_rom_ids,
+        platform_slugs=platform_slugs,
+        preferred_region=preferred_region,
+        hidden_rom_ids=hidden_rom_ids,
     )
     if not converged:
         return converged
@@ -57,6 +63,7 @@ async def converge_unless_running(
         platform_slugs=platform_slugs,
         preferred_region=preferred_region,
         running_rom_ids=running,
+        hidden_rom_ids=hidden_rom_ids,
     )
     if len(left) < len(converged):
         logger.info(f"Convergence: {len(converged) - len(left)} shortcut(s) of a running game stay until a later sync")

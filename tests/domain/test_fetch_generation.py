@@ -9,6 +9,7 @@ from domain.fetch_generation import (
     count_rows_for_skip,
     current_generation_ids,
     gone_from_romm_ids,
+    hidden_without_a_listed_version,
     prune_candidate_ids,
 )
 from domain.platform_sync_state import PlatformSyncState
@@ -174,3 +175,37 @@ class TestCurrentGenerationIds:
     def test_no_rows_yields_nothing(self):
         stamp = PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id="run-new")
         assert current_generation_ids([], stamp) == set()
+
+
+def _game_row(rom_id: int, *, key: str | None, fetch_id: str, app_id: int | None = None) -> Rom:
+    """A row of the game *key*, bound to *app_id*, that the fetch *fetch_id* last returned."""
+    from dataclasses import replace
+
+    return replace(_row(rom_id, fetch_id), sibling_group_key=key, shortcut_app_id=app_id)
+
+
+class TestHiddenWithoutAListedVersion:
+    """Which bound rows a platform skip leaves to the stale removal (#2502 D2)."""
+
+    def test_a_bound_hidden_row_whose_game_the_fetch_did_not_return_is_named(self):
+        rows = [_game_row(1, key="g1", fetch_id="old", app_id=11), _game_row(2, key="g2", fetch_id="new", app_id=12)]
+        assert hidden_without_a_listed_version(rows, {1}, "new") == {1}
+
+    def test_a_visible_version_the_fetch_returned_keeps_it(self):
+        rows = [_game_row(1, key="g", fetch_id="old", app_id=11), _game_row(2, key="g", fetch_id="new")]
+        assert hidden_without_a_listed_version(rows, {1}, "new") == set()
+
+    def test_a_version_of_an_older_fetch_or_one_also_hidden_keeps_nothing(self):
+        rows = [
+            _game_row(1, key="g", fetch_id="old", app_id=11),
+            _game_row(2, key="g", fetch_id="old"),
+            _game_row(3, key="g", fetch_id="new"),
+        ]
+        assert hidden_without_a_listed_version(rows, {1, 3}, "new") == {1}
+
+    def test_a_row_without_a_group_key_stands_alone(self):
+        rows = [_game_row(1, key=None, fetch_id="old", app_id=11), _game_row(2, key=None, fetch_id="new")]
+        assert hidden_without_a_listed_version(rows, {1}, "new") == {1}
+
+    def test_an_unbound_hidden_row_is_not_named(self):
+        assert hidden_without_a_listed_version([_game_row(1, key="g", fetch_id="old")], {1}, "new") == set()

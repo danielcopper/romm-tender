@@ -187,6 +187,14 @@ class RommRomReader(Protocol):
         """
         ...
 
+    def list_hidden_roms(self) -> dict[str, Any]:
+        """Every ROM the user hid in RomM, as one list answer with ``limit=1``.
+
+        ``rom_id_index`` names every such ROM (``domain/hidden_roms.py``); a
+        ROM an admin hid for this user is not among them.
+        """
+        ...
+
     def list_collection_roms_updated_after(
         self,
         collection_id: int | str,

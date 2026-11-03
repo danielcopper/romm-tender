@@ -443,6 +443,7 @@ def converge_bound_groups(
     platform_slugs: AbstractSet[str],
     preferred_region: str = AUTO_REGION,
     running_rom_ids: AbstractSet[int] = frozenset(),
+    hidden_rom_ids: Collection[int] = frozenset(),
 ) -> list[ConvergedBinding]:
     """Every bound row of *platform_slugs* whose group keeps another row's shortcut (#2645).
 
@@ -463,20 +464,29 @@ def converge_bound_groups(
     else an installed unlisted one; else a listed one, by the chain over the
     group's bound listed versions, so one RomM holds a file for comes first;
     else the unlisted one with the lowest ``rom_id`` — also when RomM lists no
-    version of the game at all. The listing cannot tell a version hidden in
-    RomM from one deleted there, so an unlisted version is ranked by its
-    install alone. Every other bound row of the group is answered, in
-    ``rom_id`` order.
+    version of the game at all. An unlisted version is ranked by its install
+    alone, whether the user hid it or RomM no longer has it. Every other bound
+    row of the group is answered, in ``rom_id`` order.
+
+    In a group *listed* holds no version of, a bound row in *hidden_rom_ids*
+    (the run's hidden set) takes no part: the stale removal takes its shortcut
+    (:func:`sort_stale_rows`), so it neither keeps the group's shortcut nor
+    hands it to another row (#2502 D1).
 
     A group one of whose bound rows is in *running_rom_ids* is left out: its
     shortcut is not removed under a game Steam lists as running, and the group
     converges on a later run (#2645 D5).
     """
     members_by_id = {sd["rom_id"]: sd for sd in listed}
+    listed_keys = {sd.get("sibling_group_key") for sd in listed}
     bound_by_group = _bound_rows_by_group(
         {rom_id: sd.get("sibling_group_key") for rom_id, sd in members_by_id.items()},
         {rid: reg for rid, reg in registry.items() if reg.get("platform_slug") in platform_slugs},
     )
+    bound_by_group = {
+        key: rows if key in listed_keys else [(rom_id, reg) for rom_id, reg in rows if rom_id not in hidden_rom_ids]
+        for key, rows in bound_by_group.items()
+    }
     converging = groups_to_converge(key for key, rows in bound_by_group.items() for _row in rows)
     bindings: list[ConvergedBinding] = []
     for key in sorted(converging):
@@ -750,12 +760,15 @@ class StaleSort(NamedTuple):
 
     :attr:`ask_only` holds the rows RomM is asked about for their mark alone:
     their game was synced, so they stay bound whatever RomM answers.
+    :attr:`hidden` holds the rows of :attr:`remove` that go because the user
+    hid them in RomM.
     """
 
     remove: list[StaleRow]
     keep: list[StaleRow]
     ask: list[StaleRow]
     ask_only: tuple[StaleRow, ...] = ()
+    hidden: tuple[StaleRow, ...] = ()
 
     def gone_from_romm_marks(
         self, answers: Mapping[int, RomAnswer], read_platform_slugs: Collection[str]
@@ -770,11 +783,13 @@ class StaleSort(NamedTuple):
         RomM returned the very ROM; an answer that established nothing is
         absent, so nothing is written for it. A row kept on a platform the run
         read whole is absent too: its platform's stamp already says the fetch
-        did not return it.
+        did not return it. A row removed because the user hid it in RomM has
+        its mark cleared: RomM still serves it.
         """
         marks: dict[int, GoneEvidence | None] = {
             row.rom_id: "delisted" for row in self.keep if row.platform_slug not in read_platform_slugs
         }
+        marks.update((row.rom_id, None) for row in self.hidden)
         for row in (*self.ask, *self.ask_only):
             answer = answers.get(row.rom_id)
             if answer == "gone":
@@ -791,6 +806,7 @@ def sort_stale_rows(
     listed_platform_slugs: Collection[str] | None,
     collection_listed_rom_ids: Collection[int],
     synced_group_keys: Collection[str] = frozenset(),
+    hidden_rom_ids: Collection[int] = frozenset(),
 ) -> StaleSort:
     """Split the stale rows into the ones to remove, to keep, and to ask RomM about.
 
@@ -801,11 +817,17 @@ def sort_stale_rows(
     collection held at its last completed apply, read before the run rewrote
     any of them; *synced_group_keys* the games the run synced — the group keys
     (:func:`group_keys_of`) of every ROM a unit returned, a skipped unit's stamp
-    members included.
+    members included; *hidden_rom_ids* the run's hidden set
+    (``domain/hidden_roms.py``), empty where RomM's answer could not be read.
 
+    * **remove, hidden** — first: a row the user hid in RomM whose game the
+      run did not sync, on any route and unasked (#2502 D1). A hidden row
+      whose game the run synced lands as any other row below: the game keeps
+      its one shortcut.
     * **keep** — the row's platform was read whole and did not return it, so it
-      is gone from RomM. A skipped platform rebuilds every bound row, so only a
-      fetched one can leave one out. Also kept: a row last delivered through
+      is gone from RomM. A skipped platform rebuilds every bound row but the
+      hidden ones whose game it holds no version of, so only a fetched one can
+      leave another out. Also kept: a row last delivered through
       its platform, or never delivered since the route was recorded, whose
       platform RomM no longer lists — that platform was on, and RomM's listing
       is a complete answer, so the game is gone from RomM rather than turned
@@ -827,9 +849,13 @@ def sort_stale_rows(
     listed = None if listed_platform_slugs is None else set(listed_platform_slugs)
     sort = StaleSort(remove=[], keep=[], ask=[])
     ask_only: list[StaleRow] = []
+    hidden: list[StaleRow] = []
     for row in rows:
         game_synced = row.sibling_group_key in synced_group_keys
-        if row.platform_slug in read_platform_slugs:
+        if row.rom_id in hidden_rom_ids and not game_synced:
+            sort.remove.append(row)
+            hidden.append(row)
+        elif row.platform_slug in read_platform_slugs:
             sort.keep.append(row)
         elif _reached_through_a_collection(row, collection_listed_rom_ids):
             (ask_only if game_synced else sort.ask).append(row)
@@ -839,7 +865,7 @@ def sort_stale_rows(
             sort.keep.append(row)
         else:
             sort.remove.append(row)
-    return sort._replace(ask_only=tuple(ask_only))
+    return sort._replace(ask_only=tuple(ask_only), hidden=tuple(hidden))
 
 
 def _reached_through_a_collection(row: StaleRow, collection_listed_rom_ids: Collection[int]) -> bool:
