@@ -255,9 +255,11 @@ class _FocusWatch:
             steam = self._steam
         input_id = input_id_for(window, await self._launched_app_id(window))
         if await self._send(input_id, steam):
-            # Reading the window may have taken a later change off the socket
-            # with the replies; one more pass looks. Not after a send that
-            # failed, which the next reading of Steam tries again.
+            # A change the server sent while the window was being read is
+            # taken off the socket with the replies and waits in xcb's queue,
+            # so the socket never becomes readable for it; one more pass reads
+            # the events again. Not after a send that failed, which the next
+            # reading of Steam tries again.
             self._wake.set()
 
     async def _launched_app_id(self, window: FocusedWindow | None) -> int | None:

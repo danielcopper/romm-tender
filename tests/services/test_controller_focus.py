@@ -77,9 +77,13 @@ class FakeRunningSteam:
     def __init__(self, steam: RunningSteam | None) -> None:
         self.steam = steam
         self.reads = 0
+        self.raises_once: Exception | None = None
 
     def read(self) -> RunningSteam | None:
         self.reads += 1
+        if self.raises_once is not None:
+            error, self.raises_once = self.raises_once, None
+            raise error
         return self.steam
 
 
@@ -92,6 +96,8 @@ class FakeX:
         self.connected_to: list[XDisplay] = []
         self.closes = 0
         self.is_lost = False
+        self.moves_during_next_question: FocusedWindow | None = None
+        self._queued_change = False
         self._read_end: int | None = None
         self._write_end: int | None = None
 
@@ -115,13 +121,24 @@ class FakeX:
     def take_focus_changes(self) -> bool:
         if self._read_end is None:
             return False
+        queued, self._queued_change = self._queued_change, False
         try:
-            return bool(os.read(self._read_end, 4096))
+            return bool(os.read(self._read_end, 4096)) or queued
         except BlockingIOError:
-            return False
+            return queued
 
     def focused_window(self) -> FocusedWindow | None:
-        return self.window
+        """The window focused when asked; a move set up for this question happens while it is answered.
+
+        Such a move is what xcb does with an event that arrives with a reply:
+        it is read off the socket into xcb's queue, so the socket never becomes
+        readable for it, and only the next reading of the events finds it.
+        """
+        answer = self.window
+        if self.moves_during_next_question is not None:
+            self.window, self.moves_during_next_question = self.moves_during_next_question, None
+            self._queued_change = True
+        return answer
 
     def lost(self) -> bool:
         return self.is_open and self.is_lost
@@ -150,8 +167,12 @@ class FakeX:
 class FakeSteamLaunch:
     def __init__(self) -> None:
         self.app_ids = {GAME_PID: GAME_APP_ID, OTHER_GAME_PID: OTHER_GAME_APP_ID}
+        self.raises_once: Exception | None = None
 
     def launched_app_id(self, pid: int) -> int | None:
+        if self.raises_once is not None:
+            error, self.raises_once = self.raises_once, None
+            raise error
         return self.app_ids.get(pid)
 
 
@@ -263,8 +284,8 @@ class TestWhereSteamAttributesWindowsItself:
         "steam",
         [
             pytest.param(_steam(exe=STEAM_32), id="32-bit-client"),
-            pytest.param(_steam(under_gamescope=True), id="game-mode"),
-            pytest.param(_steam(exe=STEAM_32, under_gamescope=True), id="32-bit-game-mode"),
+            pytest.param(_steam(under_gamescope=True), id="gaming-mode"),
+            pytest.param(_steam(exe=STEAM_32, under_gamescope=True), id="32-bit-gaming-mode"),
         ],
     )
     async def test_it_opens_nothing_and_sends_nothing(self, make_watcher, steam: RunningSteam) -> None:
@@ -348,6 +369,17 @@ class TestWatching:
 
             assert watcher.urls.urls == [_url(413080)]
 
+    async def test_a_change_taken_off_the_socket_with_a_reply_is_still_answered(self, make_watcher) -> None:
+        async with make_watcher() as watcher:
+            await watcher.start()
+            watcher.x.moves_during_next_question = BIG_PICTURE
+
+            watcher.x.focus(GAME_WINDOW)
+            await _until(lambda: len(watcher.urls.urls) >= 3, "the send for the window focused during the question")
+            await _quiet()
+
+            assert watcher.urls.urls == [_url(413080), _url(GAME_APP_ID), _url(769)]
+
     async def test_changes_arriving_during_a_send_are_folded_into_the_latest(self, make_watcher) -> None:
         async with make_watcher() as watcher:
             await watcher.start()
@@ -377,7 +409,7 @@ class TestSteamRestarts:
             assert watcher.x.is_open is False
             assert watcher.urls.urls == [_url(413080)]
 
-    async def test_into_game_mode_closes_the_connection_and_sends_nothing(self, make_watcher) -> None:
+    async def test_into_gaming_mode_closes_the_connection_and_sends_nothing(self, make_watcher) -> None:
         async with make_watcher() as watcher:
             await watcher.start()
             watcher.steam.steam = _steam(under_gamescope=True, start_time=2)
@@ -579,6 +611,44 @@ class TestReleasingThePin:
             await asyncio.wait_for(release, 5)
 
             assert watcher.urls.urls == [_url(413080), _url(GAME_APP_ID), _url(0)]
+
+
+class TestAPassThatRaises:
+    async def test_a_reading_of_steam_that_raises_is_logged_and_the_next_one_goes_on(
+        self, make_watcher, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.WARNING)
+        async with make_watcher() as watcher:
+            watcher.steam.raises_once = OSError("proc went away")
+            await watcher.start()
+
+            assert watcher.urls.urls == []
+            assert [r.getMessage() for r in caplog.records] == [
+                "controller focus: reading Steam failed: OSError('proc went away')"
+            ]
+
+            await watcher.tick()
+
+            assert watcher.urls.urls == [_url(413080)]
+
+    async def test_an_answer_that_raises_is_logged_and_the_next_change_is_answered(
+        self, make_watcher, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.WARNING)
+        async with make_watcher() as watcher:
+            await watcher.start()
+            watcher.launch.raises_once = OSError("proc went away")
+
+            watcher.x.focus(GAME_WINDOW)
+            await _until(lambda: len(caplog.records) == 1, "the failed answer logged")
+            watcher.x.focus(OTHER_GAME_WINDOW)
+            await _until(lambda: len(watcher.urls.urls) == 2, "the next change answered")
+            await _quiet()
+
+            assert [r.getMessage() for r in caplog.records] == [
+                "controller focus: answering a focus change failed: OSError('proc went away')"
+            ]
+            assert watcher.urls.urls == [_url(413080), _url(OTHER_GAME_APP_ID)]
 
 
 class TestCancelled:

@@ -27,8 +27,9 @@ if TYPE_CHECKING:
     from domain.controller_focus import XDisplay
 
 _LIBXCB = "libxcb.so.1"
-# A package of its own on Debian, Ubuntu, Mint and openSUSE (``libxcb-res0``),
-# which an Xfce, MATE or LXDE install may not have pulled in.
+# A package of its own on some distributions; which, and how to install it:
+# docs/user-guide/troubleshooting.md, "The controller acts as mouse and
+# keyboard in a game in Desktop Mode".
 _LIBXCB_RES = "libxcb-res.so.0"
 
 # The Xauthority entry this backend admits itself with.
@@ -149,8 +150,9 @@ def display_number(name: str) -> str | None:
 def cookie_for(authority: bytes, number: str) -> bytes | None:
     """The MIT-MAGIC-COOKIE-1 an Xauthority file holds for display *number*, or ``None``.
 
-    The first entry that matches wins, as Xlib's lookup does: a local entry
-    for this display number, or a wildcard entry for this number or for any.
+    The first entry that matches wins: a local entry for this display
+    number, whatever its address, or a wildcard entry for this number or for
+    any.
     An entry cut short ends the reading; what came before it still counts.
     """
     offset = 0
@@ -213,7 +215,6 @@ class _Libraries:
         _sign(xcb.xcb_get_property_value, void_p, ctypes.POINTER(_GetPropertyReply))
         _sign(xcb.xcb_get_property_value_length, c_int, ctypes.POINTER(_GetPropertyReply))
         _sign(xcb.xcb_poll_for_event, void_p, void_p)
-        _sign(xcb.xcb_poll_for_queued_event, void_p, void_p)
         _sign(res.xcb_res_query_client_ids, _Cookie, void_p, u32, ctypes.POINTER(_ClientIdSpec))
         _sign(res.xcb_res_query_client_ids_reply, void_p, void_p, _Cookie, error_out)
         _sign(res.xcb_res_query_client_ids_ids_iterator, _ClientIdValueIterator, void_p)
@@ -242,7 +243,6 @@ class X11FocusAdapter:
         self._root = 0
         self._atoms: dict[bytes, int] = {}
         self._has_res = False
-        self._queued_change = False
 
     def connect(self, display: XDisplay) -> str | None:
         """Connect to *display* and listen for focus changes; answer ``None``, or why it could not.
@@ -267,8 +267,9 @@ class X11FocusAdapter:
             libs, connection = self._libs, self._connection
             if libs is None or connection is None:
                 return False
-            changed = self._queued_change
-            self._queued_change = False
+            changed = False
+            # Answers the events xcb already queued while reading a reply
+            # first, then those still on the socket.
             while event := libs.xcb.xcb_poll_for_event(connection):
                 changed = self._is_focus_change(event) or changed
                 libs.free(event)
@@ -280,14 +281,7 @@ class X11FocusAdapter:
             libs, connection = self._libs, self._connection
             if libs is None or connection is None:
                 return None
-            try:
-                return self._focused_window_locked(libs, connection)
-            finally:
-                # A reply read off the socket may have brought events with it,
-                # and those never make the socket readable again.
-                while event := libs.xcb.xcb_poll_for_queued_event(connection):
-                    self._queued_change = self._is_focus_change(event) or self._queued_change
-                    libs.free(event)
+            return self._focused_window_locked(libs, connection)
 
     def lost(self) -> bool:
         """Whether the connection has failed; a connection never opened is not lost."""
@@ -374,7 +368,6 @@ class X11FocusAdapter:
         self._connection = None
         self._atoms = {}
         self._has_res = False
-        self._queued_change = False
 
     # -- reading ---------------------------------------------------------------
 
