@@ -62,19 +62,19 @@ class WorkUnit:
     # (:func:`is_own_collection`). A foreign smart collection's listing is its
     # owner's view, so its ``member_rom_ids`` do not stand for the caller's walk.
     is_own: bool = True
-    # Plan-time estimate riders (#1382 / #1511 / #1517). ``predicted_skip`` is
-    # the plan's local-conditions guess at the fetch-time wholesale-skip gate's
-    # outcome, ``collapsed_count`` the persisted post-collapse shortcut count
-    # and ``new_shortcut_count`` how many of those shortcuts do not exist yet —
-    # all three platform-only. ``bound_count`` carries on BOTH unit types:
-    # how many of the unit's known ROMs already hold a Steam shortcut, which is
-    # what lets the frontend price them at the cheap UPDATE rate instead of the
-    # create rate (a platform reads its persisted rows; a collection reads its
-    # stamped member set).
+    # Plan-time estimate riders (#1382 / #1511 / #1517 / #2623).
+    # ``collapsed_count`` is the persisted post-collapse shortcut count and
+    # ``new_shortcut_count`` how many of those shortcuts do not exist yet —
+    # both platform-only. Two carry on BOTH unit types: ``predicted_skip``, the
+    # plan's local-conditions guess at the fetch-time wholesale-skip gate's
+    # outcome, and ``bound_count``, how many of the unit's known ROMs already
+    # hold a Steam shortcut, which is what lets the frontend price them at the
+    # cheap UPDATE rate instead of the create rate (a platform reads its
+    # persisted rows; a collection reads its stamped member set).
     # Estimate-ONLY: they price the ``sync_plan`` payload and must never feed
-    # the actual skip decision — ``_try_unit_incremental_skip`` remains the
-    # sole skip authority (ADR-0023). ``None`` means unknown and is omitted
-    # from the event payload.
+    # the actual skip decision — ``_try_unit_incremental_skip`` and
+    # ``_try_collection_incremental_skip`` remain the sole skip authority
+    # (ADR-0023). ``None`` means unknown and is omitted from the event payload.
     predicted_skip: bool | None = None
     collapsed_count: int | None = None
     bound_count: int | None = None

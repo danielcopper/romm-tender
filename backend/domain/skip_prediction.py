@@ -1,15 +1,17 @@
 """Plan-time estimate kernels for the skip-aware sync time estimate.
 
 Pure predictions derived from locally persisted state: whether the
-fetch-time wholesale-skip gate is expected to skip a platform unit, how
-many Steam shortcuts a platform's persisted rows collapse into, and how
-many of those shortcuts do not exist yet. They exist ONLY to price the
-``sync_plan`` estimate payload (``predicted_skip`` / ``collapsed_count``
-/ ``new_shortcut_count`` / ``total_estimated_items``).
+fetch-time wholesale-skip gate is expected to skip a platform unit or a
+collection unit, how many Steam shortcuts a platform's persisted rows
+collapse into, and how many of those shortcuts do not exist yet. They
+exist ONLY to price the ``sync_plan`` estimate payload
+(``predicted_skip`` / ``collapsed_count`` / ``new_shortcut_count`` /
+``total_estimated_items``).
 
-Hard constraint (ADR-0023): the fetch-time gate
-(``LibraryFetcher._try_unit_incremental_skip``) remains the SOLE skip
-authority — nothing computed here may ever feed the actual skip
+Hard constraint (ADR-0023): the fetch-time gates
+(``LibraryFetcher._try_unit_incremental_skip`` and
+``CollectionFetcher._try_collection_incremental_skip``) remain the SOLE
+skip authority — nothing computed here may ever feed the actual skip
 decision. A mis-prediction can only mis-estimate (the countdown reads
 long or short); it can never mis-apply.
 """
@@ -18,12 +20,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from domain.platform_skip import stamp_can_match
+from domain.collection_skip import holds_a_game_to_converge, membership_verdict, recorded_updated_at
+from domain.platform_skip import skip_reference, stamp_can_match
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+    from domain.collection_sync_state import CollectionSyncState
     from domain.platform_sync_state import PlatformSyncState
+    from domain.rom import Rom
+    from domain.work_unit import WorkUnit
 
 
 def predict_unit_skip(
@@ -66,6 +72,30 @@ def predict_unit_skip(
         and not needs_backfill
         and not needs_convergence
     )
+
+
+def predict_collection_skip(*, unit: WorkUnit, stamp: CollectionSyncState | None, rows: Iterable[Rom]) -> bool:
+    """Predict whether the collection skip gate will skip *unit*.
+
+    Replays the LOCAL conditions of
+    ``CollectionFetcher._try_collection_incremental_skip``, in its order and
+    through its own functions; every refusal predicts a fetch. The gate's
+    probe is deliberately NOT replayed — no network at plan time — so a
+    collection whose member ROM RomM edited since the stamp is predicted as a
+    skip the fetch then refuses (#2623 D1).
+
+    Estimate-only (ADR-0023): the return value prices the plan payload and
+    must never feed the actual skip decision.
+    """
+    kind = unit.collection_kind
+    if kind is None or recorded_updated_at(kind, unit.collection_updated_at) is None or stamp is None:
+        return False
+    listing = membership_verdict(
+        stamp, listing_updated_at=unit.collection_updated_at, listing_rom_ids=unit.member_rom_ids
+    )
+    if not listing.unchanged or skip_reference(stamp) is None:
+        return False
+    return not holds_a_game_to_converge(rows, stamp.member_rom_ids, platform_slugs=set(unit.unwalked_platform_slugs))
 
 
 def collapsed_shortcut_count(rows: Iterable[tuple[str | None, bool]]) -> int:

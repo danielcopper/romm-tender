@@ -2068,7 +2068,7 @@ class TestDoSyncPerUnit:
 
     @pytest.mark.asyncio
     async def test_sync_plan_carries_skip_aware_estimate_fields(self, make_library, fake_romm_api, emit):
-        """#1382: platform units ride predicted_skip / collapsed_count, the raw
+        """#1382: units ride predicted_skip, platform units collapsed_count, the raw
         ``total_roms`` stays untouched (backward compat), and the additive
         ``total_estimated_items`` zero-weights predicted skips and prices the
         rest at their collapsed count (raw fallback)."""
@@ -2086,10 +2086,11 @@ class TestDoSyncPerUnit:
         _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00", rom_count=2)
         _seed_rom_row(library, 10, app_id=1001, platform_slug="n64", sibling_group_key="igdb:100:1")
         _seed_rom_row(library, 11, app_id=None, platform_slug="n64", sibling_group_key="igdb:100:1")
-        # A collection unit, left UNSTAMPED here: its membership is knowable only
-        # from a completion stamp, so it carries no estimate field at all and
-        # weighs its raw rom_count. (A stamped collection does ride bound_count,
-        # #1511 — covered in test_fetcher.)
+        # A collection unit, left UNSTAMPED here: it is predicted to be fetched,
+        # and its membership is knowable only from a completion stamp, so it
+        # carries no other estimate field and weighs its raw rom_count. (A
+        # stamped collection does ride bound_count, #1511 — covered in
+        # test_fetcher.)
         _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[20, 21, 22])
         library.settings["enabled_collections"] = {"standard": {"7": True}, "smart": {}, "virtual": {}}
 
@@ -2112,9 +2113,47 @@ class TestDoSyncPerUnit:
         assert units["N64"]["collapsed_count"] == 1
         assert units["GBA"]["predicted_skip"] is False
         assert "collapsed_count" not in units["GBA"]
-        assert "predicted_skip" not in units["Faves"]
+        assert units["Faves"]["predicted_skip"] is False
         assert "collapsed_count" not in units["Faves"]
         assert "bound_count" not in units["Faves"]
+
+    @pytest.mark.asyncio
+    async def test_sync_plan_predicts_an_unchanged_collection_s_skip(self, make_library, fake_romm_api, emit):
+        """#2623: a collection whose listing matches its stamp rides predicted_skip and weighs nothing."""
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.platforms = []
+        library.settings["enabled_platforms"] = {}
+        _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[20, 21, 22])
+        fake_romm_api.collections[0]["updated_at"] = "2026-01-01T00:00:00"
+        _seed_collection(fake_romm_api, collection_id=8, name="Changed", rom_ids=[30, 31])
+        fake_romm_api.collections[1]["updated_at"] = "2026-02-01T00:00:00"
+        library.settings["enabled_collections"] = {"standard": {"7": True, "8": True}, "smart": {}, "virtual": {}}
+        for cid, members in (("7", (20, 21, 22)), ("8", (30, 31))):
+            _seed_collection_stamp(
+                library.uow,
+                cid,
+                "standard",
+                updated_at="2026-01-01T00:00:00",
+                completed_at="2026-06-01T00:30:00+00:00",
+                rom_count=len(members),
+                member_rom_ids=members,
+                fetch_started_at="2026-06-01T00:10:00+00:00",
+                listing_rom_ids=members,
+            )
+
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.sync._box.sync_state = SyncState.RUNNING
+        library.sync._box.current_sync_id = "run-est"
+
+        await library.sync._orchestrator._do_sync_per_unit()
+
+        payload = next(c[0][1] for c in emit.call_args_list if c[0][0] == "sync_plan")
+        units = {u["name"]: u for u in payload["units"]}
+        assert units["Faves"]["predicted_skip"] is True
+        assert units["Changed"]["predicted_skip"] is False
+        assert payload["total_roms"] == 5
+        assert payload["total_estimated_items"] == 2
 
     @pytest.mark.asyncio
     async def test_unstamped_zero_delta_platform_restamps_and_records_run(self, make_library, fake_romm_api, emit):

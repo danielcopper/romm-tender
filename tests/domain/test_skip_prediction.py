@@ -1,9 +1,20 @@
 """Tests for domain/skip_prediction.py — plan-time estimate kernels (#1382)."""
 
+from dataclasses import replace
+
 import pytest
 
+from domain.collection_sync_state import CollectionSyncState
+from domain.platform_skip import rom_id_checksum
 from domain.platform_sync_state import PlatformSyncState
-from domain.skip_prediction import collapsed_shortcut_count, new_shortcut_count, predict_unit_skip
+from domain.rom import Rom
+from domain.skip_prediction import (
+    collapsed_shortcut_count,
+    new_shortcut_count,
+    predict_collection_skip,
+    predict_unit_skip,
+)
+from domain.work_unit import WorkUnit
 
 
 def _stamp(*, started: str | None = "2025-01-01T00:00:00+00:00", checksum: str | None = "c" * 64) -> PlatformSyncState:
@@ -54,6 +65,107 @@ class TestPredictUnitSkip:
 
     def test_needs_backfill_predicts_full_fetch(self):
         assert predict_unit_skip(**_kwargs(needs_backfill=True)) is False
+
+
+_COLLECTION_UPDATED_AT = "2026-10-01T09:00:00+00:00"
+
+
+def _collection_stamp(
+    *,
+    kind: str = "standard",
+    listing_ids: tuple[int, ...] = (10, 11),
+    fetch_started_at: str | None = "2026-10-19T12:00:00+00:00",
+    checksum: bool = True,
+) -> CollectionSyncState:
+    return CollectionSyncState.stamp(
+        collection_id="7",
+        collection_kind=kind,
+        updated_at="" if kind == "virtual" else _COLLECTION_UPDATED_AT,
+        completed_at="2026-10-19T12:30:00+00:00",
+        rom_count=2,
+        member_rom_ids=(10, 11),
+        fetch_started_at=fetch_started_at,
+        listing_rom_id_checksum=rom_id_checksum(listing_ids) if checksum else None,
+    )
+
+
+def _collection_unit(**overrides) -> WorkUnit:
+    """A unit whose listing matches :func:`_collection_stamp`; GBA is a platform the sync leaves off."""
+    kwargs = {
+        "type": "collection",
+        "id": "7",
+        "name": "Faves",
+        "slug": "",
+        "rom_count": 2,
+        "collection_kind": "standard",
+        "collection_updated_at": _COLLECTION_UPDATED_AT,
+        "member_rom_ids": (11, 10),
+        "unwalked_platform_slugs": ("gba",),
+    }
+    kwargs.update(overrides)
+    return WorkUnit(**kwargs)
+
+
+def _row(rom_id: int, *, app_id: int | None, slug: str = "gba") -> Rom:
+    return Rom(
+        rom_id=rom_id,
+        platform_slug=slug,
+        name=f"rom-{rom_id}",
+        fs_name=f"rom-{rom_id}.zip",
+        shortcut_app_id=app_id,
+        last_synced_at="2026-10-01T00:00:00",
+        sibling_group_key="igdb:300:2",
+    )
+
+
+class TestPredictCollectionSkip:
+    """Every LOCAL condition of the collection skip gate flips the prediction (#2623 D1)."""
+
+    def test_predicts_skip_when_all_local_conditions_hold(self):
+        assert predict_collection_skip(unit=_collection_unit(), stamp=_collection_stamp(), rows=[]) is True
+
+    @pytest.mark.parametrize("listed", [None, ""])
+    def test_a_standard_listing_without_updated_at_predicts_a_fetch(self, listed):
+        """Even over a stamp that recorded an empty one: the gate never compares a missing ``updated_at``."""
+        unit = _collection_unit(collection_updated_at=listed)
+        stamp = replace(_collection_stamp(), updated_at="")
+        assert predict_collection_skip(unit=unit, stamp=stamp, rows=[]) is False
+
+    def test_a_virtual_listing_without_updated_at_still_predicts_skip(self):
+        """A virtual collection's ``updated_at`` says nothing, and the gate compares none."""
+        unit = _collection_unit(collection_kind="virtual", collection_updated_at=None)
+        assert predict_collection_skip(unit=unit, stamp=_collection_stamp(kind="virtual"), rows=[]) is True
+
+    def test_no_stamp_predicts_a_fetch(self):
+        assert predict_collection_skip(unit=_collection_unit(), stamp=None, rows=[]) is False
+
+    def test_a_changed_updated_at_predicts_a_fetch(self):
+        unit = _collection_unit(collection_updated_at="2026-10-02T09:00:00+00:00")
+        assert predict_collection_skip(unit=unit, stamp=_collection_stamp(), rows=[]) is False
+
+    def test_a_listing_whose_ids_differ_from_the_stamp_s_predicts_a_fetch(self):
+        unit = _collection_unit(member_rom_ids=(10, 11, 12))
+        assert predict_collection_skip(unit=unit, stamp=_collection_stamp(), rows=[]) is False
+
+    def test_a_stamp_without_a_checksum_predicts_a_fetch(self):
+        stamp = _collection_stamp(checksum=False)
+        assert predict_collection_skip(unit=_collection_unit(), stamp=stamp, rows=[]) is False
+
+    def test_a_stamp_without_a_fetch_start_predicts_a_fetch(self):
+        stamp = _collection_stamp(fetch_started_at=None)
+        assert predict_collection_skip(unit=_collection_unit(), stamp=stamp, rows=[]) is False
+
+    def test_a_game_with_two_bound_shortcuts_on_a_platform_left_off_predicts_a_fetch(self):
+        rows = [_row(10, app_id=6010), _row(30, app_id=6030)]
+        assert predict_collection_skip(unit=_collection_unit(), stamp=_collection_stamp(), rows=rows) is False
+
+    def test_the_same_game_on_a_platform_a_unit_reads_predicts_skip(self):
+        rows = [_row(10, app_id=6010, slug="n64"), _row(30, app_id=6030, slug="n64")]
+        assert predict_collection_skip(unit=_collection_unit(), stamp=_collection_stamp(), rows=rows) is True
+
+    def test_a_platform_unit_predicts_no_collection_skip(self):
+        unit = replace(_collection_unit(), type="platform", collection_kind=None)
+        assert predict_collection_skip(unit=unit, stamp=_collection_stamp(), rows=[]) is False
 
 
 class TestCollapsedShortcutCount:
