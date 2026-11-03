@@ -39,7 +39,7 @@ from domain.emulator_commands import (
 )
 from domain.emulator_pick import pick_for, platform_pick, platform_pick_value, source_kind
 from domain.platform_names import PLATFORM_NAMES_KEY, platform_display_name
-from domain.rom_files import folder_boot_root
+from domain.rom_files import asked_path
 from domain.shortcut_data import (
     EmulatorInvocation,
     build_launch_options,
@@ -245,7 +245,7 @@ class CoreService:
     def _launch_question(self, rom_id: int) -> tuple[str, str, ResolvedEmulator, str] | None:
         """What ``rom_id``'s question is asked with, and the platform name its answers carry.
 
-        The system, the path (:func:`_asked_path`), the emulator resolution and
+        The system, the path (:func:`domain.rom_files.asked_path`), the emulator resolution and
         the platform's name.
 
         ``None`` for a ROM that is not installed or has no system to ask.
@@ -672,15 +672,8 @@ class CoreService:
 
 
 def _asked_path(install: RomInstall, rom: Rom, disc_resolver: DiscResolver) -> str:
-    """The path a launchability question for an installed game is asked with.
-
-    The one the shortcut starts — the disc pick folded over the install —
-    except for a game kept as a folder, whose folder is asked about as ES-DE
-    scans it (#2195 D11).
-    """
-    if install.rom_dir is not None and folder_boot_root(install.file_path, install.rom_dir) is not None:
-        return install.rom_dir
-    return disc_resolver.resolve_for_install(install, rom.selected_disc)
+    """The path a question about the installed game's start is asked with (:func:`domain.rom_files.asked_path`)."""
+    return asked_path(install.file_path, install.rom_dir, disc_resolver.resolve_for_install(install, rom.selected_disc))
 
 
 # A ROM with no system to ask has no choice to make.

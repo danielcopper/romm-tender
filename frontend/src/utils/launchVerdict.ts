@@ -53,11 +53,8 @@ export interface LaunchPrompts {
 interface VerdictHooks {
   /** The core-change, unchecked-source and sync-wait questions are asked inside the gate, not here. */
   prompts: Pick<LaunchPrompts, "resolveConflicts" | "askOfflineDrift" | "confirmFallbackLaunch">;
-  /**
-   * Start the game. Every approving branch ends here; `skipReconfirm` is set
-   * after a check that got no answer in time.
-   */
-  launch(options?: { skipReconfirm?: boolean }): Promise<void>;
+  /** Start the game. Every approving branch ends here. */
+  launch(): Promise<void>;
   /**
    * The start ended without a launch, and the trigger has nothing else to show:
    * the gate aborted (the setup step stopped the start, or the user declined the
@@ -125,14 +122,14 @@ export async function actOnGateVerdict(
     }
     case "sync_failed": {
       if (await hooks.prompts.confirmFallbackLaunch(verdict.message)) {
-        await hooks.launch({ skipReconfirm: verdict.noAnswer === true });
+        await hooks.launch();
         return "done";
       }
       hooks.onDeclined();
       return "done";
     }
     case "play_anyway":
-      await hooks.launch({ skipReconfirm: verdict.noAnswer });
+      await hooks.launch();
       return "done";
   }
 }

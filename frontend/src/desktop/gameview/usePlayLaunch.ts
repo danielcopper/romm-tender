@@ -11,7 +11,7 @@ import { desktopLaunchPrompts, desktopResolveConflicts, desktopStopGameDialog } 
 import { executeStopRunningGame } from "../../utils/runningGame";
 import { resolveKnownConflicts } from "../../utils/saveConflictFlow";
 import { noteAppRom, readGameRunning } from "../../utils/sessionManager";
-import { reconfirmLaunchOptions } from "../../utils/launchOptionsReconcile";
+import { prepareStart } from "../../utils/launchOptionsReconcile";
 import {
   capturePruneLeaseAdmission,
   isPruneLeaseAdmissionCurrent,
@@ -66,23 +66,25 @@ export function usePlayLaunch({
 }: UsePlayLaunchOptions): UsePlayLaunchResult {
   const stopInFlightRef = useRef(false);
 
-  // Why a start after a check that got no answer in time skips the re-confirm:
-  // docs/architecture/save-file-sync-architecture.md, "Pre-launch sync".
+  // Every start is prepared first; without the hand-over nothing starts, so a
+  // preparation that does not come about refuses the start with its sentence
+  // (#2221 D15, D19). Bringing a running game to the front prepares nothing.
   const dispatchLaunch = async (
     rid: number,
     gameId: string,
     admission: PruneLeaseAdmission,
-    { skipReconfirm = false }: { skipReconfirm?: boolean } = {},
+    { prepare = true }: { prepare?: boolean } = {},
   ) => {
     if (!isPruneLeaseAdmissionCurrent(admission)) {
       setPressState(null);
       return;
     }
     setPressState("launching");
-    if (!skipReconfirm) {
-      const reconfirm = await reconfirmLaunchOptions(rid, appId, TAG, admission);
-      if (reconfirm.status === "cancelled") return;
-      if (reconfirm.status === "timeout") {
+    if (prepare) {
+      const prepared = await prepareStart(rid, appId, TAG, admission);
+      if (prepared.status === "cancelled") return;
+      if (prepared.status === "refused") {
+        showToast(prepared.sentence);
         setPressState(null);
         return;
       }
@@ -103,7 +105,7 @@ export function usePlayLaunch({
     const running = readGameRunning(appId, romId);
     if (running.running) {
       detach(debugLog(`${TAG}: appId=${appId} already running — skipping pre-launch sync [${running.diagnostics}]`));
-      await dispatchLaunch(romId, gameId, admission);
+      await dispatchLaunch(romId, gameId, admission, { prepare: false });
       return;
     }
     detach(debugLog(`${TAG}: appId=${appId} not running — running the launch gate [${running.diagnostics}]`));
@@ -136,7 +138,7 @@ export function usePlayLaunch({
       // A migration block needs no message: the page shows it in place of its cards.
       await runGateLoop(appId, romId, ops, {
         prompts,
-        launch: (options) => dispatchLaunch(romId, gameId, admission, options),
+        launch: () => dispatchLaunch(romId, gameId, admission),
         onDeclined: () => setPressState(null),
         onMigrationBlocked: () => setPressState(null),
         onConflictCancelled: () => {

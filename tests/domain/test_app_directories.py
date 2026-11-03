@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from domain.app_directories import (
@@ -11,6 +13,7 @@ from domain.app_directories import (
     ENV_CONFIG_DIR,
     ENV_DATA_DIR,
     ENV_STATE_DIR,
+    HANDOVER_FOLDER,
     XDG_CACHE_HOME,
     XDG_CONFIG_HOME,
     XDG_DATA_HOME,
@@ -151,3 +154,26 @@ class TestTheSplitBetweenTheRoots:
     def test_the_bin_directory_is_not(self):
         """It is shared with every other program the user installed for themselves."""
         assert not resolve().bin_dir.endswith(f"/{APP_DIR_NAME}")
+
+
+class TestTheHandoverFolder:
+    """Where a start's command is handed to the launcher (#2221 D15): inside the session's runtime directory only."""
+
+    def test_it_lies_in_the_runtime_directory_where_the_launcher_looks(self):
+        answer = resolve(**{XDG_RUNTIME_DIR: "/run/user/1000"})
+
+        assert answer.handover_dir == f"/run/user/1000/{APP_DIR_NAME}/start"
+
+    def test_without_a_runtime_directory_there_is_none(self):
+        """The fallback is the state directory, on disk; a start is not handed over there (#2708 C3)."""
+        assert resolve().handover_dir is None
+
+    def test_the_installers_answers_do_not_move_it(self):
+        answer = resolve(**{XDG_RUNTIME_DIR: "/run/user/1000", ENV_STATE_DIR: "/opt/state"})
+
+        assert answer.handover_dir == f"/run/user/1000/{APP_DIR_NAME}/start"
+
+    def test_the_launcher_spells_the_same_folder(self):
+        launcher = (Path(__file__).resolve().parents[2] / "bin" / "tender-rom-launcher").read_text(encoding="utf-8")
+
+        assert f'"$XDG_RUNTIME_DIR/{APP_DIR_NAME}/{HANDOVER_FOLDER}/$app_id"' in launcher

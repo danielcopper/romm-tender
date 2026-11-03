@@ -482,6 +482,14 @@ Launchability is a statement about a start, never about the download. Every inst
 and gets its launch command whatever its launchability (D28); installing a package by hand in the emulator is the
 documented RetroDECK procedure, and the files are what it needs.
 
+### Start command / start hand-over
+
+The **start command** is how a game starts with the entry in effect: the resolver's launch command for the game's own
+path, as Tender runs it ([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D1, D2). It is asked at every
+start and stored nowhere (D7). An entry the resolver gives no **complete** command for is **not startable through Tender
+yet**, with the resolver's reason. The **start hand-over** is that command, given to `tender-rom-launcher` for one start
+only: a file in Tender's runtime directory the launcher claims, removes and runs; no hand-over, no start (D11, D15).
+
 ### Missing download / forget a download
 
 A **missing download** is a `rom_installs` row whose recorded file and folder are both absent; the row stays until the

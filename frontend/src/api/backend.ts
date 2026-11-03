@@ -28,6 +28,7 @@ import type {
   BiosStatus,
   BiosFileStatus,
   CoreInfo,
+  EmulatorStart,
   GameLaunch,
   SystemCoreInfo,
   RomMetadata,
@@ -410,11 +411,16 @@ export interface LocalDriftAnswer {
   stranding: SaveStranding;
 }
 export const checkLocalDrift = endpoint<[number], LocalDriftAnswer>("check_local_drift");
-export type RelaunchOptionsResult =
+/**
+ * `prepare_game_start` result: the next start of the game's shortcut has its command handed to the launcher
+ * (#2221 D15), and `launch_options` — the shortcut's appId — are what the shortcut is set to before it starts
+ * (D16), under the lease in `prune_lease_token`. A refusal stops the start; `cannot_start` carries the `start`
+ * it comes to, which the panel words as the game page does (D2, D20).
+ */
+export type GameStartResult =
   | { success: true; app_id: number; launch_options: string; prune_lease_token: string }
-  | { success: false; reason: WireReason; message: string }
-  | null;
-export const getRomRelaunchOptions = endpoint<[number], RelaunchOptionsResult>("get_rom_relaunch_options");
+  | { success: false; reason: WireReason; message: string; start?: EmulatorStart };
+export const prepareGameStart = endpoint<[number], GameStartResult>("prepare_game_start");
 /**
  * `stop_running_game` result. On success the counts describe what the backend's
  * stop ladder did to the processes of the ROM it was called for: `stopped`

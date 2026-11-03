@@ -1,14 +1,38 @@
 #!/bin/bash
 # tender-rom-launcher — Steam shortcut launcher for Tender.
-# Steam invokes it with the full launch command (emulator invocation + ROM
-# path) in the shortcut's launch options. Pure exec wrapper: it runs exactly
-# what it is handed and owns no state, no path resolution, no emulator knowledge.
+# Steam starts it as `tender-rom-launcher <appId>`, the shortcut's whole launch
+# options; every word after the appId is ignored. Tender's start check hands it
+# one start's command in a file of its own, <runtime dir>/start/<appId>, just
+# before Steam starts the shortcut: the folder to start in, then the program
+# and its arguments, each ended by a NUL. The launcher claims the file by
+# renaming it, removes it and runs the command; with no file, or one older than
+# 30 seconds, it starts nothing. It owns no state and no emulator knowledge.
 
 set -euo pipefail
 
-if [[ $# -eq 0 ]]; then
-    echo "Usage: tender-rom-launcher <command> [args...]" >&2
-    exit 1
-fi
+# How old a hand-over may be, in seconds, and still be this start's.
+readonly MAX_AGE=30
 
-exec "$@"
+refuse() {
+    echo "tender-rom-launcher: $1" >&2
+    exit 1
+}
+
+app_id="${1:-}"
+[[ $app_id =~ ^[0-9]+$ ]] || refuse "no appId given"
+[[ -n ${XDG_RUNTIME_DIR:-} ]] || refuse "no runtime directory, so no start was handed over for $app_id"
+
+handover="$XDG_RUNTIME_DIR/romm-tender/start/$app_id"
+claimed="$handover.claimed.$$"
+mv -- "$handover" "$claimed" 2>/dev/null || refuse "no start was handed over for $app_id"
+
+written=$(stat -c %Y -- "$claimed")
+printf -v now '%(%s)T' -1
+mapfile -d '' -t record <"$claimed"
+rm -f -- "$claimed"
+
+((now - written <= MAX_AGE)) || refuse "the start handed over for $app_id is older than $MAX_AGE seconds"
+((${#record[@]} >= 2)) || refuse "the start handed over for $app_id names no program"
+
+cd -- "${record[0]}"
+exec "${record[@]:1}"

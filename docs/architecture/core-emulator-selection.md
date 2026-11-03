@@ -492,6 +492,26 @@ placeholder ES-DE leaves in the command as written is named; a value ES-DE's own
 the resolver answers it, and nothing is said. `tests/adapters/test_launch_command_vectors.py` runs every recorded
 launch-command machine of the vendored resolver through this reading.
 
+### The start: one command, handed over for one start
+
+Nothing of the command is stored (#2221 D7). Just before a start, the panel asks `prepare_game_start`
+(`services/game_start.py`): the entry in effect, the game's path (`domain/rom_files.py::asked_path`, the path the launch
+verdict is asked with), the resolver's command for them, and the game's folder — its own folder for a game kept in one,
+else the folder its file lies in — and Tender's firmware store as the grants. The command goes into a file of its own,
+`<runtime dir>/start/<appId>` (D15): the folder the command starts in, then the program and its arguments, each ended by
+a NUL, written whole through a staging file into an owner-only folder and readable by the user only
+(`adapters/start_handover.py`). The runtime directory is `$XDG_RUNTIME_DIR/romm-tender`, in memory and emptied at
+logout; a session with no `XDG_RUNTIME_DIR` hands nothing over, and its starts are refused. The folder is the one the
+command names (created where ES-DE would create it), else `start-folder/` in Tender's data folder, created at the start
+(D6).
+
+The shortcut's launch options are its appId, and the answer names them; the panel sets them back before the start (D16).
+Steam starts `tender-rom-launcher <appId>`, which ignores every word after the appId, claims the file by renaming it,
+removes it and runs the command in its folder; with no file, or one older than 30 seconds, it starts nothing and says so
+on its error output (D11 — what it says to the player is #2230's). A refusal of `prepare_game_start` stops the start:
+`not_found` for a game with no shortcut, `not_installed`, `cannot_start` with the game's `start` where its entry cannot
+start it or the resolver gives no complete command, and `start_unavailable` where the command cannot be handed over.
+
 ## Application: baking `-e` into `launch_options`
 
 Per

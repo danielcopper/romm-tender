@@ -22,11 +22,9 @@ resolving inside the iteration UoW would deadlock until ``busy_timeout`` then
 raise ``database is locked`` (#1154). The disc scan is the resolver's I/O seam,
 none at this layer.
 
-Both launch funnels — the game-detail Play button and Steam's direct-launch
-watcher — re-confirm the single-ROM item just before a launch through
-:meth:`RelaunchOptionsResolver.get_rom_relaunch_options`, the one use case here
-an endpoint calls: it checks that endpoint's conflict rules and leases the
-frontend's write. Every other consumer calls the plain reads, which check none.
+A version switch rebakes its one ROM through
+:meth:`RelaunchOptionsResolver.relaunch_item_for_rom`. Its callers check their
+own conflict rules; these reads check none.
 """
 
 from __future__ import annotations
@@ -37,13 +35,10 @@ from typing import TYPE_CHECKING, Any
 from domain.shortcut_data import build_launch_options, resolve_emulator_invocation
 
 if TYPE_CHECKING:
-    import asyncio
-
     from domain.rom import Rom
     from domain.rom_install import RomInstall
     from services.protocols import (
         ActiveCoreReader,
-        ConflictRules,
         DiscResolver,
         UnitOfWorkFactory,
     )
@@ -58,15 +53,11 @@ class RelaunchOptionsResolverConfig:
     resolver (which ``.so`` each ROM launches with) and the shared
     ``disc_resolver`` (which file a multi-disc ROM launches given its persisted
     pick) — the same two seams every other launch-bake site resolves through.
-    ``loop`` runs the single-ROM re-confirm off the loop thread, and
-    ``conflict_rules`` are what that use case checks and leases through.
     """
 
     uow_factory: UnitOfWorkFactory
     active_core: ActiveCoreReader
     disc_resolver: DiscResolver
-    loop: asyncio.AbstractEventLoop
-    conflict_rules: ConflictRules
 
 
 class RelaunchOptionsResolver:
@@ -76,8 +67,6 @@ class RelaunchOptionsResolver:
         self._uow_factory = config.uow_factory
         self._active_core = config.active_core
         self._disc_resolver = config.disc_resolver
-        self._loop = config.loop
-        self._rules = config.conflict_rules
 
     def _resolve_item(self, rom: Rom, install: RomInstall) -> dict[str, Any]:
         """Compose one ``{app_id, launch_options}`` item for an installed+bound ROM.
@@ -140,25 +129,6 @@ class RelaunchOptionsResolver:
         there is no installed launch command to re-confirm. Snapshots the
         rom/install in one short read UoW, closes it, then resolves outside —
         same non-reentrant-write-lock reason as the batch path (#1154).
-
-        Both launch funnels re-confirm the shortcut's launch command from this
-        just before a launch, through :meth:`get_rom_relaunch_options`, healing
-        mid-session ``launch_options`` drift (#1150).
         """
         pair = self._bound_install(rom_id)
         return self._resolve_item(*pair) if pair is not None else None
-
-    async def get_rom_relaunch_options(self, rom_id: int | str) -> dict[str, Any] | None:
-        """Answer the ``get_rom_relaunch_options`` endpoint: one lease-bearing relaunch item, or ``None``.
-
-        :meth:`relaunch_item_for_rom` off the loop thread, under the endpoint's
-        conflict rules. An item carries ``success: True`` and a
-        ``launch_reconfirm`` lease in ``prune_lease_token`` for the frontend's
-        Steam write; ``None`` takes no lease.
-        """
-        async with self._rules.hold("get_rom_relaunch_options", prune=True):
-            item = await self._loop.run_in_executor(None, self.relaunch_item_for_rom, int(rom_id))
-            if item is not None:
-                item["success"] = True
-                item["prune_lease_token"] = await self._rules.acquire_lease("launch_reconfirm")
-            return item

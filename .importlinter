@@ -164,6 +164,7 @@ modules =
     services.firmware
     services.game_detail
     services.game_process
+    services.game_start
     services.leftover_tmp_cleanup
     services.library
     services.metadata

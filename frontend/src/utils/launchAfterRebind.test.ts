@@ -28,7 +28,7 @@ vi.mock("../api/backend", () => ({
   probeReachability: vi.fn(),
   preLaunchSync: vi.fn(),
   checkLocalDrift: vi.fn(),
-  getRomRelaunchOptions: vi.fn(),
+  prepareGameStart: vi.fn(),
   getVersionList: vi.fn(),
   fetchCoverBase64: vi.fn(),
   invalidateCachedGameDetail: vi.fn(),
@@ -156,16 +156,16 @@ describe.each(Object.entries(BINDING_MOVES))(
       vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: "" } as never);
       vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
       vi.mocked(backend.renewPruneConflictLease).mockResolvedValue({ success: true, message: "renewed" });
-      // The old row is unbound after the move, so the backend has no launch
-      // command for it (`RelaunchOptionsResolver._bound_install` answers None).
-      vi.mocked(backend.getRomRelaunchOptions).mockImplementation(async (romId: number) =>
+      // The old row is unbound after the move, so the backend has no shortcut
+      // to prepare a start of it for (`GameStartService` refuses `not_found`).
+      vi.mocked(backend.prepareGameStart).mockImplementation(async (romId: number) =>
         romId === NEW_ROM
-          ? { success: true, app_id: APP_ID, launch_options: "new-command", prune_lease_token: "lease" }
-          : null,
+          ? { success: true, app_id: APP_ID, launch_options: String(APP_ID), prune_lease_token: "lease" }
+          : { success: false, reason: "not_found", message: `ROM ${romId} has no shortcut` },
       );
     });
 
-    it("re-confirms the new version's launch command, never the old one's, when both are installed", async () => {
+    it("prepares the new version's start, never the old one's, when both are installed", async () => {
       vi.mocked(backend.getInstalledRom).mockImplementation(async (romId: number) => installRecord(romId));
       const handler = await loadMapThenMove(move);
       vi.mocked(steamShortcuts.setLaunchOptionsConfirmed).mockClear();
@@ -173,8 +173,9 @@ describe.each(Object.entries(BINDING_MOVES))(
       handler(7, GAME_ID, "LaunchApp", 100);
       await flush();
 
-      expect(steamShortcuts.setLaunchOptionsConfirmed).toHaveBeenCalledWith(APP_ID, "new-command");
-      expect(backend.getRomRelaunchOptions).not.toHaveBeenCalledWith(OLD_ROM);
+      expect(steamShortcuts.setLaunchOptionsConfirmed).toHaveBeenCalledWith(APP_ID, String(APP_ID));
+      expect(backend.prepareGameStart).toHaveBeenCalledWith(NEW_ROM);
+      expect(backend.prepareGameStart).not.toHaveBeenCalledWith(OLD_ROM);
       expect(SteamClient.Apps.RunGame).toHaveBeenCalledTimes(1);
     });
 

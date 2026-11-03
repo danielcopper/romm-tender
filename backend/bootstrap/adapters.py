@@ -22,6 +22,7 @@ from adapters.adoption_move import AdoptionMoveAdapter
 from adapters.asyncio_sleeper import AsyncioSleeper
 from adapters.atlas_catalogue import AtlasCatalogueAdapter
 from adapters.atlas_firmware import AtlasFirmwareAdapter, AtlasFirmwareIdentifier, AtlasPlatformFirmwareAdapter
+from adapters.atlas_launch import AtlasLaunchAdapter
 from adapters.atlas_platforms import AtlasPlatformSystemsAdapter
 from adapters.atlas_saves import AtlasSaveLocationAdapter, describe_core_probe_interpreter
 from adapters.atlas_zstd import register_zstd_codec
@@ -58,6 +59,7 @@ from adapters.running_steam import RunningSteamAdapter
 from adapters.save_file import SaveFileAdapter
 from adapters.sgdb_artwork_cache import SgdbArtworkCacheAdapter
 from adapters.sqlite_migrations import MIGRATIONS_DIR, apply_migrations
+from adapters.start_handover import StartHandoverAdapter
 from adapters.steam_config import SteamConfigAdapter
 from adapters.steam_process_tree import SteamProcessTreeAdapter
 from adapters.steam_recovery import SteamRecoveryAdapter
@@ -127,6 +129,8 @@ if TYPE_CHECKING:
         SgdbArtworkCache,
         Sleeper,
         SourcePlatformSystems,
+        StartCommandReader,
+        StartHandover,
         SteamConfigStore,
         SteamInterfaceReader,
         SteamLaunchReader,
@@ -207,6 +211,9 @@ class AdapterBundle:
     journal: JournalEntriesFn
     downscale_icon: IconDownscaleFn
     tender_logo: TenderLogoFn
+    start_commands: StartCommandReader
+    # ``None`` where the session has no runtime directory to hand a start over in (#2708 C3).
+    start_handover: StartHandover | None
 
 
 @dataclass(frozen=True)
@@ -498,6 +505,7 @@ def bootstrap(
     platform_firmware_resolver = AtlasPlatformFirmwareAdapter(sources=emulator_sources, log_debug=debug_logger)
     firmware_identifier = AtlasFirmwareIdentifier(sources=emulator_sources, log_debug=debug_logger)
     emulator_catalogue = AtlasCatalogueAdapter(sources=emulator_sources, log_debug=debug_logger)
+    start_commands = AtlasLaunchAdapter(sources=emulator_sources, log_debug=debug_logger)
     save_locations = AtlasSaveLocationAdapter(sources=emulator_sources, log_debug=debug_logger)
     source_platform_systems = AtlasPlatformSystemsAdapter(sources=emulator_sources, log_debug=debug_logger)
 
@@ -542,6 +550,10 @@ def bootstrap(
         journal=journal,
         downscale_icon=icon_images.downscale,
         tender_logo=icon_images.tender_logo,
+        start_commands=start_commands,
+        start_handover=(
+            StartHandoverAdapter(folder=directories.handover_dir) if directories.handover_dir is not None else None
+        ),
     )
     stores = StateBundle(
         settings=settings,

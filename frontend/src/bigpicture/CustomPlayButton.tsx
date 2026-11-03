@@ -94,7 +94,7 @@ import {
   withPruneLease,
   type PruneLeaseAdmission,
 } from "../utils/pruneLease";
-import { reconfirmLaunchOptions } from "../utils/launchOptionsReconcile";
+import { prepareStart, UNKNOWN_GAME_START } from "../utils/launchOptionsReconcile";
 import { Throbber, ThrobberLabel } from "../shared/Throbber";
 
 type PlayButtonState =
@@ -567,14 +567,15 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
   // the global watcher and gate a start this button has already handled — run
   // the funnel for, or found to need none (the double-gate fix C1).
   //
-  // `skipReconfirm` is for a start after a check that got no answer in time:
-  // the re-confirm asks the same backend, and its timeout would stop the start
-  // the user just chose. The watcher's first-contact fallback starts the same
-  // way, without it.
+  // A start is prepared first: the backend hands the resolver's command to the
+  // launcher for this start, and without that hand-over nothing starts, so a
+  // preparation that does not come about refuses the start with its sentence
+  // (#2221 D15, D19). Bringing a running game to the front starts nothing and
+  // prepares nothing (`prepare: false`).
   const dispatchLaunch = async (
     gameId: string,
     admission: PruneLeaseAdmission,
-    { skipReconfirm = false }: { skipReconfirm?: boolean } = {},
+    { prepare = true }: { prepare?: boolean } = {},
   ) => {
     if (!isPruneLeaseAdmissionCurrent(admission)) {
       // A start this panel no longer answers for; the press it came from must
@@ -583,13 +584,11 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
       return;
     }
     setState("launching");
-    // Heal any mid-session launch_options drift on this shortcut before launch
-    // (#1150) via the shared bounded-race re-confirm. Ordinary I/O failures stay
-    // best-effort; timeout or the button's unmount cancels this launch.
-    if (romId && !skipReconfirm) {
-      const reconfirm = await reconfirmLaunchOptions(romId, appId, "CustomPlayButton", admission);
-      if (reconfirm.status === "cancelled") return;
-      if (reconfirm.status === "timeout") {
+    if (prepare && romId) {
+      const prepared = await prepareStart(romId, appId, "CustomPlayButton", admission);
+      if (prepared.status === "cancelled") return;
+      if (prepared.status === "refused") {
+        showToast(prepared.sentence);
         setState("play");
         return;
       }
@@ -612,9 +611,10 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
     const admission = capturePruneLeaseAdmission(leaseOwner);
     detach(debugLog(`CustomPlayButton: handlePlay appId=${appId} gameId=${gameId}`));
 
-    // Non-RomM / unresolved ROM — nothing to gate, launch straight through.
+    // A shortcut Tender places no game for: no start can be handed over for it,
+    // so nothing starts (#2221 D19).
     if (!romId) {
-      await dispatchLaunch(gameId, admission);
+      showToast(UNKNOWN_GAME_START);
       return;
     }
 
@@ -631,15 +631,14 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
       detach(
         debugLog(`CustomPlayButton: appId=${appId} already running — skipping pre-launch sync [${running.diagnostics}]`),
       );
-      await dispatchLaunch(gameId, admission);
+      await dispatchLaunch(gameId, admission, { prepare: false });
       return;
     }
     detach(debugLog(`CustomPlayButton: appId=${appId} not running — running the launch gate [${running.diagnostics}]`));
 
     // An unexpected throw while acting on the verdict (from a prompt's modal
     // helper or launch dispatch) would otherwise leave the button on its
-    // throbber. The watcher never traps the user's game (bare relaunch); the
-    // Play-button equivalent is to reset the button to "play".
+    // throbber, so the button is reset to "play".
     setState("checking");
     try {
       // The page could not tell whether the game can start, so the press asks
@@ -667,7 +666,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
       // already shows it.
       await runGateLoop(appId, romId, ops, {
         prompts: gamepadLaunchPrompts,
-        launch: (options) => dispatchLaunch(gameId, admission, options),
+        launch: () => dispatchLaunch(gameId, admission),
         onDeclined: () => setState("play"),
         onMigrationBlocked: () => setState("play"),
         onConflictCancelled: () => setState("conflict"),

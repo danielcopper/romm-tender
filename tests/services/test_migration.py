@@ -127,8 +127,6 @@ def migration(logger) -> MigrationHarness:
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
             active_core=active_core,
             disc_resolver=FakeDiscResolver(),
-            loop=running_loop(),
-            conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
         ),
     )
 

@@ -439,3 +439,16 @@ def resolve_extract_dir_name(rom_detail: dict[str, Any]) -> str:
         return fs_name_no_ext
     fs_name = rom_detail.get("fs_name", synthetic_rom_name(rom_detail))
     return os.path.splitext(fs_name)[0]
+
+
+def asked_path(file_path: str, rom_dir: str | None, disc_path: str) -> str:
+    """The path an installed game is started with and asked about: its folder for a game kept as one, else *disc_path*.
+
+    *disc_path* is the disc pick folded over the install (``DiscResolver``).
+    A game kept as a folder is asked about as ES-DE scans it (#2195 D11). One
+    answer for every question about the game's start — the launch verdict, the
+    launch command and the start itself (#2221 D3, #2708 C7).
+    """
+    if rom_dir is not None and folder_boot_root(file_path, rom_dir) is not None:
+        return rom_dir
+    return disc_path

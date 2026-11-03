@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from domain.savestate_location import NoSavestates, SavestateLocation
     from domain.shortcut_data import EmulatorInvocation
     from domain.source_roots import SourceRoots
+    from domain.start_command import StartAnswer
     from domain.tender_folder import SourceRomFolders
 
 
@@ -372,6 +373,28 @@ class SystemKnownFn(Protocol):
     """
 
     def __call__(self, system_name: str) -> bool | None: ...
+
+
+class StartCommandReader(Protocol):
+    """How one game starts with one entry, as the resolver's launch command states it (#2221 D1, D2).
+
+    The composition root satisfies this with ``AtlasLaunchAdapter``.
+    ``start_command`` asks the answering source with the system, the game's own
+    path and the entry's label, and answers a complete command as Tender runs
+    it — the folders in *writable* and *read_only* granted to a Flatpak start —
+    or why the resolver gives no complete command.
+    """
+
+    def start_command(
+        self,
+        system: str,
+        content_path: str,
+        *,
+        label: str,
+        writable: tuple[str, ...] = (),
+        read_only: tuple[str, ...] = (),
+        reading: SourcesReading | None = None,
+    ) -> StartAnswer: ...
 
 
 class PlatformCoreReader(Protocol):

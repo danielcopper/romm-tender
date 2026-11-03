@@ -180,7 +180,9 @@ _CLAIMS_NAMED_BY_A_REASON: Mapping[str, WaitReason] = MappingProxyType(
 # again; and the record of an artwork image
 # handed to Steam, with the `set` record kept for a cache copy a download
 # replaces (#2381 D15), written before the image goes out, so a restart in
-# between leaves no image in Steam the records do not know. A lease one of them
+# between leaves no image in Steam the records do not know; and one start's
+# command handed to the launcher, a file in the runtime directory the next
+# press writes again (#2221 D15). A lease one of them
 # hands out for the frontend's Steam write is a claim of its own above.
 READ_ONLY_CLAIMS: frozenset[str] = frozenset(
     {
@@ -188,13 +190,13 @@ READ_ONLY_CLAIMS: frozenset[str] = frozenset(
         "get_artwork_slot_candidates",
         "get_artwork_slots",
         "get_installed_relaunch_options",
-        "get_rom_relaunch_options",
         "get_save_slots",
         "get_save_status",
         "get_sgdb_artwork_base64",
         "get_sgdb_resolution",
         "get_sgdb_slot_artwork",
         "keep_artwork_current",
+        "prepare_game_start",
         "refresh_save_status",
         "refresh_sgdb_artwork",
         "test_connection",

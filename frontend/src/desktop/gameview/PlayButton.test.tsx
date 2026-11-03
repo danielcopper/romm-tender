@@ -57,7 +57,8 @@ vi.mock("../../api/backend", async (importOriginal) => {
     isSaveTrackingConfigured: vi.fn(),
     checkCoreChange: vi.fn(),
     checkLocalDrift: vi.fn(),
-    getRomRelaunchOptions: vi.fn(),
+    prepareGameStart: vi.fn(),
+    releasePruneConflictLease: vi.fn(),
   };
 });
 
@@ -175,7 +176,13 @@ describe("PlayButton", () => {
       uploaded: 0,
       downloaded: 0,
     } as never);
-    vi.mocked(backend.getRomRelaunchOptions).mockResolvedValue(null);
+    vi.mocked(backend.prepareGameStart).mockResolvedValue({
+      success: true,
+      app_id: APP_ID,
+      launch_options: String(APP_ID),
+      prune_lease_token: "launch-lease",
+    });
+    vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
     vi.mocked(backend.stopRunningGame).mockResolvedValue({ success: true, stopped: 1, force_killed: 0 } as never);
   });
 

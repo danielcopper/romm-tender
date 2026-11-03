@@ -406,6 +406,18 @@ the menu says, for each emulator, whether it can start the game.
 
 To find the files, open the game's detail page — the **ROM File** section shows the filename the download produced.
 
+### Play says "Couldn't start the game"
+
+**Symptom**: Pressing Play — Tender's or Steam's own — starts nothing, and a notification says _"Tender isn't responding
+— couldn't start the game."_ or _"Couldn't start the game: …"_ with what went wrong.
+
+**What happened**: Tender starts every game itself, at the moment you press Play: it asks the emulator source how the
+game starts and hands that to the game's shortcut for that one start. When Tender does not answer, or something stops it
+from handing the start over, nothing starts — a shortcut started without Tender runs nothing.
+
+**Fix**: Make sure Tender is running (its panel opens in the QAM) and press Play again. If the message names something
+else, it says what stood in the way.
+
 ### Play asks whether to launch with local saves
 
 **Symptom**: You start a game — with **Play** on its detail page, where the button reads **Preparing...**, or with
@@ -710,9 +722,6 @@ nothing to sync.
   or, if that save had changed since its last sync, you were asked first.
 - Whether the other device uploaded to the same save slot. Each device syncs the slot that is active for the game on it;
   the game's **Saves** tab shows which one that is.
-- Whether the message "Tender isn't responding — started without syncing saves." appeared. It comes only with a start
-  through Steam's own Play or a `steam://rungameid` link: Tender did not answer within about five seconds of the start,
-  so the game started without the sync before it.
 - Whether you chose **Launch Anyway** in the **Save Sync Unavailable** dialog. It asks when the sync before the start
   failed, or when a step of the check before it got no answer in time, and Launch Anyway starts the game on the save
   already on the device — see

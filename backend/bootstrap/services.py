@@ -44,6 +44,7 @@ from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.firmware.store import FirmwareStore, FirmwareStoreConfig
 from services.game_detail import GameDetailService, GameDetailServiceConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
+from services.game_start import START_FOLDER, GameStartService, GameStartServiceConfig
 from services.leftover_tmp_cleanup import LeftoverTmpCleanupService, LeftoverTmpCleanupServiceConfig
 from services.metadata import MetadataService, MetadataServiceConfig
 from services.migration import MigrationService, MigrationServiceConfig
@@ -173,7 +174,7 @@ class ServicesBundle:
     update_output_service: UpdateOutputService
     session_lifecycle_service: SessionLifecycleService
     game_process_service: GameProcessService
-    relaunch_options_resolver: RelaunchOptionsResolver
+    game_start_service: GameStartService
     leftover_tmp_cleanup_service: LeftoverTmpCleanupService
     controller_focus_service: ControllerFocusService
 
@@ -342,8 +343,6 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             uow_factory=cfg.callbacks.uow_factory,
             active_core=active_core_resolver,
             disc_resolver=disc_launch_resolver,
-            loop=cfg.runtime.loop,
-            conflict_rules=conflict_rules,
         ),
     )
 
@@ -812,6 +811,22 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         ),
     )
 
+    # Every start of a game: the resolver's command, handed to the launcher for that start only (#2221 D7, D15).
+    game_start_service = GameStartService(
+        config=GameStartServiceConfig(
+            uow_factory=cfg.callbacks.uow_factory,
+            active_core=active_core_resolver,
+            disc_resolver=disc_launch_resolver,
+            start_commands=cfg.adapters.start_commands,
+            handover=cfg.adapters.start_handover,
+            tender_folder=cfg.adapters.tender_folder,
+            start_folder=os.path.join(cfg.directories.data_dir, START_FOLDER),
+            loop=cfg.runtime.loop,
+            conflict_rules=conflict_rules,
+            log_debug=cfg.callbacks.log_debug,
+        ),
+    )
+
     # Stop Game (the running-overlay chevron action). The kill is backend-side.
     game_process_service = GameProcessService(
         config=GameProcessServiceConfig(
@@ -992,7 +1007,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         update_output_service=update_output_service,
         session_lifecycle_service=session_lifecycle_service,
         game_process_service=game_process_service,
-        relaunch_options_resolver=relaunch_options_resolver,
+        game_start_service=game_start_service,
         leftover_tmp_cleanup_service=leftover_tmp_cleanup_service,
         controller_focus_service=controller_focus_service,
     )

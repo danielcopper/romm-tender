@@ -31,7 +31,7 @@ vi.mock("../api/backend", () => ({
   getVersionList: vi.fn(),
   // The shared reconcile helper (real module) pulls the single-ROM command here
   // before each watcher relaunch (#1152).
-  getRomRelaunchOptions: vi.fn(),
+  prepareGameStart: vi.fn(),
   releaseOrphanedPruneLeases: vi.fn(() => Promise.resolve({ success: true, released: 0 })),
   releasePruneConflictLease: vi.fn(),
   renewPruneConflictLease: vi.fn(),
@@ -192,13 +192,13 @@ describe("launchInterceptor — full funnel watcher", () => {
     // existing funnel tests run unchanged. Overridden per-test.
     vi.mocked(sessionManager.readGameRunning).mockReturnValue(NOT_RUNNING);
     vi.mocked(launchGate.runLaunchGate).mockResolvedValue({ decision: "allow" });
-    // The shared relaunch re-confirm (#1152) runs on every relaunch; default it
-    // to a resolved command + a clean confirm-set so the existing verdict tests
-    // exercise the happy path without per-test wiring.
-    vi.mocked(backend.getRomRelaunchOptions).mockResolvedValue({
+    // Every relaunch prepares its start (#2221 D15); default it to a prepared
+    // start + a clean confirm-set so the existing verdict tests exercise the
+    // happy path without per-test wiring.
+    vi.mocked(backend.prepareGameStart).mockResolvedValue({
       success: true,
       app_id: APP_ID,
-      launch_options: "flatpak run x",
+      launch_options: String(APP_ID),
       prune_lease_token: "launch-lease",
     });
     vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
@@ -477,7 +477,7 @@ describe("launchInterceptor — full funnel watcher", () => {
       backend.probeReachability,
       backend.preLaunchSync,
       backend.checkLocalDrift,
-      backend.getRomRelaunchOptions,
+      backend.prepareGameStart,
       backend.logInfo,
       backend.logError,
     ];
@@ -532,9 +532,9 @@ describe("launchInterceptor — full funnel watcher", () => {
   });
 
   describe("first backend contact", () => {
-    const NOT_RESPONDING = { title: "Tender", body: "Tender isn't responding — started without syncing saves." };
+    const NOT_RESPONDING = { title: "Tender", body: "Tender isn't responding — couldn't start the game." };
 
-    it("a backend that never answers gets the start going with the event's game ID at the deadline, not before", async () => {
+    it("a backend that never answers refuses the start at the deadline, not before, and says so", async () => {
       vi.useFakeTimers();
       try {
         vi.mocked(backend.getInstalledRom).mockReturnValue(new Promise<never>(() => {}));
@@ -547,8 +547,8 @@ describe("launchInterceptor — full funnel watcher", () => {
         expect(toaster.toast).not.toHaveBeenCalled();
 
         await vi.advanceTimersByTimeAsync(1);
-        expect(runGameMock()).toHaveBeenCalledTimes(1);
-        expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
+        expect(runGameMock()).not.toHaveBeenCalled();
+        expect(backend.prepareGameStart).not.toHaveBeenCalled();
         expect(toaster.toast).toHaveBeenCalledWith(NOT_RESPONDING);
         expect(launchGate.runLaunchGate).not.toHaveBeenCalled();
         expect(backend.logError).toHaveBeenCalledWith(
@@ -567,7 +567,7 @@ describe("launchInterceptor — full funnel watcher", () => {
         register();
         captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
         await vi.advanceTimersByTimeAsync(FIRST_CONTACT_DEADLINE_MS);
-        expect(runGameMock()).toHaveBeenCalledTimes(1);
+        expect(toaster.toast).toHaveBeenCalledTimes(1);
 
         answer({
           rom_id: 42,
@@ -579,7 +579,7 @@ describe("launchInterceptor — full funnel watcher", () => {
         });
         await vi.advanceTimersByTimeAsync(FIRST_CONTACT_DEADLINE_MS);
 
-        expect(runGameMock()).toHaveBeenCalledTimes(1);
+        expect(runGameMock()).not.toHaveBeenCalled();
         expect(launchGate.runLaunchGate).not.toHaveBeenCalled();
         expect(toaster.toast).toHaveBeenCalledTimes(1);
       } finally {
@@ -758,17 +758,17 @@ describe("launchInterceptor — full funnel watcher", () => {
       expect(runGameMock()).not.toHaveBeenCalled();
     });
 
-    it("Play Anyway stops the sync and relaunches after re-confirming the launch options", async () => {
+    it("Play Anyway stops the sync and relaunches once its start is prepared", async () => {
       prompts.askSyncWait.mockResolvedValueOnce("play_anyway");
 
       await startPastTheLimit();
 
       expect(backend.stopPreLaunchSync).toHaveBeenCalledWith(42);
-      expect(backend.getRomRelaunchOptions).toHaveBeenCalledWith(42);
+      expect(backend.prepareGameStart).toHaveBeenCalledWith(42);
       expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
     });
 
-    it("Play Anyway after Tender did not answer relaunches without the re-confirm", async () => {
+    it("Play Anyway after Tender did not answer still prepares the start, and relaunches once it is", async () => {
       vi.mocked(backend.preLaunchSyncState).mockReturnValue(never());
       vi.mocked(backend.stopPreLaunchSync).mockReturnValue(never());
       prompts.askSyncWait.mockResolvedValueOnce("play_anyway");
@@ -777,7 +777,7 @@ describe("launchInterceptor — full funnel watcher", () => {
       await vi.advanceTimersByTimeAsync(5000);
 
       expect(prompts.askSyncWait).toHaveBeenCalledWith({ kind: "not_answering" }, expect.any(Promise));
-      expect(backend.getRomRelaunchOptions).not.toHaveBeenCalled();
+      expect(backend.prepareGameStart).toHaveBeenCalledWith(42);
       expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
     });
 
@@ -825,11 +825,11 @@ describe("launchInterceptor — full funnel watcher", () => {
       });
       vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
       vi.mocked(backend.probeReachability).mockReturnValue(new Promise<never>(() => {}));
-      // The re-confirm would ask the same silent backend.
-      vi.mocked(backend.getRomRelaunchOptions).mockReturnValue(new Promise<never>(() => {}));
+      // Preparing the start asks the same silent backend.
+      vi.mocked(backend.prepareGameStart).mockReturnValue(new Promise<never>(() => {}));
     });
 
-    it("ends in the fallback dialog at the step's limit; Launch Anyway starts the game", async () => {
+    it("ends in the fallback dialog at the step's limit; Launch Anyway asks to prepare the start, which the silent backend refuses", async () => {
       vi.useFakeTimers();
       try {
         prompts.confirmFallbackLaunch.mockResolvedValue(true);
@@ -842,10 +842,14 @@ describe("launchInterceptor — full funnel watcher", () => {
 
         await vi.advanceTimersByTimeAsync(1);
         expect(prompts.confirmFallbackLaunch).toHaveBeenCalledWith("Couldn't check your saves in time");
-        expect(runGameMock()).toHaveBeenCalledTimes(1);
-        expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
-        // Not the first contact's start-without-asking.
-        expect(toaster.toast).not.toHaveBeenCalled();
+        expect(backend.prepareGameStart).toHaveBeenCalledWith(42);
+
+        await vi.advanceTimersByTimeAsync(3000);
+        expect(runGameMock()).not.toHaveBeenCalled();
+        expect(toaster.toast).toHaveBeenCalledWith({
+          title: "Tender",
+          body: "Tender isn't responding — couldn't start the game.",
+        });
       } finally {
         vi.useRealTimers();
       }
@@ -911,7 +915,7 @@ describe("launchInterceptor — full funnel watcher", () => {
       expect(launchGate.runLaunchGate).toHaveBeenCalledWith(APP_ID, 42, expect.anything());
     });
 
-    it("relaunches without gating when the refreshed map still does not hold it", async () => {
+    it("refuses the start when the refreshed map still does not hold it, and says so", async () => {
       mapFilledByRefresh({});
       register();
       captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
@@ -919,7 +923,11 @@ describe("launchInterceptor — full funnel watcher", () => {
 
       expect(sessionManager.refreshAppIdMap).toHaveBeenCalledTimes(1);
       expect(launchGate.runLaunchGate).not.toHaveBeenCalled();
-      expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
+      expect(runGameMock()).not.toHaveBeenCalled();
+      expect(toaster.toast).toHaveBeenCalledWith({
+        title: "Tender",
+        body: "Couldn't start the game: Tender has no game for this shortcut.",
+      });
     });
 
     it("a refresh that never answers is bounded by the first-contact deadline", async () => {
@@ -931,10 +939,10 @@ describe("launchInterceptor — full funnel watcher", () => {
         captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
         await vi.advanceTimersByTimeAsync(FIRST_CONTACT_DEADLINE_MS);
 
-        expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
+        expect(runGameMock()).not.toHaveBeenCalled();
         expect(toaster.toast).toHaveBeenCalledWith({
           title: "Tender",
-          body: "Tender isn't responding — started without syncing saves.",
+          body: "Tender isn't responding — couldn't start the game.",
         });
       } finally {
         vi.useRealTimers();
@@ -1055,7 +1063,7 @@ describe("launchInterceptor — full funnel watcher", () => {
       expect(runGameMock()).not.toHaveBeenCalled();
     });
 
-    it("relaunches without gating when the appId is unknown to the session map", async () => {
+    it("refuses without gating when the appId is unknown to the session map", async () => {
       vi.mocked(sessionManager.getAppIdRomIdMapSnapshot).mockReturnValue({});
       register();
       const handler = captureHandler();
@@ -1063,7 +1071,7 @@ describe("launchInterceptor — full funnel watcher", () => {
       await flush();
 
       expect(launchGate.runLaunchGate).not.toHaveBeenCalled();
-      expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
+      expect(runGameMock()).not.toHaveBeenCalled();
     });
 
     it("getInstalledRom throws + cached installed=true → funnel proceeds (not hard-blocked)", async () => {
@@ -1300,7 +1308,7 @@ describe("launchInterceptor — full funnel watcher", () => {
       expect(runGameMock()).not.toHaveBeenCalled();
     });
 
-    it("sync_failed after a step got no answer → Launch Anyway relaunches without the re-confirm", async () => {
+    it("sync_failed after a step got no answer → Launch Anyway still prepares the start before the relaunch", async () => {
       vi.mocked(launchGate.runLaunchGate).mockResolvedValue({
         decision: "sync_failed",
         message: launchGate.NO_ANSWER_MESSAGE,
@@ -1313,11 +1321,11 @@ describe("launchInterceptor — full funnel watcher", () => {
       await flush();
 
       expect(prompts.confirmFallbackLaunch).toHaveBeenCalledWith("Couldn't check your saves in time");
+      expect(backend.prepareGameStart).toHaveBeenCalledWith(42);
       expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
-      expect(backend.getRomRelaunchOptions).not.toHaveBeenCalled();
     });
 
-    it("sync_failed with an answer → Launch Anyway re-confirms the launch options before the relaunch", async () => {
+    it("sync_failed with an answer → Launch Anyway prepares the start before the relaunch", async () => {
       vi.mocked(launchGate.runLaunchGate).mockResolvedValue({ decision: "sync_failed", message: "no device" });
       prompts.confirmFallbackLaunch.mockResolvedValue(true);
 
@@ -1325,7 +1333,7 @@ describe("launchInterceptor — full funnel watcher", () => {
       captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
       await flush();
 
-      expect(backend.getRomRelaunchOptions).toHaveBeenCalledWith(42);
+      expect(backend.prepareGameStart).toHaveBeenCalledWith(42);
       expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
     });
 
@@ -1395,134 +1403,118 @@ describe("launchInterceptor — full funnel watcher", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // #1152 — the watcher's relaunch path re-confirms launch_options just before
-  // RunGame, mirroring the Play-button funnel via the shared
-  // `reconfirmLaunchOptions` helper. Null/rejected responses remain best-effort;
-  // a timeout or stale admission aborts the relaunch.
+  // Every relaunch prepares its start first (#2221 D15, D16): the backend hands
+  // the resolver's command to the launcher, the shortcut's launch options are
+  // set back to its appId, then RunGame. A preparation that does not come about
+  // refuses the start with a toast and no RunGame (D19).
   // ---------------------------------------------------------------------------
-  describe("relaunch launch_options re-confirm (#1152)", () => {
-    const RELAUNCH_COMMAND = 'flatpak run net.retrodeck.retrodeck "/roms/snes/g.rom"';
+  describe("the start prepared before the relaunch (#2221 D15)", () => {
+    const LAUNCH_OPTIONS = String(APP_ID);
 
-    it("allow → re-confirms (getRomRelaunchOptions → setLaunchOptionsConfirmed) BEFORE RunGame", async () => {
+    it("allow → prepares the start (prepareGameStart → setLaunchOptionsConfirmed) BEFORE RunGame", async () => {
       vi.mocked(launchGate.runLaunchGate).mockResolvedValue({ decision: "allow" });
-      vi.mocked(backend.getRomRelaunchOptions).mockResolvedValue({
-        success: true,
-        app_id: APP_ID,
-        launch_options: RELAUNCH_COMMAND,
-        prune_lease_token: "launch-lease",
-      });
 
       register();
       const handler = captureHandler();
       handler(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
       await flush();
 
-      expect(backend.getRomRelaunchOptions).toHaveBeenCalledWith(42);
-      expect(steamShortcuts.setLaunchOptionsConfirmed).toHaveBeenCalledWith(APP_ID, RELAUNCH_COMMAND);
+      expect(backend.prepareGameStart).toHaveBeenCalledWith(42);
+      expect(steamShortcuts.setLaunchOptionsConfirmed).toHaveBeenCalledWith(APP_ID, LAUNCH_OPTIONS);
       expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
-      // Order: getRomRelaunchOptions → setLaunchOptionsConfirmed → RunGame.
-      const getOrder = vi.mocked(backend.getRomRelaunchOptions).mock.invocationCallOrder[0]!;
+      const prepareOrder = vi.mocked(backend.prepareGameStart).mock.invocationCallOrder[0]!;
       const setOrder = vi.mocked(steamShortcuts.setLaunchOptionsConfirmed).mock.invocationCallOrder[0]!;
       const runOrder = vi.mocked(SteamClient.Apps.RunGame).mock.invocationCallOrder[0]!;
-      expect(getOrder).toBeLessThan(setOrder);
+      expect(prepareOrder).toBeLessThan(setOrder);
       expect(setOrder).toBeLessThan(runOrder);
     });
 
-    it("markLaunchSkipped fires immediately before RunGame (re-confirm doesn't disturb the skip→run order)", async () => {
+    it("markLaunchSkipped fires immediately before RunGame (preparing doesn't disturb the skip→run order)", async () => {
       vi.mocked(launchGate.runLaunchGate).mockResolvedValue({ decision: "allow" });
-      vi.mocked(backend.getRomRelaunchOptions).mockResolvedValue({
-        success: true,
-        app_id: APP_ID,
-        launch_options: RELAUNCH_COMMAND,
-        prune_lease_token: "launch-lease",
-      });
 
       register();
       const handler = captureHandler();
       handler(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
       await flush();
 
-      // markLaunchSkipped(APP_ID) ran before RunGame, so the relaunch is exempt:
-      // consuming the skip now returns true (the real skip-set carries it).
       expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
       expect(launchGate.consumeLaunchSkip(APP_ID)).toBe(true);
     });
 
-    it("a null item skips setLaunchOptionsConfirmed but STILL relaunches", async () => {
+    it("a start the backend refuses is not relaunched, and the toast says why in the game page's words", async () => {
       vi.mocked(launchGate.runLaunchGate).mockResolvedValue({ decision: "allow" });
-      vi.mocked(backend.getRomRelaunchOptions).mockResolvedValue(null);
+      vi.mocked(backend.prepareGameStart).mockResolvedValue({
+        success: false,
+        reason: "cannot_start",
+        message: "ROM 42 cannot start",
+        start: { state: "cannot_start", reason: "not_installed", entry: "Snes9x" },
+      });
 
       register();
-      const handler = captureHandler();
-      handler(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+      captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
       await flush();
 
-      expect(backend.getRomRelaunchOptions).toHaveBeenCalledWith(42);
       expect(steamShortcuts.setLaunchOptionsConfirmed).not.toHaveBeenCalled();
-      expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
+      expect(runGameMock()).not.toHaveBeenCalled();
+      expect(toaster.toast).toHaveBeenCalledWith({
+        title: "Tender",
+        body: "Snes9x is not installed, so this game cannot start.",
+      });
     });
 
-    it("a rejected re-confirm logs with the Watcher context AND still relaunches (non-vacuous)", async () => {
+    it("a preparation that fails refuses the start in the error's own words", async () => {
       vi.mocked(launchGate.runLaunchGate).mockResolvedValue({ decision: "allow" });
-      vi.mocked(backend.getRomRelaunchOptions).mockRejectedValue(new Error("offline"));
+      vi.mocked(backend.prepareGameStart).mockRejectedValue(new Error("offline"));
 
       register();
-      const handler = captureHandler();
-      handler(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+      captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
       await flush();
 
-      // Post-catch: no set, the failure was logged with the helper's Watcher
-      // prefix, and the relaunch still fired (best-effort).
       expect(steamShortcuts.setLaunchOptionsConfirmed).not.toHaveBeenCalled();
-      expect(backend.logError).toHaveBeenCalledWith(
-        expect.stringContaining("Watcher: launch_options re-confirm failed"),
-      );
-      expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
+      expect(backend.logError).toHaveBeenCalledWith(expect.stringContaining("Watcher: preparing the start failed"));
+      expect(runGameMock()).not.toHaveBeenCalled();
+      expect(toaster.toast).toHaveBeenCalledWith({ title: "Tender", body: "Couldn't start the game: offline" });
     });
 
-    it("a timed-out re-confirm keeps the cancelled watcher launch blocked and says so", async () => {
+    it("a preparation with no answer in time keeps the cancelled watcher launch stopped and says so", async () => {
       vi.useFakeTimers();
       try {
-        vi.mocked(backend.getRomRelaunchOptions).mockReturnValue(new Promise<never>(() => {}));
+        vi.mocked(backend.prepareGameStart).mockReturnValue(new Promise<never>(() => {}));
         register();
         captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
 
         await vi.advanceTimersByTimeAsync(0);
-        expect(backend.getRomRelaunchOptions).toHaveBeenCalledWith(42);
+        expect(backend.prepareGameStart).toHaveBeenCalledWith(42);
         await vi.advanceTimersByTimeAsync(3000);
 
         expect(backend.logError).toHaveBeenCalledWith(
-          expect.stringContaining("Watcher: launch_options re-confirm timed out"),
+          expect.stringContaining("Watcher: preparing the start timed out"),
         );
         expect(steamShortcuts.setLaunchOptionsConfirmed).not.toHaveBeenCalled();
         expect(runGameMock()).not.toHaveBeenCalled();
-        // The watcher owns no UI, so without this toast the press dies silently.
-        expect(toaster.toast).toHaveBeenCalledWith({ title: "Tender", body: "Launch cancelled — try again" });
+        expect(toaster.toast).toHaveBeenCalledWith({
+          title: "Tender",
+          body: "Tender isn't responding — couldn't start the game.",
+        });
       } finally {
         vi.useRealTimers();
       }
     });
 
-    it("conflict resolved → re-confirms then relaunches (shared path covers every relaunch branch)", async () => {
+    it("conflict resolved → prepares then relaunches (shared path covers every relaunch branch)", async () => {
       vi.mocked(launchGate.runLaunchGate).mockResolvedValue({ decision: "conflict", conflicts: [conflict()] });
       prompts.resolveConflicts.mockResolvedValue("resolved");
-      vi.mocked(backend.getRomRelaunchOptions).mockResolvedValue({
-        success: true,
-        app_id: APP_ID,
-        launch_options: RELAUNCH_COMMAND,
-        prune_lease_token: "launch-lease",
-      });
 
       register();
       const handler = captureHandler();
       handler(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
       await flush();
 
-      expect(steamShortcuts.setLaunchOptionsConfirmed).toHaveBeenCalledWith(APP_ID, RELAUNCH_COMMAND);
+      expect(steamShortcuts.setLaunchOptionsConfirmed).toHaveBeenCalledWith(APP_ID, LAUNCH_OPTIONS);
       expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
     });
 
-    it("unknown appId relaunches WITHOUT a re-confirm (no romId to resolve)", async () => {
+    it("an unknown appId has no start to prepare: nothing starts, and the toast says so", async () => {
       vi.mocked(sessionManager.getAppIdRomIdMapSnapshot).mockReturnValue({});
 
       register();
@@ -1530,14 +1522,18 @@ describe("launchInterceptor — full funnel watcher", () => {
       handler(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
       await flush();
 
-      expect(backend.getRomRelaunchOptions).not.toHaveBeenCalled();
+      expect(backend.prepareGameStart).not.toHaveBeenCalled();
       expect(steamShortcuts.setLaunchOptionsConfirmed).not.toHaveBeenCalled();
-      expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
+      expect(runGameMock()).not.toHaveBeenCalled();
+      expect(toaster.toast).toHaveBeenCalledWith({
+        title: "Tender",
+        body: "Couldn't start the game: Tender has no game for this shortcut.",
+      });
     });
   });
 
   describe("error fallback", () => {
-    it("relaunches (never traps) when acting on the verdict throws", async () => {
+    it("refuses the start in the error's own words when acting on the verdict throws", async () => {
       vi.mocked(launchGate.runLaunchGate).mockResolvedValue({ decision: "offline_drift" });
       prompts.askOfflineDrift.mockRejectedValue(new Error("boom"));
 
@@ -1547,9 +1543,10 @@ describe("launchInterceptor — full funnel watcher", () => {
       await flush();
 
       // A throw while acting on the verdict propagates out of the gate loop;
-      // the listener's own catch logs it and falls back to a bare relaunch.
+      // the listener's own catch logs it and refuses the start, which nothing prepared.
       expect(backend.logError).toHaveBeenCalledWith("Launch interceptor error: Error: boom");
-      expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
+      expect(runGameMock()).not.toHaveBeenCalled();
+      expect(toaster.toast).toHaveBeenCalledWith({ title: "Tender", body: "Couldn't start the game: boom" });
     });
   });
 
