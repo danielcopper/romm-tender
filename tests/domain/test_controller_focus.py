@@ -125,13 +125,13 @@ class TestWhatSteamWouldChooseItself:
 
 class TestWhatAFocusChangeSends:
     def test_a_window_to_pin_is_pinned_and_the_pin_stands(self) -> None:
-        assert answer_focus(None, RETROARCH, GAME_APP_ID) == FocusAnswer(sends=(GAME_APP_ID,), pin=GAME_APP_ID)
+        assert answer_focus(False, RETROARCH, GAME_APP_ID) == FocusAnswer(sends=(GAME_APP_ID,), pin=GAME_APP_ID)
 
     def test_the_same_pin_is_sent_again(self) -> None:
-        assert answer_focus(GAME_APP_ID, RETROARCH, GAME_APP_ID) == FocusAnswer(sends=(GAME_APP_ID,), pin=GAME_APP_ID)
+        assert answer_focus(True, RETROARCH, GAME_APP_ID) == FocusAnswer(sends=(GAME_APP_ID,), pin=GAME_APP_ID)
 
     def test_another_window_to_pin_replaces_the_pin(self) -> None:
-        assert answer_focus(GAME_APP_ID, RETROARCH, 7) == FocusAnswer(sends=(7,), pin=7)
+        assert answer_focus(True, RETROARCH, 7) == FocusAnswer(sends=(7,), pin=7)
 
     @pytest.mark.parametrize(
         ("window", "choice"),
@@ -148,7 +148,7 @@ class TestWhatAFocusChangeSends:
     ) -> None:
         launched = NATIVE_GAME_APP_ID if window is NATIVE_GAME else None
 
-        assert answer_focus(GAME_APP_ID, window, launched) == FocusAnswer(sends=(choice, 0), pin=None)
+        assert answer_focus(True, window, launched) == FocusAnswer(sends=(choice, 0), pin=None)
 
     @pytest.mark.parametrize(
         "window",
@@ -162,7 +162,7 @@ class TestWhatAFocusChangeSends:
     def test_with_no_pin_standing_nothing_is_sent(self, window: FocusedWindow | None) -> None:
         launched = NATIVE_GAME_APP_ID if window is NATIVE_GAME else None
 
-        assert answer_focus(None, window, launched) == FocusAnswer(sends=(), pin=None)
+        assert answer_focus(False, window, launched) == FocusAnswer(sends=(), pin=None)
 
 
 class TestTheUrl:

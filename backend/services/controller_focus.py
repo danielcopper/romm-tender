@@ -4,7 +4,9 @@ Contract: while Steam's 64-bit client runs outside gamescope, a focused window
 Steam cannot attribute itself is pinned with ``steam://forceinputappid/<id>`` —
 the id of the Steam launch its process runs under — on every focus change onto
 it; focus leaving a standing pin gets Steam's own choice for the new window and
-then ``0``; with no pin standing nothing is sent. A pin still standing at stop
+then ``0``; with no pin standing nothing is sent. The first answer in a Steam
+run also clears a pin a backend that did not stop cleanly may have left: a
+window not to pin gets the same pair. A pin still standing at stop
 is released with ``0`` through :meth:`ControllerFocusService.release_pin`, which
 the host calls before it lets go of Steam's debugger. Anywhere else, and with
 the switch off, it sends nothing.
@@ -141,6 +143,9 @@ class _FocusWatch:
         self._send_due = False
         # The id pinned and the Steam run it stands in; a new run carries no pin.
         self._pin: tuple[int, SteamIdentity] | None = None
+        # A Steam run this watcher has not answered yet, in which a pin an
+        # earlier backend left may still stand.
+        self._unanswered_run: SteamIdentity | None = None
         self._unreachable_said_for: SteamIdentity | None = None
         self._send_failure_said = False
         self._released = False
@@ -186,6 +191,7 @@ class _FocusWatch:
                 self._steam = identity
                 await self._close_source()
                 if applies:
+                    self._unanswered_run = identity
                     self._logger.info("controller focus: Steam's 64-bit client runs outside gamescope; watching")
                 else:
                     self._log_debug("controller focus: Steam attributes windows itself here; not watching")
@@ -280,8 +286,8 @@ class _FocusWatch:
         async with self._send_lock:
             if self._released or steam is None:
                 return False
-            standing = self._pin[0] if self._pin is not None and self._pin[1] == steam else None
-            answer = answer_focus(standing, window, launched_app_id)
+            pin_may_stand = (self._pin is not None and self._pin[1] == steam) or self._unanswered_run == steam
+            answer = answer_focus(pin_may_stand, window, launched_app_id)
             for input_id in answer.sends:
                 if not await self._steam_urls.execute_steam_url(force_input_url(input_id)):
                     self._send_due = True
@@ -293,4 +299,6 @@ class _FocusWatch:
             if answer.sends:
                 self._send_failure_said = False
             self._pin = (answer.pin, steam) if answer.pin is not None else None
+            if self._unanswered_run == steam:
+                self._unanswered_run = None
             return True

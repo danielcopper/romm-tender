@@ -150,18 +150,20 @@ class FocusAnswer:
     pin: int | None
 
 
-def answer_focus(standing: int | None, window: FocusedWindow | None, launched_app_id: int | None) -> FocusAnswer:
-    """What the watcher sends for the focused window, given the pin *standing* before it (``None`` for none).
+def answer_focus(pin_may_stand: bool, window: FocusedWindow | None, launched_app_id: int | None) -> FocusAnswer:
+    """What the watcher sends for the focused window, given whether a pin may stand before it.
 
     A window to pin gets its id, an unchanged one included, and the pin
-    stands. Focus leaving a standing pin gets Steam's own choice for the new
-    window and then :data:`RELEASED_INPUT_ID`, so Steam decides every later
-    change itself. With no pin standing, nothing is sent.
+    stands. Otherwise, where a pin may stand — one this watcher left, or one
+    a backend that did not stop cleanly left in a Steam run this watcher has
+    not answered yet — the window gets Steam's own choice and then
+    :data:`RELEASED_INPUT_ID`, so Steam decides every later change itself.
+    Where none may stand, nothing is sent.
     """
     pin = pin_for(window, launched_app_id)
     if pin is not None:
         return FocusAnswer(sends=(pin,), pin=pin)
-    if standing is None:
+    if not pin_may_stand:
         return FocusAnswer(sends=(), pin=None)
     return FocusAnswer(sends=(steam_choice_for(window), RELEASED_INPUT_ID), pin=None)
 

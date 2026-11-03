@@ -323,6 +323,11 @@ class TestWhereSteamAttributesWindowsItself:
             assert watcher.sleeper.durations == [POLL_SECONDS, POLL_SECONDS]
 
 
+# The first answer in a Steam run with no window focused: Steam's choice for it
+# and the release, in case a backend that did not stop cleanly left a pin.
+FIRST_ANSWER = [_url(413080), _url(0)]
+
+
 async def _focus(watcher: Watcher, window: FocusedWindow | None) -> None:
     """Move the focus to *window* and let the watcher answer it."""
     watcher.x.focus(window)
@@ -339,16 +344,19 @@ class TestWatching:
             assert watcher.urls.urls == [_url(GAME_APP_ID)]
 
     @pytest.mark.parametrize(
-        "window",
+        ("window", "choice"),
         [
-            pytest.param(None, id="no-window"),
-            pytest.param(BIG_PICTURE, id="big-picture"),
-            pytest.param(DESKTOP_CLIENT, id="desktop-client"),
-            pytest.param(NATIVE_WINDOW, id="native-game"),
-            pytest.param(EDITOR, id="other-window"),
+            pytest.param(None, 413080, id="no-window"),
+            pytest.param(BIG_PICTURE, 769, id="big-picture"),
+            pytest.param(DESKTOP_CLIENT, 413080, id="desktop-client"),
+            pytest.param(NATIVE_WINDOW, NATIVE_APP_ID, id="native-game"),
+            pytest.param(EDITOR, 413080, id="other-window"),
         ],
     )
-    async def test_with_no_pin_standing_nothing_is_sent(self, make_watcher, window: FocusedWindow | None) -> None:
+    async def test_a_new_run_gets_steam_s_choice_and_a_release_once_and_then_nothing_with_no_pin_standing(
+        self, make_watcher, window: FocusedWindow | None, choice: int
+    ) -> None:
+        # A backend that did not stop cleanly may have left a pin in this run.
         async with make_watcher() as watcher:
             watcher.x.window = window
             await watcher.start()
@@ -357,7 +365,27 @@ class TestWatching:
             await watcher.tick()
 
             assert watcher.x.connected_to == [DISPLAY]
-            assert watcher.urls.urls == []
+            assert watcher.urls.urls == [_url(choice), _url(0)]
+
+    async def test_the_first_answer_is_tried_again_where_it_did_not_go_out(self, make_watcher) -> None:
+        async with make_watcher() as watcher:
+            watcher.urls.answer = False
+            await watcher.start()
+            watcher.urls.answer = True
+            await watcher.tick()
+            await watcher.tick()
+
+            assert watcher.urls.urls == [_url(413080), _url(413080), _url(0)]
+
+    async def test_a_connection_opened_again_in_the_same_run_sends_no_second_release(self, make_watcher) -> None:
+        async with make_watcher() as watcher:
+            await watcher.start()
+            watcher.x.is_lost = True
+
+            await watcher.tick()
+
+            assert watcher.x.connected_to == [DISPLAY, DISPLAY]
+            assert watcher.urls.urls == [_url(413080), _url(0)]
 
     async def test_focus_onto_a_window_to_pin_pins_it(self, make_watcher) -> None:
         async with make_watcher() as watcher:
@@ -365,7 +393,7 @@ class TestWatching:
 
             await _focus(watcher, GAME_WINDOW)
 
-            assert watcher.urls.urls == [_url(GAME_APP_ID)]
+            assert watcher.urls.urls == [*FIRST_ANSWER, _url(GAME_APP_ID)]
 
     @pytest.mark.parametrize(
         ("window", "choice"),
@@ -438,26 +466,26 @@ class TestWatching:
             watcher.x.moves_during_next_question = BIG_PICTURE
 
             watcher.x.focus(GAME_WINDOW)
-            await _until(lambda: len(watcher.urls.urls) >= 3, "the answer for the window focused during the question")
+            await _until(lambda: len(watcher.urls.urls) >= 5, "the answer for the window focused during the question")
             await _quiet()
 
-            assert watcher.urls.urls == [_url(GAME_APP_ID), _url(769), _url(0)]
+            assert watcher.urls.urls == [*FIRST_ANSWER, _url(GAME_APP_ID), _url(769), _url(0)]
 
     async def test_changes_arriving_during_a_send_are_folded_into_the_latest(self, make_watcher) -> None:
         async with make_watcher() as watcher:
             await watcher.start()
             watcher.urls.hold = asyncio.Event()
             watcher.x.focus(GAME_WINDOW)
-            await _until(lambda: len(watcher.urls.urls) == 1, "the send in flight")
+            await _until(lambda: len(watcher.urls.urls) == 3, "the send in flight")
 
             watcher.x.focus(BIG_PICTURE)
             watcher.x.focus(OTHER_GAME_WINDOW)
             await _quiet()
             watcher.urls.hold.set()
-            await _until(lambda: len(watcher.urls.urls) == 2, "the send after it")
+            await _until(lambda: len(watcher.urls.urls) == 4, "the send after it")
             await _quiet()
 
-            assert watcher.urls.urls == [_url(GAME_APP_ID), _url(OTHER_GAME_APP_ID)]
+            assert watcher.urls.urls == [*FIRST_ANSWER, _url(GAME_APP_ID), _url(OTHER_GAME_APP_ID)]
 
 
 class TestSteamRestarts:
@@ -491,17 +519,18 @@ class TestSteamRestarts:
             await watcher.tick()
 
             assert watcher.x.connected_to == [DISPLAY, DISPLAY]
-            assert watcher.urls.urls == [_url(GAME_APP_ID)]
+            assert watcher.urls.urls == [*FIRST_ANSWER, _url(GAME_APP_ID)]
 
-    async def test_a_new_run_carries_no_pin_so_leaving_a_window_sends_nothing(self, make_watcher) -> None:
+    async def test_a_new_run_is_answered_with_steam_s_choice_and_a_release(self, make_watcher) -> None:
         async with make_watcher() as watcher:
             watcher.x.window = GAME_WINDOW
             await watcher.start()
             watcher.x.window = BIG_PICTURE
             watcher.steam.steam = _steam(start_time=2)
             await watcher.tick()
+            await _focus(watcher, EDITOR)
 
-            assert watcher.urls.urls == [_url(GAME_APP_ID)]
+            assert watcher.urls.urls == [_url(GAME_APP_ID), _url(769), _url(0)]
 
     async def test_steam_gone_closes_the_connection(self, make_watcher) -> None:
         async with make_watcher() as watcher:
@@ -591,7 +620,7 @@ class TestWhenASendCannotGoOut:
 
             assert watcher.urls.urls == [_url(GAME_APP_ID)]
 
-    async def test_a_failed_pin_leaves_no_pin_standing(self, make_watcher) -> None:
+    async def test_a_failed_first_pin_leaves_the_run_unanswered(self, make_watcher) -> None:
         async with make_watcher() as watcher:
             watcher.x.window = GAME_WINDOW
             watcher.urls.answer = False
@@ -600,7 +629,7 @@ class TestWhenASendCannotGoOut:
             watcher.urls.answer = True
             await watcher.tick()
 
-            assert watcher.urls.urls == [_url(GAME_APP_ID)]
+            assert watcher.urls.urls == [_url(GAME_APP_ID), _url(769), _url(0)]
 
     async def test_a_release_that_did_not_go_out_leaves_the_pin_standing_and_is_sent_again(self, make_watcher) -> None:
         async with make_watcher() as watcher:
@@ -637,7 +666,7 @@ class TestALostConnection:
             await watcher.tick()
 
             assert watcher.x.connected_to == [DISPLAY, DISPLAY]
-            assert watcher.urls.urls == [_url(GAME_APP_ID)]
+            assert watcher.urls.urls == [*FIRST_ANSWER, _url(GAME_APP_ID)]
 
     async def test_one_found_lost_at_a_reading_of_steam_is_opened_again(self, make_watcher) -> None:
         async with make_watcher() as watcher:
@@ -668,7 +697,7 @@ class TestReleasingThePin:
 
             await watcher.service.release_pin()
 
-            assert watcher.urls.urls == []
+            assert watcher.urls.urls == FIRST_ANSWER
 
     async def test_nothing_is_sent_once_the_pin_was_released_by_a_focus_change(self, make_watcher) -> None:
         async with make_watcher() as watcher:
@@ -727,15 +756,15 @@ class TestReleasingThePin:
             await watcher.start()
             watcher.urls.hold = asyncio.Event()
             watcher.x.focus(GAME_WINDOW)
-            await _until(lambda: len(watcher.urls.urls) == 1, "the send in flight")
+            await _until(lambda: len(watcher.urls.urls) == 3, "the send in flight")
 
             release = asyncio.ensure_future(watcher.service.release_pin())
             await _quiet()
-            assert watcher.urls.urls == [_url(GAME_APP_ID)]
+            assert watcher.urls.urls == [*FIRST_ANSWER, _url(GAME_APP_ID)]
             watcher.urls.hold.set()
             await asyncio.wait_for(release, 5)
 
-            assert watcher.urls.urls == [_url(GAME_APP_ID), _url(0)]
+            assert watcher.urls.urls == [*FIRST_ANSWER, _url(GAME_APP_ID), _url(0)]
 
 
 class TestAPassThatRaises:
@@ -768,13 +797,13 @@ class TestAPassThatRaises:
             watcher.x.focus(GAME_WINDOW)
             await _until(lambda: len(caplog.records) == 1, "the failed answer logged")
             watcher.x.focus(OTHER_GAME_WINDOW)
-            await _until(lambda: len(watcher.urls.urls) == 1, "the next change answered")
+            await _until(lambda: len(watcher.urls.urls) == 3, "the next change answered")
             await _quiet()
 
             assert [r.getMessage() for r in caplog.records] == [
                 "controller focus: answering a focus change failed: OSError('proc went away')"
             ]
-            assert watcher.urls.urls == [_url(OTHER_GAME_APP_ID)]
+            assert watcher.urls.urls == [*FIRST_ANSWER, _url(OTHER_GAME_APP_ID)]
 
 
 class TestCancelled:
