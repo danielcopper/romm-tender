@@ -67,6 +67,9 @@ const VANISHED_HINT = "No longer available on RomM";
 /** The label of a row another shortcut of this game is on. */
 const BOUND_ELSEWHERE_HINT = "On another shortcut of this game";
 
+/** The label of a row the user hid in RomM. */
+const HIDDEN_HINT = "Hidden in RomM";
+
 /** Accessible name of the trash affordance that opens the cleanup confirmation. */
 const REMOVE_LOCAL_DATA_LABEL = "Remove local data";
 
@@ -91,7 +94,7 @@ const RemoveLocalDataIcon: FC<{ onMenuRow?: boolean; style?: React.CSSProperties
   />
 );
 
-/** The italic inline hint that explains why a version can't be selected. */
+/** The italic inline hint beside a version: why it can't be selected, or what RomM holds about it. */
 const AvailabilityHint: FC<{ text: string }> = ({ text }) => (
   <span style={{ marginLeft: "8px", fontSize: "11px", fontStyle: "italic", color: NEUTRAL_GREY }}>{text}</span>
 );
@@ -311,6 +314,8 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
     if (v.bound_elsewhere) return <AvailabilityHint text={BOUND_ELSEWHERE_HINT} />;
     if (v.no_file) return <AvailabilityHint text={NO_FILE_ON_ROMM_LABEL} />;
     if (!v.switchable) return <AvailabilityHint text="conflicting metadata match in RomM" />;
+    // Last: it explains no refusal, so any hint that does goes first.
+    if (v.hidden) return <AvailabilityHint text={HIDDEN_HINT} />;
     return null;
   };
 
