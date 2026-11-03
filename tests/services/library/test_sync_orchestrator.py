@@ -10991,3 +10991,18 @@ class TestAGameTheUserHidInRomm:
 
         assert (counted, removed) == (0, [])
         assert self._bound(library) == {30: 6030, 40: 6040}
+
+    @pytest.mark.asyncio
+    async def test_a_removal_the_sync_makes_for_another_reason_stands_beside_an_unread_hidden_list(
+        self, make_library, fake_romm_api, emit, tmp_path
+    ):
+        """Faves' listing moved, so it is fetched: 40, missing from its walk, is asked about by its id and goes."""
+        library = make_library(romm_api=fake_romm_api)
+        await self._bind(library, fake_romm_api, tmp_path, "collection")
+        self._hide(fake_romm_api, "collection", 40)
+        fake_romm_api.list_hidden_roms_side_effect = RommConnectionError("RomM did not answer")
+        fake_romm_api.collections[0]["updated_at"] = "2031-01-01T00:00:00"
+
+        counted, removed, _sent, asked = await self._sync(library, fake_romm_api, emit, "run-2")
+
+        assert (counted, removed, asked) == (1, [40], [40])
