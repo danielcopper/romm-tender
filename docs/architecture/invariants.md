@@ -554,15 +554,16 @@ Format: **invariant** — tier — enforced by.
   above; and `TestProbeVerdict` and `TestRestampDue` pin each decider alone, so nothing holds them to one comparison
 - **A collection's completion stamp records what the collection skip compares RomM's answers with, and the preview's
   re-stamp count is that skip's own refusal: the checksum is over exactly the `rom_ids` the collection listing carried
-  (`WorkUnit.member_rom_ids`, in `ChunkDispatcher._build_final_collection_stamp`), never the stamp's `member_rom_ids`;
-  `fetch_started_at` is Tender's clock read before the unit's own skip check, for a collection unit as for a platform
-  one (`CollectionFetcher.fetch_collection_units`, which fetches every collection unit before the first applies); the
-  margin is the platform skip's, applied when the stamp is read (`domain/platform_skip.py::skip_reference`); no
-  `rom_count` is compared; and a collection is counted in `restamp_collection_count` exactly when the preview's gate
-  refused it for a reason a fresh stamp settles (`domain/collection_skip.py::CollectionSkip.restamp_settles`, never for
-  a probe that raised or could not be read) and the apply will stamp it — it has members, and `recorded_updated_at`
-  answers, which `domain/collection_skip.py::apply_stamps` decides for the count and for the final chunk's stamp alike**
-  — test + prompt-only — the fetch start by
+  less the run's hidden set (`WorkUnit.member_rom_ids`, in `ChunkDispatcher._build_final_collection_stamp`), never the
+  stamp's `member_rom_ids`; `fetch_started_at` is Tender's clock read before the unit's own skip check, for a collection
+  unit as for a platform one (`CollectionFetcher.fetch_collection_units`, which fetches every collection unit before the
+  first applies); the margin is the platform skip's, applied when the stamp is read
+  (`domain/platform_skip.py::skip_reference`); no `rom_count` is compared; and a collection is counted in
+  `restamp_collection_count` exactly when the preview's gate refused it for a reason a fresh stamp settles
+  (`domain/collection_skip.py::CollectionSkip.restamp_settles`, never for a probe that raised or could not be read) and
+  the apply will stamp it — it has members, and `recorded_updated_at` answers, which
+  `domain/collection_skip.py::apply_stamps` decides for the count and for the final chunk's stamp alike** — test +
+  prompt-only — the fetch start by
   `tests/services/library/test_sync_orchestrator.py::TestOnlyAFreshCollectionStampRestoresTheSkip::test_a_member_edited_while_the_run_applied_is_fetched_in_full_next_sync`
   (an edit between the fetch's start and the run's end is seen next sync) and
   `tests/services/library/test_collection_fetcher.py::TestTryCollectionIncrementalSkip::test_the_probe_s_reference_is_the_fetch_start_less_the_margin`,
@@ -581,10 +582,16 @@ Format: **invariant** — tier — enforced by.
   `tests/domain/test_collection_skip.py::TestWhetherAFreshStampSettlesTheRefusal`; and that a stamp the apply writes
   matches the listing it was written from by
   `TestFinalChunkCollectionStamp::test_the_stamp_it_writes_matches_the_listing_it_was_written_from`, and that the writer
-  refuses what `apply_stamps` refuses by `::test_a_collection_handed_no_members_is_not_stamped`. The rule spans five
-  modules: the collection fetcher reads the clock and judges, the preview counts, the dispatcher writes the stamp, and
-  `domain/collection_skip.py` with `domain/platform_skip.py` hold the comparisons and the margin. Why the checksum
-  covers the listing rather than the visible id set the platform's covers is in
+  refuses what `apply_stamps` refuses by `::test_a_collection_handed_no_members_is_not_stamped`. That the members are
+  the listing's ids less the run's hidden set ([#2502](https://github.com/danielcopper/romm-tender/issues/2502) D4) is
+  pinned by
+  `tests/services/library/test_fetcher.py::TestTheHiddenSet::test_a_collection_unit_s_members_are_its_listing_less_the_hidden_ones`,
+  and end to end by
+  `tests/services/library/test_sync_orchestrator.py::TestAGameTheUserHidInRomm::test_a_game_hidden_before_a_stopped_run_goes_on_the_next_run_that_skips_its_unit`:
+  a collection stamped over the full listing would replay a hidden member on every skip, and a hide or an unhide would
+  never fetch it. The rule spans five modules: the collection fetcher reads the clock and judges, the preview counts,
+  the dispatcher writes the stamp, and `domain/collection_skip.py` with `domain/platform_skip.py` hold the comparisons
+  and the margin. Why the checksum covers the listing rather than the visible id set the platform's covers is in
   [Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "Incremental skip"; do
   not restate it here. **Each wrong turn is silent.** A checksum over the stamp's `member_rom_ids` holds the ids a walk
   answered beyond the listing, so an own smart collection whose walk answers more never matches and is fetched in full,
@@ -626,41 +633,47 @@ Format: **invariant** — tier — enforced by.
   sync that moved it there would say nothing; the game page says the version is gone instead, and the version picker is
   the way to switch. **What breaks without it:** a sync moves a shortcut onto another version, and a downloaded copy of
   the old one is left unbound beside it, still playable and no longer started by anything
-- **The end-of-run stale removal removes the shortcut only of a game outside what the sync syncs: a bound row missing
-  from a platform the run read whole is kept; on a platform the run did not read, a row whose game the run synced —
-  another member of its sibling group among the ROMs the run counts as synced, a skipped unit's stamp members included —
-  stays bound whatever RomM answers, and is asked about and marked only where any other row would be, while a row
-  without a group key is judged alone (#2533 D6); any other row a collection last delivered (`roms.delivered_through`)
-  is asked for by its exact id on every run until it is found or unbound, and kept unless RomM's answer is the ROM
-  itself, while any other row is kept when the run's own platform listing no longer names its platform and removed
-  unasked when it does; a row with no recorded route is asked only when the collections' last completed members list it;
-  a kept row stays in its platform's Steam collection, and so does a bound row a collection's skip rebuilt on a platform
-  the run read whole without returning it (#2549 D1), and, with platform groups on, every other row the run leaves
-  bound, a row RomM did not confirm included (#2490 D2, D3); the preview counts exactly the removals and the platform
-  collections the apply makes; and of the two, only the apply records what the stale removal established on the row
-  (`roms.gone_from_romm`): a 404 or a keep on a platform RomM no longer lists marks it, the ROM itself clears the mark,
-  and any other answer writes nothing. Beside it, a group holding more than one bound shortcut converges (#2645): on a
-  platform unit the run fetched in full, every bound row of such a group but the one
-  `domain/sync_diff.py::converge_bound_groups` keeps is removed on a run that was not stopped — never sorted as stale,
-  never over an appId the run bound, and never while Steam lists one of the group's shortcuts as running, read at the
-  platform unit and again before the removal — with the preview counting the same removals unless a game starts or quits
-  between the preview and the removal (#2645 D5, D6), and no platform whose rows still hold such a group is skipped; on
-  a platform the sync leaves off, the run's collection deliveries converge a group they bring in the same way (#2661),
-  once for the run, over the bound rows they deliver and the bound rows of the same stored key a delivered member lists
-  in `sibling_roms` (`domain/sync_diff.py::brought_in_by_delivery`), a row no collection delivered ranked by its stored
-  version fields and the sibling list's default, while the convergence leaves a bound row no delivered member lists to
-  the stale sort, and no collection holding a member of such a group is skipped; a bound version RomM joined to the game
-  after Tender last read it, its stored key still its old game's, is not brought in and goes the stale way (#2661 D5). A
-  row whose shortcut either removes keeps its binding until the panel reports the shortcut gone from Steam, the finalize
-  settles the row's stamps whatever its binding by then, and `report_sync_removals` unbinds it only while it still holds
-  the reported appId; a removal never reported is emitted and counted by the preview again while the shortcut is in
-  Steam, and unbound by the next sync's start reconcile where it is gone (#2653 D1). The removed-game cleanup's own
-  proof marks and clears rows too, by its rule in docs/architecture/removed-game-cleanup.md, "Discovery"** — test +
-  prompt-only — `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule (`sort_stale_rows`,
-  `settle_asked_rows`), `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection`
-  for the apply and the preview (a 404 keeps, a found ROM removes, an answer that establishes nothing keeps; a 404 is
-  asked again on the third run, a stopped run leaves the row asked at the next, a row its platform last delivered is
-  removed unasked, and a row with no recorded route is asked only when a collection record lists it),
+- **The end-of-run stale removal removes the shortcut only of a game outside what the sync syncs, or of one the user hid
+  in RomM: a stale row in the run's hidden set whose game the run did not sync is removed unasked on any route and its
+  mark cleared (#2502 D1); a bound row missing from a platform the run read whole is kept; on a platform the run did not
+  read, a row whose game the run synced — another member of its sibling group among the ROMs the run counts as synced, a
+  skipped unit's stamp members included — stays bound whatever RomM answers, and is asked about and marked only where
+  any other row would be, while a row without a group key is judged alone (#2533 D6); any other row a collection last
+  delivered (`roms.delivered_through`) is asked for by its exact id on every run until it is found or unbound, and kept
+  unless RomM's answer is the ROM itself, while any other row is kept when the run's own platform listing no longer
+  names its platform and removed unasked when it does; a row with no recorded route is asked only when the collections'
+  last completed members list it; a kept row stays in its platform's Steam collection, and so does a bound row a
+  collection's skip rebuilt on a platform the run read whole without returning it (#2549 D1), and, with platform groups
+  on, every other row the run leaves bound, a row RomM did not confirm included (#2490 D2, D3); the preview counts
+  exactly the removals and the platform collections the apply makes; and of the two, only the apply records what the
+  stale removal established on the row (`roms.gone_from_romm`): a 404 or a keep on a platform RomM no longer lists marks
+  it, the ROM itself clears the mark, and any other answer writes nothing. Beside it, a group holding more than one
+  bound shortcut converges (#2645): on a platform unit the run fetched in full, every bound row of such a group but the
+  one `domain/sync_diff.py::converge_bound_groups` keeps is removed on a run that was not stopped — never sorted as
+  stale, never over an appId the run bound, and never while Steam lists one of the group's shortcuts as running, read at
+  the platform unit and again before the removal — with the preview counting the same removals unless a game starts or
+  quits between the preview and the removal (#2645 D5, D6), and no platform whose rows still hold such a group is
+  skipped; on a platform the sync leaves off, the run's collection deliveries converge a group they bring in the same
+  way (#2661), once for the run, over the bound rows they deliver and the bound rows of the same stored key a delivered
+  member lists in `sibling_roms` (`domain/sync_diff.py::brought_in_by_delivery`), a row no collection delivered ranked
+  by its stored version fields and the sibling list's default, while the convergence leaves a bound row no delivered
+  member lists to the stale sort, and no collection holding a member of such a group is skipped; a bound version RomM
+  joined to the game after Tender last read it, its stored key still its old game's, is not brought in and goes the
+  stale way (#2661 D5); in a group no listed version holds, a bound row the user hid takes no part in either convergence
+  (#2502 D1). A row whose shortcut either removes keeps its binding until the panel reports the shortcut gone from
+  Steam, the finalize settles the row's stamps whatever its binding by then, and `report_sync_removals` unbinds it only
+  while it still holds the reported appId; a removal never reported is emitted and counted by the preview again while
+  the shortcut is in Steam, and unbound by the next sync's start reconcile where it is gone (#2653 D1). The removed-game
+  cleanup's own proof marks and clears rows too, by its rule in docs/architecture/removed-game-cleanup.md, "Discovery"**
+  — test + prompt-only — `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule (`sort_stale_rows`,
+  `settle_asked_rows`), `tests/domain/test_sync_diff.py::TestAHiddenRowInTheStaleSort` for a row the user hid,
+  `tests/domain/test_fetch_generation.py::TestHiddenWithoutAListedVersion` for the platform skip's rebuild that leaves
+  such a row stale, `TestConvergeBoundGroups`' hidden cases for the convergence and
+  `tests/services/library/test_sync_orchestrator.py::TestAGameTheUserHidInRomm` for every route end to end, preview
+  included, `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply
+  and the preview (a 404 keeps, a found ROM removes, an answer that establishes nothing keeps; a 404 is asked again on
+  the third run, a stopped run leaves the row asked at the next, a row its platform last delivered is removed unasked,
+  and a row with no recorded route is asked only when a collection record lists it),
   `TestDoSyncPerUnit::test_a_game_whose_every_version_is_gone_keeps_its_shortcut` and `TestPlatformTurnedOffAndBackOn`
   for the two ends — a game gone from RomM keeps its shortcut, a platform turned off loses its games, and
   `test_a_platform_still_on_that_romm_no_longer_lists_keeps_its_shortcuts` holds a platform gone from RomM's list apart
@@ -790,7 +803,33 @@ Format: **invariant** — tier — enforced by.
   the apply keeps, and offers Apply on every preview; and a mark a preview wrote, or an answer that established nothing
   set or cleared, would offer the cleanup a game RomM still serves or hide one it no longer does; a game a collection
   brings in keeps every shortcut it holds, for good; and a row unbound before its shortcut was gone leaves that shortcut
-  in Steam with no row, for good
+  in Steam with no row, for good; a game the user hid keeps its shortcut on a platform read whole while the cleanup
+  offers it on every scan and refuses it, and through a collection goes only once that collection is fetched for another
+  reason
+- **What the user hid in RomM is read off one request, `GET /api/roms?statuses=hidden`
+  (`RommApiAdapter.list_hidden_roms`), parsed only by `domain/hidden_roms.py::hidden_rom_ids`, and asked once per sync's
+  work queue, once per version-picker open and once per cleanup scan, whose start reuses the scan's set; an answer that
+  cannot be read takes nothing for hidden — no removal, no mark, nothing left out of the cleanup; and a ROM an admin hid
+  is told apart from a deleted one nowhere** — test + prompt-only — the parse by `tests/domain/test_hidden_roms.py`, the
+  request by `tests/adapters/romm/test_romm_api.py::TestListHiddenRoms`, the work queue asking once and an unreadable
+  answer by `tests/services/library/test_fetcher.py::TestTheHiddenSet` and, end to end,
+  `tests/services/library/test_sync_orchestrator.py::TestAGameTheUserHidInRomm::test_a_hidden_list_that_cannot_be_read_removes_nothing`,
+  the picker by `tests/services/test_version_switch.py::TestAVersionTheUserHidInRomm`, the cleanup and its start by
+  `tests/services/prune/test_service.py::TestAGameTheUserHidInRomm`, and the fake telling the two kinds apart by
+  `tests/fakes/test_fake_romm_api.py::TestTheTwoKindsOfHide`. RomM has two kinds of hidden
+  ([#2502](https://github.com/danielcopper/romm-tender/issues/2502)): an admin's hide (`hidden_entities`) answers the
+  ROM 404 by its exact id and lists it nowhere, which is a deletion as far as any request a non-admin makes can tell
+  (D3); the user's own hide (`rom_user.hidden`) only leaves the ROM out of `/api/roms` lists, while exact-id reads,
+  standard and virtual collection listings and `sibling_roms` still name it. One request answers every id of the second
+  kind (D2), and the sync, the picker and the cleanup each read that one answer (D5), so the three agree on what is
+  hidden; what the sync does with it is under
+  [Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "A game the user hid in
+  RomM". **What breaks without it:** an answer that could not be read, taken for a set anyway, removes shortcuts on a
+  guess; `rom_user.hidden` read off the exact-id answers the sync already gets is blind on the platform route and on a
+  skipped collection, so the same hide would remove the game on one route and keep it on another; a picker or a cleanup
+  reading another source disagrees with the sync about the same version. **What nothing checks**: that no reader takes
+  `rom_user.hidden` off an exact-id answer or a list item; that within a run the set is read only off
+  `LibrarySyncStateBox.run_hidden_rom_ids`; and that a new reader of what is hidden asks the same request
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py` pins the adapter's degradation (a
   raising resolver, a missing installation, an answer with no root all come back with `resolved` clear, never as an
