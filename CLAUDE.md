@@ -854,12 +854,13 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **The focus watcher sends `steam://forceinputappid` only while Steam runs the 64-bit client outside gamescope, and
   pins only a window Steam cannot attribute itself — one under a `reaper SteamLaunch AppId=<id>` that carries no
   `STEAM_GAME` — with its id, on every focus change onto it, an unchanged one included; focus leaving a standing pin
-  gets once the id Steam's own choice would be and right after it `0`; with no pin standing it sends nothing; `0` at
-  stop goes out once, through the host's step before it detaches from Steam's debugger, and only where a pin stands and
-  its Steam still runs; switched off (`TENDER_FOCUS_WATCHER=off`, or `TENDER_INJECT=off`) it opens nothing and sends
-  nothing; and no module but `domain/controller_focus.py` spells the URL** — test + prompt-only —
-  `tests/domain/test_controller_focus.py` (`TestWhenTheWatcherApplies`, `TestWhichWindowIsPinned`,
-  `TestWhatSteamWouldChooseItself`, `TestWhatAFocusChangeSends`, `TestTheSwitch`, `TestOnlyTheRulesSpellTheUrl`),
+  gets once the id Steam's own choice would be and right after it `0`, and so does the first answer in a Steam run for a
+  window not to pin, once per run; otherwise, with no pin standing, it sends nothing; `0` at stop goes out once, through
+  the host's step before it detaches from Steam's debugger, and only where a pin stands and its Steam still runs;
+  switched off (`TENDER_FOCUS_WATCHER=off`, or `TENDER_INJECT=off`) it opens nothing and sends nothing; and no module
+  but `domain/controller_focus.py` spells the URL** — test + prompt-only — `tests/domain/test_controller_focus.py`
+  (`TestWhenTheWatcherApplies`, `TestWhichWindowIsPinned`, `TestWhatSteamWouldChooseItself`,
+  `TestWhatAFocusChangeSends`, `TestTheSwitch`, `TestOnlyTheRulesSpellTheUrl`),
   `tests/services/test_controller_focus.py` (`TestWhereSteamAttributesWindowsItself`, `TestWatching`,
   `TestSteamRestarts`, `TestReleasingThePin`, `TestSwitchedOff`),
   `tests/host/test_runtime.py::TestTheStepBeforeTheDetach` for the order at stop, `tests/test_build_backend.py`

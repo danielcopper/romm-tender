@@ -1002,12 +1002,13 @@ Format: **invariant** — tier — enforced by.
 - **The focus watcher sends `steam://forceinputappid` only while Steam runs the 64-bit client outside gamescope, and
   pins only a window Steam cannot attribute itself — one under a `reaper SteamLaunch AppId=<id>` that carries no
   `STEAM_GAME` — with its id, on every focus change onto it, an unchanged one included; focus leaving a standing pin
-  gets once the id Steam's own choice would be and right after it `0`; with no pin standing it sends nothing; `0` at
-  stop goes out once, through the host's step before it detaches from Steam's debugger, and only where a pin stands and
-  its Steam still runs; switched off (`TENDER_FOCUS_WATCHER=off`, or `TENDER_INJECT=off`) it opens nothing and sends
-  nothing; and no module but `domain/controller_focus.py` spells the URL** — test + prompt-only —
-  `tests/domain/test_controller_focus.py` (`TestWhenTheWatcherApplies`, `TestWhichWindowIsPinned`,
-  `TestWhatSteamWouldChooseItself`, `TestWhatAFocusChangeSends`, `TestTheSwitch`, `TestOnlyTheRulesSpellTheUrl`),
+  gets once the id Steam's own choice would be and right after it `0`, and so does the first answer in a Steam run for a
+  window not to pin, once per run; otherwise, with no pin standing, it sends nothing; `0` at stop goes out once, through
+  the host's step before it detaches from Steam's debugger, and only where a pin stands and its Steam still runs;
+  switched off (`TENDER_FOCUS_WATCHER=off`, or `TENDER_INJECT=off`) it opens nothing and sends nothing; and no module
+  but `domain/controller_focus.py` spells the URL** — test + prompt-only — `tests/domain/test_controller_focus.py`
+  (`TestWhenTheWatcherApplies`, `TestWhichWindowIsPinned`, `TestWhatSteamWouldChooseItself`,
+  `TestWhatAFocusChangeSends`, `TestTheSwitch`, `TestOnlyTheRulesSpellTheUrl`),
   `tests/services/test_controller_focus.py` (`TestWhereSteamAttributesWindowsItself`, `TestWatching`,
   `TestSteamRestarts`, `TestReleasingThePin`, `TestSwitchedOff`),
   `tests/host/test_runtime.py::TestTheStepBeforeTheDetach` for the order at stop, `tests/test_build_backend.py`
@@ -1023,11 +1024,12 @@ Format: **invariant** — tier — enforced by.
   attribute is pinned; leaving it sends Steam's own choice, which sets the window focused now at once, and then the `0`,
   which leaves every later change to Steam; and the `0` at stop has to go out while the attachment it travels over still
   exists — the host lets go of Steam's debugger before it shuts the application down, so a `0` from
-  `Application.shutdown` would find no connection and leave the pin forcing its layout onto every window. Under the
-  32-bit client and in Gaming Mode Steam attributes the window itself, and a pin there would override what works. Each
-  URL is built by `force_input_url` from an integer, so nothing but a number reaches Steam. The rules are
-  `domain/controller_focus.py`'s, the watcher is `services/controller_focus.py`, the step before the detach is
-  `BackendBuild.before_detach` in `backend/host/runtime.py`, and the design is
+  `Application.shutdown` would find no connection and leave the pin forcing its layout onto every window. A backend that
+  did not stop cleanly leaves its pin, which the next backend cannot know about, so the first answer in a Steam run
+  treats one as standing. Under the 32-bit client and in Gaming Mode Steam attributes the window itself, and a pin there
+  would override what works. Each URL is built by `force_input_url` from an integer, so nothing but a number reaches
+  Steam. The rules are `domain/controller_focus.py`'s, the watcher is `services/controller_focus.py`, the step before
+  the detach is `BackendBuild.before_detach` in `backend/host/runtime.py`, and the design is
   [Controller focus in Desktop Mode](controller-focus.md)
 - **No save path but the sync before a start, the one after a game and a conflict resolved before a start changes the
   saves of a game Steam lists as running, the RetroDECK home migration excepted, which

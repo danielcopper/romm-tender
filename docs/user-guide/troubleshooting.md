@@ -496,11 +496,11 @@ steam-for-linux tracker as issue `13053`.
 
 **What Tender does**: While Steam's 64-bit client runs in Desktop Mode, Tender's backend watches which window has focus.
 When a game's window that Steam cannot place has it, the backend tells Steam to load that game's controller layout. When
-focus moves on to Big Picture, the desktop or another game, it tells Steam once which layout that window gets and then
-hands the choice back to Steam, which decides by itself from then on — so a game Steam places itself, and its in-game
-overlay, are left to Steam. When the backend stops while a game's layout is still forced, it hands the choice back to
-Steam. Under the 32-bit client and in Gaming Mode it does nothing. It reaches Steam the same way Tender's panel does, so
-while the panel is not loaded into Steam it does nothing either. How it works is in
+focus moves on to Big Picture, the desktop or a game's window Steam places itself, it tells Steam once which layout that
+window gets and then hands the choice back to Steam, which decides by itself from then on — so a game Steam places
+itself, and its in-game overlay, are left to Steam. When the backend stops while a game's layout is still forced, it
+hands the choice back to Steam. Under the 32-bit client and in Gaming Mode it does nothing. It reaches Steam the same
+way Tender's panel does, so while the panel is not loaded into Steam it does nothing either. How it works is in
 [Controller focus in Desktop Mode](../architecture/controller-focus.md).
 
 If the layout is still wrong, look at the backend's log with
@@ -517,8 +517,8 @@ If the layout is still wrong, look at the backend's log with
 - **"Steam could not be handed the input id yet; trying again"**: the backend's connection to Steam is not there at the
   moment. It tries again every few seconds for as long as that lasts.
 
-If the backend was stopped without the chance to clean up while a game's layout was forced, that layout can stay on
-every window. Starting a RetroDECK game from Tender again, and then leaving its window, hands the choice back to Steam.
+If the backend was stopped without the chance to clean up while a game's layout was forced, the backend clears that
+layout as soon as it is running again: its first look at the focused window hands the choice back to Steam.
 
 **Switching it off**: To see how things behave without it, switch the watcher off with an override of the backend's
 unit:

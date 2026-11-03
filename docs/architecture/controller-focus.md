@@ -2,9 +2,10 @@
 
 In Desktop Mode, Steam's **64-bit client** loads the wrong controller layout for a game a Flatpak draws: the Desktop
 layout, under which the Deck's controls act as mouse and keyboard. The **focus watcher** in Tender's backend works
-around this. On every change of the focused window it tells Steam which layout to load. This page is how it does that
-and why. It is a stopgap: the watcher goes once Steam attributes such windows itself, and this page goes with it. What a
-user sees, and how to switch the watcher off, is in
+around this. It pins the layout of a game's window Steam cannot attribute itself while that window has focus, and hands
+the choice back to Steam once focus leaves it. This page is how it does that and why. It is a stopgap: the watcher goes
+once Steam attributes such windows itself, and this page goes with it. What a user sees, and how to switch the watcher
+off, is in
 [Troubleshooting](../user-guide/troubleshooting.md#the-controller-acts-as-mouse-and-keyboard-in-a-game-in-desktop-mode).
 
 ## Why Steam gets it wrong
@@ -61,7 +62,8 @@ So the watcher pins only where Steam cannot attribute the window itself, and oth
   window of the compositor's — a window gone before it could be asked about, and a window whose pid the server cannot
   give. The id before the `0` sets the window focused now at once; the `0` leaves every later change to Steam.
 - **With no pin standing** nothing is sent: not on an ordinary focus change, not for a native game, and not while no
-  game Steam cannot attribute is running.
+  game Steam cannot attribute is running. The one exception is the first answer in a Steam run, which treats a pin as
+  standing, because one a backend that did not stop cleanly left may still be there ([When it acts](#when-it-acts)).
 
 A controller that disconnects and reconnects keeps the pin, so nothing is sent for that.
 
@@ -82,10 +84,13 @@ Only in Desktop Mode under the 64-bit client (`watcher_applies`). Both are read 
   line.
 
 A Steam run is identified by its pid together with the start time in `/proc/<pid>/stat`, so a reused pid counts as a new
-run. Steam is read every three seconds. A new run, a switch of client, Steam gone and a lost X connection are each A run
-where the watcher applies gets a fresh connection, and a focused window to pin is pinned at once; a new run carries no
-pin. Under the 32-bit client and in Gaming Mode nothing is opened and nothing is sent, so the attribution that works
-there is never overridden.
+run. Steam is read every three seconds. A new run, a switch of client, Steam gone and a lost X connection are each
+noticed within that time. A run where the watcher applies gets a fresh connection, and its first answer goes out at
+once: a focused window to pin is pinned, and any other window gets Steam's own choice and then `0`, because a backend
+that did not stop cleanly may have left a pin in that run, and a new backend knows nothing of it. Where no pin stands,
+that pair changes nothing in Steam. After the first answer, nothing is sent while no pin stands. The cleanup is per
+Steam run: a lost X connection opened again in the same run sends no second pair. Under the 32-bit client and in Gaming
+Mode nothing is opened and nothing is sent, so the attribution that works there is never overridden.
 
 ## Talking to the X server
 
@@ -147,9 +152,8 @@ watcher, and nothing else, sends `0`, and only where a pin stands and the Steam 
 send after it is dropped. The rest of the stop keeps its old order.
 
 Moving the whole detach behind the services' shutdown was rejected: the connection would stay open while every service
-stops, and nothing has examined that. A backend that is killed outright never runs this step, and its pin stands. A
-backend started after it does not know the pin, so it stands until that backend next pins a window and focus leaves it
-again.
+stops, and nothing has examined that. A backend that is killed outright never runs this step, and its pin stands until
+the next backend's first answer in that Steam run clears it ([When it acts](#when-it-acts)).
 
 ## Switching it off
 
@@ -165,7 +169,8 @@ watcher is removed. It has no setting in the panel.
   reports the sandbox's pid, which Steam checks against the host's processes. A pin fixes the controller layout and
   nothing about which game Steam thinks has focus.
 - **The on-screen keyboard.** Steam+X opens none over such a game in Desktop Mode, whether the game is pinned or not.
-- **A native Wayland window.** It is invisible to X, so it gets the desktop's id. Tender starts RetroDECK without a
-  Wayland socket so that its windows are X windows
+- **A native Wayland window.** It is invisible to X, so the watcher cannot tell it from no window: focus leaving a pin
+  for it gets the desktop's id, and with no pin standing it gets nothing from the watcher. Tender starts RetroDECK
+  without a Wayland socket so that its windows are X windows
   ([Troubleshooting](../user-guide/troubleshooting.md#retrodeck-runs-through-xwayland-in-desktop-mode)).
 - **A Steam installed as a Flatpak.** The watcher stays idle there.
