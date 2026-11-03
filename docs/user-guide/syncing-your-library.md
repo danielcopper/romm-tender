@@ -116,10 +116,11 @@ SteamGridDB game or key — after asking before it replaces a cover set in Steam
 although none of its shortcuts change reads "No shortcut changes — recording what RomM has now." and offers **Apply
 Sync** as well: applying records what RomM serves on that platform or in that collection, so the next sync can skip it
 again. You see it once after an update that introduced this check, while every platform or collection is read in full
-one time; after a game was hidden or deleted in RomM; after a game was changed in RomM in a way none of its shortcuts
-shows, such as a metadata edit or a rescan, since the last sync or shortly before it; and after a sync that stopped
-before it finished. With **Skip preview** on there is no preview to show it in: the sync records what RomM has now by
-itself. Only when there is truly nothing to do does the page read "Everything is up to date."
+one time; after a game was deleted in RomM or an admin hid it from you, or after you hid one version of a game that
+keeps another; after a game was changed in RomM in a way none of its shortcuts shows, such as a metadata edit or a
+rescan, since the last sync or shortly before it; and after a sync that stopped before it finished. With **Skip
+preview** on there is no preview to show it in: the sync records what RomM has now by itself. Only when there is truly
+nothing to do does the page read "Everything is up to date."
 
 A preview stays good for **30 minutes**, and it belongs to Tender rather than to the page you are looking at: you can
 leave for the settings or a submenu, come back, and the same preview is still there with **Apply Sync** ready. That
@@ -593,16 +594,17 @@ RomM has two kinds of hidden, and Tender treats them differently:
   Steam. A game whose every version you hid loses its shortcut on the next sync that runs to its end, whether a platform
   you sync or a RomM collection brings it in. The preview counts it under removals. Its downloaded files, its saves, its
   download record and Tender's playtime stay, as for a platform you turn off. Unhide it in RomM and a later sync brings
-  the shortcut back as a new one: what was set only in Steam — its Steam collections, Favorites, artwork set in Steam,
-  its own Steam playtime — is not restored. A hidden version of a game that still has a visible version keeps the game's
-  one shortcut, and the version picker labels it _"Hidden in RomM"_. A Steam collection made from a RomM collection
-  counts a version you hid as not in it, as RomM's own collection view does: where a collection holds only a hidden
-  version of a game that keeps a visible version elsewhere, the game leaves that Steam collection and keeps its
-  shortcut. A game that is running when the sync removes its shortcut keeps running.
+  the shortcut back as a new one: what was set only in Steam — the Steam collections you put it in yourself, Favorites,
+  artwork set in Steam, its own Steam playtime — is not restored. A hidden version of a game that still has a visible
+  version keeps the game's one shortcut, and the version picker labels it _"Hidden in RomM"_. A Steam collection made
+  from a RomM collection counts a version you hid as not in it, as RomM's own collection view does: where a collection
+  holds only a hidden version of a game that keeps a visible version elsewhere, the game leaves that Steam collection
+  and keeps its shortcut. A game that is running when the sync removes its shortcut keeps running.
 - **Hidden from you by an admin** — under _Hidden games_ or _Hidden platforms_ in RomM's settings. RomM answers such a
   game as if it were deleted and lists it nowhere, so Tender cannot tell the two apart: it is no longer available on
-  RomM, as above, and only [Clean Up Removed RomM Games](managing-games.md#cleaning-up-versions-removed-from-romm)
-  removes it. For an admin, such a hide has no effect.
+  RomM, as above: its shortcut stays, and
+  [Clean Up Removed RomM Games](managing-games.md#cleaning-up-versions-removed-from-romm) removes it from this device.
+  For an admin, such a hide has no effect.
 
 Each sync asks RomM once which games you hid. When that answer cannot be read, nothing counts as hidden, and no shortcut
 is removed on its account.

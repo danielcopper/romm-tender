@@ -113,7 +113,7 @@ the rows no stamp can name. Its one request asks RomM for the ROMs the user hid
 ([#2502](https://github.com/danielcopper/romm-tender/issues/2502) D5; `PruneService._read_hidden_rom_ids`): such a ROM
 is absent from every fetch and still on RomM, so the scan leaves it out of what it takes for gone. The set is kept on
 the `PrunePreview`, and the start rebuilds the snapshot over that same set rather than asking again. An answer that
-cannot be read takes nothing for hidden: the scan then offers such a ROM as before, and the run's exact-id proof, which
+cannot be read takes nothing for hidden: the scan then offers such a ROM as gone, and the run's exact-id proof, which
 RomM answers with the ROM, leaves it as it is. Inline removal from the version picker's trash icon needs neither: the
 picker offers the icon only after RomM answered that version with a 404, so the preview counts the version it was opened
 on as gone even where it is still in its platform's last fetch and carries no mark, and the run still takes the same

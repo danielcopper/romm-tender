@@ -74,15 +74,16 @@ agrees with this game's, then re-sync.
 
 A version another Steam shortcut of the same game is on is dimmed too, labelled _"On another shortcut of this game"_,
 and cannot be selected: moving it onto this shortcut would leave the other one with no version. A game has a second
-shortcut only until a sync leaves it one, or for good where only a collection brings it in or RomM no longer lists its
-platform ([Multiple versions of a game](syncing-your-library.md#multiple-versions-of-a-game)). To use that version here,
-switch the other shortcut to another version first.
+shortcut only until a sync leaves it one: for good only where RomM no longer lists its platform, or where its platform
+is turned off and the second shortcut is on a version no collection holds that RomM no longer lists for the game
+([Multiple versions of a game](syncing-your-library.md#multiple-versions-of-a-game)). To use that version here, switch
+the other shortcut to another version first.
 
-A version you hid in RomM — its own **Hidden** status there — is labelled _"Hidden in RomM"_ and can still be selected:
-a game keeps its shortcut while one of its versions is visible in RomM. Hiding every version of a game takes it out of
-Steam on the next sync ([Hiding a game in RomM](syncing-your-library.md#hiding-a-game-in-romm)). The label comes from
-one request to RomM each time the version list loads; when RomM's answer cannot be read, no version is labelled. Any
-other label a version carries comes first.
+A version you hid in RomM — its own **Hidden** status there — is labelled _"Hidden in RomM"_, unless one of the labels
+above applies, which is then shown in its place. Hiding alone does not stop you selecting it: a game keeps its shortcut
+while one of its versions is visible in RomM. Hiding every version of a game takes it out of Steam on the next sync that
+runs to its end ([Hiding a game in RomM](syncing-your-library.md#hiding-a-game-in-romm)). The label comes from one
+request to RomM each time the version list loads; when RomM's answer cannot be read, no version is labelled.
 
 A retained local version that RomM has positively confirmed it no longer has is also shown dimmed, with the separate
 label _"No longer available on RomM"_, and it cannot be switched to: selecting it instead opens the cleanup confirmation
@@ -98,8 +99,8 @@ get the button back.
 A library sync never moves the shortcut off such a version, and never removes it because every version is gone — see
 [Re-Syncing](syncing-your-library.md#re-syncing). Instead the game page shows a banner above the Play row, which says
 **no longer available on RomM** rather than deleted, because RomM answers a ROM an admin hid from your RomM user — under
-_Hidden games_ or _Hidden platforms_ in RomM's settings — the same way. A version you hid yourself is still on RomM, and
-carries the _"Hidden in RomM"_ label above instead:
+_Hidden games_ or _Hidden platforms_ in RomM's settings — the same way. A version you hid yourself is still on RomM: it
+shows no banner, and carries the _"Hidden in RomM"_ label above instead. The banner reads:
 
 - **Not downloaded, other versions remain** — _This version is no longer available on RomM. Choose another version to
   play._
@@ -185,13 +186,13 @@ switching straight back before the list has caught up).
 ### Cleaning up versions removed from RomM
 
 Normal library sync never deletes retained local rows, installed files, saves, or playtime just because a game
-disappears from RomM. To remove that state explicitly, open **Data Management › Gone from RomM**. The first scan is
-local and finds groups containing rows absent from a completed platform fetch. It also lists the versions a sync already
-found gone from RomM: games a collection brought in that RomM answered as gone, and the games of a platform RomM no
-longer lists. It lists, too, a version an earlier cleanup found gone while it was checking that game's other versions. A
-version you hid in RomM is not gone and is not listed as gone: the scan asks RomM once which versions you hid. When
-RomM's answer cannot be read, such a version can be listed, and the cleanup then leaves it as it is, since RomM still
-has it.
+disappears from RomM. To remove that state explicitly, open **Data Management › Gone from RomM**. The first scan reads
+what this device recorded and finds groups containing rows absent from a completed platform fetch. It also lists the
+versions a sync already found gone from RomM: games a collection brought in that RomM answered as gone, and the games of
+a platform RomM no longer lists. It lists, too, a version an earlier cleanup found gone while it was checking that
+game's other versions. A version you hid in RomM is not gone and is not listed as gone: the scan asks RomM once which
+versions you hid. When RomM's answer cannot be read, such a version can be listed, and the cleanup then leaves it as it
+is, since RomM still has it.
 
 The dialog opens with what a cleanup would do: _RomM no longer has N versions this device still holds. Each one is
 checked against RomM again before anything is removed. If you clean up now:_, followed by how many versions are removed,

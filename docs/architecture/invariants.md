@@ -804,32 +804,30 @@ Format: **invariant** — tier — enforced by.
   set or cleared, would offer the cleanup a game RomM still serves or hide one it no longer does; a game a collection
   brings in keeps every shortcut it holds, for good; and a row unbound before its shortcut was gone leaves that shortcut
   in Steam with no row, for good; a game the user hid keeps its shortcut on a platform read whole while the cleanup
-  offers it on every scan and refuses it, and through a collection goes only once that collection is fetched for another
-  reason
+  offers it on every scan and refuses it, and through a standard collection goes only once that collection is fetched
+  for another reason
 - **What the user hid in RomM is read off one request, `GET /api/roms?statuses=hidden`
   (`RommApiAdapter.list_hidden_roms`), parsed only by `domain/hidden_roms.py::hidden_rom_ids`, and asked once per sync's
   work queue, once per version-picker open and once per cleanup scan, whose start reuses the scan's set; an answer that
-  cannot be read takes nothing for hidden — no removal, no mark, nothing left out of the cleanup; and a ROM an admin hid
-  is told apart from a deleted one nowhere** — test + prompt-only — the parse by `tests/domain/test_hidden_roms.py`, the
-  request by `tests/adapters/romm/test_romm_api.py::TestListHiddenRoms`, the work queue asking once and an unreadable
-  answer by `tests/services/library/test_fetcher.py::TestTheHiddenSet` and, end to end,
+  cannot be read — one whose first item is not marked hidden included, as from a RomM that ignored `statuses` — takes
+  nothing for hidden: no removal, no mark, nothing left out of the cleanup; and a ROM an admin hid is told apart from a
+  deleted one nowhere** — test + prompt-only — the parse by `tests/domain/test_hidden_roms.py`, the request by
+  `tests/adapters/romm/test_romm_api.py::TestListHiddenRoms`, the work queue asking once and an unreadable answer by
+  `tests/services/library/test_fetcher.py::TestTheHiddenSet` and, end to end,
   `tests/services/library/test_sync_orchestrator.py::TestAGameTheUserHidInRomm::test_a_hidden_list_that_cannot_be_read_removes_nothing`,
   the picker by `tests/services/test_version_switch.py::TestAVersionTheUserHidInRomm`, the cleanup and its start by
   `tests/services/prune/test_service.py::TestAGameTheUserHidInRomm`, and the fake telling the two kinds apart by
-  `tests/fakes/test_fake_romm_api.py::TestTheTwoKindsOfHide`. RomM has two kinds of hidden
-  ([#2502](https://github.com/danielcopper/romm-tender/issues/2502)): an admin's hide (`hidden_entities`) answers the
-  ROM 404 by its exact id and lists it nowhere, which is a deletion as far as any request a non-admin makes can tell
-  (D3); the user's own hide (`rom_user.hidden`) only leaves the ROM out of `/api/roms` lists, while exact-id reads,
-  standard and virtual collection listings and `sibling_roms` still name it. One request answers every id of the second
-  kind (D2), and the sync, the picker and the cleanup each read that one answer (D5), so the three agree on what is
-  hidden; what the sync does with it is under
-  [Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "A game the user hid in
-  RomM". **What breaks without it:** an answer that could not be read, taken for a set anyway, removes shortcuts on a
-  guess; `rom_user.hidden` read off the exact-id answers the sync already gets is blind on the platform route and on a
-  skipped collection, so the same hide would remove the game on one route and keep it on another; a picker or a cleanup
-  reading another source disagrees with the sync about the same version. **What nothing checks**: that no reader takes
-  `rom_user.hidden` off an exact-id answer or a list item; that within a run the set is read only off
-  `LibrarySyncStateBox.run_hidden_rom_ids`; and that a new reader of what is hidden asks the same request
+  `tests/fakes/test_fake_romm_api.py::TestTheTwoKindsOfHide`. RomM's two kinds of hidden, and why only the user's own
+  can be read, are under [Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary),
+  "A game the user hid in RomM". One request answers every id of the user's own kind
+  ([#2502](https://github.com/danielcopper/romm-tender/issues/2502) D2), and the sync, the picker and the cleanup each
+  read that one answer (D5), so the three agree on what is hidden. **What breaks without it:** an answer that could not
+  be read, taken for a set anyway, removes shortcuts on a guess; `rom_user.hidden` read off the exact-id answers the
+  sync already gets is blind on the platform route and on a skipped collection, so the same hide would remove the game
+  on one route and keep it on another; a picker or a cleanup reading another source disagrees with the sync about the
+  same version. **What nothing checks**: that no reader takes `rom_user.hidden` off an exact-id answer or a list item;
+  that within a run the set is read only off `LibrarySyncStateBox.run_hidden_rom_ids`; and that a new reader of what is
+  hidden asks the same request
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py` pins the adapter's degradation (a
   raising resolver, a missing installation, an answer with no root all come back with `resolved` clear, never as an

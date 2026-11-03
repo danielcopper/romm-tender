@@ -796,8 +796,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **What the user hid in RomM is read off one request, `GET /api/roms?statuses=hidden`
   (`RommApiAdapter.list_hidden_roms`), parsed only by `domain/hidden_roms.py::hidden_rom_ids`, and asked once per sync's
   work queue, once per version-picker open and once per cleanup scan, whose start reuses the scan's set; an answer that
-  cannot be read takes nothing for hidden — no removal, no mark, nothing left out of the cleanup; and a ROM an admin hid
-  is told apart from a deleted one nowhere** — test + prompt-only — `tests/domain/test_hidden_roms.py`,
+  cannot be read — one whose first item is not marked hidden included, as from a RomM that ignored `statuses` — takes
+  nothing for hidden: no removal, no mark, nothing left out of the cleanup; and a ROM an admin hid is told apart from a
+  deleted one nowhere** — test + prompt-only — `tests/domain/test_hidden_roms.py`,
   `tests/adapters/romm/test_romm_api.py::TestListHiddenRoms`,
   `tests/services/library/test_fetcher.py::TestTheHiddenSet`,
   `tests/services/library/test_sync_orchestrator.py::TestAGameTheUserHidInRomm::test_a_hidden_list_that_cannot_be_read_removes_nothing`,
