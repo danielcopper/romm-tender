@@ -2006,9 +2006,10 @@ class TestPlanEstimates:
         assert units[0].predicted_skip is False
 
     @pytest.mark.asyncio
-    async def test_unstamped_collection_carries_no_estimate_fields(self, make_library, fake_romm_api):
-        """Without a stamp a collection's membership is unknown — every rider
-        stays None, and the seed prices the unit exactly as it did pre-#1511."""
+    async def test_unstamped_collection_is_predicted_fetched_and_carries_no_counts(self, make_library, fake_romm_api):
+        """Without a stamp a collection's membership is unknown — it is predicted
+        to be fetched, every count stays None, and the seed prices the unit
+        exactly as it did pre-#1511."""
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = []
         fake_romm_api.collections = [{"id": 7, "name": "Faves", "slug": "faves", "rom_count": 4}]
@@ -2018,7 +2019,7 @@ class TestPlanEstimates:
         units = await library.sync._fetcher.build_work_queue()
 
         assert [u.type for u in units] == ["collection"]
-        assert units[0].predicted_skip is None
+        assert units[0].predicted_skip is False
         assert units[0].collapsed_count is None
         # None, NOT 0 — the platform side reports 0 for "nothing mirrored", but a
         # collection with no stamp has no member set to count at all (#1511).
@@ -2147,6 +2148,27 @@ class TestPlanEstimates:
         assert units[0].bound_count is None
 
     @pytest.mark.asyncio
+    async def test_a_failed_collection_read_leaves_its_prediction_unknown(self, make_library, fake_romm_api):
+        """Fail-open: a DB failure leaves ``predicted_skip`` absent rather than predicting either way (#2623)."""
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.platforms = []
+        fake_romm_api.collections = [
+            {"id": 7, "name": "Faves", "rom_count": 1, "rom_ids": [10], "updated_at": "2026-01-01T00:00:00"}
+        ]
+        library.settings["enabled_platforms"] = {}
+        library.settings["enabled_collections"] = {"standard": {"7": True}, "smart": {}, "virtual": {}}
+
+        def _boom():
+            raise RuntimeError("db down")
+
+        library.sync._fetcher._uow_factory = _boom
+
+        units = await library.sync._fetcher.build_work_queue()
+
+        assert [u.type for u in units] == ["collection"]
+        assert units[0].predicted_skip is None
+
+    @pytest.mark.asyncio
     async def test_force_full_sync_clears_stamps_so_plan_predicts_no_skips(self, make_library, fake_romm_api):
         """clear_sync_cache runs BEFORE the run, so a forced plan reads no stamps.
 
@@ -2222,6 +2244,106 @@ class TestPlanEstimates:
         assert units[0].predicted_skip is None
         assert units[0].collapsed_count is None
         assert units[0].bound_count is None
+
+
+_LISTED_AT = "2026-01-01T00:00:00"
+
+
+def _seed_unchanged_collection(library, fake_romm_api, *, kind="standard", listing=None, stamp=True, pre_032=False):
+    """A collection whose listing matches its stamp: members 10 and 11; N64 has a unit, GBA is left off.
+
+    *listing* overrides fields of the listing entry; *stamp* ``False`` leaves it
+    unstamped, *pre_032* stamps it without a fetch start or a checksum.
+    """
+    cid = "fr-1" if kind == "virtual" else 7
+    entry = {"id": cid, "name": "Faves", "rom_count": 2, "rom_ids": [10, 11], "updated_at": _LISTED_AT}
+    entry.update(listing or {})
+    fake_romm_api.platforms = [
+        {"id": 1, "name": "N64", "slug": "n64", "rom_count": 0},
+        {"id": 2, "name": "GBA", "slug": "gba", "rom_count": 0},
+    ]
+    library.settings["enabled_platforms"] = {"1": True, "2": False}
+    if kind == "virtual":
+        fake_romm_api.virtual_collections = {"franchise": [entry]}
+    else:
+        fake_romm_api.collections = [entry]
+    library.settings["enabled_collections"] = {
+        "standard": {} if kind == "virtual" else {"7": True},
+        "smart": {},
+        "virtual": {"fr-1": True} if kind == "virtual" else {},
+    }
+    if stamp:
+        _seed_collection_stamp(
+            library.uow,
+            str(cid),
+            kind,
+            updated_at="" if kind == "virtual" else _LISTED_AT,
+            completed_at="2026-06-01T00:30:00+00:00",
+            rom_count=2,
+            member_rom_ids=(10, 11),
+            fetch_started_at=None if pre_032 else "2026-06-01T00:10:00+00:00",
+            listing_rom_ids=None if pre_032 else (10, 11),
+        )
+
+
+def _seed_a_game_with_two_shortcuts(library, *, slug):
+    """Member 10 and a version Faves does not list, both bound under one game's key, on *slug*."""
+    _seed_persisted_rom(library.uow, 10, app_id=1010, group_key="igdb:10:2", platform_slug=slug)
+    _seed_persisted_rom(library.uow, 30, app_id=1030, group_key="igdb:10:2", platform_slug=slug)
+
+
+class TestThePlanPredictsWhatTheCollectionGateDecides:
+    """A collection unit's ``predicted_skip`` is the collection gate's answer when its probe finds nothing (#2623 D1).
+
+    Each case runs the plan, then the gate on the unit the plan built, over the
+    same stored state; the fake's probe answers no member updated, the one
+    condition the prediction does not replay.
+    """
+
+    @pytest.mark.parametrize(
+        ("case", "expected"),
+        [
+            ("unchanged", True),
+            ("listing_without_updated_at", False),
+            ("virtual_without_updated_at", True),
+            ("no_stamp", False),
+            ("updated_at_changed", False),
+            ("listed_ids_changed", False),
+            ("stamp_without_fetch_start_or_checksum", False),
+            ("game_to_converge_on_a_platform_left_off", False),
+            ("game_with_two_shortcuts_on_a_platform_with_a_unit", True),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_the_prediction_agrees_with_the_gate(self, make_library, fake_romm_api, case, expected):
+        library = make_library(romm_api=fake_romm_api)
+        if case == "listing_without_updated_at":
+            _seed_unchanged_collection(library, fake_romm_api, listing={"updated_at": None})
+        elif case == "virtual_without_updated_at":
+            _seed_unchanged_collection(library, fake_romm_api, kind="virtual", listing={"updated_at": None})
+        elif case == "no_stamp":
+            _seed_unchanged_collection(library, fake_romm_api, stamp=False)
+        elif case == "updated_at_changed":
+            _seed_unchanged_collection(library, fake_romm_api, listing={"updated_at": "2026-02-01T00:00:00"})
+        elif case == "listed_ids_changed":
+            _seed_unchanged_collection(library, fake_romm_api, listing={"rom_ids": [10, 11, 12]})
+        elif case == "stamp_without_fetch_start_or_checksum":
+            _seed_unchanged_collection(library, fake_romm_api, pre_032=True)
+        elif case == "game_to_converge_on_a_platform_left_off":
+            _seed_unchanged_collection(library, fake_romm_api)
+            _seed_a_game_with_two_shortcuts(library, slug="gba")
+        elif case == "game_with_two_shortcuts_on_a_platform_with_a_unit":
+            _seed_unchanged_collection(library, fake_romm_api)
+            _seed_a_game_with_two_shortcuts(library, slug="n64")
+        else:
+            _seed_unchanged_collection(library, fake_romm_api)
+
+        units = await library.sync._fetcher.build_work_queue()
+        [unit] = [u for u in units if u.type == "collection"]
+        skip = await library.collection_fetcher._try_collection_incremental_skip(unit)
+
+        assert unit.predicted_skip is expected
+        assert (skip.member_rom_ids is not None) is expected
 
 
 class TestTheSyncKeepsThePlatformsIds:
@@ -2344,6 +2466,22 @@ class TestPredictionNeverFeedsSkipGate:
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_the_collection_gate_decides_the_same_whatever_its_prediction(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
+        _seed_unchanged_collection(library, fake_romm_api)
+        [skipping] = [u for u in await library.sync._fetcher.build_work_queue() if u.type == "collection"]
+        fetching = replace(skipping, collection_updated_at="2026-02-01T00:00:00")
+
+        gate = library.collection_fetcher._try_collection_incremental_skip
+        answers = [
+            (await gate(replace(unit, predicted_skip=p))).member_rom_ids
+            for unit in (skipping, fetching)
+            for p in (None, False, True)
+        ]
+
+        assert answers == [[10, 11]] * 3 + [None] * 3
 
 
 class TestAskRommForRoms:
