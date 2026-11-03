@@ -79,15 +79,10 @@ def predict_collection_skip(*, unit: WorkUnit, stamp: CollectionSyncState | None
 
     Replays the LOCAL conditions of
     ``CollectionFetcher._try_collection_incremental_skip``, in its order and
-    through its own functions: the listing carries an ``updated_at`` the stamp
-    can record (``recorded_updated_at``), a completion stamp exists, the
-    listing matches it (``membership_verdict``) and it records a fetch start
-    (``skip_reference``), and no game among its members still holds more than
-    one bound shortcut on a platform the sync leaves off
-    (``holds_a_game_to_converge`` over the stored *rows*). Every refusal
-    predicts a fetch. The gate's probe is deliberately NOT replayed — no
-    network at plan time — so a collection whose member ROM RomM edited since
-    the stamp is predicted as a skip the fetch then refuses (#2623 D1).
+    through its own functions; every refusal predicts a fetch. The gate's
+    probe is deliberately NOT replayed — no network at plan time — so a
+    collection whose member ROM RomM edited since the stamp is predicted as a
+    skip the fetch then refuses (#2623 D1).
 
     Estimate-only (ADR-0023): the return value prices the plan payload and
     must never feed the actual skip decision.

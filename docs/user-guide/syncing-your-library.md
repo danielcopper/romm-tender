@@ -130,17 +130,18 @@ past the half hour it says "expired"; the change table stays readable, **Apply S
 moves you on. Nothing you were shown is discarded behind your back. Once it has expired the main page's **Changes
 ready** row disappears, and **Refresh** works out a fresh preview in place of the old one.
 
-That starting estimate is **skip-aware**: when the run is planned, Tender already knows which platforms and collections
-haven't changed since their last sync and expects to skip them wholesale, so they don't inflate the number — an
-incremental re-sync of an unchanged library reads seconds, not the minutes a full first import would take. The
-prediction is only an estimate (the actual skip is decided per platform as the run reaches it, and for every collection
-together once the run reaches the first one), so a wrong guess can make the readout run long or short for a moment, but
-it never changes what the sync actually does. Collections are skipped by the same rules as a platform: if RomM still
-lists the same games in a collection and none of them changed since shortly before the last sync started reading it,
-Tender skips it without re-listing its contents — so a large, collection-heavy library re-syncs quickly. That holds for
-**Franchises** and **IGDB collections** too. When Tender does not skip a collection, it asks RomM only for the
-collection's games on platforms you don't sync, since your enabled platforms already brought in the rest. Another user's
-shared smart collection is the exception and is read in full, because which games it holds can depend on who is asking.
+That starting estimate is **skip-aware**: when the run is planned, Tender works out from what it recorded at the last
+sync which platforms and collections it expects to skip wholesale, so they don't inflate the number — an incremental
+re-sync of an unchanged library reads seconds, not the minutes a full first import would take. That guess cannot see
+every change made on RomM since then, so it is only an estimate (the actual skip is decided per platform as the run
+reaches it, and for every collection together once the run reaches the first one): a wrong guess can make the readout
+run long or short for a moment, but it never changes what the sync actually does. Collections are skipped by the same
+rules as a platform: if RomM still lists the same games in a collection and none of them changed since shortly before
+the last sync started reading it, Tender skips it without re-listing its contents — so a large, collection-heavy library
+re-syncs quickly. That holds for **Franchises** and **IGDB collections** too. When Tender does not skip a collection, it
+asks RomM only for the collection's games on platforms you don't sync, since your enabled platforms already brought in
+the rest. Another user's shared smart collection is the exception and is read in full, because which games it holds can
+depend on who is asking.
 
 The estimate also knows the **difference between adding a game and updating one**. Creating a shortcut is roughly three
 times the work of refreshing one that already exists, and it also has to pull down a cover; updating an existing
