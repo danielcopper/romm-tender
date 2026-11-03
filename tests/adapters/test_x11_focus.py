@@ -14,6 +14,7 @@ import contextlib
 import ctypes
 import os
 import secrets
+import select
 import shutil
 import struct
 import subprocess
@@ -147,25 +148,43 @@ class TestBeforeAnyConnection:
 
 @pytest.fixture
 def xvfb(tmp_path: Path) -> Iterator[tuple[XDisplay, subprocess.Popen[bytes]]]:
-    """An Xvfb on a display of its own, admitting only the cookie in its own authority file."""
+    """An Xvfb on a display of its own choosing, admitting only the cookie in its own authority file.
+
+    The server picks a free display number itself (``-displayfd``), so tests
+    running in parallel never race for one; the authority entry is a wildcard
+    for that reason, since the number is not known when the file is written.
+    """
     binary = shutil.which("Xvfb")
     if binary is None:
         if os.environ.get("CI"):
             pytest.fail("Xvfb is not installed; CI installs it for this tier (.github/workflows/ci.yml)")
         pytest.skip("Xvfb is not installed")
     authority = tmp_path / "Xauthority"
-    cookie = secrets.token_bytes(16)
-    number = _free_display_number()
-    authority.write_bytes(_entry(256, str(number).encode(), cookie))
+    authority.write_bytes(_entry(65535, b"", secrets.token_bytes(16)))
+    read_end, write_end = os.pipe()
     server = subprocess.Popen(
-        [binary, f":{number}", "-auth", str(authority), "-nolisten", "tcp", "-screen", "0", "320x240x24"],
+        [
+            binary,
+            "-displayfd",
+            str(write_end),
+            "-auth",
+            str(authority),
+            "-nolisten",
+            "tcp",
+            "-screen",
+            "0",
+            "320x240x24",
+        ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        pass_fds=(write_end,),
     )
+    os.close(write_end)
     try:
-        _wait_for_socket(number, server)
+        number = _announced_display(read_end, server)
         yield XDisplay(name=f":{number}", authority_path=str(authority)), server
     finally:
+        os.close(read_end)
         server.terminate()
         with contextlib.suppress(subprocess.TimeoutExpired):
             server.wait(5)
@@ -174,22 +193,22 @@ def xvfb(tmp_path: Path) -> Iterator[tuple[XDisplay, subprocess.Popen[bytes]]]:
             server.wait(5)
 
 
-def _free_display_number() -> int:
-    for number in range(140, 400):
-        if not os.path.exists(f"/tmp/.X11-unix/X{number}") and not os.path.exists(f"/tmp/.X{number}-lock"):
-            return number
-    pytest.fail("no free X display number")
-
-
-def _wait_for_socket(number: int, server: subprocess.Popen[bytes]) -> None:
+def _announced_display(read_end: int, server: subprocess.Popen[bytes]) -> int:
+    """The display number Xvfb writes once it accepts connections."""
+    announced = b""
     deadline = time.monotonic() + 10
-    while time.monotonic() < deadline:
+    while time.monotonic() < deadline and not announced.endswith(b"\n"):
         if server.poll() is not None:
             pytest.fail(f"Xvfb exited with {server.returncode}")
-        if os.path.exists(f"/tmp/.X11-unix/X{number}"):
-            return
-        time.sleep(0.05)
-    pytest.fail("Xvfb did not come up")
+        ready, _, _ = select.select([read_end], [], [], 0.1)
+        if ready:
+            chunk = os.read(read_end, 64)
+            if not chunk:
+                break
+            announced += chunk
+    if not announced.strip().isdigit():
+        pytest.fail(f"Xvfb announced no display number ({announced!r})")
+    return int(announced)
 
 
 class _Client:
