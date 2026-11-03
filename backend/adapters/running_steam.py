@@ -27,9 +27,8 @@ _STEAM_COMM = "steam"
 _DEFAULT_AUTHORITY = ".Xauthority"
 
 # Bound on the walk up from Steam to the first process of this user namespace.
-# The 64-bit client runs a few levels deep inside its container (steam ←
-# pv-adverb ← bwrap ← the launch scripts); the cap only bounds a process table
-# rewritten underneath the walk.
+# The 64-bit client runs a few levels deep inside its container; the cap only
+# bounds a process table rewritten underneath the walk.
 _MAX_DEPTH = 16
 
 # ``/proc/<pid>/stat`` field 22 is the start time in clock ticks since boot;
