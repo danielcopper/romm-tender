@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Sequence
     from contextlib import AbstractAsyncContextManager
 
+    from domain.controller_focus import FocusedWindow, RunningSteam, XDisplay
     from domain.sync_action import SyncAction
     from domain.update_output import JournalEntry
 
@@ -301,6 +302,60 @@ class GameProcessControl(Protocol):
         spend the whole grace window and provoke a pointless force kill.
         """
         ...
+
+
+class SteamLaunchReader(Protocol):
+    """Which Steam launch a process runs under.
+
+    ``launched_app_id`` walks from *pid* up its parents to the ``reaper`` Steam
+    started a launch under, and answers that launch's app id — any game's, not
+    only a shortcut's — or ``None`` where the process runs under none.
+    """
+
+    def launched_app_id(self, pid: int) -> int | None: ...
+
+
+class RunningSteamReader(Protocol):
+    """One reading of the Steam this user runs; ``None`` where none runs or it could not be read."""
+
+    def read(self) -> RunningSteam | None: ...
+
+
+class FocusedWindowReader(Protocol):
+    """One connection to the desktop session's X server, as the focus watcher uses it.
+
+    ``connect`` opens it — closing any connection open before — and answers
+    ``None``, or why it could not. ``fileno`` is the socket that becomes
+    readable when the server has sent something, -1 while not connected.
+    ``take_focus_changes`` reads what the server sent and answers whether the
+    focused window changed since the last call; ``focused_window`` answers the
+    focused window, ``None`` where none is focused or it is gone. ``lost`` is
+    whether the connection has failed. Every method answers rather than
+    raises, and every one but ``fileno`` may block on the server, so a service
+    calls them off the loop.
+    """
+
+    def connect(self, display: XDisplay) -> str | None: ...
+
+    def fileno(self) -> int: ...
+
+    def take_focus_changes(self) -> bool: ...
+
+    def focused_window(self) -> FocusedWindow | None: ...
+
+    def lost(self) -> bool: ...
+
+    def close(self) -> None: ...
+
+
+class SteamUrlControl(Protocol):
+    """Hands Steam a ``steam://`` URL to execute; answers whether it went out.
+
+    ``False`` where it could not — nothing attached to Steam yet, the
+    connection lost — and never raises.
+    """
+
+    async def execute_steam_url(self, url: str) -> bool: ...
 
 
 class PendingSyncReader(Protocol):
