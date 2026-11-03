@@ -846,6 +846,25 @@ class TestEveryStatementIsSaid:
         assert (result.state, result.reason, result.reason_file) == (NOT_THIS_EMULATOR, PLAYLIST_REFUSED, "Game.m3u")
         assert result.statements == (LaunchStatement(OPENED_FORMAT_UNREAD, "Game (Disc 2).chd"),)
 
+    def test_beside_a_refusal_a_playlist_s_discs_past_the_limit_are_said(self, traces):
+        # The recorded Genesis Plus GX playlist past four discs, its first disc
+        # gone: the load stops there, and the lines past the fourth disc are
+        # still not read.
+        inp = copy.deepcopy(
+            _disc_opens_vector("opens-genesis-plus-gx-a-playlist-past-four-discs-ignores-the-rest")["input"]
+        )
+        for path in [path for path in inp["files"] if "(Disc 1)" in path]:
+            del inp["files"][path]
+
+        result = _through_tender(inp, traces)
+
+        assert (result.state, result.reason, result.reason_file) == (
+            NOT_THIS_EMULATOR,
+            OPENED_FILE_MISSING,
+            "Game (Disc 1).cue",
+        )
+        assert result.statements == (LaunchStatement(PLAYLIST_DISCS_PAST_LIMIT, "Game.m3u"),)
+
     def test_the_format_and_archive_notes_are_statements_of_their_own(self, traces):
         result = _ask_psx(
             LaunchabilityAnswer(

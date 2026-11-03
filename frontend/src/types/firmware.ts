@@ -518,8 +518,9 @@ export type LaunchStoppedShortReason =
  * out — what a start says is `statements`.
  * `reason_file` is the name of the file that reason is about, where the resolver names one; absent or `null`
  * otherwise. `statements` is everything said beside the verdict, in the resolver's order (#2698 D8): each
- * statement beside a start, and beside a refused start each file it would have gone on without and each thing the
- * resolver could not establish; an answer without it is read from `reason` and the two notes below.
+ * statement beside a start, and beside a refused start each file it would have gone on without, what else it is
+ * established to do, and each thing the resolver could not establish; an answer without it is read from `reason` and
+ * the two notes below.
  * `contents_unread` says the file is an archive whose
  * contents were not read; `format_unestablished` that whether the entry reads
  * this format was not established.

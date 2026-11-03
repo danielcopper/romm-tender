@@ -251,14 +251,19 @@ function refusalFile(launch: GameLaunch): string {
   return launch.reason_file ?? launch.file;
 }
 
-/** *text* as a sentence of its own: its first letter capitalized, a full stop after it. */
-function asSentence(text: string): string {
+/**
+ * *text* as a sentence of its own, with a full stop after it: its first letter capitalized, unless it begins with
+ * the name of a file in *files*, which is never changed.
+ */
+function asSentence(text: string, files: readonly string[]): string {
+  if (files.some((file) => text.startsWith(file))) return ` ${text}.`;
   return ` ${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
 }
 
 /**
  * What a refused start says after its own sentence (#2698 D8): each file the emulator would have gone on without,
- * then each thing the resolver could not establish, each as a sentence of its own.
+ * what else it is established to do, then each thing the resolver could not establish, each as a sentence of its
+ * own.
  */
 function besideARefusal(launch: GameLaunch): string[] {
   const statements = statementsOf(launch);
@@ -269,17 +274,23 @@ function besideARefusal(launch: GameLaunch): string[] {
         ]
       : [],
   );
+  const notes = statements.flatMap((statement) =>
+    statement.reason in STARTS_WITH_A_NOTE_BECAUSE
+      ? [` It ${STARTS_WITH_A_NOTE_BECAUSE[statement.reason as LaunchNoteReason](statement.file ?? launch.file)}.`]
+      : [],
+  );
   const notEstablished = statements.flatMap((statement) => {
     const file = statement.file ?? launch.file;
+    const files = [file, launch.file];
     if (statement.reason in STOPPED_SHORT_BECAUSE) {
-      return [asSentence(STOPPED_SHORT_BECAUSE[statement.reason as LaunchStoppedShortReason](launch, file))];
+      return [asSentence(STOPPED_SHORT_BECAUSE[statement.reason as LaunchStoppedShortReason](launch, file), files)];
     }
     if (statement.reason === "format_unestablished" || statement.reason === "contents_unread") {
-      return [asSentence(said(launch, statement, true)!.line)];
+      return [asSentence(said(launch, statement, true)!.line, files)];
     }
     return [];
   });
-  return [...goesOn, ...notEstablished];
+  return [...goesOn, ...notes, ...notEstablished];
 }
 
 function refusedBecause(launch: GameLaunch): (typeof REFUSED_BECAUSE)[LaunchRefusalReason] | null {

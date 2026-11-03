@@ -522,6 +522,41 @@ describe("every statement the resolver makes, each in its own words (#2698 D8)",
     expect(entryLaunchLine(both, RETRODECK)).toBe("it starts no game from a playlist +2 more");
   });
 
+  it("a refusal says what else the emulator is established to do, between the files it goes on without and the rest", () => {
+    const answer = playlist({
+      entry: "Genesis Plus GX",
+      state: "not_this_emulator",
+      reason: "opened_file_missing",
+      reason_file: "Game (Disc 1).cue",
+      statements: [
+        { reason: "opened_format_unread", file: "Game (Disc 6).chd" },
+        { reason: "playlist_discs_past_limit", file: "Game.m3u" },
+        missingDisc2,
+      ],
+    });
+    expect(launchRefusal(answer, false)).toBe(
+      "Genesis Plus GX cannot start Game.m3u: Game (Disc 1).cue is missing. It would go on without Disc 2.cue: it is missing. It does not read every disc Game.m3u lists. How it opens Game (Disc 6).chd was not checked.",
+    );
+    expect(entryLaunchLine(answer, RETRODECK)).toBe("Game (Disc 1).cue is missing +3 more");
+  });
+
+  it("a sentence that begins with a file's name keeps the name as it is", () => {
+    const answer = playlist({
+      entry: "SwanStation",
+      file: "ff7 (disc 1).cue",
+      state: "not_this_emulator",
+      reason: "opened_file_missing",
+      reason_file: "ff7 (disc 1).bin",
+      statements: [
+        { reason: "opened_file_unread", file: "ff7 (disc 2).cue" },
+        { reason: "content_missing", file: null },
+      ],
+    });
+    expect(launchRefusal(answer, false)).toBe(
+      "SwanStation cannot start ff7 (disc 1).cue: ff7 (disc 1).bin is missing. ff7 (disc 2).cue could not be checked. ff7 (disc 1).cue was not found.",
+    );
+  });
+
   it("an answer that carries no statements says its reason and its two notes", () => {
     const answer = playlist({
       state: "starts",

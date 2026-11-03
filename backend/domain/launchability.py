@@ -133,8 +133,8 @@ class Launchability:
     the reason is about, where the resolver names one, and ``None`` otherwise.
     ``statements`` is everything said beside the verdict, in the resolver's
     order (#2698 D8): each statement beside a start, and beside a refusal each
-    file the emulator would have gone on without and each thing the resolver
-    could not establish.
+    file the emulator would have gone on without, what else it is established
+    to do, and each thing the resolver could not establish.
     ``contents_unread`` says the file is an archive whose contents were not
     read; ``format_unestablished`` that whether the entry reads this format was
     not established.
