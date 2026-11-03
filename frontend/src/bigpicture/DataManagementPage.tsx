@@ -30,7 +30,7 @@ import { useDataPage, type DataPageState, type PageRead, type ScannedCount } fro
  * What a row's count slot says: a figure, `—` for a read that failed, or `null`
  * while the read is still in flight, which the slot draws as a spinner.
  *
- * A figure that costs a backend scan, which sends no request to RomM, reads
+ * A figure that costs a backend scan reads
  * `scan` until the reader asks for it, because focus selects on this layout: a
  * figure fetched on selection would put that scan under every row the stick
  * passes. From

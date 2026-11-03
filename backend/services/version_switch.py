@@ -549,7 +549,7 @@ class VersionSwitchService:
         live_main_flags: Mapping[int, bool],
         hidden_ids: frozenset[int],
     ) -> dict[str, Any]:
-        """Build one server-only stub's picker entry (``synced: False`` + switchable verdict).
+        """Build one server-only stub's picker entry: ``synced: False`` but where its row marks it, and ``switchable``.
 
         A stub already synced under a (possibly different) local key is judged by key
         equality (#1359); a never-synced stub is judged by canonical compatibility

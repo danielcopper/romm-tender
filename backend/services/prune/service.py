@@ -216,7 +216,7 @@ class PruneService:
         return self._starting or self._run_id is not None
 
     async def get_prune_preview(self, request: object) -> dict[str, Any]:
-        """Create or page an ephemeral local-only candidate preview.
+        """Create or page an ephemeral candidate preview; creating one asks RomM only which ROMs the user hid.
 
         Checks its endpoint's conflict rules at its entry and raises the
         rule's refusal when one holds (GLOSSARY.md → Conflict rules).
