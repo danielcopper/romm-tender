@@ -57,8 +57,10 @@ Together with the resolver, never on its own: the vectors are the answers of one
    ```
 
 4. Put the new asset name and its digest in the release line above.
-5. Compare `fixture_machine` and `_target` in `tests/services/test_firmware_vectors.py` with `fixture_machine` and
-   `_select` in the new release's `tests/test_machine_vectors.py`, and bring them and the line numbers they cite up to
-   date: a machine built differently from upstream's is not the machine the vector recorded.
-6. Run `python scripts/check_vendored_trees.py` and `tests/services/test_firmware_vectors.py`. A new release may answer
-   differently; what that test's list of known mismatches may then do is its module docstring's.
+5. Compare `fixture_machine` and `select` in `tests/_atlas_machines.py` with `fixture_machine` and `_select` in the new
+   release's `tests/test_machine_vectors.py`, and bring them and the line numbers they cite up to date: a machine built
+   differently from upstream's is not the machine the vector recorded.
+6. Run `python scripts/check_vendored_trees.py`, `tests/services/test_firmware_vectors.py` and
+   `tests/adapters/test_launch_vectors.py`. A new release may answer differently; what the firmware test's list of known
+   mismatches may then do is its module docstring's, and a launch answer Tender reads otherwise than the resolver states
+   it is a finding.
