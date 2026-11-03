@@ -40,7 +40,7 @@ const plainButton: CSSProperties = { padding: "8px 12px", fontSize: "14px", widt
 
 export const STEAM_BUTTONS: FallbackButtons = {
   Column: ({ children }) => (
-    <Focusable flow-children="vertical" style={column}>
+    <Focusable flow-children="column" style={column}>
       {children}
     </Focusable>
   ),

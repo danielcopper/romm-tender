@@ -207,7 +207,7 @@ describe("ValidatingModalShell", () => {
         {child()}
       </ValidatingModalShell>,
     );
-    expect(getByTestId("shell-footer").getAttribute("data-flow-children")).toBe("horizontal");
+    expect(getByTestId("shell-footer").getAttribute("data-flow-children")).toBe("row");
   });
   describe("Steam's own OK (Enter in a field, R2)", () => {
     const shell = (props: { submitDisabled?: boolean; dialogOKSubmits?: boolean }) => {

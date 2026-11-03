@@ -245,7 +245,7 @@ function tileRows(tiles: Tile[], busy: boolean): ReactNode[] {
     const pair = tiles.slice(index, index + 2);
     rows.push(
       <PanelSectionRow key={pair.map((tile) => tile.key).join("|")}>
-        <Focusable flow-children="horizontal" style={{ display: "flex", gap: "12px", marginBottom: "12px" }}>
+        <Focusable flow-children="row" style={{ display: "flex", gap: "12px", marginBottom: "12px" }}>
           {pair.map((tile) => (
             <TileStop key={tile.key} tile={tile} busy={busy} />
           ))}
