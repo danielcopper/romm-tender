@@ -37,23 +37,33 @@ layout of `<id>` and keep it until it is replaced. This is the **pin**.
 | `0`      | none: Steam chooses by itself again   | at the next focus change |
 
 A pin outlives its game. While one stands, Steam forces its layout onto every window, Big Picture and other games
-included, until another id replaces it. So the watcher never leaves a pin to stand and never relies on `0` while it
-runs. On every focus change it sends an explicit id, an unchanged one included, which also puts the pin back if anything
-else changed it. It sends `0` only once, when the backend stops. A controller that disconnects and reconnects keeps the
-pin, so nothing is sent for that.
+included, until another id replaces it. A pin on a native game's window also keeps the game's in-game overlay from
+taking the controller: the overlay is drawn inside the game's own window, so opening it is no X focus change, and
+Steam's own switch to the overlay's layout does not get past the pin. Measured on a Deck under the 64-bit client: with a
+native game's app id pinned its overlay did not take the controller; after that app id and then `0`, the game and its
+overlay both took it, and Steam switched to the overlay's layout and back by itself.
 
-Which id a window gets, in this order (`domain/controller_focus.py::input_id_for`):
+So the watcher pins only where Steam cannot attribute the window itself, and otherwise leaves Steam to its own choice
+(`domain/controller_focus.py::answer_focus`):
 
-1. The window's process, or one of its parents, is a `reaper` of this user started by `SteamLaunch` with `AppId=<id>`
-   among its own options, before the `--`. The watcher sends `<id>`, for any game and not only a shortcut of Tender's.
-   The process comes from X-Resource, the host's pid. `_NET_WM_PID` is never used, because for a Flatpak it is the
-   sandbox's own pid.
-2. The window carries `STEAM_GAME` = `769` **and** a `STEAM_INPUT_FOCUS` property. That is Big Picture, and it gets
-   `769`. The desktop client's windows (library, friends list, a properties dialog) carry `STEAM_GAME` = `769` too, but
-   not `STEAM_INPUT_FOCUS`. The title is never used, because Steam translates it.
-3. Everything else gets `413080`: no focused window, which is also what X reports while a native Wayland window has
-   focus — none, or a placeholder X window of the compositor's — a window gone before it could be asked about, and a
-   window whose pid the server cannot give.
+- **A window to pin** — its process, or one of its parents, is a `reaper` of this user started by `SteamLaunch` with
+  `AppId=<id>` among its own options, before the `--`, **and** the window carries no `STEAM_GAME` property — gets `<id>`
+  on every focus change onto it, an unchanged one included, and the pin stands. Measured: RetroArch's window from
+  RetroDECK's Flatpak carries no `STEAM_GAME`; a native game's window carries its app id there, set by Steam. The
+  process comes from X-Resource, the host's pid. `_NET_WM_PID` is never used, because for a Flatpak it is the sandbox's
+  own pid.
+- **Focus leaving a standing pin**, for any other window, gets once the id Steam's own choice would be, and right after
+  it `0` (`steam_choice_for`): the window's `STEAM_GAME` for a game Steam attributes; `769` for a window carrying
+  `STEAM_GAME` = `769` **and** a `STEAM_INPUT_FOCUS` property, which is Big Picture; `413080` for everything else. The
+  desktop client's windows (library, friends list, a properties dialog) carry `STEAM_GAME` = `769` too, but not
+  `STEAM_INPUT_FOCUS`, and get `413080`. The title is never used, because Steam translates it. "Everything else" covers
+  no focused window, which is also what X reports while a native Wayland window has focus — none, or a placeholder X
+  window of the compositor's — a window gone before it could be asked about, and a window whose pid the server cannot
+  give. The id before the `0` sets the window focused now at once; the `0` leaves every later change to Steam.
+- **With no pin standing** nothing is sent: not on an ordinary focus change, not for a native game, and not while no
+  game Steam cannot attribute is running.
+
+A controller that disconnects and reconnects keeps the pin, so nothing is sent for that.
 
 ## When it acts
 
@@ -72,9 +82,9 @@ Only in Desktop Mode under the 64-bit client (`watcher_applies`). Both are read 
   line.
 
 A Steam run is identified by its pid together with the start time in `/proc/<pid>/stat`, so a reused pid counts as a new
-run. Steam is read every three seconds. A new run, a switch of client, Steam gone and a lost X connection are each
-noticed within that time. A run where the watcher applies gets a fresh connection, and the focused window's id is sent
-at once. Under the 32-bit client and in Gaming Mode nothing is opened and nothing is sent, so the attribution that works
+run. Steam is read every three seconds. A new run, a switch of client, Steam gone and a lost X connection are each A run
+where the watcher applies gets a fresh connection, and a focused window to pin is pinned at once; a new run carries no
+pin. Under the 32-bit client and in Gaming Mode nothing is opened and nothing is sent, so the attribution that works
 there is never overridden.
 
 ## Talking to the X server
@@ -123,22 +133,23 @@ Two other ways in were rejected:
 A URL that cannot go out answers `False`: nothing is attached yet, the connection was lost, the page threw (Steam's
 `SteamClient` not there yet, for one), or the injector stopped for good, after
 [the crash watchdog](loading-the-panel.md#the-crash-watchdog) or a press on
-[the load-failure card](loading-the-panel.md#the-load-failure-card) ended it. The watcher then tries the id of the
-window focused at that point on its next reading of Steam, and says once that it could not. A focus change that arrives
-while a send is in flight is not queued, because the next pass reads the window focused by then. With
-`TENDER_INJECT=off` there is no attachment, so the entry point does not start the watcher at all.
+[the load-failure card](loading-the-panel.md#the-load-failure-card) ended it. The pin standing stays as it was, and on
+its next reading of Steam the watcher asks again what the window focused then needs, and says once that it could not. A
+focus change that arrives while a send is in flight is not queued, because the next pass reads the window focused by
+then. With `TENDER_INJECT=off` there is no attachment, so the entry point does not start the watcher at all.
 
 ## At stop: the one step before the detach
 
 The host lets go of Steam's debugger before it shuts the application down. A `0` sent from the services' shutdown would
 find no connection, and a pin left standing keeps forcing its layout onto every window until something replaces it. So
 the host gives the application one narrow step before it detaches (`BackendBuild.before_detach`). In that step the
-watcher, and nothing else, sends `0`, and only where this run sent a pin and the Steam it pinned is still running. Every
+watcher, and nothing else, sends `0`, and only where a pin stands and the Steam it stands in is still running. Every
 send after it is dropped. The rest of the stop keeps its old order.
 
 Moving the whole detach behind the services' shutdown was rejected: the connection would stay open while every service
-stops, and nothing has examined that. A backend that is killed outright never runs this step, and its pin stands; the
-next backend start sends a fresh id at once.
+stops, and nothing has examined that. A backend that is killed outright never runs this step, and its pin stands. A
+backend started after it does not know the pin, so it stands until that backend next pins a window and focus leaves it
+again.
 
 ## Switching it off
 

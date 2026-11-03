@@ -494,11 +494,13 @@ belongs to the running game, and RetroDECK is a Flatpak. Steam then gives the wi
 controls into a mouse and a keyboard. Steam's 32-bit client and Gaming Mode are not affected. Valve tracks this in its
 steam-for-linux tracker as issue `13053`.
 
-**What Tender does**: While Steam's 64-bit client runs in Desktop Mode, Tender's backend watches which window has focus
-and tells Steam which controller layout to load. A game's window gets the game's layout, Big Picture gets Big Picture's,
-and every other window gets the desktop's, each at the moment it takes focus. When the backend stops, it hands the
-choice back to Steam. Under the 32-bit client and in Gaming Mode it does nothing. It reaches Steam the same way Tender's
-panel does, so while the panel is not loaded into Steam it does nothing either. How it works is in
+**What Tender does**: While Steam's 64-bit client runs in Desktop Mode, Tender's backend watches which window has focus.
+When a game's window that Steam cannot place has it, the backend tells Steam to load that game's controller layout. When
+focus moves on to Big Picture, the desktop or another game, it tells Steam once which layout that window gets and then
+hands the choice back to Steam, which decides by itself from then on — so a game Steam places itself, and its in-game
+overlay, are left to Steam. When the backend stops while a game's layout is still forced, it hands the choice back to
+Steam. Under the 32-bit client and in Gaming Mode it does nothing. It reaches Steam the same way Tender's panel does, so
+while the panel is not loaded into Steam it does nothing either. How it works is in
 [Controller focus in Desktop Mode](../architecture/controller-focus.md).
 
 If the layout is still wrong, look at the backend's log with
@@ -515,8 +517,8 @@ If the layout is still wrong, look at the backend's log with
 - **"Steam could not be handed the input id yet; trying again"**: the backend's connection to Steam is not there at the
   moment. It tries again every few seconds for as long as that lasts.
 
-If the backend was stopped without the chance to clean up, a game's layout can stay on every window. The next start of
-the backend sets the right layout at once.
+If the backend was stopped without the chance to clean up while a game's layout was forced, that layout can stay on
+every window. Starting a RetroDECK game from Tender again, and then leaving its window, hands the choice back to Steam.
 
 **Switching it off**: To see how things behave without it, switch the watcher off with an override of the backend's
 unit:

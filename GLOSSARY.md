@@ -1362,11 +1362,12 @@ Tender's own text.
 
 ### Focus watcher / pin (forced input id)
 
-The **focus watcher** (`services/controller_focus.py`) tells Steam which controller layout to load for the focused
-window, because Steam's **64-bit client** cannot attribute a Flatpak's window to its game in **Desktop Mode**. A **pin**
-is what `steam://forceinputappid/<id>` leaves: Steam forces the layout of `<id>` onto every window until another id
-replaces it. A **release** is `0`, which hands the choice back to Steam. Detail:
-[Controller focus in Desktop Mode](docs/architecture/controller-focus.md). _Avoid_: _input lock_, _controller override_.
+The **focus watcher** (`services/controller_focus.py`) tells Steam which controller layout to load for a focused window
+Steam cannot attribute itself, because Steam's **64-bit client** cannot attribute a Flatpak's window to its game in
+**Desktop Mode**, and hands the choice back once focus leaves it. A **pin** is what `steam://forceinputappid/<id>`
+leaves: Steam forces the layout of `<id>` onto every window until another id replaces it. A **release** is `0`, which
+hands the choice back to Steam. Detail: [Controller focus in Desktop Mode](docs/architecture/controller-focus.md).
+_Avoid_: _input lock_, _controller override_.
 
 ### Navigation watcher / restoration ledger
 
