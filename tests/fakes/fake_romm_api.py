@@ -394,7 +394,7 @@ class FakeRommApi:
             return self.list_hidden_roms_answer
         hidden = sorted(rid for rid in self.hidden_rom_ids if rid in self.roms and rid not in self.admin_hidden_rom_ids)
         return {
-            "items": [dict(self.roms[rid]) for rid in hidden[:1]],
+            "items": [self._answer_rom(rid) for rid in hidden[:1]],
             "total": len(hidden),
             "rom_id_index": hidden,
         }

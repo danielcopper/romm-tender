@@ -609,7 +609,9 @@ class TestAGameTheUserHidInRomm:
     async def test_a_hidden_game_is_not_offered_and_the_start_asks_no_second_time(self, harness):
         _seed(harness.uow, _rom(1, fetch="old"), _rom(2, fetch="old"))
         harness.romm.outcomes[2] = [RommNotFoundError("gone")] * 3
-        asked = self._answer_hidden(harness, {"items": [{"id": 1}], "total": 1, "rom_id_index": [1]})
+        asked = self._answer_hidden(
+            harness, {"items": [{"id": 1, "rom_user": {"hidden": True}}], "total": 1, "rom_id_index": [1]}
+        )
 
         preview = await _preview(harness)
         await _start(harness, preview["preview_id"], remove_fully_vanished=True)
