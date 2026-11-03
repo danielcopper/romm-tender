@@ -154,7 +154,7 @@ def _parent(pid: int) -> int | None:
             for line in f:
                 if line.startswith("PPid:"):
                     return int(line.split()[1])
-    except (OSError, UnicodeDecodeError, IndexError, ValueError):
+    except (OSError, IndexError, ValueError):
         return None
     return None
 

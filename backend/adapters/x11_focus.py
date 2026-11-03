@@ -24,6 +24,8 @@ from typing import TYPE_CHECKING, Any
 from domain.controller_focus import FocusedWindow
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from domain.controller_focus import XDisplay
 
 _LIBXCB = "libxcb.so.1"
@@ -155,28 +157,42 @@ def cookie_for(authority: bytes, number: str) -> bytes | None:
     any.
     An entry cut short ends the reading; what came before it still counts.
     """
+    wanted = number.encode()
+    for family, entry_number, name, data in _authority_entries(authority):
+        if name != _COOKIE_NAME or not data:
+            continue
+        if family == _FAMILY_LOCAL and entry_number == wanted:
+            return data
+        if family == _FAMILY_WILD and entry_number in (b"", wanted):
+            return data
+    return None
+
+
+def _authority_entries(authority: bytes) -> Iterator[tuple[int, bytes, bytes, bytes]]:
+    """Each whole entry of an Xauthority file as (family, display number, name, data); a cut-short one ends it."""
     offset = 0
     while offset + 2 <= len(authority):
         (family,) = struct.unpack_from(">H", authority, offset)
         offset += 2
         fields: list[bytes] = []
         for _ in range(4):
-            if offset + 2 > len(authority):
-                return None
-            (length,) = struct.unpack_from(">H", authority, offset)
-            offset += 2
-            if offset + length > len(authority):
-                return None
-            fields.append(authority[offset : offset + length])
-            offset += length
+            field, offset = _counted_field(authority, offset)
+            if field is None:
+                return
+            fields.append(field)
         _address, entry_number, name, data = fields
-        if name != _COOKIE_NAME or not data:
-            continue
-        if family == _FAMILY_LOCAL and entry_number == number.encode():
-            return data
-        if family == _FAMILY_WILD and entry_number in (b"", number.encode()):
-            return data
-    return None
+        yield family, entry_number, name, data
+
+
+def _counted_field(authority: bytes, offset: int) -> tuple[bytes | None, int]:
+    """The length-prefixed field at *offset* and the offset after it; ``None`` where the file ends inside it."""
+    if offset + 2 > len(authority):
+        return None, offset
+    (length,) = struct.unpack_from(">H", authority, offset)
+    start = offset + 2
+    if start + length > len(authority):
+        return None, offset
+    return authority[start : start + length], start + length
 
 
 class _Libraries:
@@ -317,7 +333,12 @@ class X11FocusAdapter:
             return f"the X authority file {display.authority_path} holds no cookie for display {display.name}"
         name_buffer = ctypes.create_string_buffer(_COOKIE_NAME, len(_COOKIE_NAME))
         data_buffer = ctypes.create_string_buffer(cookie, len(cookie))
-        auth = _AuthInfo(len(_COOKIE_NAME), ctypes.addressof(name_buffer), len(cookie), ctypes.addressof(data_buffer))
+        auth = _AuthInfo(
+            len(_COOKIE_NAME),
+            ctypes.cast(name_buffer, ctypes.c_void_p),
+            len(cookie),
+            ctypes.cast(data_buffer, ctypes.c_void_p),
+        )
         screen = ctypes.c_int(0)
         connection = libs.xcb.xcb_connect_to_display_with_auth_info(
             display.name.encode(), ctypes.byref(auth), ctypes.byref(screen)
