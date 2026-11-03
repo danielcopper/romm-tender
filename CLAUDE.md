@@ -53,6 +53,8 @@ is invisible at the citation site), so reach it through the page that owns the t
 - Emulator and core selection — [core-emulator-selection.md](docs/architecture/core-emulator-selection.md)
 - RetroArch/ES-DE config parsing — [config-source-parsers.md](docs/architecture/config-source-parsers.md)
 - Steam Remote Play — [steam-remote-play.md](docs/architecture/steam-remote-play.md)
+- The focus watcher — which controller layout Steam's 64-bit client is told to load in Desktop Mode, the X connection,
+  the pin and its release at stop — [controller-focus.md](docs/architecture/controller-focus.md)
 - The desktop surface's changes to Steam's page in the desktop client (dev build only) —
   [desktop-dom-architecture.md](docs/architecture/desktop-dom-architecture.md)
 - **End-user-facing behavior and UI** — setup, configuration, syncing, save-sync, BIOS, troubleshooting —
@@ -849,6 +851,19 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   (`TestTheStatusHomesAgree`, `TestWhichEntriesHold`, `TestEachEntryNamesItsApp`),
   `tests/services/test_running_games.py`, `frontend/src/utils/runningApps.test.ts`. Prompt-only: no new reader of
   `SteamUIStore.RunningApps`, and the stranded card's sentence follows what the backend waits on
+- **The focus watcher sends `steam://forceinputappid` only while Steam runs the 64-bit client outside gamescope: an
+  explicit id on every focus change, an unchanged one included, and never `0` while it runs; `0` goes out once, at stop,
+  through the host's step before it detaches from Steam's debugger, and only where this run pinned and that Steam still
+  runs; switched off (`TENDER_FOCUS_WATCHER=off`, or `TENDER_INJECT=off`) it opens nothing and sends nothing; and no
+  module but `domain/controller_focus.py` spells the URL** — test + prompt-only —
+  `tests/domain/test_controller_focus.py` (`TestWhenTheWatcherApplies`, `TestWhichIdAWindowGets`, `TestTheSwitch`,
+  `TestOnlyTheRulesSpellTheUrl`), `tests/services/test_controller_focus.py` (`TestWhereSteamAttributesWindowsItself`,
+  `TestWatching`, `TestSteamRestarts`, `TestReleasingThePin`, `TestSwitchedOff`),
+  `tests/host/test_runtime.py::TestTheStepBeforeTheDetach` for the order at stop and `tests/test_build_backend.py`
+  (`TestWhetherTheFocusWatcherRuns`, `TestTheFocusWatcher::test_the_step_before_the_detach_releases_its_pin`). Unseen by
+  them: what Steam does with a URL (device only), a URL built at run time or named only in a comment or docstring, and
+  the X tier, which skips where Xvfb is missing outside CI. Prompt-only: nothing but the watcher's `release_pin` runs in
+  `BackendBuild.before_detach`
 - **No save path but the sync before a start, the one after a game and a conflict resolved before a start changes the
   saves of a game Steam lists as running, the RetroDECK home migration excepted, which
   [#2226](https://github.com/danielcopper/romm-tender/issues/2226) decided to remove: Sync All Saves Now and a

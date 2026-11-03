@@ -202,6 +202,10 @@ Steam UI from itself is in [How the panel gets into Steam](../architecture/loadi
 Two switches exist, both read from the environment at start-up: `TENDER_INJECT=off` serves the panel and loads it
 nowhere, and `TENDER_INJECT=force` loads it even where the crash watchdog has stopped.
 
+`TENDER_FOCUS_WATCHER=off`, read at start-up too, switches the [focus watcher](../architecture/controller-focus.md) off:
+it then opens no X connection and sends Steam nothing. It sends through the attachment the panel is loaded over, so
+`TENDER_INJECT=off` switches it off as well.
+
 ### Running an installed one
 
 `mise run dev` is the development loop. What a user gets instead is a systemd **user** unit,
