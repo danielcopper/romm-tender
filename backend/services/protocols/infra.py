@@ -355,7 +355,7 @@ class SteamUrlControl(Protocol):
     connection lost — and never raises.
     """
 
-    async def execute_steam_url(self, url: str) -> bool: ...
+    async def execute_steam_url(self, url: str, /) -> bool: ...
 
 
 class PendingSyncReader(Protocol):
