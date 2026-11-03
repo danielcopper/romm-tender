@@ -737,17 +737,19 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   member lists to the stale sort, and no collection holding a member of such a group is skipped; a bound version RomM
   joined to the game after Tender last read it, its stored key still its old game's, is not brought in and goes the
   stale way (#2661 D5); in a group no listed version holds, a bound row the user hid takes no part in either convergence
-  (#2502 D1). A row whose shortcut either removes keeps its binding until the panel reports the shortcut gone from
-  Steam, the finalize settles the row's stamps whatever its binding by then, and `report_sync_removals` unbinds it only
-  while it still holds the reported appId; a removal never reported is emitted and counted by the preview again while
-  the shortcut is in Steam, and unbound by the next sync's start reconcile where it is gone (#2653 D1). The removed-game
-  cleanup's own proof marks and clears rows too, by its rule in docs/architecture/removed-game-cleanup.md, "Discovery"**
-  — test + prompt-only — `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule,
+  (#2502 D1), and in a group a listed version holds it ranks as one RomM no longer lists in both (D8). A row whose
+  shortcut either removes keeps its binding until the panel reports the shortcut gone from Steam, the finalize settles
+  the row's stamps whatever its binding by then, and `report_sync_removals` unbinds it only while it still holds the
+  reported appId; a removal never reported is emitted and counted by the preview again while the shortcut is in Steam,
+  and unbound by the next sync's start reconcile where it is gone (#2653 D1). The removed-game cleanup's own proof marks
+  and clears rows too, by its rule in docs/architecture/removed-game-cleanup.md, "Discovery"** — test + prompt-only —
+  `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule,
   `tests/domain/test_sync_diff.py::TestAHiddenRowInTheStaleSort`,
-  `tests/domain/test_fetch_generation.py::TestHiddenWithoutAListedVersion`, `TestConvergeBoundGroups`' hidden cases and
-  `tests/services/library/test_sync_orchestrator.py::TestAGameTheUserHidInRomm` for a game the user hid,
-  `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and the
-  preview (among it the third run, the stopped run, the platform route and the fallback),
+  `tests/domain/test_fetch_generation.py::TestHiddenWithoutAListedVersion`, `TestConvergeBoundGroups`' hidden cases,
+  `tests/services/library/test_sync_orchestrator.py::TestAGameTheUserHidInRomm` and
+  `TestAGameACollectionBringsInConverges::test_a_version_the_user_hid_ranks_as_one_romm_no_longer_lists` for a game the
+  user hid, `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply
+  and the preview (among it the third run, the stopped run, the platform route and the fallback),
   `TestDoSyncPerUnit::test_a_game_whose_every_version_is_gone_keeps_its_shortcut` and `TestPlatformTurnedOffAndBackOn`
   (with `test_a_platform_still_on_that_romm_no_longer_lists_keeps_its_shortcuts`,
   `test_a_platform_romm_no_longer_lists_keeps_its_steam_collection` and
@@ -794,14 +796,15 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   converge a game a collection brings in through `services/library/_convergence.py::converge_collection_deliveries`,
   over the ROMs the collection units fetched and never a skipped collection's rebuilt rows
 - **What the user hid in RomM is read off one request, `GET /api/roms?statuses=hidden`
-  (`RommApiAdapter.list_hidden_roms`), parsed only by `domain/hidden_roms.py::hidden_rom_ids`, and asked once per sync's
-  work queue, once per version-picker open and once per cleanup scan, whose start reuses the scan's set; an answer that
-  cannot be read — one whose first item is not marked hidden included, as from a RomM that ignored `statuses` — takes
-  nothing for hidden: no removal, no mark, nothing left out of the cleanup; and a ROM an admin hid is told apart from a
-  deleted one nowhere** — test + prompt-only — `tests/domain/test_hidden_roms.py`,
-  `tests/adapters/romm/test_romm_api.py::TestListHiddenRoms`,
-  `tests/services/library/test_fetcher.py::TestTheHiddenSet`,
-  `tests/services/library/test_sync_orchestrator.py::TestAGameTheUserHidInRomm::test_a_hidden_list_that_cannot_be_read_removes_nothing`,
+  (`RommApiAdapter.list_hidden_roms`), read only through `RommApiAdapter.read_hidden_rom_ids`, which parses it with
+  `domain/hidden_roms.py::hidden_rom_ids` and logs an answer it cannot read, and asked once per sync's work queue, once
+  per version-picker open and once per cleanup scan, whose start reuses the scan's set; an answer that cannot be read —
+  one whose first item is not marked hidden included, as from a RomM that ignored `statuses` — takes nothing for hidden:
+  no removal, no mark, nothing left out of the cleanup; and a ROM an admin hid is told apart from a deleted one
+  nowhere** — test + prompt-only — `tests/domain/test_hidden_roms.py`, `tests/adapters/romm/test_romm_api.py`
+  (`TestListHiddenRoms`, `TestReadHiddenRomIds`), `tests/services/library/test_fetcher.py::TestTheHiddenSet`,
+  `tests/services/library/test_sync_orchestrator.py::TestAGameTheUserHidInRomm::test_a_hidden_list_that_cannot_be_read_removes_nothing`
+  with `::test_a_removal_the_sync_makes_for_another_reason_stands_beside_an_unread_hidden_list`,
   `tests/services/test_version_switch.py::TestAVersionTheUserHidInRomm`,
   `tests/services/prune/test_service.py::TestAGameTheUserHidInRomm` and, for the fake telling the two kinds apart,
   `tests/fakes/test_fake_romm_api.py::TestTheTwoKindsOfHide`. Prompt-only: no reader takes `rom_user.hidden` off an

@@ -110,7 +110,7 @@ Bulk discovery from Data Management's Gone from RomM row reads two kinds of loca
 generation-gated: a platform with no known completed fetch produces no candidates from its stamp, because absence from
 an incomplete fetch is not evidence of removal. The second is the library sync's own mark on a row, below, which reaches
 the rows no stamp can name. Its one request asks RomM for the ROMs the user hid
-([#2502](https://github.com/danielcopper/romm-tender/issues/2502) D5; `PruneService._read_hidden_rom_ids`): such a ROM
+([#2502](https://github.com/danielcopper/romm-tender/issues/2502) D5; `RommApiAdapter.read_hidden_rom_ids`): such a ROM
 is absent from every fetch and still on RomM, so the scan leaves it out of what it takes for gone. The set is kept on
 the `PrunePreview`, and the start rebuilds the snapshot over that same set rather than asking again. An answer that
 cannot be read takes nothing for hidden: the scan then offers such a ROM as gone, and the run's exact-id proof, which
