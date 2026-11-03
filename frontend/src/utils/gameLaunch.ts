@@ -21,6 +21,7 @@ import type {
   AnsweringSource,
   GameLaunch,
   LaunchGoesOnReason,
+  LaunchNoteReason,
   LaunchRefusalReason,
   LaunchStoppedShortReason,
 } from "../types";
@@ -144,6 +145,8 @@ const STOPPED_SHORT_BECAUSE: Record<LaunchStoppedShortReason, (launch: GameLaunc
   opened_file_unread: (launch) => `${namedFile(launch)} could not be read`,
   patch_setting_unread: () => "whether it loads a patch for the disc image could not be read",
   opens_past_bound: () => "the game opens more files than were checked",
+  path_too_long_unchecked: (launch) =>
+    `the path of ${namedFile(launch)} is too long for it to read in full, and what it does then was not checked`,
 };
 
 /**
@@ -157,6 +160,20 @@ const GOES_ON_BECAUSE: Record<LaunchGoesOnReason, string> = {
   goes_on_format_refused: "it is not a disc image it opens",
   goes_on_path_too_long: "its path is too long to open",
 };
+
+/**
+ * What else the emulator is established to do short of the whole start (#2698), as the page's note and the menu's
+ * line both finish their sentence after "can start …, but". Play stays on.
+ */
+const STARTS_WITH_A_NOTE_BECAUSE: Record<LaunchNoteReason, (launch: GameLaunch) => string> = {
+  playlist_discs_past_limit: (launch) => `reads no more than four discs from ${namedFile(launch)}`,
+};
+
+function startsWithANoteBecause(launch: GameLaunch): string | null {
+  return launch.state === "starts" && launch.reason !== null && launch.reason in STARTS_WITH_A_NOTE_BECAUSE
+    ? STARTS_WITH_A_NOTE_BECAUSE[launch.reason as LaunchNoteReason](launch)
+    : null;
+}
 
 /** The file the resolver's reason is about, named as the sentences name it: its name, else the game's own file. */
 function namedFile(launch: GameLaunch): string {
@@ -260,6 +277,8 @@ export function launchNote(launch: GameLaunch | null, source: AnsweringSource | 
   const goesOn = goesOnBecause(launch);
   if (goesOn !== null)
     return `${launch.entry} can start this game, but goes on without ${namedFile(launch)}: ${goesOn}.`;
+  const note = startsWithANoteBecause(launch);
+  if (note !== null) return `${launch.entry} can start this game, but ${note}.`;
   if (launch.state === "starts" && launch.format_unestablished) {
     return `Whether ${launch.entry} reads ${launch.extension} files is not established.`;
   }
@@ -298,6 +317,8 @@ export function entryLaunchLine(
         const without = `without ${namedFile(launch)}: ${goesOn}`;
         return tenderStarts ? `can start it, ${without}` : without;
       }
+      const note = startsWithANoteBecause(launch);
+      if (note !== null) return tenderStarts ? `can start it, but ${note}` : note;
       if (launch.format_unestablished) return `whether it reads ${launch.extension} is not established`;
       if (launch.contents_unread) return `what is inside ${launch.file} was not read`;
       return tenderStarts ? "can start it" : null;

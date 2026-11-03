@@ -9,11 +9,13 @@ not reach cheaply.
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 from typing import Any
 
 import pytest
+from _atlas_machines import fixture_machine, vectors_asking
 from _vendor import atlas
 from _vendor.atlas import (
     CAVEAT_ARCHIVE_CONTENTS_UNREAD,
@@ -712,3 +714,65 @@ class TestWhatADiscFileOpensInTendersWords:
         )
 
         assert result.payload(platform_name="PlayStation")["reason_file"] == "Game (Track 2).bin"
+
+
+def _gpgx_vector(name: str) -> dict[str, Any]:
+    return next(
+        vector for stem, vector in vectors_asking("launchable") if stem == "disc-opens" and vector["name"] == name
+    )
+
+
+def _through_tender(inp: dict[str, Any], traces: list[str]):
+    """The recorded machine's question asked live and read through Tender's reading module."""
+    adapter = AtlasCatalogueAdapter(
+        sources=EmulatorSourcesAdapter(
+            user_home=inp["home"], settings={}, log_debug=traces.append, machine=fixture_machine(inp)
+        ),
+        log_debug=traces.append,
+    )
+    query = inp["launchable_query"]
+    return adapter.launchability(query["system"], query["content_path"], label="Genesis Plus GX")
+
+
+class TestGenesisPlusGxNotesOnlyWhereTheyHold:
+    """Both notes stand only where the resolver states their case, over its recorded machines (#2698)."""
+
+    @pytest.fixture(autouse=True)
+    def _no_host_deploy(self):
+        """A recorded machine answers for its own ``/var/lib/flatpak`` deploy; nothing on this host is read."""
+
+    def test_a_playlist_past_four_discs_says_so(self, traces):
+        inp = _gpgx_vector("opens-genesis-plus-gx-a-playlist-past-four-discs-ignores-the-rest")["input"]
+
+        result = _through_tender(inp, traces)
+
+        assert (result.state, result.reason, result.reason_file) == (STARTS, PLAYLIST_DISCS_PAST_LIMIT, "Game.m3u")
+
+    def test_a_playlist_of_four_discs_says_nothing(self, traces):
+        inp = copy.deepcopy(_gpgx_vector("opens-genesis-plus-gx-a-playlist-past-four-discs-ignores-the-rest")["input"])
+        playlist = inp["launchable_query"]["content_path"]
+        inp["files"][playlist] = "".join(inp["files"][playlist].splitlines(keepends=True)[:4])
+
+        result = _through_tender(inp, traces)
+
+        assert (result.state, result.reason) == (STARTS, None)
+
+    def test_a_sheet_path_of_255_bytes_is_not_established(self, traces):
+        inp = _gpgx_vector("opens-genesis-plus-gx-a-sheet-path-of-255-bytes-is-not-established")["input"]
+
+        result = _through_tender(inp, traces)
+
+        assert (result.state, result.reason, result.reason_file) == (STARTS, PATH_TOO_LONG_UNCHECKED, "Game.cue")
+
+    def test_a_sheet_path_under_255_bytes_says_nothing(self, traces):
+        inp = copy.deepcopy(_gpgx_vector("opens-genesis-plus-gx-a-sheet-path-of-255-bytes-is-not-established")["input"])
+        long_folder = os.path.dirname(inp["launchable_query"]["content_path"])
+        short_folder = os.path.join(os.path.dirname(long_folder), "Game")
+        inp["files"] = {path.replace(long_folder, short_folder): text for path, text in inp["files"].items()}
+        inp["launchable_query"]["content_path"] = inp["launchable_query"]["content_path"].replace(
+            long_folder, short_folder
+        )
+
+        result = _through_tender(inp, traces)
+
+        assert (result.state, result.reason) == (STARTS, None)

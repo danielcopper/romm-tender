@@ -373,6 +373,35 @@ describe("what a disc file opens, as the resolver read it (#2698)", () => {
     expect(entryLaunchLine(answer, RETRODECK)).toBe(`whether it starts the game is not established: ${why}`);
   });
 
+  it("a playlist past four discs keeps Play on and says the emulator reads only four", () => {
+    const answer = disc({
+      entry: "Genesis Plus GX",
+      state: "starts",
+      reason: "playlist_discs_past_limit",
+      file: "Game.m3u",
+      reason_file: "Game.m3u",
+    });
+    expect(launchRefused(answer)).toBe(false);
+    expect(launchNote(answer, RETRODECK)).toBe(
+      "Genesis Plus GX can start this game, but reads no more than four discs from Game.m3u.",
+    );
+    expect(entryLaunchLine(answer, RETRODECK)).toBe("can start it, but reads no more than four discs from Game.m3u");
+    expect(entryLaunchLine(answer, RETRODECK, false)).toBe("reads no more than four discs from Game.m3u");
+  });
+
+  it("a sheet path too long for the emulator to read in full keeps Play on and says what was not checked", () => {
+    const answer = disc({
+      entry: "Genesis Plus GX",
+      state: "starts",
+      reason: "path_too_long_unchecked",
+      reason_file: "Game.cue",
+    });
+    expect(launchRefused(answer)).toBe(false);
+    expect(launchNote(answer, RETRODECK)).toBe(
+      "Whether Genesis Plus GX starts this game cannot be established: the path of Game.cue is too long for it to read in full, and what it does then was not checked.",
+    );
+  });
+
   it("a stop is no note on a file that starts, and a file the start goes on without is no refusal", () => {
     expect(launchNote(disc({ state: "starts", reason: "playlist_refused" }), RETRODECK)).toBeNull();
     expect(launchRefusal(disc({ state: "not_this_emulator", reason: "goes_on_file_missing" }), true)).toBe(

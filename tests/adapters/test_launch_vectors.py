@@ -1,24 +1,27 @@
 """Tender's judgement of a launch answer is the resolver's, on every recorded launch machine (#2698 D6).
 
 Each vector in ``tests/adapters/atlas_vectors/`` whose expectations hold a
-``launchable`` answer is a whole machine. The installation it names, else the
-first detected, is asked the vector's own question live, and that answer is read
-through Tender's reading module (:class:`adapters.atlas_catalogue.AtlasCatalogueAdapter`).
-What is compared is keyed on what the resolver states as data, never on a code
-Tender interprets:
+``launchable`` answer is a whole machine, whatever family it stands in. The
+installation it names, else the first detected, is asked the vector's own
+question live, and that answer is read through Tender's reading module
+(:class:`adapters.atlas_catalogue.AtlasCatalogueAdapter`). What is compared is
+keyed on what the resolver states as data, and on nothing Tender reads into a
+code:
 
 - the verdict: a refusal of the file turns Play off, a launchable answer leaves
   it on, and only a verdict the resolver could not establish reads as not
   established;
-- the effect it states for a failure of the open (``effect``): the stop is the
-  refusal's reason and names its file, and on a launchable answer a file the
-  emulator goes on without reads as said beside the start, never as not
-  established, while an effect not established reads as not established.
+- the ``effect`` it states for a failure of the open: the stop is the refusal's
+  reason and names its file, and beside a launchable answer a file the emulator
+  goes on without reads as said beside the start, never as not established,
+  while an effect not established reads as not established.
 
-Unseen by it: a note whose being "not established" the resolver states only
+Its limit: a note whose being "not established" the resolver states only
 through what its code means — ``entry-format-unestablished``, the boot codes,
-the reading's own unread codes — where no data says so; those stand in the
-reading module's classification and its own tests.
+the opens reading's unread codes — carries no such data, so the test does not
+judge it; the reading module's classification and its own tests stand for it.
+The test grows to cover those once emu-atlas states the take on every launch
+caveat.
 """
 
 from __future__ import annotations
@@ -53,12 +56,7 @@ from domain.launchability import (
     NOT_A_LAUNCH_FILE,
     NOT_ESTABLISHED,
     NOT_THIS_EMULATOR,
-    OPENED_CONTENT_UNREAD,
     OPENED_FILE_MISSING,
-    OPENED_FILE_UNREAD,
-    OPENED_FORMAT_UNREAD,
-    OPENS_PAST_BOUND,
-    PATCH_SETTING_UNREAD,
     PATH_TOO_LONG,
     PATH_TOO_LONG_UNCHECKED,
     PLAYLIST_REFUSED,
@@ -84,14 +82,7 @@ _GOES_ON_WORDS = {
     GOES_ON_FORMAT_REFUSED,
     GOES_ON_PATH_TOO_LONG,
 }
-_NOT_ESTABLISHED_WORDS = {
-    PATH_TOO_LONG_UNCHECKED,
-    OPENED_FORMAT_UNREAD,
-    OPENED_CONTENT_UNREAD,
-    OPENED_FILE_UNREAD,
-    PATCH_SETTING_UNREAD,
-    OPENS_PAST_BOUND,
-}
+_NOT_ESTABLISHED_WORDS = {PATH_TOO_LONG_UNCHECKED}
 _GROUP_OF_EFFECT = {EFFECT_GOES_ON: _GOES_ON_WORDS, EFFECT_UNESTABLISHED: _NOT_ESTABLISHED_WORDS}
 
 _VECTORS = vectors_asking("launchable")

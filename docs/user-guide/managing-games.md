@@ -653,8 +653,8 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
   a disc image it opens, or a path too long for it to open — or that it starts no game from a playlist, as Beetle PCE
   does. **Play** is off.
 - **"Beetle Saturn can start this game, but goes on without Game (Track 2).bin: it is a track of a type it does not
-  take."** — the emulator starts the game without a file of the disc, and the sentence names it and why. **Play** stays
-  on.
+  take."** — the emulator starts the game without a file of the disc, and the sentence names it and why. Genesis Plus GX
+  says the same way that it reads no more than four discs from a playlist that lists more. **Play** stays on.
 - **"Tender cannot start RPCS3 Game Serial (Standalone) yet."** — the emulator in effect is one Tender cannot start from
   Steam yet, and nothing else stands in the way. **Play** is off; choose another emulator in the emulator menu.
 - **"Whether Game.sfc starts cannot be established: …"** — the emulator source could not answer, with the reason.

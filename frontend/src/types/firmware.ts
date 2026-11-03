@@ -469,6 +469,9 @@ export type LaunchGoesOnReason =
   | "goes_on_format_refused"
   | "goes_on_path_too_long";
 
+/** What the emulator is established to do short of the whole start that is not a file it goes on without (#2698). */
+export type LaunchNoteReason = "playlist_discs_past_limit";
+
 /** What could not be established about a file the entry starts, in Tender's words. */
 export type LaunchStoppedShortReason =
   | "content_missing"
@@ -490,7 +493,8 @@ export type LaunchStoppedShortReason =
   | "opened_content_unread"
   | "opened_file_unread"
   | "patch_setting_unread"
-  | "opens_past_bound";
+  | "opens_past_bound"
+  | "path_too_long_unchecked";
 
 /**
  * Whether one installed game's file starts with one emulator entry, as the
@@ -522,7 +526,13 @@ export interface GameLaunch {
   starts_from: string[];
   other_entries: string[];
   install_in: string[] | null;
-  reason: LaunchNotEstablishedReason | LaunchRefusalReason | LaunchStoppedShortReason | LaunchGoesOnReason | null;
+  reason:
+    | LaunchNotEstablishedReason
+    | LaunchRefusalReason
+    | LaunchStoppedShortReason
+    | LaunchGoesOnReason
+    | LaunchNoteReason
+    | null;
   reason_file?: string | null;
   contents_unread: boolean;
   format_unestablished: boolean;
