@@ -93,12 +93,12 @@ socket to the X server is watched with `loop.add_reader`, with no thread of its 
 - **The display and its cookie come from Steam's session, never from the backend's environment.** The backend's systemd
   unit starts before the desktop session, and its environment outlives a switch between modes. `DISPLAY` and
   `XAUTHORITY` are read from the first process at or above Steam that shares the backend's user namespace **and** names
-  an authority file the backend can read (`~/.Xauthority` where `XAUTHORITY` is unset). The second condition is not a
-  nicety. Measured on a Deck, the chain above the 64-bit client is `steam` and `pv-adverb` inside the container, then
-  `srt-bwrap` on the host, still naming the container's `/run/pressure-vessel/Xauthority`, which does not exist on the
-  host; `srt-client-cont` above it names the session's file. The cookie, `MIT-MAGIC-COOKIE-1`, is read out of that file
-  and handed to `xcb_connect_to_display_with_auth_info`. The backend's own environment is never changed, and the cookie
-  is never logged.
+  both a display and an authority file the backend can read (`~/.Xauthority` where `XAUTHORITY` is unset). The second
+  condition is not a nicety. Measured on a Deck, the chain above the 64-bit client is `steam` and `pv-adverb` inside the
+  container, then `srt-bwrap` on the host, still naming the container's `/run/pressure-vessel/Xauthority`, which does
+  not exist on the host; `srt-client-cont` above it names the session's file. The cookie, `MIT-MAGIC-COOKIE-1`, is read
+  out of that file and handed to `xcb_connect_to_display_with_auth_info`. The backend's own environment is never
+  changed, and the cookie is never logged.
 - **A reply can bring events with it.** An event the server sends while the watcher waits for a reply is read off the
   socket with the reply and kept in xcb's queue, so the socket never becomes readable for it. Reading the events returns
   the queued ones first, so after every send that went out the watcher makes one more pass over the events

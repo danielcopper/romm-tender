@@ -198,7 +198,7 @@ class _FocusWatch:
 
     async def _open_source(self, steam: RunningSteam) -> bool:
         if steam.display is None:
-            reason = "Steam's desktop session names no X display"
+            reason = "Steam's desktop session names no X display with an authority file this backend can read"
         else:
             reason = await self._loop.run_in_executor(None, self._source.connect, steam.display)
         if reason is not None:

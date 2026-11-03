@@ -486,7 +486,8 @@ class TestWhenTheDisplayCannotBeReached:
 
             assert watcher.x.connected_to == []
             assert [r.getMessage() for r in caplog.records] == [
-                "controller focus: not watching, Steam's desktop session names no X display; trying again"
+                "controller focus: not watching, Steam's desktop session names no X display with an authority file "
+                "this backend can read; trying again"
             ]
 
 

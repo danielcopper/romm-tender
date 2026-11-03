@@ -10,6 +10,7 @@ naming the session's, then the host's ``steam`` launch script and its shell.
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING
 
 import pytest
@@ -222,6 +223,41 @@ class TestTheDisplayItWasStartedFrom:
 
         assert steam is not None
         assert steam.display is None
+
+    def test_an_authority_file_this_backend_cannot_read_is_walked_past(
+        self, proc_root: Path, home: Path, tmp_path: Path, session_authority: str
+    ) -> None:
+        if os.geteuid() == 0:
+            pytest.skip("root reads a file whatever its mode")
+        unreadable = tmp_path / "unreadable-xauth"
+        unreadable.write_bytes(b"\x01\x00")
+        unreadable.chmod(0)
+        _make_process(
+            proc_root,
+            4000,
+            comm="steam.sh",
+            parent=1,
+            namespace=HOST_NAMESPACE,
+            environ={"DISPLAY": ":0", "XAUTHORITY": session_authority},
+        )
+        _make_process(
+            proc_root,
+            STEAM_PID,
+            comm="steam",
+            parent=4000,
+            namespace=HOST_NAMESPACE,
+            environ={"DISPLAY": ":0", "XAUTHORITY": str(unreadable)},
+            exe=STEAM_64,
+        )
+        _write_pid_file(home, str(STEAM_PID))
+
+        try:
+            steam = _read(home)
+        finally:
+            unreadable.chmod(0o600)
+
+        assert steam is not None
+        assert steam.display == XDisplay(name=":0", authority_path=session_authority)
 
     def test_an_authority_path_that_is_a_directory_is_walked_past(
         self, proc_root: Path, home: Path, tmp_path: Path, session_authority: str
