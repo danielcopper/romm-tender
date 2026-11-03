@@ -264,6 +264,7 @@ class SyncPreview:
                         preferred_region=preferred_region,
                         running_rom_ids=self._running_rom_ids,
                         logger=self._logger,
+                        hidden_rom_ids=box.run_hidden_rom_ids or frozenset(),
                     )
                 }
             emitted, classify_skipped = collapse_counting_platform_rebinds(

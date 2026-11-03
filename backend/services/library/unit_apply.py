@@ -159,6 +159,7 @@ class UnitApplier:
             preferred_region=self._settings.get("preferred_region", AUTO_REGION),
             running_rom_ids=self._running_rom_ids,
             logger=self._logger,
+            hidden_rom_ids=self._sync_state.run_hidden_rom_ids or frozenset(),
         )
         self._sync_state.run_converged.update((binding.rom_id, binding) for binding in converged)
         by_key = {collection_membership_key(delivery.unit): delivery for delivery in deliveries}

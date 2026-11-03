@@ -10727,6 +10727,27 @@ class TestAGameACollectionBringsInConverges:
         )
 
     @pytest.mark.asyncio
+    async def test_a_version_the_user_hid_ranks_as_one_romm_no_longer_lists(self, make_library, fake_romm_api, emit):
+        """Faves now lists only 30; 31, RomM's default and bound too, is hidden, so 30 keeps the shortcut (#2502 D8)."""
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, faves=[30, 31], main=31, also_bound=(30,))
+        assert self._bound(library) == {30: 6030, 31: 6031}
+        self._list(fake_romm_api, 7, [30])
+        fake_romm_api.hidden_rom_ids = {31}
+        # 30's recorded launch command is stale, so the preview counts its entry
+        # as a change only where 30 is the version that keeps the shortcut.
+        with library.uow as uow:
+            uow.roms.set_applied_launch_options(30, "stale")
+        changed = (await library.sync.sync_preview())["summary"]["changed_count"]
+        library.sync._box.discard_preview()
+
+        counted, removed, _walks = await self._sync(library, fake_romm_api, emit, "run-2")
+
+        assert (changed, counted) == (1, 1)
+        assert removed == [{"rom_id": 31, "app_id": 6031, "kept_rom_id": 30, "kept_app_id": 6030}]
+        assert self._bound(library) == {30: 6030}
+
+    @pytest.mark.asyncio
     async def test_the_steam_collection_keeps_the_game_on_the_shortcut_it_keeps(
         self, make_library, fake_romm_api, emit
     ):

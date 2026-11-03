@@ -81,6 +81,7 @@ async def converge_collection_deliveries(
     preferred_region: str,
     running_rom_ids: RunningRomIdsFn,
     logger: logging.Logger,
+    hidden_rom_ids: Collection[int] = frozenset(),
 ) -> list[ConvergedBinding]:
     """:func:`converge_unless_running` over the bound rows the run's collection deliveries bring in (#2661 D1, D4).
 
@@ -88,9 +89,11 @@ async def converge_collection_deliveries(
     fetched, *sibling_stubs* each one's ``sibling_roms``, *registry* every bound
     row, and *platform_slugs* the platforms the sync leaves off. A brought-in
     row no collection delivered is ranked by its stored version fields
-    (:func:`~domain.sync_diff.stored_version`), and every brought-in row's
-    install is read from its install record, as the preview and the apply
-    both read it here.
+    (:func:`~domain.sync_diff.stored_version`), unless the user hid it
+    (*hidden_rom_ids*, the run's hidden set): RomM still lists such a version
+    among its siblings, and it ranks as one RomM no longer lists, as on a
+    platform (#2502 D8). Every brought-in row's install is read from its
+    install record, as the preview and the apply both read it here.
     """
     brought_in = brought_in_by_delivery(delivered, sibling_stubs, registry)
     if not brought_in.rows:
@@ -102,7 +105,7 @@ async def converge_collection_deliveries(
     versions = [
         stored_version(stored[rom_id], is_main_sibling=is_main)
         for rom_id, is_main in brought_in.undelivered.items()
-        if rom_id in stored
+        if rom_id in stored and rom_id not in hidden_rom_ids
     ]
     return await converge_unless_running(
         [*delivered, *versions],
@@ -112,4 +115,5 @@ async def converge_collection_deliveries(
         preferred_region=preferred_region,
         running_rom_ids=running_rom_ids,
         logger=logger,
+        hidden_rom_ids=hidden_rom_ids,
     )
