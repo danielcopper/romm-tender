@@ -49,6 +49,9 @@ class PrunePreview:
     entries: tuple[dict[str, Any], ...]
     free_bytes: int
     server_namespace: str
+    # The ROMs the user hid in RomM when the scan asked (#2502 D5): never
+    # offered as gone. The start rebuilds the snapshot over the same set.
+    hidden_rom_ids: frozenset[int] = frozenset()
 
 
 @dataclass(frozen=True)

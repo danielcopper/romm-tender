@@ -6,6 +6,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
+from domain.hidden_roms import hidden_rom_ids
 from domain.retrodeck_folders import EveryFolderRefused, FolderRefused
 from lib.background_tasks import BackgroundTasks
 from lib.errors import NamedRefused, Refused
@@ -151,6 +152,7 @@ class PruneService:
         self._artwork_job = config.artwork_job
         self._recovery_store = config.recovery_store
         self._retrodeck_folders = config.retrodeck_folders
+        self._romm_api = config.romm_api
         self._preview_builder = PreviewBuilder(
             config=PreviewBuilderConfig(
                 uow_factory=config.uow_factory,
@@ -229,7 +231,10 @@ class PruneService:
         preview = self._preview
         if preview_id is None:
             token = self._uuid_gen.uuid4()
-            preview = await self._loop.run_in_executor(None, self._preview_builder.build, token, scope, explicit_rom_id)
+            hidden = await self._read_hidden_rom_ids()
+            preview = await self._loop.run_in_executor(
+                None, self._preview_builder.build, token, scope, explicit_rom_id, hidden
+            )
             self._preview = preview
             self._selection = None
         elif (
@@ -243,6 +248,19 @@ class PruneService:
         result = self._preview_builder.page(preview, offset, limit)
         result["recovery_root"] = self._recovery_store.root()
         return result
+
+    async def _read_hidden_rom_ids(self) -> frozenset[int]:
+        """Every ROM the user hid in RomM, asked once per scan (#2502 D5); empty where the answer cannot be read."""
+        try:
+            answer: object = await self._loop.run_in_executor(None, self._romm_api.list_hidden_roms)
+        except Exception as e:  # an unread answer takes nothing for hidden
+            self._logger.warning(f"Removed-game cleanup: the list of ROMs hidden in RomM could not be read: {e}")
+            return frozenset()
+        hidden = hidden_rom_ids(answer)
+        if hidden is None:
+            self._logger.warning("Removed-game cleanup: the list of ROMs hidden in RomM was not readable")
+            return frozenset()
+        return hidden
 
     async def stage_prune_installed_selection(self, request: object) -> dict[str, Any]:
         """Append one bounded page to an ephemeral preview-bound selection."""
@@ -331,6 +349,7 @@ class PruneService:
                 preview.preview_id,
                 preview.scope,
                 preview.explicit_rom_id,
+                preview.hidden_rom_ids,
             )
             async with self._admission_lock:
                 if self._closed:
