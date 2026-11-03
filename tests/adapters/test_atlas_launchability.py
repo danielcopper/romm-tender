@@ -810,7 +810,7 @@ class TestEveryStatementIsSaid:
         assert swapped.statements == tuple(reversed(first.statements))
         assert (first.reason, swapped.reason) == (GOES_ON_FILE_MISSING, OPENED_FORMAT_UNREAD)
 
-    def test_beside_a_refusal_each_file_the_emulator_would_have_gone_on_without_follows_the_stop(self, traces):
+    def test_beside_a_refusal_every_statement_but_the_stop_is_carried_in_the_resolver_s_order(self, traces):
         result = _ask_psx(
             LaunchabilityAnswer(
                 verdict=VERDICT_ENTRY_NOT_ACCEPTED,
@@ -825,7 +825,26 @@ class TestEveryStatementIsSaid:
         )
 
         assert (result.reason, result.reason_file) == (PLAYLIST_REFUSED, "Game.m3u")
-        assert result.statements == (LaunchStatement(GOES_ON_FILE_MISSING, "Disc 2.cue"),)
+        assert result.statements == (
+            LaunchStatement(GOES_ON_FILE_MISSING, "Disc 2.cue"),
+            LaunchStatement(OPENED_CONTENT_UNREAD, "Disc 1.cue"),
+        )
+
+    def test_beside_a_refusal_a_disc_whose_opening_was_not_checked_is_said(self, traces):
+        # The recorded Beetle PCE playlist whose second disc is missing, with
+        # that disc a .chd: the core's open of it is not followed, and the load
+        # fails for the playlist.
+        inp = copy.deepcopy(
+            _disc_opens_vector("opens-beetle-pce-a-playlist-missing-its-second-disc-states-which-caveat-stops")["input"]
+        )
+        folder = os.path.dirname(inp["launchable_query"]["content_path"])
+        inp["files"][f"{folder}/Game.m3u"] = "Game (Disc 1).cue\nGame (Disc 2).chd\n"
+        inp["files"][f"{folder}/Game (Disc 2).chd"] = {"size": 4096}
+
+        result = _through_tender(inp, traces, label="Beetle PCE")
+
+        assert (result.state, result.reason, result.reason_file) == (NOT_THIS_EMULATOR, PLAYLIST_REFUSED, "Game.m3u")
+        assert result.statements == (LaunchStatement(OPENED_FORMAT_UNREAD, "Game (Disc 2).chd"),)
 
     def test_the_format_and_archive_notes_are_statements_of_their_own(self, traces):
         result = _ask_psx(

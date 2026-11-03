@@ -500,6 +500,28 @@ describe("every statement the resolver makes, each in its own words (#2698 D8)",
     expect(launchNotes(answer, RETRODECK)).toEqual([]);
   });
 
+  it("a refusal then says each thing the resolver could not establish, after the files it would go on without", () => {
+    const answer = playlist({
+      entry: "Beetle PCE",
+      state: "not_this_emulator",
+      reason: "playlist_refused",
+      reason_file: "Game.m3u",
+      other_entries: ["Beetle PCE Fast"],
+      statements: [{ reason: "opened_format_unread", file: "Game (Disc 2).chd" }],
+    });
+    expect(launchRefusal(answer, true)).toBe(
+      "Beetle PCE cannot start Game.m3u: it starts no game from a playlist. How it opens Game (Disc 2).chd was not checked. Beetle PCE Fast can — choose it in the emulator menu.",
+    );
+    const both = playlist({
+      ...answer,
+      statements: [{ reason: "opened_format_unread", file: "Game (Disc 2).chd" }, missingDisc2],
+    });
+    expect(launchRefusal(both, false)).toBe(
+      "Beetle PCE cannot start Game.m3u: it starts no game from a playlist. It would go on without Disc 2.cue: it is missing. How it opens Game (Disc 2).chd was not checked.",
+    );
+    expect(entryLaunchLine(both, RETRODECK)).toBe("it starts no game from a playlist +2 more");
+  });
+
   it("an answer that carries no statements says its reason and its two notes", () => {
     const answer = playlist({
       state: "starts",

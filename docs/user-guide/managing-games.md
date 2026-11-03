@@ -651,7 +651,8 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
   `.ccd`, `.gdi` or `.m3u`, or a disc image, the emulator's own opening of its files was followed, and the sentence
   names the file it stops on: a file that is missing, a track or a cue sheet or playlist it refuses, a file that is not
   a disc image it opens, or a path too long for it to open — or that it starts no game from a playlist, as Beetle PCE
-  does. Each file it would have gone on without follows. **Play** is off.
+  does. Each file it would have gone on without follows, then each thing that could not be established about the others.
+  **Play** is off.
 - **"Beetle Saturn can start this game, but goes on without Game (Track 2).bin: it is a track of a type it does not
   take."** — the emulator starts the game without a file it opens, and the sentence names it and why. Genesis Plus GX
   says the same way that it does not read every disc a playlist lists. **Play** stays on.

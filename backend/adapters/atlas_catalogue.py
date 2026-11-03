@@ -589,17 +589,26 @@ def _statement(caveat: Any, reason: str) -> LaunchStatement:
     return LaunchStatement(reason, _named_file(caveat) if caveat.code in _NAMES_A_FILE else None)
 
 
+def _beside_a_refusal(caveat: Any) -> str | None:
+    """What *caveat* says beside a refusal, in Tender's word: a file the emulator would have gone on without, or
+    something the resolver could not establish; ``None`` for the stop itself and for anything else."""
+    for effect in (EFFECT_GOES_ON, EFFECT_UNESTABLISHED):
+        reason = _open_failure(caveat, effect)
+        if reason is not None:
+            return reason
+    return _STOPPED_SHORT_BECAUSE.get(caveat.code) or _STARTS_ALSO_SAYS.get(caveat.code)
+
+
 def _statements(answer: Any, state: str) -> tuple[LaunchStatement, ...]:
     """Every statement Tender says beside *answer*'s verdict, in the resolver's caveat order (#2698 D8).
 
-    Beside a start, each one Tender words; beside a refusal, each file the
-    emulator would have gone on without, the stop being the verdict's reason.
+    Beside a start, each one Tender words; beside a refusal, whose stop is the
+    verdict's reason, each file the emulator would have gone on without and
+    each thing the resolver could not establish.
     """
     if state == NOT_THIS_EMULATOR:
         return tuple(
-            _statement(caveat, reason)
-            for caveat in answer.caveats
-            if (reason := _open_failure(caveat, EFFECT_GOES_ON)) is not None
+            _statement(caveat, reason) for caveat in answer.caveats if (reason := _beside_a_refusal(caveat)) is not None
         )
     if state != STARTS:
         return ()

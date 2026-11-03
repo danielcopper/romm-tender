@@ -513,11 +513,14 @@ export type LaunchStoppedShortReason =
  * `reason` is the resolver's reason in Tender's words, `null` where it named
  * none Tender words: why a verdict was `not_established`, why the entry does not
  * start the file on `not_this_emulator`, and what could not be established
- * about a file that `starts` (#2195 D40) — there, the first of its statements.
+ * about a file that `starts` (#2195 D40), what its start goes on without, or that the emulator does not read
+ * every disc a playlist lists (#2698 D7); on a start, the first such statement, the format and archive notes left
+ * out — what a start says is `statements`.
  * `reason_file` is the name of the file that reason is about, where the resolver names one; absent or `null`
  * otherwise. `statements` is everything said beside the verdict, in the resolver's order (#2698 D8): each
- * statement beside a start, and each file a refused start would have gone on without; an answer without it is read
- * from `reason` and the two notes below. `contents_unread` says the file is an archive whose
+ * statement beside a start, and beside a refused start each file it would have gone on without and each thing the
+ * resolver could not establish; an answer without it is read from `reason` and the two notes below.
+ * `contents_unread` says the file is an archive whose
  * contents were not read; `format_unestablished` that whether the entry reads
  * this format was not established.
  */

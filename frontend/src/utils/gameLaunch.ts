@@ -251,19 +251,35 @@ function refusalFile(launch: GameLaunch): string {
   return launch.reason_file ?? launch.file;
 }
 
+/** *text* as a sentence of its own: its first letter capitalized, a full stop after it. */
+function asSentence(text: string): string {
+  return ` ${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
+}
+
 /**
- * The files a refused start would have gone on without (#2698 D8), each as a sentence after the refusal's own.
+ * What a refused start says after its own sentence (#2698 D8): each file the emulator would have gone on without,
+ * then each thing the resolver could not establish, each as a sentence of its own.
  */
-function wouldGoOnWithout(launch: GameLaunch): string {
-  return statementsOf(launch)
-    .flatMap((statement) =>
-      statement.reason in GOES_ON_BECAUSE
-        ? [
-            ` It would go on without ${statement.file ?? launch.file}: ${GOES_ON_BECAUSE[statement.reason as LaunchGoesOnReason]}.`,
-          ]
-        : [],
-    )
-    .join("");
+function besideARefusal(launch: GameLaunch): string[] {
+  const statements = statementsOf(launch);
+  const goesOn = statements.flatMap((statement) =>
+    statement.reason in GOES_ON_BECAUSE
+      ? [
+          ` It would go on without ${statement.file ?? launch.file}: ${GOES_ON_BECAUSE[statement.reason as LaunchGoesOnReason]}.`,
+        ]
+      : [],
+  );
+  const notEstablished = statements.flatMap((statement) => {
+    const file = statement.file ?? launch.file;
+    if (statement.reason in STOPPED_SHORT_BECAUSE) {
+      return [asSentence(STOPPED_SHORT_BECAUSE[statement.reason as LaunchStoppedShortReason](launch, file))];
+    }
+    if (statement.reason === "format_unestablished" || statement.reason === "contents_unread") {
+      return [asSentence(said(launch, statement, true)!.line)];
+    }
+    return [];
+  });
+  return [...goesOn, ...notEstablished];
 }
 
 function refusedBecause(launch: GameLaunch): (typeof REFUSED_BECAUSE)[LaunchRefusalReason] | null {
@@ -311,9 +327,10 @@ export function launchRefused(launch: GameLaunch | null): boolean {
 }
 
 /**
- * Why the game cannot start with its entry, as one sentence, or `null` where
- * the verdict lets it start. `canPick` says the emulator menu offers another
- * entry; only then does the sentence point at it.
+ * Why the game cannot start with its entry, or `null` where the verdict lets it
+ * start: the refusal's sentence, then what the resolver says beside it (#2698
+ * D8). `canPick` says the emulator menu offers another entry; only then does the
+ * text point at it.
  */
 export function launchRefusal(launch: GameLaunch | null, canPick: boolean): string | null {
   if (launch === null) return null;
@@ -328,11 +345,11 @@ export function launchRefusal(launch: GameLaunch | null, canPick: boolean): stri
       return `${launch.file} is not the file ${launch.platform_name} starts from; it starts from ${listedExtensions(launch.starts_from)}.`;
     case "not_this_emulator": {
       const refused = refusedBecause(launch);
-      const goesOn = wouldGoOnWithout(launch);
-      if (refused !== null) return `${refused.page(launch)}${goesOn}${otherEntriesPointer(launch, canPick)}`;
-      if (launch.other_entries.length === 0) return `${launch.entry} does not start ${launch.extension}.${goesOn}`;
+      const beside = besideARefusal(launch).join("");
+      if (refused !== null) return `${refused.page(launch)}${beside}${otherEntriesPointer(launch, canPick)}`;
+      if (launch.other_entries.length === 0) return `${launch.entry} does not start ${launch.extension}.${beside}`;
       const pointer = canPick ? " Choose another emulator in the emulator menu." : "";
-      return `${launch.entry} does not start ${launch.extension}; other emulators of this system do.${goesOn}${pointer}`;
+      return `${launch.entry} does not start ${launch.extension}; other emulators of this system do.${beside}${pointer}`;
     }
     default:
       return null;
@@ -379,8 +396,8 @@ export function entryLaunchLine(
     case "not_a_launch_file":
       return `${launch.platform_name} does not start from ${launch.extension}`;
     case "not_this_emulator": {
-      const goesOn = statementsOf(launch).filter((statement) => statement.reason in GOES_ON_BECAUSE).length;
-      return withMore(refusedBecause(launch)?.line(launch) ?? `cannot start ${launch.extension} files`, goesOn);
+      const more = besideARefusal(launch).length;
+      return withMore(refusedBecause(launch)?.line(launch) ?? `cannot start ${launch.extension} files`, more);
     }
     case "not_established":
       return `whether it starts cannot be established: ${notEstablishedBecause(launch, source)}`;

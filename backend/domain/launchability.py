@@ -127,12 +127,14 @@ class Launchability:
     (:data:`SYSTEM_UNKNOWN` …), why the entry does not start the file on
     :data:`NOT_THIS_EMULATOR` (:data:`TAKES_NO_FOLDER` …), and what could not be
     established about a file that :data:`STARTS` (:data:`CONTENT_MISSING` …)
-    or what is said beside its start (:data:`GOES_ON_FILE_MISSING` …) — on a
-    start, the first of its ``statements``. ``reason_file`` is the name of the
-    file the reason is about, where the resolver names one, and ``None``
-    otherwise. ``statements`` is everything said beside the verdict, in the
-    resolver's order (#2698 D8): each statement beside a start, and beside a
-    refusal each file the emulator would have gone on without.
+    or what is said beside its start (:data:`GOES_ON_FILE_MISSING` …); on a
+    start, the first such statement, the format and archive notes left out —
+    what a start says is ``statements``. ``reason_file`` is the name of the file
+    the reason is about, where the resolver names one, and ``None`` otherwise.
+    ``statements`` is everything said beside the verdict, in the resolver's
+    order (#2698 D8): each statement beside a start, and beside a refusal each
+    file the emulator would have gone on without and each thing the resolver
+    could not establish.
     ``contents_unread`` says the file is an archive whose contents were not
     read; ``format_unestablished`` that whether the entry reads this format was
     not established.

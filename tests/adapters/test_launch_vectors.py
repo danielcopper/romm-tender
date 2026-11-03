@@ -13,9 +13,9 @@ code:
   established;
 - the ``effect`` it states for a failure of the open: the stop is the refusal's
   reason and names its file, and every other failure the answer states is said
-  among Tender's statements (#2698 D8), in the resolver's order, in its own
-  group — a file the emulator goes on without as said beside the start or the
-  refusal, never as not established, and an effect not established as not
+  among Tender's statements (#2698 D8), under every verdict, in the resolver's
+  order, in its own group — a file the emulator goes on without as one it goes
+  on without, never as not established, and an effect not established as not
   established.
 
 Its limit: a note whose being "not established" the resolver states only
