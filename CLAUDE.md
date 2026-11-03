@@ -1375,6 +1375,11 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `NO_CLASS_HASHES`; test files left out), kept live by `frontend/src/eslintNoClassHashes.test.ts`. Unseen by it: a hash
   with no digit, no capital or no small letter in it, one shorter than twelve characters, and one built at run time.
   This list is the one home of what the check misses; the config, the rules file and the long form point here
+- **Every `flow-children` in `frontend/src/` is one of the six values Steam's parser knows — `column`, `column-reverse`,
+  `row`, `row-reverse`, `grid`, `geometric` — written as a string literal** — check — `tender/flow-children-value`
+  (`frontend/eslint-rules/flow-children-value.js`, over every `src/**/*.{ts,tsx}` file, tests included), kept live by
+  `frontend/src/eslintFlowChildren.test.ts`. Unseen by it: a value handed over through a spread or `createElement`'s
+  props, and whether a known value is the way its group's stops are laid out
 
 When a change applies a guard / sanitize / backup / grouping pattern, sweep for sibling sites of the same pattern — the
 register is what that sweep checks against.

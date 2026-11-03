@@ -747,6 +747,26 @@ tab does today), and the narrow pages sit in the Quick Access panel's own scroll
 two scrollers of its own — the dialog body and its details region (`bigpicture/RemovedGamesCleanup.tsx`). Whether a
 full-width row in any of these loses the edges of its ring has not been looked at.
 
+### Focus groups
+
+A `Focusable` holding focus stops is a **focus group**, and its `flow-children` prop names the way Steam's gamepad
+navigation moves between them. **Steam's parser knows six values: `column`, `column-reverse`, `row`, `row-reverse`,
+`grid` and `geometric`.** A row moves left and right, a column up and down, and `grid` and `geometric` both ways; a
+press the group does not move on goes to the group around it.
+
+**Any other value is dropped**: the parser asserts `Unhandled flow-children` and answers no layout, which is what an
+absent prop answers too. A group with no layout takes one from its CSS each time it is asked, and none at all while it
+holds fewer than two stops: a flex row is a row, a flex row that wraps a grid, a flex column a column, a CSS grid a grid
+(geometric where it names template areas), and anything else a column — unless its first element child floats (left a
+row, right a reversed row) or is inline or inline-block (a grid). So `horizontal`, `vertical` or `right` steers the way
+it reads only while the group's CSS points the same way, and turns with the CSS without a word.
+
+Both halves are in `steamui/sp.js`: the parser is the switch that ends in the `Unhandled flow-children` assert, and the
+fallback is the navigation node's `GetLayout`, which reads the element's computed style. Module numbers change between
+Steam builds; the assert's text and the method's name are how to find them again. The ESLint rule
+`tender/flow-children-value` (`frontend/eslint.config.js`) refuses any other value in `frontend/src/`, and a value that
+is not a string literal.
+
 ### Columns
 
 One row of side-by-side scrolling regions, which is what every wide page whose content is more than one column is built

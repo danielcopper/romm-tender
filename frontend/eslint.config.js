@@ -11,11 +11,16 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import noResolverVocabulary from "./eslint-rules/no-resolver-vocabulary.js";
 import qamFocusableRow from "./eslint-rules/qam-focusable-row.js";
+import flowChildrenValue from "./eslint-rules/flow-children-value.js";
 
 // One plugin object for every block that turns on one of its rules: ESLint
 // refuses a second definition of the same plugin name for a file.
 const tender = {
-  rules: { "no-resolver-vocabulary": noResolverVocabulary, "qam-focusable-row": qamFocusableRow },
+  rules: {
+    "no-resolver-vocabulary": noResolverVocabulary,
+    "qam-focusable-row": qamFocusableRow,
+    "flow-children-value": flowChildrenValue,
+  },
 };
 
 // Names that carry "plugin" because they name someone else's plugin, and must
@@ -457,6 +462,15 @@ export default tseslint.config(
           generic: PANEL_GENERIC_VALUES,
         },
       ],
+    },
+  },
+  // Every `flow-children` in the panel is one of the six values Steam's parser
+  // knows, tests included; a value that is not a string literal fails too.
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    plugins: { tender },
+    rules: {
+      "tender/flow-children-value": "error",
     },
   },
   // Must stay LAST: turns off ESLint rules that conflict with Prettier formatting
