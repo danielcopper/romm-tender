@@ -10,6 +10,7 @@ import logging
 import urllib.parse
 from typing import TYPE_CHECKING, Any
 
+from domain.hidden_roms import hidden_rom_ids
 from lib.errors import (
     PairingCodeInvalidError,
     PairingCodeOwnerDisabledError,
@@ -31,7 +32,7 @@ from lib.romm_paging import LIST_PAGE_SIZE
 _SYNC_DISABLED_DETAIL = "Sync is disabled for this device"
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
     from adapters.romm.http import RommHttpAdapter
     from models.cover import CoverRevalidation
@@ -43,6 +44,26 @@ if TYPE_CHECKING:
     )
 
 _logger = logging.getLogger(__name__)
+
+
+def hidden_rom_ids_answered_by(list_hidden_roms: Callable[[], object]) -> frozenset[int] | None:
+    """Every ROM *list_hidden_roms* names as hidden by the user; ``None``, logged, where it raises or cannot be read.
+
+    ``None`` takes nothing for hidden, so a failed request never removes a
+    shortcut or offers a game as gone (#2502 D2, D5). Shared by
+    :meth:`RommApiAdapter.read_hidden_rom_ids` and the fake RomM, so both read
+    an answer alike.
+    """
+    try:
+        answer = list_hidden_roms()
+    except Exception as e:  # any failure establishes nothing
+        _logger.warning(f"The list of ROMs hidden in RomM could not be read; nothing is taken for hidden: {e}")
+        return None
+    hidden = hidden_rom_ids(answer)
+    if hidden is None:
+        _logger.warning("The list of ROMs hidden in RomM was not readable; nothing is taken for hidden")
+    return hidden
+
 
 # ``/api/play-sessions`` pagination guard: stop after this many pages so a server
 # that never returns a short page (e.g. ignores ``offset``) can't loop forever.
@@ -187,6 +208,10 @@ class RommApiAdapter:
     def list_hidden_roms(self) -> dict[str, Any]:
         """RomM's list of the ROMs this user hid, one item at most; its ``rom_id_index`` names every one."""
         return self._client.request(f"/api/roms?statuses=hidden&limit=1{_LIST_AGGREGATIONS_DISABLED}")
+
+    def read_hidden_rom_ids(self) -> frozenset[int] | None:
+        """Every ROM the user hid in RomM, by :func:`hidden_rom_ids_answered_by` over :meth:`list_hidden_roms`."""
+        return hidden_rom_ids_answered_by(self.list_hidden_roms)
 
     def download_rom_content(
         self,

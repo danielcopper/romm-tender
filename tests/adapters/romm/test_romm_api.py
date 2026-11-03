@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
@@ -14,6 +15,7 @@ from lib.errors import (
     PairingCodeRateLimitedError,
     PairingCodeTokenGoneError,
     RommApiError,
+    RommConnectionError,
     RommForbiddenError,
     RommNotFoundError,
     RommServerError,
@@ -622,6 +624,34 @@ class TestListHiddenRoms:
         answer = {"items": [{"id": 3}], "total": 2, "rom_id_index": [3, 4]}
         client.request.return_value = answer
         assert api.list_hidden_roms() == answer
+
+
+class TestReadHiddenRomIds:
+    """The one home of asking RomM which ROMs the user hid, reading the answer, and saying when it cannot (#2502 D2)."""
+
+    def test_answers_every_id_the_index_names(self):
+        api, client = _make_api()
+        client.request.return_value = {"items": [{"id": 3, "rom_user": {"hidden": True}}], "rom_id_index": [3, 4]}
+        assert api.read_hidden_rom_ids() == frozenset({3, 4})
+
+    @pytest.mark.parametrize(
+        "failure",
+        [RommConnectionError("down"), RommServerError("HTTP 500"), ValueError("no JSON")],
+        ids=["unreachable", "server-error", "not-json"],
+    )
+    def test_a_request_that_raises_answers_none_and_says_so(self, caplog, failure):
+        api, client = _make_api()
+        client.request.side_effect = failure
+        with caplog.at_level(logging.WARNING, logger="adapters.romm.romm_api"):
+            assert api.read_hidden_rom_ids() is None
+        assert "hidden in RomM could not be read" in caplog.text
+
+    def test_an_answer_it_cannot_read_answers_none_and_says_so(self, caplog):
+        api, client = _make_api()
+        client.request.return_value = {"items": [{"id": 3}], "rom_id_index": [3, 4]}
+        with caplog.at_level(logging.WARNING, logger="adapters.romm.romm_api"):
+            assert api.read_hidden_rom_ids() is None
+        assert "hidden in RomM was not readable" in caplog.text
 
 
 class TestListCollectionRomsUpdatedAfter:

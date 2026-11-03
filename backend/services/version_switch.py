@@ -36,7 +36,6 @@ from typing import TYPE_CHECKING, Any
 
 from domain.artwork_slot import ArtworkSlot
 from domain.artwork_slot_outcome import binding_forgets_cover_record
-from domain.hidden_roms import hidden_rom_ids
 from domain.main_sibling import main_sibling_flag
 from domain.rom import Rom
 from domain.rom_file import NO_FILE_ON_ROMM_MESSAGE, NoFileOnRomm, has_file_on_romm
@@ -342,16 +341,7 @@ class VersionSwitchService:
 
     async def _read_hidden_ids(self) -> frozenset[int]:
         """Every ROM the user hid in RomM, asked once per list (#2502 D5); empty where the answer cannot be read."""
-        try:
-            answer: object = await self._loop.run_in_executor(None, self._romm_api.list_hidden_roms)
-        except Exception as e:  # an unread answer marks nothing hidden
-            self._logger.warning(f"Version list: the list of ROMs hidden in RomM could not be read: {e}")
-            return frozenset()
-        hidden = hidden_rom_ids(answer)
-        if hidden is None:
-            self._logger.warning("Version list: the list of ROMs hidden in RomM was not readable")
-            return frozenset()
-        return hidden
+        return await self._loop.run_in_executor(None, self._romm_api.read_hidden_rom_ids) or frozenset()
 
     async def _fetch_stub_details(self, stubs: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
         """Fetch each server-only sibling's full dims concurrently (best-effort).

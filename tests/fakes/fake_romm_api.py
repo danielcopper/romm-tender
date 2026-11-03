@@ -33,6 +33,7 @@ import pathlib
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from adapters.romm.romm_api import hidden_rom_ids_answered_by
 from domain.cover_refresh import _strip_cover_ts
 from fakes._romm_save_semantics import (
     check_add_save_conflict,
@@ -385,6 +386,10 @@ class FakeRommApi:
             "total": len(items),
             "rom_id_index": [r["id"] for r in items],
         }
+
+    def read_hidden_rom_ids(self) -> frozenset[int] | None:
+        """The adapter's own reading of :meth:`list_hidden_roms`, so the fake reads an answer as the adapter does."""
+        return hidden_rom_ids_answered_by(self.list_hidden_roms)
 
     def list_hidden_roms(self) -> dict[str, Any]:
         """RomM's ``statuses=hidden`` answer: the ROMs the user hid, ``limit=1``, and every one's id."""

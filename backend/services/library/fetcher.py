@@ -25,7 +25,6 @@ from domain.fetch_generation import (
     count_rows_for_skip,
     hidden_without_a_listed_version,
 )
-from domain.hidden_roms import hidden_rom_ids
 from domain.platform_names import listed_platform_names
 from domain.platform_prefs import materialize_enabled_platforms, resolve_sync_enabled
 from domain.platform_skip import probe_verdict, stamp_can_match
@@ -359,25 +358,6 @@ class LibraryFetcher:
         left_off_ids = tuple(int(p["id"]) for p in listed if int(p["id"]) not in synced_ids)
         return platforms, left_off_ids
 
-    async def _fetch_hidden_rom_ids(self) -> frozenset[int] | None:
-        """Ask RomM once for every ROM the user hid, and hold the answer on the run's box (#2502 D2).
-
-        An answer that raises or cannot be read is logged and held as ``None``:
-        it establishes nothing, so the run goes on taking nothing for hidden.
-        """
-        try:
-            answer: object = await self._loop.run_in_executor(None, self._romm_api.list_hidden_roms)
-        except SyncCancelled:
-            raise
-        except Exception as e:
-            self._logger.warning(f"The list of ROMs hidden in RomM could not be read; nothing is taken for hidden: {e}")
-            answer = None
-        hidden = hidden_rom_ids(answer)
-        if hidden is None and answer is not None:
-            self._logger.warning("The list of ROMs hidden in RomM was not readable; nothing is taken for hidden")
-        self._sync_state.run_hidden_rom_ids = hidden
-        return hidden
-
     def _check_cancelling(self):
         """Raise SyncCancelled if sync is being cancelled."""
         raise_if_cancelling(self._sync_state)
@@ -404,7 +384,9 @@ class LibraryFetcher:
         units: list[WorkUnit] = []
 
         platforms, unwalked_platform_ids = await self._fetch_enabled_platforms()
-        hidden = await self._fetch_hidden_rom_ids()
+        # Asked once per run, and the run's only source of what is hidden (#2502 D2).
+        hidden = await self._loop.run_in_executor(None, self._romm_api.read_hidden_rom_ids)
+        self._sync_state.run_hidden_rom_ids = hidden
         platform_units = [
             WorkUnit(
                 type="platform",
