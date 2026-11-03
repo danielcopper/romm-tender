@@ -1,9 +1,9 @@
-"""Steam-process-tree adapter — concrete ``GameProcessControl`` over ``/proc``.
+"""Steam-process-tree adapter — concrete ``GameProcessControl`` and ``SteamLaunchReader`` over ``/proc``.
 
 Owns the host-side view of what a shortcut Steam started is running: the
-``reaper`` process Steam starts each shortcut under, the ``/proc`` tree beneath
-it, and the signals sent to that tree's processes. Direct file reads and
-``os.kill`` only — no ``subprocess``.
+``reaper`` process Steam starts each launch under, the ``/proc`` tree beneath
+it, the way up from a process to that ``reaper``, and the signals sent to the
+tree's processes. Direct file reads and ``os.kill`` only — no ``subprocess``.
 
 Which tree is the game, and why: docs/architecture/save-file-sync-architecture.md,
 "Stop Game".
@@ -45,7 +45,7 @@ _MAX_DEPTH = 16
 
 
 class SteamProcessTreeAdapter:
-    """Real ``GameProcessControl`` backed by Steam's ``reaper`` trees in ``/proc``."""
+    """Real ``GameProcessControl`` and ``SteamLaunchReader`` backed by Steam's ``reaper`` trees in ``/proc``."""
 
     def find_game_processes(self, app_id: int) -> list[int]:
         """Return the signal targets of the tree Steam started for shortcut *app_id*, deepest first.
@@ -94,6 +94,26 @@ class SteamProcessTreeAdapter:
             return False
         return False
 
+    def launched_app_id(self, pid: int) -> int | None:
+        """Return the app id of the Steam launch *pid* runs under, or ``None`` where it runs under none.
+
+        Walks from *pid* itself up its parents to the first ``reaper`` of this
+        user started by ``SteamLaunch``, and answers the ``AppId=`` among that
+        reaper's own options — any game's, not only a shortcut's. A parent that
+        cannot be read ends the walk, and so does the depth cap.
+        """
+        uid = os.getuid()
+        current = pid
+        for _ in range(_MAX_DEPTH):
+            options = self._launch_options(current, uid)
+            if options is not None:
+                return _app_id_among(options)
+            parent = self._parent(current)
+            if parent is None or parent <= 0:
+                return None
+            current = parent
+        return None
+
     # ── Steam's reaper ───────────────────────────────────────────────────────
 
     def _reapers_of(self, app_id: int) -> list[int]:
@@ -108,22 +128,27 @@ class SteamProcessTreeAdapter:
         )
 
     def _is_reaper_of(self, pid: int, app_id: int, uid: int) -> bool:
-        """Return True when *pid* is a ``reaper`` owned by *uid* whose own options name *app_id*.
+        """Return True when *pid* is a ``reaper`` owned by *uid* whose own options name *app_id*."""
+        options = self._launch_options(pid, uid)
+        return options is not None and f"{_APP_ID_OPTION}{app_id}" in options
 
-        A process of another user is never one: its tree is not ours to signal.
+    def _launch_options(self, pid: int, uid: int) -> list[str] | None:
+        """Return the own options of *pid* when it is a ``SteamLaunch`` ``reaper`` owned by *uid*, else ``None``.
+
+        A process of another user is never one: its tree is not ours to signal,
+        and its launch is not this user's game.
         """
         try:
             if os.stat(f"{_PROC}/{pid}").st_uid != uid:
-                return False
+                return None
         except OSError:
-            return False
+            return None
         if self._comm(pid) != _REAPER_COMM:
-            return False
+            return None
         tokens = self._cmdline_tokens(pid)
         if len(tokens) < 2 or tokens[1] != _STEAM_LAUNCH:
-            return False
-        options = tokens[2 : tokens.index(_END_OF_OPTIONS)] if _END_OF_OPTIONS in tokens else tokens[2:]
-        return f"{_APP_ID_OPTION}{app_id}" in options
+            return None
+        return tokens[2 : tokens.index(_END_OF_OPTIONS)] if _END_OF_OPTIONS in tokens else tokens[2:]
 
     # ── /proc process tree ───────────────────────────────────────────────────
 
@@ -174,6 +199,18 @@ class SteamProcessTreeAdapter:
         return [int(token) for token in raw.split() if token.isdigit()]
 
     @staticmethod
+    def _parent(pid: int) -> int | None:
+        """Return *pid*'s parent from the ``PPid:`` line of ``/proc/<pid>/status``, or None when it cannot be read."""
+        try:
+            with open(f"{_PROC}/{pid}/status", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("PPid:"):
+                        return int(line.split()[1])
+        except (OSError, UnicodeDecodeError, IndexError, ValueError):
+            return None
+        return None
+
+    @staticmethod
     def _cmdline_tokens(pid: int) -> list[str]:
         """Return *pid*'s argv tokens from ``/proc/<pid>/cmdline``.
 
@@ -221,3 +258,13 @@ class SteamProcessTreeAdapter:
         except OSError:
             return False
         return True
+
+
+def _app_id_among(options: list[str]) -> int | None:
+    """The positive app id an ``AppId=`` option among *options* names, or ``None``."""
+    for option in options:
+        if option.startswith(_APP_ID_OPTION):
+            value = option[len(_APP_ID_OPTION) :]
+            if value.isdigit() and int(value) > 0:
+                return int(value)
+    return None
