@@ -78,9 +78,6 @@ interface SteamAppOverview {
   GetGameID?(): string;
 }
 
-// Keep the old name as an alias for backwards compatibility with existing code
-type AppStoreOverview = SteamAppOverview;
-
 interface SteamDragDropCollection {
   AddApps(overviews: SteamAppOverview[]): void;
   RemoveApps(overviews: SteamAppOverview[]): void;
