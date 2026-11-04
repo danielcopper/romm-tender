@@ -136,9 +136,10 @@ function declarationsOf(type: ts.Type, checker: ts.TypeChecker): ts.Node[] {
 
 /**
  * Each type's route from Steam's roots, keyed by the declarations it is made
- * of: a breadth-first walk, so the first route recorded is the shortest, and
- * among routes of one length the one from the earlier root. The declarations
- * of the global scope itself (`interface Window`) are named by no route: a
+ * of: a breadth-first walk, so the first route recorded is the shortest; among
+ * routes of one length, the one from the earlier root; from one root, the one
+ * through the member declared first. The declarations of the global scope
+ * itself (`interface Window`, a window cast's target) are named by no route: a
  * window-typed field reached on the way does not rename them.
  */
 function routes(
@@ -205,6 +206,7 @@ export function scanSteamReach(frontendDir: string): SteamReach {
   }
   const ownGlobals = new Set(roots.map(([name]) => name));
 
+  const castTargets: ts.Type[] = [];
   const shapes = new Set<ts.Node>();
   const unreadableCastFiles = new Set<string>();
   for (const source of sources) {
@@ -213,12 +215,17 @@ export function scanSteamReach(frontendDir: string): SteamReach {
       if (cast) {
         const target = checker.getTypeFromTypeNode(cast.type);
         if (target.getProperties().length === 0) unreadableCastFiles.add(relative(srcDir, source.fileName));
-        roots.push(["", target]);
+        castTargets.push(target);
         castShapes(cast.type, checker, shapes);
       }
       ts.forEachChild(node, visit);
     };
     visit(source);
+  }
+  // A cast's target is the global scope seen through another type: its properties are globals, roots like any other.
+  const castScope = castTargets.flatMap((target) => declarationsOf(target, checker));
+  for (const target of castTargets) {
+    for (const property of target.getProperties()) roots.push([property.name, checker.getTypeOfSymbol(property)]);
   }
 
   const windowSymbol = checker.resolveName("window", undefined, ts.SymbolFlags.Value, false);
@@ -242,7 +249,7 @@ export function scanSteamReach(frontendDir: string): SteamReach {
       return file.startsWith(`${srcDir}/`) || DECKY_GLOBALS.test(file);
     });
   const windowInterface = checker.resolveName("Window", undefined, ts.SymbolFlags.Type, false);
-  const routeOf = routes(roots, windowInterface?.declarations ?? [], checker, descends);
+  const routeOf = routes(roots, [...(windowInterface?.declarations ?? []), ...castScope], checker, descends);
 
   const unrouted = new Set<string>();
   const pathOf = (member: Member): string | undefined => {

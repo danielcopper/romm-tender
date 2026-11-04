@@ -26,6 +26,8 @@ beforeAll(() => {
   writeFileSync(
     `${dir}/src/types/steam.d.ts`,
     "declare var SteamUIStore: { RunningApps: number[]; SetRunningApp(id: number): void };\n" +
+      "declare var SteamClient: { Inner: SteamShared };\n" +
+      "interface SteamShared { x: number }\n" +
       "interface SteamOrphan { Lost: number }\n",
   );
   writeFileSync(
@@ -38,6 +40,10 @@ beforeAll(() => {
       "interface Shape extends Base { Other?: number }\n" +
       "export const ready = (window as unknown as Shape).BFinished();\n",
   );
+  writeFileSync(
+    `${dir}/src/holder.ts`,
+    "interface Holder { Shared: SteamShared }\nexport const x = (window as unknown as Holder).Shared.x;\n",
+  );
   writeFileSync(`${dir}/src/orphan.ts`, "export const lost = (null as unknown as SteamOrphan).Lost;\n");
   reach = scanSteamReach(dir);
 }, 60_000);
@@ -47,10 +53,13 @@ afterAll(() => {
 });
 
 describe("scanSteamReach", () => {
-  it("reads a destructured member as a reach, and a member only a comment names as none", () => {
-    const { reached } = reach;
-    expect(reached.has("SteamUIStore.RunningApps")).toBe(true);
-    expect(reached.has("SteamUIStore.SetRunningApp")).toBe(false);
+  it("reaches exactly what the code reads: a destructured member, and no member only a comment names", () => {
+    expect([...reach.reached.keys()].sort()).toEqual(["BFinished", "Shared", "Shared.x", "SteamUIStore.RunningApps"]);
+  });
+
+  it("names a type a cast's property and a global's member both reach after the shorter route", () => {
+    expect(reach.reached.has("Shared.x")).toBe(true);
+    expect(reach.reached.has("SteamClient.Inner.x")).toBe(false);
   });
 
   it("counts a member a window cast's shape inherits, named from the global scope", () => {
