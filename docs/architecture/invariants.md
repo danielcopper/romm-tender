@@ -1439,11 +1439,9 @@ Format: **invariant** — tier — enforced by.
   file no entry names is reported. The backend's half, `backend/domain/steam_internals.py`, is held by
   `tests/domain/test_steam_internals.py` over the syntax tree: every string naming Steam is held in a module-level
   constant the list names, each such constant spells its entries, and each property it reads is an entry's, or
-  JavaScript's own as the test names them (`_JAVASCRIPTS_OWN`). What neither side sees is listed in the register entry —
-  among it a route literal that is neither spelled whole nor handed as a string literal to a method named `Navigate`, an
-  untyped entry spelled part by part but not as its path, and a backend read the read check's two patterns (`.name`, a
-  double-quoted `["…"]`) do not match — and none of it is a check of what an internal DOES — Steam keeping a name while
-  changing what it answers stays a device test
+  JavaScript's own as the test names them (`_JAVASCRIPTS_OWN`). What neither side sees is listed in the register entry,
+  and none of it is a check of what an internal DOES — Steam keeping a name while changing what it answers stays a
+  device test
 - **Whether every search answered and whether the panel may MOUNT are two questions, and a miss that costs less than the
   panel never takes the interface off the air** — check + test + prompt-only — the type carries the first half:
   `SteamLookup.absenceCost` is required, so a new entry does not compile until it states which of the four its absence
