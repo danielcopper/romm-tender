@@ -36,7 +36,6 @@ from tests.services.saves._helpers import (
     _create_save,
     _enable_sync_with_device,
     _fail_renames_from_call,
-    _fail_save_backups,
     _file_md5,
     _get_save_state,
     _install_rom,
@@ -2384,13 +2383,12 @@ class TestSwitchSlot:
         """#1058: a failed download on a target the new slot provides leaves a coherent, self-healing state.
 
         The local file's extension IS provided by the new slot, so it is a
-        download target (never the non-target backup path). The download
-        fails — and because the download writes to a temp file and only
-        backs up + moves on success, the original local file is untouched (not
-        backed-up-then-lost) and its prior baseline stays intact, still
-        matching the on-disk bytes. The active slot is flipped + persisted and
-        the answer is a SlotSwitchIncomplete; the next sync re-resolves the target as a
-        Download against the newer server save, so the state self-heals.
+        download target. The switch backs it up into ``.romm-backup`` and drops
+        its baseline before the first download, so when that download fails the
+        file is not in the saves folder and has no baseline. The active slot is
+        flipped + persisted and the answer is a SlotSwitchIncomplete; the next
+        sync finds the file missing and downloads it from the new slot, so the
+        state self-heals.
         """
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
@@ -2402,7 +2400,7 @@ class TestSwitchSlot:
 
         # The target slot provides the same canonical pokemon.srm target...
         fake.saves[700] = _server_save(save_id=700, slot="target")
-        fake.set_server_save_content(700, b"server bytes that never land")
+        fake.set_server_save_content(700, b"server bytes that land on the next sync")
         # ...but its download fails.
         fake.fail_download_on(700, RommApiError(500, "download blew up"))
 
@@ -2412,13 +2410,22 @@ class TestSwitchSlot:
 
         state = _require_save_state(svc, 42)
         assert state.active_slot == "target"
-        # The original local file is untouched — not lost, not backed up.
-        assert save_path.read_bytes() == b"original local bytes"
+        # The original local file is not lost: it is in .romm-backup, not in the folder.
+        assert not save_path.exists()
         backup_dir = save_path.parent / ".romm-backup"
-        assert not (backup_dir.exists() and list(backup_dir.glob("pokemon_*.srm")))
-        # The prior baseline is preserved and still matches the on-disk bytes,
-        # so the file is not seen as diverged — it re-resolves as Download next sync.
-        assert state.files["pokemon.srm"].last_sync_hash == local_hash
+        assert [p.read_bytes() for p in backup_dir.glob("pokemon_*.srm")] == [b"original local bytes"]
+        # Its baseline is gone, so nothing holds it as in sync with the new slot.
+        assert "pokemon.srm" not in state.files
+
+        fake._fail_download_on.clear()
+        fake.call_log.clear()
+        synced = await svc.sync_rom_saves(42)
+
+        assert synced["success"] is True
+        assert [c[1][0] for c in fake.call_log if c[0] == "download_save_content"] == [700]
+        assert not any(c[0] == "upload_save" for c in fake.call_log)
+        assert save_path.read_bytes() == b"server bytes that land on the next sync"
+        assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == 700
 
     @pytest.mark.asyncio
     async def test_empty_slot_backs_up_synced_and_unsynced(self, tmp_path):
@@ -2547,7 +2554,7 @@ class TestASwitchMarksThisDeviceOnlyOnceItPlaced:
         svc, fake = make_service(tmp_path)
         save_path = self._seed_a_switch(svc, fake, tmp_path)
         record_before = dict(fake._device_sync_ledger)
-        _fail_save_backups(svc, monkeypatch)
+        _fail_renames_from_call(svc, monkeypatch, failing_call=2)
 
         result = await svc.switch_slot(42, "desktop")
 
@@ -2555,7 +2562,7 @@ class TestASwitchMarksThisDeviceOnlyOnceItPlaced:
         assert [c[2]["optimistic"] for c in fake.call_log if c[0] == "download_save_content"] == [False]
         assert not any(c[0] == "confirm_download" for c in fake.call_log)
         assert fake._device_sync_ledger == record_before
-        assert save_path.read_bytes() == b"default slot save"
+        assert not save_path.exists()
 
         monkeypatch.undo()
         synced = await svc.sync_rom_saves(42)
@@ -2580,7 +2587,7 @@ class TestASwitchMarksThisDeviceOnlyOnceItPlaced:
 
         assert isinstance(result, SlotSwitchIncomplete)
         assert save_path.read_bytes() == self._HEAD
-        assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == 100
+        assert "pokemon.srm" not in _require_save_state(svc, 42).files
 
         monkeypatch.undo()
         fake.call_log.clear()
@@ -2597,20 +2604,25 @@ class _TheBackendStopped(BaseException):
 
 
 class TestASwitchThatStopsLeavesTheNewSlotRecorded:
-    """A switch records the new slot before its first download, and each file it placed right after placing it.
+    """A switch sets every local save aside and writes the new slot before its first download, then each placed file.
 
-    However it stops, the next sync faces the new slot alone and uploads nothing into the old one.
+    A switch that stops once the new slot is written leaves the next sync facing the new slot alone, and that sync
+    uploads nothing into either slot.
     """
 
-    def _seed_two_slots(self, svc, fake, tmp_path):
-        """Two saves synced to ``default``, RomM holding both slots' heads: this device is current on ``default``'s."""
+    def _seed_two_slots(self, svc, fake, tmp_path, *, desktop_heads_by: str = "device-B"):
+        """Two saves synced to ``default``, RomM holding both slots' heads: this device is current on ``default``'s.
+
+        *desktop_heads_by* is the device current on ``desktop``'s heads; ``device-1`` is this one, as after an
+        earlier sync of ``desktop`` that RomM's ``desktop`` has not moved past.
+        """
         _enable_sync_with_device(svc)
         srm, rtc = _seed_two_synced_saves(svc, tmp_path)
         heads = (
             (100, "default", "pokemon.srm", b"srm bytes", "device-1"),
             (101, "default", "pokemon.rtc", b"rtc bytes", "device-1"),
-            (200, "desktop", "pokemon.srm", b"desktop srm", "device-B"),
-            (201, "desktop", "pokemon.rtc", b"desktop rtc", "device-B"),
+            (200, "desktop", "pokemon.srm", b"desktop srm", desktop_heads_by),
+            (201, "desktop", "pokemon.rtc", b"desktop rtc", desktop_heads_by),
         )
         for save_id, slot, filename, content, device in heads:
             fake.seed_foreign_save(
@@ -2690,8 +2702,8 @@ class TestASwitchThatStopsLeavesTheNewSlotRecorded:
         assert state.active_slot == "desktop"
         assert srm.read_bytes() == b"desktop srm"
         assert state.files["pokemon.srm"].tracked_save_id == 200
-        assert rtc.read_bytes() == b"rtc bytes"
-        assert state.files["pokemon.rtc"].tracked_save_id == 101
+        assert not rtc.exists()
+        assert "pokemon.rtc" not in state.files
 
         monkeypatch.undo()
         fake.call_log.clear()
@@ -2708,7 +2720,7 @@ class TestASwitchThatStopsLeavesTheNewSlotRecorded:
         }
 
     @pytest.mark.asyncio
-    async def test_a_switch_stopped_between_placing_a_file_and_its_write_uploads_it_into_the_new_slot_once_more(
+    async def test_a_file_placed_but_not_yet_recorded_when_the_switch_stopped_is_adopted_by_the_next_sync(
         self, tmp_path, monkeypatch
     ):
         svc, fake = make_service(tmp_path)
@@ -2729,6 +2741,8 @@ class TestASwitchThatStopsLeavesTheNewSlotRecorded:
 
         assert self._downloaded_ids(fake) == [200]
         assert srm.read_bytes() == b"desktop srm"
+        assert "pokemon.srm" not in _require_save_state(svc, 42).files
+        saves_before = set(fake.saves)
 
         monkeypatch.undo()
         fake.call_log.clear()
@@ -2736,13 +2750,10 @@ class TestASwitchThatStopsLeavesTheNewSlotRecorded:
 
         assert synced["success"] is True
         assert synced["conflicts"] == []
-        uploads = self._uploads(fake)
-        assert [(c[1][1], c[2]["slot"]) for c in uploads] == [(str(srm), "desktop")]
+        assert self._uploads(fake) == []
+        assert set(fake.saves) == saves_before
         assert self._downloaded_ids(fake) == [201]
-        uploaded_id = _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id
-        assert uploaded_id is not None
-        assert fake.saves[uploaded_id]["slot"] == "desktop"
-        assert fake._save_content[uploaded_id] == b"desktop srm"
+        assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == 200
         assert (srm.read_bytes(), rtc.read_bytes()) == (b"desktop srm", b"desktop rtc")
 
     @pytest.mark.asyncio
@@ -2770,8 +2781,8 @@ class TestASwitchThatStopsLeavesTheNewSlotRecorded:
 
         state = _require_save_state(svc, 42)
         assert state.active_slot == "desktop"
-        assert "pokemon.sav" not in state.files
-        assert not sav.exists()
+        assert state.files == {}
+        assert not any(p.exists() for p in (srm, rtc, sav))
 
         monkeypatch.undo()
         fake.call_log.clear()
@@ -2783,6 +2794,44 @@ class TestASwitchThatStopsLeavesTheNewSlotRecorded:
         assert sorted(self._downloaded_ids(fake)) == [200, 201]
         assert not sav.exists()
         assert (srm.read_bytes(), rtc.read_bytes()) == (b"desktop srm", b"desktop rtc")
+
+    @pytest.mark.parametrize("how", ["download_fails", "switch_stops"])
+    @pytest.mark.asyncio
+    async def test_back_on_a_slot_this_device_is_current_on_a_file_not_downloaded_is_not_kept_as_the_slots(
+        self, tmp_path, monkeypatch, how
+    ):
+        svc, fake = make_service(tmp_path)
+        srm, rtc = self._seed_two_slots(svc, fake, tmp_path, desktop_heads_by="device-1")
+        if how == "download_fails":
+            fake.fail_download_on(201, RommApiError(500, "download blew up"))
+        else:
+            original = fake.download_save_content
+
+            def stops_at_the_second_download(save_id: int, dest_path: str, **kwargs: Any) -> None:
+                if save_id == 201:
+                    fake.call_log.append(("download_save_content", (save_id, dest_path), kwargs))
+                    raise _TheBackendStopped
+                original(save_id, dest_path, **kwargs)
+
+            monkeypatch.setattr(fake, "download_save_content", stops_at_the_second_download)
+
+        if how == "download_fails":
+            assert isinstance(await svc.switch_slot(42, "desktop"), SlotSwitchIncomplete)
+        else:
+            with pytest.raises(_TheBackendStopped):
+                await svc.switch_slot(42, "desktop")
+
+        monkeypatch.undo()
+        fake._fail_download_on.clear()
+        fake.call_log.clear()
+        synced = await svc.sync_rom_saves(42)
+
+        assert synced["success"] is True
+        assert synced["conflicts"] == []
+        assert self._uploads(fake) == []
+        assert self._downloaded_ids(fake) == [201]
+        assert (srm.read_bytes(), rtc.read_bytes()) == (b"desktop srm", b"desktop rtc")
+        assert _require_save_state(svc, 42).files["pokemon.rtc"].tracked_save_id == 201
 
 
 class TestASwitchWhoseBackupFails:

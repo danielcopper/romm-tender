@@ -92,7 +92,7 @@ class SlotSwitchStopped(PartialFailure):
 
 @dataclass(frozen=True)
 class _SetAside:
-    """What backing up the local saves the new slot does not provide left behind.
+    """What backing up the local saves left behind.
 
     ``moved`` names the files now in ``.romm-backup``. ``failed`` names the
     file whose backup failed and ``error`` why, both ``None`` when every
@@ -176,14 +176,14 @@ class SlotSwitcher:
            is raised; a RomM error fetching the new slot's saves propagates.
 
         On success the local saves dir and per-file tracking are made coherent
-        with the new slot: every local file the new slot does not provide is
-        backed up into ``.romm-backup`` (never destroyed) and untracked, the
-        newest server save per canonical target is downloaded, and nothing is
-        uploaded — saves are not carried between slots. The flipped slot is
-        written before the first download, and the state again after each
-        download that succeeds, so a switch that stops partway leaves the new
-        slot active in the database and nothing for the next sync to upload
-        into the old one. A partial download failure answers a
+        with the new slot: every local save file, the ones the new slot
+        provides included, is backed up into ``.romm-backup`` (never
+        destroyed) and untracked, the newest server save per canonical target
+        is downloaded, and nothing is uploaded — saves are not carried between
+        slots. The flipped slot is written before the first download, and the
+        state again after each download that succeeds; what a switch that
+        stops leaves behind is ``docs/architecture/save-file-sync-architecture.md``,
+        "Switching slots". A partial download failure answers a
         :class:`SlotSwitchIncomplete` so the caller can retry.
 
         The slot changes only once every one of those backups went through. A
@@ -271,11 +271,12 @@ class SlotSwitcher:
                 f"slot_saves_ids={[s.get('id') for s in slot_saves]}"
             )
 
-            # 7. Back up + untrack every local file the new slot does not provide.
+            # 7. Back up + untrack every local save, the ones the new slot provides
+            #    included (why: save-file-sync-architecture.md, "Switching slots").
             default_slot = resolve_default_slot(self._settings)
             targets = newest_server_saves_by_target(slot_saves, info["rom_name"], known_names=save_answer.synced_names)
             set_aside = await self._loop.run_in_executor(
-                None, self._set_aside_local_saves, rom_id, saves_dir, save_answer, save_state, set(targets)
+                None, self._set_aside_local_saves, rom_id, saves_dir, save_answer, save_state
             )
             if set_aside.failed is not None:
                 stopped = self._backup_stopped(set_aside)
@@ -283,16 +284,15 @@ class SlotSwitcher:
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return stopped
 
-            # 8. Flip the active slot and write it before the first download, so a
-            #    switch that stops from here on leaves the next sync facing the
-            #    new slot rather than uploading its files into the old one.
+            # 8. Flip the active slot. It is written before the first download and
+            #    after each one that succeeds (why: save-file-sync-architecture.md,
+            #    "Switching slots").
             save_state.switch_active_slot(resolved_slot)
             await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
             switch_errors = await self._loop.run_in_executor(
                 None, self._download_targets, rom_id, saves_dir, system, save_state, device_id, targets, default_slot
             )
 
-            # 9. Record the evaluation, whatever the downloads answered.
             save_state.mark_sync_evaluated(self._clock.now().isoformat())
             await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
 
@@ -302,7 +302,7 @@ class SlotSwitcher:
                     message=f"Switched to slot but {len(switch_errors)} save(s) failed to download — retry",
                 )
 
-        # 10. Return fresh status. MUST stay outside the lock above —
+        # 9. Return fresh status. MUST stay outside the lock above —
         # get_save_status re-acquires rom_lock(rom_id), which would self-deadlock.
         save_status = await self._status_service.get_save_status(rom_id)
         return {"success": True, "save_status": save_status}
@@ -313,31 +313,24 @@ class SlotSwitcher:
         saves_dir: str,
         save_answer: SaveAnswer,
         save_state: RomSaveSyncState,
-        target_names: set[str],
     ) -> _SetAside:
-        """Back up and untrack every local save the new slot does not provide.
+        """Back up and untrack every local save, the ones the new slot provides included.
 
-        No stale file is left to upload into the new slot, and no never-synced
-        save is destroyed without a backup. The backup folder is made ready
-        before the switch's first move — a backup here, or a download that
-        will back up the local file it overwrites — and this raises
+        No never-synced save is destroyed without a backup. The backup folder
+        is made ready before the first move, and this raises
         :class:`SlotSwitchBackupFolderUnusable` when the folder cannot take
-        backups; where nothing will be moved, the folder is neither checked
+        backups; where there is nothing to move, the folder is neither checked
         nor created. The first backup that fails stops the loop, and only the
         files moved before it are untracked; when every backup went through,
-        every tracked name the new slot does not provide is untracked too.
-        Mutates *save_state* in memory; the caller owns the write Unit of
-        Work. Runs synchronously — call via ``run_in_executor``.
+        every tracked name is untracked too. Mutates *save_state* in memory;
+        the caller owns the write Unit of Work. Runs synchronously — call via
+        ``run_in_executor``.
         """
         local_now = self._rom_info.find_save_files(rom_id, save_answer=save_answer)
-        to_move = [lf["filename"] for lf in local_now if lf["filename"] not in target_names]
-        to_overwrite = [lf["filename"] for lf in local_now if lf["filename"] in target_names]
-        self._log_debug(
-            f"switch_slot: apply rom={rom_id} targets={list(target_names)} "
-            f"local_files={[lf['filename'] for lf in local_now]} tracked={list(save_state.files)}"
-        )
+        to_move = [lf["filename"] for lf in local_now]
+        self._log_debug(f"switch_slot: apply rom={rom_id} local_files={to_move} tracked={list(save_state.files)}")
 
-        if to_move or to_overwrite:
+        if to_move:
             try:
                 self._save_backup.prepare_save_backup_folder(saves_dir)
             except (OSError, ValueError) as e:
@@ -356,10 +349,8 @@ class SlotSwitcher:
                 save_state.delete_file_tracking(filename)
                 moved.append(filename)
 
-        # Drop stale baseline entries that have no local file. Snapshot the
-        # keys first — delete_file_tracking mutates save_state.files.
-        stale_tracked = [fn for fn in save_state.files if fn not in target_names]
-        for fn in stale_tracked:
+        # Snapshot the keys first — delete_file_tracking mutates save_state.files.
+        for fn in list(save_state.files):
             save_state.delete_file_tracking(fn)
         return _SetAside(moved=moved)
 
@@ -400,12 +391,12 @@ class SlotSwitcher:
     ) -> list[str]:
         """Download the newest server save per target of the new slot.
 
-        Writes *save_state* after each download that succeeds, so every file
-        placed is recorded with its new baseline before the next download
-        starts; a failed download writes nothing new for its file, and a
-        failed write raises. Runs synchronously — call via
-        ``run_in_executor``. Returns the filenames whose download failed
-        (empty when all succeeded).
+        Writes *save_state* after each download that succeeds — its file
+        placed, acknowledged and recorded on *save_state* — before the next
+        download starts. A download that fails, its acknowledgement included,
+        writes nothing new, and a failed write raises. Runs synchronously —
+        call via ``run_in_executor``. Returns the filenames whose download
+        failed (empty when all succeeded).
         """
         errors: list[str] = []
         for target_name, server_save in targets.items():
