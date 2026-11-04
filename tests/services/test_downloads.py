@@ -179,8 +179,8 @@ class DownloadsHarness:
     factory wraps; install records flow through it, and tests inspect
     ``uow.rom_installs`` after the service has run. ``loop``,
     ``download_file_store`` and ``retrodeck_folders`` are the ones the download
-    parts were built with. ``core_info`` is the core-info fake the launch
-    command is baked through, so a test can seed ``available_cores``.
+    parts were built with. ``core_info`` is the core-info fake the entry in
+    effect is resolved through, so a test can seed ``available_cores``.
     ``m3u_supported`` answers the ``m3u_support`` seam of the unpacker and the
     adoption service; a test that simulates a non-m3u platform (Switch/Xbox
     360) flips it to False. ``accepted_extensions`` answers the unpacker's
@@ -255,9 +255,7 @@ async def make_downloads(emit, logger) -> MakeDownloads:
         prune_conflicts = _make_prune_conflicts()
         uow = FakeUnitOfWork()
         # The real ActiveCoreResolver folds the DB override over this fake's
-        # es_systems default — the same seam the transfer re-bakes through on
-        # download-complete, so a test can assert the per-game override re-bakes
-        # the ``-e`` form.
+        # es_systems default.
         core_info = FakeCoreInfoProvider()
         active_core = ActiveCoreResolver(
             config=ActiveCoreResolverConfig(

@@ -17,7 +17,7 @@ from _factories import (
     _refused_by_conflict_rule,
 )
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
-from fakes.fake_core_info_provider import core_invocation
+from fakes.fake_core_info_provider import libretro_option
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
@@ -124,7 +124,7 @@ def _service(
             active_core=active_core
             if active_core is not None
             else FakeActiveCoreResolver(
-                default_emulator=core_invocation("mupen64plus_next_libretro", "Mupen64Plus-Next")
+                default_emulator=libretro_option("mupen64plus_next_libretro", "Mupen64Plus-Next")
             ),
             disc_resolver=disc_resolver if disc_resolver is not None else FakeDiscResolver(),
             start_commands=commands if commands is not None else _Commands(),
@@ -305,18 +305,10 @@ class TestAStartThatDoesNotComeAbout:
     async def test_an_entry_in_effect_that_is_not_installed_is_refused_with_its_start(self):
         uow = FakeUnitOfWork()
         _seed(uow)
-        option = EmulatorOption(
-            label="PCSX2",
-            kind=PROGRAM,
-            core_so=None,
-            command="%EMULATOR_PCSX2% %ROM%",
-            status="needs_setup",
-            reason=NOT_INSTALLED,
-            emulator="PCSX2",
-        )
+        option = EmulatorOption(label="PCSX2", kind=PROGRAM, core_so=None, emulator="PCSX2", not_installed=True)
         active_core = FakeActiveCoreResolver()
         active_core.resolved[1] = ResolvedEmulator(
-            choice=EmulatorChoice(option=option, layer="game", vanished=None), options=[option], invocation=None
+            choice=EmulatorChoice(option=option, layer="game", vanished=None), options=[option]
         )
         commands = _Commands()
 

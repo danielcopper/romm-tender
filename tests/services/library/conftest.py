@@ -157,11 +157,9 @@ async def make_library(tmp_path, emit, logger, home) -> MakeLibrary:
             ),
         )
 
-        # Shared core-info fake so a sync-apply test can seed ``available_cores`` and
-        # assert a per-game emulator_override (or per-platform core) re-bakes the
-        # ``-e`` form. The real ActiveCoreResolver folds the DB override + the
-        # per-platform map over this fake's es_systems default — the same seam the
-        # orchestrator's bake site draws from.
+        # Shared core-info fake so a sync-apply test can seed ``available_cores``.
+        # The real ActiveCoreResolver folds the DB override + the per-platform map
+        # over this fake's es_systems default.
         core_info = FakeCoreInfoProvider()
         platform_core_reader = FakePlatformCoreReader()
         active_core = ActiveCoreResolver(

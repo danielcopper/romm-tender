@@ -1627,20 +1627,8 @@ class TestAGameWhoseSavesCannotSync:
 
 def _started_with(label: str) -> ResolvedEmulator:
     """A game that starts with the entry *label*, picked for the game itself."""
-    option = EmulatorOption(
-        label=label,
-        kind=PROGRAM,
-        core_so=None,
-        command="%EMULATOR_MGBA% %ROM%",
-        status="bakeable",
-        reason=None,
-        emulator="mgba",
-    )
-    return ResolvedEmulator(
-        choice=EmulatorChoice(option=option, layer=GAME_PICK, vanished=None),
-        options=[option],
-        invocation=None,
-    )
+    option = EmulatorOption(label=label, kind=PROGRAM, core_so=None, emulator="mgba")
+    return ResolvedEmulator(choice=EmulatorChoice(option=option, layer=GAME_PICK, vanished=None), options=[option])
 
 
 class TestWhetherAGamesSavesSync:

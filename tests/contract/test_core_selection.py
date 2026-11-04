@@ -55,7 +55,6 @@ _MGBA_ENTRY = {
     "declared_index": 0,
     "is_default": True,
     "chosen_in_frontend": False,
-    "bakeable": True,
     "reason": None,
 }
 _VBA_NEXT_ENTRY = {
@@ -66,7 +65,6 @@ _VBA_NEXT_ENTRY = {
     "declared_index": 1,
     "is_default": False,
     "chosen_in_frontend": False,
-    "bakeable": True,
     "reason": None,
 }
 
@@ -310,7 +308,7 @@ async def test_a_platforms_answer_flags_unavailable_emulator_data(harness):
     assert gba["emulators"] == []
 
 
-# A switch system whose only bakeable standalone command names Ryubing — a
+# A switch system whose only standalone command names Ryubing — a
 # RetroDECK component that the seeded deploy does not carry, so the resolver's
 # launch lookup states it not installed.
 _SWITCH_ES_SYSTEMS_XML = """\
@@ -369,10 +367,10 @@ async def test_a_standalone_whose_component_is_absent_stays_the_default_and_cann
     """An emulator the resolver states not installed is withheld from picking, and stays the default (#2195 D7).
 
     Ryubing is declared first and is the only standalone; its component launcher
-    is not in the seeded deploy, so the picker must show it ``needs_setup`` /
-    ``not_installed``. Nothing behind it is taken instead: the platform names
-    Ryubing and says it cannot start. Drives the real catalogue read and the
-    resolver's own launch lookup over the seeded find rules.
+    is not in the seeded deploy, so the picker must show it ``not_installed``.
+    Nothing behind it is taken instead: the platform names Ryubing and says it
+    cannot start. Drives the real catalogue read and the resolver's own launch
+    lookup over the seeded find rules.
     """
     seed_es_systems(harness, _SWITCH_ES_SYSTEMS_XML)
     seed_es_find_rules(harness, _SWITCH_ES_FIND_RULES_XML)
@@ -389,7 +387,6 @@ async def test_a_standalone_whose_component_is_absent_stays_the_default_and_cann
             "declared_index": 0,
             "is_default": True,
             "chosen_in_frontend": False,
-            "bakeable": False,
             "reason": "not_installed",
         },
         {
@@ -400,7 +397,6 @@ async def test_a_standalone_whose_component_is_absent_stays_the_default_and_cann
             "declared_index": 1,
             "is_default": False,
             "chosen_in_frontend": False,
-            "bakeable": True,
             "reason": None,
         },
     ]
@@ -420,9 +416,9 @@ async def test_the_same_standalone_is_the_default_once_its_component_is_there(ha
 
     result = await harness.endpoints.get_system_core_info("switch")
 
-    assert [(e["label"], e["bakeable"], e["is_default"]) for e in result["emulators"]] == [
-        ("Ryubing (Standalone)", True, True),
-        ("Yuzu", True, False),
+    assert [(e["label"], e["reason"], e["is_default"]) for e in result["emulators"]] == [
+        ("Ryubing (Standalone)", None, True),
+        ("Yuzu", None, False),
     ]
     assert result["active_core_label"] == "Ryubing (Standalone)"
 

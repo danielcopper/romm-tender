@@ -76,8 +76,8 @@ class DiscService:
         "label", "index"}, ...], "selected": <roms.selected_disc | None>,
         "default": {"kind", "label", "filename"}}``. ``selected`` is
         down-validated: a stale pin whose file is no longer enumerated reports as
-        ``None`` so the badge matches what the bake launches (the bake degrades
-        the same stale pin to the default). Read-only over the local filesystem;
+        ``None`` so the badge matches what a start opens (the start degrades the
+        same stale pin to the default). Read-only over the local filesystem;
         the not-multi-disc answers are the normal "no picker" response, not
         failures.
         """
@@ -98,9 +98,9 @@ class DiscService:
         if len(discs) < 2:
             return {"multi_disc": False}
         # Down-validate the pin: a stale pin (the file is no longer enumerated)
-        # surfaces as ``None`` so the UI badge matches what the bake will actually
-        # launch (the bake degrades the same stale pin to the default). A live pin
-        # is returned verbatim.
+        # surfaces as ``None`` so the UI badge matches what a start actually opens
+        # (the start degrades the same stale pin to the default). A live pin is
+        # returned verbatim.
         if selected is not None and selected not in {disc.filename for disc in discs}:
             selected = None
         return {

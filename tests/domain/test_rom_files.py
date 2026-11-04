@@ -380,7 +380,7 @@ class TestFolderBootRoot:
 
     def test_derived_root_escaping_rom_dir_returns_none(self):
         # The stripped root is the shared system dir (rom_dir's parent), so the
-        # containment guard rejects it — never bake the shared directory.
+        # containment guard rejects it — never start the shared directory.
         rom_dir = "/roms/ps3/MyGame"
         launch = "/roms/ps3/PS3_GAME/USRDIR/EBOOT.BIN"
         assert folder_boot_root(launch, rom_dir) is None

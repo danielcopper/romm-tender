@@ -20,6 +20,7 @@ from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_emulator_sources import FakeSourcesReading
 from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
 from fakes.fake_settings_persister import FakeSettingsPersister
+from fakes.fake_start_commands import FakeStartCommands
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.uow_open_probe import record_uow_open
 
@@ -32,7 +33,7 @@ from domain.launchability import NEEDS_INSTALLING, NOT_THIS_EMULATOR, TAKES_NO_F
 from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
 from domain.rom import Rom
 from domain.rom_install import RomInstall
-from domain.shortcut_data import EmulatorInvocation
+from domain.start_command import DESKTOP_FILE, PLACEHOLDER_UNFILLED, StartCommand, StartNote, StartRefused
 from lib.errors import Refused
 from services.cores import CoreService, CoreServiceConfig
 
@@ -152,6 +153,11 @@ def prune_conflicts():
 
 
 @pytest.fixture
+def start_commands() -> FakeStartCommands:
+    return FakeStartCommands()
+
+
+@pytest.fixture
 def service(
     event_loop,
     prune_conflicts,
@@ -163,6 +169,7 @@ def service(
     uow_factory,
     active_core,
     disc_resolver,
+    start_commands,
 ) -> CoreService:
     return CoreService(
         config=CoreServiceConfig(
@@ -175,6 +182,7 @@ def service(
             uow_factory=uow_factory,
             active_core=active_core,
             disc_resolver=disc_resolver,
+            start_commands=start_commands,
             conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
         ),
     )
@@ -267,9 +275,7 @@ class TestGetPlatformCoreInfo:
         # names a ROW and the resolver names an EMULATOR, and a payload that
         # projected one of them twice would pass an assertion over equal ones.
         _seed_rom(uow, rom_id=42, platform_slug="ps2", emulator_override="PCSX2 (Standalone)")
-        active_core.per_rom_emulator[42] = EmulatorInvocation.run_game(
-            "%EMULATOR_PCSX2% %ROM%", "PCSX2 (Standalone)", "PCSX2"
-        )
+        active_core.per_rom_emulator[42] = standalone_option("PCSX2 (Standalone)", emulator="PCSX2")
         result = event_loop.run_until_complete(service.get_platform_core_info(42))
         assert result["active_core"] == "PCSX2"
         assert result["active_core_label"] == "PCSX2 (Standalone)"
@@ -279,7 +285,7 @@ class TestGetPlatformCoreInfo:
         # nothing may be keyed on it — the pane highlights nothing rather than
         # matching a row by accident.
         _seed_rom(uow, rom_id=42, platform_slug="n3ds")
-        active_core.per_rom_emulator[42] = EmulatorInvocation.run_game("%EMULATOR_X% %ROM%", "Citra", None)
+        active_core.per_rom_emulator[42] = standalone_option("Citra")
         result = event_loop.run_until_complete(service.get_platform_core_info(42))
         assert result["active_core"] is None
         assert result["active_core_label"] == "Citra"
@@ -380,7 +386,7 @@ class TestGetSystemCoreInfo:
         result = event_loop.run_until_complete(service.get_system_core_info("snes"))
         assert result["active_core_label"] == "Snes9x"
 
-    def test_no_bakeable_emulator_answers_no_label(self, event_loop, service, core_info):
+    def test_no_emulator_answers_no_label(self, event_loop, service, core_info):
         core_info.options = []
         result = event_loop.run_until_complete(service.get_system_core_info("snes"))
         assert result["active_core_label"] is None
@@ -483,7 +489,7 @@ class TestSetGameCore:
 
     def test_pins_standalone_emulator(self, event_loop, service, uow, core_info):
         # A per-game pin may name a STANDALONE emulator (#1210).
-        core_info.options = [standalone_option("%EMULATOR_PCSX2% -batch %ROM%", "PCSX2 (Standalone)")]
+        core_info.options = [standalone_option("PCSX2 (Standalone)")]
         _seed_rom(uow, rom_id=42, platform_slug="ps2", shortcut_app_id=99)
         _seed_install(uow, rom_id=42, file_path="/roms/ps2/gt4.iso", platform_slug="ps2")
         result = event_loop.run_until_complete(service.set_game_core(42, "PCSX2 (Standalone)"))
@@ -508,14 +514,7 @@ class TestSetGameCore:
     def test_an_entry_tender_cannot_start_is_pinned_like_any_other(self, event_loop, service, uow, core_info):
         # Pinned like any other (#2195 D23); the game page and the start then say
         # Tender cannot start it yet.
-        core_info.options = [
-            standalone_option(
-                "%EMULATOR_OS-SHELL% %ROM%",
-                "RPCS3 Shortcut (Standalone)",
-                status="unbakeable",
-                reason="shortcut_script",
-            )
-        ]
+        core_info.options = [standalone_option("RPCS3 Shortcut (Standalone)")]
         _seed_rom(uow, rom_id=42, platform_slug="ps3", shortcut_app_id=99)
         _seed_install(uow, rom_id=42, file_path="/roms/ps3/Game.iso", platform_slug="ps3")
 
@@ -525,11 +524,7 @@ class TestSetGameCore:
         assert uow.roms.get(42).emulator_override == "RPCS3 Shortcut (Standalone)"
 
     def test_an_entry_not_installed_is_refused_and_nothing_written(self, event_loop, service, uow, core_info):
-        core_info.options = [
-            standalone_option(
-                "%EMULATOR_X% %ROM%", "Missing (Standalone)", status="needs_setup", reason="not_installed"
-            )
-        ]
+        core_info.options = [standalone_option("Missing (Standalone)", not_installed=True)]
         _seed_rom(uow, rom_id=42, platform_slug="snes", shortcut_app_id=99)
         _seed_install(uow, rom_id=42, file_path="/roms/snes/mario.sfc")
         setting = service.set_game_core(42, "Missing (Standalone)")
@@ -845,7 +840,6 @@ class TestAVanishedPick:
                 option=snes9x, layer=DEFAULT, vanished=VanishedPick(pick=StoredPick("Gone", "retrodeck"), layer="game")
             ),
             options=[snes9x],
-            invocation=None,
         )
 
         result = event_loop.run_until_complete(service.get_platform_core_info(42))
@@ -915,6 +909,7 @@ def _service_over(
             uow_factory=FakeUnitOfWorkFactory(uow=FakeUnitOfWork()),
             active_core=FakeActiveCoreResolver(),
             disc_resolver=FakeDiscResolver(),
+            start_commands=FakeStartCommands(),
             conflict_rules=_make_conflict_rules(prune_conflicts=_make_prune_conflicts()),
         ),
     )
@@ -977,7 +972,7 @@ class TestEverySourcesDefault:
     def test_with_emudeck_first_no_line_of_the_starting_source_stands_under_its_default(self, event_loop):
         """No refusal and no vanished pick of RetroDECK's beneath EmuDeck's default (#2195 D24)."""
         missing = dataclasses.replace(
-            standalone_option("%EMULATOR_X% %ROM%", "Missing", status="needs_setup", reason="not_installed"),
+            standalone_option("Missing", not_installed=True),
             declared_index=0,
         )
         core_info = _TwoSourceCoreInfo(
@@ -998,7 +993,7 @@ class TestEverySourcesDefault:
     def test_with_emudeck_first_a_standing_pick_that_cannot_start_says_so(self, event_loop):
         """A pick is no default from elsewhere: its own refusal stands (#2195 D23, D24)."""
         missing = dataclasses.replace(
-            standalone_option("%EMULATOR_X% %ROM%", "Missing", status="needs_setup", reason="not_installed"),
+            standalone_option("Missing", not_installed=True),
             declared_index=0,
         )
         core_info = _TwoSourceCoreInfo(
@@ -1018,7 +1013,7 @@ class TestEverySourcesDefault:
     def test_with_retrodeck_first_its_own_lines_stand(self, event_loop):
         """The control: the same RetroDECK list first in the order says its default cannot start."""
         missing = dataclasses.replace(
-            standalone_option("%EMULATOR_X% %ROM%", "Missing", status="needs_setup", reason="not_installed"),
+            standalone_option("Missing", not_installed=True),
             declared_index=0,
         )
         core_info = _TwoSourceCoreInfo(
@@ -1078,15 +1073,14 @@ def _resolved(*options: Any, chosen: Any | None = None) -> ResolvedEmulator:
     return ResolvedEmulator(
         choice=EmulatorChoice(option=chosen, layer=DEFAULT if chosen is not None else None, vanished=None),
         options=list(options),
-        invocation=None,
     )
 
 
 class TestGetEmulatorLaunches:
     """Each entry's verdict, asked with its own label, for the emulator menu (#2195 D22, D29)."""
 
-    _RPCS3_SHORTCUT = standalone_option("%EMULATOR_OS-SHELL% %ROM%", "RPCS3 Shortcut (Standalone)")
-    _RPCS3_DIRECTORY = standalone_option("%EMULATOR_RPCS3% --no-gui %ROM%", "RPCS3 Directory (Standalone)")
+    _RPCS3_SHORTCUT = standalone_option("RPCS3 Shortcut (Standalone)")
+    _RPCS3_DIRECTORY = standalone_option("RPCS3 Directory (Standalone)")
 
     def test_every_entry_is_asked_with_its_own_label_about_the_installed_file(
         self, event_loop, service, core_info, active_core, uow
@@ -1171,8 +1165,8 @@ class TestGetEmulatorLaunches:
 class TestTheChosenEntrysLaunch:
     """The page's core read carries whether the game starts with the entry it starts with (#2195 D2, D26)."""
 
-    _SHORTCUT = standalone_option("%EMULATOR_OS-SHELL% %ROM%", "RPCS3 Shortcut (Standalone)")
-    _DIRECTORY = standalone_option("%EMULATOR_RPCS3% --no-gui %ROM%", "RPCS3 Directory (Standalone)")
+    _SHORTCUT = standalone_option("RPCS3 Shortcut (Standalone)")
+    _DIRECTORY = standalone_option("RPCS3 Directory (Standalone)")
 
     def test_an_installed_game_is_asked_about_with_its_chosen_entry_alone(
         self, event_loop, service, core_info, active_core, uow
@@ -1274,3 +1268,92 @@ class TestTheChosenEntrysLaunch:
 
         assert result["launch"] is None
         assert core_info.launchability_calls == []
+
+
+class TestWhatTheResolversCommandSaysOfTheStart:
+    """The page's ``start`` and the menu's ``start_verdict`` carry the resolver's launch command (#2221 D2, D20)."""
+
+    _SHORTCUT = standalone_option("RPCS3 Shortcut (Standalone)")
+    _DIRECTORY = standalone_option("RPCS3 Directory (Standalone)")
+    _MISSING = standalone_option("RPCS3 Missing (Standalone)", not_installed=True)
+
+    @staticmethod
+    def _installed(uow: FakeUnitOfWork) -> None:
+        _seed_rom(uow, rom_id=42, platform_slug="ps3")
+        _seed_install(uow, rom_id=42, file_path="/roms/ps3/Game.iso", platform_slug="ps3")
+
+    def test_an_entry_the_resolver_gives_no_complete_command_for_cannot_start_with_its_reason(
+        self, event_loop, service, active_core, start_commands, uow
+    ):
+        self._installed(uow)
+        active_core.resolved[42] = _resolved(self._SHORTCUT, chosen=self._SHORTCUT)
+        start_commands.answers["RPCS3 Shortcut (Standalone)"] = StartRefused(DESKTOP_FILE)
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert result["start"] == {
+            "state": "cannot_start",
+            "reason": DESKTOP_FILE,
+            "entry": "RPCS3 Shortcut (Standalone)",
+        }
+        assert start_commands.asked == [("ps3", "/roms/ps3/Game.iso", "RPCS3 Shortcut (Standalone)")]
+
+    def test_a_complete_command_says_what_it_says_beside_the_start(
+        self, event_loop, service, active_core, start_commands, uow
+    ):
+        self._installed(uow)
+        active_core.resolved[42] = _resolved(self._DIRECTORY, chosen=self._DIRECTORY)
+        start_commands.answers["RPCS3 Directory (Standalone)"] = StartCommand(
+            argv=("rpcs3",), folder=None, notes=(StartNote(PLACEHOLDER_UNFILLED, "%RPCS3_GAMEID%"),)
+        )
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert result["start"]["state"] == "starts"
+        assert result["start"]["remarks"] == [{"reason": PLACEHOLDER_UNFILLED, "placeholder": "%RPCS3_GAMEID%"}]
+
+    def test_a_game_that_is_not_installed_asks_no_command(self, event_loop, service, active_core, start_commands, uow):
+        _seed_rom(uow, rom_id=42, platform_slug="ps3")
+        active_core.resolved[42] = _resolved(self._SHORTCUT, chosen=self._SHORTCUT)
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert result["start"]["state"] == "starts"
+        assert start_commands.asked == []
+
+    def test_an_entry_not_installed_says_so_and_asks_no_command(
+        self, event_loop, service, active_core, start_commands, uow
+    ):
+        self._installed(uow)
+        active_core.resolved[42] = _resolved(self._MISSING, chosen=self._MISSING)
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert (result["start"]["state"], result["start"]["reason"]) == ("cannot_start", "not_installed")
+        assert start_commands.asked == []
+
+    def test_the_menu_carries_each_entrys_command_verdict_asked_with_its_own_label(
+        self, event_loop, service, active_core, start_commands, uow
+    ):
+        self._installed(uow)
+        active_core.resolved[42] = _resolved(self._SHORTCUT, self._DIRECTORY, self._MISSING)
+        start_commands.answers["RPCS3 Shortcut (Standalone)"] = StartRefused(DESKTOP_FILE)
+
+        result = event_loop.run_until_complete(service.get_emulator_launches(42))
+
+        assert [entry["start_verdict"] for entry in result] == [
+            {"starts": False, "reason": DESKTOP_FILE, "remarks": []},
+            {"starts": True, "reason": None, "remarks": []},
+            None,
+        ]
+        assert start_commands.asked == [
+            ("ps3", "/roms/ps3/Game.iso", "RPCS3 Shortcut (Standalone)"),
+            ("ps3", "/roms/ps3/Game.iso", "RPCS3 Directory (Standalone)"),
+        ]
+
+    def test_a_platforms_own_read_asks_no_command(self, event_loop, service, start_commands):
+        """The platform page says nothing of the command (#2221 D20)."""
+        result = event_loop.run_until_complete(service.get_system_core_info("snes"))
+
+        assert result["start"]["state"] == "starts"
+        assert start_commands.asked == []

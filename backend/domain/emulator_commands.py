@@ -1,63 +1,26 @@
-"""Classify ES-DE ``<command>`` strings into safely-bakeable emulator options.
+"""The entries of one system's emulator list, as Tender offers them for a pick.
 
-Given the label + command text of one ES-DE ``<command>``, decide whether
-Tender can bake it into a Steam shortcut's ``-e`` override — a real emulator
-invocation ending in ``%ROM%`` that RetroDECK's ``run_game.sh`` starts. That
-rule is Tender's own, and it follows the script's handling of a command rather
-than ES-DE's. The emulator picker offers every entry, annotated with its
-bakeability and, when it cannot be baked, the reason.
+Each ES-DE ``<command>`` the resolver lists is one :class:`EmulatorOption`,
+carrying what the resolver states about it in Tender's words: what it launches,
+the core it loads, the emulator behind it and whether its program is there.
+Whether an entry starts a game is not decided here: the command a game starts
+with is the resolver's, asked at the start (:mod:`adapters.atlas_launch`,
+#2221 D7), and an entry it gives no complete command for is not startable
+through Tender yet (D2).
 
 Which entry is the default is no judgement of Tender's: it is the entry the
 source ships first, the lowest ``declared_index`` the resolver states, whatever
 that entry's state (:func:`shipped_default`). A choice the user made inside
-ES-DE never becomes it, and Tender never passes over the shipped entry for a
-later one it could bake.
+ES-DE never becomes it.
 
-What an entry launches, the core it loads and where that core lies, whether it
-is installed, and whether ``run_game.sh`` would run anything for it are not
-decided here: they are the resolver's answer, which
-:mod:`adapters.atlas_catalogue` reads and hands in, in the words below.
-
-Pure compute only — takes the ``(label, text)`` pairs of one catalogue entry,
-which :mod:`adapters.atlas_catalogue` reads off ``es_systems.xml``, and returns
-value objects. The launch-bake itself (``EmulatorInvocation`` → the ``-e``
-string) lives in :mod:`domain.shortcut_data`; this module only decides *which*
-command becomes that invocation.
+Pure compute only — takes what :mod:`adapters.atlas_catalogue` reads off the
+resolver's catalogue answer and returns value objects.
 """
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import Any, Protocol
-
-from domain.shortcut_data import EmulatorInvocation
-
-_PLACEHOLDER_RE = re.compile(r"%[^%]+%")
-
-# Placeholders ES-DE's ``run_game.sh`` resolves that a baked ``-e`` override can
-# safely carry verbatim. ``%EMULATOR_*%`` (any emulator binary token, e.g.
-# ``%EMULATOR_RPCS3%``) is accepted by prefix, not listed here. ``%STARTDIR%``
-# is "known" (so it is not flagged as an unknown placeholder) but is rejected on
-# its own by the dedicated startdir rule — run_game.sh parses-but-drops it, so a
-# baked command that relies on it would launch from the wrong directory.
-# ``%CORE_RETROARCH%`` is known but never reaches a core entry's bake, because
-# run_game.sh writes it as an empty folder (docs/architecture/
-# core-emulator-selection.md, "Application"): the reference is written as the
-# resolver's core path instead (:func:`_with_core_path`).
-_KNOWN_PLACEHOLDERS = frozenset(
-    {
-        "%ROM%",
-        "%CORE_RETROARCH%",
-        "%GAMEDIR%",
-        "%GAMEDIRRAW%",
-        "%ROMPATH%",
-        "%BASENAME%",
-        "%FILENAME%",
-        "%ROMRAW%",
-        "%STARTDIR%",
-    }
-)
 
 # What the resolver states about whether an entry's program is there, in
 # Tender's words. ``NOT_INSTALLED`` withholds the entry whatever its command.
@@ -73,25 +36,6 @@ NOT_ESTABLISHED_FIND_RULES_UNREAD = "find_rules_unread"
 NOT_ESTABLISHED_LOOKUP_UNSUPPORTED = "lookup_unsupported"
 NOT_ESTABLISHED_PATH_UNSEEN = "path_unseen"
 
-# Why an entry the resolver describes cannot be baked, beside the reasons a
-# command's own text earns. ``CORE_UNLOCATED``: a core entry the resolver gives
-# no core path for, so there is nothing to write where the command names the
-# core. ``START_SCRIPT_RUNS_NOTHING``: the resolver states RetroDECK's
-# ``run_game.sh`` would run nothing for the entry's emulator. The panel words
-# both (``reasonCopy`` in ``frontend/src/utils/emulatorMenu.tsx``).
-CORE_UNLOCATED = "core_unlocated"
-START_SCRIPT_RUNS_NOTHING = "start_script_runs_nothing"
-
-# Why the entry a game would start with cannot start it, in Tender's words:
-# ``NOT_INSTALLED`` and ``START_SCRIPT_RUNS_NOTHING``, which the resolver states
-# about the entry itself, and ``NOT_BAKEABLE`` — any other entry Tender cannot
-# bake, which Tender does not start (#2195 D7, D23; why is
-# docs/architecture/core-emulator-selection.md, "What starting comes to"). A
-# game with such an entry has Play refused with the reason. The panel words
-# each (``frontend/src/utils/emulatorStart.ts``).
-CANNOT_START = frozenset({NOT_INSTALLED, START_SCRIPT_RUNS_NOTHING})
-NOT_BAKEABLE = "not_bakeable"
-
 # What an entry launches, as the resolver states it, in Tender's words: a core
 # RetroArch loads on this machine, an emulator program of its own, or a
 # RetroArch launch naming a core this machine cannot load.
@@ -102,41 +46,21 @@ FOREIGN_CORE = "foreign_core"
 
 @dataclass(frozen=True)
 class EmulatorOption:
-    """One ES-DE ``<command>`` classified for launch-bakeability.
+    """One ES-DE ``<command>`` of a system, as the resolver states it.
 
     ``label`` is ES-DE's display label — the pick key the per-game/per-platform
     override stores. ``kind`` is :data:`CORE`, :data:`PROGRAM` or
     :data:`FOREIGN_CORE`, the resolver's statement of what the entry launches.
     ``core_so`` is the core a :data:`CORE` entry loads, its bare name (no
-    ``.so``), and ``core_path`` the file the resolver states ES-DE loads it
-    from, spelled where RetroDECK runs it; both are ``None`` on every other
-    entry, and ``core_path`` also where the resolver found no core file.
-    ``command`` is the raw ES-DE command text, retained so the option can be
-    rendered into an ``EmulatorInvocation``; it is not exposed on the frontend
-    payload.
+    ``.so``), ``None`` on every other entry.
 
-    ``status`` is the bake verdict:
-
-    - ``"bakeable"`` — a real emulator invocation ending in ``%ROM%`` Tender
-      can bake into a shortcut ``-e`` override (``reason`` is ``None``).
-    - ``"needs_setup"`` — an entry that is not launchable from Steam as it
-      stands: a ``%INJECT%`` form, which injects a file's contents into the
-      command and which Tender cannot start (reason ``"inject"``), or one whose
-      program the resolver states is not installed (:data:`NOT_INSTALLED`),
-      which stands whatever the command is, ahead of every other reason.
-    - ``"unbakeable"`` — cannot be baked; ``reason`` says why.
-
-    ``reason`` is ``None`` when bakeable, else one of ``"inject"``,
-    ``"not_installed"``, :data:`START_SCRIPT_RUNS_NOTHING`,
-    :data:`CORE_UNLOCATED`, ``"shortcut_script"``, ``"no_rom_target"``,
-    ``"quoting"``, ``"startdir"``, ``"unknown_placeholder"``.
-
-    ``not_established`` is the note an entry carries where the resolver could
-    not establish whether its program is there — :data:`NOT_ESTABLISHED` or a
-    named cause — and ``None`` otherwise. For a program it leaves ``status`` to
-    the command: the entry stays a pick that resolves, and is never the default
-    by itself (:func:`default_option`). A core entry with the note has no
-    core path and is :data:`CORE_UNLOCATED` (#2195 D15).
+    ``not_installed`` is whether the resolver states the entry's program is not
+    there; such an entry is not offered as a pick, and as the default or a
+    stored pick it cannot start. ``not_established`` is the note an entry
+    carries where the resolver could not establish whether its program is
+    there — :data:`NOT_ESTABLISHED` or a named cause — and ``None`` otherwise;
+    such an entry stays a pick and is never the default by itself
+    (:func:`default_option`, #2195 D9).
 
     ``emulator`` is the resolver's identity for the emulator behind this row, and
     it is what a firmware answer is joined and scoped on — the one field that
@@ -144,11 +68,6 @@ class EmulatorOption:
     from ``label``: ES-DE lists one ``pcsx2_libretro.so`` as both ``LRPS2`` and
     ``PCSX2``, so two labels can be one emulator. ``None`` is an emulator the
     resolver could not identify, and nothing may be scoped to it.
-
-    ``launcher`` is the path inside RetroDECK's sandbox the resolver states ES-DE
-    runs for this entry — what the folder-boot bake execs directly (ADR-0019).
-    ``None`` where the reading hands none on; which launchers it does is
-    ``adapters/atlas_catalogue.py::_sandbox_launcher``'s rule.
 
     ``declared_index`` is the entry's place in the order the source ships, the
     resolver's own value, ``None`` for an entry no layer declared. With
@@ -160,13 +79,9 @@ class EmulatorOption:
     label: str
     kind: str
     core_so: str | None
-    command: str
-    status: str
-    reason: str | None
     emulator: str | None
-    launcher: str | None = None
+    not_installed: bool = False
     not_established: str | None = None
-    core_path: str | None = None
     declared_index: int | None = None
     chosen_in_frontend: bool = False
 
@@ -185,8 +100,8 @@ class LaunchingEmulator(Protocol):
 
     A structural type rather than a class of its own, because both resolutions
     that answer this question already state both fields — :class:`EmulatorOption`
-    for a platform's pick, :class:`~domain.shortcut_data.EmulatorInvocation` for
-    a ROM's — and a wrapper would be a third spelling of what they already are.
+    for a platform's pick and for a ROM's — and a wrapper would be a second
+    spelling of what it already is.
 
     **Those two answer two different questions**, and this type does not merge
     them: it carries the pick the CALLER's question is about — a platform's, for
@@ -211,102 +126,34 @@ class LaunchingEmulator(Protocol):
     def label(self) -> str | None: ...
 
 
-def classify_command(
+def emulator_option(
     label: str,
-    text: str,
     *,
     kind: str,
     core_so: str | None = None,
-    core_path: str | None = None,
     emulator: str | None = None,
     installation: str | None = None,
-    launcher: str | None = None,
-    start_script_runs_nothing: bool = False,
     declared_index: int | None = None,
     chosen_in_frontend: bool = False,
 ) -> EmulatorOption:
-    """Classify a single ES-DE ``<command>`` (``label`` + ``text``).
+    """One catalogue entry as an :class:`EmulatorOption`, from what the resolver states about it.
 
-    Applies the bake-verdict rules in order (the first that matches wins),
-    returning a fully-populated :class:`EmulatorOption`. Pure — no I/O,
-    deterministic in its inputs.
-
-    *kind*, *core_so*, *core_path*, *emulator*, *launcher*, *declared_index*
-    and *chosen_in_frontend* are the resolver's statements about the row, carried through unexamined: this
-    function judges only whether the command can be baked, and what the entry
-    launches, which core it loads from where, who the emulator is and what
-    ES-DE runs for it are read off the catalogue entry beside it rather than
-    parsed out of the command text.
-
-    *installation* is what the resolver states where it does not state the
-    entry startable, ``None`` where it does. :data:`NOT_INSTALLED` takes the
-    place of the bake verdict, so the entry bakes nothing and the picker shows
-    it disabled; as the default or a stored pick it cannot start. Any other word is the
-    entry's ``not_established`` note, beside the bake verdict its command earns.
-    After it, *start_script_runs_nothing* refuses the bake
-    (:data:`START_SCRIPT_RUNS_NOTHING`), and so does a :data:`CORE` entry
-    without a *core_path* (:data:`CORE_UNLOCATED`); every other entry is judged
-    by its command, a core entry's with its core path written in.
+    Every argument is the resolver's statement about the row, carried through
+    unexamined. *installation* is what the resolver states where it does not
+    state the entry startable, ``None`` where it does: :data:`NOT_INSTALLED`
+    marks the entry ``not_installed``, any other word is its
+    ``not_established`` note.
     """
-    if installation == NOT_INSTALLED:
-        status, reason = "needs_setup", NOT_INSTALLED
-    elif start_script_runs_nothing:
-        status, reason = "unbakeable", START_SCRIPT_RUNS_NOTHING
-    elif kind == CORE and core_path is None:
-        status, reason = "unbakeable", CORE_UNLOCATED
-    else:
-        status, reason = _bake_verdict(_with_core_path(text, kind, core_so, core_path))
     return EmulatorOption(
         label=label,
         kind=kind,
         core_so=core_so,
-        command=text.strip(),
-        status=status,
-        reason=reason,
         emulator=emulator,
-        launcher=launcher,
+        not_installed=installation == NOT_INSTALLED,
         not_established=installation if installation not in (None, NOT_INSTALLED) else None,
-        core_path=core_path,
         declared_index=declared_index,
         chosen_in_frontend=chosen_in_frontend,
     )
-
-
-def _with_core_path(text: str, kind: str, core_so: str | None, core_path: str | None) -> str:
-    """*text* with a :data:`CORE` entry's ``%CORE_RETROARCH%/<core>.so`` written as *core_path*, else unchanged.
-
-    The path is the resolver's, so the bake loads the file ES-DE's own lookup
-    finds rather than one Tender places itself.
-    """
-    if kind != CORE or core_so is None or core_path is None:
-        return text.strip()
-    return text.strip().replace(f"%CORE_RETROARCH%/{core_so}.so", core_path)
-
-
-def _bake_verdict(text: str) -> tuple[str, str | None]:
-    """Return ``(status, reason)`` for a command, first matching rule wins.
-
-    Order matters: an ``%INJECT%`` command is *needs-setup* even though it also
-    lacks a ``%ROM%`` target, and a ``.desktop``/OS-shell form is flagged as a
-    script before the ``%ROM%``-ending check. ``%STARTDIR%`` is deliberately
-    checked *after* the unknown-placeholder sweep (it is a known placeholder)
-    so it surfaces its own ``startdir`` reason rather than being lumped in.
-    """
-    t = text.strip()
-    if "%INJECT%" in t:
-        return ("needs_setup", "inject")
-    if "%ENABLESHORTCUTS%" in t or "%EMULATOR_OS-SHELL%" in t:
-        return ("unbakeable", "shortcut_script")
-    if not t.endswith("%ROM%"):
-        return ("unbakeable", "no_rom_target")
-    if '"' in t or "\\;" in t:
-        return ("unbakeable", "quoting")
-    for token in _PLACEHOLDER_RE.findall(t):
-        if token not in _KNOWN_PLACEHOLDERS and not token.startswith("%EMULATOR_"):
-            return ("unbakeable", "unknown_placeholder")
-    if "%STARTDIR%" in t:
-        return ("unbakeable", "startdir")
-    return ("bakeable", None)
 
 
 def shipped_default(options: list[EmulatorOption]) -> EmulatorOption | None:
@@ -327,54 +174,21 @@ def default_option(options: list[EmulatorOption]) -> EmulatorOption | None:
 
     An entry whose installation the resolver could not establish never becomes
     the default by itself (#2195 D9): the game then has no default, and the user
-    picks one. Every other state of the shipped entry stands, one that cannot be
-    baked or cannot start included — nothing later in the list is taken instead.
+    picks one. Every other state of the shipped entry stands, one that cannot
+    start included — nothing later in the list is taken instead.
     """
     shipped = shipped_default(options)
     return shipped if shipped is not None and shipped.not_established is None else None
-
-
-def option_to_invocation(option: EmulatorOption | None) -> EmulatorInvocation | None:
-    """Render a *bakeable* option into an :class:`EmulatorInvocation`, else ``None``.
-
-    Every bakeable option is baked as its command, a core entry's with its core
-    path written in, through ``run_game.sh -e``: a core entry whose command
-    passes RetroArch more than its core — FinalBurn Neo's ``--subsystem neocd``
-    on Neo Geo CD — keeps all of it. The invocation carries the option's
-    ``core_so``, and an emulator program's ``launcher`` for the folder-boot
-    fold, which execs a program and never RetroArch with a core. A ``None``
-    option, or one that is not bakeable, resolves to ``None``; for the entry in
-    effect, the active-core resolver bakes the latter as the empty command
-    (#2195 D43).
-    """
-    if option is None or option.status != "bakeable" or not option.command:
-        return None
-    return EmulatorInvocation.run_game(
-        _with_core_path(option.command, option.kind, option.core_so, option.core_path),
-        option.label,
-        option.emulator,
-        core_so=option.core_so,
-        launcher=option.launcher if option.kind == PROGRAM else None,
-    )
 
 
 def option_for_label(options: list[EmulatorOption], label: str) -> EmulatorOption | None:
     """The option *label* names, or ``None`` where no option carries it.
 
     A label is unique within one system's catalogue, which is what ES-DE stores
-    a choice by; whether the option it names can be baked or started is not
-    asked here — a pick stands whatever its state (#2195 D23).
+    a choice by; whether the option it names can start is not asked here — a
+    pick stands whatever its state (#2195 D23).
     """
     return next((option for option in options if option.label == label), None)
-
-
-def label_to_invocation(options: list[EmulatorOption], label: str) -> EmulatorInvocation | None:
-    """Resolve a picked *label* to its :class:`EmulatorInvocation`, else ``None``.
-
-    ``None`` where no option carries the label or the option it names cannot be
-    baked.
-    """
-    return option_to_invocation(option_for_label(options, label))
 
 
 def resolve_firmware_option(options: list[EmulatorOption], override: str | None) -> EmulatorOption | None:
@@ -395,15 +209,12 @@ def options_to_payload(options: list[EmulatorOption]) -> list[dict[str, Any]]:
     The rows keep the order the resolver gives and are never merged: two labels
     that run one command are two entries in ES-DE, which stores a choice by its
     label (#2195 D8). Each row is ``{label, kind, core_so, emulator,
-    declared_index, is_default, chosen_in_frontend, bakeable, reason}``.
-    ``is_default`` marks the option :func:`default_option` takes;
-    ``chosen_in_frontend`` the one the user chose inside ES-DE. ``bakeable`` is
-    ``True`` only for a fully bakeable option. ``reason`` is the option's
+    declared_index, is_default, chosen_in_frontend, reason}``. ``is_default``
+    marks the option :func:`default_option` takes; ``chosen_in_frontend`` the
+    one the user chose inside ES-DE. ``reason`` is the option's
     ``not_established`` note where it has one, so a surface says so beside a
-    pick it offers whether or not it can be baked (#2195 D9), else the reason it
-    cannot be baked — ``"not_installed"`` among them, the one an entry is not
-    offered for. The raw ``command`` text is intentionally dropped from the wire
-    payload.
+    pick it offers (#2195 D9), :data:`NOT_INSTALLED` for an entry that is not
+    offered, ``None`` otherwise.
 
     ``kind`` is Tender's word for what the entry launches (:data:`CORE`,
     :data:`PROGRAM`, :data:`FOREIGN_CORE`). ``emulator`` is the identity, and it
@@ -422,8 +233,14 @@ def options_to_payload(options: list[EmulatorOption]) -> list[dict[str, Any]]:
             "declared_index": option.declared_index,
             "is_default": option is default,
             "chosen_in_frontend": option.chosen_in_frontend,
-            "bakeable": option.status == "bakeable",
-            "reason": option.not_established if option.not_established is not None else option.reason,
+            "reason": _reason(option),
         }
         for option in options
     ]
+
+
+def _reason(option: EmulatorOption) -> str | None:
+    """What a picker row says about *option*'s program: its note, that it is not installed, or nothing."""
+    if option.not_established is not None:
+        return option.not_established
+    return NOT_INSTALLED if option.not_installed else None

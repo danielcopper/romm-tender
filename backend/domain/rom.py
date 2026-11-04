@@ -215,7 +215,7 @@ class Rom:
         moves the binding here from the previous representative; the repository's
         collision-unbind then clears the old holder so the one-binding-per-appId
         rule (migration 003) holds. The shortcut's name/appId stay sticky — only
-        the binding (and the baked ``launch_options``) move. *app_id* must be a
+        the binding moves. *app_id* must be a
         positive Steam shortcut id.
         """
         if app_id <= 0:
@@ -262,7 +262,7 @@ class Rom:
         """Pin a per-game emulator/core override to the core *label* of the emulator source *source*.
 
         Stores the LABEL the user chose (e.g. ``"PCSX ReARMed"``), not a
-        resolved ``.so`` — the ``.so`` is resolved live at launch-bake time, so
+        resolved ``.so`` — the ``.so`` is resolved live at each start, so
         the override survives RetroDECK/ES-DE default changes — and the kind of
         the source whose catalogue it was chosen from, so a label that later
         disappears from it can be named with it. A blank or whitespace-only
@@ -284,7 +284,7 @@ class Rom:
         """Pin the multi-disc launch target to the disc named *filename*.
 
         Stores the disc's basename (the stable selection key), not a resolved
-        path — the absolute path is re-derived live at launch-bake time, so the
+        path — the absolute path is re-derived live at each start, so the
         pin survives uninstall/reinstall and RetroDECK-home migration. A blank
         or whitespace-only *filename* is meaningless and raises ``ValueError``;
         clear the selection with :meth:`clear_selected_disc` instead.

@@ -150,9 +150,7 @@ def emulator_tabs(
     A launching emulator with no identity has no entry: nothing could be asked
     about it, and an entry under a made-up name would read as an emulator.
     """
-    not_installed = {
-        option.emulator for option in options if option.emulator is not None and option.reason == "not_installed"
-    }
+    not_installed = {option.emulator for option in options if option.emulator is not None and option.not_installed}
     labels = _labels_by_emulator(options)
 
     def label_of(emulator: str | None) -> str | None:

@@ -11,12 +11,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from domain.emulator_choice import DEFAULT, EmulatorChoice, ResolvedEmulator
-from domain.emulator_commands import CORE, PROGRAM, EmulatorOption
-from fakes.fake_core_info_provider import core_invocation
+from fakes.fake_core_info_provider import libretro_option
 
 if TYPE_CHECKING:
+    from domain.emulator_commands import EmulatorOption
     from domain.emulator_sources import SourcesReading
-    from domain.shortcut_data import EmulatorInvocation
 
 
 class FakeActiveCoreResolver:
@@ -27,17 +26,16 @@ class FakeActiveCoreResolver:
     assert the seam was reached with the right ROM, and ``emulator_readings``
     the reading each :meth:`active_emulator_for_rom` call was handed.
 
-    :meth:`active_emulator_for_rom` is the launch-bake seam. By default it
-    projects the same ``(core_so, label)`` tuple config into a core
-    :class:`EmulatorInvocation` (or ``None`` when the core is ``None``), so the
-    existing tuple-configured tests keep working unchanged. To exercise a
-    **standalone** emulator (PCSX2, RPCS3, …), pass an explicit
+    :meth:`active_emulator_for_rom` answers the entry a ROM starts with. By
+    default it projects the same ``(core_so, label)`` tuple config into a core
+    :class:`EmulatorOption` (or ``None`` when the core is ``None``). To
+    exercise a **standalone** emulator (PCSX2, RPCS3, …), pass an explicit
     ``default_emulator`` and/or ``per_rom_emulator`` map — those take precedence
     over the tuple projection.
 
-    :meth:`resolve_rom` answers that same invocation as the default layer's
-    choice of a bakeable entry, or no entry where it is ``None``; ``resolved``
-    maps a ``rom_id`` to the answer a test states instead.
+    :meth:`resolve_rom` answers that same entry as the default layer's choice,
+    or no entry where it is ``None``; ``resolved`` maps a ``rom_id`` to the
+    answer a test states instead.
     """
 
     def __init__(
@@ -45,13 +43,13 @@ class FakeActiveCoreResolver:
         *,
         default: tuple[str | None, str | None] = (None, None),
         per_rom: dict[int, tuple[str | None, str | None]] | None = None,
-        default_emulator: EmulatorInvocation | None = None,
-        per_rom_emulator: dict[int, EmulatorInvocation | None] | None = None,
+        default_emulator: EmulatorOption | None = None,
+        per_rom_emulator: dict[int, EmulatorOption | None] | None = None,
     ) -> None:
         self.default = default
         self.per_rom: dict[int, tuple[str | None, str | None]] = per_rom if per_rom is not None else {}
         self.default_emulator = default_emulator
-        self.per_rom_emulator: dict[int, EmulatorInvocation | None] = (
+        self.per_rom_emulator: dict[int, EmulatorOption | None] = (
             per_rom_emulator if per_rom_emulator is not None else {}
         )
         self.calls: list[int] = []
@@ -63,9 +61,7 @@ class FakeActiveCoreResolver:
         self.calls.append(rom_id)
         return self.per_rom.get(rom_id, self.default)
 
-    def active_emulator_for_rom(
-        self, rom_id: int, *, reading: SourcesReading | None = None
-    ) -> EmulatorInvocation | None:
+    def active_emulator_for_rom(self, rom_id: int, *, reading: SourcesReading | None = None) -> EmulatorOption | None:
         self.emulator_calls.append(rom_id)
         self.emulator_readings.append(reading)
         if rom_id in self.per_rom_emulator:
@@ -77,25 +73,12 @@ class FakeActiveCoreResolver:
             # The identity a libretro entry carries is the core file's own
             # basename, which is what the resolver states for it — so a
             # tuple-configured test gets the identity its core would really have.
-            return core_invocation(core_so, label, f"{core_so}.so")
+            return libretro_option(core_so, label or "")
         return None
 
     def resolve_rom(self, rom_id: int, *, reading: SourcesReading | None = None) -> ResolvedEmulator | None:
         if rom_id in self.resolved:
             return self.resolved[rom_id]
-        invocation = self.active_emulator_for_rom(rom_id, reading=reading)
-        option = (
-            None
-            if invocation is None
-            else EmulatorOption(
-                label=invocation.label or "",
-                kind=CORE if invocation.core_so is not None else PROGRAM,
-                core_so=invocation.core_so,
-                command=invocation.command or "",
-                status="bakeable",
-                reason=None,
-                emulator=invocation.emulator,
-            )
-        )
+        option = self.active_emulator_for_rom(rom_id, reading=reading)
         choice = EmulatorChoice(option=option, layer=DEFAULT if option is not None else None, vanished=None)
-        return ResolvedEmulator(choice=choice, options=[], invocation=invocation)
+        return ResolvedEmulator(choice=choice, options=[])

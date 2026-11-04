@@ -353,7 +353,7 @@ def _service(
             firmware_identifier=lambda md5: None,
             store=store,
             retrodeck_folders=FakeRetroDeckFolders(),
-            core_info=FakeCoreInfoProvider(options=[standalone_option("emulator %ROM%", emulator, emulator=emulator)]),
+            core_info=FakeCoreInfoProvider(options=[standalone_option(emulator, emulator=emulator)]),
             platform_systems=platform_systems,
             platform_core_reader=FakePlatformCoreReader(),
             active_core=FakeActiveCoreResolver(),

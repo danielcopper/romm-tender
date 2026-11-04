@@ -160,7 +160,7 @@ class TestGetDiscSelection:
 
     def test_live_pin_returned_verbatim(self, event_loop, service, uow):
         # A pin whose file is still enumerated is returned as-is (the badge shows
-        # exactly what the bake launches).
+        # exactly what a start is asked with).
         _seed_rom(uow, rom_id=1, selected_disc=_DISC2)
         _seed_install(uow, rom_id=1, rom_dir=_ROM_DIR)
         result = event_loop.run_until_complete(service.get_disc_selection(1))
@@ -168,8 +168,8 @@ class TestGetDiscSelection:
 
     def test_stale_pin_down_validated_to_none(self, event_loop, service, uow):
         # A pin whose file is no longer enumerated degrades to None so the badge
-        # matches what the bake actually launches (the bake degrades the same
-        # stale pin to the default).
+        # matches what a start is actually asked with (the start degrades the
+        # same stale pin to the default).
         _seed_rom(uow, rom_id=1, selected_disc="Game (Disc 9).cue")
         _seed_install(uow, rom_id=1, rom_dir=_ROM_DIR)
         result = event_loop.run_until_complete(service.get_disc_selection(1))
@@ -299,9 +299,9 @@ def _unfold_install_between_transactions(uow: FakeUnitOfWork, disc_resolver: Fak
 
 
 class TestTransactionBoundary:
-    """Enumeration and the bake run between transactions, never inside one.
+    """Enumeration and the path resolution run between transactions, never inside one.
 
-    ``enumerate_discs`` lists the install directory, and the bake resolves the
+    ``enumerate_discs`` lists the install directory, and the path resolution reads the
     ROM's active core through a seam that opens its own UoW. A UoW takes
     SQLite's non-reentrant ``BEGIN IMMEDIATE`` write lock, so file I/O held
     inside one stalls every other writer in the backend and a nested open

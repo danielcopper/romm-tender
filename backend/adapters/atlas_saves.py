@@ -15,7 +15,7 @@ shared memory cards where a libretro core would keep a file per game, and asking
 "what does system X save" has no answer. So the caller names the emulator it
 resolved for this ROM — the label
 :class:`services.active_core_resolver.ActiveCoreResolver` already produced,
-which is the label the launch bakes — and this adapter puts the question to that
+which is the label the start asks with — and this adapter puts the question to that
 entry. Where Tender resolved no emulator, the catalogue answer is a refusal
 (:func:`adapters.atlas_catalogue.catalogue_refused`), or it no longer offers
 one under that label, there is nobody to ask and the answer says so.

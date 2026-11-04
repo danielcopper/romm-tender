@@ -151,19 +151,17 @@ describe("the emulator menu's answer per entry (#2195 D22, D31)", () => {
   });
 });
 
-describe("an entry Tender cannot start yet (#2195 D42)", () => {
-  it("says no 'can start it' beside its own line, and keeps every line of the resolver's", async () => {
+describe("an entry the resolver gives no complete command for (#2221 D20)", () => {
+  const refused = { starts: false, reason: "desktop_file" as const, remarks: [] };
+
+  it("says why Tender cannot start it yet, after the file's statements and counted among them", async () => {
     const read = heldRead();
     const serial = "RPCS3 Game Serial (Standalone)";
     const { container } = render(
       <>
         {buildEmulatorMenu(
           config({
-            emulators: [
-              standaloneEmu(SHORTCUT, true, { bakeable: false, reason: "shortcut_script" }),
-              standaloneEmu(DIRECTORY),
-              standaloneEmu(serial, false, { bakeable: false, reason: "inject" }),
-            ],
+            emulators: [standaloneEmu(SHORTCUT, true), standaloneEmu(DIRECTORY), standaloneEmu(serial)],
             launches: askEntryLaunches(42, () => true, read.read),
           }),
         )}
@@ -171,28 +169,37 @@ describe("an entry Tender cannot start yet (#2195 D42)", () => {
     );
 
     await read.answer([
-      launch(SHORTCUT, { state: "not_this_emulator", other_entries: [DIRECTORY], reason: "takes_no_folder" }),
-      launch(DIRECTORY),
-      launch(serial, { reason: "game_list_unread" }),
+      launch(SHORTCUT, { start_verdict: refused }),
+      launch(DIRECTORY, { start_verdict: { starts: true, reason: null, remarks: [] } }),
+      launch(serial, { reason: "game_list_unread", start_verdict: refused }),
     ]);
 
-    expect(row(container, SHORTCUT).textContent).toContain("cannot start a game installed as a folder");
+    expect(row(container, SHORTCUT).textContent).toContain(
+      "Tender cannot start it yet: it starts through a .desktop file",
+    );
+    expect(row(container, SHORTCUT).textContent).not.toContain("can start it");
     expect(row(container, DIRECTORY).textContent).toContain("can start it");
-    expect(row(container, serial).textContent).toContain("Tender cannot start it yet");
-    expect(row(container, serial).textContent).toContain("the emulator's own list of installed games was not read");
-    const plain = launch(serial);
-    const read2 = heldRead();
-    const second = render(
+    expect(row(container, serial).textContent).toContain(
+      "the emulator's own list of installed games was not read +1 more",
+    );
+    expect(row(container, serial).textContent).not.toContain("can start it");
+  });
+
+  it("says nothing of a command for an entry the resolver states not installed", async () => {
+    const read = heldRead();
+    const { container } = render(
       <>
         {buildEmulatorMenu(
           config({
-            emulators: [standaloneEmu(serial, true, { bakeable: false, reason: "inject" })],
-            launches: askEntryLaunches(42, () => true, read2.read),
+            emulators: [standaloneEmu(SHORTCUT, true, { reason: "not_installed" })],
+            launches: askEntryLaunches(42, () => true, read.read),
           }),
         )}
       </>,
     );
-    await read2.answer([plain]);
-    expect(row(second.container, serial).textContent).toBe(`${serial} (default) ✓ — Tender cannot start it yet`);
+
+    await read.answer([launch(SHORTCUT, { start_verdict: null })]);
+
+    expect(row(container, SHORTCUT).textContent).not.toContain("Tender cannot start");
   });
 });

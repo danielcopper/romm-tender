@@ -339,10 +339,7 @@ describe("PlayButton", () => {
       vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(
         detailState({
           emulatorStart: { state: "cannot_start", reason: "not_installed", entry: "DuckStation" },
-          emulators: [
-            { label: "DuckStation", bakeable: true },
-            { label: "Beetle PSX", bakeable: true },
-          ] as never,
+          emulators: [{ label: "DuckStation" }, { label: "Beetle PSX" }] as never,
           activeCoreLabel: "DuckStation",
         }),
       );
@@ -371,11 +368,11 @@ describe("PlayButton", () => {
       expect(play.getAttribute("title")).toContain("smw.zip is not the file Super Nintendo starts from");
     });
 
-    it("takes the file's refusal over an entry Tender cannot start yet", () => {
+    it("says the file's refusal first, then that Tender cannot start the entry yet (#2221 D20)", () => {
       const launch = notALaunchFile();
       vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(
         detailState({
-          emulatorStart: { state: "cannot_start", reason: "not_bakeable", entry: "Snes9x" },
+          emulatorStart: { state: "cannot_start", reason: "desktop_file", entry: "Snes9x" },
           gameLaunch: launch,
           startCheck: { state: "answered" },
         }),
@@ -384,7 +381,10 @@ describe("PlayButton", () => {
 
       const play = screen.getByRole("button", { name: /^PLAY/ });
       expect(play).toBeDisabled();
-      expect(play).toHaveAttribute("title", launchRefusal(launch, false));
+      expect(play).toHaveAttribute(
+        "title",
+        `${launchRefusal(launch, false)} Tender cannot start Snes9x yet: it starts through a .desktop file.`,
+      );
     });
 
     it("words the file's refusal for a page with no emulator menu to point at", () => {

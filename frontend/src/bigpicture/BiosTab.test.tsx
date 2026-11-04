@@ -42,7 +42,6 @@ const coreInfo: CoreInfo = coreInfoFixture({
       core_so: "snes9x_libretro",
       emulator: "snes9x_libretro.so",
       is_default: true,
-      bakeable: true,
       reason: null,
     },
   ],

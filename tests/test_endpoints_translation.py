@@ -59,6 +59,7 @@ from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_sgdb_artwork_cache import FakeSgdbArtworkCache
 from fakes.fake_shortcut_artwork_job import FakeShortcutArtworkJob
+from fakes.fake_start_commands import FakeStartCommands
 from fakes.fake_steam_interface import FakeSteamInterface
 from fakes.fake_transient_units import FakeTransientUnits
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
@@ -1833,6 +1834,7 @@ def _dispatcher_over_cores(settings: dict[str, Any], persister: FakeSettingsPers
             uow_factory=FakeUnitOfWorkFactory(FakeUnitOfWork()),
             active_core=FakeActiveCoreResolver(),
             disc_resolver=FakeDiscResolver(),
+            start_commands=FakeStartCommands(),
             conflict_rules=_make_conflict_rules(),
         )
     )

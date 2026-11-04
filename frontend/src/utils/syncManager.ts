@@ -186,9 +186,9 @@ async function rewriteShortcutIdentity(appId: number, item: SyncAddItem): Promis
  * - An **existing** binding (rom_id already in *existing*) → update in place,
  *   ``created: false``.
  * - No binding → the create path. First try to **adopt** a live RomM-owned
- *   orphan of the same name — reuse its appId + rewrite its identity/launch
- *   bake, instead of ``addShortcut`` minting a duplicate the user then sees
- *   twice (#1366). Failing that, mint a fresh shortcut.
+ *   orphan of the same name — reuse its appId + rewrite its identity and its
+ *   launch options, instead of ``addShortcut`` minting a duplicate the user
+ *   then sees twice (#1366). Failing that, mint a fresh shortcut.
  *
  * *liveAppIds* is the run's cached live-shortcut scan, threaded in so the orphan
  * pool reuses it (no second scan). ``appId`` is ``undefined`` when a create

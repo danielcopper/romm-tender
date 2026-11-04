@@ -194,7 +194,7 @@ Format: **invariant** — tier — enforced by.
   artwork and the SGDB artwork cache on the first because they are re-derivable from the server and the database on the
   second because it is not; a system that clears caches must be able to clear one and not the other. The launcher's home
   is the read whose mix-up a user would see rather than the next start only, since
-  `launcher_in_bin_dir(directories.bin_dir)` is carried on as `ShortcutLauncher.path` and baked into every shortcut's
+  `launcher_in_bin_dir(directories.bin_dir)` is carried on as `ShortcutLauncher.path` and written into every shortcut's
   `exe`. `bin_dir` is one of the two fields not named after this program (the other is `code_dir`, wherever the program
   was installed; GLOSSARY.md's "The program's directories" is the home of that split) — it is the directory every
   program a user installs for themselves puts a binary in, which is why nothing under it may be treated as ours to
@@ -1225,25 +1225,25 @@ Format: **invariant** — tier — enforced by.
   server I/O (GLOSSARY.md → Unit of Work, ADR-0006)** — check — `scripts/check_uow_seam_nesting.py`, second seam family
   (`IO_SEAM_METHODS`). The list is **the seams this checker can see and has been told about, never an inventory of the
   I/O seams that exist**: `DiscResolver.enumerate_discs` / `.resolve_for_install` (a recursive walk of the ROM's install
-  directory), the three `CoreInfoProvider` reads — `get_active_core`, `get_default_emulator`, `get_emulator_options` —
-  which are answered by the vendored resolver's live read of ES-DE's catalogue (every call from the panel opens it
-  again; only a run's one reading of the sources keeps a system's answer for the run, and the answer carries the
-  resolver's lookup of each entry's emulator on the machine), `SystemSupportedExtensionsFn` / `SystemKnownFn` (two more
-  questions to the same catalogue, asked afresh from the panel and once per reading within a run),
-  `SteamConfigStore.read_shortcut_exes` and `.read_shortcut_launch_options` (each parses Steam's whole `shortcuts.vdf`,
-  for the one-time shortcut relocation and for a launch-options confirm that Steam's reports did not settle. **Listing
-  them changes nothing at their call sites**: each service reaches its reading through `run_in_executor` as a bound
-  method, which is this checker's documented blind spot, so the entries are a statement of the rule rather than an
-  enforcement of it. They are also not the store's only real I/O — `grid_dir()` is called from `services/artwork/`
-  (seven sites), `services/steamgrid/` (`service.py` and `_slots.py`), `services/shortcut_removal.py` and
-  `services/library/reporter.py`, `set_steam_input_config()` from `services/settings.py`, `services/shortcut_removal.py`
-  and `services/library/reporter.py`, `write_shortcut_icon()` from `services/steamgrid/service.py`, and
-  `ensure_grid_file()` from `services/shortcut_artwork.py` — those are unlisted, and their being unlisted is a gap, not
-  a judgement), `.read_shortcut_icons` (the same whole-file parse, for the shortcut artwork job's worklist, called
-  plainly, so its entry is enforced), `.grid_file_names` (lists Steam's grid directory to answer which artwork slots a
-  shortcut has), `.read_grid_file` (reads one grid file whole, for the ARTWORK tab to hash a slot's image; reached as a
-  bound method, so listed rather than enforced), `.grid_file_stamps` (stats the files filling the ARTWORK tab's slots,
-  for each thumbnail's signature), the shortcut artwork job's reading of Steam's renderer memory before each batch
+  directory), the two `CoreInfoProvider` reads — `get_active_core` and `get_emulator_options` — which are answered by
+  the vendored resolver's live read of ES-DE's catalogue (every call from the panel opens it again; only a run's one
+  reading of the sources keeps a system's answer for the run, and the answer carries the resolver's lookup of each
+  entry's emulator on the machine), `SystemSupportedExtensionsFn` / `SystemKnownFn` (two more questions to the same
+  catalogue, asked afresh from the panel and once per reading within a run), `SteamConfigStore.read_shortcut_exes` and
+  `.read_shortcut_launch_options` (each parses Steam's whole `shortcuts.vdf`, for the one-time shortcut relocation and
+  for a launch-options confirm that Steam's reports did not settle. **Listing them changes nothing at their call
+  sites**: each service reaches its reading through `run_in_executor` as a bound method, which is this checker's
+  documented blind spot, so the entries are a statement of the rule rather than an enforcement of it. They are also not
+  the store's only real I/O — `grid_dir()` is called from `services/artwork/` (seven sites), `services/steamgrid/`
+  (`service.py` and `_slots.py`), `services/shortcut_removal.py` and `services/library/reporter.py`,
+  `set_steam_input_config()` from `services/settings.py`, `services/shortcut_removal.py` and
+  `services/library/reporter.py`, `write_shortcut_icon()` from `services/steamgrid/service.py`, and `ensure_grid_file()`
+  from `services/shortcut_artwork.py` — those are unlisted, and their being unlisted is a gap, not a judgement),
+  `.read_shortcut_icons` (the same whole-file parse, for the shortcut artwork job's worklist, called plainly, so its
+  entry is enforced), `.grid_file_names` (lists Steam's grid directory to answer which artwork slots a shortcut has),
+  `.read_grid_file` (reads one grid file whole, for the ARTWORK tab to hash a slot's image; reached as a bound method,
+  so listed rather than enforced), `.grid_file_stamps` (stats the files filling the ARTWORK tab's slots, for each
+  thumbnail's signature), the shortcut artwork job's reading of Steam's renderer memory before each batch
   (`_renderer_above_ceiling`, with `LibraryService.renderer_above_ceiling` beside it: a `/proc` read, and at or above
   `GC_SKIP_BELOW_KB` a garbage collection over Steam's debugger, bounded at about 5 s, and a second read),
   `FirmwarePlatformResolver` (reads what one system's emulators want WITH content verification: it opens each candidate
@@ -1712,7 +1712,7 @@ Format: **invariant** — tier — enforced by.
   that scope is a projection of it** — test + prompt-only —
   `tests/services/test_firmware.py::TestOnePlatformOneEmulator` asserts the two surfaces AGREE across every way a
   platform arrives at an emulator (no pick, each of the three ES-DE offers, a pin naming an emulator the catalogue no
-  longer lists, a pin whose command cannot be baked) rather than pinning today's value, because a value test would pass
+  longer lists, a pin that stands whatever its state) rather than pinning today's value, because a value test would pass
   for a third resolution that diverges on some other configuration;
   `::TestDownloadRequiredFirmware::test_it_fetches_what_the_platforms_own_pick_calls_required` holds the download button
   to the same pick. The pick is `domain/emulator_commands.py::resolve_firmware_option` — the per-platform override
@@ -1742,14 +1742,14 @@ Format: **invariant** — tier — enforced by.
   where `core_so` is `None` for every standalone emulator, and a pick with no identity is answered as not established
   (#2190 D26). Reaching for `.core_so` here again would turn every standalone pick into that answer silently, because
   the field is still there and still right for the picker payload beside it. `CoreInfoProvider.get_active_core` — the
-  "first libretro entry, bakeable or not" reading these sites used — has no production caller left. **The ROM scope is
-  the same rule one layer in, over a different pair of modules**: the game page is assembled by two services that each
-  ask `ActiveCoreReader` for themselves — `services/cores.py::get_platform_core_info` names the pick in the picker
+  "first libretro entry, whatever its state" reading these sites used — has no production caller left. **The ROM scope
+  is the same rule one layer in, over a different pair of modules**: the game page is assembled by two services that
+  each ask `ActiveCoreReader` for themselves — `services/cores.py::get_platform_core_info` names the pick in the picker
   through `resolve_rom`, `services/game_detail.py::get_bios_status` scopes the BIOS question to the entry that same call
-  chose, whether or not Tender can bake it — and `::TestOneRomOneEmulator` asserts they agree across every way a ROM
-  arrives at an emulator (nothing pinned, the platform's pick, a per-game override, the override over a platform pick
-  naming something else, a standalone pick, a stale pin that degrades, a standing pick Tender cannot bake). They read
-  one seam today and nothing says they must; the picker reaching for `active_core_for_rom` — the `.so`-space projection
+  chose, whether or not it can start — and `::TestOneRomOneEmulator` asserts they agree across every way a ROM arrives
+  at an emulator (nothing pinned, the platform's pick, a per-game override, the override over a platform pick naming
+  something else, a standalone pick, a stale pin that degrades, a standing pick that is not installed). They read one
+  seam today and nothing says they must; the picker reaching for `active_core_for_rom` — the `.so`-space projection
   right beside it — would answer `None` for every standalone pick and send the BIOS rows back to the platform's own,
   which is the platform-scoped defect above, per ROM. The one-of groups an answer judges are that same pick's too
   (`FirmwareCatalogue.groups_for(identity)`), and both classes hold the group verdicts in their agreement
@@ -1771,10 +1771,10 @@ Format: **invariant** — tier — enforced by.
   `::test_a_game_page_download_links_the_file_for_every_emulator_of_the_platform`). A reader keying a launch's rows on
   `by_file_name()` instead would read the first declarer's place and verdict wherever two emulators declare one name at
   different places — Saturn green under YabaSanshiro over a file only under `kronos/`. **What the ROM sibling cannot pin
-  is the fixture's own default**: `FakeCoreInfoProvider.get_default_emulator` builds its invocation from the
-  `active_core` tuple, which carries no identity, so a test on the bare fake resolves an unpinned ROM to a `None` where
-  the live adapter resolves it to an emulator — `_DeclaredDefaultCoreInfo` in that file renders the declared default the
-  way `AtlasCatalogueAdapter` does, and every other fixture on the bare fake still exercises the weaker resolution
+  is the fixture's own default**: the bare `FakeCoreInfoProvider` lists only the entries it is handed (`options`, or
+  `available_cores`) and its `active_core` tuple decides no default, so a test that hands it none resolves an unpinned
+  ROM to `None` where the live adapter resolves it to an emulator — the fixtures in that file hand it the declared
+  entries, and every other fixture on a bare fake still exercises the weaker resolution
 - **A platform's BIOS answer is asked for one platform at a time, and a row that has not got one yet is never rendered
   as a row nothing could be established for** — test + prompt-only —
   `frontend/src/bigpicture/library/PlatformsTab.test.tsx` pins the five parts that can be seen from a test: the two

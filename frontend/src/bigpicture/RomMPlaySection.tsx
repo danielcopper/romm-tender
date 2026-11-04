@@ -66,7 +66,13 @@ import {
   releasePruneLeasesByOwner,
 } from "../utils/pruneLease";
 import { executeGameCoreChange } from "../utils/coreOverride";
-import { frontendChoiceSentence, gameCanPickAnother, startRefusal, vanishedPickSentence } from "../utils/emulatorStart";
+import {
+  frontendChoiceSentence,
+  gameCanPickAnother,
+  startRefusal,
+  startRemarkSentences,
+  vanishedPickSentence,
+} from "../utils/emulatorStart";
 import { launchNotes } from "../utils/gameLaunch";
 import { askEntryLaunches } from "../utils/emulatorLaunches";
 import { useGamePlaytime } from "../utils/playtimeReconcile";
@@ -956,7 +962,9 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       ? null
       : startRefusal(detail.emulatorStart, gameLaunch, canPick);
   const startNotes =
-    stranded || fileMissing || startCheckFailed || emulatorRefusal !== null ? [] : launchNotes(gameLaunch, detail.emulatorSource);
+    stranded || fileMissing || startCheckFailed || emulatorRefusal !== null
+      ? []
+      : [...launchNotes(gameLaunch, detail.emulatorSource), ...startRemarkSentences(detail.emulatorStart?.remarks)];
 
   const warningLine = (testId: string, text: string) => (
     <div

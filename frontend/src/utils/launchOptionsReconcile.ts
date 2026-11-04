@@ -9,7 +9,7 @@ import {
   withPruneLease,
   type PruneLeaseAdmission,
 } from "./pruneLease";
-import { emulatorStartRefusal } from "./emulatorStart";
+import { startRefusal } from "./emulatorStart";
 
 // Apply in bounded-concurrency batches (mirrors getExistingRomMShortcuts) so a
 // reconcile touching many ROMs doesn't serialize worst-case per-shortcut
@@ -63,7 +63,7 @@ export function couldNotStart(error: unknown): string {
 
 /** Why the backend refused the start, in the words the game page uses for it where it names the game's start. */
 function refusalSentence(item: Extract<GameStartResult, { success: false }>): string {
-  return (item.start ? emulatorStartRefusal(item.start, "this game", false) : null) ?? item.message;
+  return (item.start ? startRefusal(item.start, null, false) : null) ?? item.message;
 }
 
 type Prepared =

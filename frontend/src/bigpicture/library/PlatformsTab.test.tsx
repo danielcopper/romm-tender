@@ -71,7 +71,6 @@ const MGBA = {
   core_so: "mgba_libretro",
   emulator: "mgba_libretro.so",
   is_default: true,
-  bakeable: true,
   reason: null,
 };
 const VBA = {
@@ -82,7 +81,6 @@ const VBA = {
   core_so: "vba_next_libretro",
   emulator: "vba_next_libretro.so",
   is_default: false,
-  bakeable: true,
   reason: null,
 };
 // RetroDECK's PlayStation 2 core under the one command it lists twice, as
@@ -1487,7 +1485,7 @@ describe("Library › Platforms", () => {
     it("names a default that is not installed, and says these games cannot start, pointing at no menu with nothing to pin", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
-          emulators: [{ ...LRPS2_PCSX2, bakeable: false, reason: "not_installed" }],
+          emulators: [{ ...LRPS2_PCSX2, reason: "not_installed" }],
           active_core_label: "LRPS2",
           start: emulatorStart({ state: "cannot_start", reason: "not_installed", entry: "LRPS2" }),
         }),
@@ -1501,10 +1499,10 @@ describe("Library › Platforms", () => {
       expect(coreButton(container)!.title).toBe(sentence);
     });
 
-    it("offers the pick where no default stands and the one entry is one Tender cannot bake (#2195 D23)", async () => {
+    it("offers the pick where no default stands and the one entry's installation is not established (#2195 D23)", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
-          emulators: [{ ...LRPS2_PCSX2, is_default: false, bakeable: false, reason: "lookup_unsupported" }],
+          emulators: [{ ...LRPS2_PCSX2, is_default: false, reason: "lookup_unsupported" }],
           active_core_label: null,
           start: emulatorStart({ state: "choose", reason: "lookup_unsupported", entry: "LRPS2" }),
         }),
@@ -1518,7 +1516,7 @@ describe("Library › Platforms", () => {
     it("says no emulator is the default where the default's installation could not be established, and still offers the pick", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
-          emulators: [{ ...LRPS2_PCSX2, is_default: false, bakeable: true, reason: "lookup_unsupported" }],
+          emulators: [{ ...LRPS2_PCSX2, is_default: false, reason: "lookup_unsupported" }],
           active_core_label: null,
           start: emulatorStart({ state: "choose", reason: "lookup_unsupported", entry: "LRPS2" }),
         }),
@@ -1534,39 +1532,35 @@ describe("Library › Platforms", () => {
       expect(coreButton(container)).not.toBeDisabled();
     });
 
-    it.each([
-      ["not installed", "not_installed", "mGBA is not installed, so these games cannot start."],
-      [
-        "one Tender cannot bake",
-        "inject",
-        "Tender cannot start mGBA yet. Choose another emulator in the emulator menu.",
-      ],
-    ])("keeps the picker open beside a default that is %s", async (_shape, reason, sentence) => {
-      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
-        coreInfo({
-          emulators: [
-            { ...MGBA, bakeable: false, reason },
-            { ...LRPS2_PCSX2, is_default: false, bakeable: true, reason: "no_find_rule" },
-          ],
-          active_core_label: "mGBA",
-          start: emulatorStart({
-            state: "cannot_start",
-            reason: reason === "not_installed" ? reason : "not_bakeable",
-            entry: "mGBA",
+    it.each([["not installed", "not_installed", "mGBA is not installed, so these games cannot start."]])(
+      "keeps the picker open beside a default that is %s",
+      async (_shape, reason, sentence) => {
+        vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+          coreInfo({
+            emulators: [
+              { ...MGBA, reason },
+              { ...LRPS2_PCSX2, is_default: false, reason: "no_find_rule" },
+            ],
+            active_core_label: "mGBA",
+            start: emulatorStart({
+              state: "cannot_start",
+              reason,
+              entry: "mGBA",
+            }),
           }),
-        }),
-      );
-      const { container } = render(<LibraryPage onBack={vi.fn()} />);
-      await flushAsync();
+        );
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
 
-      expect(container.textContent).toContain(sentence);
-      expect(coreButton(container)).not.toBeDisabled();
-    });
+        expect(container.textContent).toContain(sentence);
+        expect(coreButton(container)).not.toBeDisabled();
+      },
+    );
 
     it("says so under the header where the platform's own pick could not be established", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
-          emulators: [MGBA, { ...LRPS2_PCSX2, is_default: false, bakeable: true, reason: "path_unseen" }],
+          emulators: [MGBA, { ...LRPS2_PCSX2, is_default: false, reason: "path_unseen" }],
           active_core_label: "LRPS2",
         }),
       );
@@ -1610,7 +1604,7 @@ describe("Library › Platforms", () => {
       expect(coreButton(container)).toBeDisabled();
     });
 
-    it.each([["one option", [{ ...MGBA, bakeable: false, reason: "not_installed" }]]])(
+    it.each([["one option", [{ ...MGBA, reason: "not_installed" }]]])(
       "names a default that is not installed in red, with nothing else to pin (%s)",
       async (_shape, emulators) => {
         vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
@@ -1633,31 +1627,10 @@ describe("Library › Platforms", () => {
       },
     );
 
-    it("names a default Tender cannot bake in red, saying Tender cannot start it yet", async () => {
+    it("keeps the picker open beside a default that is not installed where another entry stands", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
-          emulators: [{ ...MGBA, bakeable: false, reason: "inject" }],
-          active_core_label: "mGBA",
-          start: emulatorStart({ state: "cannot_start", reason: "not_bakeable", entry: "mGBA" }),
-        }),
-      );
-      const { container } = render(<LibraryPage onBack={vi.fn()} />);
-      await flushAsync();
-
-      const clause = factPart(container, "mGBA");
-      expect(clause).toBeTruthy();
-      expect(clause!.style.color).toBe(RED);
-      expect(container.textContent).toContain("Tender cannot start mGBA yet.");
-      expect(coreButton(container)).toBeDisabled();
-    });
-
-    it("keeps the picker open beside a default that is not installed where another entry Tender cannot bake stands", async () => {
-      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
-        coreInfo({
-          emulators: [
-            { ...MGBA, bakeable: false, reason: "not_installed" },
-            { ...VBA, bakeable: false, reason: "inject" },
-          ],
+          emulators: [{ ...MGBA, reason: "not_installed" }, VBA],
           active_core_label: "mGBA",
           start: emulatorStart({ state: "cannot_start", reason: "not_installed", entry: "mGBA" }),
         }),
@@ -1764,7 +1737,7 @@ describe("Library › Platforms", () => {
     it("draws a standing pick that cannot start in red with another source first, never gold (#2195 D23, D24)", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
-          emulators: [{ ...VBA, bakeable: false, reason: "not_installed" }, MGBA],
+          emulators: [{ ...VBA, reason: "not_installed" }, MGBA],
           source_defaults: [
             { kind: "emudeck", default: "PicoDrive", chosen_in_frontend: null, reason: null },
             { kind: "retrodeck", default: "mGBA", chosen_in_frontend: null, reason: null },

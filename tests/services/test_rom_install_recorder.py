@@ -1,4 +1,4 @@
-"""RomInstallRecorder — the row, the bake behind it, and the size write-back.
+"""RomInstallRecorder — the row, the path a start is asked with, and the size write-back.
 
 The recorder is the one path both a completed download and an adoption reach an
 install through, so these cases hold for both.
@@ -81,9 +81,9 @@ class TestEveryInstallIsRecordedAndBaked:
         assert install is not None
         assert install.rom_dir == "/roms/ps3/Puppeteer"
 
-    def test_a_ps3_folder_bakes_its_directory_end_to_end(self, harness):
-        # Recorded, then resolved through the real DiscLaunchResolver the bake
-        # sites use: the folder, named as ES-DE scans it, is the bake path.
+    def test_a_ps3_folder_starts_with_its_directory_end_to_end(self, harness):
+        # Recorded, then resolved through the real DiscLaunchResolver a start
+        # uses: the folder, named as ES-DE scans it, is the path asked with.
         from services.disc_launch_resolver import DiscLaunchResolver, DiscLaunchResolverConfig
 
         rom_dir = "/roms/ps3/MyGame.ps3"

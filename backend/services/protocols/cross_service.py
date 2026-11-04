@@ -19,11 +19,10 @@ if TYPE_CHECKING:
     from domain.artwork_slot import ArtworkSlot
     from domain.disc_selection import Disc
     from domain.emulator_choice import ResolvedEmulator
-    from domain.emulator_commands import LaunchingEmulator
+    from domain.emulator_commands import EmulatorOption, LaunchingEmulator
     from domain.emulator_sources import SourcesReading
     from domain.rom_install import RomInstall
     from domain.save_answer import SaveAnswer
-    from domain.shortcut_data import EmulatorInvocation
     from domain.update_release import LatestRelease
     from lib.partial_failure import PartialFailure
     from models.prune import InstalledContentRemoval, PruneSaveBackup, SourceClaim
@@ -261,17 +260,17 @@ class ActiveCoreReader(Protocol):
     """Per-ROM active-core resolution consumed by the read-path core consumers.
 
     The composition root satisfies this with ``ActiveCoreResolver``.
-    ``active_emulator_for_rom`` names the emulator a ROM launches with — a
-    libretro core or a **standalone** emulator (PCSX2, RPCS3, …) via its full
-    ES-DE command — and is what a consumer asks by default. ``active_core_for_rom``
+    ``active_emulator_for_rom`` names the entry a ROM starts with — a libretro
+    core or a **standalone** emulator (PCSX2, RPCS3, …) — and is what a consumer
+    asks by default. ``active_core_for_rom``
     is its ``.so``-space projection for the two save-sync reads keyed off the
     libretro core (core-change detection and the upload's emulator tag):
     ``(None, None)`` / ``(None, label)`` means no libretro core (unconfigured, or a
     standalone emulator) and they degrade. Both draw from the same resolution, so
-    no read diverges from the launch. ``resolve_rom`` answers the choice behind
-    both — the entry, the layer it came from, a stored pick passed over because
-    its label is gone, and whether a folder install cannot start — for a surface
-    that says what stands in the game's way. ``reading`` is a run's one reading
+    no read diverges from the start. ``resolve_rom`` answers the choice behind
+    both — the entry, the layer it came from and a stored pick passed over
+    because its label is gone — for a surface that says what stands in the
+    game's way. ``reading`` is a run's one reading
     of the emulator sources, handed down by a run that resolves many ROMs; a
     caller without one leaves it out and the call asks fresh.
     """
@@ -280,21 +279,21 @@ class ActiveCoreReader(Protocol):
 
     def active_emulator_for_rom(
         self, rom_id: int, *, reading: SourcesReading | None = None
-    ) -> EmulatorInvocation | None: ...
+    ) -> EmulatorOption | None: ...
 
     def resolve_rom(self, rom_id: int, *, reading: SourcesReading | None = None) -> ResolvedEmulator | None: ...
 
 
 class DiscResolver(Protocol):
-    """Per-ROM multi-disc launch-path resolution consumed by the bake sites.
+    """Per-ROM multi-disc launch-path resolution.
 
-    The composition root satisfies this with ``DiscLaunchResolver``. The three
-    launch-bake sites (library sync, download-complete, RetroDECK-home migration)
-    and the disc-picker use cases ask "which file does this installed ROM launch
-    with, given its persisted disc pick?" and operate entirely in path space.
+    The composition root satisfies this with ``DiscLaunchResolver``. The start
+    check, the questions a game's page asks about its start and the disc-picker
+    use cases ask "which file does this installed ROM launch with, given its
+    persisted disc pick?" and operate entirely in path space.
     :meth:`enumerate_discs` lists the launchable discs in disc order (empty for a
-    single-file ROM); :meth:`resolve_bake_path` resolves the pin over that list;
-    :meth:`resolve_for_install` is the bake-site convenience that does both. A
+    single-file ROM); :meth:`resolve_disc_path` resolves the pin over that list;
+    :meth:`resolve_for_install` is the convenience that does both. A
     non-multi-disc ROM resolves to its own ``file_path`` unchanged; a stale pin
     degrades to the default with a WARNING rather than raising. ``reading`` is a run's
     one reading of the emulator sources, handed down so the accept-list a
@@ -303,7 +302,7 @@ class DiscResolver(Protocol):
 
     def enumerate_discs(self, install: RomInstall, *, reading: SourcesReading | None = None) -> list[Disc]: ...
 
-    def resolve_bake_path(self, install: RomInstall, discs: list[Disc], selected_disc: str | None) -> str: ...
+    def resolve_disc_path(self, install: RomInstall, discs: list[Disc], selected_disc: str | None) -> str: ...
 
     def resolve_for_install(
         self, install: RomInstall, selected_disc: str | None, *, reading: SourcesReading | None = None

@@ -26,7 +26,6 @@ if TYPE_CHECKING:
     from domain.rom_install import RomInstall
     from domain.save_answer import SaveAnswer
     from domain.savestate_location import NoSavestates, SavestateLocation
-    from domain.shortcut_data import EmulatorInvocation
     from domain.source_roots import SourceRoots
     from domain.start_command import StartAnswer
     from domain.tender_folder import SourceRomFolders
@@ -219,12 +218,11 @@ class CoreInfoProvider(Protocol):
     for that detected source instead of the answering one.
 
     ``get_active_core`` stays libretro-only — the first libretro command a
-    system declares, bakeable or not. It is carried and currently read by nothing
-    in production: the firmware layer's BIOS filter used to key on it and now
+    system declares. It is carried and currently read by nothing in
+    production: the firmware layer's BIOS filter used to key on it and now
     takes the platform's own pick, so the emulator a surface names and the core
-    it judges by come off one choice. The launch-layer default
-    (``get_default_emulator``) and the full picker (``get_emulator_options``) are
-    emulator-kind-aware (libretro OR standalone).
+    it judges by come off one choice. The full picker (``get_emulator_options``)
+    is emulator-kind-aware (libretro OR standalone).
 
     ``launchability`` answers for one game's file and one entry, asked when
     that game's page, its emulator menu or a press on Steam's own Play reads
@@ -234,10 +232,6 @@ class CoreInfoProvider(Protocol):
     def get_active_core(
         self, system_name: str, *, reading: SourcesReading | None = None
     ) -> tuple[str | None, str | None]: ...
-
-    def get_default_emulator(
-        self, system_name: str, *, reading: SourcesReading | None = None
-    ) -> EmulatorInvocation | None: ...
 
     def get_emulator_options(
         self,

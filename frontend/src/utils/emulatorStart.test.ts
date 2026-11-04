@@ -9,6 +9,7 @@ vi.mock("../api/backend", () => ({
 import { getPlatformCoreInfo } from "../api/backend";
 import {
   canPickAnother,
+  commandRefusalLine,
   emulatorRefusalForRom,
   emulatorStartRefusal,
   frontendChoiceLines,
@@ -17,6 +18,7 @@ import {
   isChoosable,
   startRefusal,
   startRefused,
+  startRemarkSentences,
   vanishedPickSentence,
 } from "./emulatorStart";
 import { coreInfo } from "../test-utils/coreFixtures";
@@ -34,7 +36,6 @@ function row(label: string, overrides: Partial<EmulatorOption> = {}): EmulatorOp
     declared_index: 0,
     is_default: false,
     chosen_in_frontend: false,
-    bakeable: true,
     reason: null,
     ...overrides,
   };
@@ -61,17 +62,6 @@ describe("why a start is refused", () => {
     );
   });
 
-  it("names an emulator RetroDECK's start script cannot start", () => {
-    const words = emulatorStartRefusal(
-      start({ state: "cannot_start", reason: "start_script_runs_nothing", entry: "PICO-8 (Standalone)" }),
-      "these games",
-      true,
-    );
-    expect(words).toBe(
-      "RetroDECK's start script cannot start PICO-8 (Standalone), so these games cannot start. Choose another emulator in the emulator menu.",
-    );
-  });
-
   it("asks for a choice where the default's installation could not be established, with its cause", () => {
     const answer = start({ state: "choose", reason: "no_find_rule", entry: "BlastEm" });
     expect(emulatorStartRefusal(answer, "this game", true)).toBe(
@@ -87,11 +77,6 @@ describe("why a start is refused", () => {
       "LRPS2 is not installed, so this game cannot start.",
     ],
     [
-      "run by nothing",
-      start({ state: "cannot_start", reason: "start_script_runs_nothing", entry: "PICO-8 (Standalone)" }),
-      "RetroDECK's start script cannot start PICO-8 (Standalone), so this game cannot start.",
-    ],
-    [
       "not established",
       start({ state: "choose", reason: "no_find_rule", entry: "BlastEm" }),
       "No emulator is the default, because whether BlastEm is installed could not be established (ES-DE has no rule for finding it).",
@@ -104,18 +89,16 @@ describe("why a start is refused", () => {
 describe("whether another entry can be pinned", () => {
   it("is so only for an entry not stated not installed, other than the one in effect", () => {
     expect(canPickAnother([row("A"), row("B")], "A")).toBe(true);
-    expect(canPickAnother([row("A"), row("B", { bakeable: false })], "A")).toBe(true);
-    expect(canPickAnother([row("A"), row("B", { bakeable: false, reason: "not_installed" })], "A")).toBe(false);
+    expect(canPickAnother([row("A"), row("B", { reason: "not_installed" })], "A")).toBe(false);
     expect(canPickAnother([row("A")], "A")).toBe(false);
     expect(canPickAnother([row("A")], null)).toBe(true);
   });
 
-  it("counts an entry Tender cannot bake, but never one the resolver states not installed (#2195 D9, D23)", () => {
-    expect(isChoosable(row("B", { bakeable: false, reason: "shortcut_script" }))).toBe(true);
-    expect(isChoosable(row("B", { bakeable: false, reason: "start_script_runs_nothing" }))).toBe(true);
-    expect(isChoosable(row("B", { bakeable: false, reason: "not_installed" }))).toBe(false);
-    expect(canPickAnother([row("A"), row("B", { bakeable: false, reason: "inject" })], "A")).toBe(true);
-    expect(canPickAnother([row("A"), row("B", { bakeable: false, reason: "not_installed" })], "A")).toBe(false);
+  it("counts an entry whose installation could not be established, but never one the resolver states not installed (#2195 D9, D23)", () => {
+    expect(isChoosable(row("B", { reason: "no_find_rule" }))).toBe(true);
+    expect(isChoosable(row("B", { reason: "not_installed" }))).toBe(false);
+    expect(canPickAnother([row("A"), row("B", { reason: "no_find_rule" })], "A")).toBe(true);
+    expect(canPickAnother([row("A"), row("B", { reason: "not_installed" })], "A")).toBe(false);
   });
 
   it("is never so on a game's page with one emulator, where the page offers no menu", () => {
@@ -193,7 +176,7 @@ describe("a start's own read of the emulator", () => {
   it("answers the page's sentence where the game cannot start", async () => {
     vi.mocked(getPlatformCoreInfo).mockResolvedValue({
       start: start({ state: "cannot_start", reason: "not_installed", entry: "Ryubing (Standalone)" }),
-      emulators: [row("Ryubing (Standalone)", { bakeable: false }), row("Ryujinx (Standalone)")],
+      emulators: [row("Ryubing (Standalone)", {}), row("Ryujinx (Standalone)")],
       active_core_label: "Ryubing (Standalone)",
     } as Awaited<ReturnType<typeof getPlatformCoreInfo>>);
     expect(await emulatorRefusalForRom(7, "test")).toBe(
@@ -204,7 +187,7 @@ describe("a start's own read of the emulator", () => {
   it("points at no menu where the game's page offers none", async () => {
     vi.mocked(getPlatformCoreInfo).mockResolvedValue({
       start: start({ state: "cannot_start", reason: "not_installed", entry: "Ryubing (Standalone)" }),
-      emulators: [row("Ryubing (Standalone)", { bakeable: false })],
+      emulators: [row("Ryubing (Standalone)", {})],
       active_core_label: "Ryubing (Standalone)",
     } as Awaited<ReturnType<typeof getPlatformCoreInfo>>);
     expect(await emulatorRefusalForRom(7, "test")).toBe(
@@ -245,34 +228,83 @@ describe("a start's own read of the emulator", () => {
   });
 });
 
-describe("an entry Tender cannot bake (#2195 D7, D23)", () => {
-  const answer = start({ state: "cannot_start", reason: "not_bakeable", entry: "RPCS3 Shortcut (Standalone)" });
+describe("an entry the resolver gives no complete command for (#2221 D2, D20)", () => {
+  const answer = start({ state: "cannot_start", reason: "desktop_file", entry: "RPCS3 Shortcut (Standalone)" });
 
-  it("refuses the start, saying Tender cannot start it yet", () => {
+  it("refuses the start, saying Tender cannot start it yet and why", () => {
     expect(startRefused(answer)).toBe(true);
     expect(emulatorStartRefusal(answer, "this game", false)).toBe(
-      "Tender cannot start RPCS3 Shortcut (Standalone) yet.",
+      "Tender cannot start RPCS3 Shortcut (Standalone) yet: it starts through a .desktop file.",
     );
   });
 
   it("points at the emulator menu where it offers another entry", () => {
     expect(emulatorStartRefusal(answer, "this game", true)).toBe(
-      "Tender cannot start RPCS3 Shortcut (Standalone) yet. Choose another emulator in the emulator menu.",
+      "Tender cannot start RPCS3 Shortcut (Standalone) yet: it starts through a .desktop file. Choose another emulator in the emulator menu.",
     );
   });
 
   it("refuses Steam's own Play with the same words", async () => {
     vi.mocked(getPlatformCoreInfo).mockResolvedValue({
       start: answer,
-      emulators: [row("RPCS3 Shortcut (Standalone)", { bakeable: false, reason: "shortcut_script" })],
+      emulators: [row("RPCS3 Shortcut (Standalone)")],
       active_core_label: "RPCS3 Shortcut (Standalone)",
     } as Awaited<ReturnType<typeof getPlatformCoreInfo>>);
-    expect(await emulatorRefusalForRom(7, "test")).toBe("Tender cannot start RPCS3 Shortcut (Standalone) yet.");
+    expect(await emulatorRefusalForRom(7, "test")).toBe(
+      "Tender cannot start RPCS3 Shortcut (Standalone) yet: it starts through a .desktop file.",
+    );
+  });
+
+  it.each([
+    ["command_unread", "how ES-DE starts it could not be read"],
+    ["desktop_file", "it starts through a .desktop file"],
+    ["injected_file_unread", "a file its command reads in could not be read"],
+    ["no_program", "its command names no program"],
+    ["rom_root_unknown", "where its games are kept could not be established"],
+    ["command_too_long", "its command is longer than can be read"],
+    ["frontend_build_unread", "which ES-DE build the source ships could not be read"],
+    ["environment_unread", "what it needs from RetroDECK's start could not be read"],
+    ["environment_unknown", "what it needs from RetroDECK's start is not known yet"],
+    ["folder_unplaced", "the folder it starts in could not be placed"],
+  ])("words %s as the owner signed it", (reason, why) => {
+    expect(emulatorStartRefusal(start({ state: "cannot_start", reason, entry: "Dolphin" }), "this game", false)).toBe(
+      `Tender cannot start Dolphin yet: ${why}.`,
+    );
+    expect(commandRefusalLine(reason)).toBe(`Tender cannot start it yet: ${why}`);
+  });
+
+  it("says a label the resolver does not know is no longer there", () => {
+    expect(
+      emulatorStartRefusal(
+        start({ state: "cannot_start", reason: "entry_unknown", entry: "Gone" }),
+        "this game",
+        false,
+      ),
+    ).toBe("Your choice 'Gone' no longer exists in its emulator source.");
+    expect(commandRefusalLine("entry_unknown")).toBe("no longer exists in its emulator source");
   });
 });
 
-describe("which refusal a game's page says first (#2195 D42)", () => {
-  const notBakeable = start({ state: "cannot_start", reason: "not_bakeable", entry: "RPCS3 Shortcut (Standalone)" });
+describe("a game no emulator starts (#2221 D20)", () => {
+  it("is refused, saying so", () => {
+    expect(startRefusal(start({ state: "no_entry", entry: null }), null, true)).toBe("No emulator starts this game.");
+  });
+});
+
+describe("what is said beside a start that goes ahead (#2708 Q3)", () => {
+  it("names a placeholder ES-DE leaves unfilled", () => {
+    expect(startRemarkSentences([{ reason: "placeholder_unfilled", placeholder: "%RPCS3_GAMEID%" }])).toEqual([
+      "ES-DE leaves %RPCS3_GAMEID% unfilled in this command.",
+    ]);
+  });
+
+  it("says nothing where there is nothing to say", () => {
+    expect(startRemarkSentences(undefined)).toEqual([]);
+  });
+});
+
+describe("which refusal a game's page says (#2221 D20, #2698 D8)", () => {
+  const unread = start({ state: "cannot_start", reason: "desktop_file", entry: "RPCS3 Shortcut (Standalone)" });
   const folder: GameLaunch = {
     state: "not_this_emulator",
     entry: "RPCS3 Shortcut (Standalone)",
@@ -288,17 +320,19 @@ describe("which refusal a game's page says first (#2195 D42)", () => {
     format_unestablished: false,
   };
 
-  it("says the resolver's refusal of the file before Tender's own that it cannot start the entry yet", () => {
-    expect(startRefusal(notBakeable, folder, true)).toBe(
-      "RPCS3 Shortcut (Standalone) cannot start a game installed as a folder. RPCS3 Directory (Standalone) can — choose it in the emulator menu.",
+  it("says both where the resolver refuses the file and gives no complete command, the file's first", () => {
+    expect(startRefusal(unread, folder, false)).toBe(
+      "RPCS3 Shortcut (Standalone) cannot start a game installed as a folder. Tender cannot start RPCS3 Shortcut (Standalone) yet: it starts through a .desktop file.",
     );
   });
 
   it("says Tender cannot start the entry yet where the resolver refuses nothing", () => {
-    expect(startRefusal(notBakeable, { ...folder, state: "starts", reason: null }, false)).toBe(
-      "Tender cannot start RPCS3 Shortcut (Standalone) yet.",
+    expect(startRefusal(unread, { ...folder, state: "starts", reason: null }, false)).toBe(
+      "Tender cannot start RPCS3 Shortcut (Standalone) yet: it starts through a .desktop file.",
     );
-    expect(startRefusal(notBakeable, null, false)).toBe("Tender cannot start RPCS3 Shortcut (Standalone) yet.");
+    expect(startRefusal(unread, null, false)).toBe(
+      "Tender cannot start RPCS3 Shortcut (Standalone) yet: it starts through a .desktop file.",
+    );
   });
 
   it("keeps an emulator that is not installed ahead of the file's refusal", () => {
@@ -308,15 +342,15 @@ describe("which refusal a game's page says first (#2195 D42)", () => {
     );
   });
 
-  it("refuses Steam's own Play with the resolver's sentence too", async () => {
+  it("refuses Steam's own Play with both sentences too", async () => {
     vi.mocked(getPlatformCoreInfo).mockResolvedValue({
-      start: notBakeable,
+      start: unread,
       launch: folder,
-      emulators: [row("RPCS3 Shortcut (Standalone)", { bakeable: false, reason: "shortcut_script" })],
+      emulators: [row("RPCS3 Shortcut (Standalone)")],
       active_core_label: "RPCS3 Shortcut (Standalone)",
     } as Awaited<ReturnType<typeof getPlatformCoreInfo>>);
     expect(await emulatorRefusalForRom(7, "test")).toBe(
-      "RPCS3 Shortcut (Standalone) cannot start a game installed as a folder.",
+      "RPCS3 Shortcut (Standalone) cannot start a game installed as a folder. Tender cannot start RPCS3 Shortcut (Standalone) yet: it starts through a .desktop file.",
     );
   });
 });

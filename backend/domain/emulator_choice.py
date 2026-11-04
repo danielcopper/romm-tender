@@ -14,18 +14,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.emulator_commands import (
-    CANNOT_START,
-    NOT_BAKEABLE,
-    default_option,
-    option_for_label,
-    shipped_default,
-)
+from domain.emulator_commands import NOT_INSTALLED, default_option, option_for_label, shipped_default
+from domain.start_command import StartRefused
 
 if TYPE_CHECKING:
     from domain.emulator_commands import EmulatorOption
     from domain.emulator_pick import StoredPick
-    from domain.shortcut_data import EmulatorInvocation
+    from domain.start_command import StartAnswer
 
 # The layer an entry was taken from.
 GAME_PICK = "game"
@@ -66,16 +61,10 @@ class EmulatorChoice:
 
 @dataclass(frozen=True, slots=True)
 class ResolvedEmulator:
-    """One ROM's emulator: the choice, the options it was made among, and what it bakes to.
-
-    ``invocation`` is ``None`` for the plain launch, and
-    :meth:`~domain.shortcut_data.EmulatorInvocation.nothing` where no entry
-    Tender can bake is in effect (#2195 D43).
-    """
+    """One ROM's emulator: the choice and the options it was made among."""
 
     choice: EmulatorChoice
     options: list[EmulatorOption]
-    invocation: EmulatorInvocation | None
 
 
 def choose_emulator(
@@ -98,16 +87,22 @@ def choose_emulator(
     return EmulatorChoice(option=default, layer=DEFAULT if default is not None else None, vanished=vanished)
 
 
-def start_payload(choice: EmulatorChoice, options: list[EmulatorOption]) -> dict[str, Any]:
-    """What starting with *choice* comes to, as ``{state, reason, entry}``.
+def start_payload(
+    choice: EmulatorChoice, options: list[EmulatorOption], command: StartAnswer | None = None
+) -> dict[str, Any]:
+    """What starting with *choice* comes to, as ``{state, reason, entry}`` and, beside a start, ``remarks``.
 
     ``entry`` is the label of the entry it is about — the chosen one, or for
     :data:`CHOOSE` the shipped default — ``None`` for :data:`NO_ENTRY`.
-    ``reason`` is why it cannot start (:data:`domain.emulator_commands.NOT_INSTALLED`,
-    :data:`~domain.emulator_commands.START_SCRIPT_RUNS_NOTHING`, and
-    :data:`~domain.emulator_commands.NOT_BAKEABLE` for any other entry Tender
-    cannot bake, #2195 D7, D23), or, for :data:`CHOOSE`, the shipped entry's
-    not-established note; ``None`` otherwise. Whether the game's file starts with the entry is the launch
+    ``reason`` is why it cannot start: :data:`domain.emulator_commands.NOT_INSTALLED`,
+    which the resolver states about the entry itself, or, where *command* is the
+    resolver's launch command for the game and gives no complete command, its
+    reason (:class:`domain.start_command.StartRefused`, #2221 D2); for
+    :data:`CHOOSE` the shipped entry's not-established note; ``None`` otherwise.
+    ``remarks`` are what is said beside a start the command lets go ahead
+    (:class:`domain.start_command.StartNote`), present only where there is any. Without a
+    *command* nothing is said of the command — a platform's page asks none
+    (#2221 D20). Whether the game's file starts with the entry is the launch
     verdict's (:mod:`domain.launchability`), a folder the entry does not take
     included (#2195 D21).
     """
@@ -115,13 +110,24 @@ def start_payload(choice: EmulatorChoice, options: list[EmulatorOption]) -> dict
     if option is None:
         shipped = shipped_default(options)
         if shipped is None:
-            return {"state": NO_ENTRY, "reason": None, "entry": None}
-        return {"state": CHOOSE, "reason": shipped.not_established, "entry": shipped.label}
-    if option.reason in CANNOT_START:
-        return {"state": CANNOT_START_STATE, "reason": option.reason, "entry": option.label}
-    if option.status != "bakeable":
-        return {"state": CANNOT_START_STATE, "reason": NOT_BAKEABLE, "entry": option.label}
-    return {"state": STARTS, "reason": None, "entry": option.label}
+            return _start(NO_ENTRY, None, None)
+        return _start(CHOOSE, shipped.not_established, shipped.label)
+    if option.not_installed:
+        return _start(CANNOT_START_STATE, NOT_INSTALLED, option.label)
+    if isinstance(command, StartRefused):
+        return _start(CANNOT_START_STATE, command.reason, option.label)
+    remarks = [note.payload() for note in command.notes] if command is not None else []
+    return _start(STARTS, None, option.label, remarks)
+
+
+def _start(
+    state: str, reason: str | None, entry: str | None, remarks: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
+    """The payload; ``remarks`` only where there is something to say beside the start."""
+    payload: dict[str, Any] = {"state": state, "reason": reason, "entry": entry}
+    if remarks:
+        payload["remarks"] = remarks
+    return payload
 
 
 def unspoken_start(entry: str | None) -> dict[str, Any]:
@@ -130,7 +136,7 @@ def unspoken_start(entry: str | None) -> dict[str, Any]:
     Until such a source starts games, whether its entry could start them is not
     a question a page asks (#2195 D24).
     """
-    return {"state": STARTS, "reason": None, "entry": entry}
+    return _start(STARTS, None, entry)
 
 
 def vanished_payload(choice: EmulatorChoice) -> dict[str, Any] | None:

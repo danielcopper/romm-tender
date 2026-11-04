@@ -206,6 +206,36 @@ describe("prepareStart", () => {
     expect(steamShortcuts.setLaunchOptionsConfirmed).not.toHaveBeenCalled();
   });
 
+  it("refuses with the resolver's reason where it gives the entry no complete command", async () => {
+    vi.mocked(backend.prepareGameStart).mockResolvedValue({
+      success: false,
+      reason: "cannot_start",
+      message: "ROM 42 cannot start with Dolphin: environment_unknown",
+      start: { state: "cannot_start", reason: "environment_unknown", entry: "Dolphin" },
+    });
+
+    await expect(prepareStart(42, 100, "Watcher")).resolves.toEqual({
+      status: "refused",
+      sentence: "Tender cannot start Dolphin yet: what it needs from RetroDECK's start is not known yet.",
+    });
+    expect(steamShortcuts.setLaunchOptionsConfirmed).not.toHaveBeenCalled();
+  });
+
+  it("refuses a game no emulator starts in the game page's words", async () => {
+    vi.mocked(backend.prepareGameStart).mockResolvedValue({
+      success: false,
+      reason: "cannot_start",
+      message: "ROM 42 has no emulator to start with",
+      start: { state: "no_entry", reason: null, entry: null },
+    });
+
+    await expect(prepareStart(42, 100, "Watcher")).resolves.toEqual({
+      status: "refused",
+      sentence: "No emulator starts this game.",
+    });
+    expect(steamShortcuts.setLaunchOptionsConfirmed).not.toHaveBeenCalled();
+  });
+
   it("refuses with the backend's own message where it names no start", async () => {
     vi.mocked(backend.prepareGameStart).mockResolvedValue({
       success: false,

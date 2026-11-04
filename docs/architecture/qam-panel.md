@@ -1562,13 +1562,15 @@ it, for the focused platform:
   **The clause names the core; "Default" is not one of the names it can take.** `active_core_label` names the platform's
   pick, else Tender's default (the entry the first enabled source ships first,
   [core-emulator-selection.md](core-emulator-selection.md#per-platform-coreserviceset_system_core)), whatever its state
-  — a default Tender cannot bake is named like any other. The clause is red where the games cannot start
+  — a default that is not installed is named like any other. The clause is red where the games cannot start
   (`frontend/src/utils/emulatorClause.ts`):
 
-  - **The emulator cannot start them** — `start` says `cannot_start`: it is not installed, RetroDECK's start script
-    cannot start it, or Tender cannot bake it, so Tender cannot start it yet. The clause names it in **red** and the
-    line under it says why (`frontend/src/utils/emulatorStart.ts`, the same sentence a game's page and a refused start
-    use); the chip stays open, and the line points at the emulator menu, only where another entry can be pinned.
+  - **The emulator cannot start them** — `start` says `cannot_start`: it is not installed. The clause names it in
+    **red** and the line under it says why (`frontend/src/utils/emulatorStart.ts`, the same sentence a game's page and a
+    refused start use); the chip stays open, and the line points at the emulator menu, only where another entry can be
+    pinned. The platform page asks no start command, since a platform has no game to ask it with: whether the resolver
+    gives one is said on a game's page and at its start
+    ([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D20).
   - **No default** — the entry the source ships first could not be established installed, so it is never the default by
     itself ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D9). The clause reads `no default` in
     **red**, the line asks for a choice with the cause where one is known, and the chip stays open where an entry can be

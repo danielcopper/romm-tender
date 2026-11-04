@@ -177,20 +177,20 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # DiscResolver — the same recursive walk, resolving the persisted disc
         # pin over it.
         "resolve_for_install",
-        # CoreInfoProvider (services/protocols/paths.py) — the three catalogue
+        # CoreInfoProvider (services/protocols/paths.py) — the two catalogue
         # reads. Each is answered by the vendored emu-atlas resolver, which reads
         # ES-DE's own catalogue off the flatpak install: every call from the
         # panel opens it again, and only a run's one reading of the emulator
         # sources keeps a system's answer for the run, and the answer carries the
-        # resolver's lookup of each entry's emulator on the machine. Listing one
-        # of the three would be arbitrary: every consumer pairs
-        # two of them. FirmwareStatusReader._enrich_platform calls
-        # get_active_core beside get_emulator_options for one platform, and
-        # ActiveCoreResolver reaches get_emulator_options (active_emulator_for_rom)
-        # and get_default_emulator (_resolve_by_precedence) on one resolution.
+        # resolver's lookup of each entry's emulator on the machine.
+        # FirmwareStatusReader._enrich_platform calls get_active_core beside
+        # get_emulator_options for one platform.
         "get_active_core",
-        "get_default_emulator",
         "get_emulator_options",
+        # StartCommandReader (services/protocols/paths.py) — the resolver's
+        # launch command for one game and one entry: the same catalogue read,
+        # plus the files the command reads in and the distribution's own start.
+        "start_command",
         # SaveLocationReader (services/protocols/paths.py) — asks the vendored
         # resolver where one ROM's save lives and what it consists of. Reads
         # ES-DE's catalogue for the entry, the emulator's own configuration for

@@ -1,7 +1,7 @@
 """Tests for DiscLaunchResolver — the single read-path disc-resolution seam.
 
 Covers enumeration (single-file → empty, folder-backed → disc list, es_systems
-intersection, fallback when es_systems is unavailable) and bake-path resolution
+intersection, fallback when es_systems is unavailable) and the path a start is asked with
 (non-multi-disc → file_path unchanged, pinned → that disc, stale pin → default +
 WARNING).
 """
@@ -107,11 +107,11 @@ class TestEnumerateDiscs:
 
 class TestResolveBakePath:
     def test_non_multi_disc_resolves_to_file_path_unchanged(self, logger):
-        # Fewer than two discs → resolve_launch_path returns file_path, no scan
+        # Fewer than two discs → resolve_disc_path returns file_path, no scan
         # override. This is the zero-behavior-change guarantee for single-disc.
         resolver = _build(FakeFileLister(), FakeSystemExtensions(), logger)
         install = _install(file_path="/roms/psx/game.chd", rom_dir=None)
-        assert resolver.resolve_bake_path(install, [], None) == "/roms/psx/game.chd"
+        assert resolver.resolve_disc_path(install, [], None) == "/roms/psx/game.chd"
 
     def test_pinned_disc_resolves_to_that_disc_path(self, logger):
         files = {
@@ -123,7 +123,7 @@ class TestResolveBakePath:
         resolver = _build(FakeFileLister(files), FakeSystemExtensions(), logger)
         install = _install(file_path="/roms/psx/game/Game (Disc 1).cue", rom_dir="/roms/psx/game")
         discs = resolver.enumerate_discs(install)
-        path = resolver.resolve_bake_path(install, discs, "Game (Disc 2).cue")
+        path = resolver.resolve_disc_path(install, discs, "Game (Disc 2).cue")
         assert path == "/roms/psx/game/Game (Disc 2).cue"
 
     def test_stale_pin_degrades_to_default_and_warns(self, caplog, logger):
@@ -137,7 +137,7 @@ class TestResolveBakePath:
         install = _install(file_path="/roms/psx/game/Game (Disc 1).cue", rom_dir="/roms/psx/game")
         discs = resolver.enumerate_discs(install)
         with caplog.at_level(logging.WARNING, logger="test_disc_launch_resolver"):
-            path = resolver.resolve_bake_path(install, discs, "Game (Disc 9).cue")
+            path = resolver.resolve_disc_path(install, discs, "Game (Disc 9).cue")
         # Missing pin degrades to disc 1 (the default), never fatal.
         assert path == "/roms/psx/game/Game (Disc 1).cue"
         assert any("no longer present" in r.message for r in caplog.records)
@@ -153,7 +153,7 @@ class TestResolveBakePath:
         install = _install(file_path="/roms/psx/game/Game (Disc 1).cue", rom_dir="/roms/psx/game")
         discs = resolver.enumerate_discs(install)
         with caplog.at_level(logging.WARNING, logger="test_disc_launch_resolver"):
-            resolver.resolve_bake_path(install, discs, "Game (Disc 2).cue")
+            resolver.resolve_disc_path(install, discs, "Game (Disc 2).cue")
         assert not any("no longer present" in r.message for r in caplog.records)
 
 
@@ -196,7 +196,7 @@ class TestResolveForInstall:
 class TestFolderBootTarget:
     """The PS3-style folder-as-launch-target override layered over disc resolution.
 
-    A folder-boot ROM (PS3/RPCS3) bakes the game **directory**, not the nested
+    A folder-boot ROM (PS3/RPCS3) is started with the game **directory**, not the nested
     ``…/PS3_GAME/USRDIR/EBOOT.BIN`` launch file. The override rides on top of disc
     resolution: it fires only when the resolved path still carries the folder-boot
     marker, so a resolved disc path (multi-disc) or a single-file ROM is never
@@ -235,10 +235,10 @@ class TestFolderBootTarget:
         assert resolver.resolve_for_install(install, None) == "/roms/snes/game.sfc"
 
 
-class TestEveryInstallHasABakePath:
-    """Every installed game gets a path to bake, whether or not its file starts (#2195 D28).
+class TestEveryInstallHasAPathToStartWith:
+    """Every installed game gets a path a start is asked with, whether or not its file starts (#2195 D28).
 
-    Whether it starts is asked when the game's page reads it, never by a bake.
+    Whether it starts is asked when the game's page reads it, never by this seam.
     """
 
     def test_a_ps3_pkg_in_its_folder_resolves_to_its_file(self, logger):

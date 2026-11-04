@@ -668,8 +668,16 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
 - **"Beetle Saturn can start this game, but goes on without Game (Track 2).bin: it is a track of a type it does not
   take."** — the emulator starts the game without a file it opens, and the sentence names it and why. Genesis Plus GX
   says the same way that it does not read every disc a playlist lists. **Play** stays on.
-- **"Tender cannot start RPCS3 Game Serial (Standalone) yet."** — the emulator in effect is one Tender cannot start from
-  Steam yet, and nothing else stands in the way. **Play** is off; choose another emulator in the emulator menu.
+- **"Tender cannot start _emulator_ yet: _reason_."** — the emulator source gives no complete command to start the game
+  with the emulator in effect, and the reason says what is missing: how ES-DE starts it could not be read, it starts
+  through a `.desktop` file, a file its command reads in could not be read, its command names no program, where its
+  games are kept could not be established, its command is longer than can be read, which ES-DE build the source ships
+  could not be read, what it needs from RetroDECK's start could not be read or is not known yet, or the folder it starts
+  in could not be placed. Where the emulator's own reading of the game refuses it too, that sentence comes first.
+  **Play** is off; choose another emulator in the emulator menu, whose rows say the same of each emulator.
+- **"No emulator starts this game."** — no emulator is in effect for the game. **Play** is off.
+- **"ES-DE leaves _placeholder_ unfilled in this command."** — the command starts, with a placeholder ES-DE does not
+  fill in left as it is written. **Play** stays on.
 - **"Whether Game.sfc starts cannot be established: …"** — the emulator source could not answer, with the reason.
   **Play** stays on.
 - **"What is inside Game.zip was not read, …"** — the file is an archive the emulator opens, and whether it holds a game

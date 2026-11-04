@@ -48,3 +48,19 @@ async def test_a_game_whose_command_the_resolver_does_not_complete_is_refused_wi
     assert answer["success"] is False
     assert answer["reason"] == "cannot_start"
     assert answer["start"] == {"state": "cannot_start", "reason": "frontend_build_unread", "entry": "mGBA"}
+
+
+async def test_the_game_page_and_its_menu_say_what_the_start_refuses_with(harness):
+    """The page and the menu ask the same command the start asks (#2221 D20)."""
+    seed_es_systems(harness)
+    seed_install(harness, 42, system="gba", platform_slug="gba", file_name="pokemon.gba")
+
+    info = await harness.endpoints.get_platform_core_info(42)
+    launches = await harness.endpoints.get_emulator_launches(42)
+
+    assert info["start"] == {"state": "cannot_start", "reason": "frontend_build_unread", "entry": "mGBA"}
+    assert launches
+    assert all(
+        entry["start_verdict"] == {"starts": False, "reason": "frontend_build_unread", "remarks": []}
+        for entry in launches
+    )

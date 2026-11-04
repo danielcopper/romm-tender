@@ -17,7 +17,7 @@
 
 import type { CoreInfo, EmulatorOption, EmulatorStart, SystemCoreInfo } from "../types";
 
-/** A bakeable libretro emulator option (the common case). */
+/** A libretro emulator option (the common case). */
 export function libretroEmu(core_so: string, label: string, is_default = false): EmulatorOption {
   return {
     label,
@@ -27,12 +27,11 @@ export function libretroEmu(core_so: string, label: string, is_default = false):
     declared_index: null,
     is_default,
     chosen_in_frontend: false,
-    bakeable: true,
     reason: null,
   };
 }
 
-/** A standalone emulator option; pass overrides to make it un-bakeable. */
+/** A standalone emulator option; pass overrides to give it a reason. */
 export function standaloneEmu(
   label: string,
   is_default = false,
@@ -46,7 +45,6 @@ export function standaloneEmu(
     declared_index: null,
     is_default,
     chosen_in_frontend: false,
-    bakeable: true,
     reason: null,
     ...overrides,
   };

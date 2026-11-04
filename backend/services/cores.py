@@ -29,7 +29,6 @@ from domain.emulator_choice import (
     vanished_payload,
 )
 from domain.emulator_commands import (
-    NOT_INSTALLED,
     default_option,
     option_for_label,
     options_to_payload,
@@ -38,6 +37,7 @@ from domain.emulator_commands import (
 from domain.emulator_pick import pick_for, platform_pick, platform_pick_value, source_kind
 from domain.platform_names import PLATFORM_NAMES_KEY, platform_display_name
 from domain.rom_files import asked_path
+from domain.start_command import start_verdict
 from lib.errors import Refused
 
 if TYPE_CHECKING:
@@ -48,6 +48,7 @@ if TYPE_CHECKING:
     from domain.platform_system import PlatformSystem
     from domain.rom import Rom
     from domain.rom_install import RomInstall
+    from domain.start_command import StartAnswer
     from services.protocols import (
         ActiveCoreReader,
         ConflictRules,
@@ -55,6 +56,7 @@ if TYPE_CHECKING:
         DiscResolver,
         PlatformSystems,
         SettingsPersister,
+        StartCommandReader,
         UnitOfWorkFactory,
     )
 
@@ -69,8 +71,9 @@ class CoreServiceConfig:
     SQLite Unit-of-Work factory (to read the ROM + its install and write the
     per-game pin), the shared per-ROM active-core resolver (the menu's active
     marker), the shared per-ROM disc resolver (so a question about the start is
-    asked with the ROM's pinned disc), and the ``ConflictRules`` the three
-    writes check at their entry.
+    asked with the ROM's pinned disc), the resolver's launch command for one
+    game (what the game page and the emulator menu say of a start, #2221 D20),
+    and the ``ConflictRules`` the three writes check at their entry.
     Bundled here so the ctor stays within the S107 parameter budget.
     """
 
@@ -83,6 +86,7 @@ class CoreServiceConfig:
     uow_factory: UnitOfWorkFactory
     active_core: ActiveCoreReader
     disc_resolver: DiscResolver
+    start_commands: StartCommandReader
     conflict_rules: ConflictRules
 
 
@@ -104,6 +108,7 @@ class CoreService:
         self._uow_factory = config.uow_factory
         self._active_core = config.active_core
         self._disc_resolver = config.disc_resolver
+        self._start_commands = config.start_commands
         self._rules = config.conflict_rules
 
     async def get_platform_core_info(self, rom_id: int) -> dict[str, Any]:
@@ -111,7 +116,7 @@ class CoreService:
 
         The emulator list is platform-wide (system-level): every ES-DE
         ``<command>`` for the ROM's system, each annotated ``{label, kind,
-        core_so, emulator, is_default, bakeable, reason}`` (libretro AND
+        core_so, emulator, is_default, reason}`` (libretro AND
         standalone). The active selection is the per-ROM resolution from
         :class:`ActiveCoreResolver`, so a pinned ``emulator_override`` (or
         per-platform core) surfaces over the system default and the menu can
@@ -146,8 +151,10 @@ class CoreService:
         The list is asked with the installed game's path, so the entry the user
         chose for this game inside ES-DE is marked ``chosen_in_frontend``.
         ``active_core`` and ``active_core_label`` name the entry the game starts
-        with, whether or not Tender can bake it. ``start`` is what starting with
-        it comes to (:func:`domain.emulator_choice.start_payload`), and
+        with, whatever starting with it comes to. ``start`` is what starting with
+        it comes to (:func:`domain.emulator_choice.start_payload`) — for an
+        installed game with the resolver's launch command for it, asked as the
+        start asks it (#2221 D20) — and
         ``vanished_pick`` the stored pick whose label no longer exists, ``None``
         where none was passed over (:func:`domain.emulator_choice.vanished_payload`).
         """
@@ -188,7 +195,9 @@ class CoreService:
             "active_core_label": option.label if option is not None else None,
             "platform_core_label": stored.label if stored is not None else None,
             "has_game_override": rom.emulator_override is not None,
-            "start": start_payload(choice, resolved.options if resolved is not None else []),
+            "start": start_payload(
+                choice, resolved.options if resolved is not None else [], self._chosen_command(rom, install, resolved)
+            ),
             "launch": self._chosen_launch(rom, install, resolved),
             "vanished_pick": vanished_payload(choice),
         }
@@ -208,6 +217,23 @@ class CoreService:
         verdict = self._core_info.launchability(install.system, path, label=resolved.choice.option.label)
         return verdict.payload(platform_name=self._platform_name(rom.platform_slug))
 
+    def _chosen_command(
+        self, rom: Rom, install: RomInstall | None, resolved: ResolvedEmulator | None
+    ) -> StartAnswer | None:
+        """The resolver's launch command for the installed game with the entry it starts with, or ``None``.
+
+        Asked with the path the start asks with (:func:`_asked_path`), so the
+        page says what the start would do. Nothing is asked where the launch
+        verdict asks nothing (:meth:`_chosen_launch`), nor for an entry the
+        resolver states not installed, whose start is refused for that reason.
+        """
+        if install is None or resolved is None or resolved.choice.option is None:
+            return None
+        if resolved.choice.option.not_installed:
+            return None
+        path = _asked_path(install, rom, self._disc_resolver)
+        return self._start_commands.start_command(install.system, path, label=resolved.choice.option.label)
+
     async def get_emulator_launches(self, rom_id: int) -> list[dict[str, Any]]:
         """Whether each emulator entry of ``rom_id``'s system starts the game's installed file.
 
@@ -215,6 +241,11 @@ class CoreService:
         with that entry's label (:meth:`~services.protocols.CoreInfoProvider.launchability`)
         — those not established included — so the emulator menu shows which
         entries can start the game and why the others cannot (#2195 D22, D29).
+        Each carries ``start_verdict``, whether the resolver gives a complete
+        command for the game with that entry
+        (:func:`domain.start_command.start_verdict`), so the menu says which
+        entries Tender cannot start yet and why (#2221 D20); an entry the
+        resolver states not installed carries none.
         Empty for a ROM that is not installed or has no system to ask.
         Asked when the menu is opened, for one game: a verdict may read its
         entry's core, which the first time costs a probe (#2195 D31).
@@ -228,9 +259,16 @@ class CoreService:
         system, path, resolved, platform_name = question
         reading = self._core_info.sources_reading()
         return [
-            self._core_info.launchability(system, path, label=option.label, reading=reading).payload(
-                platform_name=platform_name
-            )
+            {
+                **self._core_info.launchability(system, path, label=option.label, reading=reading).payload(
+                    platform_name=platform_name
+                ),
+                "start_verdict": None
+                if option.not_installed
+                else start_verdict(
+                    self._start_commands.start_command(system, path, label=option.label, reading=reading)
+                ),
+            }
             for option in resolved.options
         ]
 
@@ -455,7 +493,7 @@ class CoreService:
         options = self._emulator_options(self._platform_systems.rom_system(platform_slug, install))
         source = source_kind(options)
         option = option_for_label(options["options"], label)
-        if option is None or option.reason == NOT_INSTALLED or source is None:
+        if option is None or option.not_installed or source is None:
             # Refuse BEFORE any write — never persist a label the system does not
             # list, or one whose emulator the resolver states not installed.
             raise Refused("core_unavailable", f"Emulator '{label}' is not available for {platform_slug}")

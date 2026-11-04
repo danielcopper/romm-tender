@@ -16,7 +16,7 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.emulator_choice import CANNOT_START_STATE, NO_ENTRY, STARTS, start_payload
+from domain.emulator_choice import NO_ENTRY, STARTS, start_payload
 from domain.firmware_store import STORE_FOLDER
 from domain.rom_files import asked_path
 from domain.shortcut_data import shortcut_launch_options
@@ -130,7 +130,7 @@ class GameStartService:
             read_only=(os.path.join(self._tender_folder.place().folder, STORE_FOLDER),),
         )
         if isinstance(command, StartRefused):
-            start = {"state": CANNOT_START_STATE, "reason": command.reason, "entry": label}
+            start = start_payload(resolved.choice, resolved.options, command)
             raise Refused("cannot_start", f"ROM {rom_id} cannot start with {label}: {command.reason}", start=start)
         folder = command.folder if command.folder is not None else self._start_folder
         self._hand_over(app_id, folder, command.argv, create_folder=command.folder is None or command.create_folder)

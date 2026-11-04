@@ -965,7 +965,7 @@ describe("launchInterceptor — full funnel watcher", () => {
         coreInfo({
           start: emulatorStart({ state: "cannot_start", reason: "not_installed", entry: "Ryubing (Standalone)" }),
           emulators: [
-            standaloneEmu("Ryubing (Standalone)", true, { bakeable: false, reason: "not_installed" }),
+            standaloneEmu("Ryubing (Standalone)", true, { reason: "not_installed" }),
             standaloneEmu("Ryujinx (Standalone)"),
           ],
           active_core_label: "Ryubing (Standalone)",

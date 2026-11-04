@@ -160,10 +160,9 @@ vi.mock("../utils/cachedGameDetailStore", () => ({
   invalidateCachedGameDetail: vi.fn(),
 }));
 
-// ----- steamShortcuts — the set/clear core apply flow confirms the re-baked
-// launch_options landed via setLaunchOptionsConfirmed (the fire-then-poll
-// helper). Mock it so tests drive the confirmed (true) / unconfirmed (false)
-// branches without touching the real RegisterForAppDetails poll. -----
+// ----- steamShortcuts — no core action writes a shortcut's launch options any
+// more (#2221 D10); mocked so a test can assert none is written, without
+// touching the real RegisterForAppDetails poll. -----
 vi.mock("../utils/steamShortcuts", () => ({
   setLaunchOptionsConfirmed: vi.fn(),
 }));
@@ -429,8 +428,7 @@ describe("RomMPlaySection", () => {
     });
     vi.mocked(playSectionUtils.resolveSaveSyncLabel).mockReturnValue("synced label");
     vi.mocked(playSectionUtils.timeoutMs).mockImplementation(() => new Promise(() => {}));
-    // Default: the re-baked launch_options confirm-set succeeds. Tests opt into
-    // the unconfirmed (false) branch per case.
+    // Default: a confirm-set would succeed; no core action reaches it.
     vi.mocked(setLaunchOptionsConfirmed).mockResolvedValue(true);
     // Default core-info path — empty cores. Tests opt into specific shapes.
     vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(
@@ -2554,7 +2552,6 @@ describe("RomMPlaySection", () => {
               core_so: "snes9x.so",
               emulator: "snes9x.so",
               is_default: true,
-              bakeable: true,
               reason: null,
             },
             {
@@ -2565,7 +2562,6 @@ describe("RomMPlaySection", () => {
               core_so: "blastem.so",
               emulator: "blastem.so",
               is_default: false,
-              bakeable: true,
               reason: null,
             },
           ],
@@ -2632,7 +2628,6 @@ describe("RomMPlaySection", () => {
               core_so: "snes9x.so",
               emulator: "snes9x.so",
               is_default: true,
-              bakeable: true,
               reason: null,
             },
             {
@@ -2643,7 +2638,6 @@ describe("RomMPlaySection", () => {
               core_so: "blastem.so",
               emulator: "blastem.so",
               is_default: false,
-              bakeable: true,
               reason: null,
             },
           ],
@@ -3718,7 +3712,6 @@ describe("RomMPlaySection", () => {
               core_so: "snes9x.so",
               emulator: "snes9x.so",
               is_default: true,
-              bakeable: true,
               reason: null,
             },
             {
@@ -3729,7 +3722,6 @@ describe("RomMPlaySection", () => {
               core_so: "blastem.so",
               emulator: "blastem.so",
               is_default: false,
-              bakeable: true,
               reason: null,
             },
           ],
@@ -3751,7 +3743,6 @@ describe("RomMPlaySection", () => {
             core_so: "snes9x.so",
             emulator: "snes9x.so",
             is_default: true,
-            bakeable: true,
             reason: null,
           },
           {
@@ -3762,7 +3753,6 @@ describe("RomMPlaySection", () => {
             core_so: "blastem.so",
             emulator: "blastem.so",
             is_default: false,
-            bakeable: true,
             reason: null,
           },
         ],
@@ -3817,10 +3807,8 @@ describe("RomMPlaySection", () => {
       }
     });
 
-    // R1 — the silent-success guard. An unconfirmed bake must NOT toast success;
-    // it shows the DISTINCT "restart Steam" toast and keeps the DB row.
-    // Uninstalled/unbound: backend persists the pin but returns no launch_options
-    // / app_id → no SetAppLaunchOptions, still toasts the saved state.
+    // Setting a core writes nothing to Steam: the next start asks with the new
+    // entry (#2221 D10). The backend persists the pin and the toast names it.
     it("uninstalled/unbound: success without launch_options/app_id → success toast, no confirm-set", async () => {
       await setupCoreAction();
       vi.mocked(backend.setGameCore).mockResolvedValue({ success: true });
@@ -3994,7 +3982,6 @@ describe("RomMPlaySection", () => {
               core_so: "snes9x.so",
               emulator: "snes9x.so",
               is_default: true,
-              bakeable: true,
               reason: null,
             },
             {
@@ -4005,7 +3992,6 @@ describe("RomMPlaySection", () => {
               core_so: "blastem.so",
               emulator: "blastem.so",
               is_default: false,
-              bakeable: true,
               reason: null,
             },
           ],
@@ -4029,7 +4015,6 @@ describe("RomMPlaySection", () => {
             core_so: "snes9x.so",
             emulator: "snes9x.so",
             is_default: true,
-            bakeable: true,
             reason: null,
           },
           {
@@ -4040,7 +4025,6 @@ describe("RomMPlaySection", () => {
             core_so: "blastem.so",
             emulator: "blastem.so",
             is_default: false,
-            bakeable: true,
             reason: null,
           },
         ],
@@ -4189,7 +4173,6 @@ describe("RomMPlaySection", () => {
           core_so: "snes9x.so",
           emulator: "snes9x.so",
           is_default: true,
-          bakeable: true,
           reason: null,
         },
         {
@@ -4200,7 +4183,6 @@ describe("RomMPlaySection", () => {
           core_so: "blastem.so",
           emulator: "blastem.so",
           is_default: false,
-          bakeable: true,
           reason: null,
         },
       ],
@@ -4303,7 +4285,6 @@ describe("RomMPlaySection", () => {
             core_so: "snes9x.so",
             emulator: "snes9x.so",
             is_default: true,
-            bakeable: true,
             reason: null,
           },
           {
@@ -4314,7 +4295,6 @@ describe("RomMPlaySection", () => {
             core_so: "blastem.so",
             emulator: "blastem.so",
             is_default: false,
-            bakeable: true,
             reason: null,
           },
         ],
@@ -4464,7 +4444,6 @@ describe("RomMPlaySection", () => {
             core_so: "snes9x.so",
             emulator: "snes9x.so",
             is_default: true,
-            bakeable: true,
             reason: null,
           },
           {
@@ -4475,7 +4454,6 @@ describe("RomMPlaySection", () => {
             core_so: "blastem.so",
             emulator: "blastem.so",
             is_default: false,
-            bakeable: true,
             reason: null,
           },
         ],
@@ -4515,7 +4493,6 @@ describe("RomMPlaySection", () => {
             core_so: "snes9x.so",
             emulator: "snes9x.so",
             is_default: true,
-            bakeable: true,
             reason: null,
           },
           {
@@ -4526,7 +4503,6 @@ describe("RomMPlaySection", () => {
             core_so: "blastem.so",
             emulator: "blastem.so",
             is_default: false,
-            bakeable: true,
             reason: null,
           },
         ],
@@ -4564,7 +4540,6 @@ describe("RomMPlaySection", () => {
             core_so: "snes9x.so",
             emulator: "snes9x.so",
             is_default: true,
-            bakeable: true,
             reason: null,
           },
           {
@@ -4575,7 +4550,6 @@ describe("RomMPlaySection", () => {
             core_so: "blastem.so",
             emulator: "blastem.so",
             is_default: false,
-            bakeable: true,
             reason: null,
           },
         ],
@@ -4611,7 +4585,6 @@ describe("RomMPlaySection", () => {
             core_so: "snes9x.so",
             emulator: "snes9x.so",
             is_default: true,
-            bakeable: true,
             reason: null,
           },
           {
@@ -4622,7 +4595,6 @@ describe("RomMPlaySection", () => {
             core_so: "blastem.so",
             emulator: "blastem.so",
             is_default: false,
-            bakeable: true,
             reason: null,
           },
         ],
@@ -4654,7 +4626,6 @@ describe("RomMPlaySection", () => {
             core_so: "snes9x.so",
             emulator: "snes9x.so",
             is_default: true,
-            bakeable: true,
             reason: null,
           },
           {
@@ -4665,7 +4636,6 @@ describe("RomMPlaySection", () => {
             core_so: "blastem.so",
             emulator: "blastem.so",
             is_default: false,
-            bakeable: true,
             reason: null,
           },
         ],
@@ -4701,7 +4671,6 @@ describe("RomMPlaySection", () => {
             core_so: "snes9x.so",
             emulator: "snes9x.so",
             is_default: true,
-            bakeable: true,
             reason: null,
           },
           {
@@ -4712,7 +4681,6 @@ describe("RomMPlaySection", () => {
             core_so: "blastem.so",
             emulator: "blastem.so",
             is_default: false,
-            bakeable: true,
             reason: null,
           },
         ],
@@ -4990,7 +4958,6 @@ describe("RomMPlaySection", () => {
             core_so: "x.so",
             emulator: "x.so",
             is_default: true,
-            bakeable: true,
             reason: null,
           },
         ],
@@ -5083,7 +5050,6 @@ describe("RomMPlaySection", () => {
             core_so: "genesis_plus_gx_libretro",
             emulator: "genesis_plus_gx_libretro.so",
             is_default: true,
-            bakeable: true,
             reason: null,
           },
           {
@@ -5094,7 +5060,6 @@ describe("RomMPlaySection", () => {
             core_so: "genesis_plus_gx_expanded_libretro",
             emulator: "genesis_plus_gx_expanded_libretro.so",
             is_default: false,
-            bakeable: true,
             reason,
           },
         ],
@@ -5249,6 +5214,21 @@ describe("RomMPlaySection", () => {
         "SwanStation can start this game, but goes on without Disc 2.cue: it is missing.",
         "Whether SwanStation starts this game cannot be established: how it opens Disc 3.chd was not checked.",
       ]);
+      expect(capturedPlayButton[capturedPlayButton.length - 1]!.emulatorRefusal).toBeNull();
+    });
+
+    it("says under the row what ES-DE leaves unfilled in the command of a start that goes ahead (#2708 Q3)", async () => {
+      const { container } = await mountWith({
+        emulatorStart: {
+          state: "starts",
+          reason: null,
+          entry: "RPCS3 Game Serial (Standalone)",
+          remarks: [{ reason: "placeholder_unfilled", placeholder: "%RPCS3_GAMEID%" }],
+        },
+      });
+
+      const notes = [...container.querySelectorAll<HTMLElement>('.romm-play-section-row [data-testid="start-note"]')];
+      expect(notes.map((note) => note.textContent)).toContain("ES-DE leaves %RPCS3_GAMEID% unfilled in this command.");
       expect(capturedPlayButton[capturedPlayButton.length - 1]!.emulatorRefusal).toBeNull();
     });
 

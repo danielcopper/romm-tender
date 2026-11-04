@@ -369,10 +369,10 @@ class TestIoSeamsViolations:
 
     @pytest.mark.parametrize(
         "method",
-        ["get_active_core", "get_default_emulator", "get_emulator_options"],
+        ["get_active_core", "get_emulator_options"],
     )
     def test_every_core_info_read_inside_uow_is_flagged(self, method: str):
-        # All three CoreInfoProvider reads reach the same catalogue read, so the
+        # Both CoreInfoProvider reads reach the same catalogue read, so the
         # family covers the Protocol, not one method of it.
         findings = check.scan_source(
             "class S:\n"

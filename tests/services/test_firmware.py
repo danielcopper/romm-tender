@@ -14,7 +14,6 @@ from _factories import _make_conflict_rules, _refused_by_conflict_rule
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_core_info_provider import (
     FakeCoreInfoProvider,
-    core_invocation,
     libretro_option,
     standalone_option,
 )
@@ -26,6 +25,7 @@ from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_settings_persister import FakeSettingsPersister
+from fakes.fake_start_commands import FakeStartCommands
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock
@@ -33,7 +33,7 @@ from fakes.system_time import FakeClock
 from adapters.firmware_file import FirmwareFileAdapter
 from domain.bios_file import BiosFile
 from domain.bios_status import BiosFileEntry
-from domain.emulator_commands import EmulatorOption, default_option, option_to_invocation
+from domain.emulator_commands import PROGRAM, EmulatorOption
 from domain.firmware_cache import FirmwareCacheEntry
 from domain.firmware_store import StoredFirmware
 from domain.firmware_wants import (
@@ -51,7 +51,6 @@ from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
 from domain.retrodeck_folders import GAME_DOWNLOAD, finding_refusal, no_bios_root, switched_off
 from domain.rom import Rom
 from domain.rom_install import RomInstall
-from domain.shortcut_data import RUN_GAME, EmulatorInvocation
 from lib.errors import Refused, RommConnectionError, ServerUnreachable
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
 from services.cores import CoreService, CoreServiceConfig
@@ -133,15 +132,14 @@ def _id(core_so: str) -> str:
     return f"{core_so}.so"
 
 
-def _pick(emulator: str | None, label: str | None = None) -> EmulatorInvocation:
+def _pick(emulator: str | None, label: str | None = None) -> EmulatorOption:
     """One resolved emulator, as the per-game path hands it to the BIOS check.
 
     The check takes the PICK rather than an identity beside a name, so a test
-    asking it about an emulator hands it one value too. ``EmulatorInvocation`` is
-    what the ROM path really passes; its ``form`` plays no part in a firmware
-    answer, which is keyed on the identity alone.
+    asking it about an emulator hands it one value too: the entry the ROM path
+    really passes, keyed on the identity alone.
     """
-    return EmulatorInvocation(form=RUN_GAME, label=label, emulator=emulator)
+    return EmulatorOption(label=label or "", kind=PROGRAM, core_so=None, emulator=emulator)
 
 
 def _make_firmware_service(
@@ -1897,7 +1895,6 @@ class TestGetFirmwareStatus:
                 "declared_index": 0,
                 "is_default": True,
                 "chosen_in_frontend": False,
-                "bakeable": True,
                 "reason": None,
             }
         ]
@@ -1918,7 +1915,7 @@ class TestGetFirmwareStatus:
         core_info = FakeCoreInfoProvider(
             active_core=("ppsspp_libretro", "PPSSPP"),
             options=[
-                standalone_option("%EMULATOR_PPSSPP% -b %ROM%", "PPSSPP (Standalone)"),
+                standalone_option("PPSSPP (Standalone)"),
                 libretro_option("ppsspp_libretro", "PPSSPP"),
             ],
         )
@@ -1943,7 +1940,7 @@ class TestGetFirmwareStatus:
         """No override → the label is the default EMULATOR (standalone), not the libretro core.
 
         The libretro ``active_core`` stays "PPSSPP" (BIOS filter), but the
-        displayed label follows the bakeable default, so a standalone-default
+        displayed label follows the default entry, so a standalone-default
         system reads its standalone label instead of the libretro one (#1210).
         """
         label = await self._psp_active_core_label(FakePlatformCoreReader())
@@ -3360,23 +3357,8 @@ def _psx_emulators() -> list[EmulatorOption]:
     return [
         libretro_option(_PSX_CORE, _PSX_DEFAULT_LABEL),
         libretro_option(_PSX_ALTERNATIVE_CORE, _PSX_ALTERNATIVE_LABEL),
-        standalone_option("%EMULATOR_DUCKSTATION% %ROM%", _PSX_STANDALONE_LABEL),
+        standalone_option(_PSX_STANDALONE_LABEL),
     ]
-
-
-class _DeclaredDefaultCoreInfo(FakeCoreInfoProvider):
-    """ES-DE's own default, rendered the way the live adapter renders it.
-
-    :class:`FakeCoreInfoProvider` builds the default invocation out of its
-    ``active_core`` tuple, which carries no identity — and the identity is the
-    one field a firmware answer is keyed on, so a fixture on the bare fake
-    resolves an unpinned ROM to a ``None`` where production resolves it to an
-    emulator. The live adapter renders the default OPTION instead
-    (``AtlasCatalogueAdapter.get_default_emulator``), identity and all.
-    """
-
-    def get_default_emulator(self, system_name: str, *, reading: Any = None) -> EmulatorInvocation | None:
-        return option_to_invocation(default_option(self.get_emulator_options(system_name)["options"]))
 
 
 def _psx_platform_service(
@@ -3392,8 +3374,8 @@ def _psx_platform_service(
     three: the only thing that moves is which emulator the platform resolves to,
     which is what makes a disagreement between two surfaces attributable.
 
-    *options* replaces the emulator list for a test about a pin that no longer
-    bakes; every other caller takes ES-DE's three.
+    *options* replaces the emulator list for a test about a pin to an entry of
+    its own; every other caller takes ES-DE's three.
 
     *grouped* has SwanStation state a one-of group over the three images with
     only the NTSC-U one in place — the answer a group moves with the pick.
@@ -3439,7 +3421,7 @@ def _psx_platform_service(
     fw = _make_firmware_service(
         romm_api=romm_api,
         firmware_resolver=resolver,
-        core_info=_DeclaredDefaultCoreInfo(
+        core_info=FakeCoreInfoProvider(
             active_core=(_PSX_CORE, _PSX_DEFAULT_LABEL),
             options=options if options is not None else _psx_emulators(),
         ),
@@ -3462,10 +3444,9 @@ def _emulator_dependent(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 # Every way a platform can arrive at an emulator: no pick at all, a pick that is
-# each of the three ES-DE offers, and the two pins that no longer resolve — one
-# naming an emulator the catalogue does not list, one naming an installed
-# emulator whose command cannot be baked. The last two degrade to the default,
-# and the whole point is that they degrade the same way on both surfaces.
+# each of the three ES-DE offers, and a pin that no longer resolves because it
+# names an emulator the catalogue does not list. That one degrades to the
+# default, and the whole point is that it degrades the same way on both surfaces.
 _PLATFORM_PICKS = [
     None,
     _PSX_DEFAULT_LABEL,
@@ -3497,8 +3478,8 @@ class TestAStandaloneEmulatorIsAskedLikeAnyOther:
             firmware_resolver=resolver,
             core_info=FakeCoreInfoProvider(
                 options=[
-                    standalone_option("%EMULATOR_DUCKSTATION% %ROM%", "DuckStation", emulator=self._CARDED),
-                    standalone_option("%EMULATOR_PCSX2% %ROM%", "PCSX2", emulator=self._UNCARDED),
+                    standalone_option("DuckStation", emulator=self._CARDED),
+                    standalone_option("PCSX2", emulator=self._UNCARDED),
                     libretro_option(self._CORE, "Beetle PSX"),
                 ]
             ),
@@ -3556,9 +3537,7 @@ class TestAStandaloneEmulatorIsAskedLikeAnyOther:
         """No identity, so nothing can be scoped to it — the same silence, said the same way."""
         fw = _make_firmware_service(
             firmware_resolver=self._resolver(),
-            core_info=FakeCoreInfoProvider(
-                options=[standalone_option("%EMULATOR_CITRA% %ROM%", "Citra", emulator=None)]
-            ),
+            core_info=FakeCoreInfoProvider(options=[standalone_option("Citra", emulator=None)]),
         )
         _inline_executor(fw)
         _stub_listing(fw, [])
@@ -3674,15 +3653,13 @@ class TestOnePlatformOneEmulator:
             assert (payload["console_needs_image"], payload["bios_level"]) == (False, "ok")
 
     @pytest.mark.asyncio
-    async def test_a_pin_that_cannot_be_baked_stands_and_is_answered_for(self):
+    async def test_a_pin_stands_whatever_its_state_and_is_answered_for(self):
         """A pick stands whatever its state (#2195 D23) — the answer is about it, not the default."""
         fw = _psx_platform_service(
             platform_core="Vita3K (Standalone)",
             options=[
                 libretro_option(_PSX_CORE, _PSX_DEFAULT_LABEL),
-                standalone_option(
-                    "%EMULATOR_VITA3K% %INJECT%", "Vita3K (Standalone)", status="needs_setup", reason="inject"
-                ),
+                standalone_option("Vita3K (Standalone)"),
             ],
         )
 
@@ -3747,7 +3724,7 @@ class TestTheAnswerNamesTheEmulatorItJudgedBy:
     """
 
     @staticmethod
-    async def _page(platform_core: str | None = None, pick: EmulatorInvocation | None = None) -> dict[str, Any]:
+    async def _page(platform_core: str | None = None, pick: EmulatorOption | None = None) -> dict[str, Any]:
         return await _psx_platform_service(platform_core=platform_core).check_platform_bios("psx", pick)
 
     @pytest.mark.asyncio
@@ -3761,7 +3738,7 @@ class TestTheAnswerNamesTheEmulatorItJudgedBy:
 
     @pytest.mark.asyncio
     async def test_a_pick_that_could_not_be_made_names_nobody(self):
-        """ES-DE offers this platform nothing bakeable, so there is no name to print.
+        """ES-DE offers this platform no entry, so there is no name to print.
 
         The field is still stated: the surface words its sentence without a name,
         and an absent key and an absent name are the same thing to it.
@@ -3851,7 +3828,7 @@ def _rom_scoped_surfaces(
         options=[
             libretro_option(_PSX_CORE, _PSX_DEFAULT_LABEL),
             libretro_option(_PSX_ALTERNATIVE_CORE, _PSX_ALTERNATIVE_LABEL),
-            standalone_option("%EMULATOR_DUCKSTATION% %ROM%", _PSX_STANDALONE_LABEL, emulator=_PSX_STANDALONE_ID),
+            standalone_option(_PSX_STANDALONE_LABEL, emulator=_PSX_STANDALONE_ID),
         ],
     )
     core_info = _core_info(fw)
@@ -3891,6 +3868,7 @@ def _rom_scoped_surfaces(
             uow_factory=uow_factory,
             active_core=active_core,
             disc_resolver=FakeDiscResolver(),
+            start_commands=FakeStartCommands(),
             conflict_rules=_make_conflict_rules(),
         )
     )
@@ -3989,12 +3967,12 @@ class TestOneRomOneEmulator:
         assert picker["active_core"] == named["emulator"]
 
     @pytest.mark.asyncio
-    async def test_a_standing_pick_tender_cannot_bake_is_the_one_both_halves_answer_for(self, monkeypatch):
+    async def test_a_standing_pick_that_is_not_installed_is_the_one_both_halves_answer_for(self, monkeypatch):
         """A pick stands whatever its state (#2195 D23), so the BIOS half judges it, never the platform's own."""
         real = standalone_option
 
-        def not_installed(command: str, label: str, **kwargs: Any) -> EmulatorOption:
-            return real(command, label, status="needs_setup", reason="not_installed", **kwargs)
+        def not_installed(label: str, **kwargs: Any) -> EmulatorOption:
+            return real(label, not_installed=True, **kwargs)
 
         monkeypatch.setitem(globals(), "standalone_option", not_installed)
         picker, bios, fw = await self._both(_PSX_STANDALONE_LABEL, None)
@@ -5382,7 +5360,7 @@ class TestCheckPlatformBiosRequired:
         )
         fw = _make_firmware_service(
             romm_api=romm_api,
-            core_info=FakeCoreInfoProvider(options=[standalone_option("%EMULATOR_RPCS3% %ROM%", "RPCS3")]),
+            core_info=FakeCoreInfoProvider(options=[standalone_option("RPCS3")]),
             retrodeck_folders=FakeRetroDeckFolders(bios=str(tmp_path / "bios")),
         )
         _inline_executor(fw)
@@ -5787,7 +5765,7 @@ class TestDownloadRequiredFirmware:
         RetroDECK system before reading the platform's emulators (ADR-0010 §2) so
         the per-core required flags use the correct active core.
         """
-        core_info = _DeclaredDefaultCoreInfo(
+        core_info = FakeCoreInfoProvider(
             active_core=("flycast_libretro", "Flycast"), options=[libretro_option("flycast_libretro", "Flycast")]
         )
         resolver = FakePlatformSystems(mapping={"dc": "dreamcast"})
@@ -6085,8 +6063,8 @@ class TestPerCoreFiltering:
         they answer different questions: ``options`` is the emulator list the
         platform's own pick is resolved from, ``active_core`` the libretro-only
         system reading. A test meaning "this platform launches with gpSP" has to
-        say it in the list. ``(None, None)`` is the platform ES-DE offers nothing
-        bakeable for, which is an empty list rather than a named emulator.
+        say it in the list. ``(None, None)`` is the platform ES-DE offers no
+        entry for, which is an empty list rather than a named emulator.
         """
         romm_api = MagicMock()
         romm_api.list_platforms.return_value = _platforms(self._gba_firmware())
@@ -6413,7 +6391,7 @@ class TestABatchDownloadCarriesOnPastAFailedFile:
 
     def _service(self, tmp_path) -> FirmwareService:
         fw = _make_firmware_service(
-            core_info=_DeclaredDefaultCoreInfo(
+            core_info=FakeCoreInfoProvider(
                 active_core=("flycast_libretro", "Flycast"), options=[libretro_option("flycast_libretro", "Flycast")]
             ),
             retrodeck_folders=FakeRetroDeckFolders(bios=str(tmp_path / "bios")),
@@ -7388,7 +7366,7 @@ class TestEachEmulatorsOwnPlace:
             romm_api=romm_api,
             firmware_resolver=resolver,
             retrodeck_folders=FakeRetroDeckFolders(bios=str(bios_dir)),
-            core_info=_DeclaredDefaultCoreInfo(
+            core_info=FakeCoreInfoProvider(
                 options=options
                 if options is not None
                 else [libretro_option(_KRONOS, "Kronos"), libretro_option(_YABASANSHIRO, "YabaSanshiro")],
@@ -7462,10 +7440,10 @@ class TestEachEmulatorsOwnPlace:
 
     @pytest.mark.asyncio
     async def test_download_required_fetches_for_a_pick_that_is_not_installed(self, tmp_path):
-        """Nothing bakes: the first declared emulator is the pick, and its requirement is what is fetched."""
+        """Nothing is installed: the first declared emulator is the pick, and its requirement is what is fetched."""
         options = [
-            replace(libretro_option(_KRONOS, "Kronos"), status="needs_setup", reason="not_installed"),
-            replace(libretro_option(_YABASANSHIRO, "YabaSanshiro"), status="needs_setup", reason="not_installed"),
+            replace(libretro_option(_KRONOS, "Kronos"), not_installed=True),
+            replace(libretro_option(_YABASANSHIRO, "YabaSanshiro"), not_installed=True),
         ]
         fw, _ = self._service(tmp_path, "YabaSanshiro", options=options)
         (tmp_path / "bios" / "kronos" / "saturn_bios.bin").unlink()
@@ -7481,8 +7459,8 @@ class TestEachEmulatorsOwnPlace:
         self, tmp_path, rom_picks_kronos
     ):
         """Whichever emulator the game resolves to, the file is linked wherever an emulator of the platform opens it."""
-        invocation = core_invocation(_KRONOS, "Kronos", f"{_KRONOS}.so") if rom_picks_kronos else None
-        game = FakeActiveCoreResolver(per_rom_emulator={42: invocation})
+        pick = libretro_option(_KRONOS, "Kronos") if rom_picks_kronos else None
+        game = FakeActiveCoreResolver(per_rom_emulator={42: pick})
         fw, _ = self._service(tmp_path, "YabaSanshiro", active_core=game)
         (tmp_path / "bios" / "kronos" / "saturn_bios.bin").unlink()
 
@@ -7621,7 +7599,7 @@ class TestOneEntryPerEmulator:
 
     @staticmethod
     def _not_installed(option: EmulatorOption) -> EmulatorOption:
-        return replace(option, status="needs_setup", reason="not_installed")
+        return replace(option, not_installed=True)
 
     @pytest.mark.asyncio
     async def test_a_pick_that_is_not_installed_is_the_launching_entry_marked_so(self, tmp_path):

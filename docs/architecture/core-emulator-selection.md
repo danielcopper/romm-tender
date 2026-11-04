@@ -38,13 +38,13 @@ on `domain.emulator_commands.EmulatorOption.kind` and on the picker payload's `k
 - **`program`** — an emulator program of its own (PS2 → PCSX2, PS3 → RPCS3, GameCube/Wii → Dolphin, PSP → PPSSPP, …);
   `core_so` is `None`.
 - **`foreign_core`** — a RetroArch launch naming a core file this machine cannot load (EmuDeck's `n3ds` overlay names
-  Windows `.dll` cores). It is marked and nothing more: its bake verdict is the one its command earns.
+  Windows `.dll` cores). It is marked and nothing more: whether it starts is the resolver's command's answer, as for any
+  entry.
 
 Tender reads none of this off the command text. The resolved emulator is a pure value object —
-`domain.shortcut_data.EmulatorInvocation` — whose `form` says how it is baked: `run_game`, the ES-DE command handed to
-RetroDECK's `run_game.sh` through `-e` (a core entry's with the resolver's core path written in, see "Application"
-below), or `direct`, the [folder-boot form](#folder-boot-launch-target). It carries the `core_so` of a core entry for
-the `.so`-space consumers.
+`domain.emulator_commands.EmulatorOption` — carrying the entry's label, its kind, its emulator identity and the
+`core_so` of a core entry for the `.so`-space consumers. How the entry starts is not on it: every start asks the
+resolver for its command ([Starting a game](#starting-a-game-the-resolvers-command)).
 
 Every kind is first-class throughout: the **default** may be any of them (the entry its source ships first), and the
 per-game / per-platform picker lists them all — so a pin may name an emulator program OR a core (#1210). A pin is stored
@@ -90,10 +90,9 @@ core **LABEL** the user picked (e.g. `"Beetle PSX HW"`), exactly as ES-DE displa
 Tender stores the **deviation** (the LABEL, or `NULL`), not a resolved core. The default and system layers are owned by
 RetroDECK/ES-DE and change externally — a RetroDECK update can ship a new default emulator — so a stored resolved value
 would go stale. Storing only the deviation keeps Tender authoritative over exactly the slice it owns and re-resolves the
-rest live. The LABEL is turned into an `EmulatorInvocation` (the entry's command, and beside it the `core_so` of a core
-entry) through the live-`es_systems.xml` classified option list at use time: `domain.emulator_commands.option_for_label`
-finds the entry it names and `option_to_invocation` renders it — so a per-game pin may name an emulator program, not
-only a core (#1210).
+rest live. The LABEL is looked up in the live-`es_systems.xml` option list at use time:
+`domain.emulator_commands.option_for_label` finds the entry it names — so a per-game pin may name an emulator program,
+not only a core (#1210).
 
 ## Storage: the per-platform core is a LABEL in `settings.json`
 
@@ -116,10 +115,13 @@ write resolves the freshly-written value rather than a stale snapshot.
 ## The single read seam: `ActiveCoreResolver`
 
 `ActiveCoreResolver` (`backend/services/active_core_resolver.py`) is the one place that answers "which emulator will
-this ROM actually launch with?" It exposes two methods over the **same** three-layer resolution:
+this ROM actually launch with?" It exposes three methods over the **same** three-layer resolution:
 
-- **`active_emulator_for_rom(rom_id) -> EmulatorInvocation | None`** — the **launch-bake seam**. Returns the full
-  resolved emulator (libretro core OR standalone), or `None` when the platform has no resolvable emulator at all.
+- **`resolve_rom(rom_id) -> ResolvedEmulator | None`** — the choice (`EmulatorChoice`: the entry in effect, the layer it
+  came from, and a pick that is gone) beside the system's options, or `None` where no system is found. The start check
+  and the game page read it.
+- **`active_emulator_for_rom(rom_id) -> EmulatorOption | None`** — the entry in effect (libretro core OR standalone), or
+  `None` where none is.
 - **`active_core_for_rom(rom_id) -> (core_so, label)`** — the **read-path projection** of the above, kept for the
   `.so`-space consumers. A libretro emulator yields `(core_so, label)`; a **standalone** emulator yields
   `(None, label)`; an unresolvable platform yields `(None, None)`. Consumers already degrade on a `None` core, so a
@@ -128,24 +130,20 @@ this ROM actually launch with?" It exposes two methods over the **same** three-l
 The precedence is the invariant:
 
 > **per-game DB `emulator_override` (top) → per-platform `settings.json` `platform_cores` → the default, the entry the
-> source ships first → the empty command where the system lists entries (#2195 D43), else `None` (plain launch).**
+> source ships first → no entry, and the game does not start (#2195 D43).**
 
 ```text
 resolve_rom(rom_id):
   rom, install = read roms + rom_installs rows             ── one UoW read
   system = rom_system(rom.platform_slug, install)          ── the install's system, else the platform's (below)
-  if system is None: return None                           ── no switched-on system: plain launch
-  options = get_emulator_options(system)["options"]        ── every es_systems entry, classified, in the resolver's order
+  if system is None: return None                           ── no switched-on system: no entry
+  options = get_emulator_options(system)["options"]        ── every es_systems entry, in the resolver's order
   choice = choose_emulator(options, game=pin, platform=platform_cores[slug])
                                                            ── a stored label stands while it names an entry, whatever
                                                            ── its state; a label that is gone gives way, named
-  invocation = get_default_emulator(system) if the default layer answered, else the chosen entry rendered
-  if choice is an entry Tender cannot bake, or no entry while options is not empty:
-    invocation = nothing()                                 ── the empty command (#2195 D43); plain launch only with no options
-  invocation = folder_boot_direct(invocation, install)     ── PS3 folder games (below)
-  return choice, invocation
+  return choice, options
 
-active_emulator_for_rom(rom_id) = resolve_rom(rom_id).invocation
+active_emulator_for_rom(rom_id) = resolve_rom(rom_id).choice.option
 active_core_for_rom(rom_id):                               ── the .so-space projection
   e = active_emulator_for_rom(rom_id)
   return (None, None) if e is None else (e.core_so, e.label)
@@ -157,31 +155,31 @@ through (`domain/emulator_pick.py::pick_for`): otherwise the default applies, th
 said, and a label is only ever checked against its own source's list
 ([#2222](https://github.com/danielcopper/romm-tender/issues/2222) D5). **A stored pick stands while its label still
 names an entry, whatever that entry's state** ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D23):
-one that is not installed, that `run_game.sh` runs nothing for, or that Tender cannot bake cannot start, and the game
-page says so and disables Play (below). Only a label that no longer exists in the list gives way to the next layer —
-never another entry Tender picks by itself — with a WARNING, and the answer names that pick so a surface says "Your
-choice '_label_' no longer exists in _source_;" and what is used instead — "your platform choice '_label_' is used"
-where a per-platform pick stands, "the default '_default_' is used" for the default, "there is no default to use
-instead" where there is none (D5). The default layer's invocation is
-`AtlasCatalogueAdapter.get_default_emulator(system)` (`adapters/atlas_catalogue.py`): the entry its source ships first
-(see [The default: the first in declared order](#the-default-the-first-in-declared-order)), which may itself be
-standalone (PCSX2, RPCS3, Dolphin, …) or libretro, rendered where Tender can bake it. **Only** the live file decides it
-— no bundled snapshot — and **no gamelist selection ever moves it**: the resolver states which entry a per-game
-`<altemulator>` or a system-level `<alternativeEmulator>` promotes, and the default is read off the declared position,
-which promotion never touches. Where the entry in effect — a pick or the default — is one Tender cannot bake, or no
-entry is in effect though the system lists some (no default established, or a pick gone with no default), the resolver
-answers `EmulatorInvocation.nothing()` and every bake site writes the empty start command, so a start Tender does not
-see runs nothing rather than ES-DE's own choice (#2195 D43). The plain RetroDECK launch remains only where the system
-lists no entry, no system is found, or the catalogue cannot be read.
+one that is not installed, or that the resolver gives no complete command for, cannot start, and the game page says so
+and disables Play (below). Only a label that no longer exists in the list gives way to the next layer — never another
+entry Tender picks by itself — with a WARNING, and the answer names that pick so a surface says "Your choice '_label_'
+no longer exists in _source_;" and what is used instead — "your platform choice '_label_' is used" where a per-platform
+pick stands, "the default '_default_' is used" for the default, "there is no default to use instead" where there is none
+(D5). The default layer is `domain.emulator_commands.default_option` over the same list: the entry its source ships
+first (see [The default: the first in declared order](#the-default-the-first-in-declared-order)), which may itself be
+standalone (PCSX2, RPCS3, Dolphin, …) or libretro. **Only** the live file decides it — no bundled snapshot — and **no
+gamelist selection ever moves it**: the resolver states which entry a per-game `<altemulator>` or a system-level
+`<alternativeEmulator>` promotes, and the default is read off the declared position, which promotion never touches.
+Where no entry is in effect — the system lists none, no system is found, the catalogue cannot be read, no default is
+established, or a pick is gone with no default — the start is refused, and nothing starts in that entry's place, ES-DE's
+own choice included (#2195 D43).
 
 **What starting comes to.** `domain/emulator_choice.py::start_payload` turns the choice into the `start` the game page
-and the platform page read: `starts`; `cannot_start` with the reason — `not_installed`, `start_script_runs_nothing`, or
-`not_bakeable` for any other entry Tender cannot bake, since RetroDECK's `run_game.sh` without `-e` would start ES-DE's
-own choice rather than that entry (D7, D23); `choose` where the shipped default's installation is not established, so
-there is no default until the user picks one (D9); `no_entry` where there is nothing to start with. A `cannot_start` or
-`choose` answer disables the game page's Play, and the launch watcher refuses Steam's own Play on the shortcut with the
-same sentence (`frontend/src/utils/emulatorStart.ts`). Whether the entry starts the game's own file — a game installed
-as a folder included, which RPCS3 Shortcut does not take — is the resolver's launch verdict, not the start's (D21; see
+and the platform page read: `starts`; `cannot_start` with the reason — `not_installed` for an entry the resolver states
+not installed, or, on the game page and at the start, why the resolver gives the entry no complete command for the game
+([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D2, D20; the reasons are under
+[Starting a game](#starting-a-game-the-resolvers-command)); `choose` where the shipped default's installation is not
+established, so there is no default until the user picks one (D9); `no_entry` where there is nothing to start with. The
+platform page asks no command, since a platform has no game to ask it with. Beside a `starts`, `remarks` names each
+placeholder ES-DE leaves unfilled in the command. A `cannot_start` or `choose` answer disables the game page's Play, and
+the launch watcher refuses Steam's own Play on the shortcut with the same sentence
+(`frontend/src/utils/emulatorStart.ts`). Whether the entry starts the game's own file — a game installed as a folder
+included, which RPCS3 Shortcut does not take — is the resolver's launch verdict, not the start's (D21; see
 [Whether an entry starts the installed game](#whether-an-entry-starts-the-installed-game)). Tender never switches such a
 game to another entry by itself.
 
@@ -300,13 +298,13 @@ The platform page names the system taken with its source in its header line ([qa
 ### The default: the first in declared order
 
 Selection is **data-derived from the live `es_systems.xml` alone** — there is no curated snapshot. The pure kernel
-`domain/emulator_commands.py` classifies each of a system's ES-DE `<command>` entries into an `EmulatorOption` (`label`,
-`kind`, `core_so`, `command`, `status`, `reason`, `declared_index`, `chosen_in_frontend`), and `shipped_default` returns
-**the entry with the lowest `declared_index`** — the one its source ships first, whatever Tender can do with it
-([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D7). `default_option` takes it unless its installation
-is not established (D9). Nothing later in the list is taken instead: an entry that cannot start is said so (above). This
-amends [ADR-0020](../adr/0020-live-es-systems-emulator-resolution.md)'s rule, which skipped to the first entry Tender
-could bake.
+`domain/emulator_commands.py` turns each of a system's catalogue entries into an `EmulatorOption` (`label`, `kind`,
+`core_so`, `emulator`, `not_installed`, `not_established`, `declared_index`, `chosen_in_frontend`), and
+`shipped_default` returns **the entry with the lowest `declared_index`** — the one its source ships first, whatever
+Tender can do with it ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D7). `default_option` takes it
+unless its installation is not established (D9). Nothing later in the list is taken instead: an entry that cannot start
+is said so (above). This amends [ADR-0020](../adr/0020-live-es-systems-emulator-resolution.md)'s rule, which skipped to
+the first entry Tender could write into a shortcut.
 
 **The rows keep the resolver's order; the default is read off the declared position.** The resolver states its entries
 in _effective_ order, where a choice the user made in ES-DE — a per-game `<altemulator>`, a system-level
@@ -318,61 +316,37 @@ page asks with the installed game's path, so a game's own choice counts; the lau
 are ascending but need not start at 0 or be dense — ES-DE's own walk lets an empty-text `<command>` hold a position
 without yielding an entry, and drops a duplicate label entirely — so the lowest one counts, never `entries[0]` and never
 "index 0 exists". An entry with **no** declared position is never the default; that is the resolver's derived
-enumeration for a catalogue-less arrangement, and such an entry carries an empty command, which rule 3 below reads as
-`no_rom_target`.
+enumeration for a catalogue-less arrangement, and such an entry carries an empty command.
 
-A command is `bakeable` only when it is a real emulator invocation Tender can carry into a Steam shortcut's `-e`, where
-RetroDECK's `run_game.sh` starts it. This rule is Tender's own, and it follows that script's handling of a command
-rather than ES-DE's. Ahead of the rules below come three refusals the resolver's statements cause: an entry it states
-not installed (`not_installed`, below), one it states `run_game.sh` would run nothing for (`start_script_runs_nothing`,
-below), and a `core` entry it gives no core path for (`core_unlocated`), since there is then nothing to write where the
-command names its core; the panel words the second as "RetroDECK's start script finds no emulator for it", and a core
-entry without its core path carries the not-established note it comes with (below). A `core` entry's command is judged
-with its core path written in. `classify_command` then applies these rules in order, first match wins:
-
-1. contains `%INJECT%` → `needs_setup` (`"inject"`) — the command injects a file's contents, and Tender cannot start a
-   command in that form;
-2. contains `%ENABLESHORTCUTS%` or `%EMULATOR_OS-SHELL%` → `unbakeable` (`"shortcut_script"`);
-3. does not end in `%ROM%` → `unbakeable` (`"no_rom_target"`) — trailing args after `%ROM%` break the bake;
-4. contains `"` or `\;` → `unbakeable` (`"quoting"`);
-5. any placeholder outside the whitelist (`%EMULATOR_*%`, `%ROM%`, `%CORE_RETROARCH%`, `%GAMEDIR%`, `%GAMEDIRRAW%`,
-   `%ROMPATH%`, `%BASENAME%`, `%FILENAME%`, `%ROMRAW%`, `%STARTDIR%`) → `unbakeable` (`"unknown_placeholder"`);
-6. contains `%STARTDIR%` → `unbakeable` (`"startdir"`) — RetroDECK's `run_game.sh` parses-but-drops it, so a baked
-   command would launch from the wrong directory (a v1 limitation);
-7. otherwise `bakeable`.
-
-A system whose first command is the shortcut form (`%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%`, RetroDECK's PS3) keeps
-it as its default, `unbakeable` as it is, so its games say Tender cannot start it yet (above). A leading `env VAR=val …`
-prefix (the GameCube/Wii Dolphin form) is accepted as an invocation like any other.
+Whether an entry starts a game is the resolver's command for that game, asked at the start and on the game's page
+([Starting a game](#starting-a-game-the-resolvers-command)); Tender keeps no rule of its own about a command's text
+([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D20). A system whose first command is the shortcut
+form (`%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%`, RetroDECK's PS3) keeps it as its default, and its game page says
+what the resolver answers for it.
 
 **Whether an entry is installed is the resolver's answer.** RetroDECK lists more emulators in `es_systems.xml` than it
-bundles, so a system's bakeable default could name one that is not on disk (Ryubing on `switch`) — baking it produces a
-shortcut that dies in ~0.4 s. Each catalogue entry carries the resolver's `availability`, from ES-DE's own lookup over
-its find rules, for libretro cores and standalone emulators alike, and `adapters/atlas_catalogue.py` reads it:
+bundles, so a system's default could name one that is not on disk (Ryubing on `switch`). Each catalogue entry carries
+the resolver's `availability`, from ES-DE's own lookup over its find rules, for libretro cores and standalone emulators
+alike, and `adapters/atlas_catalogue.py` reads it:
 
-- **startable** — the entry keeps its bake verdict above.
+- **startable** — whether it starts a game is the command's answer (above).
 - **not installed** — reason `not_installed`, whichever of the resolver's causes it states (no find rule matched, the
-  program or its launcher script is missing, or the core is). It takes the place of the bake verdict, whatever the
-  command: the entry is `needs_setup` and bakes nothing, the picker shows it disabled as "emulator not installed"
-  (`reasonCopy`, `frontend/src/utils/emulatorMenu.tsx`), and as the default or a stored pick it cannot start.
-- **not established** — the resolver cannot tell. The entry keeps the bake verdict its command earns and carries a note
-  (`EmulatorOption.not_established`, sent as the entry's `reason` ahead of any bake reason) naming the cause where the
-  reading knows it: `no_find_rule` (ES-DE has no rule for the emulator or the core), `find_rules_unread`,
-  `lookup_unsupported` (the resolver does not follow this lookup yet — the arrangement's, or this one command's shape)
-  or `path_unseen` (ES-DE would look where the resolver cannot see: the sandbox's own `/etc`, `/tmp`, `/dev`, `/proc` or
-  `/sys`, or a path it cannot stat); `not_established` where it does not. Such an entry stays a pick a user may make,
-  and a pin to it stays, but `default_option` never takes it, so it is never the default by itself (#2195 D9). The
-  picker offers it with "installation not established" and the cause, and a page whose emulator it is says so under it
-  (`frontend/src/utils/emulatorInstallation.ts`); it is never called missing. Such an entry is a `program`: the resolver
-  states no core path for a `core` entry whose installation it cannot establish, so that entry is not bakeable
-  (`core_unlocated`, #2195 D15): the picker shows its note and that Tender cannot start it yet.
+  program or its launcher script is missing, or the core is). It stands in place of any command: no command is asked for
+  it, the picker shows it disabled as "emulator not installed" (`entryNotes`, `frontend/src/utils/emulatorMenu.tsx`),
+  and as the default or a stored pick it cannot start.
+- **not established** — the resolver cannot tell. The entry carries a note (`EmulatorOption.not_established`, sent as
+  the entry's `reason`) naming the cause where the reading knows it: `no_find_rule` (ES-DE has no rule for the emulator
+  or the core), `find_rules_unread`, `lookup_unsupported` (the resolver does not follow this lookup yet — the
+  arrangement's, or this one command's shape) or `path_unseen` (ES-DE would look where the resolver cannot see: the
+  sandbox's own `/etc`, `/tmp`, `/dev`, `/proc` or `/sys`, or a path it cannot stat); `not_established` where it does
+  not. Such an entry stays a pick a user may make, and a pin to it stays, but `default_option` never takes it, so it is
+  never the default by itself (#2195 D9). The picker offers it with "installation not established" and the cause, and a
+  page whose emulator it is says so under it (`frontend/src/utils/emulatorInstallation.ts`); it is never called missing.
+  Such an entry is a `program`: the resolver states no core path for a `core` entry whose installation it cannot
+  establish (#2195 D15).
 
-One note the resolver states beside a verdict decides the bake: `run-game-differs` says RetroDECK's `run_game.sh` reads
-only the shipped find rules, never expands `~` and takes no `|` entry, so its lookup of the command's `%EMULATOR_X%`
-token — the one Tender's `-e` bake goes through — finds something other than ES-DE does. Where it names nothing (an
-empty `run_game_path`; PICO-8's two entries, whose `%EMULATOR_PICO-8%` the script never resolves), a baked shortcut
-would start nothing, so the entry is `unbakeable` with `start_script_runs_nothing` (#2195 D16). Where it names a path,
-and every other note, changes nothing here.
+The resolver's `run-game-differs` note — RetroDECK's `run_game.sh` would find a different program for the command's
+`%EMULATOR_X%` token than ES-DE does — changes nothing here: no start goes through that script (#2221 D7).
 
 `get_emulator_options(system)` returns `{"available": bool, "options": [EmulatorOption, ...], "reason", "source"}`.
 **`available` is `False` whenever nothing could be established**: no emulator source answers (`reason` `no_source`, or
@@ -396,14 +370,12 @@ is that real "knows none", and `emulator-catalogue-exclusive` is not a refusal a
 declaring itself the whole catalogue gives a complete answer, merely a small one. The test is the codes and never an
 empty caveat list — a broken installation states health findings on every answer it gives. `options_to_payload` projects
 the list to the frontend picker shape
-(`{label, kind, core_so, emulator, declared_index, is_default, chosen_in_frontend,
-bakeable, reason}`): every entry is
-clickable but one the resolver states not installed, which reads "emulator not installed" (D9, D23, D31); the default
-and the user's ES-DE choice are marked; an entry's not-established note wins over any bake reason in its `reason`, and
-an entry Tender cannot bake reads its note, where it has one, and "Tender cannot start it yet" — or, for one RetroDECK's
-start script runs nothing for, the resolver's line (`start_script_runs_nothing`). Asked with `source`,
-`get_emulator_options` answers for that detected source instead of the answering one, which the platform page's
-per-source defaults read (below).
+(`{label, kind, core_so, emulator, declared_index, is_default, chosen_in_frontend, reason}`): every entry is clickable
+but one the resolver states not installed, which reads "emulator not installed" (D9, D23, D31); the default and the
+user's ES-DE choice are marked; an entry's `reason` is its not-established note, else `not_installed`. Whether the
+resolver gives an entry a complete command for the game is not on the list: the game page's emulator menu reads it per
+game ([below](#whether-an-entry-starts-the-installed-game)). Asked with `source`, `get_emulator_options` answers for
+that detected source instead of the answering one, which the platform page's per-source defaults read (below).
 
 **One row per entry.** Every entry is a row of its own, in the resolver's order, two labels that run one command
 included: RetroDECK lists `pcsx2_libretro.so` as `LRPS2` and as `PCSX2`, and ES-DE stores a choice by its label, so
@@ -451,12 +423,14 @@ game kept as a `<game>.ps3` folder, Beetle PCE "it starts no game from a playlis
 ([#2698](https://github.com/danielcopper/romm-tender/issues/2698) D7) — and an entry that starts it says what the
 resolver's reading of the file could not establish, where it stopped short (D40), a file its start goes on without, with
 "can start it, without _file_: …", or what else it is established to do short of the whole start, with "can start it,
-but …". Where the answer says more than one thing, the line is the first with "+_N_ more" (#2698 D8). An entry Tender
-cannot start yet says so on its row and gets no "can start it" under it; every other line of the resolver's stays (D42).
-The menu's answer never moves the pick; a pick of an entry that cannot start the game is the user's, and Play is then
-off with the verdict's sentence — the resolver's refusal of the file where it states one, before Tender's own "Tender
-cannot start _entry_ yet." (D42, `frontend/src/utils/emulatorStart.ts::startRefusal`). What a game's own entry answers,
-and what each answer does to a start, is [Launch-target validation](backend-architecture.md#launch-target-validation).
+but …". Where the answer says more than one thing, the line is the first with "+_N_ more" (#2698 D8). The same request
+asks each installed entry's command for the game (`start_verdict`), and an entry the resolver gives no complete command
+for gets no "can start it" under it: its row says "Tender cannot start it yet: _reason_", after the file's statements
+and counted among them ([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D20). The menu's answer never
+moves the pick; a pick of an entry that cannot start the game is the user's, and Play is then off with the verdict's
+sentence — the resolver's refusal of the file where it states one, then "Tender cannot start _entry_ yet: _reason_."
+(`frontend/src/utils/emulatorStart.ts::startRefusal`). What a game's own entry answers, and what each answer does to a
+start, is [Launch-target validation](backend-architecture.md#launch-target-validation).
 
 ## Starting a game: the resolver's command
 
@@ -609,44 +583,30 @@ filename) stay stable.
 Some systems boot a game **directory**, not the nested launch file. A PS3 game installs as a folder whose payload is
 `…/PS3_GAME/USRDIR/EBOOT.BIN`, and `detect_launch_file` picks that EBOOT as `file_path` — correct as the launch _file_
 identity, but RPCS3's directory-boot rejects it and wants the folder that contains `PS3_GAME`
-([#1212](https://github.com/danielcopper/romm-tender/issues/1212)). Two things change together for such a game — the
-baked **path** and the baked **invocation form** — because they are decided from the same layout fact.
+([#1212](https://github.com/danielcopper/romm-tender/issues/1212)). The path a start is asked with is therefore the
+folder.
 
-**The path.** A bake-time path override, layered **after** disc resolution in the same `resolve_bake_path` seam:
+A path override, layered **after** disc resolution in the same `resolve_disc_path` seam:
 `folder_boot_root(path, install.rom_dir)` (`domain/rom_files.py`) strips a hardcoded `FOLDER_BOOT_MARKERS` run
 (`PS3_GAME/USRDIR/EBOOT.BIN`, matched case-sensitively) from the resolved path and returns the game root, guarded so it
 fires only when `rom_dir` is set and the derived root stays inside `rom_dir` (a bare EBOOT in the shared system dir
-never bakes that shared dir). Because it triggers only when the resolved path still carries the marker, it composes with
+never names that shared dir). Because it triggers only when the resolved path still carries the marker, it composes with
 disc resolution — a resolved disc path (`…(Disc 2).cue`) has no marker, so a multi-disc ROM is never folder-stripped,
 and the folder rule applies only when disc resolution returned `file_path`.
 
-**The invocation form.** RetroDECK's `run_game.sh` reinterprets any directory `%ROM%` as an ES-DE "directory as a file"
-(`game="$game/$(basename "$game")"`, `run_game.sh:63-67`), so the standalone `-e "%EMULATOR_RPCS3% --no-gui %ROM%"` form
-handed a folder points RPCS3 at a nonexistent `…/<Game>/<Game>` and never boots. A folder-boot standalone is therefore
-baked as a **direct sandbox invocation** that bypasses `run_game.sh`:
-`flatpak run --nosocket=wayland --command=<launcher> net.retrodeck.retrodeck <args> '<folder>'`, running the emulator's
-own launcher inside the sandbox. `ActiveCoreResolver.active_emulator_for_rom` makes this rewrite: when the resolved
-emulator is a standalone and the ROM's install is a folder-boot layout (same `folder_boot_root` fact), it takes the
-launcher the resolver states for the entry (its `launcher.path`, such as
-`/app/retrodeck/components/rpcs3/component_launcher.sh`, carried on the option and the invocation) and returns an
-`EmulatorInvocation.direct`; `resolve_emulator_invocation` renders the `--command=` form, stripping `%EMULATOR_*%` +
-`%ROM%` down to the middle args (`--no-gui`). The reading passes a launcher on only where the resolver spells it inside
-RetroDECK's sandbox and its rule entry carries no replacement command, since ES-DE would then run that command instead.
-A libretro emulator, a non-folder install, or no such launcher leave the standard `run_game` `-e` form untouched.
-
 `RomInstall.file_path` stays the EBOOT (the [ADR-0008](../adr/0008-rom-install-launch-file-and-rom-dir.md) anchor), so
-save-path, core, and displayed-filename derivations are untouched. Both overrides live in the two shared seams
-(`resolve_bake_path` for the path, `active_emulator_for_rom` for the invocation), so **every** bake site (the three
-below plus the download-complete, core set/clear, and startup-reconcile bakes) inherits them with no call-site edits,
-and a PS3 ROM synced before this change self-heals on its next bake. See
+save-path, core, and displayed-filename derivations are untouched. The resolver's command for the folder is run as it
+answers it, like any other ([Starting a game](#starting-a-game-the-resolvers-command)); RetroDECK's `run_game.sh`, which
+turned a folder `%ROM%` into a path inside it, is no longer in the way
+([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D7). See
 [ADR-0019](../adr/0019-folder-as-launch-target.md).
 
 **The folder is named as ES-DE scans it.** A folder-boot download's folder is renamed `<game>.ps3` (`ps3_folder_rename`,
 `domain/rom_files.py`), the name ps3's accept-list carries for a game kept as a folder, and the resolver is asked about
 that folder as about any other game's file: on the game's page with the entry the game starts with, in the emulator menu
 with each entry, never with an entry of Tender's own choosing. The resolver also names the folder RPCS3 boots, but the
-marker run above decides which directory inside it is baked until the direct start
-([#2221](https://github.com/danielcopper/romm-tender/issues/2221)) reads the resolver's instead
+marker run above decides which directory inside it a start is asked with, until a later part of
+[#2221](https://github.com/danielcopper/romm-tender/issues/2221) reads the resolver's instead
 ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D11, D38). A folder whose name already ends in a
 suffix the accept-list carries, compared verbatim as ES-DE compares it, keeps its name, and so does one whose new name
 is taken: nothing is moved over another folder. A download whose game folder lies exactly one level inside the folder it

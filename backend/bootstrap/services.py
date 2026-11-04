@@ -689,6 +689,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             uow_factory=cfg.callbacks.uow_factory,
             active_core=active_core_resolver,
             disc_resolver=disc_launch_resolver,
+            start_commands=cfg.adapters.start_commands,
             conflict_rules=conflict_rules,
         ),
     )

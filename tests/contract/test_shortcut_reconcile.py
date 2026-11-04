@@ -67,7 +67,7 @@ async def test_empty_live_set_unbinds_all(harness):
 
 
 async def test_unbind_drops_row_from_app_id_rom_id_map(harness):
-    """After reconcile the dead appId is gone from the map playtime/launch bakes read.
+    """After reconcile the dead appId is gone from the map playtime and starts read.
 
     ``get_app_id_rom_id_map`` only serves bound rows; unbinding the stale
     appId stops it being served to a nonexistent Steam app, and the same NULL

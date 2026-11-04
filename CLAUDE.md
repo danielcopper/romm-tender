@@ -1133,7 +1133,7 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `domain/emulator_pick.py::pick_for`, while its label exists, else the shipped default whatever its state; the
   platform's core read names the pick or Tender's default, #2195 D4), `.label` and `.emulator` come off one call, the
   key is the emulator identity and never `.core_so`, and both game-page services ask `ActiveCoreReader.resolve_rom` —
-  the picker for its rows, the BIOS question for the chosen entry whether or not it can be baked — never
+  the picker for its rows, the BIOS question for the chosen entry whether or not it can start — never
   `active_core_for_rom`; the one-of groups an answer judges are that same pick's (`groups_for(identity)`), and so are
   the rows (`FirmwareCatalogue.placements_for(identity)`, #2190 D2/D9); every other emulator's answer is an entry of its
   own (`emulator_tabs`) the BIOS tables' emulator selector shows, which never changes the level, the header's counts or

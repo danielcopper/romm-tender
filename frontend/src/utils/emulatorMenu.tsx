@@ -4,10 +4,11 @@
  * Both pickers — the game-detail core menu (`RomMPlaySection`) and the Library
  * page's per-platform menu (`PlatformDetail`) — render the same list: every ES-DE
  * `<command>`, each one choosable but an entry the resolver states not installed
- * (#2195 D9, D23, D31). An entry Tender cannot bake says so, so a pick of it does
- * not surprise: Play is then off (D7). The frontend owns the copy; the backend
- * only ships the reason slug. Keys are the emulator LABEL (not `core_so`), since
- * a standalone emulator has no core.
+ * (#2195 D9, D23, D31). On a game's page, an entry the resolver gives no complete
+ * start command for says so under it, so a pick of it does not surprise: Play is
+ * then off (#2221 D20). The frontend owns the copy; the backend only ships the
+ * reason slug. Keys are the emulator LABEL (not `core_so`), since a standalone
+ * emulator has no core.
  *
  * Every entry is a row of its own, in the order the resolver lists them; two
  * labels that run one command are two rows, as in ES-DE, which stores a choice
@@ -21,34 +22,17 @@ import type { AnsweringSource, EmulatorDataReason, EmulatorOption, PlatformSyste
 import { emulatorDataReasonSentence } from "./emulatorSourceWording";
 import { entryForLabel } from "./emulatorEntries";
 import { notEstablishedNote } from "./emulatorInstallation";
-import { isChoosable } from "./emulatorStart";
+import { commandRefusalLine, isChoosable } from "./emulatorStart";
 import type { EntryLaunches } from "./emulatorLaunches";
 import { entryLaunchLine } from "./gameLaunch";
 
-/** The line an entry Tender cannot bake carries, so a pick of it does not surprise (#2195 D7). */
-const CANNOT_START_YET = "Tender cannot start it yet";
+/** The words an entry the resolver states not installed carries after its label. */
+const NOT_INSTALLED_NOTE = "emulator not installed";
 
-/** Map a backend un-bakeable reason slug to short menu copy: the resolver's statement, else that Tender cannot start it. */
-export function reasonCopy(reason: string | null): string {
-  switch (reason) {
-    case "not_installed":
-      return "emulator not installed";
-    case "core_unlocated":
-      return "core location not established";
-    case "start_script_runs_nothing":
-      return "RetroDECK's start script finds no emulator for it";
-    default:
-      // inject / shortcut_script / no_rom_target / quoting / startdir / unknown_placeholder / null
-      return CANNOT_START_YET;
-  }
-}
-
-/** What an entry's row says after its label: its not-established note, then why Tender cannot start it, where either holds. */
+/** What an entry's row says after its label: its not-established note, or that it is not installed, where either holds. */
 function entryNotes(e: EmulatorOption): string {
-  const note = notEstablishedNote(e.reason);
-  const notes = note === null ? [] : [note];
-  if (!e.bakeable) notes.push(note === null ? reasonCopy(e.reason) : CANNOT_START_YET);
-  return notes.map((part) => ` — ${part}`).join("");
+  const note = e.reason === "not_installed" ? NOT_INSTALLED_NOTE : notEstablishedNote(e.reason);
+  return note === null ? "" : ` — ${note}`;
 }
 
 export interface EmulatorMenuConfig {
@@ -85,13 +69,15 @@ export interface EmulatorMenuConfig {
   launches?: EntryLaunches | undefined;
 }
 
-/** The line under an entry saying whether it can start the game: Play's throbber until the answer lands, then its words. */
+/**
+ * The line under an entry saying whether it can start the game: Play's throbber until the answer lands, then its
+ * words — the file's verdict, and where the resolver gives no complete command for the entry, why (#2221 D20).
+ */
 const EntryLaunchLine: FC<{
   launches: EntryLaunches;
   label: string;
   source: AnsweringSource | null;
-  tenderStarts: boolean;
-}> = ({ launches, label, source, tenderStarts }) => {
+}> = ({ launches, label, source }) => {
   const launch = useSyncExternalStore(launches.subscribe, () => launches.forLabel(label));
   if (launch === undefined) {
     return (
@@ -101,7 +87,13 @@ const EntryLaunchLine: FC<{
     );
   }
   if (launch === null) return null;
-  const line = entryLaunchLine(launch, source, tenderStarts);
+  const verdict = launch.start_verdict ?? null;
+  const refusedBecause =
+    verdict === null || verdict.starts || verdict.reason === "not_installed" ? null : verdict.reason;
+  const line =
+    refusedBecause === null
+      ? entryLaunchLine(launch, source)
+      : entryLaunchLine(launch, source, false, commandRefusalLine(refusedBecause));
   return line === null ? null : <div style={{ fontSize: "12px", opacity: 0.7 }}>{line}</div>;
 };
 
@@ -134,7 +126,7 @@ export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
     ) : (
       <div>
         <div>{text}</div>
-        <EntryLaunchLine launches={launches} label={e.label} source={config.emulatorSource} tenderStarts={e.bakeable} />
+        <EntryLaunchLine launches={launches} label={e.label} source={config.emulatorSource} />
       </div>
     );
 
