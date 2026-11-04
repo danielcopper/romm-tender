@@ -1,29 +1,9 @@
 /**
- * Which of Steam's internals the shipped code reaches, read off the type checker.
- *
- * A reach is a property read, a call, an element access whose key is a string
- * literal or a union of them, a destructuring, or an object-literal property
- * written where a Steam type is expected. It counts when the member it resolves
- * to is declared in one of three places:
- *
- * - `types/steam.d.ts`'s global declarations (its `declare module` blocks are
- *   React's, not Steam's);
- * - `@decky/ui`'s `dist/globals/` and the `Window` augmentation in its
- *   `dist/webpack.d.ts`, which declare fifteen more of Steam's globals with
- *   types of their own — so a reach typed by them compiles without
- *   `steam.d.ts` naming it;
- * - a type declared in shipped source and reached from a cast of a window
- *   value, following type references within the cast's own file only. That
- *   rule is what keeps a type of Tender's own, used inside such a shape
- *   (`api/host.ts`'s `ToastData`), out of the answer.
- *
- * A member whose type is an inline type literal is a container, not a reach:
- * its members are.
- *
- * A member is named by its path: the nearest named declaration and the chain of
- * properties below it (`SteamClient.Apps.AddShortcut`,
- * `SteamNotificationStore.ProcessNotification`), with `window` for a type
- * literal written in the cast itself (`window.g_PopupManager`).
+ * Which of Steam's internals the shipped code reaches, read off the type
+ * checker, each named by its path. What counts as a reach, the three places a
+ * reached member may be declared, and how a path is derived are
+ * `docs/architecture/frontend-bundles.md`'s, "Every Steam internal Tender
+ * reaches".
  */
 
 import { relative } from "node:path";
@@ -35,6 +15,8 @@ export interface SteamReach {
   readonly reached: ReadonlyMap<string, ReadonlySet<string>>;
   /** Every member `types/steam.d.ts` declares, as a path. */
   readonly declared: readonly string[];
+  /** The types holding a counted member that no route from Steam's roots reaches, by name. */
+  readonly unrouted: ReadonlySet<string>;
   /** The files holding a cast of a window value to a type with no members to read — a `Record`, `unknown`. */
   readonly unreadableCastFiles: ReadonlySet<string>;
   /** How many source files the program checked: a scan over nothing passes always. */
@@ -58,23 +40,6 @@ function* ancestors(node: ts.Node): Generator<ts.Node> {
   for (let parent = node.parent as ts.Node | undefined; parent; parent = parent.parent as ts.Node | undefined) {
     yield parent;
   }
-}
-
-function memberPath(member: Member): string {
-  const source = member.getSourceFile();
-  const parts = [member.name.getText(source)];
-  for (const node of ancestors(member)) {
-    if (isMember(node)) {
-      parts.unshift(node.name.getText(source));
-    } else if (ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node) || ts.isVariableDeclaration(node)) {
-      parts.unshift(node.name.getText(source));
-      break;
-    } else if (ts.isAsExpression(node)) {
-      parts.unshift("window");
-      break;
-    }
-  }
-  return parts.join(".");
 }
 
 function insideModuleBlock(node: ts.Node): boolean {
@@ -108,8 +73,8 @@ function castShapes(target: ts.TypeNode, checker: ts.TypeChecker, into: Set<ts.N
   const file = target.getSourceFile().fileName;
   const visit = (node: ts.Node): void => {
     if (ts.isTypeLiteralNode(node)) into.add(node);
-    if (ts.isTypeReferenceNode(node)) {
-      let symbol = checker.getSymbolAtLocation(node.typeName);
+    if (ts.isTypeReferenceNode(node) || ts.isExpressionWithTypeArguments(node)) {
+      let symbol = checker.getSymbolAtLocation(ts.isTypeReferenceNode(node) ? node.typeName : node.expression);
       if (symbol && symbol.flags & ts.SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol);
       for (const declaration of symbol?.declarations ?? []) {
         const isShape = ts.isInterfaceDeclaration(declaration) || ts.isTypeAliasDeclaration(declaration);
@@ -155,6 +120,71 @@ function reachedSymbols(node: ts.Node, checker: ts.TypeChecker): (ts.Symbol | un
   return [];
 }
 
+const isReference = (type: ts.Type): type is ts.TypeReference =>
+  (type.flags & ts.TypeFlags.Object) !== 0 && ((type as ts.ObjectType).objectFlags & ts.ObjectFlags.Reference) !== 0;
+
+const ELEMENT_HOLDERS = new Set(["Array", "ReadonlyArray", "Iterable", "IterableIterator", "Set", "ReadonlySet"]);
+
+/** The interface and type-literal declarations a type is made of, its base interfaces' included. */
+function declarationsOf(type: ts.Type, checker: ts.TypeChecker): ts.Node[] {
+  const own = (type.getSymbol()?.declarations ?? []).filter(
+    (declaration) => ts.isInterfaceDeclaration(declaration) || ts.isTypeLiteralNode(declaration),
+  );
+  const bases = type.isClassOrInterface() ? checker.getBaseTypes(type) : [];
+  return [...own, ...bases.flatMap((base) => declarationsOf(base, checker))];
+}
+
+/**
+ * Each type's route from Steam's roots, keyed by the declarations it is made
+ * of: a breadth-first walk, so the first route recorded is the shortest, and
+ * among routes of one length the one from the earlier root. The declarations
+ * of the global scope itself (`interface Window`) are named by no route: a
+ * window-typed field reached on the way does not rename them.
+ */
+function routes(
+  roots: readonly (readonly [string, ts.Type])[],
+  globalScope: readonly ts.Node[],
+  checker: ts.TypeChecker,
+  descends: (type: ts.Type) => boolean,
+): Map<ts.Node, string> {
+  const found = new Map<ts.Node, string>(globalScope.map((declaration) => [declaration, ""]));
+  const seen = new Set<ts.Type>();
+  const queue: (readonly [ts.Type, string])[] = [...roots.map(([name, type]) => [type, name] as const)];
+  const member = (route: string, name: string): string => (route === "" ? name : `${route}.${name}`);
+  for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
+    const [whole, route] = next;
+    const nonNull = checker.getNonNullableType(whole);
+    for (const type of nonNull.isUnion() ? nonNull.types : [nonNull]) {
+      if (seen.has(type)) continue;
+      seen.add(type);
+      for (const declaration of declarationsOf(type, checker))
+        if (!found.has(declaration)) found.set(declaration, route);
+      const holder = type.getSymbol()?.name ?? "";
+      const [argument] = isReference(type) ? checker.getTypeArguments(type) : [];
+      if (holder === "Promise") {
+        // The awaited value takes no step: at the front, so the walk stays shortest-first.
+        if (argument) queue.unshift([argument, route]);
+        continue;
+      }
+      if (ELEMENT_HOLDERS.has(holder)) {
+        if (argument) queue.push([argument, `${route}[]`]);
+        continue;
+      }
+      if (!descends(type)) continue;
+      for (const signature of type.getCallSignatures()) {
+        queue.push([signature.getReturnType(), `${route}()`]);
+        for (const parameter of signature.getParameters()) {
+          queue.push([checker.getTypeOfSymbol(parameter), `${route}(${parameter.name})`]);
+        }
+      }
+      for (const property of type.getProperties()) {
+        queue.push([checker.getTypeOfSymbol(property), member(route, property.name)]);
+      }
+    }
+  }
+  return found;
+}
+
 export function scanSteamReach(frontendDir: string): SteamReach {
   const srcDir = `${frontendDir}/src`;
   const steamDts = `${srcDir}/types/steam.d.ts`;
@@ -163,6 +193,17 @@ export function scanSteamReach(frontendDir: string): SteamReach {
   const sources = program
     .getSourceFiles()
     .filter((source) => !source.isDeclarationFile && source.fileName.startsWith(`${srcDir}/`));
+  const dts = program.getSourceFile(steamDts);
+  if (!dts) throw new Error(`${steamDts} is not in the program`);
+
+  const roots: (readonly [string, ts.Type])[] = [];
+  for (const statement of dts.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      roots.push([declaration.name.getText(dts), checker.getTypeAtLocation(declaration)]);
+    }
+  }
+  const ownGlobals = new Set(roots.map(([name]) => name));
 
   const shapes = new Set<ts.Node>();
   const unreadableCastFiles = new Set<string>();
@@ -170,14 +211,21 @@ export function scanSteamReach(frontendDir: string): SteamReach {
     const visit = (node: ts.Node): void => {
       const cast = windowCast(node, checker);
       if (cast) {
-        if (checker.getTypeFromTypeNode(cast.type).getProperties().length === 0) {
-          unreadableCastFiles.add(relative(srcDir, source.fileName));
-        }
+        const target = checker.getTypeFromTypeNode(cast.type);
+        if (target.getProperties().length === 0) unreadableCastFiles.add(relative(srcDir, source.fileName));
+        roots.push(["", target]);
         castShapes(cast.type, checker, shapes);
       }
       ts.forEachChild(node, visit);
     };
     visit(source);
+  }
+
+  const windowSymbol = checker.resolveName("window", undefined, ts.SymbolFlags.Value, false);
+  const windowType = windowSymbol ? checker.getTypeOfSymbol(windowSymbol) : undefined;
+  for (const property of windowType?.getProperties() ?? []) {
+    const deckys = (property.declarations ?? []).some((d) => DECKY_GLOBALS.test(d.getSourceFile().fileName));
+    if (deckys && !ownGlobals.has(property.name)) roots.push([property.name, checker.getTypeOfSymbol(property)]);
   }
 
   const counts = (member: Member): boolean => {
@@ -188,6 +236,26 @@ export function scanSteamReach(frontendDir: string): SteamReach {
     return file.startsWith(`${srcDir}/`) && insideShape(member, shapes);
   };
 
+  const descends = (type: ts.Type): boolean =>
+    (type.getSymbol()?.declarations ?? []).some((declaration) => {
+      const file = declaration.getSourceFile().fileName;
+      return file.startsWith(`${srcDir}/`) || DECKY_GLOBALS.test(file);
+    });
+  const windowInterface = checker.resolveName("Window", undefined, ts.SymbolFlags.Type, false);
+  const routeOf = routes(roots, windowInterface?.declarations ?? [], checker, descends);
+
+  const unrouted = new Set<string>();
+  const pathOf = (member: Member): string | undefined => {
+    const route = routeOf.get(member.parent);
+    const name = member.name.getText(member.getSourceFile());
+    if (route === undefined) {
+      const holder = member.parent;
+      unrouted.add(ts.isInterfaceDeclaration(holder) ? holder.name.text : `a type literal holding ${name}`);
+      return undefined;
+    }
+    return route === "" ? name : `${route}.${name}`;
+  };
+
   const reached = new Map<string, Set<string>>();
   for (const source of sources) {
     const file = relative(srcDir, source.fileName);
@@ -195,7 +263,8 @@ export function scanSteamReach(frontendDir: string): SteamReach {
       for (const symbol of reachedSymbols(node, checker)) {
         for (const declaration of symbol?.declarations ?? []) {
           if (!isMember(declaration) || !counts(declaration)) continue;
-          const path = memberPath(declaration);
+          const path = pathOf(declaration);
+          if (path === undefined) continue;
           const files = reached.get(path) ?? new Set<string>();
           files.add(file);
           reached.set(path, files);
@@ -207,36 +276,47 @@ export function scanSteamReach(frontendDir: string): SteamReach {
   }
 
   const declared: string[] = [];
-  const dts = program.getSourceFile(steamDts);
-  if (!dts) throw new Error(`${steamDts} is not in the program`);
   const collect = (node: ts.Node): void => {
-    if (isMember(node) && !isContainer(node) && !insideModuleBlock(node)) declared.push(memberPath(node));
+    if (isMember(node) && !isContainer(node) && !insideModuleBlock(node)) {
+      const path = pathOf(node);
+      if (path !== undefined) declared.push(path);
+    }
     ts.forEachChild(node, collect);
   };
   collect(dts);
 
-  return { reached, declared, unreadableCastFiles, sourceFiles: sources.length };
+  return { reached, declared, unrouted, unreadableCastFiles, sourceFiles: sources.length };
 }
 
 /**
- * The words a source file spells in code: its identifiers, and the text of its
- * string and template literals. Comments are not code, so a name only a comment
- * mentions is not reached.
+ * The words a source file spells in code: its identifiers, the text of its
+ * string, template and regex literals, and the literal paths it hands a
+ * `Navigate` call. Comments are not code, so a name only a comment mentions is
+ * not reached.
  */
 export function codeWords(path: string): {
   readonly identifiers: ReadonlySet<string>;
   readonly strings: readonly string[];
+  readonly navigated: readonly string[];
 } {
   const text = ts.sys.readFile(path);
   if (text === undefined) throw new Error(`${path} cannot be read`);
   const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, false, ts.ScriptKind.TSX);
   const identifiers = new Set<string>();
   const strings: string[] = [];
+  const navigated: string[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isIdentifier(node) || ts.isPrivateIdentifier(node)) identifiers.add(node.text);
-    else if (ts.isStringLiteralLike(node) || ts.isTemplateLiteralToken(node)) strings.push(node.text);
+    else if (ts.isStringLiteralLike(node) || ts.isTemplateLiteralToken(node) || ts.isRegularExpressionLiteral(node)) {
+      strings.push(node.text);
+    }
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+      const [first] = node.arguments;
+      if (node.expression.name.text === "Navigate" && first && ts.isStringLiteralLike(first))
+        navigated.push(first.text);
+    }
     ts.forEachChild(node, visit);
   };
   visit(source);
-  return { identifiers, strings };
+  return { identifiers, strings, navigated };
 }

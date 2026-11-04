@@ -4,8 +4,9 @@ Contract: the backend's half of the one list of Steam internals — every name o
 Steam's client the strings the backend evaluates in Steam spell, the ``steam://``
 URL it has Steam execute, the debugger target it attaches to and the origin
 Steam's interface sends from. The panel's half is
-``frontend/src/boot/steamInternals.ts``; what belongs on neither is
-``docs/architecture/frontend-bundles.md``, "Every Steam internal the panel
+``frontend/src/boot/steamInternals.ts``; what a Steam internal is, how a path is
+spelled and what belongs on neither half is
+``docs/architecture/frontend-bundles.md``, "Every Steam internal Tender
 reaches".
 
 ``tests/domain/test_steam_internals.py`` holds every entry to the constants it
@@ -41,10 +42,10 @@ _FORCE_INPUT = force_input_url(0).removesuffix("/0")
 
 STEAM_INTERNALS: tuple[SteamInternal, ...] = (
     SteamInternal("SteamUIStore.RunningApps", _RUNNING, (_RUNNING_APPS,)),
-    SteamInternal("SteamUIStore.RunningApps.local_per_client_data.display_status", _RUNNING, (_RUNNING_APPS,)),
-    SteamInternal("SteamUIStore.RunningApps.display_name", _RUNNING, (_RUNNING_APPS,)),
-    SteamInternal("SteamUIStore.RunningApps.strDisplayName", _RUNNING, (_RUNNING_APPS,)),
-    SteamInternal("SteamUIStore.RunningApps.appid", _RUNNING, (_RUNNING_APPS,)),
+    SteamInternal("SteamUIStore.RunningApps[].local_per_client_data.display_status", _RUNNING, (_RUNNING_APPS,)),
+    SteamInternal("SteamUIStore.RunningApps[].display_name", _RUNNING, (_RUNNING_APPS,)),
+    SteamInternal("SteamUIStore.RunningApps[].strDisplayName", _RUNNING, (_RUNNING_APPS,)),
+    SteamInternal("SteamUIStore.RunningApps[].appid", _RUNNING, (_RUNNING_APPS,)),
     SteamInternal(
         "SteamClient.Browser.RestartJSContext",
         "replacing a stranded panel without restarting Steam",
@@ -59,7 +60,7 @@ STEAM_INTERNALS: tuple[SteamInternal, ...] = (
         _FORCE_INPUT, "the focus watcher's controller layout pin", ("domain.controller_focus._FORCE_INPUT_URL",)
     ),
     SteamInternal(
-        "window.webpackChunksteamui",
+        "webpackChunksteamui",
         "waiting for Steam's module registry before the panel is loaded",
         ("host.inject.bundles._STEAM_REGISTRY_READY",),
     ),

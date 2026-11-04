@@ -3,9 +3,8 @@
  * the shipped code reaches, in both directions, and `types/steam.d.ts` declares
  * nothing the code does not reach.
  *
- * What the scan reads, and what it cannot see, is `test-utils/steamReach.ts`'s
- * and `docs/architecture/frontend-bundles.md`'s, "Every Steam internal the panel
- * reaches".
+ * What the scan reads is `test-utils/steamReach.ts`'s; what it cannot see is
+ * the invariant register's entry in CLAUDE.md.
  */
 
 import { globSync } from "node:fs";
@@ -14,7 +13,6 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { type SteamReach, codeWords, scanSteamReach } from "../test-utils/steamReach";
 import { NOT_STEAM_INTERNALS, STEAM_INTERNALS } from "./steamInternals";
-import { STEAM_LOOKUPS } from "./steamModules";
 
 const FRONTEND_DIR = process.cwd();
 const SRC_DIR = `${FRONTEND_DIR}/src/`;
@@ -31,9 +29,6 @@ const untypedFiles = new Set(untyped.flatMap((entry) => entry.untypedIn ?? []));
 
 const isNotSteams = (path: string): boolean =>
   Object.keys(NOT_STEAM_INTERNALS).some((prefix) => path === prefix || path.startsWith(`${prefix}.`));
-
-/** A global the start-up check already asks about, read off the window: its one home is `STEAM_LOOKUPS`. */
-const isAskedAtStartUp = (path: string): boolean => STEAM_LOOKUPS.some((lookup) => path === `window.${lookup.name}`);
 
 const where = (path: string): string => `${path} (${[...(reach.reached.get(path) ?? [])].sort().join(", ")})`;
 
@@ -52,6 +47,10 @@ describe("the Steam-internals list", () => {
     expect(reach.reached.size).toBeGreaterThan(50);
   });
 
+  it("finds a route from Steam's roots to every type holding a member it counts", () => {
+    expect([...reach.unrouted].sort()).toEqual([]);
+  });
+
   it("names each internal once", () => {
     const paths = STEAM_INTERNALS.map((entry) => entry.path);
     expect(paths.filter((path, index) => paths.indexOf(path) !== index)).toEqual([]);
@@ -59,9 +58,7 @@ describe("the Steam-internals list", () => {
 
   it("names every Steam internal the shipped code reaches", () => {
     const listed = new Set(typed.map((entry) => entry.path));
-    const unnamed = [...reach.reached.keys()]
-      .filter((path) => !listed.has(path) && !isNotSteams(path) && !isAskedAtStartUp(path))
-      .map(where);
+    const unnamed = [...reach.reached.keys()].filter((path) => !listed.has(path) && !isNotSteams(path)).map(where);
     expect(unnamed).toEqual([]);
   });
 
@@ -78,7 +75,7 @@ describe("the Steam-internals list", () => {
     for (const entry of untyped) {
       for (const file of entry.untypedIn ?? []) {
         const { identifiers, strings } = codeWords(`${SRC_DIR}${file}`);
-        for (const part of entry.path.split(/[./]/).filter(Boolean)) {
+        for (const part of entry.path.split(/[./()[\]]+/).filter(Boolean)) {
           if (!identifiers.has(part) && !strings.some((text) => text.includes(part))) {
             missing.push(`${entry.path}: "${part}" in ${file}`);
           }
@@ -104,14 +101,17 @@ describe("the Steam-internals list", () => {
     expect([...reach.unreadableCastFiles].filter((file) => !untypedFiles.has(file))).toEqual([]);
   });
 
-  it("names, for every steamloopback.host or steam:// literal, the file it is in", () => {
-    // The list spells the routes it names.
-    const unnamed = shippedSources().filter(
-      (file) =>
-        file !== "boot/steamInternals.ts" &&
-        !untypedFiles.has(file) &&
-        codeWords(`${SRC_DIR}${file}`).strings.some((text) => /steamloopback\.host|steam:\/\//.test(text)),
-    );
+  it("names, for every route literal, the file it is in", () => {
+    // A path handed to `Navigate`, or a literal spelling the loopback host, a
+    // `steam://` URL or the route of a game's library page; the list spells the
+    // routes it names.
+    const spellsARoute = (text: string): boolean =>
+      /steamloopback\.host|steam:\/\/|\/library\/app\//.test(text.split("\\").join(""));
+    const unnamed = shippedSources().filter((file) => {
+      if (file === "boot/steamInternals.ts" || untypedFiles.has(file)) return false;
+      const { strings, navigated } = codeWords(`${SRC_DIR}${file}`);
+      return navigated.length > 0 || strings.some(spellsARoute);
+    });
     expect(unnamed).toEqual([]);
   });
 });

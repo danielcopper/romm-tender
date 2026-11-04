@@ -1,7 +1,8 @@
 """The backend's half of the Steam-internals list holds what the backend spells in Steam, both ways.
 
-What the sweep reads, and what it cannot see, is
-``docs/architecture/frontend-bundles.md``, "Every Steam internal the panel reaches".
+What the sweep reads is ``docs/architecture/frontend-bundles.md``'s, "Every Steam
+internal Tender reaches"; what it cannot see is the invariant register's entry in
+CLAUDE.md.
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ _JAVASCRIPTS_OWN = {
 
 
 def _parts(path: str) -> list[str]:
-    return [part for part in re.split(r"[./:]", path) if part]
+    return [part for part in re.split(r"[./:()\[\]]", path) if part]
 
 
 def _docstrings(tree: ast.AST) -> set[int]:
