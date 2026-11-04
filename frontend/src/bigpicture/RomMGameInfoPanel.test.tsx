@@ -126,6 +126,7 @@ vi.mock("../utils/scrollHelpers", () => ({
   scrollFocusedToCenter: vi.fn(),
   findOutermostScrollParent: vi.fn(() => null),
   offsetWithinScroller: vi.fn(() => 0),
+  scrollToTop: vi.fn(),
 }));
 
 // The game page's tabs reach Steam's tabbed page through this module, a webpack
