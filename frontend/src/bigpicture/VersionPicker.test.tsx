@@ -2108,7 +2108,7 @@ describe("VersionPicker — in-flight switch guard (#1345 / E)", () => {
     expect(r.container.querySelector(".romm-throbber")).not.toBeNull();
 
     await act(async () => {
-      answerSwitch({ success: true, rom_id: 2, target_installed: true, launch_options: "", app_id: APP_ID });
+      answerSwitch({ success: true, rom_id: 2, target_installed: true, app_id: APP_ID });
       for (let i = 0; i < 12; i++) await Promise.resolve();
     });
     await waitFor(() => expect(r.container.querySelector(".romm-throbber")).toBeNull());
@@ -2124,7 +2124,6 @@ describe("VersionPicker — in-flight switch guard (#1345 / E)", () => {
       success: true,
       rom_id: 2,
       target_installed: true,
-      launch_options: "",
       app_id: APP_ID,
     });
 
@@ -2168,7 +2167,7 @@ describe("VersionPicker — in-flight switch guard (#1345 / E)", () => {
   it("does not let an earlier switch's broadcast clear a later switch", async () => {
     vi.mocked(backend.getVersionList).mockResolvedValue(defaultActiveList());
     vi.mocked(backend.switchVersion)
-      .mockResolvedValueOnce({ success: true, rom_id: 2, target_installed: true, launch_options: "", app_id: APP_ID })
+      .mockResolvedValueOnce({ success: true, rom_id: 2, target_installed: true, app_id: APP_ID })
       .mockReturnValueOnce(new Promise(() => undefined));
 
     const { r, menu } = await renderAndOpen();
@@ -2194,7 +2193,7 @@ describe("VersionPicker — in-flight switch guard (#1345 / E)", () => {
     expect(r.container.querySelector(".romm-throbber")).not.toBeNull();
   });
 
-  const SWITCHED = { success: true, rom_id: 2, target_installed: true, launch_options: "", app_id: APP_ID } as const;
+  const SWITCHED = { success: true, rom_id: 2, target_installed: true, app_id: APP_ID } as const;
   const settle = () =>
     act(async () => {
       for (let i = 0; i < 12; i++) await Promise.resolve();
@@ -2328,9 +2327,7 @@ describe("VersionPicker — in-flight switch guard (#1345 / E)", () => {
       .mockResolvedValueOnce(multiVersionList())
       .mockReturnValueOnce(new Promise<VersionList>((res) => (resolveReread = res)));
     vi.mocked(backend.switchVersion).mockResolvedValue(SWITCHED);
-    const apply = vi
-      .spyOn(versionApp, "applyCommittedVersionSwitch")
-      .mockResolvedValueOnce({ confirmed: true, broadcast: false });
+    const apply = vi.spyOn(versionApp, "applyCommittedVersionSwitch").mockResolvedValueOnce(false);
 
     try {
       const { r, menu } = await renderAndOpen();
@@ -2408,7 +2405,7 @@ describe("VersionPicker — in-flight switch guard (#1345 / E)", () => {
     expect(toaster.toast).not.toHaveBeenCalled();
 
     await act(async () => {
-      answerGameB({ success: true, rom_id: 2, target_installed: true, launch_options: "", app_id: APP_ID + 1 });
+      answerGameB({ success: true, rom_id: 2, target_installed: true, app_id: APP_ID + 1 });
       for (let i = 0; i < 12; i++) await Promise.resolve();
     });
     await waitFor(() => expect(throbber(r)).toBeNull());
@@ -2448,7 +2445,7 @@ describe("VersionPicker — in-flight switch guard (#1345 / E)", () => {
     expect(toaster.toast).not.toHaveBeenCalled();
 
     await act(async () => {
-      answerGameB({ success: true, rom_id: 2, target_installed: true, launch_options: "", app_id: APP_ID + 1 });
+      answerGameB({ success: true, rom_id: 2, target_installed: true, app_id: APP_ID + 1 });
       for (let i = 0; i < 12; i++) await Promise.resolve();
     });
     await waitFor(() => expect(throbber(r)).toBeNull());
@@ -2497,7 +2494,7 @@ describe("VersionPicker — in-flight switch guard (#1345 / E)", () => {
     expect(throbber(r)).not.toBeNull();
 
     await act(async () => {
-      answerGameB({ success: true, rom_id: 2, target_installed: true, launch_options: "", app_id: APP_ID + 1 });
+      answerGameB({ success: true, rom_id: 2, target_installed: true, app_id: APP_ID + 1 });
       for (let i = 0; i < 12; i++) await Promise.resolve();
     });
     await waitFor(() => expect(throbber(r)).toBeNull());
@@ -2569,7 +2566,7 @@ describe("VersionPicker — in-flight switch guard (#1345 / E)", () => {
       expect(backend.refreshSaveStatus).not.toHaveBeenCalled();
 
       await act(async () => {
-        answerGameB({ success: true, rom_id: 2, target_installed: true, launch_options: "", app_id: APP_ID + 1 });
+        answerGameB({ success: true, rom_id: 2, target_installed: true, app_id: APP_ID + 1 });
         for (let i = 0; i < 12; i++) await Promise.resolve();
       });
       await waitFor(() => expect(throbber(r)).toBeNull());

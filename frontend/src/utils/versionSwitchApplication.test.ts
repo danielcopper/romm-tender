@@ -191,7 +191,6 @@ describe("applyCommittedVersionSwitch's own lease", () => {
         app_id: 5000,
         rom_id: 42,
         target_installed: true,
-        launch_options: "cmd",
         prune_lease_token: "t",
       },
       undefined,
@@ -202,8 +201,7 @@ describe("applyCommittedVersionSwitch's own lease", () => {
     await teardown;
 
     globalThis.removeEventListener("romm_data_changed", onChanged);
-    expect(outcome).toEqual({ confirmed: false, broadcast: false });
-    expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
+    expect(outcome).toBe(false);
     expect(broadcasts).toEqual([]);
   });
 });
@@ -225,7 +223,6 @@ describe("applyCommittedVersionSwitch after its launch-command write", () => {
         app_id: 5000,
         rom_id: 42,
         target_installed: true,
-        launch_options: "cmd",
         prune_lease_token: "t",
       },
       undefined,
@@ -248,7 +245,6 @@ describe("applyCommittedVersionSwitch after its launch-command write", () => {
     mountPruneLeaseOwner(owner);
     let finishArtwork!: () => void;
     vi.stubGlobal("SteamClient", { Apps: { SetCustomArtworkForApp: vi.fn() } });
-    vi.mocked(setLaunchOptionsConfirmed).mockResolvedValue(true);
     vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false, chosen: false });
     vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: "COVER=" });
     vi.mocked(SteamClient.Apps.SetCustomArtworkForApp).mockReturnValue(
@@ -264,7 +260,6 @@ describe("applyCommittedVersionSwitch after its launch-command write", () => {
         app_id: 5000,
         rom_id: 42,
         target_installed: true,
-        launch_options: "cmd",
         prune_lease_token: "t",
       },
       undefined,
@@ -277,7 +272,7 @@ describe("applyCommittedVersionSwitch after its launch-command write", () => {
     await teardown;
 
     globalThis.removeEventListener("romm_data_changed", onChanged);
-    expect(outcome).toEqual({ confirmed: true, broadcast: false });
+    expect(outcome).toBe(false);
     expect(broadcasts).toEqual([]);
   });
 });
