@@ -1,4 +1,4 @@
-"""SyncState enum — shared between LibraryService and consumers."""
+"""SyncState enum — a library sync run's lifecycle, held by ``LibrarySyncStateBox``."""
 
 from enum import Enum
 

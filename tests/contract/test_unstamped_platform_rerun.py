@@ -69,7 +69,7 @@ async def _run_sync(harness, run_id: str) -> None:
 
 async def _drain_apply(harness, tries: int = 5000) -> None:
     for _ in range(tries):
-        if harness.app.services.sync_service._sync_state is SyncState.IDLE:
+        if harness.app.services.sync_service._box.sync_state is SyncState.IDLE:
             return
         await asyncio.sleep(0.001)
     raise AssertionError("sync_apply_delta's background apply task never finished")

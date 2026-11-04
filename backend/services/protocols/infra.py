@@ -361,8 +361,10 @@ class SteamUrlControl(Protocol):
 class PendingSyncReader(Protocol):
     """Read seam for the LibraryService pending-sync map.
 
-    SteamGridService consults the pending-sync map when resolving SGDB
-    IDs for ROMs that are mid-sync (not yet in the registry). Exposing
+    SteamGridService (a ROM's SGDB id, where its row holds none) and
+    ArtworkService (the cover path the sync staged, the first place its
+    cover lookup asks) consult the pending-sync map for ROMs that are
+    mid-sync. Exposing
     this as a Protocol avoids a service-to-service concrete import and
     keeps the typed seam narrow to "give me the current mapping".
     """

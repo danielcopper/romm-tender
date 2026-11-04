@@ -145,7 +145,7 @@ def steamgrid(sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, uow, emi
             loop=running_loop(),
             logger=logger,
             settings_persister=FakeSettingsPersister(),
-            get_pending_sync=lambda: library._pending_sync,
+            get_pending_sync=lambda: library._box.pending_sync,
             log_debug=debug_logger,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
             conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
@@ -387,7 +387,7 @@ class TestGetSgdbArtworkBase64:
         steamgrid.service._loop = asyncio.get_running_loop()
 
         # Not in registry, but in pending sync with a resolved sgdb_id.
-        steamgrid.library._pending_sync[42] = {
+        steamgrid.library._box.pending_sync[42] = {
             "name": "Zelda",
             "platform_name": "N64",
             "sgdb_id": 9999,
@@ -1201,7 +1201,7 @@ class TestDebugLoggerProtocolSeam:
                 loop=running_loop(),
                 logger=logger,
                 settings_persister=FakeSettingsPersister(),
-                get_pending_sync=lambda: library._pending_sync,
+                get_pending_sync=lambda: library._box.pending_sync,
                 log_debug=capture,
                 uow_factory=FakeUnitOfWorkFactory(),
                 conflict_rules=_make_conflict_rules(),
@@ -2343,7 +2343,7 @@ class TestASlotSteamGridDbHasNothingFor:
     @pytest.mark.asyncio
     async def test_a_rom_that_is_not_synced_records_nothing(self, steamgrid, uow, home, fake_steamgrid_db_api):
         steamgrid.settings["steamgriddb_api_key"] = "some-key"
-        steamgrid.library._pending_sync[42] = {"name": "Zelda", "sgdb_id": 9999}
+        steamgrid.library._box.pending_sync[42] = {"name": "Zelda", "sgdb_id": 9999}
         _grid_dir(home)
         fake_steamgrid_db_api.seed_raw_response("/logos/game/9999", {"success": True, "data": []})
 
@@ -4797,7 +4797,7 @@ class TestKeepingArtworkCurrent:
     @pytest.mark.asyncio
     async def test_an_unsynced_rom_is_not_checked(self, steamgrid, uow):
         steamgrid.settings["steamgriddb_api_key"] = "some-key"
-        steamgrid.library._pending_sync[42] = {"sgdb_id": 9999}
+        steamgrid.library._box.pending_sync[42] = {"sgdb_id": 9999}
 
         answer = await steamgrid.service.keep_artwork_current(42)
 

@@ -313,7 +313,6 @@ def wire_library(wiring: LibraryWiring) -> LibraryParts:
             preview=preview,
             orchestrator=orchestrator,
             conflict_rules=wiring.conflict_rules,
-            settings=wiring.settings,
         )
     )
     return LibraryParts(

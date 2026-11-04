@@ -371,7 +371,7 @@ class TestWaitForUnitComplete:
         event = asyncio.Event()
         event.set()
         library.sync._box.sync_state = SyncState.RUNNING
-        library.sync._sync_last_heartbeat = library.chunk_dispatcher._clock.monotonic()
+        library.sync._box.sync_last_heartbeat = library.chunk_dispatcher._clock.monotonic()
         library.sync._box.last_unit_results = {"10": 9000}
 
         results = await library.chunk_dispatcher._wait_for_unit_complete(unit, event)
@@ -382,7 +382,7 @@ class TestWaitForUnitComplete:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
         event = asyncio.Event()
         library.sync._box.sync_state = SyncState.CANCELLING
-        library.sync._sync_last_heartbeat = library.chunk_dispatcher._clock.monotonic()
+        library.sync._box.sync_last_heartbeat = library.chunk_dispatcher._clock.monotonic()
 
         results = await library.chunk_dispatcher._wait_for_unit_complete(unit, event)
         assert results is None
@@ -393,7 +393,7 @@ class TestWaitForUnitComplete:
         event = asyncio.Event()
         library.sync._box.sync_state = SyncState.RUNNING
         # Heartbeat is way too old — should timeout immediately on first loop check
-        library.sync._sync_last_heartbeat = library.chunk_dispatcher._clock.monotonic() - 999.0
+        library.sync._box.sync_last_heartbeat = library.chunk_dispatcher._clock.monotonic() - 999.0
 
         results = await library.chunk_dispatcher._wait_for_unit_complete(unit, event)
         assert results is None
@@ -412,7 +412,7 @@ class TestWaitForUnitCompleteCancelled:
 
         library = make_library(sleeper=_CancellingSleeper())
         library.sync._box.sync_state = SyncState.RUNNING
-        library.sync._sync_last_heartbeat = library.chunk_dispatcher._clock.monotonic()
+        library.sync._box.sync_last_heartbeat = library.chunk_dispatcher._clock.monotonic()
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
         event = asyncio.Event()  # never set — wait will enter the sleep path

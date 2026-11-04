@@ -883,11 +883,11 @@ class TestWireServices:
         deps["loop"].close()
 
     def test_pending_sync_binding_observes_library_rebinds(self, tmp_path):
-        """ArtworkService/SgdbService see live LibraryService._pending_sync rebinds.
+        """ArtworkService/SteamGridService see live rebinds of the state box's ``pending_sync``.
 
         Regression for #349: the bootstrap binding must defer the read so
-        post-bind reassignments of ``_pending_sync`` (e.g., line 417 of
-        library.py after a sync diff) are visible to consumers.
+        post-bind reassignments of ``pending_sync`` (the chunk dispatcher
+        rebinds it for every unit it applies) are visible to consumers.
         """
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
@@ -895,8 +895,8 @@ class TestWireServices:
         artwork_service = result.artwork_service
         sgdb_service = result.sgdb_service
 
-        # Producer rebinds _pending_sync to a fresh dict (mirrors sync_apply_delta).
-        sync_service._pending_sync = {42: {"name": "Game", "platform_name": "N64"}}
+        # Producer rebinds pending_sync to a fresh dict.
+        sync_service._box.pending_sync = {42: {"name": "Game", "platform_name": "N64"}}
 
         assert artwork_service._get_pending_sync() == {42: {"name": "Game", "platform_name": "N64"}}
         assert sgdb_service._get_pending_sync() == {42: {"name": "Game", "platform_name": "N64"}}

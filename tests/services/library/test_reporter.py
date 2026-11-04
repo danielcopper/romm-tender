@@ -2316,7 +2316,7 @@ class TestFinalizePerUnitRun:
 
         complete = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_complete"]
         assert "interrupted" not in complete[-1]
-        progress = library.sync._sync_progress
+        progress = library.sync._box.sync_progress
         assert progress["stage"] == "cancelled"
         assert progress["message"].startswith("Sync cancelled: ")
 
@@ -2342,7 +2342,7 @@ class TestFinalizePerUnitRun:
 
         complete = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_complete"]
         assert complete[-1]["interrupted"] is True
-        progress = library.sync._sync_progress
+        progress = library.sync._box.sync_progress
         assert progress["stage"] == "cancelled"
         assert progress["message"] == "Sync interrupted: 3 of 10 games processed"
         assert progress["total"] == 10
@@ -2366,7 +2366,7 @@ class TestFinalizePerUnitRun:
         # A budget pause sets run_paused + interrupt_reason, never run_interrupted —
         # the payload must not read as a heartbeat interrupt (#1384).
         assert "interrupted" not in complete[-1]
-        assert library.sync._sync_progress["message"] == "Sync paused: restart Steam, then sync again."
+        assert library.sync._box.sync_progress["message"] == "Sync paused: restart Steam, then sync again."
 
     @pytest.mark.asyncio
     async def test_emit_sync_complete_frame_total_falls_back_to_bound_count(self, library, emit):
@@ -2390,7 +2390,7 @@ class TestFinalizePerUnitRun:
             restart_recommended=False,
         )
 
-        progress = library.sync._sync_progress
+        progress = library.sync._box.sync_progress
         assert progress["message"] == "Sync interrupted: 1 of 2 games processed"
         assert progress["total"] == 2
 
@@ -2413,7 +2413,7 @@ class TestFinalizePerUnitRun:
             restart_recommended=False,
         )
 
-        progress = library.sync._sync_progress
+        progress = library.sync._box.sync_progress
         assert progress["message"] == "Sync complete: 1 games from 1 platforms"
         assert progress["total"] == 1
 
@@ -2436,7 +2436,7 @@ class TestFinalizePerUnitRun:
             restart_recommended=False,
         )
 
-        progress = library.sync._sync_progress
+        progress = library.sync._box.sync_progress
         assert progress["message"] == "Sync complete: 2 games from 1 platforms"
         assert progress["total"] == 2
 
@@ -2461,8 +2461,8 @@ class TestFinalizePerUnitRun:
             processed_platform_slugs=set(),
         )
 
-        assert library.sync._sync_state == SyncState.RUNNING
-        assert library.sync._current_sync_id == "sync-xyz"
+        assert library.sync._box.sync_state == SyncState.RUNNING
+        assert library.sync._box.current_sync_id == "sync-xyz"
 
     @pytest.mark.asyncio
     async def test_stale_rom_ids_keep_their_binding_and_rows(self, library, emit):
