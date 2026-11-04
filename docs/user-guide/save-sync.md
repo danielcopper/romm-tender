@@ -211,7 +211,7 @@ Each side shows:
 
 Three actions:
 
-- **Keep Local** — uploads your local save to the server, overwriting the server version.
+- **Keep Local** — keeps your local save; it becomes the server's save.
 - **Use Server** — downloads the server save and overwrites your local file.
 - **Cancel** — dismisses the modal without changing anything. The conflict will reappear on the next sync as long as
   both sides still differ. If another device pushes an update in the meantime, the situation may resolve automatically

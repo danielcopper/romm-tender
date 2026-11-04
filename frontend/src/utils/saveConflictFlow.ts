@@ -67,7 +67,8 @@ export type ConflictResolveOutcome = { ok: true; toast: string } | { ok: false; 
  * Resolve one conflict with the user's chosen side. Never throws: a refusal or a
  * throw comes back as `{ ok: false }`, already logged.
  *
- * - Keep Local → the backend POSTs the local save to the server (overwrite=true)
+ * - Keep Local → the backend makes the local save the server's: it uploads it (overwrite=true), or adopts the
+ *   server copy where the contents already match
  * - Use Server → the backend downloads the server save over the local one
  *
  * `beforeStart` is true only for a conflict the launch check found, before the
