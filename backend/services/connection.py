@@ -35,6 +35,7 @@ from lib.errors import (
     VersionUnsupported,
 )
 from lib.url_host import (
+    INVALID_SERVER_URL_MESSAGE,
     STORED_ADDRESS_WITH_USERINFO_MESSAGE,
     carries_userinfo,
     is_origin_change,
@@ -58,7 +59,6 @@ if TYPE_CHECKING:
 
 
 _NO_SERVER_URL_MESSAGE = "No server URL configured"
-_INVALID_URL_MESSAGE = "Enter a valid http(s):// server URL"
 
 _FORBIDDEN_TOKEN_MESSAGE = (
     "RomM rejected the sign-in. Check your username and password — if they are correct, your account may not be "
@@ -116,7 +116,7 @@ def _sign_in_address(romm_url: str) -> str:
     if carries_userinfo(trimmed):
         raise NotConfigured(STORED_ADDRESS_WITH_USERINFO_MESSAGE)
     if not is_valid_server_url(trimmed):
-        raise NotConfigured(_INVALID_URL_MESSAGE)
+        raise NotConfigured(INVALID_SERVER_URL_MESSAGE)
     return trimmed
 
 

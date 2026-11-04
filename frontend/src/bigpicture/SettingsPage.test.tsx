@@ -1168,7 +1168,7 @@ describe("SettingsPage", () => {
       });
 
       expect(vi.mocked(backend.connectWithCredentials)).not.toHaveBeenCalled();
-      expect(result).toEqual({ success: false, message: "Enter a valid http:// or https:// server URL" });
+      expect(result).toEqual({ success: false, message: "Enter a valid http(s):// server URL" });
       expect(capturedConnection[capturedConnection.length - 1]?.status).toBe("");
     });
 
@@ -1256,7 +1256,7 @@ describe("SettingsPage", () => {
       });
 
       expect(vi.mocked(backend.connectWithToken)).not.toHaveBeenCalled();
-      expect(result).toEqual({ success: false, message: "Enter a valid http:// or https:// server URL" });
+      expect(result).toEqual({ success: false, message: "Enter a valid http(s):// server URL" });
       expect(capturedConnection[capturedConnection.length - 1]?.status).toBe("");
     });
 
@@ -1343,7 +1343,7 @@ describe("SettingsPage", () => {
       });
 
       expect(vi.mocked(backend.connectWithPairingCode)).not.toHaveBeenCalled();
-      expect(result).toEqual({ success: false, message: "Enter a valid http:// or https:// server URL" });
+      expect(result).toEqual({ success: false, message: "Enter a valid http(s):// server URL" });
       expect(capturedConnection[capturedConnection.length - 1]?.status).toBe("");
     });
 

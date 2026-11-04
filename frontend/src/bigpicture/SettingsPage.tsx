@@ -102,7 +102,7 @@ interface SettingsPageProps {
 
 // Messages the connect handlers return to the ConnectModal (which surfaces them
 // inline) when the sign-in can't even be attempted or the endpoint call throws.
-const INVALID_URL_MESSAGE = "Enter a valid http:// or https:// server URL";
+const INVALID_URL_MESSAGE = "Enter a valid http(s):// server URL";
 const GENERIC_SIGN_IN_ERROR = "Sign-in failed. Check your connection and try again.";
 const NO_STATUS = { text: "", warns: false } as const;
 

@@ -28,6 +28,7 @@ from lib.errors import NamedRefused, NotConfigured, Refused
 from lib.steam_input_apply import SteamInputApply
 from lib.url_host import (
     ENTERED_ADDRESS_WITH_USERINFO_MESSAGE,
+    INVALID_SERVER_URL_MESSAGE,
     carries_userinfo,
     is_valid_server_url,
     with_https_added,
@@ -194,7 +195,7 @@ class SettingsService:
                 raise NotConfigured(ENTERED_ADDRESS_WITH_USERINFO_MESSAGE)
             raise SchemeMissing(_HTTPS_ADDED_MESSAGE, completed_url=completed)
         if not is_valid_server_url(trimmed):
-            raise NotConfigured("Enter a valid http(s):// server URL")
+            raise NotConfigured(INVALID_SERVER_URL_MESSAGE)
         previous = {key: self._settings[key] for key in _SERVER_URL_KEYS if key in self._settings}
         self._settings["romm_url"] = trimmed
         if allow_insecure_ssl is not None:
