@@ -200,6 +200,7 @@ describe("applyCommittedVersionSwitch's own lease", () => {
 
     globalThis.removeEventListener("romm_data_changed", onChanged);
     expect(outcome).toBe(false);
+    expect(backend.getSgdbArtworkBase64).not.toHaveBeenCalled();
     expect(broadcasts).toEqual([]);
   });
 });
