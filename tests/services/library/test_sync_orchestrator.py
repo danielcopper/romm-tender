@@ -352,9 +352,9 @@ class TestSyncPreview:
         library.settings["enabled_platforms"] = {"1": True}
 
         result = await library.sync.sync_preview()
-        assert library.sync._pending_delta is not None
-        assert library.sync._pending_delta.preview_id == result["preview_id"]
-        assert library.sync._pending_delta.created_at == library.sync._orchestrator._clock.time()
+        assert library.sync._box.pending_delta is not None
+        assert library.sync._box.pending_delta.preview_id == result["preview_id"]
+        assert library.sync._box.pending_delta.created_at == library.sync._orchestrator._clock.time()
 
     @pytest.mark.asyncio
     async def test_does_not_write_metadata(self, make_library, fake_romm_api, emit):
@@ -447,7 +447,7 @@ class TestSyncPreview:
         library.settings["enabled_platforms"] = {"1": True}
 
         await library.sync.sync_preview()
-        assert library.sync._sync_state == SyncState.IDLE
+        assert library.sync._box.sync_state == SyncState.IDLE
 
 
 class TestPreviewCollectionDiff:
@@ -1059,7 +1059,7 @@ class TestSyncApplyDelta:
 
     @pytest.mark.asyncio
     async def test_rejects_when_no_pending_delta(self, library):
-        assert library.sync._pending_delta is None
+        assert library.sync._box.pending_delta is None
         call = library.sync.sync_apply_delta("any-id")
 
         with pytest.raises(Refused) as excinfo:
@@ -1107,7 +1107,7 @@ class TestSyncApplyDelta:
         assert excinfo.value.reason == "stale_preview"
         assert "30 minutes" in excinfo.value.message
         # Stale delta is cleared so a repeat apply can't pick it up.
-        assert library.sync._pending_delta is None
+        assert library.sync._box.pending_delta is None
 
     @pytest.mark.asyncio
     async def test_accepts_when_preview_just_under_max_age(self, library, emit):
@@ -1159,7 +1159,7 @@ class TestSyncApplyDelta:
         result = await library.sync.sync_apply_delta("test-preview-123")
 
         assert result["success"] is True
-        assert library.sync._sync_state == SyncState.RUNNING
+        assert library.sync._box.sync_state == SyncState.RUNNING
 
     @pytest.mark.asyncio
     async def test_clears_pending_delta(self, library, emit):
@@ -1167,7 +1167,7 @@ class TestSyncApplyDelta:
         library.sync._orchestrator._do_sync_per_unit = AsyncMock()
 
         await library.sync.sync_apply_delta("test-preview-123")
-        assert library.sync._pending_delta is None
+        assert library.sync._box.pending_delta is None
 
 
 class TestSyncCancelPreview:
@@ -1181,7 +1181,7 @@ class TestSyncCancelPreview:
             answer={"success": True, "preview_id": "some-id"},
         )
         result = library.sync.sync_cancel_preview()
-        assert library.sync._pending_delta is None
+        assert library.sync._box.pending_delta is None
         assert result["success"] is True
 
     @pytest.mark.asyncio
@@ -1212,7 +1212,7 @@ class TestGetPendingPreview:
 
     @pytest.mark.asyncio
     async def test_returns_none_when_nothing_pending(self, library):
-        assert library.sync._pending_delta is None
+        assert library.sync._box.pending_delta is None
         assert library.sync.get_pending_preview() == {"success": True, "preview": None}
 
     @pytest.mark.asyncio
@@ -1277,11 +1277,11 @@ class TestGetPendingPreview:
         library = make_library(romm_api=fake_romm_api)
         self._preview_setup(library, fake_romm_api)
         await library.sync.sync_preview()
-        assert library.sync._pending_delta is not None
+        assert library.sync._box.pending_delta is not None
         library.sync._orchestrator._clock.advance(1801)
 
         assert library.sync.get_pending_preview() == {"success": True, "preview": None}
-        assert library.sync._pending_delta is None
+        assert library.sync._box.pending_delta is None
 
     @pytest.mark.asyncio
     async def test_just_under_the_ttl_is_still_handed_back(self, make_library, fake_romm_api):
@@ -1325,7 +1325,7 @@ class TestSyncControl:
     async def test_start_sync_when_idle(self, library):
         result = await library.sync.start_sync()
         assert result["success"] is True
-        assert library.sync._sync_state == SyncState.RUNNING
+        assert library.sync._box.sync_state == SyncState.RUNNING
 
     async def test_start_sync_rejects_when_running(self, library):
         library.sync._box.sync_state = SyncState.RUNNING
@@ -1341,7 +1341,7 @@ class TestSyncControl:
         library.sync._box.sync_state = SyncState.RUNNING
         result = library.sync.cancel_sync()
         assert result["success"] is True
-        assert library.sync._sync_state == SyncState.CANCELLING
+        assert library.sync._box.sync_state == SyncState.CANCELLING
 
     def test_cancel_sync_when_idle(self, library):
         result = library.sync.cancel_sync()
@@ -1353,7 +1353,7 @@ class TestSyncControl:
         library.sync._box.current_sync_id = "run-B"
         result = library.sync.cancel_sync("run-B")
         assert result["success"] is True
-        assert library.sync._sync_state == SyncState.CANCELLING
+        assert library.sync._box.sync_state == SyncState.CANCELLING
 
     def test_cancel_sync_with_stale_run_id_is_noop(self, library):
         """A cancel meant for run-A must NOT abort the fresh run-B (#1198).
@@ -1367,7 +1367,7 @@ class TestSyncControl:
         result = library.sync.cancel_sync("run-A")
         assert result["success"] is True
         assert "stale" in result["message"].lower()
-        assert library.sync._sync_state == SyncState.RUNNING
+        assert library.sync._box.sync_state == SyncState.RUNNING
 
     def test_cancel_sync_with_none_run_id_cancels_unconditionally(self, library):
         """A falsy run_id (legacy caller / no id captured yet) always cancels."""
@@ -1375,7 +1375,7 @@ class TestSyncControl:
         library.sync._box.current_sync_id = "run-B"
         result = library.sync.cancel_sync(None)
         assert result["success"] is True
-        assert library.sync._sync_state == SyncState.CANCELLING
+        assert library.sync._box.sync_state == SyncState.CANCELLING
 
     def test_cancel_sync_with_empty_run_id_cancels_unconditionally(self, library):
         """An empty-string run_id (the frontend's no-id-yet fallback) cancels."""
@@ -1383,7 +1383,7 @@ class TestSyncControl:
         library.sync._box.current_sync_id = "run-B"
         result = library.sync.cancel_sync("")
         assert result["success"] is True
-        assert library.sync._sync_state == SyncState.CANCELLING
+        assert library.sync._box.sync_state == SyncState.CANCELLING
 
     def test_cancel_sync_stale_run_id_when_idle_is_no_op(self, library):
         """Idle short-circuits before the run-id check — no sync, plain no-op."""
@@ -1393,12 +1393,12 @@ class TestSyncControl:
         assert "No sync" in result["message"]
 
     def test_sync_heartbeat(self, library):
-        old = library.sync._sync_last_heartbeat
+        old = library.sync._box.sync_last_heartbeat
         # Advance the injected FakeClock so monotonic moves forward.
         library.sync._orchestrator._clock.advance(0.01)
         result = library.sync.sync_heartbeat()
         assert result["success"] is True
-        assert library.sync._sync_last_heartbeat > old
+        assert library.sync._box.sync_last_heartbeat > old
 
 
 class TestEmitCancelled:
@@ -1413,13 +1413,13 @@ class TestEmitCancelled:
     @pytest.mark.asyncio
     async def test_emits_cancelled_progress_snapshot(self, library, emit):
         library.sync._box.sync_state = SyncState.RUNNING
-        library.sync._sync_progress = {"running": True, "current": 5, "total": 10}
+        library.sync._box.sync_progress = {"running": True, "current": 5, "total": 10}
 
         await library.sync._progress.emit_cancelled("Sync cancelled")
 
-        assert library.sync._sync_progress["running"] is False
-        assert library.sync._sync_progress["stage"] == "cancelled"
-        assert library.sync._sync_progress["message"] == "Sync cancelled"
+        assert library.sync._box.sync_progress["running"] is False
+        assert library.sync._box.sync_progress["stage"] == "cancelled"
+        assert library.sync._box.sync_progress["message"] == "Sync cancelled"
 
     @pytest.mark.asyncio
     async def test_does_not_reset_run_lifecycle(self, library):
@@ -1429,13 +1429,13 @@ class TestEmitCancelled:
         ``finish_run(run_id)`` later decide whether this run still owns the slot.
         """
         library.sync._box.sync_state = SyncState.RUNNING
-        library.sync._sync_progress = {"running": True}
+        library.sync._box.sync_progress = {"running": True}
         library.sync._box.current_sync_id = "sync-abc"
 
         await library.sync._progress.emit_cancelled("Sync cancelled")
 
-        assert library.sync._sync_state == SyncState.RUNNING
-        assert library.sync._current_sync_id == "sync-abc"
+        assert library.sync._box.sync_state == SyncState.RUNNING
+        assert library.sync._box.current_sync_id == "sync-abc"
 
 
 class TestGetSyncStatus:
@@ -1461,7 +1461,7 @@ class TestGetSyncStatus:
             "step": 1,
             "totalSteps": 2,
         }
-        library.sync._sync_progress = snapshot
+        library.sync._box.sync_progress = snapshot
         library.sync._box.try_begin_run("run-live", kind=SyncRunKind.APPLY)
 
         status = library.sync.get_sync_status()
@@ -1481,7 +1481,7 @@ class TestGetSyncStatus:
         box = library.sync._box
         box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
         box.request_cancel("run-1")
-        library.sync._sync_progress = {
+        library.sync._box.sync_progress = {
             "running": False,
             "stage": "cancelled",
             "message": "Sync cancelled",
@@ -1701,9 +1701,9 @@ class TestSyncPreviewErrorHandling:
             await call
 
         assert excinfo.value is failure
-        assert library.sync._sync_state == SyncState.IDLE
+        assert library.sync._box.sync_state == SyncState.IDLE
         # Error path evicts any pending delta.
-        assert library.sync._pending_delta is None
+        assert library.sync._box.pending_delta is None
 
     @pytest.mark.parametrize(
         ("kind", "failing_listing"),
@@ -1732,7 +1732,7 @@ class TestSyncPreviewErrorHandling:
         assert classify_error(excinfo.value) == ("server_unreachable", message)
         progress = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_progress"]
         assert (progress[-1]["stage"], progress[-1]["message"], progress[-1]["running"]) == ("error", message, False)
-        assert library.sync._pending_delta is None
+        assert library.sync._box.pending_delta is None
 
     @pytest.mark.asyncio
     async def test_cancelled_error_refuses_with_cancelled(self, make_library, fake_romm_api, emit):
@@ -1757,15 +1757,15 @@ class TestSyncPreviewErrorHandling:
         library.settings["enabled_platforms"] = {"1": True}
 
         # sync_preview only runs from IDLE — guard against a leaked non-IDLE state.
-        assert library.sync._sync_state == SyncState.IDLE
+        assert library.sync._box.sync_state == SyncState.IDLE
         call = library.sync.sync_preview()
 
         with pytest.raises(Refused) as excinfo:
             await call
 
         assert (excinfo.value.reason, excinfo.value.message) == ("cancelled", "Sync cancelled")
-        assert library.sync._sync_state == SyncState.IDLE
-        assert library.sync._pending_delta is None
+        assert library.sync._box.sync_state == SyncState.IDLE
+        assert library.sync._box.pending_delta is None
         # The cooperative signal genuinely originated from the fetch.
         fake_romm_api.list_platforms.assert_called()
 
@@ -1802,10 +1802,10 @@ class TestSyncPreviewErrorHandling:
             await call
 
         assert excinfo.value is failure
-        assert library.sync._pending_delta is None
+        assert library.sync._box.pending_delta is None
         last = self._progress_frames(emit)[-1]
         assert (last["stage"], last["message"], last["running"]) == ("error", classify_error(failure)[1], False)
-        assert library.sync._sync_state == SyncState.IDLE
+        assert library.sync._box.sync_state == SyncState.IDLE
 
     @pytest.mark.asyncio
     async def test_a_cancelled_preview_discards_the_staged_preview_and_ends_with_a_cancelled_frame(
@@ -1823,7 +1823,7 @@ class TestSyncPreviewErrorHandling:
             await call
 
         assert (excinfo.value.reason, excinfo.value.message) == ("cancelled", "Sync cancelled")
-        assert library.sync._pending_delta is None
+        assert library.sync._box.pending_delta is None
         last = self._progress_frames(emit)[-1]
         assert (last["stage"], last["message"], last["running"]) == ("cancelled", "Sync cancelled", False)
 
@@ -2038,7 +2038,7 @@ class TestDoSyncPerUnit:
 
         await library.sync._orchestrator._do_sync_per_unit()
 
-        assert library.sync._sync_state == SyncState.IDLE
+        assert library.sync._box.sync_state == SyncState.IDLE
         # Sync plan was emitted with empty units
         plan_events = [c for c in emit.call_args_list if c[0][0] == "sync_plan"]
         assert len(plan_events) == 1
@@ -3465,7 +3465,7 @@ class TestSyncRunLifecycle:
 
         # The run id is back to None — ``finish_run``, in the terminating
         # ``finally`` — and the run is still recorded errored.
-        assert library.sync._current_sync_id is None
+        assert library.sync._box.current_sync_id is None
         with library.uow as uow:
             run = uow.sync_runs.get("run-terminal-fail")
         assert run is not None
@@ -3483,7 +3483,7 @@ class TestReportUnitResults:
 
     @pytest.mark.asyncio
     async def test_signals_unit_complete_event(self, library):
-        library.sync._pending_sync = {}
+        library.sync._box.pending_sync = {}
         box = library.sync._box
         box.current_sync_id = "run-1"
         box.active_unit_id = 1
@@ -3499,7 +3499,7 @@ class TestReportUnitResults:
 
     @pytest.mark.asyncio
     async def test_records_last_unit_results(self, library):
-        library.sync._pending_sync = {}
+        library.sync._box.pending_sync = {}
         box = library.sync._box
         box.current_sync_id = "run-1"
         box.active_unit_id = 1
@@ -3519,7 +3519,7 @@ class TestReportUnitResults:
 
         Run B's wait event must stay UNSET and its registry untouched: the late
         ack carries run A's id, which no longer matches ``current_sync_id``."""
-        library.sync._pending_sync = {}
+        library.sync._box.pending_sync = {}
         box = library.sync._box
         # Run B is the active run, waiting on its own unit's event.
         box.current_sync_id = "run-B"
@@ -3544,7 +3544,7 @@ class TestReportUnitResults:
     async def test_mismatched_unit_id_same_run_is_ignored(self, library):
         """An ack for a different unit within the SAME run is ignored — the
         unit_id guard rejects it even though the run id matches (#1041)."""
-        library.sync._pending_sync = {}
+        library.sync._box.pending_sync = {}
         box = library.sync._box
         box.current_sync_id = "run-1"
         box.active_unit_id = 5  # unit 5 is the active one
@@ -3563,7 +3563,7 @@ class TestReportUnitResults:
         """An ack for a superseded chunk of the ACTIVE unit is ignored — the
         chunk-index guard rejects it even though run + unit match. A crash-late
         ack for chunk 0 must never be credited to chunk 1 in flight."""
-        library.sync._pending_sync = {}
+        library.sync._box.pending_sync = {}
         box = library.sync._box
         box.current_sync_id = "run-1"
         box.active_unit_id = 1
@@ -3977,17 +3977,17 @@ class TestShutdown:
     async def test_shutdown_when_running_marks_cancelling(self, library):
         library.sync._box.sync_state = SyncState.RUNNING
         await library.sync.shutdown()
-        assert library.sync._sync_state == SyncState.CANCELLING
+        assert library.sync._box.sync_state == SyncState.CANCELLING
 
     async def test_shutdown_when_idle_is_noop(self, library):
         library.sync._box.sync_state = SyncState.IDLE
         await library.sync.shutdown()
-        assert library.sync._sync_state == SyncState.IDLE
+        assert library.sync._box.sync_state == SyncState.IDLE
 
     async def test_shutdown_when_cancelling_is_noop(self, library):
         library.sync._box.sync_state = SyncState.CANCELLING
         await library.sync.shutdown()
-        assert library.sync._sync_state == SyncState.CANCELLING
+        assert library.sync._box.sync_state == SyncState.CANCELLING
 
 
 class TestTheRunIsHeldUntilItEnds:
@@ -4048,7 +4048,7 @@ class TestTheRunIsHeldUntilItEnds:
         await asyncio.wait_for(library.sync.shutdown(), 5)
 
         assert run.cancelled()
-        assert library.sync._sync_state == SyncState.IDLE
+        assert library.sync._box.sync_state == SyncState.IDLE
 
     async def test_a_running_sync_has_ended_before_the_services_after_it_shut_down(self, library):
         run = await self._start_a_run_that_waits(library)
@@ -4095,8 +4095,8 @@ class TestDoSyncPerUnitErrors:
             await library.sync._orchestrator._do_sync_per_unit()
 
         # The run's ``finally: box.finish_run(run_id)`` transitioned to IDLE + cleared sync id.
-        assert library.sync._sync_state == SyncState.IDLE
-        assert library.sync._current_sync_id is None
+        assert library.sync._box.sync_state == SyncState.IDLE
+        assert library.sync._box.current_sync_id is None
         progress_stages = [
             c.args[1].get("stage") for c in emit.call_args_list if c.args and c.args[0] == "sync_progress"
         ]
@@ -4121,7 +4121,7 @@ class TestDoSyncPerUnitErrors:
             if c.args and c.args[0] == "sync_progress" and c.args[1].get("stage") == "error"
         ]
         assert len(error_events) >= 1
-        assert library.sync._sync_state == SyncState.IDLE
+        assert library.sync._box.sync_state == SyncState.IDLE
 
     @pytest.mark.asyncio
     async def test_outer_exception_handler_emits_error_progress(self, make_library, fake_romm_api, emit):
@@ -4149,7 +4149,7 @@ class TestDoSyncPerUnitErrors:
         ]
         assert len(error_events) >= 1
         assert "Sync failed" in error_events[0].args[1]["message"]
-        assert library.sync._sync_state == SyncState.IDLE
+        assert library.sync._box.sync_state == SyncState.IDLE
 
     @pytest.mark.asyncio
     async def test_pagination_failure_does_not_emit_partial_stale_removal(self, make_library, fake_romm_api, emit):
@@ -4193,7 +4193,7 @@ class TestDoSyncPerUnitErrors:
             if c.args and c.args[0] == "sync_progress" and c.args[1].get("stage") == "error"
         ]
         assert len(error_events) >= 1
-        assert library.sync._sync_state == SyncState.IDLE
+        assert library.sync._box.sync_state == SyncState.IDLE
 
     @pytest.mark.asyncio
     async def test_cancel_mid_unit_fetch_finalizes_gracefully(self, make_library, fake_romm_api):
@@ -4246,7 +4246,7 @@ class TestDoSyncPerUnitErrors:
 
         # Guard against cross-test state leakage: a stale CANCELLING at entry
         # would break the unit loop before the fetch and pass for the wrong reason.
-        assert library.sync._sync_state == SyncState.RUNNING
+        assert library.sync._box.sync_state == SyncState.RUNNING
 
         # Must NOT propagate the cooperative cancel — awaiting returns normally.
         await library.sync._orchestrator._do_sync_per_unit()
@@ -4255,7 +4255,7 @@ class TestDoSyncPerUnitErrors:
         fake_romm_api.list_roms.assert_called()
 
         # 1. sync_state restored to IDLE (not stuck CANCELLING).
-        assert library.sync._sync_state == SyncState.IDLE
+        assert library.sync._box.sync_state == SyncState.IDLE
         # 2. The SyncRun row is marked cancelled (not left ``running``).
         with library.uow as uow:
             run = uow.sync_runs.get("run-mid-fetch-cancel")
@@ -4308,7 +4308,7 @@ class TestDoSyncPerUnitErrors:
 
         # Guard against cross-test state leakage (a stale CANCELLING would break
         # the loop before the fetch and the cancel would never fire).
-        assert library.sync._sync_state == SyncState.RUNNING
+        assert library.sync._box.sync_state == SyncState.RUNNING
 
         # The real cancel must PROPAGATE OUT — the cooperative handler does not
         # catch it.
@@ -4345,7 +4345,7 @@ class TestDoSyncPerUnitErrors:
 
         # sync_preview only runs from IDLE — guard against a leaked non-IDLE state
         # that would short-circuit it to "sync_in_progress" before the fetch.
-        assert library.sync._sync_state == SyncState.IDLE
+        assert library.sync._box.sync_state == SyncState.IDLE
 
         with pytest.raises(asyncio.CancelledError):
             await library.sync.sync_preview()
@@ -4354,7 +4354,7 @@ class TestDoSyncPerUnitErrors:
         fake_romm_api.list_platforms.assert_called()
 
         # The ``finally`` block always restores IDLE, even on a propagated cancel.
-        assert library.sync._sync_state == SyncState.IDLE
+        assert library.sync._box.sync_state == SyncState.IDLE
 
     @pytest.mark.asyncio
     async def test_cancelling_state_before_first_unit_skips_processing(self, make_library, fake_romm_api, emit):
@@ -4689,9 +4689,9 @@ class TestApplyUnitCollectionAndCancel:
         )
         assert applied == 0
         # User cancel: pending_sync cleared, unit event dropped, state CANCELLING.
-        assert library.sync._pending_sync == {}
+        assert library.sync._box.pending_sync == {}
         assert library.sync._box.unit_complete_event is None
-        assert library.sync._sync_state == SyncState.CANCELLING
+        assert library.sync._box.sync_state == SyncState.CANCELLING
         # No abandoned-chunk stash — a cancel intentionally discards the work.
         assert library.sync._box.abandoned_chunk is None
 
@@ -4739,11 +4739,11 @@ class TestApplyUnitCollectionAndCancel:
         box = library.sync._box
         # Timeout: whole-unit staging RETAINED so the late-ack commit can read it,
         # but the dispatch identity is cleared (moved into the stash).
-        assert library.sync._pending_sync != {}
+        assert library.sync._box.pending_sync != {}
         assert box.unit_complete_event is None
         assert box.active_unit_id is None
         assert box.active_chunk_index is None
-        assert library.sync._sync_state == SyncState.CANCELLING
+        assert library.sync._box.sync_state == SyncState.CANCELLING
         assert box.run_interrupted is True
         # The chunk is stashed (identity + rows) for the late-ack commit.
         assert box.abandoned_chunk is not None

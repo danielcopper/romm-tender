@@ -4,9 +4,7 @@ Built by ``bootstrap/library.py`` and handed to the façade and to the
 sub-services that share a run's state, so they can coordinate without
 back-refs to the façade. The contract:
 sub-services mutate the box's coordination fields directly (it is the
-single source of truth for in-flight sync run state); the façade exposes
-property accessors over the box so external callers see a flat shape
-rather than reaching through ``service._state.x``.
+single source of truth for in-flight sync run state).
 
 The run-lifecycle pair — ``sync_state`` and ``current_sync_id`` — is the
 one exception: it is mutated **only** through the box's own verb methods

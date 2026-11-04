@@ -82,8 +82,8 @@ async def test_cancel_sync_stale_run_does_not_abort_fresh_run(harness):
     # Finalize run A to IDLE exactly as the lifecycle's terminal finally does
     # (run-scoped compare-and-reset on the owning box).
     harness.app.services.sync_service._box.finish_run(run_a_id)
-    assert harness.app.services.sync_service._sync_state == SyncState.IDLE
-    assert harness.app.services.sync_service._current_sync_id is None
+    assert harness.app.services.sync_service._box.sync_state == SyncState.IDLE
+    assert harness.app.services.sync_service._box.current_sync_id is None
 
     # Run B: a fresh run with a distinct id.
     run_b_id = "run-B"
@@ -94,7 +94,7 @@ async def test_cancel_sync_stale_run_does_not_abort_fresh_run(harness):
     # Run A's Cancel click lands now — it must be ignored as stale.
     cancel = harness.endpoints.cancel_sync(run_a_id)
     assert cancel == {"success": True, "message": "Cancel ignored (stale run)"}
-    assert harness.app.services.sync_service._sync_state == SyncState.RUNNING
+    assert harness.app.services.sync_service._box.sync_state == SyncState.RUNNING
 
     # Drive run B to completion. It was never cancelled.
     await orch._do_sync_per_unit()
@@ -103,7 +103,7 @@ async def test_cancel_sync_stale_run_does_not_abort_fresh_run(harness):
     assert completes, "run B must emit a terminal sync_complete"
     assert "cancelled" not in completes[-1]
     assert "interrupted" not in completes[-1]
-    assert harness.app.services.sync_service._sync_state == SyncState.IDLE
+    assert harness.app.services.sync_service._box.sync_state == SyncState.IDLE
 
 
 async def test_cancel_sync_matching_run_aborts_it(harness):
@@ -113,7 +113,7 @@ async def test_cancel_sync_matching_run_aborts_it(harness):
 
     cancel = harness.endpoints.cancel_sync("run-B")
     assert cancel == {"success": True, "message": "Sync cancelling..."}
-    assert harness.app.services.sync_service._sync_state == SyncState.CANCELLING
+    assert harness.app.services.sync_service._box.sync_state == SyncState.CANCELLING
 
 
 async def test_cancel_sync_empty_run_id_cancels_unconditionally(harness):
@@ -123,7 +123,7 @@ async def test_cancel_sync_empty_run_id_cancels_unconditionally(harness):
 
     cancel = harness.endpoints.cancel_sync("")
     assert cancel == {"success": True, "message": "Sync cancelling..."}
-    assert harness.app.services.sync_service._sync_state == SyncState.CANCELLING
+    assert harness.app.services.sync_service._box.sync_state == SyncState.CANCELLING
 
 
 async def test_apply_rejected_while_run_in_flight_emits_single_complete(harness):
@@ -167,7 +167,7 @@ async def test_apply_rejected_while_run_in_flight_emits_single_complete(harness)
     await orch._do_sync_per_unit()
     completes = _sync_complete_payloads(harness)
     assert len(completes) == 1
-    assert harness.app.services.sync_service._sync_state == SyncState.IDLE
+    assert harness.app.services.sync_service._box.sync_state == SyncState.IDLE
 
 
 async def test_preview_cancel_after_unit_loop_returns_cancelled(harness):
@@ -200,4 +200,4 @@ async def test_preview_cancel_after_unit_loop_returns_cancelled(harness):
     result = await harness.endpoints.sync_preview()
     assert result == {"success": False, "reason": "cancelled", "message": "Sync cancelled"}
     assert box.pending_delta is None
-    assert harness.app.services.sync_service._sync_state == SyncState.IDLE
+    assert harness.app.services.sync_service._box.sync_state == SyncState.IDLE

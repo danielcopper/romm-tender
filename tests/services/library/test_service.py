@@ -285,7 +285,7 @@ class TestGetCollections:
             {"id": 2, "name": "Shooters", "rom_count": 3, "is_favorite": False},
         ]
         library = make_library(loop=_make_collections_loop(user=user))
-        library.sync._settings["enabled_collections"] = {
+        library.settings["enabled_collections"] = {
             "standard": {"1": True, "2": False},
             "smart": {},
             "virtual": {},
@@ -302,7 +302,7 @@ class TestGetCollections:
         """Smart-collection sync_enabled comes from the smart bucket only."""
         smart = [{"id": 7, "name": "Filter A", "rom_count": 1}]
         library = make_library(loop=_make_collections_loop(smart=smart))
-        library.sync._settings["enabled_collections"] = {
+        library.settings["enabled_collections"] = {
             "standard": {"7": True},  # same id under a different bucket — must not leak
             "smart": {"7": False},
             "virtual": {},
@@ -319,7 +319,7 @@ class TestGetCollections:
         user = [{"id": 1, "name": "RPGs", "rom_count": 2, "is_favorite": False}]
         franchise = [{"id": 101, "name": "Zelda", "rom_count": 3}]
         library = make_library(loop=_make_collections_loop(user=user, virtual=franchise))
-        library.sync._settings.pop("enabled_collections", None)
+        library.settings.pop("enabled_collections", None)
 
         result = await library.sync.get_collections()
 
@@ -450,7 +450,7 @@ class TestGetCollectionsOwnerScope:
             {"id": 2, "name": "Theirs", "rom_count": 1, "is_favorite": False, "user_id": 8},
         ]
         library = make_library(loop=_make_collections_loop(user=user))
-        library.sync._settings["romm_user_id"] = 7
+        library.settings["romm_user_id"] = 7
 
         result = await library.sync.get_collections()
 
@@ -465,7 +465,7 @@ class TestGetCollectionsOwnerScope:
             {"id": 6, "name": "TheirSmart", "rom_count": 1, "user_id": 8},
         ]
         library = make_library(loop=_make_collections_loop(smart=smart))
-        library.sync._settings["romm_user_id"] = 7
+        library.settings["romm_user_id"] = 7
 
         result = await library.sync.get_collections()
 
@@ -478,7 +478,7 @@ class TestGetCollectionsOwnerScope:
         """Virtual collections have no owner — always is_own=True."""
         franchise = [{"id": 101, "name": "Mario", "rom_count": 1}]
         library = make_library(loop=_make_collections_loop(virtual=franchise))
-        library.sync._settings["romm_user_id"] = 7
+        library.settings["romm_user_id"] = 7
 
         result = await library.sync.get_collections()
 
@@ -491,7 +491,7 @@ class TestGetCollectionsOwnerScope:
         smart = [{"id": 5, "name": "TheirSmart", "rom_count": 1, "user_id": 8}]
         franchise = [{"id": 101, "name": "Mario", "rom_count": 1}]
         library = make_library(loop=_make_collections_loop(user=user, smart=smart, virtual=franchise))
-        library.sync._settings.pop("romm_user_id", None)
+        library.settings.pop("romm_user_id", None)
 
         result = await library.sync.get_collections()
 
@@ -634,24 +634,24 @@ class TestSaveCollectionSync:
         """Enabling a standard collection stores True under enabled_collections.standard."""
         await library.sync.save_collection_sync("42", "standard", True)
 
-        assert library.sync._settings["enabled_collections"]["standard"]["42"] is True
+        assert library.settings["enabled_collections"]["standard"]["42"] is True
 
     async def test_saves_enabled_smart(self, library):
         """Enabling a smart collection stores True under enabled_collections.smart."""
         await library.sync.save_collection_sync("7", "smart", True)
 
-        assert library.sync._settings["enabled_collections"]["smart"]["7"] is True
+        assert library.settings["enabled_collections"]["smart"]["7"] is True
 
     async def test_saves_enabled_virtual(self, library):
         """Enabling a virtual collection stores True under enabled_collections.virtual."""
         b64 = "eyJ0eXBlIjogImNvbGxlY3Rpb24ifQ=="
         await library.sync.save_collection_sync(b64, "virtual", True)
 
-        assert library.sync._settings["enabled_collections"]["virtual"][b64] is True
+        assert library.settings["enabled_collections"]["virtual"][b64] is True
 
     async def test_saves_disabled(self, library):
         """Disabling a previously-enabled collection stores False in the right bucket."""
-        library.sync._settings["enabled_collections"] = {
+        library.settings["enabled_collections"] = {
             "standard": {"42": True},
             "smart": {},
             "virtual": {},
@@ -659,7 +659,7 @@ class TestSaveCollectionSync:
 
         await library.sync.save_collection_sync("42", "standard", False)
 
-        assert library.sync._settings["enabled_collections"]["standard"]["42"] is False
+        assert library.settings["enabled_collections"]["standard"]["42"] is False
 
     async def test_returns_success(self, library):
         result = await library.sync.save_collection_sync("1", "standard", True)
@@ -680,16 +680,16 @@ class TestSaveCollectionSync:
         """Passing an integer id is coerced to a string key."""
         await library.sync.save_collection_sync(99, "standard", True)
 
-        assert "99" in library.sync._settings["enabled_collections"]["standard"]
-        assert library.sync._settings["enabled_collections"]["standard"]["99"] is True
+        assert "99" in library.settings["enabled_collections"]["standard"]
+        assert library.settings["enabled_collections"]["standard"]["99"] is True
 
     async def test_creates_enabled_collections_key_if_absent(self, library):
         """enabled_collections is created with all three buckets if absent."""
-        library.sync._settings.pop("enabled_collections", None)
+        library.settings.pop("enabled_collections", None)
 
         await library.sync.save_collection_sync("7", "smart", True)
 
-        ec = library.sync._settings["enabled_collections"]
+        ec = library.settings["enabled_collections"]
         assert ec["smart"]["7"] is True
         assert ec["standard"] == {}
         assert ec["virtual"] == {}
@@ -1068,9 +1068,8 @@ class TestCollectionSyncEdgeCases:
         by the per-unit finalisation path. Collection-only ROMs must be
         excluded when the toggle is OFF.
         """
-        svc = library.sync
-        svc._settings["collection_create_platform_groups"] = False
-        svc._settings["enabled_collections"] = {"standard": {"3": True}, "smart": {}, "virtual": {}}
+        library.settings["collection_create_platform_groups"] = False
+        library.settings["enabled_collections"] = {"standard": {"3": True}, "smart": {}, "virtual": {}}
 
         # roms: ROM 1 from platform, ROM 2 from collection only
         _seed_rom(library.uow, 1, app_id=1001, platform_slug="gba", name="ROM A")
@@ -1092,8 +1091,7 @@ class TestCollectionSyncEdgeCases:
 
     def test_sc6c_build_collection_app_ids_includes_all_when_toggle_on(self, library):
         """Same as sc5c but with toggle ON — PSX should be included."""
-        svc = library.sync
-        svc._settings["collection_create_platform_groups"] = True
+        library.settings["collection_create_platform_groups"] = True
 
         _seed_rom(library.uow, 1, app_id=1001, platform_slug="gba", name="ROM A")
         _seed_rom(library.uow, 2, app_id=1002, platform_slug="psx", name="ROM B")
@@ -1114,8 +1112,7 @@ class TestCollectionSyncEdgeCases:
         """ROM A (in both GBA platform and Favorites collection) appears in both
         platform_app_ids and romm_collection_app_ids when built via
         _build_collection_app_ids."""
-        svc = library.sync
-        svc._settings["collection_create_platform_groups"] = False
+        library.settings["collection_create_platform_groups"] = False
 
         _seed_rom(library.uow, 1, app_id=1001, platform_slug="gba", name="ROM A")
         names = {"gba": "Game Boy Advance"}

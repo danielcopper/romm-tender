@@ -12,9 +12,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from domain.preview_delta import PreviewDelta
-    from domain.sync_state import SyncState
-    from services.library._state import CollectionMembership, LibrarySyncStateBox
+    from services.library._state import LibrarySyncStateBox
     from services.library.fetcher import LibraryFetcher
     from services.library.reporter import SyncReporter
     from services.library.session_budget import SessionBudgetMonitor
@@ -29,9 +27,7 @@ if TYPE_CHECKING:
 class LibraryServiceConfig:
     """Frozen wiring bundle handed to ``LibraryService.__init__``: the parts the façade calls.
 
-    The parts share the one ``sync_state_box``. ``conflict_rules`` are what a
-    library use case checks at its entry, under its endpoint's name;
-    ``settings`` is the live settings dict.
+    The parts share the one ``sync_state_box``.
     """
 
     sync_state_box: LibrarySyncStateBox
@@ -43,7 +39,6 @@ class LibraryServiceConfig:
     preview: SyncPreview
     orchestrator: SyncOrchestrator
     conflict_rules: ConflictRules
-    settings: dict[str, Any]
 
 
 class LibraryService:
@@ -64,7 +59,6 @@ class LibraryService:
     """
 
     def __init__(self, *, config: LibraryServiceConfig) -> None:
-        self._config = config
         self._rules = config.conflict_rules
         self._box = config.sync_state_box
         self._fetcher = config.fetcher
@@ -77,11 +71,6 @@ class LibraryService:
 
     # ── Public properties ────────────────────────────────────────
 
-    @property
-    def sync_state(self) -> SyncState:
-        """Current sync state (read-only)."""
-        return self._box.sync_state
-
     def is_sync_in_flight(self) -> bool:
         """True while a sync run is in flight (RUNNING or CANCELLING; IDLE is not).
 
@@ -91,77 +80,11 @@ class LibraryService:
 
     @property
     def pending_sync(self) -> dict[int, dict[str, Any]]:
-        """Public accessor for pending sync data (used by SteamGridService)."""
+        """The shortcut entries emitted for the active unit, keyed by ``rom_id``.
+
+        An abandoned chunk leaves them in place until the next unit is staged.
+        """
         return self._box.pending_sync
-
-    # ── State accessors preserving the pre-decomposition attribute shape ──
-    #
-    # Test setup reads and writes the legacy private attribute names (the
-    # SteamGridDB tests' ``get_pending_sync=lambda: library._pending_sync``
-    # among them). Proxy them through the shared state box so external
-    # readers and writers see the live values mutated by sub-services. The
-    # run-lifecycle pair (``_sync_state`` / ``_current_sync_id``) is read-only
-    # here: those two fields are written **only** through the box's verb
-    # methods (``try_begin_run`` / ``request_cancel`` / ``finish_run``), so no
-    # setter is exposed (#1202). ``_pending_delta`` is read-only for the same
-    # reason — the staged preview is written only through ``stage_preview`` /
-    # ``read_fresh_preview`` / ``discard_preview``.
-
-    @property
-    def _sync_state(self) -> SyncState:
-        return self._box.sync_state
-
-    @property
-    def _pending_sync(self) -> dict[int, dict[str, Any]]:
-        return self._box.pending_sync
-
-    @_pending_sync.setter
-    def _pending_sync(self, value: dict[int, dict[str, Any]]) -> None:
-        self._box.pending_sync = value
-
-    @property
-    def _pending_delta(self) -> PreviewDelta | None:
-        return self._box.pending_delta
-
-    @property
-    def _pending_collection_memberships(self) -> dict[tuple[str, str], CollectionMembership]:
-        return self._box.pending_collection_memberships
-
-    @_pending_collection_memberships.setter
-    def _pending_collection_memberships(self, value: dict[tuple[str, str], CollectionMembership]) -> None:
-        self._box.pending_collection_memberships = value
-
-    @property
-    def _pending_platform_rom_ids(self) -> set[int] | None:
-        return self._box.pending_platform_rom_ids
-
-    @_pending_platform_rom_ids.setter
-    def _pending_platform_rom_ids(self, value: set[int] | None) -> None:
-        self._box.pending_platform_rom_ids = value
-
-    @property
-    def _sync_progress(self) -> dict[str, Any]:
-        return self._box.sync_progress
-
-    @_sync_progress.setter
-    def _sync_progress(self, value: dict[str, Any]) -> None:
-        self._box.sync_progress = value
-
-    @property
-    def _sync_last_heartbeat(self) -> float:
-        return self._box.sync_last_heartbeat
-
-    @_sync_last_heartbeat.setter
-    def _sync_last_heartbeat(self, value: float) -> None:
-        self._box.sync_last_heartbeat = value
-
-    @property
-    def _current_sync_id(self) -> str | None:
-        return self._box.current_sync_id
-
-    @property
-    def _settings(self) -> dict[str, Any]:
-        return self._config.settings
 
     # ── Use cases the endpoints call ─────────────────────────────
 

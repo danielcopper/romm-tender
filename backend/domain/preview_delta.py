@@ -1,7 +1,7 @@
 """Pending sync-preview snapshot held between ``sync_preview`` and ``sync_apply_delta``.
 
-Owns the typed shape of the data ``LibraryService`` stashes after a preview
-run so the subsequent apply call can act on the exact snapshot the user saw,
+Owns the typed shape of the data ``SyncPreview`` stages on the
+``LibrarySyncStateBox`` after a preview run so the subsequent apply call can act on the exact snapshot the user saw,
 and so a panel that lost its card can ask for it back. Pure data —
 construction, attribute reads, the TTL predicate; no I/O, no clock.
 """
