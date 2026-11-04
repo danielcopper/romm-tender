@@ -1,13 +1,14 @@
-"""Contract tests for the startup launch-options reconcile read endpoint.
+"""Contract tests for the launch-options reconcile read endpoint.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
-``getInstalledRelaunchOptions = endpoint<[], {app_id, launch_options}[]>``.
+``getBoundLaunchOptions = endpoint<[], {success, items: {app_id, launch_options}[], prune_lease_token}>``.
 
 The frontend pulls this on mount (after backend reachability is proven) and
-re-confirms each shortcut's launch command to heal any drift to the empty
-placeholder (#1043). The contract is the list SHAPE: zero items when nothing
-is installed+bound, and a ``{app_id, launch_options}`` dict per installed+bound
-ROM with a non-empty launch command.
+after every sync, and confirm-sets each listed shortcut's launch options to its
+appId (#1043, #2221 D10). The contract is the list SHAPE: zero items when
+nothing is bound, and a ``{app_id, launch_options}`` dict per bound ROM whose
+launch options in Steam's shortcut file are not its appId — every bound ROM
+here, since the harness's Steam holds no shortcut file.
 """
 
 from __future__ import annotations
@@ -15,30 +16,30 @@ from __future__ import annotations
 from ._seed import seed_install, seed_rom
 
 
-async def test_no_installs_returns_empty_list(harness):
-    """Nothing installed → empty list (the frontend no-ops on it)."""
-    result = await harness.endpoints.get_installed_relaunch_options()
+async def test_nothing_bound_returns_empty_list(harness):
+    """Nothing bound → empty list (the frontend no-ops on it)."""
+    result = await harness.endpoints.get_bound_launch_options()
     assert result == {"success": True, "items": [], "prune_lease_token": None}
 
 
-async def test_installed_bound_rom_shape(harness):
-    """An installed+bound ROM → one {app_id, launch_options} item with a real command."""
+async def test_a_bound_rom_is_listed_with_its_app_id_as_its_launch_options(harness):
+    """A bound ROM → one {app_id, launch_options} item whose launch options are its appId."""
     seed_install(harness, 42, system="gba", platform_slug="gba", file_name="pokemon.gba")
-    result = await harness.endpoints.get_installed_relaunch_options()
+    result = await harness.endpoints.get_bound_launch_options()
     assert result["success"] is True
     assert result["prune_lease_token"].startswith("installed_reconcile:")
-    assert len(result["items"]) == 1
-    item = result["items"][0]
-    assert set(item.keys()) == {"app_id", "launch_options"}
     # seed_rom defaults shortcut_app_id to rom_id when not bound otherwise.
-    assert item["app_id"] == 42
-    assert isinstance(item["app_id"], int)
-    assert isinstance(item["launch_options"], str)
-    assert item["launch_options"]  # non-empty — the full launch command
+    assert result["items"] == [{"app_id": 42, "launch_options": "42"}]
 
 
-async def test_bound_rom_without_install_is_excluded(harness):
-    """A ROM bound to a shortcut but not installed → no item (no install row)."""
+async def test_a_bound_rom_without_an_install_is_listed_too(harness):
+    """Every bound shortcut carries its appId, installed or not."""
     seed_rom(harness, 7, platform_slug="gba", shortcut_app_id=7)
-    result = await harness.endpoints.get_installed_relaunch_options()
+    result = await harness.endpoints.get_bound_launch_options()
+    assert result["items"] == [{"app_id": 7, "launch_options": "7"}]
+
+
+async def test_an_unbound_rom_is_not_listed(harness):
+    seed_rom(harness, 8, platform_slug="gba", shortcut_app_id=None)
+    result = await harness.endpoints.get_bound_launch_options()
     assert result == {"success": True, "items": [], "prune_lease_token": None}

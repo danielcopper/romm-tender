@@ -1562,13 +1562,15 @@ it, for the focused platform:
   **The clause names the core; "Default" is not one of the names it can take.** `active_core_label` names the platform's
   pick, else Tender's default (the entry the first enabled source ships first,
   [core-emulator-selection.md](core-emulator-selection.md#per-platform-coreserviceset_system_core)), whatever its state
-  — a default Tender cannot bake is named like any other. The clause is red where the games cannot start
+  — a default that is not installed is named like any other. The clause is red where the games cannot start
   (`frontend/src/utils/emulatorClause.ts`):
 
-  - **The emulator cannot start them** — `start` says `cannot_start`: it is not installed, RetroDECK's start script
-    cannot start it, or Tender cannot bake it, so Tender cannot start it yet. The clause names it in **red** and the
-    line under it says why (`frontend/src/utils/emulatorStart.ts`, the same sentence a game's page and a refused start
-    use); the chip stays open, and the line points at the emulator menu, only where another entry can be pinned.
+  - **The emulator cannot start them** — `start` says `cannot_start`: it is not installed. The clause names it in
+    **red** and the line under it says why (`frontend/src/utils/emulatorStart.ts`, the same sentence a game's page and a
+    refused start use); the chip stays open, and the line points at the emulator menu, only where another entry can be
+    pinned. The platform page asks no start command, since a platform has no game to ask it with: whether the resolver
+    gives one is said on a game's page and at its start
+    ([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D20).
   - **No default** — the entry the source ships first could not be established installed, so it is never the default by
     itself ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D9). The clause reads `no default` in
     **red**, the line asks for a choice with the cause where one is known, and the chip stays open where an entry can be
@@ -1601,17 +1603,17 @@ it, for the focused platform:
   would spend a row of the pane reporting that nothing can be done, which is what the device round asked to remove.
   States that report a PROBLEM keep their line, because a tooltip is a hover and the Deck's controller cannot perform
   one: the read failed, the answering source gives no emulator list (worded by why, § Notices and homes), **ES-DE lists
-  no emulator at all**, nothing on its menu is choosable, the fallback is not installed or one Tender cannot start yet,
-  and the fallback or the platform's own pick is one whose installation could not be established. ES-DE listing no
-  emulator and nothing on the menu being choosable are the split above, and they are checked in that order: an empty
-  menu is the case where RetroDECK's own fallback fails too, so it is answered before the not-choosable one, and the
-  surviving count branch then speaks only for a menu that really does hold one choosable option. A switch the backend
-  refuses is reported in the same place, and the header keeps naming the old core, which every shortcut following the
-  platform's pick still launches with. A switch takes the page's busy hold from the moment it is picked until it is
-  over; an accepted one re-bakes the launch command of every bound shortcut, which is why the hold has to cover the
-  whole of it. The chip and the pane's buttons disable, another platform's pane says `Working on X`, and the acting pane
-  says `Switching to <emulator>…` in the same status line the outcome lands in — a success takes that line back, a
-  refusal replaces it, and a continuation cancelled by leaving the page takes it back too, because such a switch either
+  no emulator at all**, nothing on its menu is choosable, the default is not installed, and the default or the
+  platform's own pick is one whose installation could not be established. ES-DE listing no emulator and nothing on the
+  menu being choosable are the split above, and they are checked in that order: an empty menu is the case where no game
+  of the platform starts at all, so it is answered before the not-choosable one, and the surviving count branch then
+  speaks only for a menu that really does hold one choosable option. A switch the backend refuses is reported in the
+  same place, and the header keeps naming the old core, which every game following the platform's pick still starts
+  with. A switch takes the page's busy hold from the moment it is picked until it is over; an accepted one brings the
+  platform's BIOS links up to date and reads the platform again, which is why the hold has to cover the whole of it. The
+  chip and the pane's buttons disable, another platform's pane says `Working on X`, and the acting pane says
+  `Switching to <emulator>…` in the same status line the outcome lands in — a success takes that line back, a refusal
+  replaces it, and a continuation cancelled by leaving the page takes it back too, because such a switch either
   committed or never ran and there is no pane left to report to either way.
 
 - **BIOS files** — the summary, which this pane words nowhere: `frontend/src/utils/biosSummary.ts` holds every state and

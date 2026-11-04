@@ -10,16 +10,10 @@ import pytest
 from _factories import (
     _make_conflict_rules,
     _make_prune_conflicts,
-    _record_operations_at_lease,
     _refused_by_conflict_rule,
 )
-from fakes.fake_core_info_provider import FakeCoreInfoProvider
-from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_migration_file_store import FakeMigrationFileStore
-from fakes.fake_platform_core_reader import FakePlatformCoreReader
-from fakes.fake_platform_systems import FakePlatformSystems
-from fakes.fake_relaunch_options_resolver import FakeRelaunchOptionsResolver
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
@@ -29,11 +23,9 @@ from adapters.migration_file import MigrationFileAdapter
 from domain.retrodeck_folders import MoveRoots
 from lib.errors import Refused
 from lib.prune_conflicts import PruneConflicts
-from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
 from services.migration import MigrationService, MigrationServiceConfig
 from services.migration._moves import MigrationIncomplete
 from services.migration.service import NeedsConfirmation
-from services.relaunch_options_resolver import RelaunchOptionsResolver, RelaunchOptionsResolverConfig
 
 
 class RecordingEmitter:
@@ -86,15 +78,12 @@ _DETECTED_HOME = "/retrodeck"
 class MigrationHarness:
     """The migration service and the seams its tests seed or assert against.
 
-    ``uow`` is the one :class:`FakeUnitOfWork` the migration service and the
-    relaunch resolvers behind it read and write, so a row a test seeds there is
-    the row the migration sees. ``core_info`` is the core-info fake the relaunch
-    commands are baked through, so a test can seed ``available_cores``.
+    ``uow`` is the one :class:`FakeUnitOfWork` the migration service reads and
+    writes, so a row a test seeds there is the row the migration sees.
     """
 
     service: MigrationService
     uow: FakeUnitOfWork
-    core_info: FakeCoreInfoProvider
     save_directories: RecordingSaveDirectories
     prune_conflicts: PruneConflicts
 
@@ -104,34 +93,6 @@ def migration(logger) -> MigrationHarness:
     settings: dict[str, Any] = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
     prune_conflicts = _make_prune_conflicts()
     uow = FakeUnitOfWork()
-    # The real ActiveCoreResolver folds the DB override over this fake's
-    # es_systems default — the seam MigrationService re-bakes through on
-    # relocation, so a relaunch test can assert a per-game emulator_override
-    # re-bakes the ``-e`` form post-move.
-    core_info = FakeCoreInfoProvider()
-    active_core = ActiveCoreResolver(
-        config=ActiveCoreResolverConfig(
-            uow_factory=FakeUnitOfWorkFactory(uow=uow),
-            core_info=core_info,
-            platform_core_reader=FakePlatformCoreReader(),
-            platform_systems=FakePlatformSystems(),
-            logger=logger,
-        ),
-    )
-
-    # Real RelaunchOptionsResolver over the shared fake UoW + the active-core
-    # resolver so the migration relaunch-emit integration tests bake real launch
-    # commands from the relocated rom_installs.file_path.
-    relaunch_options = RelaunchOptionsResolver(
-        config=RelaunchOptionsResolverConfig(
-            uow_factory=FakeUnitOfWorkFactory(uow=uow),
-            active_core=active_core,
-            disc_resolver=FakeDiscResolver(),
-            loop=running_loop(),
-            conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
-        ),
-    )
-
     save_directories = RecordingSaveDirectories()
     service = MigrationService(
         config=MigrationServiceConfig(
@@ -144,7 +105,6 @@ def migration(logger) -> MigrationHarness:
             firmware_resolver=FakeFirmwareResolver(),
             # A RetroDECK is detected: without one the migrate press is refused.
             retrodeck_folders=FakeRetroDeckFolders(home=_DETECTED_HOME),
-            relaunch_options=relaunch_options,
             save_directories=save_directories.provide,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
             conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
@@ -153,7 +113,6 @@ def migration(logger) -> MigrationHarness:
     return MigrationHarness(
         service=service,
         uow=uow,
-        core_info=core_info,
         save_directories=save_directories,
         prune_conflicts=prune_conflicts,
     )
@@ -630,39 +589,6 @@ class TestMigrateRetroDeckFiles:
         assert result["roms_moved"] == 1
         with migration.uow as uow:
             assert uow.rom_installs.get(1).file_path == str(base / "new" / "retrodeck" / "roms" / "n64" / "zelda.z64")
-
-    @pytest.mark.asyncio
-    async def test_migration_records_applied_launch_options_for_bound_rom(self, migration, tmp_path):
-        """After the home-move re-bake, each bound ROM's recorded applied state is
-        updated to the emitted relaunch command, so the next sync skips the
-        now-correct (relocated) shortcut instead of re-touching it (#1383)."""
-
-        old_home = str(tmp_path / "old")
-        new_home = str(tmp_path / "new")
-        old_rom = os.path.join(old_home, "roms", "n64", "zelda.z64")
-        os.makedirs(os.path.dirname(old_rom))
-        with open(old_rom, "w") as f:
-            f.write("rom data")
-
-        with migration.uow as uow:
-            uow.kv_config.set("retrodeck_home_path_previous", old_home)
-            uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(migration.uow, 1, file_path=old_rom, system="n64", app_id=9001)
-
-        result = await migration.service.migrate_retrodeck_files()
-        assert result["success"] is True
-
-        # The emitted migration_relaunch_options item and the recorded applied match.
-        relaunch = [
-            payload for event, payload in migration.service._emit.calls if event == "migration_relaunch_options"
-        ]
-        assert len(relaunch) == 1
-        item = next(i for i in relaunch[0]["items"] if i["app_id"] == 9001)
-        with migration.uow as uow:
-            rom = uow.roms.get(1)
-        assert rom is not None
-        assert rom.applied_launch_options == item["launch_options"]
-        assert rom.applied_launch_options != ""  # a real re-baked command, not the placeholder
 
     @pytest.mark.asyncio
     async def test_migrate_multi_file_moves_whole_rom_dir_with_siblings(self, migration, tmp_path):
@@ -1298,317 +1224,6 @@ class TestMigrateSaveFiles:
         assert status["bios_count"] == 1
 
 
-class TestMigrationRelaunchOptions:
-    """Re-resolve step: after a RetroDECK-home migration relocates ROM files and
-    updates ``rom_installs`` to the new paths, the service emits
-    ``migration_relaunch_options`` so the frontend rewrites each affected Steam
-    shortcut's baked ``launch_options`` (ADR-0005). Only ROMs that are BOTH
-    installed (have a ``rom_installs`` row) AND bound (``shortcut_app_id`` set)
-    are eligible — uninstalled or unbound ROMs are skipped.
-    """
-
-    @staticmethod
-    def _relaunch_emit(migration):
-        """Return the single ``migration_relaunch_options`` payload, or ``None``."""
-        for event, payload in migration.service._emit.calls:
-            if event == "migration_relaunch_options":
-                return payload
-        return None
-
-    @staticmethod
-    def _seed_bound_uninstalled(uow, rom_id, *, app_id, system="n64"):
-        """Seed a bound Rom row with NO ``rom_installs`` row (downloaded=false)."""
-        from domain.rom import Rom
-
-        with uow:
-            uow.roms.save(
-                Rom(
-                    rom_id=rom_id,
-                    platform_slug=system,
-                    name=f"Game {rom_id}",
-                    fs_name=f"game{rom_id}",
-                    shortcut_app_id=app_id,
-                    last_synced_at="2025-01-01T00:00:00",
-                )
-            )
-
-    @pytest.mark.asyncio
-    async def test_relocated_installed_bound_rom_emits_new_launch_options(self, migration, tmp_path):
-        """Happy path: a relocated installed+bound ROM emits its app_id + NEW-path command."""
-
-        from domain.shortcut_data import build_launch_options, resolve_emulator_invocation
-
-        old_home = str(tmp_path / "old")
-        new_home = str(tmp_path / "new")
-        old_rom = os.path.join(old_home, "roms", "n64", "zelda.z64")
-        new_rom = os.path.join(new_home, "roms", "n64", "zelda.z64")
-
-        os.makedirs(os.path.dirname(old_rom))
-        with open(old_rom, "w") as f:
-            f.write("rom data")
-
-        with migration.uow as uow:
-            uow.kv_config.set("retrodeck_home_path_previous", old_home)
-            uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(migration.uow, 1, file_path=old_rom, system="n64", app_id=4242)
-
-        result = await migration.service.migrate_retrodeck_files()
-        assert result["success"] is True
-
-        payload = self._relaunch_emit(migration)
-        assert payload is not None
-        expected_cmd = build_launch_options(resolve_emulator_invocation({"id": 1}), new_rom)
-        assert payload["items"] == [{"app_id": 4242, "launch_options": expected_cmd}]
-        # The command must point at the NEW path, never the stale old one.
-        assert new_rom in payload["items"][0]["launch_options"]
-        assert old_rom not in payload["items"][0]["launch_options"]
-
-    @pytest.mark.asyncio
-    async def test_relocated_rom_with_override_rebakes_e_form(self, migration, tmp_path):
-        """A relocated ROM with a resolvable ``emulator_override`` re-bakes the ``-e`` form."""
-
-        migration.core_info.available_cores = [
-            {"core_so": "pcsx_rearmed_libretro", "label": "PCSX ReARMed", "is_default": True},
-        ]
-
-        old_home = str(tmp_path / "old")
-        new_home = str(tmp_path / "new")
-        old_rom = os.path.join(old_home, "roms", "psx", "game.chd")
-        new_rom = os.path.join(new_home, "roms", "psx", "game.chd")
-        os.makedirs(os.path.dirname(old_rom))
-        with open(old_rom, "w") as f:
-            f.write("rom data")
-
-        with migration.uow as uow:
-            uow.kv_config.set("retrodeck_home_path_previous", old_home)
-            uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(migration.uow, 1, file_path=old_rom, system="psx", platform_slug="psx", app_id=4242)
-        with migration.uow as uow:
-            uow.roms.set_emulator_override(1, "PCSX ReARMed")
-
-        result = await migration.service.migrate_retrodeck_files()
-        assert result["success"] is True
-
-        payload = self._relaunch_emit(migration)
-        assert payload is not None
-        assert payload["items"] == [
-            {
-                "app_id": 4242,
-                "launch_options": (
-                    "flatpak run --nosocket=wayland net.retrodeck.retrodeck "
-                    '-e "%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/pcsx_rearmed_libretro.so %ROM%" '
-                    f"'{new_rom}'"
-                ),
-            }
-        ]
-
-    @pytest.mark.asyncio
-    async def test_relocated_rom_with_stale_override_rebakes_plain_and_warns(self, migration, tmp_path, caplog):
-        """A stale override LABEL re-bakes the PLAIN launch + WARNs (B4) — never ``None.so``."""
-        import logging
-
-        # available_cores does not carry the pinned label → resolution returns None.
-        migration.core_info.available_cores = [
-            {"core_so": "pcsx_rearmed_libretro", "label": "PCSX ReARMed", "is_default": True},
-        ]
-
-        old_home = str(tmp_path / "old")
-        new_home = str(tmp_path / "new")
-        old_rom = os.path.join(old_home, "roms", "psx", "game.chd")
-        new_rom = os.path.join(new_home, "roms", "psx", "game.chd")
-        os.makedirs(os.path.dirname(old_rom))
-        with open(old_rom, "w") as f:
-            f.write("rom data")
-
-        with migration.uow as uow:
-            uow.kv_config.set("retrodeck_home_path_previous", old_home)
-            uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(migration.uow, 1, file_path=old_rom, system="psx", platform_slug="psx", app_id=4242)
-        with migration.uow as uow:
-            uow.roms.set_emulator_override(1, "Removed Core")
-
-        with caplog.at_level(logging.WARNING):
-            result = await migration.service.migrate_retrodeck_files()
-        assert result["success"] is True
-
-        payload = self._relaunch_emit(migration)
-        assert payload is not None
-        # Stale → PLAIN launch at the NEW path, never -e None.so.
-        assert payload["items"] == [
-            {"app_id": 4242, "launch_options": f"flatpak run --nosocket=wayland net.retrodeck.retrodeck '{new_rom}'"}
-        ]
-        assert "-e" not in payload["items"][0]["launch_options"]
-        assert "Removed Core" in caplog.text
-        assert "no longer resolves" in caplog.text
-
-    @pytest.mark.asyncio
-    async def test_installed_unbound_rom_excluded(self, migration, tmp_path):
-        """Edge: installed but UNBOUND (shortcut_app_id None) is excluded from items."""
-
-        old_home = str(tmp_path / "old")
-        new_home = str(tmp_path / "new")
-        old_rom = os.path.join(old_home, "roms", "n64", "zelda.z64")
-
-        os.makedirs(os.path.dirname(old_rom))
-        with open(old_rom, "w") as f:
-            f.write("rom data")
-
-        with migration.uow as uow:
-            uow.kv_config.set("retrodeck_home_path_previous", old_home)
-            uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(migration.uow, 1, file_path=old_rom, system="n64", app_id=None)
-
-        result = await migration.service.migrate_retrodeck_files()
-        assert result["success"] is True
-
-        # Event still fires (matches sync_stale always-emit convention) but the
-        # unbound install is not in the items.
-        payload = self._relaunch_emit(migration)
-        assert payload is not None
-        assert payload["items"] == []
-
-    @pytest.mark.asyncio
-    async def test_bound_uninstalled_rom_excluded(self, migration, tmp_path):
-        """Edge: bound but NOT installed (no rom_installs row) is excluded."""
-
-        old_home = str(tmp_path / "old")
-        new_home = str(tmp_path / "new")
-
-        with migration.uow as uow:
-            uow.kv_config.set("retrodeck_home_path_previous", old_home)
-            uow.kv_config.set("retrodeck_home_path", new_home)
-        # Bound Rom row, but no install — nothing on disk, no rom_installs row.
-        self._seed_bound_uninstalled(migration.uow, 7, app_id=9999)
-
-        result = await migration.service.migrate_retrodeck_files()
-        assert result["success"] is True
-
-        payload = self._relaunch_emit(migration)
-        assert payload is not None
-        assert payload["items"] == []
-
-    @pytest.mark.asyncio
-    async def test_mixed_batch_includes_only_installed_and_bound(self, migration, tmp_path):
-        """Edge: mixed batch — only the installed+bound ROM appears in items."""
-
-        from domain.shortcut_data import build_launch_options, resolve_emulator_invocation
-
-        old_home = str(tmp_path / "old")
-        new_home = str(tmp_path / "new")
-        bound_rom = os.path.join(old_home, "roms", "n64", "bound.z64")
-        new_bound_rom = os.path.join(new_home, "roms", "n64", "bound.z64")
-        unbound_rom = os.path.join(old_home, "roms", "n64", "unbound.z64")
-
-        os.makedirs(os.path.dirname(bound_rom))
-        with open(bound_rom, "w") as f:
-            f.write("bound data")
-        with open(unbound_rom, "w") as f:
-            f.write("unbound data")
-
-        with migration.uow as uow:
-            uow.kv_config.set("retrodeck_home_path_previous", old_home)
-            uow.kv_config.set("retrodeck_home_path", new_home)
-        # 1) installed + bound  → included
-        _seed_install(migration.uow, 1, file_path=bound_rom, system="n64", app_id=1111)
-        # 2) installed + unbound → excluded
-        _seed_install(migration.uow, 2, file_path=unbound_rom, system="n64", app_id=None)
-        # 3) bound + uninstalled → excluded
-        self._seed_bound_uninstalled(migration.uow, 3, app_id=3333)
-
-        result = await migration.service.migrate_retrodeck_files()
-        assert result["success"] is True
-
-        payload = self._relaunch_emit(migration)
-        assert payload is not None
-        expected_cmd = build_launch_options(resolve_emulator_invocation({"id": 1}), new_bound_rom)
-        assert payload["items"] == [{"app_id": 1111, "launch_options": expected_cmd}]
-
-    @pytest.mark.asyncio
-    async def test_zero_eligible_roms_emits_empty_items(self, migration, tmp_path):
-        """Edge: zero eligible ROMs — still emits (sync_stale convention) with empty items."""
-
-        old_home = str(tmp_path / "old")
-        new_home = str(tmp_path / "new")
-
-        with migration.uow as uow:
-            uow.kv_config.set("retrodeck_home_path_previous", old_home)
-            uow.kv_config.set("retrodeck_home_path", new_home)
-        # No installs, no bound ROMs.
-
-        result = await migration.service.migrate_retrodeck_files()
-        assert result["success"] is True
-
-        payload = self._relaunch_emit(migration)
-        assert payload is not None
-        assert payload["items"] == []
-
-    @pytest.mark.asyncio
-    async def test_no_relaunch_emit_on_needs_confirmation(self, migration, tmp_path):
-        """The needs-confirmation early return must NOT emit relaunch options.
-
-        Nothing was relocated and no paths were persisted, so re-resolving and
-        rewriting shortcuts would point them at files that did not move.
-        """
-
-        old_home = str(tmp_path / "old")
-        new_home = str(tmp_path / "new")
-        old_rom = os.path.join(old_home, "roms", "n64", "zelda.z64")
-        new_rom = os.path.join(new_home, "roms", "n64", "zelda.z64")
-
-        os.makedirs(os.path.dirname(old_rom))
-        os.makedirs(os.path.dirname(new_rom))
-        with open(old_rom, "w") as f:
-            f.write("old data")
-        with open(new_rom, "w") as f:
-            f.write("new data")
-
-        with migration.uow as uow:
-            uow.kv_config.set("retrodeck_home_path_previous", old_home)
-            uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(migration.uow, 1, file_path=old_rom, system="n64", app_id=4242)
-        migrating = migration.service.migrate_retrodeck_files()
-
-        with pytest.raises(NeedsConfirmation) as refused:
-            await migrating
-
-        assert refused.value.details["needs_confirmation"] is True
-        assert self._relaunch_emit(migration) is None
-
-    @pytest.mark.asyncio
-    async def test_relaunch_options_built_from_persisted_new_paths(self, migration, tmp_path):
-        """The event fires only after the relocated path is persisted to rom_installs.
-
-        Asserting the emitted command equals the command for the persisted
-        ``rom_installs.file_path`` ties the emit to post-commit state — a
-        pre-commit emit would carry the stale old path.
-        """
-
-        from domain.shortcut_data import build_launch_options, resolve_emulator_invocation
-
-        old_home = str(tmp_path / "old")
-        new_home = str(tmp_path / "new")
-        old_rom = os.path.join(old_home, "roms", "n64", "zelda.z64")
-
-        os.makedirs(os.path.dirname(old_rom))
-        with open(old_rom, "w") as f:
-            f.write("rom data")
-
-        with migration.uow as uow:
-            uow.kv_config.set("retrodeck_home_path_previous", old_home)
-            uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(migration.uow, 1, file_path=old_rom, system="n64", app_id=4242)
-
-        await migration.service.migrate_retrodeck_files()
-
-        # The persisted install now points at the new path.
-        with migration.uow as uow:
-            persisted_path = uow.rom_installs.get(1).file_path
-        payload = self._relaunch_emit(migration)
-        assert payload is not None
-        expected_cmd = build_launch_options(resolve_emulator_invocation({"id": 1}), persisted_path)
-        assert payload["items"][0]["launch_options"] == expected_cmd
-
-
 class TestMigrationFailureInjection:
     """Adapter-level failure injection tests using FakeMigrationFileStore.
 
@@ -1629,7 +1244,6 @@ class TestMigrationFailureInjection:
             "emit": RecordingEmitter(),
             "firmware_resolver": FakeFirmwareResolver(),
             "retrodeck_folders": FakeRetroDeckFolders(home=_DETECTED_HOME),
-            "relaunch_options": FakeRelaunchOptionsResolver(),
             "save_directories": RecordingSaveDirectories().provide,
             "uow_factory": FakeUnitOfWorkFactory(uow=uow),
         }
@@ -1661,7 +1275,7 @@ class TestMigrationFailureInjection:
         service = self._make_service(fake, uow=uow)
 
         roots = MoveRoots(home=new_home, bios=f"{new_home}/bios", saves=f"{new_home}/saves")
-        result, _relaunch_items = service._migrate_retrodeck_files_io([old_home], new_home, None, roots)
+        result = service._migrate_retrodeck_files_io([old_home], new_home, None, roots)
 
         assert isinstance(result, MigrationIncomplete)
         assert result.reason == "migration_incomplete"
@@ -1673,7 +1287,7 @@ class TestMigrationFailureInjection:
         with uow:
             assert uow.kv_config.get("retrodeck_home_path_previous") == old_home
 
-    async def test_a_run_whose_moves_partly_fail_answers_what_it_did_and_still_rebakes(self):
+    async def test_a_run_whose_moves_partly_fail_answers_what_it_did_and_still_records_the_save_directories(self):
         fake = FakeMigrationFileStore()
         old_home = "/old"
         new_home = _DETECTED_HOME
@@ -1688,16 +1302,9 @@ class TestMigrationFailureInjection:
         with uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
-        items = [{"app_id": 4242, "launch_options": "relocated"}]
         emit = RecordingEmitter()
         save_directories = RecordingSaveDirectories()
-        service = self._make_service(
-            fake,
-            uow=uow,
-            emit=emit,
-            relaunch_options=FakeRelaunchOptionsResolver(items=items),
-            save_directories=save_directories.provide,
-        )
+        service = self._make_service(fake, uow=uow, emit=emit, save_directories=save_directories.provide)
 
         result = await service.migrate_retrodeck_files()
 
@@ -1710,16 +1317,9 @@ class TestMigrationFailureInjection:
             missing_count=0,
             errors=[f"bad.z64: simulated move failure: {bad_rom}"],
         )
-        # The run is re-baked, recorded and re-recorded as after a clean run.
-        [(event, payload)] = emit.calls
-        assert event == "migration_relaunch_options"
-        assert isinstance(payload, dict)
-        assert payload["items"] == items
-        assert payload["prune_lease_token"].startswith("migration_relaunch_options:")
-        with uow:
-            relocated = uow.roms.get(2)
-        assert relocated is not None
-        assert relocated.applied_launch_options == "relocated"
+        # The save directories are recorded afresh as after a clean run, and no
+        # shortcut is written to: its launch options are its appId.
+        assert emit.calls == []
         assert save_directories.calls == 1
         # The pending move stays recorded so the user can retry.
         with uow:
@@ -1973,7 +1573,7 @@ class TestChainedPathChangeDetection:
 
 
 class TestTheMigrationsConflictRules:
-    """The migration checks its prune rule, and leases the relaunch items it emits inside it."""
+    """The migration checks its prune rule, and hands the frontend nothing to write to Steam."""
 
     @staticmethod
     def _stage_one_relocation(migration, tmp_path, *, app_id: int | None = 4242) -> None:
@@ -1988,67 +1588,20 @@ class TestTheMigrationsConflictRules:
             uow.kv_config.set("retrodeck_home_path", new_home)
         _seed_install(migration.uow, 1, file_path=old_rom, system="n64", app_id=app_id)
 
-    @staticmethod
-    def _relaunch_emit(migration):
-        return next(
-            payload for event, payload in migration.service._emit.calls if event == "migration_relaunch_options"
-        )
-
     @pytest.mark.asyncio
-    async def test_the_relaunch_items_carry_a_lease_taken_inside_the_migrations_operation(
-        self, migration, tmp_path, monkeypatch
-    ):
-        """No cleanup can start between the migration's operation and the lease its Steam writes run under."""
+    async def test_a_moved_game_leaves_its_shortcut_alone_and_takes_no_lease(self, migration, tmp_path):
+        # A shortcut's launch options are its appId, so a relocated install
+        # changes nothing in Steam: no event, no lease, no recorded command.
         self._stage_one_relocation(migration, tmp_path)
-        seen = _record_operations_at_lease(migration.prune_conflicts, monkeypatch)
 
         assert (await migration.service.migrate_retrodeck_files())["success"] is True
 
-        assert seen == [["migrate_retrodeck_files"]]
-        token = self._relaunch_emit(migration)["prune_lease_token"]
-        assert token.startswith("migration_relaunch_options:")
-        assert migration.prune_conflicts.conflicting_operations == 1
-        await migration.prune_conflicts.release_lease(token)
+        assert migration.service._emit.calls == []
         assert migration.prune_conflicts.conflicting_operations == 0
-
-    @pytest.mark.asyncio
-    async def test_no_relaunch_items_carry_no_lease(self, migration, tmp_path):
-        self._stage_one_relocation(migration, tmp_path, app_id=None)
-
-        assert (await migration.service.migrate_retrodeck_files())["success"] is True
-
-        assert self._relaunch_emit(migration) == {"items": []}
-        assert migration.prune_conflicts.conflicting_operations == 0
-
-    @pytest.mark.asyncio
-    async def test_relaunch_items_nobody_heard_give_their_lease_back(self, migration, tmp_path):
-        self._stage_one_relocation(migration, tmp_path)
-        heard: list[str] = []
-
-        async def unheard(event: str, payload: object, /) -> bool:
-            heard.append(event)
-            return False
-
-        migration.service._emit = unheard
-
-        assert (await migration.service.migrate_retrodeck_files())["success"] is True
-
-        assert heard == ["migration_relaunch_options"]
-        assert migration.prune_conflicts.conflicting_operations == 0
-
-    @pytest.mark.asyncio
-    async def test_relaunch_items_whose_emit_raises_give_their_lease_back(self, migration, tmp_path):
-        self._stage_one_relocation(migration, tmp_path)
-
-        async def rejected(event: str, payload: object, /) -> bool:
-            raise RuntimeError("transport rejected event")
-
-        migration.service._emit = rejected
-
-        with pytest.raises(RuntimeError, match="transport rejected event"):
-            await migration.service.migrate_retrodeck_files()
-
-        assert migration.prune_conflicts.conflicting_operations == 0
+        with migration.uow as uow:
+            rom = uow.roms.get(1)
+        assert rom is not None
+        assert rom.shortcut_applied is False
 
     @pytest.mark.asyncio
     async def test_a_running_cleanup_refuses_the_migration_and_moves_nothing(self, migration, tmp_path):
@@ -2067,13 +1620,6 @@ class TestChainedMigration:
     """Migrating a chained pending set (#1042) — files drain from every home."""
 
     @staticmethod
-    def _relaunch_emit(migration):
-        for event, payload in migration.service._emit.calls:
-            if event == "migration_relaunch_options":
-                return payload
-        return None
-
-    @staticmethod
     def _set_pending(uow, *, previous: str, hops: list[str], home: str) -> None:
         uow.kv_config.set("retrodeck_home_path_previous", previous)
         if hops:
@@ -2083,8 +1629,6 @@ class TestChainedMigration:
     @pytest.mark.asyncio
     async def test_rows_and_files_at_oldest_home_migrate_to_current(self, migration, tmp_path):
         """Headline #1042 fix: rows+files at A after A→B→C reach C, both keys cleared."""
-
-        from domain.shortcut_data import build_launch_options, resolve_emulator_invocation
 
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         old_rom = os.path.join(a, "roms", "n64", "zelda.z64")
@@ -2109,11 +1653,6 @@ class TestChainedMigration:
             previous, hops = _read_pending(uow)
         assert previous == ""
         assert hops == []
-        # Relaunch options rebaked at the NEW (C) path.
-        payload = self._relaunch_emit(migration)
-        assert payload is not None
-        expected = build_launch_options(resolve_emulator_invocation({"id": 1}), new_rom)
-        assert payload["items"] == [{"app_id": 4242, "launch_options": expected}]
 
     @pytest.mark.asyncio
     async def test_file_already_at_current_is_bookkept(self, migration, tmp_path):

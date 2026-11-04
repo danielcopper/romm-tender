@@ -15,6 +15,7 @@ import {
   scanShortcutOwnership,
   addShortcut,
   setLaunchOptionsConfirmed,
+  shortcutLaunchOptions,
   type ShortcutOwnership,
 } from "./steamShortcuts";
 import { updateSyncProgress } from "./syncProgress";
@@ -165,18 +166,17 @@ function takeAdoptableOrphan(pool: Map<string, number[]>, name: string): number 
 }
 
 /**
- * Rewrite an existing shortcut's identity + launch bake in place: name, exe,
- * start dir, then the confirmed launch-options write. Shared by the update path
- * (rom already bound) and the adoption path (reusing an orphan's appId) so the
- * two can't drift. Launch options carry the full RetroDECK command (or ``""``
- * for uninstalled); the confirm-poll verifies the write landed rather than
+ * Rewrite an existing shortcut's identity in place: name, exe, start dir, then
+ * the confirmed write of its launch options, its own appId. Shared by the update
+ * path (rom already bound) and the adoption path (reusing an orphan's appId) so
+ * the two can't drift. The confirm-poll verifies the write landed rather than
  * fire-and-forget, since ``Set*`` returns void.
  */
 async function rewriteShortcutIdentity(appId: number, item: SyncAddItem): Promise<void> {
   SteamClient.Apps.SetShortcutName(appId, item.name);
   SteamClient.Apps.SetShortcutExe(appId, item.exe);
   SteamClient.Apps.SetShortcutStartDir(appId, item.start_dir);
-  await setLaunchOptionsConfirmed(appId, item.launch_options);
+  await setLaunchOptionsConfirmed(appId, shortcutLaunchOptions(appId));
 }
 
 /**
@@ -186,9 +186,9 @@ async function rewriteShortcutIdentity(appId: number, item: SyncAddItem): Promis
  * - An **existing** binding (rom_id already in *existing*) → update in place,
  *   ``created: false``.
  * - No binding → the create path. First try to **adopt** a live RomM-owned
- *   orphan of the same name — reuse its appId + rewrite its identity/launch
- *   bake, instead of ``addShortcut`` minting a duplicate the user then sees
- *   twice (#1366). Failing that, mint a fresh shortcut.
+ *   orphan of the same name — reuse its appId + rewrite its identity and its
+ *   launch options, instead of ``addShortcut`` minting a duplicate the user
+ *   then sees twice (#1366). Failing that, mint a fresh shortcut.
  *
  * *liveAppIds* is the run's cached live-shortcut scan, threaded in so the orphan
  * pool reuses it (no second scan). ``appId`` is ``undefined`` when a create

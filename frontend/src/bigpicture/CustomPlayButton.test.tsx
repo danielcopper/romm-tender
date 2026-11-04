@@ -224,6 +224,15 @@ beforeEach(() => {
   setRommConnectionState("connected");
   resetBoundAvailability();
   vi.mocked(backend.checkStartSource).mockResolvedValue({ switched_off: null });
+  // Every start is prepared first (#2221 D15): by default the backend hands the
+  // command over and answers the shortcut's appId as its launch options.
+  vi.mocked(backend.prepareGameStart).mockResolvedValue({
+    success: true,
+    app_id: 100,
+    launch_options: "100",
+    prune_lease_token: "launch-lease",
+  });
+  vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
 });
 
 describe("CustomPlayButton — vanished bound ROM (#1570 F20)", () => {
@@ -1170,6 +1179,18 @@ describe("CustomPlayButton — already-running guard (#1148 round 2)", () => {
     );
   });
 
+  it("brings a game that is already running to the front and prepares no start for it (#2221 D19)", async () => {
+    const { findByText } = render(<CustomPlayButton appId={100} />);
+    const playBtn = await findByText("Play");
+    vi.mocked(readGameRunning).mockReturnValue(SESSION_RUNNING);
+    await act(async () => {
+      playBtn.click();
+    });
+    await waitFor(() => expect(vi.mocked(SteamClient.Apps.RunGame)).toHaveBeenCalledWith("gid-1", "", -1, 100));
+
+    expect(vi.mocked(backend.prepareGameStart)).not.toHaveBeenCalled();
+  });
+
   it("backstop: skips the gate/sync when a running-app source reports the appId at click", async () => {
     const { findByText } = render(<CustomPlayButton appId={100} />);
     const playBtn = await findByText("Play");
@@ -1262,16 +1283,16 @@ describe("CustomPlayButton — uninstall resets launch_options (#1051)", () => {
   // is all these two assert on.
   const clickUninstall = async (container: HTMLElement): Promise<void> => (await openUninstallMenu(container, 3))();
 
-  it("clears the shortcut launch command to the uninstalled placeholder on a successful uninstall", async () => {
+  it("leaves the shortcut's launch options alone on a successful uninstall", async () => {
     mockCachedDetail({ rom_id: 42, installed: true });
     const { container, findByText } = render(<CustomPlayButton appId={100} />);
     await findByText("Play");
 
     await clickUninstall(container);
 
-    // Reset to "" for the shortcut's appId so a raced-past not_installed can't
-    // exec a stale command into the deleted path (#1051).
-    expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(100, "");
+    // The shortcut carries its appId, installed or not; a start of a game that
+    // is not installed is refused before anything runs (#2221 D10).
+    expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
     expect(vi.mocked(backend.removeRom)).toHaveBeenCalledWith(42);
   });
 
@@ -1309,41 +1330,8 @@ describe("CustomPlayButton — uninstall resets launch_options (#1051)", () => {
     uninstalls.stop();
   });
 
-  it("announces the uninstall even when leaving the page cuts the launch-command reset short", async () => {
-    let finishReset!: (confirmed: boolean) => void;
-    vi.mocked(setLaunchOptionsConfirmed).mockReturnValue(
-      new Promise<boolean>((resolve) => {
-        finishReset = resolve;
-      }),
-    );
-    vi.mocked(backend.removeRom).mockResolvedValue({
-      success: true,
-      message: "",
-      prune_lease_token: "uninstall-lease",
-    });
-    mockCachedDetail({ rom_id: 42, installed: true });
-    const uninstalls = listenForUninstalls();
-    const { container, findByText, unmount } = render(<CustomPlayButton appId={100} />);
-    await findByText("Play");
-
-    await clickUninstall(container);
-    expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(100, "");
-
-    // Leaving the page aborts the removal's continuation while the reset runs;
-    // the uninstall is announced only once the reset has settled.
-    unmount();
-    expect(uninstalls.romIds).toEqual([]);
-    await act(async () => {
-      finishReset(true);
-      for (let index = 0; index < 10; index++) await Promise.resolve();
-    });
-
-    expect(uninstalls.romIds).toEqual([42]);
-    uninstalls.stop();
-  });
-
-  it("says nothing failed when the page is left before the removal's lease is taken", async () => {
-    let finishRemoval!: (result: { success: true; message: string; prune_lease_token: string }) => void;
+  it("says nothing failed when the page is left before the removal answers", async () => {
+    let finishRemoval!: (result: { success: true; message: string }) => void;
     vi.mocked(backend.removeRom).mockReturnValue(
       new Promise((resolve) => {
         finishRemoval = resolve;
@@ -1354,18 +1342,14 @@ describe("CustomPlayButton — uninstall resets launch_options (#1051)", () => {
     await findByText("Play");
 
     await clickUninstall(container);
-    // The backend removes the ROM after the page has gone, so the reset can no
-    // longer be admitted; the removal itself happened.
+    // The backend removes the ROM after the page has gone; the removal happened.
     unmount();
     await act(async () => {
-      finishRemoval({ success: true, message: "", prune_lease_token: "uninstall-lease" });
+      finishRemoval({ success: true, message: "" });
       for (let index = 0; index < 10; index++) await Promise.resolve();
     });
 
     expect(vi.mocked(toaster.toast)).not.toHaveBeenCalledWith(expect.objectContaining({ body: "Uninstall failed" }));
-    expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(
-      expect.stringContaining("CustomPlayButton: continuation was cancelled"),
-    );
   });
 });
 
@@ -1542,8 +1526,6 @@ describe("CustomPlayButton — completion flashes (#1677)", () => {
     rom_name: "Test ROM",
     platform_name: "PSX",
     file_path: "/roms/psx/game.chd",
-    app_id: 100,
-    launch_options: "run game",
   });
 
   /**
@@ -3051,9 +3033,9 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
     await waitFor(() => expect(vi.mocked(SteamClient.Apps.RunGame)).toHaveBeenCalledWith("gid-1", "", -1, 100));
   });
 
-  it("unresolved romId → launches straight through with no gating", async () => {
-    // Cached as installed but with no rom_id — the launch isn't ours to gate, so
-    // handlePlay launches straight away (still marking the skip-set).
+  it("unresolved romId → nothing starts, and the toast says why", async () => {
+    // Cached as installed but with no rom_id — Tender places no game for the
+    // shortcut, so no start can be handed over for it (#2221 D19).
     vi.mocked(getCachedGameDetail).mockResolvedValue({
       found: true,
       rom_name: "Test ROM",
@@ -3068,23 +3050,24 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
       await Promise.resolve();
     });
 
-    // No gate steps ran — no probe, no sync — just a direct (skip-marked) launch.
     expect(vi.mocked(backend.probeReachability)).not.toHaveBeenCalled();
     expect(vi.mocked(backend.preLaunchSync)).not.toHaveBeenCalled();
-    expect(vi.mocked(markLaunchSkipped)).toHaveBeenCalledWith(100);
-    await waitFor(() => expect(vi.mocked(SteamClient.Apps.RunGame)).toHaveBeenCalledWith("gid-1", "", -1, 100));
+    expect(vi.mocked(backend.prepareGameStart)).not.toHaveBeenCalled();
+    expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith({
+      title: "Tender",
+      body: "Couldn't start the game: Tender has no game for this shortcut.",
+    });
+    expect(vi.mocked(SteamClient.Apps.RunGame)).not.toHaveBeenCalled();
   });
 });
 
 // ---------------------------------------------------------------------------
-// #1150 — the Play-button pre-launch relaunch re-confirm. dispatchLaunch pulls
-// getRomRelaunchOptions and confirm-sets the shortcut's launch_options BEFORE
-// RunGame, healing mid-session drift on the common launch path. Best-effort:
-// a None item skips the set, and a rejection logs + still launches.
+// Every start is prepared before RunGame (#2221 D15, D16): dispatchLaunch asks
+// prepareGameStart, which hands the command to the launcher, and confirm-sets
+// the shortcut's launch options to the appId it answers. A preparation that
+// does not come about refuses the start, with a toast, and Play comes back (D19).
 // ---------------------------------------------------------------------------
-describe("CustomPlayButton — pre-launch relaunch re-confirm (#1150)", () => {
-  const RELAUNCH_COMMAND = 'flatpak run net.retrodeck.retrodeck "/roms/gba/pokemon.gba"';
-
+describe("CustomPlayButton — the start prepared before RunGame (#2221 D15)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     consumeLaunchSkip(100);
@@ -3114,7 +3097,7 @@ describe("CustomPlayButton — pre-launch relaunch re-confirm (#1150)", () => {
     const playBtn = await findByText("Play");
     await act(async () => {
       playBtn.click();
-      // Drain the gate chain + the dispatchLaunch re-confirm awaits.
+      // Drain the gate chain + the dispatchLaunch preparation awaits.
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
@@ -3124,70 +3107,63 @@ describe("CustomPlayButton — pre-launch relaunch re-confirm (#1150)", () => {
     });
   }
 
-  it("re-confirms launch_options (getRomRelaunchOptions → setLaunchOptionsConfirmed) BEFORE RunGame", async () => {
-    vi.mocked(backend.getRomRelaunchOptions).mockResolvedValue({
-      success: true,
-      app_id: 100,
-      launch_options: RELAUNCH_COMMAND,
-      prune_lease_token: "launch-lease",
+  it("prepares the start (prepareGameStart → setLaunchOptionsConfirmed) BEFORE RunGame", async () => {
+    await clickPlay();
+
+    await waitFor(() => expect(vi.mocked(SteamClient.Apps.RunGame)).toHaveBeenCalledWith("gid-1", "", -1, 100));
+    expect(vi.mocked(backend.prepareGameStart)).toHaveBeenCalledWith(42);
+    expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(100, "100");
+    const prepareOrder = vi.mocked(backend.prepareGameStart).mock.invocationCallOrder[0]!;
+    const setOrder = vi.mocked(setLaunchOptionsConfirmed).mock.invocationCallOrder[0]!;
+    const runOrder = vi.mocked(SteamClient.Apps.RunGame).mock.invocationCallOrder[0]!;
+    expect(prepareOrder).toBeLessThan(setOrder);
+    expect(setOrder).toBeLessThan(runOrder);
+  });
+
+  it("a start the backend refuses starts nothing, says why and puts Play back", async () => {
+    vi.mocked(backend.prepareGameStart).mockResolvedValue({
+      success: false,
+      reason: "cannot_start",
+      message: "ROM 42 cannot start",
+      start: { state: "cannot_start", reason: "not_installed", entry: "mGBA" },
     });
 
     await clickPlay();
 
-    await waitFor(() => expect(vi.mocked(SteamClient.Apps.RunGame)).toHaveBeenCalledWith("gid-1", "", -1, 100));
-    // The re-confirm pulled this ROM's resolved command and confirm-set it onto
-    // the shortcut's appId with that exact command.
-    expect(vi.mocked(backend.getRomRelaunchOptions)).toHaveBeenCalledWith(42);
-    expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(100, RELAUNCH_COMMAND);
-    // Order: getRomRelaunchOptions → setLaunchOptionsConfirmed → RunGame.
-    const getOrder = vi.mocked(backend.getRomRelaunchOptions).mock.invocationCallOrder[0]!;
-    const setOrder = vi.mocked(setLaunchOptionsConfirmed).mock.invocationCallOrder[0]!;
-    const runOrder = vi.mocked(SteamClient.Apps.RunGame).mock.invocationCallOrder[0]!;
-    expect(getOrder).toBeLessThan(setOrder);
-    expect(setOrder).toBeLessThan(runOrder);
-  });
-
-  it("a null item skips setLaunchOptionsConfirmed but still launches", async () => {
-    // No install/binding to re-confirm → backend returns null → the set is
-    // skipped, but the launch must still proceed (nothing to heal, no block).
-    vi.mocked(backend.getRomRelaunchOptions).mockResolvedValue(null);
-
-    await clickPlay();
-
-    expect(vi.mocked(backend.getRomRelaunchOptions)).toHaveBeenCalledWith(42);
-    expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
-    await waitFor(() => expect(vi.mocked(SteamClient.Apps.RunGame)).toHaveBeenCalledWith("gid-1", "", -1, 100));
-  });
-
-  it("a rejected re-confirm logs the pre-launch message AND still launches (non-vacuous catch)", async () => {
-    const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
-    vi.mocked(backend.getRomRelaunchOptions).mockRejectedValue(new Error("offline"));
-
-    await clickPlay();
-
-    // Post-catch state: the failure was logged with the shared-helper message
-    // (carrying the "CustomPlayButton" context) AND the launch still fired
-    // (best-effort — a failed re-confirm is no worse than today).
     await waitFor(() =>
-      expect(logSpy).toHaveBeenCalledWith(
-        expect.stringContaining("CustomPlayButton: launch_options re-confirm failed"),
-      ),
+      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith({
+        title: "Tender",
+        body: "mGBA is not installed, so this game cannot start.",
+      }),
     );
-    await waitFor(() => expect(vi.mocked(SteamClient.Apps.RunGame)).toHaveBeenCalledWith("gid-1", "", -1, 100));
+    expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
+    expect(vi.mocked(SteamClient.Apps.RunGame)).not.toHaveBeenCalled();
+  });
+
+  it("a preparation that fails refuses the start in the error's own words", async () => {
+    const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+    vi.mocked(backend.prepareGameStart).mockRejectedValue(new Error("offline"));
+
+    await clickPlay();
+
+    await waitFor(() =>
+      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith({
+        title: "Tender",
+        body: "Couldn't start the game: offline",
+      }),
+    );
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("CustomPlayButton: preparing the start failed"));
+    expect(vi.mocked(SteamClient.Apps.RunGame)).not.toHaveBeenCalled();
 
     logSpy.mockRestore();
   });
 
-  it("a hung getRomRelaunchOptions aborts launch after the timeout and restores Play", async () => {
-    // An endpoint call can hang forever on a wedged backend. The fetch
-    // is bounded by a 3s Promise.race; on timeout the launch is aborted and the
-    // button must not stay stuck on "Launching…".
+  it("a preparation with no answer refuses the start after the timeout and restores Play", async () => {
     // RTL's findBy* deadlocks under fake timers, so render + settle to "Play"
     // under REAL timers, then switch to fake timers right before the click so the
-    // 3s re-confirm timeout fires without a real wait (kept fast).
+    // 3s preparation timeout fires without a real wait (kept fast).
     const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
-    // Never resolves — simulates a wedged backend / hung bridge.
-    vi.mocked(backend.getRomRelaunchOptions).mockReturnValue(new Promise<never>(() => {}));
+    vi.mocked(backend.prepareGameStart).mockReturnValue(new Promise<never>(() => {}));
 
     try {
       mockCachedDetail();
@@ -3197,21 +3173,20 @@ describe("CustomPlayButton — pre-launch relaunch re-confirm (#1150)", () => {
       vi.useFakeTimers();
       await act(async () => {
         playBtn.click();
-        // Let the gate chain schedule the re-confirm timeout before advancing it.
         for (let index = 0; index < 12; index++) await Promise.resolve();
       });
-      expect(backend.getRomRelaunchOptions).toHaveBeenCalledWith(42);
+      expect(backend.prepareGameStart).toHaveBeenCalledWith(42);
       await act(async () => {
         await vi.advanceTimersByTimeAsync(3000);
       });
 
-      // The hung fetch timed out → no set and no launch. Returning to Play proves
-      // the current component is not trapped in its optimistic launching state.
       expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
-      expect(logSpy).toHaveBeenCalledWith(
-        expect.stringContaining("CustomPlayButton: launch_options re-confirm timed out"),
-      );
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("CustomPlayButton: preparing the start timed out"));
       expect(vi.mocked(SteamClient.Apps.RunGame)).not.toHaveBeenCalled();
+      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith({
+        title: "Tender",
+        body: "Tender isn't responding — couldn't start the game.",
+      });
       expect(getByText("Play")).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
@@ -3219,9 +3194,9 @@ describe("CustomPlayButton — pre-launch relaunch re-confirm (#1150)", () => {
     }
   });
 
-  it("unmount while relaunch options are pending releases the late token and never calls RunGame", async () => {
-    let resolveFetch!: (value: Awaited<ReturnType<typeof backend.getRomRelaunchOptions>>) => void;
-    vi.mocked(backend.getRomRelaunchOptions).mockImplementation(
+  it("unmount while the start is being prepared releases the late token and never calls RunGame", async () => {
+    let resolveFetch!: (value: Awaited<ReturnType<typeof backend.prepareGameStart>>) => void;
+    vi.mocked(backend.prepareGameStart).mockImplementation(
       () =>
         new Promise((resolve) => {
           resolveFetch = resolve;
@@ -3230,12 +3205,12 @@ describe("CustomPlayButton — pre-launch relaunch re-confirm (#1150)", () => {
     vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
 
     await clickPlay();
-    await waitFor(() => expect(backend.getRomRelaunchOptions).toHaveBeenCalledWith(42));
+    await waitFor(() => expect(backend.prepareGameStart).toHaveBeenCalledWith(42));
     cleanup();
     resolveFetch({
       success: true,
       app_id: 100,
-      launch_options: RELAUNCH_COMMAND,
+      launch_options: "100",
       prune_lease_token: "late-unmount-lease",
     });
     await act(async () => {
@@ -3289,7 +3264,7 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
       stranding: "none",
       rom_id: 42,
     });
-    vi.mocked(backend.getRomRelaunchOptions).mockResolvedValue({
+    vi.mocked(backend.prepareGameStart).mockResolvedValue({
       success: true,
       app_id: 100,
       launch_options: "flatpak run x",
@@ -3337,28 +3312,40 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
     vi.mocked(backend.probeReachability).mockReturnValue(never());
     vi.mocked(backend.preLaunchSync).mockReturnValue(never());
     vi.mocked(backend.checkLocalDrift).mockReturnValue(never());
-    vi.mocked(backend.getRomRelaunchOptions).mockReturnValue(never());
+    vi.mocked(backend.prepareGameStart).mockReturnValue(never());
   }
 
-  it("a backend that never answers gets the fallback dialog at 5 s; Launch Anyway starts the game", async () => {
+  it("a backend that never answers gets the fallback dialog at 5 s; Launch Anyway asks to prepare the start, which it refuses", async () => {
     backendNeverAnswers();
     vi.mocked(showFallbackLaunchModal).mockResolvedValue(true);
 
-    await pressPlay();
+    const { getByText } = await pressPlay();
     await advance(4999);
     expect(showFallbackLaunchModal).not.toHaveBeenCalled();
 
     await advance(1);
     expect(showFallbackLaunchModal).toHaveBeenCalledWith(NO_ANSWER);
-    // The re-confirm would ask the same silent backend and its timeout would
-    // stop the start the user just chose, so this start goes without it.
-    expect(SteamClient.Apps.RunGame).toHaveBeenCalledWith("gid-1", "", -1, 100);
-    expect(backend.getRomRelaunchOptions).not.toHaveBeenCalled();
-    expect(markLaunchSkipped).toHaveBeenCalledWith(100);
+    // Nothing starts without its hand-over, so the start the user chose is
+    // still prepared — and the same silent backend refuses it (#2221 D19).
+    expect(backend.prepareGameStart).toHaveBeenCalledWith(42);
+    await advance(3000);
+    expect(SteamClient.Apps.RunGame).not.toHaveBeenCalled();
+    expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith({
+      title: "Tender",
+      body: "Tender isn't responding — couldn't start the game.",
+    });
+    expect(getByText("Play")).toBeInTheDocument();
   });
 
   it("after a no-answer Launch Anyway start, the button shows Resume while the game runs and Play once it exits", async () => {
     backendNeverAnswers();
+    // The preparation answers though the check did not.
+    vi.mocked(backend.prepareGameStart).mockResolvedValue({
+      success: true,
+      app_id: 100,
+      launch_options: "100",
+      prune_lease_token: "launch-lease",
+    });
     vi.mocked(showFallbackLaunchModal).mockResolvedValue(true);
 
     const { getByText, queryByText } = await pressPlay();
@@ -3500,7 +3487,7 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
     expect(SteamClient.Apps.RunGame).not.toHaveBeenCalled();
   });
 
-  it("a sync that failed WITH an answer still re-confirms the launch options before Launch Anyway starts", async () => {
+  it("a sync that failed WITH an answer still prepares the start before Launch Anyway starts", async () => {
     vi.mocked(backend.preLaunchSync).mockResolvedValue({ success: false, message: "Device not registered", synced: 0 });
     vi.mocked(showFallbackLaunchModal).mockResolvedValue(true);
 
@@ -3508,7 +3495,7 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
     await advance(0);
 
     expect(showFallbackLaunchModal).toHaveBeenCalledWith("Device not registered");
-    expect(backend.getRomRelaunchOptions).toHaveBeenCalledWith(42);
+    expect(backend.prepareGameStart).toHaveBeenCalledWith(42);
     expect(SteamClient.Apps.RunGame).toHaveBeenCalledWith("gid-1", "", -1, 100);
   });
 
@@ -3833,11 +3820,11 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
       });
       await advance(0);
 
-      expect(backend.getRomRelaunchOptions).toHaveBeenCalledWith(42);
+      expect(backend.prepareGameStart).toHaveBeenCalledWith(42);
       expect(SteamClient.Apps.RunGame).toHaveBeenCalledWith("gid-1", "", -1, 100);
     });
 
-    it("Play Anyway stops this game's sync, then re-confirms the launch options and starts", async () => {
+    it("Play Anyway stops this game's sync, then prepares the start and starts", async () => {
       vi.mocked(showSyncWaitModal).mockResolvedValueOnce("play_anyway");
       const order: string[] = [];
       vi.mocked(backend.stopPreLaunchSync).mockImplementation(async () => {
@@ -3850,11 +3837,11 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
       await advance(15000);
 
       expect(backend.stopPreLaunchSync).toHaveBeenCalledWith(42);
-      expect(backend.getRomRelaunchOptions).toHaveBeenCalledWith(42);
+      expect(backend.prepareGameStart).toHaveBeenCalledWith(42);
       expect(order).toEqual(["stop", "start"]);
     });
 
-    it("Play Anyway after Tender did not answer starts without waiting for the stop or re-confirming", async () => {
+    it("Play Anyway after Tender did not answer starts without waiting for the stop, its start still prepared", async () => {
       vi.mocked(backend.preLaunchSyncState).mockReturnValue(never());
       vi.mocked(backend.stopPreLaunchSync).mockReturnValue(never());
       vi.mocked(showSyncWaitModal).mockResolvedValueOnce("play_anyway");
@@ -3866,7 +3853,7 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
 
       expect(showSyncWaitModal).toHaveBeenCalledWith({ kind: "not_answering" }, expect.any(Promise));
       expect(backend.stopPreLaunchSync).toHaveBeenCalledWith(42);
-      expect(backend.getRomRelaunchOptions).not.toHaveBeenCalled();
+      expect(backend.prepareGameStart).toHaveBeenCalledWith(42);
       expect(SteamClient.Apps.RunGame).toHaveBeenCalledWith("gid-1", "", -1, 100);
     });
 
@@ -3992,9 +3979,14 @@ describe("CustomPlayButton — state-aware Resume (#1313)", () => {
       errors: [],
       conflicts: [],
     });
-    // dispatchLaunch re-confirms launch_options first; keep that fetch fast (a
+    // dispatchLaunch prepares the start first; keep that call fast (a
     // later describe leaves it hanging and clearAllMocks doesn't reset the impl).
-    vi.mocked(backend.getRomRelaunchOptions).mockResolvedValue(null);
+    vi.mocked(backend.prepareGameStart).mockResolvedValue({
+      success: true,
+      app_id: 100,
+      launch_options: "100",
+      prune_lease_token: "launch-lease",
+    });
     // SteamUIStore is the foreground path: SetRunningApp + NavigateToRunningApp.
     // Fresh spies each test so call assertions are clean; RunGame is the
     // launch/self-heal sink, appStore resolves a stable gameId.
@@ -4789,7 +4781,7 @@ describe("CustomPlayButton — Stop Game", () => {
       await Promise.resolve();
     });
 
-    // Exactly one backend call, and the second press never re-confirmed either.
+    // Exactly one backend call, and the second press never prepared a start either.
     expect(backend.stopRunningGame).toHaveBeenCalledTimes(1);
     expect(showStopGameModal).toHaveBeenCalledTimes(1);
     expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(expect.stringContaining("a stop is already in flight"));
@@ -4858,7 +4850,12 @@ describe("CustomPlayButton — Stop Game", () => {
       errors: [],
       conflicts: [],
     });
-    vi.mocked(backend.getRomRelaunchOptions).mockResolvedValue(null);
+    vi.mocked(backend.prepareGameStart).mockResolvedValue({
+      success: true,
+      app_id: 100,
+      launch_options: "100",
+      prune_lease_token: "launch-lease",
+    });
     vi.stubGlobal("SteamClient", { Apps: { RunGame: vi.fn() } });
 
     const utils = render(<CustomPlayButton appId={100} />);
@@ -5366,7 +5363,7 @@ describe("CustomPlayButton — content already on disk (#260)", () => {
     expect(vi.mocked(backend.adoptExistingRom)).not.toHaveBeenCalled();
   });
 
-  it("adopt records the install and writes the launch command onto the shortcut", async () => {
+  it("adopt records the install and writes nothing to the shortcut", async () => {
     mockCachedDetail({ rom_id: 42, installed: false });
     vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
     vi.mocked(showAdoptExistingModal).mockResolvedValue("adopt");
@@ -5375,9 +5372,6 @@ describe("CustomPlayButton — content already on disk (#260)", () => {
       message: "Using the files already on this device",
       file_path: "/roms/n64/game.z64",
       rom_dir: null,
-      app_id: 100,
-      launch_options: 'flatpak run … "/roms/n64/game.z64"',
-      prune_lease_token: "adopt-token",
     });
     const utils = render(<CustomPlayButton appId={100} />);
     const btn = await utils.findByText("Download");
@@ -5389,10 +5383,8 @@ describe("CustomPlayButton — content already on disk (#260)", () => {
     // The shown path as the candidate and a null collision answer: content at the
     // game's own location, with no rename and so nothing to collide.
     expect(vi.mocked(backend.adoptExistingRom)).toHaveBeenCalledWith(42, "/roms/n64/game.z64", null);
-    expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(100, 'flatpak run … "/roms/n64/game.z64"');
-    // The lease the backend issued for this Steam write is given back, not held
-    // to its TTL — the bound branch is the only one that ever receives one.
-    expect(vi.mocked(backend.releasePruneConflictLease)).toHaveBeenCalledWith("adopt-token");
+    // The shortcut carries its appId; the next start asks with the adopted install.
+    expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
     await utils.findByText("Play");
   });
 
@@ -5409,9 +5401,6 @@ describe("CustomPlayButton — content already on disk (#260)", () => {
       message: "ok",
       file_path: "/roms/n64/game.z64",
       rom_dir: null,
-      app_id: null,
-      launch_options: "",
-      prune_lease_token: "stray-token",
     });
     const utils = render(<CustomPlayButton appId={100} />);
     const btn = await utils.findByText("Download");
@@ -5491,8 +5480,6 @@ describe("CustomPlayButton — the same game under another name (#260)", () => {
     message: "Using the files already on this device",
     file_path: "/roms/n64/game (USA).z64",
     rom_dir: null,
-    app_id: 100,
-    launch_options: 'flatpak run … "/roms/n64/game (USA).z64"',
   };
 
   beforeEach(() => {
@@ -5576,11 +5563,11 @@ describe("CustomPlayButton — the same game under another name (#260)", () => {
     ]);
   });
 
-  it("adopting a candidate sends its path, and writes the launch command afterwards", async () => {
+  it("adopting a candidate sends its path and writes nothing to the shortcut", async () => {
     mockCachedDetail({ rom_id: 42, installed: false });
     vi.mocked(backend.startDownload).mockResolvedValue(FOUND);
     vi.mocked(showAdoptExistingModal).mockResolvedValue("adopt");
-    vi.mocked(backend.adoptExistingRom).mockResolvedValue({ ...ADOPTED, prune_lease_token: "adopt-token" });
+    vi.mocked(backend.adoptExistingRom).mockResolvedValue(ADOPTED);
     const utils = render(<CustomPlayButton appId={100} />);
     const btn = await utils.findByText("Download");
 
@@ -5589,7 +5576,7 @@ describe("CustomPlayButton — the same game under another name (#260)", () => {
     });
 
     expect(vi.mocked(backend.adoptExistingRom)).toHaveBeenCalledWith(42, CANDIDATE.path, null);
-    expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(100, ADOPTED.launch_options);
+    expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
   });
 
   it("a collision opens the second dialog and re-sends the same candidate with the answer", async () => {
@@ -6071,8 +6058,6 @@ describe("CustomPlayButton — the disabled state buttons' markup", () => {
           rom_name: "Test ROM",
           platform_name: "PSX",
           file_path: "/roms/psx/game.chd",
-          app_id: 100,
-          launch_options: "run game",
         });
       });
       expect(getByText("Ready!")).toBeInTheDocument();
@@ -6529,7 +6514,7 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
     expect(vi.mocked(backend.forgetDownload)).toHaveBeenCalledWith(42);
   });
 
-  it("forgets the download once confirmed, clears the shortcut's launch command and offers Download", async () => {
+  it("forgets the download once confirmed, leaves the shortcut alone and offers Download", async () => {
     mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
     const { container, findByText, queryByText } = render(<CustomPlayButton appId={100} />);
     await findByText("Download again");
@@ -6537,7 +6522,7 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
     await confirm(await chooseForget(container));
 
     expect(vi.mocked(backend.forgetDownload)).toHaveBeenCalledWith(42);
-    expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(100, "");
+    expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
     expect(await findByText("Download")).toBeInTheDocument();
     expect(queryByText(/File missing/)).toBeNull();
     expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(

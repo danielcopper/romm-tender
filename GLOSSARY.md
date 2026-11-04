@@ -440,14 +440,11 @@ list and never the switch mechanism.
 The two path fields on `RomInstall` (`domain/rom_install.py`) answer different questions and must not be conflated:
 
 - **`file_path`** — the **launch file**: the single file that is the ROM's launch identity. Present for every ROM;
-  save-path resolution, ES-DE core resolution, and the displayed filename all derive from it. It is the **default**
-  launch target baked into the Steam shortcut's `launch_options` (`flatpak run … '<file_path>'`, run by the
-  `tender-rom-launcher` exec wrapper per [ADR-0009](docs/adr/0009-launcher-pure-exec-wrapper-baked-launch-options.md),
-  which superseded the dynamic SQLite read of [ADR-0005](docs/adr/0005-launcher-resolves-path-from-sqlite.md)) — but the
-  baked launch **target** may be **overridden at bake time** without rewriting `file_path`: a multi-disc pin bakes the
-  selected disc's path
-  ([ADR-0014](docs/adr/0014-per-game-disc-selection-in-db-applied-as-bake-time-launch-path-override.md)), and a
-  folder-boot system (PS3/RPCS3) bakes the game **directory** rather than the nested launch file
+  save-path resolution, ES-DE core resolution, and the displayed filename all derive from it. It is the **default** path
+  a start is asked with (`domain/rom_files.py::asked_path`) — but the path asked with may differ without rewriting
+  `file_path`: a multi-disc pin asks with the selected disc's path
+  ([ADR-0014](docs/adr/0014-per-game-disc-selection-in-db-applied-as-bake-time-launch-path-override.md)), and a game
+  kept as a folder (PS3/RPCS3) asks with the game **directory** rather than the nested launch file
   ([ADR-0019](docs/adr/0019-folder-as-launch-target.md)). `file_path` stays the launch **file** anchor in every case.
 - **`rom_dir`** — the **dedicated per-ROM directory**, present only for folder-backed ROMs: a multi-file ROM, or a
   single `.zip` unpacked into a folder (**served shape**). **NULL for single-file ROMs** kept as they arrived, which
@@ -479,8 +476,18 @@ reads its format at all — and is said with it (D40, D41). Which of them refuse
 folds no case before it asks (D3).
 
 Launchability is a statement about a start, never about the download. Every installed game is recorded with its files
-and gets its launch command whatever its launchability (D28); installing a package by hand in the emulator is the
-documented RetroDECK procedure, and the files are what it needs.
+whatever its launchability, and a start asks for its command whatever that is (D28); installing a package by hand in the
+emulator is the documented RetroDECK procedure, and the files are what it needs.
+
+### Start command / start hand-over
+
+The **start command** is how a game starts with the entry in effect: the resolver's launch command for the game's own
+path, as Tender runs it ([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D1, D2). It is asked at every
+start and stored nowhere (D7). An entry the resolver gives no **complete** command for is **not startable through Tender
+yet**, with the resolver's reason. The **start hand-over** is that command, given to `tender-rom-launcher` for one start
+only: a file in Tender's runtime directory the launcher claims, removes and runs; no hand-over, no start (D11, D15).
+_Avoid_: "bake" and "safely-bakeable" — they named writing a command into a shortcut and Tender's own rule for which
+commands could be written; Tender does neither (D7, D20).
 
 ### Missing download / forget a download
 
@@ -615,8 +622,8 @@ What a catalogue entry launches, as the resolver states it (its `kind`), in Tend
 the picker payload's `kind`. Tender reads none of it off the command text.
 
 - **Core** — RetroArch loads a core of this machine. `core_so` names it (bare, no `.so`), and `core_path` is the file
-  ES-DE's own core lookup finds, which the bake writes in where the command names the core. A command that passes
-  RetroArch more than its core (FinalBurn Neo's `--subsystem neocd` on Neo Geo CD) is a core all the same.
+  ES-DE's own core lookup finds, which the resolver's command names. A command that passes RetroArch more than its core
+  (FinalBurn Neo's `--subsystem neocd` on Neo Geo CD) is a core all the same.
 - **Program** — an emulator program of its own (PCSX2, RPCS3, Dolphin); no `core_so`.
 - **Foreign core** — a RetroArch launch naming a core file this machine cannot load (EmuDeck's `n3ds` overlay names
   Windows `.dll` cores). Marked and nothing more (#2195 D17).
@@ -898,29 +905,15 @@ absolute symlink at such a place, pointing at a store file; it is Tender's own w
 recorded. _Avoid_: placement for the link itself (a placement is the resolver's answer about where an emulator opens a
 file).
 
-### Safely-bakeable
-
-An ES-DE `<command>` Tender can bake into a Steam shortcut's `-e` override, where RetroDECK's `run_game.sh` starts it —
-the rule follows that script's handling of a command rather than ES-DE's (#2195 D1). It must not be refused by what the
-resolver states — an emulator it states not installed (`not_installed`), one it states `run_game.sh` would run nothing
-for (`start_script_runs_nothing`), a **core** it states no core path for (`core_unlocated`) — and, judged with a core's
-core path written in, must be a real emulator invocation that **ends in `%ROM%`** and carries none of the forms the bake
-can't carry — no `%INJECT%` form (that is _needs-setup_: the command injects a file's contents, and Tender cannot start
-it), no `%ENABLESHORTCUTS%` / `%EMULATOR_OS-SHELL%` shortcut-script form, no embedded quoting (`"` or `\;`), no
-`%STARTDIR%` (RetroDECK's `run_game.sh` parses-but-drops it), and no placeholder outside the known whitelist. The
-classifier `domain/emulator_commands.py` decides this per command
-([ADR-0020](docs/adr/0020-live-es-systems-emulator-resolution.md)). What a pick or a default that is not safely-bakeable
-comes to is [Core and Emulator Selection](docs/architecture/core-emulator-selection.md)'s.
-
 ### Default emulator
 
 The emulator a ROM launches with absent any per-game or per-platform **emulator override**: the **shipped default** —
 the entry a source ships first for a system, the lowest `declared_index` the resolver states — whatever its state (#2195
-D7). An entry Tender cannot bake, or one that is not installed, stays the default; only one whose installation could not
-be established is never the default by itself, and then there is none until the user picks (D9). It may be a **RetroArch
-core** or a **standalone emulator**. A choice made inside ES-DE never becomes it (see **chosen in ES-DE**). _Avoid_:
-"the first bakeable entry", the rule it replaced ([ADR-0020](docs/adr/0020-live-es-systems-emulator-resolution.md), as
-amended).
+D7). An entry the resolver gives no complete command for, or one that is not installed, stays the default; only one
+whose installation could not be established is never the default by itself, and then there is none until the user picks
+(D9). It may be a **RetroArch core** or a **standalone emulator**. A choice made inside ES-DE never becomes it (see
+**chosen in ES-DE**). _Avoid_: "the first bakeable entry", the rule it replaced
+([ADR-0020](docs/adr/0020-live-es-systems-emulator-resolution.md), as amended).
 
 **Tender's default** is the default emulator of the first switched-on source in the **emulator source order** that
 offers one for the platform (D4) — EmuDeck's where EmuDeck stands first. Each source's own default is that source's
@@ -968,9 +961,9 @@ A user's per-game pick of **which disc launches** for a multi-disc ROM, stored a
 `roms.selected_disc` (nullable). It mirrors the per-game **emulator override** exactly: NULL means "follow the default"
 (the install's `.m3u` when `file_path` is one, else the first enumerated disc), only `pin_selected_disc` /
 `clear_selected_disc` write it, it is **excluded from the sync UPSERT** so a re-sync never resets it, and it anchors on
-`roms` so it survives uninstall/reinstall and home migration. Applied as a **bake-time launch-path override** — it
-changes only the path baked into the shortcut's `launch_options`, never `RomInstall.file_path`, structurally identical
-to how the override changes the invocation without touching `file_path`
+`roms` so it survives uninstall/reinstall and home migration. Applied as a **launch-path override** — it changes only
+the path a start is asked with, never `RomInstall.file_path`, structurally identical to how the override changes the
+entry without touching `file_path`
 ([ADR-0014](docs/adr/0014-per-game-disc-selection-in-db-applied-as-bake-time-launch-path-override.md)). A stale pin (the
 disc no longer present) degrades to the default with a WARNING, never fatal.
 
@@ -1044,7 +1037,7 @@ never an acceptable stand-in, because it answers a different question in a shape
 So a save state is never reported for a platform, and whatever carries one names the emulator it is about.
 
 This is why the question goes to the **catalogue entry** Tender resolved for this ROM (the label `ActiveCoreResolver`
-produced, which is the label the launch bakes) rather than to a bare core: a standalone emulator answers for itself.
+produced, which is the entry the start asks for) rather than to a bare core: a standalone emulator answers for itself.
 
 ### Answered save directory
 

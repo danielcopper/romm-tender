@@ -668,8 +668,22 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
 - **"Beetle Saturn can start this game, but goes on without Game (Track 2).bin: it is a track of a type it does not
   take."** — the emulator starts the game without a file it opens, and the sentence names it and why. Genesis Plus GX
   says the same way that it does not read every disc a playlist lists. **Play** stays on.
-- **"Tender cannot start RPCS3 Game Serial (Standalone) yet."** — the emulator in effect is one Tender cannot start from
-  Steam yet, and nothing else stands in the way. **Play** is off; choose another emulator in the emulator menu.
+- **"Tender cannot start _emulator_ yet: _reason_."** — the emulator source gives no complete command to start the game
+  with the emulator in effect, and the reason says what is missing: how ES-DE starts it could not be read, it starts
+  through a `.desktop` file, a file its command reads in could not be read, its command names no program, where its
+  games are kept could not be established, its command is longer than can be read, which ES-DE build the source ships
+  could not be read, what it needs from RetroDECK's start could not be read or is not known yet, or the folder it starts
+  in could not be placed. Where the emulator's own reading of the game refuses it too, that sentence comes first.
+  **Play** is off; choose another emulator in the emulator menu, whose rows say the same of each emulator.
+- **"Whether _emulator_ is installed could not be established: _cause_."** — the emulator source gives no command for an
+  emulator whose installation it cannot establish, so Tender cannot start it. **Play** is off; the emulator menu marks
+  the same emulator "installation not established".
+- **"Tender cannot start games through EmuDeck yet."** — the emulator source that answers for the game is one Tender
+  starts no game through yet, which is the case where RetroDECK is not found or switched off. **Play** is off, and every
+  row of the emulator menu says the same.
+- **"No emulator starts this game."** — no emulator is in effect for the game. **Play** is off.
+- **"ES-DE leaves _placeholder_ unfilled in this command."** — the command starts, with a placeholder ES-DE does not
+  fill in left as it is written. **Play** stays on.
 - **"Whether Game.sfc starts cannot be established: …"** — the emulator source could not answer, with the reason.
   **Play** stays on.
 - **"What is inside Game.zip was not read, …"** — the file is an archive the emulator opens, and whether it holds a game
@@ -803,9 +817,9 @@ open the page. If the drive or folder comes back, the game is playable again as 
 - **Download again** is an ordinary download of the game, to where every download goes. Until it completes, the game
   stays as it was; a cancelled or failed download leaves it showing **File missing** again.
 - **Forget this download** asks first, naming the game and the path its file was downloaded to. Confirmed, it is an
-  uninstall without the deletion: the game becomes not downloaded and its shortcut's launch command is cleared, as after
-  an uninstall, and no file is touched. It is refused while the file or folder is in fact there: the drive or folder
-  came back, and the page offers **Play** again at once.
+  uninstall without the deletion: the game becomes not downloaded, as after an uninstall, and no file is touched. It is
+  refused while the file or folder is in fact there: the drive or folder came back, and the page offers **Play** again
+  at once.
 
 If RomM has [no file](#downloading-roms) for the game either, there is nothing to download again: the button reads _"No
 file on RomM"_ and is greyed out, and so is **Download again** in the menu. **File missing** and the path stay, as they
@@ -949,17 +963,19 @@ everything already in flight, so a batch of downloads won't overcommit the SD ca
 
 ## Launching Games
 
-Select any installed game in the Steam Library and press **Play**. The full launch command is baked into the Steam
-shortcut when the game is synced or downloaded, so launching just runs that command:
+Select any installed game in the Steam Library and press **Play**. At every start Tender asks which command starts the
+game and hands it to the shortcut for that one start:
 
-1. The shortcut launches RetroDECK with the correct ROM path
-2. RetroDECK auto-detects the system from the ROM's directory path and uses the appropriate emulator
-3. If you picked a [per-game core](bios-management.md#per-game-game-detail-page), the chosen core is baked into the
-   command and used directly
-4. For a multi-disc game, the [disc you picked](#picking-a-disc-for-multi-disc-games) is the one that launches
+1. The emulator is the one in effect for the game — the [per-game core](bios-management.md#per-game-game-detail-page)
+   you picked, else the platform's, else the default
+2. The command is the one RetroDECK's ES-DE runs for that emulator, started directly rather than through RetroDECK's own
+   start script
+3. For a multi-disc game, the [disc you picked](#picking-a-disc-for-multi-disc-games) is the one that launches
 
-If the ROM is not downloaded, pressing Play won't launch a game — download it first from the game's detail panel; the
-shortcut's command is filled in automatically when the download completes.
+Because of that, a game starts only while Tender is running: with Tender stopped, Play on a RomM shortcut starts
+nothing. If the ROM is not downloaded, pressing Play won't launch a game either — download it first from the game's
+detail panel. Where Tender cannot start the emulator in effect yet, the game page and the emulator menu say why, and
+Play says it too ([Play says "Couldn't start the game"](troubleshooting.md#play-says-couldnt-start-the-game)).
 
 If RetroDECK is switched off in **Settings › Emulator sources**, pressing Play won't launch a game either — on the
 game's detail panel or in Steam's own library — and a notification says why; switch RetroDECK on again to play (see

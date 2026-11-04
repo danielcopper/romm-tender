@@ -50,6 +50,9 @@ XDG_CACHE_HOME = "XDG_CACHE_HOME"
 XDG_STATE_HOME = "XDG_STATE_HOME"
 XDG_RUNTIME_DIR = "XDG_RUNTIME_DIR"
 
+# The folder inside the runtime directory a start's command is handed over in.
+HANDOVER_FOLDER = "start"
+
 # Third rung, and the one directory more than one default sits under: the XDG
 # basedir spec puts two of its four built-in defaults here (`share` and
 # `state`, while config and cache are their own dotted names), and `~/.local/bin`
@@ -91,6 +94,15 @@ class AppDirectories:
     them.
     """
 
+    handover_dir: str | None = None
+    """Where a start's command is handed to the shortcut launcher (#2221 D15), inside the runtime directory.
+
+    ``None`` where ``XDG_RUNTIME_DIR`` is not set: the runtime directory then
+    falls back to the state directory, which is on disk and outlives the
+    session, and a start is refused rather than handed over there (#2708 D4).
+    ``bin/tender-rom-launcher`` spells the same path from the same variable.
+    """
+
 
 def resolve_directories(environ: Mapping[str, str], user_home: str, code_fallback: str) -> AppDirectories:
     """Answer where this backend's directories are, for *environ* and *user_home*.
@@ -121,6 +133,7 @@ def resolve_directories(environ: Mapping[str, str], user_home: str, code_fallbac
         runtime_dir=os.path.join(runtime_home, APP_DIR_NAME) if runtime_home else state_dir,
         code_dir=_first(environ, ENV_CODE_DIR, code_fallback),
         bin_dir=_first(environ, ENV_BIN_DIR, os.path.join(user_home, _LOCAL, "bin")),
+        handover_dir=os.path.join(runtime_home, APP_DIR_NAME, HANDOVER_FOLDER) if runtime_home else None,
     )
 
 

@@ -78,7 +78,6 @@ class TestApplyChunking:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
         await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -129,7 +128,6 @@ class TestApplyChunking:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
         await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -166,7 +164,6 @@ class TestApplyChunking:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=3)
         await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -225,7 +222,6 @@ class TestApplyChunking:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
         await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -287,7 +283,6 @@ class TestApplyChunking:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
         await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -344,7 +339,6 @@ class TestApplyChunking:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
         await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -471,7 +465,6 @@ class TestWholeUnitStaging:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
         await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -929,7 +922,6 @@ class TestThePlaceholderIcon:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
         await library.unit_applier.apply_unit(
             unit,
-            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),

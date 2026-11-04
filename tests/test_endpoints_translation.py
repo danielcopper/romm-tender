@@ -39,7 +39,6 @@ from fakes.fake_cover_art_file_store import FakeCoverArtFileStore
 from fakes.fake_cover_slot_reader import FakeCoverSlotReader
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_download_file_store import FakeDownloadFileStore
-from fakes.fake_emulator_sources import FakeEmulatorSources
 from fakes.fake_event_sink import FakeEventSink
 from fakes.fake_firmware_file_store import FakeFirmwareFileStore
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
@@ -48,7 +47,6 @@ from fakes.fake_journal import FakeJournal
 from fakes.fake_migration_file_store import FakeMigrationFileStore
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_platform_systems import FakePlatformSystems
-from fakes.fake_relaunch_options_resolver import FakeRelaunchOptionsResolver
 from fakes.fake_release_download import FakeReleaseDownload
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
@@ -61,6 +59,7 @@ from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_sgdb_artwork_cache import FakeSgdbArtworkCache
 from fakes.fake_shortcut_artwork_job import FakeShortcutArtworkJob
+from fakes.fake_start_commands import FakeStartCommands
 from fakes.fake_steam_interface import FakeSteamInterface
 from fakes.fake_transient_units import FakeTransientUnits
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
@@ -712,7 +711,7 @@ def _dispatcher_over_rom_removal(uow: FakeUnitOfWork, rom_files: FakeRomFileStor
 class TestTheBulkUninstallOnTheWire:
     """A bulk uninstall that removed only part of the ROMs answers ``uninstall_incomplete`` with what it did."""
 
-    async def test_a_partial_run_answers_its_counts_its_app_ids_and_its_lease(self):
+    async def test_a_partial_run_answers_its_counts(self):
         uow = FakeUnitOfWork()
         rom_files = FakeRomFileStore()
         for rom_id in (1, 2, 3):
@@ -749,8 +748,6 @@ class TestTheBulkUninstallOnTheWire:
             "message": "1 ROM could not be uninstalled",
             "removed_count": 2,
             "errors": [{"rom_id": "2", "error": "simulated remove_file failure: /retrodeck/roms/n64/game_2.z64"}],
-            "app_ids": [1001, 1003],
-            "prune_lease_token": "bulk_uninstall:1",
         }
 
 
@@ -1265,9 +1262,6 @@ def _dispatcher_over_library(romm_api: FakeRommApi, events: FakeEventSink, home:
             log_debug=lambda msg: None,
             artwork=FakeArtworkManager(),
             uow_factory=FakeUnitOfWorkFactory(FakeUnitOfWork()),
-            active_core=FakeActiveCoreResolver(default=(None, None)),
-            disc_resolver=FakeDiscResolver(),
-            emulator_sources=FakeEmulatorSources(),
             artwork_job=FakeShortcutArtworkJob(),
             renderer_rss=FakeRendererRss(),
             renderer_gc=FakeRendererGc(),
@@ -1840,6 +1834,7 @@ def _dispatcher_over_cores(settings: dict[str, Any], persister: FakeSettingsPers
             uow_factory=FakeUnitOfWorkFactory(FakeUnitOfWork()),
             active_core=FakeActiveCoreResolver(),
             disc_resolver=FakeDiscResolver(),
+            start_commands=FakeStartCommands(),
             conflict_rules=_make_conflict_rules(),
         )
     )
@@ -1897,7 +1892,6 @@ def _dispatcher_over_migration(store: FakeMigrationFileStore, uow: FakeUnitOfWor
             emit=FakeEventSink().emit,
             firmware_resolver=FakeFirmwareResolver(),
             retrodeck_folders=FakeRetroDeckFolders(home=_MIGRATION_HOME),
-            relaunch_options=FakeRelaunchOptionsResolver(),
             save_directories=lambda: rerecord_save_directories,
             uow_factory=FakeUnitOfWorkFactory(uow),
             conflict_rules=_make_conflict_rules(),
@@ -2040,8 +2034,6 @@ def _dispatcher_over_adoption(world: _AdoptionWorld) -> CallDispatcher:
         config=RomInstallRecorderConfig(
             clock=FakeClock(),
             uow_factory=uow_factory,
-            active_core=FakeActiveCoreResolver(default=(None, None)),
-            disc_resolver=FakeDiscResolver(),
         )
     )
     adoption = RomAdoptionService(
@@ -2088,8 +2080,6 @@ def _dispatcher_over_adoption(world: _AdoptionWorld) -> CallDispatcher:
             queue=queue,
             unpacker=unpacker,
             romm_api=world.romm_api,
-            install_recorder=recorder,
-            conflict_rules=download_rules,
             loop=loop,
             emit=download_emit,
             logger=LOGGER,

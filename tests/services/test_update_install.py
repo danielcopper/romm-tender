@@ -458,7 +458,6 @@ class TestWaitReasons:
             ("switch_slot", "save_sync"),
             ("finalize_game_session", "save_sync"),
             ("start_download", "rom_downloads"),
-            ("download_complete", "rom_downloads"),
             ("sync_complete", "library_sync"),
             ("migrate_retrodeck_files", "retrodeck_migration"),
             ("remove_all_shortcuts", "other_work"),

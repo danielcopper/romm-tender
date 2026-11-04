@@ -44,16 +44,15 @@ describe("executeRomUninstall", () => {
 
     const removed = await executeRomUninstall({
       romId: 42,
-      appId: 100,
       romName: "Super Mario 64",
       leaseOwner: "test-owner",
       tag: "testTag",
-      context: "testContext",
     });
 
     expect(removed).toBe(true);
     expect(backend.removeRom).toHaveBeenCalledWith(42);
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(100, "");
+    // The kept shortcut carries its appId, installed or not: nothing to reset.
+    expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
     expect(uninstalls.romIds).toEqual([42]);
     expect(toast.showToast).toHaveBeenCalledWith("Super Mario 64 uninstalled");
     uninstalls.stop();
@@ -68,7 +67,6 @@ describe("executeRomUninstall", () => {
 
     const removed = await executeRomUninstall({
       romId: 42,
-      appId: 100,
       leaseOwner: "test-owner",
     });
 
@@ -85,7 +83,6 @@ describe("executeRomUninstall", () => {
 
     const removed = await executeRomUninstall({
       romId: 42,
-      appId: 100,
       romName: "Super Mario 64",
       leaseOwner: "test-owner",
     });
@@ -105,7 +102,6 @@ describe("executeRomUninstall", () => {
 
     const removed = await executeRomUninstall({
       romId: 42,
-      appId: 100,
       romName: "Super Mario 64",
       leaseOwner: "test-owner",
       tag: "handleUninstall",
@@ -127,7 +123,6 @@ describe("executeRomUninstall", () => {
 
     const removed = await executeRomUninstall({
       romId: 42,
-      appId: 100,
       romName: "Super Mario 64",
       leaseOwner: "test-owner",
     });
@@ -144,58 +139,11 @@ describe("executeRomUninstall", () => {
 
     const removed = await executeRomUninstall({
       romId: 42,
-      appId: 100,
       romName: "Super Mario 64",
       leaseOwner: "test-owner",
     });
 
     expect(removed).toBe(false);
     expect(toast.showToast).toHaveBeenCalledWith("Uninstall failed");
-  });
-
-  it("skips the launch options reset but still announces the uninstall when the continuation signal is aborted", async () => {
-    vi.mocked(backend.removeRom).mockResolvedValueOnce({
-      success: true,
-      message: "",
-      prune_lease_token: "test-token",
-    });
-
-    const uninstalls = listenForUninstalls();
-
-    // Run the continuation with an aborted signal, and hold the lease until the
-    // test lets it go.
-    let releaseLease!: () => void;
-    const leaseReleased = new Promise<void>((resolve) => {
-      releaseLease = resolve;
-    });
-    const withPruneLeaseSpy = vi
-      .spyOn(pruneLease, "withPruneLease")
-      .mockImplementationOnce(async (_token, _ctx, op) => {
-        const controller = new AbortController();
-        controller.abort();
-        const result = await op(controller.signal);
-        await leaseReleased;
-        return result;
-      });
-
-    const removal = executeRomUninstall({
-      romId: 42,
-      appId: 100,
-      leaseOwner: "test-owner",
-    });
-    for (let index = 0; index < 10; index++) await Promise.resolve();
-
-    // Nothing is announced while the removal's lease is held.
-    expect(withPruneLeaseSpy).toHaveBeenCalled();
-    expect(uninstalls.romIds).toEqual([]);
-
-    releaseLease();
-    const removed = await removal;
-
-    expect(removed).toBe(true);
-    expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
-    expect(uninstalls.romIds).toEqual([42]);
-    withPruneLeaseSpy.mockRestore();
-    uninstalls.stop();
   });
 });

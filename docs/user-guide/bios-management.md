@@ -314,10 +314,9 @@ and the row you focus is the one the right-hand pane describes.
    more than one is switched on), then how many versions it has on RomM and how many versions are in Steam ("12 versions
    on RomM · 9 versions in Steam"; every version of a game that shares one shortcut counts, so this can be more than the
    shortcuts the Remove button names). The name is in red where the platform's games cannot start with it — it is not
-   installed, or RetroDECK's start script cannot start it — and the sentence below says why. If it reads **no default**
-   in red, whether the emulator RetroDECK ships as its default is installed could not be established, so nothing is the
-   default until you pick one; the sentence below says so. If it reads **no emulator** in red, RetroDECK has none for
-   this platform at all
+   installed — and the sentence below says why. If it reads **no default** in red, whether the emulator RetroDECK ships
+   as its default is installed could not be established, so nothing is the default until you pick one; the sentence
+   below says so. If it reads **no emulator** in red, RetroDECK has none for this platform at all
 6. The **chip button** at the right of the name opens a menu of the platform's emulators — the same button, in the same
    two colours, as the one on a game's page. It is always there: it opens the menu whenever there is more than one
    emulator to choose between — also before the platform's first sync, so you can pick before its games reach Steam —
@@ -887,8 +886,8 @@ The active core name appears on the game detail page's **BIOS** tab (see
    follow your library, which is a different question — see
    [When the requirement is unknown](#when-the-requirement-is-unknown).
 
-Whatever this chain resolves to is the **same core the game launches on** — Tender bakes the resolved core into the
-Steam shortcut, so the core shown for BIOS, saves, and the core badge always matches the core that runs.
+Whatever this chain resolves to is the **same core the game launches on** — every start asks for the resolved core's
+command, so the core shown for BIOS, saves, and the core badge always matches the core that runs.
 
 The detection chain ensures BIOS filtering works even when RetroDECK's configuration files aren't accessible (e.g. after
 an update changes paths). You'll see a "Core: mGBA" badge when detection is working, or no badge when falling back to
@@ -897,8 +896,8 @@ showing all files.
 ## Changing the Active Core
 
 You can change the active emulator core directly from Tender, without leaving Game Mode. There are two scopes, and
-**both are stored by Tender itself** — neither touches ES-DE's `gamelist.xml`. Tender bakes the chosen core directly
-into each game's Steam shortcut, so your choice applies reliably for any ROM filename.
+**both are stored by Tender itself** — neither touches ES-DE's `gamelist.xml`. Every start asks for the chosen core's
+command, so your choice applies reliably for any ROM filename, from the next start on.
 
 - **Per-platform** changes set the core for every game on a platform. Stored in Tender's own settings.
 - **Per-game** changes set the core for a single game and take priority over the platform choice. Stored by Tender on
@@ -911,12 +910,11 @@ line — the same button a game's page carries, grey when the platform is on its
 picked another. It opens a menu listing every emulator ES-DE offers for that platform — both RetroArch cores and
 **standalone emulators** (e.g. PCSX2, RPCS3, Dolphin, PPSSPP) — in the order ES-DE lists them, the one you chose in
 ES-DE first. Every entry can be picked except an emulator RetroDECK does not have — a standalone emulator or a RetroArch
-core — which reads "emulator not installed". An entry Tender cannot start from Steam yet reads "Tender cannot start it
-yet": you can still pick it, and its games then say so instead of starting. Where Tender cannot tell whether a
-standalone emulator is installed, it carries "installation not established" and, where it is known, why: you can still
-pick it, and a pick you made stays, but Tender never makes it the default by itself or reports it missing; a page whose
-games launch with it says so under its header. A RetroArch core whose installation cannot be established has no known
-core file to start, so it says why beside "Tender cannot start it yet". Picking an enabled emulator sets it as the
+core — which reads "emulator not installed". Where Tender cannot tell whether an emulator is installed, it carries
+"installation not established" and, where it is known, why: you can still pick it, and a pick you made stays, but Tender
+never makes it the default by itself or reports it missing; a page whose games launch with it says so under its header.
+Whether Tender can start an emulator with a game is said on that game's page, in its own emulator menu, since it asks
+with the game ([When a game cannot start](#per-game-game-detail-page)). Picking an enabled emulator sets it as the
 default for all games on that platform. A "Switching cores may affect save compatibility" note is the first line of the
 menu.
 
@@ -937,15 +935,15 @@ RetroDECK's own lines stands under it.
 4. The BIOS table below updates to show what the new choice needs
 
 A platform that offers one emulator says so instead of showing a button. Where the default cannot start the platform's
-games — it is not installed, or RetroDECK's start script cannot start it — the pane names it in red and says so, and the
-button stays open, and the sentence points at the menu, wherever there is another emulator to pick. Where whether the
-default is installed could not be established, the pane says no emulator is the default until you pick one, with the
-reason where one is known. A platform RetroDECK lists **no** emulator for says so. If the emulator list itself cannot be
-established, the pane says why rather than showing an empty picker: no emulator source was found, every source is
-switched off in Settings › Emulator sources, ES-DE's systems file is broken, the source's list cannot be read yet
-(EmuDeck's today), or it is not established for another reason. Where the emulator you picked is no longer in the list
-after an update, the pane says **"Your choice '_name_' no longer exists in _source_;"** and what is used instead — your
-platform choice, the default, or that there is no default — rather than switching quietly.
+games — it is not installed — the pane names it in red and says so, and the button stays open, and the sentence points
+at the menu, wherever there is another emulator to pick. Where whether the default is installed could not be
+established, the pane says no emulator is the default until you pick one, with the reason where one is known. A platform
+RetroDECK lists **no** emulator for says so. If the emulator list itself cannot be established, the pane says why rather
+than showing an empty picker: no emulator source was found, every source is switched off in Settings › Emulator sources,
+ES-DE's systems file is broken, the source's list cannot be read yet (EmuDeck's today), or it is not established for
+another reason. Where the emulator you picked is no longer in the list after an update, the pane says **"Your choice
+'_name_' no longer exists in _source_;"** and what is used instead — your platform choice, the default, or that there is
+no default — rather than switching quietly.
 
 Tender stores the choice in its own settings and **immediately re-applies it** to every installed game on that platform
 — the change takes effect right away, with no sync needed (games that already have a per-game core keep their own
@@ -954,12 +952,10 @@ actually in effect. Once a sync has run, the page works even when your RomM serv
 status are available, only the download buttons are withdrawn. Before the first sync after an update, a platform needs
 RomM once to learn its system; offline, it says so instead.
 
-!!! note "A RetroDECK default-core change needs a Force Full Sync"
+!!! note "A core change applies at the next start"
 
-    Setting a per-platform core here re-bakes your installed games right away. But if a **RetroDECK
-    update** ships a _new default core_ for a platform (and you have not picked a core yourself), that new default does
-    **not** take effect on a normal sync — a normal sync skips platforms whose games haven't changed, so the
-    previously-baked core stays. Run a **Force Full Sync** to re-bake every game and pick up RetroDECK's new default.
+    Setting a per-platform core here applies to your games from their next start, with no sync. A **RetroDECK update**
+    that ships a _new default core_ for a platform you have not picked a core for applies the same way.
 
 ### Per-Game (Game Detail Page)
 
@@ -1002,25 +998,22 @@ following the system (no per-game core), the **Use System Override** item carrie
 actually in effect. When you pin a per-game core, only that pinned core carries the ✓ and the **Use System Override**
 item does not.
 
-When you set or reset a per-game core for an installed game, Tender updates the game's Steam shortcut immediately and
-confirms the change landed before reporting success. If Steam can't accept the change in the current session, you'll see
-a "Core saved — restart Steam to apply" message — your choice is still saved; it takes effect after a Steam restart (or
-the next sync).
+Setting or resetting a per-game core writes nothing to the game's Steam shortcut: the game's next start asks with the
+new choice.
 
-**When a game cannot start.** Where the emulator a game starts with is not installed, RetroDECK's start script cannot
-start it, or Tender cannot start it yet ("Tender cannot start RPCS3 Shortcut (Standalone) yet."), **Play** is disabled
-and the play row says why on a line under its buttons, in yellow, behind a warning sign — and to choose another emulator
-in the menu, where the game offers another; starting the game from Steam's library is refused with the same words. Where
-the emulator's own reading of the game also refuses it, that reason is the one said: a PS3 game installed as a folder
-whose emulator cannot start a folder — RPCS3 Shortcut, RetroDECK's default — says so and names the emulators that can,
-such as **RPCS3 Directory**, for you to pick; Tender does not switch it by itself. Where whether the default is
-installed could not be established, the line asks you to choose an emulator, and Play stays disabled until you do. A
-pick you made stands whatever happens to it: only one whose name no longer exists gives way to the default, and the line
-says so.
+**When a game cannot start.** Where the emulator a game starts with is not installed, or the emulator source gives no
+complete command to start the game with ("Tender cannot start _emulator_ yet: _reason_."), **Play** is disabled and the
+play row says why on a line under its buttons, in yellow, behind a warning sign — and to choose another emulator in the
+menu, where the game offers another; starting the game from Steam's library is refused with the same words. Where the
+emulator's own reading of the game also refuses it, that reason is the one said: a PS3 game installed as a folder whose
+emulator cannot start a folder — RPCS3 Shortcut, RetroDECK's default — says so and names the emulators that can, such as
+**RPCS3 Directory**, for you to pick; Tender does not switch it by itself. Where whether the default is installed could
+not be established, the line asks you to choose an emulator, and Play stays disabled until you do. A pick you made
+stands whatever happens to it: only one whose name no longer exists gives way to the default, and the line says so.
 
-Per-game cores work for **any ROM filename**. Tender bakes the chosen core directly into the game's launch command, so
-it does not rely on RetroDECK's gamelist lookup (which mishandles parentheses and other special characters in filenames)
-and is not affected by that upstream limitation.
+Per-game cores work for **any ROM filename**. Tender starts the chosen core's command itself, so it does not rely on
+RetroDECK's gamelist lookup (which mishandles parentheses and other special characters in filenames) and is not affected
+by that upstream limitation.
 
 ### Core choices are not migrated from ES-DE
 

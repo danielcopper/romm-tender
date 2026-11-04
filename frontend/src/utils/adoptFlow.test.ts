@@ -87,9 +87,6 @@ const ADOPTED: AdoptResult = {
   message: "Using the files already on this device",
   file_path: "/roms/n64/game.z64",
   rom_dir: null,
-  app_id: 100,
-  launch_options: 'flatpak run … "/roms/n64/game.z64"',
-  prune_lease_token: "adopt-token",
 };
 
 /** Every hook call, in order, so a test can assert what the caller was told and when. */
@@ -113,7 +110,6 @@ function makeFlow(overrides: Partial<DownloadWithAdoption> = {}) {
     romId: ROM_ID,
     romName: "Test ROM",
     pageSawCandidate: false,
-    leaseOwner: OWNER,
     logContext: "test",
     dialogs,
     hooks,
@@ -226,7 +222,7 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
     ]);
   });
 
-  it("adopt records the install, writes the launch command and tells the caller in order", async () => {
+  it("adopt records the install, writes nothing to the shortcut and tells the caller in order", async () => {
     vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
     vi.mocked(backend.adoptExistingRom).mockResolvedValue(ADOPTED);
     const { flow, dialogs } = makeFlow();
@@ -241,8 +237,8 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
     }
 
     expect(vi.mocked(backend.adoptExistingRom).mock.calls).toEqual([[ROM_ID, "/roms/n64/game.z64", null]]);
-    expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(100, ADOPTED.launch_options);
-    expect(vi.mocked(backend.releasePruneConflictLease)).toHaveBeenCalledWith("adopt-token");
+    // The shortcut carries its appId; the next start asks with the adopted install.
+    expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
     expect(log).toEqual([
       "busy:true",
       "occupied:true",
@@ -305,9 +301,6 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
     vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
     vi.mocked(backend.adoptExistingRom).mockResolvedValue({
       ...ADOPTED,
-      app_id: null,
-      launch_options: "",
-      prune_lease_token: "stray-token",
     });
     const { flow, dialogs } = makeFlow();
     dialogs.showExisting.mockResolvedValue("adopt");
@@ -325,7 +318,6 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
       message: "ok",
       file_path: "/roms/n64/game.z64",
       rom_dir: null,
-      app_id: 100,
     });
     const { flow, dialogs } = makeFlow();
     dialogs.showExisting.mockResolvedValue("adopt");
@@ -372,18 +364,6 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
 
     expect(toastBodies()).toEqual(["Couldn't use the existing files — is RomM server running?"]);
     expect(log[log.length - 1]).toBe("busy:false");
-    expect(log).not.toContain("adopted");
-  });
-
-  it("an adoption whose lease owner has gone is not counted as adopted", async () => {
-    vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
-    vi.mocked(backend.adoptExistingRom).mockResolvedValue(ADOPTED);
-    const { flow, dialogs } = makeFlow({ leaseOwner: "never-mounted" });
-    dialogs.showExisting.mockResolvedValue("adopt");
-
-    await expect(runDownloadWithAdoption(flow)).resolves.toBe("failed");
-
-    expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
     expect(log).not.toContain("adopted");
   });
 });

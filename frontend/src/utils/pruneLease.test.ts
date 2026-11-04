@@ -105,7 +105,7 @@ it("renews active ownership and stops heartbeats before release", async () => {
   vi.useFakeTimers();
   vi.mocked(renewPruneConflictLease).mockResolvedValue({ success: true, message: "renewed" });
   vi.mocked(releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
-  const release = maintainPruneLease("lease-1", "Long rebake");
+  const release = maintainPruneLease("lease-1", "Long Steam write");
 
   await vi.advanceTimersByTimeAsync(180_000);
   expect(renewPruneConflictLease).toHaveBeenCalledTimes(3);

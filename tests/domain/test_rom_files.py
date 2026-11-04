@@ -6,6 +6,7 @@ import pytest
 
 from domain.rom_files import (
     Ps3FolderLift,
+    asked_path,
     build_m3u_content,
     detect_launch_file,
     es_de_collapse_rename,
@@ -379,7 +380,7 @@ class TestFolderBootRoot:
 
     def test_derived_root_escaping_rom_dir_returns_none(self):
         # The stripped root is the shared system dir (rom_dir's parent), so the
-        # containment guard rejects it — never bake the shared directory.
+        # containment guard rejects it — never start the shared directory.
         rom_dir = "/roms/ps3/MyGame"
         launch = "/roms/ps3/PS3_GAME/USRDIR/EBOOT.BIN"
         assert folder_boot_root(launch, rom_dir) is None
@@ -636,3 +637,25 @@ class TestThePlatformRulesComeBeforeTheOtherDescriptors:
         files = [("/roms/n3ds/x/Game.3ds", 100), ("/roms/n3ds/x/data.mds", 10_000)]
 
         assert detect_launch_file(files, m3u_supported=False) == "/roms/n3ds/x/Game.3ds"
+
+
+class TestThePathAStartIsAskedWith:
+    """One path for the launch verdict, the launch command and the start (#2221 D3)."""
+
+    def test_a_game_kept_as_a_folder_is_its_folder(self):
+        folder = "/roms/ps3/Game.ps3"
+
+        assert asked_path(f"{folder}/PS3_GAME/USRDIR/EBOOT.BIN", folder, f"{folder}/x") == folder
+
+    def test_a_game_kept_as_a_folder_one_level_deeper_is_still_its_own_folder(self):
+        folder = "/roms/ps3/Game.ps3"
+
+        assert asked_path(f"{folder}/Game/PS3_GAME/USRDIR/EBOOT.BIN", folder, f"{folder}/Game") == folder
+
+    def test_a_game_with_a_folder_of_its_own_that_boots_no_folder_is_its_disc(self):
+        folder = "/roms/psx/Game"
+
+        assert asked_path(f"{folder}/Game.m3u", folder, f"{folder}/Game (Disc 2).chd") == f"{folder}/Game (Disc 2).chd"
+
+    def test_a_single_file_is_its_file(self):
+        assert asked_path("/roms/n64/Game.z64", None, "/roms/n64/Game.z64") == "/roms/n64/Game.z64"

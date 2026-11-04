@@ -45,7 +45,7 @@ def _seed_rom(
     regions: tuple[str, ...] = (),
     is_main_sibling: bool = False,
     name: str | None = None,
-    applied_launch_options: str | None = None,
+    shortcut_applied: bool = False,
 ) -> None:
     with harness.uow_factory() as uow:
         rom = Rom(
@@ -58,11 +58,10 @@ def _seed_rom(
             sibling_group_key=group_key,
             regions=regions,
             is_main_sibling=is_main_sibling,
-            applied_launch_options=applied_launch_options,
         )
         uow.roms.save(rom)
-        if applied_launch_options is not None:
-            uow.roms.set_applied_launch_options(rom_id, applied_launch_options)
+        if shortcut_applied:
+            uow.roms.set_shortcut_applied(rom_id, True)
 
 
 def _seed_install(harness, rom_id: int) -> None:
@@ -343,7 +342,6 @@ async def test_switch_version_happy_moves_binding(harness):
         "success": True,
         "rom_id": 2,
         "target_installed": False,
-        "launch_options": "",
         "app_id": _APP_ID,
     }
     assert [args[0] for name, args, _kwargs in harness.romm.call_log if name == "get_rom_once"] == [2]
@@ -360,8 +358,8 @@ async def test_switch_version_happy_moves_binding(harness):
 
 async def test_switch_version_local_404_has_canonical_shape_and_no_mutation(harness):
     """A definitive local-target 404 refuses before every write/effect boundary."""
-    _seed_rom(harness, rom_id=1, app_id=_APP_ID, applied_launch_options="old-command")
-    _seed_rom(harness, rom_id=2, app_id=None, applied_launch_options="target-command")
+    _seed_rom(harness, rom_id=1, app_id=_APP_ID, shortcut_applied=True)
+    _seed_rom(harness, rom_id=2, app_id=None, shortcut_applied=True)
     _seed_install(harness, 2)
     harness.romm.get_rom_once_side_effect_by_id[2] = RommNotFoundError("gone")
     harness.emit.reset_mock()
@@ -379,9 +377,9 @@ async def test_switch_version_local_404_has_canonical_shape_and_no_mutation(harn
     harness.emit.assert_not_awaited()
     with harness.uow_factory() as uow:
         assert uow.roms.get(1).shortcut_app_id == _APP_ID
-        assert uow.roms.get(1).applied_launch_options == "old-command"
+        assert uow.roms.get(1).shortcut_applied is True
         assert uow.roms.get(2).shortcut_app_id is None
-        assert uow.roms.get(2).applied_launch_options == "target-command"
+        assert uow.roms.get(2).shortcut_applied is True
         assert uow.rom_installs.get(2) is not None
 
 
@@ -419,7 +417,7 @@ async def test_switch_version_allow_stranded_still_refuses_local_404(harness):
 
 async def test_switch_version_server_only_404_is_version_vanished_without_row(harness):
     """Mandatory server-only detail loading peels only its typed 404."""
-    _seed_rom(harness, rom_id=1, app_id=_APP_ID, applied_launch_options="old-command")
+    _seed_rom(harness, rom_id=1, app_id=_APP_ID, shortcut_applied=True)
     harness.romm.get_rom_side_effect = RommNotFoundError("gone")
     harness.emit.reset_mock()
 
@@ -435,7 +433,7 @@ async def test_switch_version_server_only_404_is_version_vanished_without_row(ha
     harness.emit.assert_not_awaited()
     with harness.uow_factory() as uow:
         assert uow.roms.get(1).shortcut_app_id == _APP_ID
-        assert uow.roms.get(1).applied_launch_options == "old-command"
+        assert uow.roms.get(1).shortcut_applied is True
         assert uow.roms.get(3) is None
 
 
@@ -521,8 +519,8 @@ async def test_switch_version_downloaded_synced_is_free(harness):
         assert uow.roms.get(2).shortcut_app_id == _APP_ID
 
 
-async def test_switch_version_switch_back_returns_launch_options(harness):
-    """Switching onto a still-downloaded version returns its full launch command."""
+async def test_switch_version_switch_back_answers_it_installed(harness):
+    """Switching onto a still-downloaded version answers it installed and writes no launch command."""
     seed_group_member(harness, 1, group_key=_GROUP, shortcut_app_id=_APP_ID)  # bound, uninstalled
     seed_group_member(harness, 2, group_key=_GROUP, shortcut_app_id=None, installed=True, file_name="game.gba")
 
@@ -530,9 +528,7 @@ async def test_switch_version_switch_back_returns_launch_options(harness):
     assert result["success"] is True
     assert result["rom_id"] == 2
     assert result["target_installed"] is True
-    # The real relaunch resolver baked the RetroDECK launch command for the install.
-    assert "net.retrodeck.retrodeck" in result["launch_options"]
-    assert "game.gba" in result["launch_options"]
+    assert "launch_options" not in result
 
 
 async def test_switch_version_unsynced_saves_online_soft_blocks(harness):

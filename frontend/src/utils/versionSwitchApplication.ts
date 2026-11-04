@@ -1,52 +1,25 @@
-import {
-  fetchCoverBase64,
-  invalidateCachedGameDetail,
-  logError,
-  logWarn,
-  type SwitchVersionSuccess,
-} from "../api/backend";
+import { fetchCoverBase64, invalidateCachedGameDetail, logWarn, type SwitchVersionSuccess } from "../api/backend";
 import { setChosenCover, setSteamGridDbSwitchCover } from "./artwork";
 import { writeSlotArtwork } from "./artworkSlotsStore";
-import { setLaunchOptionsConfirmed } from "./steamShortcuts";
 import { isPruneLeaseCancelled, withPruneLease, type PruneLeaseAdmission } from "./pruneLease";
 import { refreshAppIdMap } from "./sessionManager";
 import { detach } from "./detach";
 
-/** Whether a committed switch's launch command was confirmed on the shortcut, and whether it was broadcast. */
-interface CommittedSwitchOutcome {
-  confirmed: boolean;
-  broadcast: boolean;
-}
-
+/** Answers whether it broadcast `version_switched`; a lease cut before the broadcast stops it short of that. */
 export async function applyCommittedVersionSwitch(
   result: SwitchVersionSuccess,
   onCover?: (romId: number, cover: string) => void,
   admission?: PruneLeaseAdmission,
-): Promise<CommittedSwitchOutcome> {
+): Promise<boolean> {
   // The binding moved when the backend answered; Steam's Play must not wait on
   // the Steam writes below to be judged by it.
   detach(refreshAppIdMap());
   return withPruneLease(
     result.prune_lease_token,
     "Version switch",
-    async (signal) => {
-      let confirmed = false;
-      if (isPruneLeaseCancelled(signal)) return { confirmed, broadcast: false };
-      try {
-        confirmed = await setLaunchOptionsConfirmed(result.app_id, result.launch_options);
-      } catch (e) {
-        logError(
-          `Version switch: launch-options confirm threw for rom ${result.rom_id} (appId ${result.app_id}): ${e}`,
-        );
-      }
-      if (!confirmed) {
-        logError(`Version switch: could not confirm launch options for rom ${result.rom_id} (appId ${result.app_id})`);
-      }
-      const broadcast =
-        !isPruneLeaseCancelled(signal) &&
-        (await publishCommittedVersionSwitch(result.app_id, result.rom_id, onCover, signal));
-      return { confirmed, broadcast };
-    },
+    async (signal) =>
+      !isPruneLeaseCancelled(signal) &&
+      (await publishCommittedVersionSwitch(result.app_id, result.rom_id, onCover, signal)),
     `version-picker:${result.app_id}`,
     admission,
   );

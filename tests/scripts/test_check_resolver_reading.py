@@ -266,6 +266,7 @@ class TestTheRealTree:
         assert set(check.READING_MODULES) == {
             "adapters/atlas_catalogue.py",
             "adapters/atlas_firmware.py",
+            "adapters/atlas_launch.py",
             "adapters/atlas_platforms.py",
             "adapters/atlas_saves.py",
             "adapters/emulator_sources.py",

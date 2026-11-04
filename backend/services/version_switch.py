@@ -17,13 +17,12 @@ or transfers saves — but a switch *away* from a downloaded version whose local
 saves the stranding verdict holds
 (``domain/save_stranding.py::stranding_verdict``) is soft-blocked so the user
 can sync first; an explicit ``allow_stranded`` override honours "switch
-anyway". A switch back onto a still-installed version re-bakes that install's
-full Steam ``launch_options`` (the frontend writes it onto the shortcut);
-switching to an uninstalled version returns the empty placeholder (ADR-0009).
-The group is resolved by ``sibling_group_key`` over the migration-010 index;
-the server view comes from ``get_rom_simple(bound).sibling_roms``. Server I/O
-and the relaunch resolver run outside the Unit of Work (ADR-0006) — read/close,
-then fetch/resolve, then a short write UoW. The liveness request narrows the
+anyway". The shortcut's launch options are its appId and do not change; the
+next start asks for the bound version's command. The group is resolved by
+``sibling_group_key`` over the migration-010 index; the server view comes from
+``get_rom_simple(bound).sibling_roms``. Server I/O
+runs outside the Unit of Work (ADR-0006) — read/close, then fetch, then a short
+write UoW. The liveness request narrows the
 race but cannot transact with RomM and SQLite as one unit.
 """
 
@@ -55,7 +54,6 @@ if TYPE_CHECKING:
         ConflictRules,
         ReachabilityProbeFn,
         RommRomReader,
-        RomRelaunchItemReader,
         SaveDriftProbeFn,
         UnitOfWorkFactory,
     )
@@ -91,8 +89,7 @@ class VersionSwitchServiceConfig:
     the RomM ROM reader (the live ``sibling_roms`` view + per-sibling detail).
     ``drift_probe`` reports whether the currently-bound version's local saves
     would be stranded (the save-stranding gate); ``reachability_probe``
-    supplies the ``server_reachable`` hint on that refusal; ``relaunch_resolver``
-    re-bakes a switched-onto install's full launch command; ``active_downloads``
+    supplies the ``server_reachable`` hint on that refusal; ``active_downloads``
     reports the rom ids currently downloading so a switch is refused while any
     group member has an active download (#1298). ``conflict_rules`` are what
     the ``switch_version`` endpoint's use case checks at its entry and takes its
@@ -106,7 +103,6 @@ class VersionSwitchServiceConfig:
     romm_api: RommRomReader
     drift_probe: SaveDriftProbeFn
     reachability_probe: ReachabilityProbeFn
-    relaunch_resolver: RomRelaunchItemReader
     active_downloads: ActiveDownloadRomIdsFn
     conflict_rules: ConflictRules
 
@@ -192,7 +188,6 @@ class VersionSwitchService:
         self._romm_api = config.romm_api
         self._drift_probe = config.drift_probe
         self._reachability_probe = config.reachability_probe
-        self._relaunch_resolver = config.relaunch_resolver
         self._active_downloads = config.active_downloads
         self._rules = config.conflict_rules
 
@@ -612,10 +607,7 @@ class VersionSwitchService:
         an offline switch stays fast. Saves are never deleted or transferred.
 
         On success returns
-        ``{success: True, rom_id, target_installed, launch_options, app_id}``:
-        ``launch_options`` is the target install's full Steam launch command when it
-        is downloaded (the frontend writes it onto the shortcut), or ``""`` for an
-        uninstalled target (the ADR-0009 placeholder). Guards, each a raised
+        ``{success: True, rom_id, target_installed, app_id}``. Guards, each a raised
         refusal: unknown appId → ``not_found``; any group member has an active
         download → ``download_in_progress`` (cancel it first); target outside the
         group → ``not_in_group``; target bound to a *different* shortcut of the
@@ -647,11 +639,8 @@ class VersionSwitchService:
             raise Refused("download_in_progress", "Cancel the running download first.")
 
         if target_rom_id == ctx.bound_rom_id:
-            # Already the active version — a harmless no-op. Re-bake its launch
-            # command so the shortcut heals even on this path (uniform shape).
-            launch_options = await self._resolve_launch_options(ctx.bound_rom_id, ctx.bound_installed)
-            await self._record_applied_launch_options(ctx.bound_rom_id, launch_options)
-            return self._switch_success(ctx.bound_rom_id, ctx.bound_installed, launch_options, app_id)
+            # Already the active version — a harmless no-op, answered in the same shape.
+            return self._switch_success(ctx.bound_rom_id, ctx.bound_installed, app_id)
 
         if ctx.target_is_local:
             return await self._switch_to_local_target(app_id, target_rom_id, allow_stranded, ctx)
@@ -756,65 +745,24 @@ class VersionSwitchService:
         )
 
     async def _switch_local(self, app_id: int, target_rom_id: int, group_key: str | None) -> dict[str, Any]:
-        """Rebind a local target (TOCTOU re-check in the write UoW), then re-bake.
+        """Rebind a local target (TOCTOU re-check in the write UoW).
 
         The write UoW re-verifies the SQLite facts (group membership,
         bound-elsewhere) against the fresh rows so a download or rebind that
         landed since the pre-write reads decides, and reports whether the target
-        is downloaded. The relaunch resolver runs *after* the write UoW closes (it
-        opens its own — the nested ``BEGIN IMMEDIATE`` would deadlock).
+        is downloaded.
         """
         target_installed = await self._loop.run_in_executor(
             None, self._rebind_local_io, app_id, target_rom_id, group_key
         )
-        launch_options = await self._resolve_launch_options(target_rom_id, target_installed)
-        await self._record_applied_launch_options(target_rom_id, launch_options)
-        return self._switch_success(target_rom_id, target_installed, launch_options, app_id)
-
-    async def _record_applied_launch_options(self, rom_id: int, launch_options: str) -> None:
-        """Record *launch_options* as ``rom_id``'s applied shortcut state (#1383).
-
-        A version switch moves the binding and the frontend writes the resolved
-        launch command onto the (sticky) shortcut, so recording it keeps the next
-        sync from re-touching the now-correct shortcut. Sixth of the six
-        recorded-state writer sites. Runs its own short write UoW on the executor,
-        outside any open UoW.
-        """
-        await self._loop.run_in_executor(None, self._record_applied_launch_options_io, rom_id, launch_options)
-
-    def _record_applied_launch_options_io(self, rom_id: int, launch_options: str) -> None:
-        with self._uow_factory() as uow:
-            rom = uow.roms.get(int(rom_id))
-            if rom is None:
-                return
-            rom.record_applied_launch_options(launch_options)
-            uow.roms.set_applied_launch_options(int(rom_id), rom.applied_launch_options)
-
-    async def _resolve_launch_options(self, rom_id: int, installed: bool) -> str:
-        """Resolve the full Steam launch command for a just-bound installed ROM.
-
-        Returns ``""`` for an uninstalled ROM (the ADR-0009 placeholder). For an
-        installed ROM the relaunch resolver (a UoW-opening seam, run on the
-        executor outside any open UoW) composes the command. A ``None`` from an
-        installed, freshly-bound ROM is an unexpected resolver miss — logged
-        loudly and downgraded to ``""`` so the committed rebind still succeeds
-        rather than faking a failure.
-        """
-        if not installed:
-            return ""
-        item = await self._loop.run_in_executor(None, self._relaunch_resolver.relaunch_item_for_rom, rom_id)
-        if item is None:
-            self._logger.error(f"Version switch: relaunch resolve returned nothing for installed rom {rom_id}")
-            return ""
-        return item.get("launch_options", "")
+        return self._switch_success(target_rom_id, target_installed, app_id)
 
     @staticmethod
-    def _switch_success(rom_id: int, installed: bool, launch_options: str, app_id: int) -> dict[str, Any]:
+    def _switch_success(rom_id: int, installed: bool, app_id: int) -> dict[str, Any]:
         return {
             "success": True,
             "rom_id": rom_id,
             "target_installed": installed,
-            "launch_options": launch_options,
             "app_id": app_id,
         }
 
@@ -867,8 +815,7 @@ class VersionSwitchService:
         facts against the fresh rows inside the write transaction — group
         membership and bound-elsewhere — so the committed decision is consistent.
         Raises a ``not_in_group`` or ``bound_elsewhere`` refusal before it writes
-        anything, or returns whether the target is downloaded; the caller resolves
-        the launch command outside this UoW (the relaunch resolver opens its own).
+        anything, or returns whether the target is downloaded.
 
         In the same UoW it forgets the target's cover record and hand-over by
         :func:`domain.artwork_slot_outcome.binding_forgets_cover_record`: the
@@ -907,8 +854,7 @@ class VersionSwitchService:
         extraction, binds it to ``app_id`` (the repository's collision-unbind
         clears the old representative), and returns the switch success. A
         server-only target has no ``rom_installs`` row, so it is never installed —
-        ``target_installed`` is ``False`` and ``launch_options`` the empty
-        placeholder. Siblings share a platform, so the bound group's
+        ``target_installed`` is ``False``. Siblings share a platform, so the bound group's
         ``platform_slug`` backstops a detail that omits it (``Rom.synced`` requires
         a non-empty slug). A detail that the aggregate rejects (bad id, no
         resolvable slug) fails ``invalid_target`` — the target is a sibling, but
@@ -946,12 +892,6 @@ class VersionSwitchService:
                 f"Version {target_rom_id}'s server details could not be turned into a local version.",
             ) from e
         rom.bind_shortcut(app_id)
-        # A server-only target is never installed, so its shortcut carries the
-        # empty placeholder — record that applied state so the next sync skips it
-        # (#1383). Same write UoW as the bind (this whole method runs on the
-        # executor, no UoW open on entry).
-        rom.record_applied_launch_options("")
         with self._uow_factory() as uow:
             uow.roms.save(rom)
-            uow.roms.set_applied_launch_options(rom.rom_id, rom.applied_launch_options)
-        return self._switch_success(rom.rom_id, False, "", app_id)
+        return self._switch_success(rom.rom_id, False, app_id)

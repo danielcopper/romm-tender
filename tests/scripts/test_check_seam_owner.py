@@ -44,9 +44,9 @@ check = _load_check_module()
 # The owner table the fixtures run against — the real one, restated so a
 # deliberate change to production ownership shows up as a test edit.
 _OWNERS = {
-    "active_core": frozenset({"shortcut_launch_resolver.py"}),
-    "disc_resolver": frozenset({"shortcut_launch_resolver.py"}),
-    "emulator_sources": frozenset({"shortcut_launch_resolver.py"}),
+    "active_core": frozenset(),
+    "disc_resolver": frozenset(),
+    "emulator_sources": frozenset(),
     "renderer_rss": frozenset({"session_budget.py"}),
     "renderer_gc": frozenset({"session_budget.py"}),
     "artwork": frozenset({"cover_preparer.py", "reporter.py"}),
@@ -80,21 +80,22 @@ class TestFindViolations:
     def test_the_restated_table_is_the_real_one(self):
         assert dict(check.SEAM_OWNERS) == _OWNERS
 
-    def test_flags_the_sources_seam_held_outside_the_launch_resolver(self, patched_check):
+    def test_flags_the_sources_seam_in_every_module_of_the_package(self, patched_check):
+        # The sync asks nothing about what starts a game, so no module holds it.
         holder = "class H:\n    def __init__(self, config):\n        self._s = config.emulator_sources\n"
-        owner = "class R:\n    def __init__(self, config):\n        self._s = config.emulator_sources\n"
-        findings = patched_check({"sync_orchestrator.py": holder, "shortcut_launch_resolver.py": owner})
-        assert len(findings) == 1
-        assert "sync_orchestrator.py" in findings[0]
-        assert "emulator_sources" in findings[0]
+        findings = patched_check({"sync_orchestrator.py": holder, "unit_apply.py": holder})
+        assert len(findings) == 2
+        assert any("sync_orchestrator.py" in finding for finding in findings)
+        assert any("unit_apply.py" in finding for finding in findings)
+        assert all("emulator_sources" in finding for finding in findings)
 
     def test_flags_seam_read_in_a_foreign_module(self, patched_check):
         holder = "class H:\n    def __init__(self, config):\n        self._a = config.active_core\n"
-        findings = patched_check({"shortcut_launch_resolver.py": holder, "sync_orchestrator.py": holder})
+        findings = patched_check({"sync_orchestrator.py": holder})
         assert len(findings) == 1
         assert "sync_orchestrator.py" in findings[0]
         assert "active_core" in findings[0]
-        assert "shortcut_launch_resolver.py" in findings[0]  # the message names the owner
+        assert "no module of the package holds" in findings[0]  # an ownerless seam says so
 
     def test_two_owner_seam_admits_both_owners_and_flags_a_third(self, patched_check):
         # ``artwork`` is the one confinement with two owners — the apply path's
@@ -156,10 +157,10 @@ class TestFindViolations:
     def test_owner_module_not_flagged(self, patched_check):
         findings = patched_check(
             {
-                "shortcut_launch_resolver.py": (
-                    "class Config:\n    active_core: ActiveCoreReader\n    disc_resolver: DiscResolver\n\n"
+                "session_budget.py": (
+                    "class Config:\n    renderer_rss: RendererRssFn\n    renderer_gc: RendererGcFn\n\n"
                     "class B:\n    def __init__(self, config):\n"
-                    "        self._a = config.active_core\n        self._d = config.disc_resolver\n"
+                    "        self._r = config.renderer_rss\n        self._g = config.renderer_gc\n"
                 ),
             }
         )

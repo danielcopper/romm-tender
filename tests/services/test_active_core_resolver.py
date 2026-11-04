@@ -4,9 +4,9 @@ Covers the three-layer precedence: a resolvable per-game override wins; a
 per-platform ``settings.json`` core beats the live es_systems default; the
 per-game override beats the per-platform core; a NULL override with no
 per-platform core delegates to the es_systems default; a stale per-game or
-per-platform label degrades to the next layer without raising or emitting a
-bogus ``-e`` override; a per-game/per-platform label may name a **standalone**
-emulator; and the retired ES-DE gamelist is never consulted.
+per-platform label degrades to the next layer without raising; a
+per-game/per-platform label may name a **standalone** emulator; and the retired
+ES-DE gamelist is never consulted.
 """
 
 from __future__ import annotations
@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING
 
 from fakes.fake_core_info_provider import (
     FakeCoreInfoProvider,
-    core_invocation,
     libretro_option,
     standalone_option,
 )
@@ -29,7 +28,6 @@ from domain.emulator_pick import StoredPick
 from domain.platform_system import NO_SYSTEM, PlatformSystem
 from domain.rom import Rom
 from domain.rom_install import RomInstall
-from domain.shortcut_data import EmulatorInvocation
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
 
 if TYPE_CHECKING:
@@ -172,7 +170,6 @@ def test_null_override_delegates_to_system_default() -> None:
 
     assert resolver.active_core_for_rom(1) == ("snes9x_libretro", "Snes9x")
     # Delegation path: the system-layer get_active_core was consulted with the system only.
-    assert core_info.active_core_calls == ["snes"]
 
 
 def test_null_override_passes_through_system_none() -> None:
@@ -237,7 +234,7 @@ def test_per_game_override_beats_per_platform_core() -> None:
 def test_stale_override_degrades_to_system_default() -> None:
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=99, platform_slug="gba", emulator_override="Removed Core")
-    # The options no longer carry "Removed Core" → label_to_invocation → None.
+    # The options no longer carry "Removed Core", so the pick gives way.
     core_info = FakeCoreInfoProvider(
         available_cores=[{"core_so": "mgba_libretro", "label": "mGBA", "is_default": True}],
         active_core=("mgba_libretro", "mGBA"),
@@ -248,8 +245,6 @@ def test_stale_override_degrades_to_system_default() -> None:
 
     # Degrades to the system default — never a bogus "None.so", never raises.
     assert result == ("mgba_libretro", "mGBA")
-    # The system layer was consulted (the degrade delegated past the unresolvable pin).
-    assert core_info.active_core_calls == ["gba"]
 
 
 def test_stale_override_logs_warning(caplog: pytest.LogCaptureFixture) -> None:
@@ -286,7 +281,6 @@ def test_stale_per_platform_core_degrades_to_system_default() -> None:
     # Degrades to the es_systems default — never a bogus "None.so", never raises.
     assert result == ("mgba_libretro", "mGBA")
     assert platform_reader.calls == ["gba"]
-    assert core_info.active_core_calls == ["gba"]
 
 
 def test_stale_per_platform_core_logs_warning(caplog: pytest.LogCaptureFixture) -> None:
@@ -322,7 +316,6 @@ def test_no_per_platform_core_falls_through_to_system_default() -> None:
 
     assert resolver.active_core_for_rom(40) == ("snes9x_libretro", "Snes9x")
     assert platform_reader.calls == ["snes"]
-    assert core_info.active_core_calls == ["snes"]
 
 
 # --- bad path: unknown rom_id → (None, None), no raise -------------------------
@@ -345,19 +338,20 @@ def test_missing_rom_resolves_to_none_with_warning(caplog: pytest.LogCaptureFixt
     assert any("404" in r.message for r in caplog.records)
 
 
-# --- active_emulator_for_rom: the standalone-aware launch-bake seam (#129) ------
+# --- active_emulator_for_rom: the entry in effect, standalone or core (#129) -----
 
 
 def test_standalone_system_default_resolves_to_standalone_emulator() -> None:
     """An un-pinned ROM on a standalone-emulator platform (PS3) resolves to the
-    standalone :class:`EmulatorInvocation`, not a libretro core."""
+    standalone entry, not a libretro core."""
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=50, platform_slug="ps3", emulator_override=None)
-    rpcs3 = EmulatorInvocation.run_game("%EMULATOR_RPCS3% --no-gui %ROM%", "RPCS3 Directory (Standalone)")
-    core_info = FakeCoreInfoProvider(standalone={"ps3": rpcs3})
+    core_info = FakeCoreInfoProvider(options=[standalone_option("RPCS3 Directory (Standalone)")])
     resolver, _ = _make_resolver(uow=uow, core_info=core_info)
 
-    assert resolver.active_emulator_for_rom(50) == rpcs3
+    emulator = resolver.active_emulator_for_rom(50)
+    assert emulator is not None
+    assert (emulator.label, emulator.core_so) == ("RPCS3 Directory (Standalone)", None)
     # A standalone emulator has no libretro core — the .so-space projection is
     # (None, label) so read-path consumers degrade exactly as for (None, None).
     assert resolver.active_core_for_rom(50) == (None, "RPCS3 Directory (Standalone)")
@@ -365,16 +359,17 @@ def test_standalone_system_default_resolves_to_standalone_emulator() -> None:
 
 def test_per_game_pin_beats_standalone_system_default() -> None:
     """A per-game libretro pin wins over a platform's standalone default — the
-    launch-bake seam returns the libretro invocation."""
+    seam answers the libretro entry."""
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=51, platform_slug="ps2", emulator_override="LRPS2")
     core_info = FakeCoreInfoProvider(
-        available_cores=[{"core_so": "pcsx2_libretro", "label": "LRPS2", "is_default": False}],
-        standalone={"ps2": EmulatorInvocation.run_game("%EMULATOR_PCSX2% -batch %ROM%", "PCSX2 (Standalone)")},
+        options=[standalone_option("PCSX2 (Standalone)"), libretro_option("pcsx2_libretro", "LRPS2")],
     )
     resolver, _ = _make_resolver(uow=uow, core_info=core_info)
 
-    assert resolver.active_emulator_for_rom(51) == core_invocation("pcsx2_libretro", "LRPS2", "pcsx2_libretro.so")
+    emulator = resolver.active_emulator_for_rom(51)
+    assert emulator is not None
+    assert (emulator.label, emulator.core_so) == ("LRPS2", "pcsx2_libretro")
 
 
 def test_per_platform_core_beats_standalone_system_default() -> None:
@@ -382,17 +377,18 @@ def test_per_platform_core_beats_standalone_system_default() -> None:
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=52, platform_slug="ps2", emulator_override=None)
     core_info = FakeCoreInfoProvider(
-        available_cores=[{"core_so": "pcsx2_libretro", "label": "LRPS2", "is_default": False}],
-        standalone={"ps2": EmulatorInvocation.run_game("%EMULATOR_PCSX2% -batch %ROM%", "PCSX2 (Standalone)")},
+        options=[standalone_option("PCSX2 (Standalone)"), libretro_option("pcsx2_libretro", "LRPS2")],
     )
     platform_reader = FakePlatformCoreReader(mapping={"ps2": "LRPS2"})
     resolver, _ = _make_resolver(uow=uow, core_info=core_info, platform_core_reader=platform_reader)
 
-    assert resolver.active_emulator_for_rom(52) == core_invocation("pcsx2_libretro", "LRPS2", "pcsx2_libretro.so")
+    emulator = resolver.active_emulator_for_rom(52)
+    assert emulator is not None
+    assert (emulator.label, emulator.core_so) == ("LRPS2", "pcsx2_libretro")
 
 
-def test_resolvable_pin_returns_libretro_invocation() -> None:
-    """The launch-bake seam returns a libretro invocation for a resolvable pin."""
+def test_resolvable_pin_returns_libretro_entry() -> None:
+    """A resolvable pin answers its libretro entry."""
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=53, platform_slug="gba", emulator_override="mGBA")
     core_info = FakeCoreInfoProvider(
@@ -400,12 +396,14 @@ def test_resolvable_pin_returns_libretro_invocation() -> None:
     )
     resolver, _ = _make_resolver(uow=uow, core_info=core_info)
 
-    assert resolver.active_emulator_for_rom(53) == core_invocation("mgba_libretro", "mGBA", "mgba_libretro.so")
+    emulator = resolver.active_emulator_for_rom(53)
+    assert emulator is not None
+    assert (emulator.label, emulator.core_so) == ("mGBA", "mgba_libretro")
 
 
 def test_unresolvable_platform_returns_none() -> None:
     """A platform with no libretro default and no standalone pref resolves to None
-    — the bake site falls back to the plain launch."""
+    — no entry is in effect, and a start is refused."""
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=54, platform_slug="unknown", emulator_override=None)
     core_info = FakeCoreInfoProvider(active_core=(None, None))
@@ -416,174 +414,57 @@ def test_unresolvable_platform_returns_none() -> None:
 
 # --- per-game / per-platform pin to a STANDALONE emulator label (#1210) --------
 
-_RPCS3_COMMAND = "%EMULATOR_RPCS3% --no-gui %ROM%"
 _RPCS3_LABEL = "RPCS3 Directory (Standalone)"
-_RPCS3 = EmulatorInvocation.run_game(_RPCS3_COMMAND, _RPCS3_LABEL)
 
 
 def test_per_game_pin_to_standalone_label_resolves_standalone() -> None:
-    """A per-game pin naming a bakeable STANDALONE emulator resolves to it."""
+    """A per-game pin naming a STANDALONE emulator resolves to it."""
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=60, platform_slug="ps3", emulator_override=_RPCS3_LABEL)
-    core_info = FakeCoreInfoProvider(options=[standalone_option(_RPCS3_COMMAND, _RPCS3_LABEL)])
+    core_info = FakeCoreInfoProvider(options=[standalone_option(_RPCS3_LABEL)])
     resolver, _ = _make_resolver(uow=uow, core_info=core_info)
 
-    assert resolver.active_emulator_for_rom(60) == _RPCS3
+    emulator = resolver.active_emulator_for_rom(60)
+    assert emulator is not None
+    assert emulator.label == _RPCS3_LABEL
     # The .so-space projection is (None, label) — read-path consumers degrade.
     assert resolver.active_core_for_rom(60) == (None, _RPCS3_LABEL)
 
 
 def test_per_platform_standalone_label_resolves_standalone() -> None:
-    """A per-platform pin naming a bakeable STANDALONE emulator resolves to it."""
+    """A per-platform pin naming a STANDALONE emulator resolves to it."""
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=61, platform_slug="ps3", emulator_override=None)
-    core_info = FakeCoreInfoProvider(options=[standalone_option(_RPCS3_COMMAND, _RPCS3_LABEL)])
+    core_info = FakeCoreInfoProvider(options=[standalone_option(_RPCS3_LABEL)])
     platform_reader = FakePlatformCoreReader(mapping={"ps3": "RPCS3 Directory (Standalone)"})
     resolver, _ = _make_resolver(uow=uow, core_info=core_info, platform_core_reader=platform_reader)
 
-    assert resolver.active_emulator_for_rom(61) == _RPCS3
+    emulator = resolver.active_emulator_for_rom(61)
+    assert emulator is not None
+    assert emulator.label == _RPCS3_LABEL
 
 
-def test_a_standalone_pin_that_cannot_be_baked_stands_and_bakes_nothing(
+def test_a_standalone_pin_stands_whatever_starting_with_it_comes_to(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """A per-game pin to a label that still exists stands whatever its state (#2195 D23).
 
-    The entry cannot be baked, so it bakes the empty command, never another
-    emulator the user did not choose (#2195 D23, D43), and nothing is passed over.
+    Whether the resolver gives a complete command for it is asked at the start
+    (#2221 D2), and nothing is passed over.
     """
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=62, platform_slug="ps3", emulator_override="RPCS3 Shortcut (Standalone)")
     core_info = FakeCoreInfoProvider(
-        # The pinned label exists but is now un-bakeable (a shortcut form).
-        options=[
-            standalone_option(
-                "%ENABLESHORTCUTS% %ROM%", "RPCS3 Shortcut (Standalone)", status="unbakeable", reason="shortcut_script"
-            )
-        ],
-        standalone={"ps3": _RPCS3},
+        options=[standalone_option(_RPCS3_LABEL), standalone_option("RPCS3 Shortcut (Standalone)")],
     )
     resolver, _ = _make_resolver(uow=uow, core_info=core_info)
 
     with caplog.at_level(logging.WARNING, logger="test"):
         result = resolver.active_emulator_for_rom(62)
 
-    assert result == EmulatorInvocation.nothing()
+    assert result is not None
+    assert result.label == "RPCS3 Shortcut (Standalone)"
     assert not caplog.records
-
-
-# --- folder-boot direct rewrite: standalone → sandbox launch (ADR-0019 / #1212) -
-
-_PS3_EBOOT = "/roms/ps3/MyGame/PS3_GAME/USRDIR/EBOOT.BIN"
-_PS3_ROM_DIR = "/roms/ps3/MyGame"
-_RPCS3_LAUNCHER = "/app/retrodeck/components/rpcs3/component_launcher.sh"
-_RPCS3_WITH_LAUNCHER = EmulatorInvocation.run_game(_RPCS3_COMMAND, _RPCS3_LABEL, launcher=_RPCS3_LAUNCHER)
-
-
-def test_folder_boot_standalone_rewrites_to_direct() -> None:
-    """A standalone PS3 default over a folder-boot install becomes the ``direct``
-    sandbox invocation, through the launcher the resolver states for it."""
-    uow = FakeUnitOfWork()
-    _seed_rom(uow, rom_id=70, platform_slug="ps3", emulator_override=None)
-    _seed_install(uow, rom_id=70, file_path=_PS3_EBOOT, rom_dir=_PS3_ROM_DIR)
-    core_info = FakeCoreInfoProvider(standalone={"ps3": _RPCS3_WITH_LAUNCHER})
-    resolver, _ = _make_resolver(uow=uow, core_info=core_info)
-
-    assert resolver.active_emulator_for_rom(70) == EmulatorInvocation.direct(
-        _RPCS3_COMMAND, _RPCS3_LAUNCHER, _RPCS3_LABEL
-    )
-    # The .so-space projection stays (None, label) — unchanged from the standalone.
-    assert resolver.active_core_for_rom(70) == (None, _RPCS3_LABEL)
-
-
-def test_folder_boot_standalone_pin_also_rewrites_to_direct() -> None:
-    """A per-game standalone PIN over a folder-boot install rewrites to direct too —
-    the rewrite is on the resolved emulator, whichever layer produced it."""
-    uow = FakeUnitOfWork()
-    _seed_rom(uow, rom_id=71, platform_slug="ps3", emulator_override=_RPCS3_LABEL)
-    _seed_install(uow, rom_id=71, file_path=_PS3_EBOOT, rom_dir=_PS3_ROM_DIR)
-    core_info = FakeCoreInfoProvider(
-        options=[standalone_option(_RPCS3_COMMAND, _RPCS3_LABEL, launcher=_RPCS3_LAUNCHER)]
-    )
-    resolver, _ = _make_resolver(uow=uow, core_info=core_info)
-
-    assert resolver.active_emulator_for_rom(71) == EmulatorInvocation.direct(
-        _RPCS3_COMMAND, _RPCS3_LAUNCHER, _RPCS3_LABEL
-    )
-
-
-def test_non_folder_install_keeps_standalone_run_game_form() -> None:
-    """A standalone over a NON-folder install (e.g. a .iso, no folder-boot marker)
-    is left as the run_game ``-e`` standalone form — byte-identical to before."""
-    uow = FakeUnitOfWork()
-    _seed_rom(uow, rom_id=72, platform_slug="ps3", emulator_override=None)
-    _seed_install(uow, rom_id=72, file_path="/roms/ps3/Game.iso", rom_dir="/roms/ps3/Game")
-    core_info = FakeCoreInfoProvider(standalone={"ps3": _RPCS3_WITH_LAUNCHER})
-    resolver, _ = _make_resolver(uow=uow, core_info=core_info)
-
-    assert resolver.active_emulator_for_rom(72) == _RPCS3_WITH_LAUNCHER
-
-
-def test_uninstalled_rom_keeps_standalone() -> None:
-    """No install row (uninstalled ROM) → no folder-boot rewrite; the standalone
-    invocation passes through unchanged for the read-path projection."""
-    uow = FakeUnitOfWork()
-    _seed_rom(uow, rom_id=73, platform_slug="ps3", emulator_override=None)
-    core_info = FakeCoreInfoProvider(standalone={"ps3": _RPCS3_WITH_LAUNCHER})
-    resolver, _ = _make_resolver(uow=uow, core_info=core_info)
-
-    assert resolver.active_emulator_for_rom(73) == _RPCS3_WITH_LAUNCHER
-
-
-def test_libretro_over_folder_boot_install_is_never_rewritten() -> None:
-    """A libretro pin is never rewritten to direct, even over a folder-boot layout —
-    the rewrite fires only for standalone emulators."""
-    uow = FakeUnitOfWork()
-    _seed_rom(uow, rom_id=74, platform_slug="ps3", emulator_override="LRPS3")
-    _seed_install(uow, rom_id=74, file_path=_PS3_EBOOT, rom_dir=_PS3_ROM_DIR)
-    core_info = FakeCoreInfoProvider(
-        options=[
-            standalone_option(_RPCS3_COMMAND, _RPCS3_LABEL, launcher=_RPCS3_LAUNCHER),
-            libretro_option("lrps3_libretro", "LRPS3"),
-        ],
-    )
-    resolver, _ = _make_resolver(uow=uow, core_info=core_info)
-
-    assert resolver.active_emulator_for_rom(74) == core_invocation("lrps3_libretro", "LRPS3", "lrps3_libretro.so")
-
-
-def test_a_core_over_a_folder_boot_install_is_never_rewritten_whatever_launcher_it_carries() -> None:
-    """A RetroArch core is started only through its command: the fold execs a program, never RetroArch with a core."""
-    uow = FakeUnitOfWork()
-    _seed_rom(uow, rom_id=76, platform_slug="ps3", emulator_override=None)
-    _seed_install(uow, rom_id=76, file_path=_PS3_EBOOT, rom_dir=_PS3_ROM_DIR)
-    lrps3 = EmulatorInvocation.run_game(
-        "%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/lrps3_libretro.so %ROM%",
-        "LRPS3",
-        core_so="lrps3_libretro",
-        launcher=_RPCS3_LAUNCHER,
-    )
-    resolver, _ = _make_resolver(uow=uow, core_info=FakeCoreInfoProvider(standalone={"ps3": lrps3}))
-
-    assert resolver.active_emulator_for_rom(76) == lrps3
-
-
-def test_folder_boot_standalone_unresolvable_launcher_keeps_run_game_and_warns(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """When the resolver states no sandbox launcher, the standalone run_game form is
-    kept (no direct) and a WARNING is logged — the launch fails until a re-bake heals."""
-    uow = FakeUnitOfWork()
-    _seed_rom(uow, rom_id=75, platform_slug="ps3", emulator_override=None)
-    _seed_install(uow, rom_id=75, file_path=_PS3_EBOOT, rom_dir=_PS3_ROM_DIR)
-    core_info = FakeCoreInfoProvider(standalone={"ps3": _RPCS3})
-    resolver, _ = _make_resolver(uow=uow, core_info=core_info)  # the resolver states no launcher
-
-    with caplog.at_level(logging.WARNING, logger="test"):
-        result = resolver.active_emulator_for_rom(75)
-
-    assert result == _RPCS3
-    assert any("sandbox" in r.message and "launcher" in r.message for r in caplog.records)
 
 
 # --- the platform's system -------------------------------------------------------
@@ -622,45 +503,22 @@ def test_an_installed_game_launches_with_its_install_records_system() -> None:
 
 # --- the choice and what stands in its way (#2195 D7, D21, D23) -----------------
 
-_SHORTCUT = standalone_option(
-    "%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%",
-    "RPCS3 Shortcut (Standalone)",
-    status="unbakeable",
-    reason="shortcut_script",
-)
+_SHORTCUT = standalone_option("RPCS3 Shortcut (Standalone)")
 
 
-def test_a_folder_game_with_rpcs3_directory_picked_starts_it_directly() -> None:
-    uow = FakeUnitOfWork()
-    _seed_rom(uow, rom_id=81, platform_slug="ps3", emulator_override=_RPCS3_LABEL)
-    _seed_install(uow, rom_id=81, file_path=_PS3_EBOOT, rom_dir=_PS3_ROM_DIR)
-    core_info = FakeCoreInfoProvider(
-        options=[_SHORTCUT, standalone_option(_RPCS3_COMMAND, _RPCS3_LABEL, launcher=_RPCS3_LAUNCHER)]
-    )
-    resolver, _ = _make_resolver(uow=uow, core_info=core_info)
-
-    resolved = resolver.resolve_rom(81)
-
-    assert resolved is not None
-    assert resolved.invocation == EmulatorInvocation.direct(_RPCS3_COMMAND, _RPCS3_LAUNCHER, _RPCS3_LABEL)
-
-
-def test_a_shipped_default_tender_cannot_bake_bakes_the_empty_command() -> None:
-    """The default stands, and its shortcut gets no start that would run ES-DE's own choice (#2195 D7, D43)."""
+def test_a_shipped_default_stands_whatever_starting_with_it_comes_to() -> None:
+    """The default stands, and names its entry to every read of the emulator a game starts with (#2195 D7)."""
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=85, platform_slug="ps3")
-    core_info = FakeCoreInfoProvider(options=[_SHORTCUT, standalone_option(_RPCS3_COMMAND, _RPCS3_LABEL)])
+    core_info = FakeCoreInfoProvider(options=[_SHORTCUT, standalone_option(_RPCS3_LABEL)])
     resolver, _ = _make_resolver(uow=uow, core_info=core_info)
 
     resolved = resolver.resolve_rom(85)
 
     assert resolved is not None
     assert resolved.choice.option is not None
-    assert (resolved.choice.option.label, resolved.invocation) == (
-        "RPCS3 Shortcut (Standalone)",
-        EmulatorInvocation.nothing(),
-    )
-    assert resolver.active_core_for_rom(85) == (None, None)
+    assert resolved.choice.option.label == "RPCS3 Shortcut (Standalone)"
+    assert resolver.active_core_for_rom(85) == (None, "RPCS3 Shortcut (Standalone)")
 
 
 def test_a_platform_with_no_entry_keeps_the_plain_launch() -> None:
@@ -671,12 +529,12 @@ def test_a_platform_with_no_entry_keeps_the_plain_launch() -> None:
     assert resolver.active_emulator_for_rom(86) is None
 
 
-def test_a_system_with_entries_but_no_default_established_bakes_the_empty_command() -> None:
-    """D9's choose state: no entry is in effect, so the shortcut gets the empty command (#2195 D43)."""
+def test_a_system_with_entries_but_no_default_established_has_no_entry_in_effect() -> None:
+    """D9's choose state: no entry is in effect."""
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=87, platform_slug="ps2")
     unseen = dataclasses.replace(
-        standalone_option("%EMULATOR_PCSX2% -batch %ROM%", "PCSX2 (Standalone)"),
+        standalone_option("PCSX2 (Standalone)"),
         declared_index=0,
         not_established="no_find_rule",
     )
@@ -685,14 +543,14 @@ def test_a_system_with_entries_but_no_default_established_bakes_the_empty_comman
     resolved = resolver.resolve_rom(87)
 
     assert resolved is not None
-    assert (resolved.choice.option, resolved.invocation) == (None, EmulatorInvocation.nothing())
+    assert resolved.choice.option is None
 
 
-def test_a_vanished_pick_with_no_default_bakes_the_empty_command() -> None:
+def test_a_vanished_pick_with_no_default_has_no_entry_in_effect() -> None:
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=88, platform_slug="ps2", emulator_override="Gone (Standalone)")
     unseen = dataclasses.replace(
-        standalone_option("%EMULATOR_PCSX2% -batch %ROM%", "PCSX2 (Standalone)"),
+        standalone_option("PCSX2 (Standalone)"),
         declared_index=0,
         not_established="no_find_rule",
     )
@@ -702,13 +560,13 @@ def test_a_vanished_pick_with_no_default_bakes_the_empty_command() -> None:
 
     assert resolved is not None
     assert resolved.choice.vanished is not None
-    assert (resolved.choice.option, resolved.invocation) == (None, EmulatorInvocation.nothing())
+    assert resolved.choice.option is None
 
 
 def test_a_pin_to_an_entry_not_installed_stands() -> None:
     uow = FakeUnitOfWork()
     _seed_rom(uow, rom_id=83, platform_slug="gba", emulator_override="Missing")
-    missing = standalone_option("%EMULATOR_MISSING% %ROM%", "Missing", status="needs_setup", reason="not_installed")
+    missing = standalone_option("Missing", not_installed=True)
     core_info = FakeCoreInfoProvider(options=[libretro_option("mgba_libretro", "mGBA"), missing])
     resolver, _ = _make_resolver(uow=uow, core_info=core_info)
 
@@ -716,11 +574,7 @@ def test_a_pin_to_an_entry_not_installed_stands() -> None:
 
     assert resolved is not None
     assert resolved.choice.option is not None
-    assert (resolved.choice.option.label, resolved.choice.layer, resolved.invocation) == (
-        "Missing",
-        "game",
-        EmulatorInvocation.nothing(),
-    )
+    assert (resolved.choice.option.label, resolved.choice.layer) == ("Missing", "game")
 
 
 def test_a_vanished_pin_is_named_with_its_source_beside_the_default() -> None:
@@ -782,3 +636,19 @@ def test_a_retrodeck_pin_while_retrodeck_is_switched_off_waits_for_it(caplog: py
     assert on is not None
     assert on.choice.option is not None
     assert (on.choice.option.label, on.choice.layer) == ("mGBA", GAME_PICK)
+
+
+def test_the_resolution_carries_the_source_that_answered() -> None:
+    """The start check reads whether the answering source starts games off the resolution (#2221 D21)."""
+    uow = FakeUnitOfWork()
+    _seed_rom(uow, rom_id=60, platform_slug="gba")
+    core_info = FakeCoreInfoProvider(
+        available_cores=[{"core_so": "mgba_libretro", "label": "mGBA", "is_default": True}],
+        source={"kind": "emudeck", "starts_games": False},
+    )
+    resolver, _ = _make_resolver(uow=uow, core_info=core_info)
+
+    resolved = resolver.resolve_rom(60)
+
+    assert resolved is not None
+    assert resolved.source == {"kind": "emudeck", "starts_games": False}

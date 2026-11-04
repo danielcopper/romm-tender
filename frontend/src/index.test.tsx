@@ -1,6 +1,6 @@
 /**
- * Exercises index.tsx's `download_complete` and `migration_relaunch_options`
- * listeners through the backend-event harness. The panel factory registers
+ * Exercises index.tsx's backend-event listeners through the backend-event
+ * harness. The panel factory registers
  * the listeners on the in-memory bus; tests dispatch events via emitHostEvent
  * and assert the launch-options confirm-poll fires for the payload's appId.
  *
@@ -34,7 +34,7 @@ import {
   getAllPlaytime,
   getAppIdRomIdMap,
   ensureDeviceRegistered,
-  getInstalledRelaunchOptions,
+  getBoundLaunchOptions,
   invalidateCachedGameDetail,
   getMetadataCachePage,
   releasePruneConflictLease,
@@ -699,14 +699,13 @@ describe("index.tsx — persistent prune listeners", () => {
   });
 });
 
-describe("index.tsx — download_complete launch-options sync", () => {
+describe("index.tsx — download_complete leaves the shortcut alone", () => {
   beforeEach(() => {
     setLaunchOptionsConfirmed.mockClear();
     setLaunchOptionsConfirmed.mockResolvedValue(true);
-    logError.mockClear();
   });
 
-  it("confirm-sets launch options for the payload appId on download_complete", async () => {
+  it("writes nothing to the shortcut: its launch options are its appId, installed or not", async () => {
     panelFactory();
 
     const event: DownloadCompleteEvent = {
@@ -714,57 +713,13 @@ describe("index.tsx — download_complete launch-options sync", () => {
       rom_name: "Test ROM",
       platform_name: "PSX",
       file_path: "/games/test.bin",
-      app_id: 5000,
-      launch_options: 'flatpak run net.retrodeck.retrodeck "/games/test.bin"',
     };
     act(() => {
       emitHostEvent<DownloadCompleteEvent>("download_complete", event);
     });
     await flush();
 
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(
-      5000,
-      'flatpak run net.retrodeck.retrodeck "/games/test.bin"',
-    );
-  });
-
-  it("no-ops gracefully when the downloaded rom has no bound appId (null)", async () => {
-    panelFactory();
-
-    act(() => {
-      emitHostEvent<DownloadCompleteEvent>("download_complete", {
-        rom_id: 999,
-        rom_name: "Unsynced",
-        platform_name: "PSX",
-        file_path: "/games/u.bin",
-        app_id: null,
-        launch_options: 'flatpak run net.retrodeck.retrodeck "/games/u.bin"',
-      });
-    });
-    await flush();
-
     expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
-  });
-
-  it("surfaces a logError when setLaunchOptionsConfirmed rejects", async () => {
-    setLaunchOptionsConfirmed.mockRejectedValue(new Error("set failed"));
-    panelFactory();
-
-    act(() => {
-      emitHostEvent<DownloadCompleteEvent>("download_complete", {
-        rom_id: 42,
-        rom_name: "Test ROM",
-        platform_name: "PSX",
-        file_path: "/games/test.bin",
-        app_id: 5000,
-        launch_options: 'flatpak run net.retrodeck.retrodeck "/games/test.bin"',
-      });
-    });
-    await flush();
-
-    expect(logError).toHaveBeenCalledWith(
-      expect.stringContaining("download_complete: failed to set launch options for rom 42"),
-    );
   });
 });
 
@@ -1136,70 +1091,6 @@ type SyncCompleteAfterStaleFailure = {
   prune_lease_token?: string;
 };
 
-describe("index.tsx — migration_relaunch_options listener", () => {
-  beforeEach(() => {
-    setLaunchOptionsConfirmed.mockClear();
-    setLaunchOptionsConfirmed.mockResolvedValue(true);
-    logError.mockClear();
-  });
-
-  it("confirm-sets launch options for each migrated item", async () => {
-    panelFactory();
-
-    act(() => {
-      emitHostEvent<{ items: { app_id: number; launch_options: string }[] }>("migration_relaunch_options", {
-        items: [
-          { app_id: 100, launch_options: 'flatpak run net.retrodeck.retrodeck "/new/a.bin"' },
-          { app_id: 200, launch_options: 'flatpak run net.retrodeck.retrodeck "/new/b.bin"' },
-        ],
-      });
-    });
-    await flush();
-
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(
-      100,
-      'flatpak run net.retrodeck.retrodeck "/new/a.bin"',
-      undefined,
-      expect.any(Function),
-    );
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(
-      200,
-      'flatpak run net.retrodeck.retrodeck "/new/b.bin"',
-      undefined,
-      expect.any(Function),
-    );
-  });
-
-  it("ignores an empty items array", async () => {
-    panelFactory();
-
-    act(() => {
-      emitHostEvent<{ items: { app_id: number; launch_options: string }[] }>("migration_relaunch_options", {
-        items: [],
-      });
-    });
-    await flush();
-
-    expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
-  });
-
-  it("surfaces a logError when setLaunchOptionsConfirmed rejects for an item", async () => {
-    setLaunchOptionsConfirmed.mockRejectedValue(new Error("set failed"));
-    panelFactory();
-
-    act(() => {
-      emitHostEvent<{ items: { app_id: number; launch_options: string }[] }>("migration_relaunch_options", {
-        items: [{ app_id: 100, launch_options: 'flatpak run net.retrodeck.retrodeck "/new/a.bin"' }],
-      });
-    });
-    await flush();
-
-    expect(logError).toHaveBeenCalledWith(
-      expect.stringContaining("migration_relaunch_options: failed to set launch options for appId 100"),
-    );
-  });
-});
-
 describe("index.tsx — startup launch-options reconcile (#1043)", () => {
   const relaunchOptions = (items: { app_id: number; launch_options: string }[]) => ({
     success: true as const,
@@ -1216,11 +1107,11 @@ describe("index.tsx — startup launch-options reconcile (#1043)", () => {
     vi.mocked(getAppIdRomIdMap).mockResolvedValue({});
     // Settle the sibling reset-notice detach so its .catch doesn't muddy logError.
     vi.mocked(getSettingsResetNotice).mockResolvedValue({ pending: false, backed_up_to: null });
-    vi.mocked(getInstalledRelaunchOptions).mockReset();
+    vi.mocked(getBoundLaunchOptions).mockReset();
   });
 
   it("confirm-sets launch options for each reconciled item after init", async () => {
-    vi.mocked(getInstalledRelaunchOptions).mockResolvedValue(
+    vi.mocked(getBoundLaunchOptions).mockResolvedValue(
       relaunchOptions([
         { app_id: 100, launch_options: 'flatpak run net.retrodeck.retrodeck "/roms/a.bin"' },
         { app_id: 200, launch_options: 'flatpak run net.retrodeck.retrodeck "/roms/b.bin"' },
@@ -1245,17 +1136,17 @@ describe("index.tsx — startup launch-options reconcile (#1043)", () => {
   });
 
   it("never confirm-sets when there is nothing installed to reconcile", async () => {
-    vi.mocked(getInstalledRelaunchOptions).mockResolvedValue(relaunchOptions([]));
+    vi.mocked(getBoundLaunchOptions).mockResolvedValue(relaunchOptions([]));
     panelFactory();
     await flush();
 
-    expect(getInstalledRelaunchOptions).toHaveBeenCalled();
+    expect(getBoundLaunchOptions).toHaveBeenCalled();
     expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
   });
 
   it("surfaces a startup_reconcile-prefixed logError when a confirm returns false", async () => {
     setLaunchOptionsConfirmed.mockResolvedValue(false);
-    vi.mocked(getInstalledRelaunchOptions).mockResolvedValue(
+    vi.mocked(getBoundLaunchOptions).mockResolvedValue(
       relaunchOptions([{ app_id: 100, launch_options: 'flatpak run net.retrodeck.retrodeck "/roms/a.bin"' }]),
     );
     panelFactory();
@@ -1271,7 +1162,7 @@ describe("index.tsx — startup launch-options reconcile (#1043)", () => {
   });
 
   it("surfaces a startup_reconcile-prefixed logError when the pull endpoint rejects", async () => {
-    vi.mocked(getInstalledRelaunchOptions).mockRejectedValue(new Error("pull failed"));
+    vi.mocked(getBoundLaunchOptions).mockRejectedValue(new Error("pull failed"));
     panelFactory();
     await flush();
 
@@ -1306,16 +1197,16 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
     vi.mocked(getSettingsResetNotice).mockResolvedValue({ pending: false, backed_up_to: null });
     // The startup reconcile fires on factory init; default it to an empty set
     // so each test isolates the sync_complete-triggered reconcile below.
-    vi.mocked(getInstalledRelaunchOptions).mockReset();
-    vi.mocked(getInstalledRelaunchOptions).mockResolvedValue(relaunchOptions([]));
+    vi.mocked(getBoundLaunchOptions).mockReset();
+    vi.mocked(getBoundLaunchOptions).mockResolvedValue(relaunchOptions([]));
   });
 
   it("re-confirms launch options for every installed+bound ROM after a sync", async () => {
     panelFactory();
     await flush(); // settle the startup reconcile (empty set)
     setLaunchOptionsConfirmed.mockClear();
-    vi.mocked(getInstalledRelaunchOptions).mockClear();
-    vi.mocked(getInstalledRelaunchOptions).mockResolvedValue(
+    vi.mocked(getBoundLaunchOptions).mockClear();
+    vi.mocked(getBoundLaunchOptions).mockResolvedValue(
       relaunchOptions([{ app_id: 100, launch_options: 'flatpak run net.retrodeck.retrodeck "/roms/a.bin"' }]),
     );
 
@@ -1328,7 +1219,7 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
     });
     await flush();
 
-    expect(getInstalledRelaunchOptions).toHaveBeenCalled();
+    expect(getBoundLaunchOptions).toHaveBeenCalled();
     expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(
       100,
       'flatpak run net.retrodeck.retrodeck "/roms/a.bin"',
@@ -1342,8 +1233,8 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
     panelFactory();
     await flush();
     setLaunchOptionsConfirmed.mockClear();
-    vi.mocked(getInstalledRelaunchOptions).mockClear();
-    vi.mocked(getInstalledRelaunchOptions).mockResolvedValue(
+    vi.mocked(getBoundLaunchOptions).mockClear();
+    vi.mocked(getBoundLaunchOptions).mockResolvedValue(
       relaunchOptions([{ app_id: 200, launch_options: 'flatpak run net.retrodeck.retrodeck "/roms/b.bin"' }]),
     );
 
@@ -1369,8 +1260,8 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
     await flush();
     setLaunchOptionsConfirmed.mockClear();
     logError.mockClear();
-    vi.mocked(getInstalledRelaunchOptions).mockReset();
-    vi.mocked(getInstalledRelaunchOptions).mockRejectedValue(new Error("pull failed"));
+    vi.mocked(getBoundLaunchOptions).mockReset();
+    vi.mocked(getBoundLaunchOptions).mockRejectedValue(new Error("pull failed"));
 
     act(() => {
       emitHostEvent<SyncCompletePayload>("sync_complete", {
@@ -1418,7 +1309,7 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
   it("reads the bound rows for the after-sync passes only once the removal has reported, and files collections at once (#2653 D3)", async () => {
     panelFactory();
     await flush();
-    vi.mocked(getInstalledRelaunchOptions).mockClear();
+    vi.mocked(getBoundLaunchOptions).mockClear();
     vi.mocked(getAllPlaytime).mockClear();
     vi.mocked(getAppIdRomIdMap).mockClear();
     createOrUpdateCollections.mockClear();
@@ -1439,12 +1330,12 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
       expect(createOrUpdateCollections).toHaveBeenCalledWith({ SNES: [100] }, undefined, expect.any(AbortSignal)),
     );
     await flush();
-    const readBeforeTheReport = [getInstalledRelaunchOptions, getAllPlaytime, getAppIdRomIdMap].map(
+    const readBeforeTheReport = [getBoundLaunchOptions, getAllPlaytime, getAppIdRomIdMap].map(
       (read) => vi.mocked(read).mock.calls.length,
     );
 
     finishReport();
-    await vi.waitFor(() => expect(getInstalledRelaunchOptions).toHaveBeenCalled());
+    await vi.waitFor(() => expect(getBoundLaunchOptions).toHaveBeenCalled());
     await vi.waitFor(() => expect(getAllPlaytime).toHaveBeenCalled());
 
     expect(readBeforeTheReport).toEqual([0, 0, 0]);
@@ -1454,7 +1345,7 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
   it("runs the after-sync passes when the removal's report fails (#2653 D3)", async () => {
     panelFactory();
     await flush();
-    vi.mocked(getInstalledRelaunchOptions).mockClear();
+    vi.mocked(getBoundLaunchOptions).mockClear();
     vi.mocked(getAllPlaytime).mockClear();
     reportSyncRemovals.mockRejectedValueOnce(new Error("report lost"));
 
@@ -1466,7 +1357,7 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
     await vi.waitFor(() =>
       expect(logError).toHaveBeenCalledWith(expect.stringContaining("stale shortcut removal failed")),
     );
-    await vi.waitFor(() => expect(getInstalledRelaunchOptions).toHaveBeenCalled());
+    await vi.waitFor(() => expect(getBoundLaunchOptions).toHaveBeenCalled());
     await vi.waitFor(() => expect(getAllPlaytime).toHaveBeenCalled());
   });
 
@@ -1535,8 +1426,8 @@ describe("index.tsx — sync_complete registers RomM appIds (#1205)", () => {
     vi.mocked(getAllPlaytime).mockResolvedValue({ playtime: {} });
     vi.mocked(getAppIdRomIdMap).mockResolvedValue({});
     vi.mocked(getSettingsResetNotice).mockResolvedValue({ pending: false, backed_up_to: null });
-    vi.mocked(getInstalledRelaunchOptions).mockReset();
-    vi.mocked(getInstalledRelaunchOptions).mockResolvedValue({
+    vi.mocked(getBoundLaunchOptions).mockReset();
+    vi.mocked(getBoundLaunchOptions).mockResolvedValue({
       success: true,
       items: [],
       prune_lease_token: null,

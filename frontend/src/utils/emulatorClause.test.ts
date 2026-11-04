@@ -15,17 +15,8 @@ describe("emulatorClause", () => {
     expect(emulatorClause(known({}))).toEqual({ text: "mGBA", gamesCannotStart: false });
   });
 
-  it("names a default Tender cannot bake, which the games cannot start with", () => {
-    const emulators = [standaloneEmu("mGBA (Standalone)", true, { bakeable: false, reason: "inject" })];
-    const start = emulatorStart({ state: "cannot_start", reason: "not_bakeable", entry: "mGBA (Standalone)" });
-    expect(emulatorClause(known({ emulators, active_core_label: "mGBA (Standalone)", start }))).toEqual({
-      text: "mGBA (Standalone)",
-      gamesCannotStart: true,
-    });
-  });
-
   it("names a default that cannot start the games, in the state they cannot start in", () => {
-    const emulators = [standaloneEmu("Ryubing (Standalone)", true, { bakeable: false, reason: "not_installed" })];
+    const emulators = [standaloneEmu("Ryubing (Standalone)", true, { reason: "not_installed" })];
     const start = emulatorStart({ state: "cannot_start", reason: "not_installed", entry: "Ryubing (Standalone)" });
     expect(emulatorClause(known({ emulators, active_core_label: "Ryubing (Standalone)", start }))).toEqual({
       text: "Ryubing (Standalone)",

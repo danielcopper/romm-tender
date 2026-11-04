@@ -5,7 +5,7 @@ import * as backend from "../../api/backend";
 import * as toast from "../../utils/toast";
 import * as sessionManager from "../../utils/sessionManager";
 import * as pruneLease from "../../utils/pruneLease";
-import { reconfirmLaunchOptions } from "../../utils/launchOptionsReconcile";
+import { prepareStart } from "../../utils/launchOptionsReconcile";
 import { consumeLaunchSkip } from "../../utils/launchGate";
 import { getMigrationState } from "../../utils/migrationStore";
 import * as gameDetailStore from "../../utils/gameDetailStore";
@@ -59,7 +59,7 @@ vi.mock("../../utils/sessionManager", () => {
 });
 
 vi.mock("../../utils/launchOptionsReconcile", () => ({
-  reconfirmLaunchOptions: vi.fn().mockResolvedValue({ status: "ready" }),
+  prepareStart: vi.fn().mockResolvedValue({ status: "ready" }),
 }));
 
 vi.mock("../../utils/gameDetailStore", async (importOriginal) => {
@@ -200,14 +200,15 @@ describe("usePlayLaunch", () => {
       });
 
       expect(backend.preLaunchSync).not.toHaveBeenCalled();
+      expect(prepareStart).not.toHaveBeenCalled();
       expect(runGame).toHaveBeenCalledWith("12345", "", -1, 100);
       expect(backend.debugLog).toHaveBeenCalledWith(
         "DesktopPlayButton: appId=12345 already running — skipping pre-launch sync [session=1]",
       );
     });
 
-    it("starts nothing when the re-confirm was cancelled", async () => {
-      vi.mocked(reconfirmLaunchOptions).mockResolvedValueOnce({ status: "cancelled" });
+    it("starts nothing when preparing the start was cancelled", async () => {
+      vi.mocked(prepareStart).mockResolvedValueOnce({ status: "cancelled" });
       const result = renderLaunch();
 
       await act(async () => {
@@ -262,18 +263,18 @@ describe("usePlayLaunch", () => {
       );
     });
 
-    it("re-confirms the shortcut's launch options before the start", async () => {
+    it("prepares the start before Steam starts it", async () => {
       const result = renderLaunch();
 
       await act(async () => {
         await result.current.handlePlayClick();
       });
 
-      expect(reconfirmLaunchOptions).toHaveBeenCalledWith(100, 12345, "DesktopPlayButton", expect.anything());
+      expect(prepareStart).toHaveBeenCalledWith(100, 12345, "DesktopPlayButton", expect.anything());
       expect(runGame).toHaveBeenCalled();
     });
 
-    it("starts without the re-confirm after a check that got no answer in time", async () => {
+    it("still prepares the start after a check that got no answer in time", async () => {
       vi.mocked(backend.checkCoreChange).mockReturnValueOnce(new Promise(() => {}));
       vi.useFakeTimers();
       try {
@@ -289,12 +290,12 @@ describe("usePlayLaunch", () => {
         vi.useRealTimers();
       }
 
+      expect(prepareStart).toHaveBeenCalledWith(100, 12345, "DesktopPlayButton", expect.anything());
       expect(runGame).toHaveBeenCalled();
-      expect(reconfirmLaunchOptions).not.toHaveBeenCalled();
     });
 
-    it("returns to PLAY and starts nothing when the re-confirm times out", async () => {
-      vi.mocked(reconfirmLaunchOptions).mockResolvedValueOnce({ status: "timeout" });
+    it("returns to PLAY, starts nothing and says why when the start is refused", async () => {
+      vi.mocked(prepareStart).mockResolvedValueOnce({ status: "refused", sentence: "No emulator starts this game." });
       const result = renderLaunch();
 
       await act(async () => {
@@ -304,6 +305,7 @@ describe("usePlayLaunch", () => {
       expect(setPressState).toHaveBeenLastCalledWith(null);
       expect(runGame).not.toHaveBeenCalled();
       expect(consumeLaunchSkip(12345)).toBe(false);
+      expect(toast.showToast).toHaveBeenCalledWith("No emulator starts this game.");
     });
 
     it("returns to PLAY and starts nothing once the page no longer answers for the start", async () => {

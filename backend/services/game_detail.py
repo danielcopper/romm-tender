@@ -423,10 +423,8 @@ class GameDetailService:
 
         # The BIOS filter keys off the entry the game starts with (the pin over
         # the default), resolved by rom_id from the shared seam — the CHOSEN
-        # entry, which the picker names too, whether or not Tender can bake it:
-        # the invocation names no emulator for one it cannot (#2195 D43), which
-        # would send the page back to the platform's own pick. The whole entry
-        # goes over, not one field of it: the checker filters by its IDENTITY —
+        # entry, which the picker names too, whatever starting with it comes to.
+        # The whole entry goes over, not one field of it: the checker filters by its IDENTITY —
         # the one field naming a standalone emulator as well as a libretro core,
         # where ``active_core_for_rom`` would answer ``None`` for the first — and
         # names it by its LABEL, and a caller splitting those is how a page comes

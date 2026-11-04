@@ -2,9 +2,10 @@
 
 Owns the reconciliation steps that run after state is loaded and
 adapters are wired: reports the downloads whose files are not where their
-``rom_installs`` row says, and transitions any ``running`` ``SyncRun`` left
-behind by a crash into ``interrupted``. The report deletes nothing; why
-such a record stays is ``docs/architecture/database-design.md``'s.
+``rom_installs`` row says, transitions any ``running`` ``SyncRun`` left
+behind by a crash into ``interrupted``, and lists the bound shortcuts whose
+launch options in Steam's shortcut file are not their appId. The report deletes
+nothing; why such a record stays is ``docs/architecture/database-design.md``'s.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.installed_roms import is_pending_migration_path
 from domain.migration_paths import pending_homes_from_kv
+from domain.shortcut_data import shortcut_launch_options
 
 if TYPE_CHECKING:
     import asyncio
@@ -24,8 +26,8 @@ if TYPE_CHECKING:
         Clock,
         ConflictRules,
         PathExistsReader,
-        RelaunchOptionsReader,
         ResolvedPathFn,
+        SteamConfigStore,
         UnitOfWorkFactory,
     )
 
@@ -48,12 +50,11 @@ class StartupHealingServiceConfig:
     path resolver that turns a stored home marker into the directory it names,
     and the SQLite Unit-of-Work factory (the transactional seam over the
     ``rom_installs``, ``sync_runs``, and ``kv_config`` repositories — the last
-    holding the pending-migration previous home marker). The shared
-    ``relaunch_options`` seam builds each installed+bound ROM's full launch
-    command (active core, selected disc) so the startup launch-options
-    reconcile draws its items from the same resolver the RetroDECK-home
-    migration does. ``loop`` runs that build off the loop thread, and
-    ``conflict_rules`` are what its use case checks and leases through. Bundled
+    holding the pending-migration previous home marker). ``steam_config``
+    reads the launch options Steam's shortcut file holds, which the
+    launch-options reconcile compares with each bound shortcut's appId;
+    ``loop`` runs that read off the loop thread, and ``conflict_rules`` are what
+    its use case checks and leases through. Bundled
     here so the ctor stays within the S107 parameter budget and the service
     stays free of raw filesystem I/O.
     """
@@ -63,7 +64,7 @@ class StartupHealingServiceConfig:
     path_probe: PathExistsReader
     resolve_path: ResolvedPathFn
     uow_factory: UnitOfWorkFactory
-    relaunch_options: RelaunchOptionsReader
+    steam_config: SteamConfigStore
     loop: asyncio.AbstractEventLoop
     conflict_rules: ConflictRules
 
@@ -77,7 +78,7 @@ class StartupHealingService:
         self._path_probe = config.path_probe
         self._resolve_path = config.resolve_path
         self._uow_factory = config.uow_factory
-        self._relaunch_options = config.relaunch_options
+        self._steam_config = config.steam_config
         self._loop = config.loop
         self._rules = config.conflict_rules
 
@@ -156,23 +157,37 @@ class StartupHealingService:
             run.mark_interrupted(at=self._clock.now().isoformat(), reason="interrupted by restart")
             uow.sync_runs.save(run)
 
-    async def get_installed_relaunch_options(self) -> dict[str, Any]:
-        """Build the relaunch items for every installed+bound ROM so the
-        frontend can re-confirm drifted ``launch_options`` at startup (#1043).
+    async def get_bound_launch_options(self) -> dict[str, Any]:
+        """List every bound shortcut whose launch options are not its appId, for the panel to set.
 
-        Checks the ``get_installed_relaunch_options`` endpoint's conflict rules
-        first. Answers ``{"success": True, "items", "prune_lease_token"}``: the
-        token is an ``installed_reconcile`` lease for the frontend's Steam
-        writes when there are items, and ``None`` when there are none.
+        Checks the ``get_bound_launch_options`` endpoint's conflict rules first.
+        Answers ``{"success": True, "items", "prune_lease_token"}``: each item is
+        ``{"app_id", "launch_options"}`` with the launch options the shortcut
+        must carry, and the token an ``installed_reconcile`` lease for the
+        panel's Steam writes when there are items, ``None`` when there are none.
 
-        Delegates, off the loop thread, to the shared ``relaunch_options``
-        resolver — the same seam the RetroDECK-home migration re-bakes through —
-        so the startup reconcile and the migration relaunch never carry a
-        divergent build of the list. It snapshots the installed+bound rows in one
-        short read UoW it closes before resolving the core and disc, so the
-        nested resolver UoW never deadlocks (#1154).
+        A shortcut is listed when Steam's shortcut file holds anything else for
+        it, holds nothing for it, or cannot be read at all — then every bound
+        shortcut is listed, and the panel's confirm decides. Installed or not
+        makes no difference: every bound shortcut carries its appId.
         """
-        async with self._rules.hold("get_installed_relaunch_options", prune=True):
-            items = await self._loop.run_in_executor(None, self._relaunch_options.installed_relaunch_items)
+        async with self._rules.hold("get_bound_launch_options", prune=True):
+            items = await self._loop.run_in_executor(None, self._bound_launch_options_io)
             token = await self._rules.acquire_lease("installed_reconcile") if items else None
             return {"success": True, "items": items, "prune_lease_token": token}
+
+    def _bound_launch_options_io(self) -> list[dict[str, Any]]:
+        """The bound shortcuts whose launch options in Steam's file differ from their appId.
+
+        The bound appIds are read in one short read UoW that is closed before the
+        file is read, so the file read holds no transaction.
+        """
+        with self._uow_factory() as uow:
+            app_ids = sorted({rom.shortcut_app_id for rom in uow.roms.iter_all() if rom.shortcut_app_id is not None})
+        held = self._steam_config.read_shortcut_launch_options()
+        items: list[dict[str, Any]] = []
+        for app_id in app_ids:
+            wanted = shortcut_launch_options(app_id)
+            if held is None or held.get(app_id) != wanted:
+                items.append({"app_id": app_id, "launch_options": wanted})
+        return items

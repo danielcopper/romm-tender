@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { batchConfirmLaunchOptions, reconfirmLaunchOptions } from "./launchOptionsReconcile";
+import { batchConfirmLaunchOptions, NOT_RESPONDING_START, prepareStart } from "./launchOptionsReconcile";
 import * as steamShortcuts from "./steamShortcuts";
 import * as backend from "../api/backend";
 import { capturePruneLeaseAdmission, mountPruneLeaseOwner, releasePruneLeasesByOwner } from "./pruneLease";
@@ -104,11 +104,11 @@ describe("batchConfirmLaunchOptions", () => {
     vi.mocked(steamShortcuts.setLaunchOptionsConfirmed).mockImplementation((appId: number) =>
       appId === 2 ? Promise.reject(new Error("boom")) : Promise.resolve(true),
     );
-    await batchConfirmLaunchOptions(items(3), "migration_relaunch_options");
+    await batchConfirmLaunchOptions(items(3), "startup_reconcile");
     expect(vi.mocked(steamShortcuts.setLaunchOptionsConfirmed)).toHaveBeenCalledTimes(3);
     expect(vi.mocked(backend.logError)).toHaveBeenCalledTimes(1);
     const msg = vi.mocked(backend.logError).mock.calls[0]![0];
-    expect(msg).toContain("migration_relaunch_options: failed to set launch options for appId 2");
+    expect(msg).toContain("startup_reconcile: failed to set launch options for appId 2");
     expect(msg).toContain("boom");
   });
 
@@ -164,148 +164,180 @@ describe("batchConfirmLaunchOptions", () => {
   });
 });
 
-describe("reconfirmLaunchOptions", () => {
-  const RELAUNCH_COMMAND = 'flatpak run net.retrodeck.retrodeck "/roms/gba/pokemon.gba"';
+describe("prepareStart", () => {
+  const APP_ID = "100";
+  type Answer = Awaited<ReturnType<typeof backend.prepareGameStart>>;
+  const prepared = (token = "launch-lease"): Answer => ({
+    success: true,
+    app_id: 100,
+    launch_options: APP_ID,
+    prune_lease_token: token,
+  });
 
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(steamShortcuts.setLaunchOptionsConfirmed).mockResolvedValue(true);
+    vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
   });
 
-  it("confirm-sets the resolved command onto the appId when an item is returned", async () => {
-    vi.mocked(backend.getRomRelaunchOptions).mockResolvedValue({
-      success: true,
-      app_id: 100,
-      launch_options: RELAUNCH_COMMAND,
-      prune_lease_token: "launch-lease",
+  it("asks the backend to prepare the start and sets the shortcut's launch options back to its appId", async () => {
+    vi.mocked(backend.prepareGameStart).mockResolvedValue(prepared());
+
+    await expect(prepareStart(42, 100, "CustomPlayButton")).resolves.toEqual({ status: "ready" });
+
+    expect(backend.prepareGameStart).toHaveBeenCalledWith(42);
+    expect(steamShortcuts.setLaunchOptionsConfirmed).toHaveBeenCalledWith(100, APP_ID);
+    expect(backend.releasePruneConflictLease).toHaveBeenCalledWith("launch-lease");
+    expect(backend.logError).not.toHaveBeenCalled();
+  });
+
+  it("refuses with the game page's own words where the backend names the game's start", async () => {
+    vi.mocked(backend.prepareGameStart).mockResolvedValue({
+      success: false,
+      reason: "cannot_start",
+      message: "ROM 42 cannot start with PCSX2: environment_unread",
+      start: { state: "cannot_start", reason: "not_installed", entry: "PCSX2" },
     });
 
-    await expect(reconfirmLaunchOptions(42, 100, "CustomPlayButton")).resolves.toEqual({ status: "ready" });
-
-    expect(vi.mocked(backend.getRomRelaunchOptions)).toHaveBeenCalledWith(42);
-    expect(vi.mocked(steamShortcuts.setLaunchOptionsConfirmed)).toHaveBeenCalledWith(100, RELAUNCH_COMMAND);
-    expect(vi.mocked(backend.logError)).not.toHaveBeenCalled();
+    await expect(prepareStart(42, 100, "Watcher")).resolves.toEqual({
+      status: "refused",
+      sentence: "PCSX2 is not installed, so this game cannot start.",
+    });
+    expect(steamShortcuts.setLaunchOptionsConfirmed).not.toHaveBeenCalled();
   });
 
-  it("skips the confirm-set on a null item but does not throw or log", async () => {
-    vi.mocked(backend.getRomRelaunchOptions).mockResolvedValue(null);
-
-    await expect(reconfirmLaunchOptions(42, 100, "Watcher")).resolves.toEqual({ status: "ready" });
-
-    expect(vi.mocked(backend.getRomRelaunchOptions)).toHaveBeenCalledWith(42);
-    expect(vi.mocked(steamShortcuts.setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
-    expect(vi.mocked(backend.logError)).not.toHaveBeenCalled();
-  });
-
-  it("logs a non-vacuous error with the context prefix when the fetch rejects; never throws", async () => {
-    vi.mocked(backend.getRomRelaunchOptions).mockRejectedValue(new Error("offline"));
-
-    await expect(reconfirmLaunchOptions(42, 100, "Watcher")).resolves.toEqual({
-      status: "best_effort_failure",
+  it("refuses with the resolver's reason where it gives the entry no complete command", async () => {
+    vi.mocked(backend.prepareGameStart).mockResolvedValue({
+      success: false,
+      reason: "cannot_start",
+      message: "ROM 42 cannot start with Dolphin: environment_unknown",
+      start: { state: "cannot_start", reason: "environment_unknown", entry: "Dolphin" },
     });
 
-    expect(vi.mocked(steamShortcuts.setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
-    const msg = vi.mocked(backend.logError).mock.calls[0]![0];
-    expect(msg).toContain("Watcher: launch_options re-confirm failed");
-    expect(msg).toContain("offline");
+    await expect(prepareStart(42, 100, "Watcher")).resolves.toEqual({
+      status: "refused",
+      sentence: "Tender cannot start Dolphin yet: what it needs from RetroDECK's start is not known yet.",
+    });
+    expect(steamShortcuts.setLaunchOptionsConfirmed).not.toHaveBeenCalled();
   });
 
-  it("carries the caller's context prefix (CustomPlayButton) into the failure log", async () => {
-    vi.mocked(backend.getRomRelaunchOptions).mockRejectedValue(new Error("boom"));
-
-    await expect(reconfirmLaunchOptions(42, 100, "CustomPlayButton")).resolves.toEqual({
-      status: "best_effort_failure",
+  it("refuses a game no emulator starts in the game page's words", async () => {
+    vi.mocked(backend.prepareGameStart).mockResolvedValue({
+      success: false,
+      reason: "cannot_start",
+      message: "ROM 42 has no emulator to start with",
+      start: { state: "no_entry", reason: null, entry: null },
     });
 
-    expect(vi.mocked(backend.logError)).toHaveBeenCalledWith(
-      expect.stringContaining("CustomPlayButton: launch_options re-confirm failed"),
+    await expect(prepareStart(42, 100, "Watcher")).resolves.toEqual({
+      status: "refused",
+      sentence: "No emulator starts this game.",
+    });
+    expect(steamShortcuts.setLaunchOptionsConfirmed).not.toHaveBeenCalled();
+  });
+
+  it("refuses with the backend's own message where it names no start", async () => {
+    vi.mocked(backend.prepareGameStart).mockResolvedValue({
+      success: false,
+      reason: "start_unavailable",
+      message: "Tender has no runtime folder to hand the start to the launcher in",
+    });
+
+    await expect(prepareStart(42, 100, "Watcher")).resolves.toEqual({
+      status: "refused",
+      sentence: "Tender has no runtime folder to hand the start to the launcher in",
+    });
+    expect(backend.logError).toHaveBeenCalledWith(expect.stringContaining("Watcher: the start was refused"));
+  });
+
+  it("refuses a call that fails, in the error's own words, and starts no Steam write", async () => {
+    vi.mocked(backend.prepareGameStart).mockRejectedValue(new Error("connection lost"));
+
+    await expect(prepareStart(42, 100, "CustomPlayButton")).resolves.toEqual({
+      status: "refused",
+      sentence: "Couldn't start the game: connection lost",
+    });
+    expect(steamShortcuts.setLaunchOptionsConfirmed).not.toHaveBeenCalled();
+    expect(backend.logError).toHaveBeenCalledWith(
+      expect.stringContaining("CustomPlayButton: preparing the start failed"),
     );
   });
 
-  it("keeps a Steam write failure best-effort and releases its lease", async () => {
-    vi.mocked(backend.getRomRelaunchOptions).mockResolvedValue({
-      success: true,
-      app_id: 100,
-      launch_options: RELAUNCH_COMMAND,
-      prune_lease_token: "write-failure-lease",
-    });
+  it("keeps a Steam write that fails from stopping the start, and releases its lease", async () => {
+    vi.mocked(backend.prepareGameStart).mockResolvedValue(prepared("write-failure-lease"));
     vi.mocked(steamShortcuts.setLaunchOptionsConfirmed).mockRejectedValue(new Error("steam unavailable"));
 
-    await expect(reconfirmLaunchOptions(42, 100, "Watcher")).resolves.toEqual({
-      status: "best_effort_failure",
-    });
+    await expect(prepareStart(42, 100, "Watcher")).resolves.toEqual({ status: "ready" });
 
     expect(backend.releasePruneConflictLease).toHaveBeenCalledWith("write-failure-lease");
     expect(backend.logError).toHaveBeenCalledWith(
-      expect.stringContaining("Watcher: launch_options re-confirm failed (launching anyway)"),
+      expect.stringContaining("Watcher: setting the launch options failed"),
     );
   });
 
+  it("keeps a Steam write Steam does not confirm from stopping the start", async () => {
+    vi.mocked(backend.prepareGameStart).mockResolvedValue(prepared());
+    vi.mocked(steamShortcuts.setLaunchOptionsConfirmed).mockResolvedValue(false);
+
+    await expect(prepareStart(42, 100, "Watcher")).resolves.toEqual({ status: "ready" });
+
+    expect(backend.logError).toHaveBeenCalledWith(expect.stringContaining("launch options of appId 100 not confirmed"));
+  });
+
   it("answers cancelled for a torn-down owner's admission, and never without an admission", async () => {
-    let answer!: (value: Awaited<ReturnType<typeof backend.getRomRelaunchOptions>>) => void;
-    const fetched = new Promise<Awaited<ReturnType<typeof backend.getRomRelaunchOptions>>>((resolve) => {
+    let answer!: (value: Answer) => void;
+    const fetched = new Promise<Answer>((resolve) => {
       answer = resolve;
     });
-    vi.mocked(backend.getRomRelaunchOptions).mockReturnValue(fetched);
+    vi.mocked(backend.prepareGameStart).mockReturnValue(fetched);
     mountPruneLeaseOwner("custom-play-button:100");
-    const owned = reconfirmLaunchOptions(
-      42,
-      100,
-      "CustomPlayButton",
-      capturePruneLeaseAdmission("custom-play-button:100"),
-    );
-    const unowned = reconfirmLaunchOptions(42, 100, "Watcher");
+    const owned = prepareStart(42, 100, "CustomPlayButton", capturePruneLeaseAdmission("custom-play-button:100"));
+    const unowned = prepareStart(42, 100, "Watcher");
 
     await releasePruneLeasesByOwner("custom-play-button:100");
-    answer({ success: true, app_id: 100, launch_options: RELAUNCH_COMMAND, prune_lease_token: "launch-lease" });
+    answer(prepared());
 
     await expect(owned).resolves.toEqual({ status: "cancelled" });
     await expect(unowned).resolves.toEqual({ status: "ready" });
     expect(steamShortcuts.setLaunchOptionsConfirmed).toHaveBeenCalledTimes(1);
   });
 
-  it("a hung fetch returns a distinct timeout without starting a Steam write", async () => {
+  it("refuses a preparation with no answer in time as Tender not responding, without a Steam write", async () => {
     vi.useFakeTimers();
     try {
-      // Never resolves — simulates a wedged backend / hung endpoint call.
-      vi.mocked(backend.getRomRelaunchOptions).mockReturnValue(new Promise<never>(() => {}));
+      vi.mocked(backend.prepareGameStart).mockReturnValue(new Promise<never>(() => {}));
 
-      const pending = reconfirmLaunchOptions(42, 100, "CustomPlayButton");
-      // Advancing past the 3s race fires the timeout reject without a real wait.
+      const pending = prepareStart(42, 100, "CustomPlayButton");
       await vi.advanceTimersByTimeAsync(3000);
-      await expect(pending).resolves.toEqual({ status: "timeout" });
+      await expect(pending).resolves.toEqual({ status: "refused", sentence: NOT_RESPONDING_START });
 
-      expect(vi.mocked(steamShortcuts.setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
-      expect(vi.mocked(backend.logError)).toHaveBeenCalledWith(
-        expect.stringContaining("CustomPlayButton: launch_options re-confirm timed out"),
+      expect(NOT_RESPONDING_START).toBe("Tender isn't responding — couldn't start the game.");
+      expect(steamShortcuts.setLaunchOptionsConfirmed).not.toHaveBeenCalled();
+      expect(backend.logError).toHaveBeenCalledWith(
+        expect.stringContaining("CustomPlayButton: preparing the start timed out"),
       );
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("observes a lease-bearing response that arrives after timeout and releases it without a Steam write", async () => {
+  it("observes a lease-bearing answer that arrives after the timeout and releases it without a Steam write", async () => {
     vi.useFakeTimers();
     try {
-      let resolveFetch!: (value: Awaited<ReturnType<typeof backend.getRomRelaunchOptions>>) => void;
-      vi.mocked(backend.getRomRelaunchOptions).mockImplementation(
+      let resolveFetch!: (value: Answer) => void;
+      vi.mocked(backend.prepareGameStart).mockImplementation(
         () =>
           new Promise((resolve) => {
             resolveFetch = resolve;
           }),
       );
 
-      const pending = reconfirmLaunchOptions(42, 100, "Watcher");
+      const pending = prepareStart(42, 100, "Watcher");
       await vi.advanceTimersByTimeAsync(3000);
-      await expect(pending).resolves.toEqual({ status: "timeout" });
+      await expect(pending).resolves.toEqual({ status: "refused", sentence: NOT_RESPONDING_START });
       expect(backend.releasePruneConflictLease).not.toHaveBeenCalled();
 
-      resolveFetch({
-        success: true,
-        app_id: 100,
-        launch_options: RELAUNCH_COMMAND,
-        prune_lease_token: "late-timeout-lease",
-      });
+      resolveFetch(prepared("late-timeout-lease"));
       await vi.advanceTimersByTimeAsync(0);
 
       expect(backend.releasePruneConflictLease).toHaveBeenCalledWith("late-timeout-lease");

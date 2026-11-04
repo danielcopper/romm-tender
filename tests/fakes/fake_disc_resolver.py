@@ -1,8 +1,8 @@
 """In-memory ``DiscResolver`` implementation for service tests.
 
-Lets the launch-bake consumers (library sync, download-complete, RetroDECK-home
-migration) and the disc-picker endpoints inject the disc-resolution seam without
-standing up a real ``DiscLaunchResolver`` (directory scan + es_systems read +
+Lets the start check, the game page's reads and the disc-picker endpoints
+inject the disc-resolution seam without standing up a real
+``DiscLaunchResolver`` (directory scan + es_systems read +
 ``domain.disc_selection``). Configure per-``rom_dir`` disc lists; the default
 (no discs seeded for a directory) reproduces a single-disc ROM, which resolves to
 its own ``file_path`` unchanged — matching the real resolver's zero-behavior-
@@ -26,7 +26,7 @@ class FakeDiscResolver:
     """Maps an install's ``rom_dir`` to a configured disc list for tests.
 
     Seed a directory's discs via ``set_discs(rom_dir, discs)``; a directory with
-    no seeded discs enumerates empty (single-disc ROM). ``resolve_bake_path`` and
+    no seeded discs enumerates empty (single-disc ROM). ``resolve_disc_path`` and
     ``resolve_for_install`` mirror the real resolver's
     :func:`domain.disc_selection.resolve_launch_path` decision over the seeded
     discs, so a non-multi-disc ROM resolves to ``install.file_path`` unchanged and
@@ -50,7 +50,7 @@ class FakeDiscResolver:
             return []
         return list(self._by_rom_dir.get(install.rom_dir, []))
 
-    def resolve_bake_path(self, install: RomInstall, discs: list[Disc], selected_disc: str | None) -> str:
+    def resolve_disc_path(self, install: RomInstall, discs: list[Disc], selected_disc: str | None) -> str:
         self.calls.append((install.rom_dir, selected_disc))
         path, _stale = resolve_launch_path(install.file_path, discs, selected_disc)
         return path
@@ -58,4 +58,4 @@ class FakeDiscResolver:
     def resolve_for_install(
         self, install: RomInstall, selected_disc: str | None, *, reading: SourcesReading | None = None
     ) -> str:
-        return self.resolve_bake_path(install, self.enumerate_discs(install, reading=reading), selected_disc)
+        return self.resolve_disc_path(install, self.enumerate_discs(install, reading=reading), selected_disc)

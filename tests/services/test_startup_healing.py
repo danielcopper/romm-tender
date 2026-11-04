@@ -14,7 +14,6 @@ from _factories import (
     _refused_by_conflict_rule,
 )
 from fakes.fake_path_exists_reader import FakePathExistsReader
-from fakes.fake_relaunch_options_resolver import FakeRelaunchOptionsResolver
 from fakes.fake_resolved_path import FakeResolvedPath
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
@@ -27,6 +26,18 @@ from services.startup_healing import StartupHealingService, StartupHealingServic
 
 if TYPE_CHECKING:
     from lib.prune_conflicts import PruneConflicts
+
+
+class _FakeSteamConfig:
+    """The shortcut file's launch options, as ``SteamConfigStore.read_shortcut_launch_options`` answers them."""
+
+    def __init__(self, held: dict[int, str] | None = None) -> None:
+        self.held = held
+        self.reads = 0
+
+    def read_shortcut_launch_options(self) -> dict[int, str] | None:
+        self.reads += 1
+        return self.held
 
 
 @pytest.fixture
@@ -77,7 +88,7 @@ def _make_service(
     resolve_path: FakeResolvedPath | None = None,
     uow: FakeUnitOfWork | None = None,
     clock: FakeClock | None = None,
-    relaunch_options: FakeRelaunchOptionsResolver | None = None,
+    steam_config: _FakeSteamConfig | None = None,
     prune_conflicts: PruneConflicts | None = None,
 ) -> StartupHealingService:
     probe = path_probe if path_probe is not None else FakePathExistsReader()
@@ -88,7 +99,7 @@ def _make_service(
             path_probe=probe,
             resolve_path=resolve_path if resolve_path is not None else FakeResolvedPath(),
             uow_factory=FakeUnitOfWorkFactory(uow) if uow is not None else FakeUnitOfWorkFactory(),
-            relaunch_options=relaunch_options if relaunch_options is not None else FakeRelaunchOptionsResolver(),
+            steam_config=steam_config if steam_config is not None else _FakeSteamConfig({}),  # type: ignore[arg-type]
             loop=running_loop(),
             conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
         ),
@@ -309,47 +320,87 @@ class TestReconcileOrphanedSyncRuns:
         assert uow.sync_runs.save_count == 0
 
 
-class TestGetInstalledRelaunchOptions:
-    """The use case delegates to the shared relaunch-options resolver.
+def _seed_bound(uow: FakeUnitOfWork, rom_id: int, app_id: int | None) -> None:
+    with uow:
+        uow.roms.save(_make_rom(rom_id, shortcut_app_id=app_id) if app_id is not None else _unbound_rom(rom_id))
 
-    The deep resolution behavior (skip rules, core/disc baking) is owned by
-    ``test_relaunch_options_resolver.py``; here we pin only that the service
-    forwards the resolver's list through unchanged and queries it once.
-    """
 
-    async def test_delegates_to_resolver(self, logger):
-        """Returns the resolver's items verbatim and queries the seam once."""
-        items = [
-            {"app_id": 11, "launch_options": 'flatpak run net.retrodeck.retrodeck "/roms/n64/a.z64"'},
-            {"app_id": 22, "launch_options": 'flatpak run net.retrodeck.retrodeck "/roms/n64/b.z64"'},
+def _unbound_rom(rom_id: int) -> Rom:
+    rom = _make_rom(rom_id)
+    rom.unbind_shortcut()
+    return rom
+
+
+class TestGetBoundLaunchOptions:
+    """Every bound shortcut whose launch options in Steam's shortcut file are not its appId is listed."""
+
+    async def test_a_shortcut_still_carrying_an_old_command_is_listed_with_its_app_id(self, logger):
+        uow = FakeUnitOfWork()
+        _seed_bound(uow, 1, 1001)
+        steam = _FakeSteamConfig({1001: "flatpak run net.retrodeck.retrodeck '/roms/n64/a.z64'"})
+        service = _make_service(logger=logger, uow=uow, steam_config=steam)
+
+        assert (await service.get_bound_launch_options())["items"] == [{"app_id": 1001, "launch_options": "1001"}]
+
+    async def test_a_shortcut_carrying_its_app_id_is_not_listed(self, logger):
+        uow = FakeUnitOfWork()
+        _seed_bound(uow, 1, 1001)
+        service = _make_service(logger=logger, uow=uow, steam_config=_FakeSteamConfig({1001: "1001"}))
+
+        assert (await service.get_bound_launch_options())["items"] == []
+
+    async def test_a_game_that_is_not_installed_is_listed_all_the_same(self, logger):
+        # Every bound shortcut carries its appId, installed or not (#2221 D10).
+        uow = FakeUnitOfWork()
+        _seed_bound(uow, 1, 1001)
+        service = _make_service(logger=logger, uow=uow, steam_config=_FakeSteamConfig({1001: ""}))
+
+        assert (await service.get_bound_launch_options())["items"] == [{"app_id": 1001, "launch_options": "1001"}]
+
+    async def test_a_shortcut_the_file_does_not_hold_is_listed(self, logger):
+        uow = FakeUnitOfWork()
+        _seed_bound(uow, 1, 1001)
+        service = _make_service(logger=logger, uow=uow, steam_config=_FakeSteamConfig({}))
+
+        assert (await service.get_bound_launch_options())["items"] == [{"app_id": 1001, "launch_options": "1001"}]
+
+    async def test_an_unreadable_file_lists_every_bound_shortcut(self, logger):
+        uow = FakeUnitOfWork()
+        _seed_bound(uow, 1, 1001)
+        _seed_bound(uow, 2, 1002)
+        service = _make_service(logger=logger, uow=uow, steam_config=_FakeSteamConfig(None))
+
+        assert (await service.get_bound_launch_options())["items"] == [
+            {"app_id": 1001, "launch_options": "1001"},
+            {"app_id": 1002, "launch_options": "1002"},
         ]
-        relaunch_options = FakeRelaunchOptionsResolver(items=items)
-        service = _make_service(logger=logger, relaunch_options=relaunch_options)
-        result = (await service.get_installed_relaunch_options())["items"]
-        assert result == items
-        assert relaunch_options.calls == 1
 
-    async def test_empty_resolver_yields_empty_list(self, logger):
-        """An empty resolver list passes straight through."""
-        relaunch_options = FakeRelaunchOptionsResolver(items=[])
-        service = _make_service(logger=logger, relaunch_options=relaunch_options)
-        assert (await service.get_installed_relaunch_options())["items"] == []
-        assert relaunch_options.calls == 1
+    async def test_an_unbound_rom_is_never_listed(self, logger):
+        uow = FakeUnitOfWork()
+        _seed_bound(uow, 1, None)
+        service = _make_service(logger=logger, uow=uow, steam_config=_FakeSteamConfig(None))
+
+        assert (await service.get_bound_launch_options())["items"] == []
 
 
-_ITEM = {"app_id": 11, "launch_options": 'flatpak run net.retrodeck.retrodeck "/roms/n64/a.z64"'}
+_STALE = {1001: "flatpak run net.retrodeck.retrodeck '/roms/n64/a.z64'"}
 
 
 class TestTheInstalledReconcileLease:
-    """Items to heal carry an ``installed_reconcile`` lease for the frontend's Steam writes; none carry no lease."""
+    """Items to set carry an ``installed_reconcile`` lease for the frontend's Steam writes; none carry no lease."""
+
+    @staticmethod
+    def _service(logger, prune_conflicts, held):
+        uow = FakeUnitOfWork()
+        _seed_bound(uow, 1, 1001)
+        steam = _FakeSteamConfig(held)
+        return _make_service(logger=logger, uow=uow, steam_config=steam, prune_conflicts=prune_conflicts), steam
 
     async def test_items_carry_a_lease(self, logger):
         prune_conflicts = _make_prune_conflicts()
-        service = _make_service(
-            logger=logger, relaunch_options=FakeRelaunchOptionsResolver(items=[_ITEM]), prune_conflicts=prune_conflicts
-        )
+        service, _ = self._service(logger, prune_conflicts, _STALE)
 
-        result = await service.get_installed_relaunch_options()
+        result = await service.get_bound_launch_options()
 
         assert result["success"] is True
         assert result["prune_lease_token"].startswith("installed_reconcile:")
@@ -358,36 +409,31 @@ class TestTheInstalledReconcileLease:
     async def test_the_lease_is_taken_while_the_calls_operation_still_holds(self, logger, monkeypatch):
         """No cleanup can start between the call's operation and the lease that outlasts it."""
         prune_conflicts = _make_prune_conflicts()
-        service = _make_service(
-            logger=logger, relaunch_options=FakeRelaunchOptionsResolver(items=[_ITEM]), prune_conflicts=prune_conflicts
-        )
+        service, _ = self._service(logger, prune_conflicts, _STALE)
         seen = _record_operations_at_lease(prune_conflicts, monkeypatch)
 
-        await service.get_installed_relaunch_options()
+        await service.get_bound_launch_options()
 
-        assert seen == [["get_installed_relaunch_options"]]
+        assert seen == [["get_bound_launch_options"]]
 
     async def test_no_items_carry_no_lease(self, logger):
         prune_conflicts = _make_prune_conflicts()
-        service = _make_service(
-            logger=logger, relaunch_options=FakeRelaunchOptionsResolver(items=[]), prune_conflicts=prune_conflicts
-        )
+        service, _ = self._service(logger, prune_conflicts, {1001: "1001"})
 
-        assert await service.get_installed_relaunch_options() == {
+        assert await service.get_bound_launch_options() == {
             "success": True,
             "items": [],
             "prune_lease_token": None,
         }
         assert prune_conflicts.conflicting_operations == 0
 
-    async def test_a_running_cleanup_refuses_it_before_the_resolver_is_asked(self, logger):
+    async def test_a_running_cleanup_refuses_it_before_the_file_is_read(self, logger):
         prune_conflicts = _make_prune_conflicts()
         prune_conflicts.register_run("held-run")
-        relaunch_options = FakeRelaunchOptionsResolver(items=[_ITEM])
-        service = _make_service(logger=logger, relaunch_options=relaunch_options, prune_conflicts=prune_conflicts)
+        service, steam = self._service(logger, prune_conflicts, _STALE)
 
         with _refused_by_conflict_rule("prune_active"):
-            await service.get_installed_relaunch_options()
+            await service.get_bound_launch_options()
 
-        assert relaunch_options.calls == 0
+        assert steam.reads == 0
         assert prune_conflicts.conflicting_operations == 0

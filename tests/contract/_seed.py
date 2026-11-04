@@ -277,7 +277,7 @@ def seed_server_save(harness: ContractHarness, **kwargs: Any) -> dict[str, Any]:
 
 # A minimal, real-shaped es_systems.xml: one ``gba`` system with an mGBA
 # default (first %CORE_RETROARCH% command) and a VBA Next alternative — two
-# bakeable libretro cores a core-selection contract test can pin/clear between.
+# libretro cores a core-selection contract test can pin/clear between.
 _DEFAULT_ES_SYSTEMS_XML = """\
 <?xml version="1.0"?>
 <systemList>
@@ -455,7 +455,7 @@ def seed_component_launcher(harness: ContractHarness, component: str) -> str:
     Lays down the on-disk launcher under the flatpak files tree so the resolver
     states the standalone emulator startable, and returns the
     ``/app/retrodeck/components/<component>/component_launcher.sh`` sandbox path —
-    the launcher the resolver states and the direct bake carries.
+    the launcher the resolver states.
     """
     host = os.path.join(_flatpak_files_dir(harness), "retrodeck", "components", component, "component_launcher.sh")
     os.makedirs(os.path.dirname(host), exist_ok=True)

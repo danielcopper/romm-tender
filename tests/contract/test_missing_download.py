@@ -5,8 +5,8 @@ and ``startDownload`` over the real ``bootstrap()`` + SQLite and real file
 stores under ``tmp_path``; only the RomM transport is the fake.
 
 "Forget this download" is an uninstall without the deletion: the record goes
-through the uninstall's writer of ``applied_launch_options``, no file is
-touched, and it answers to the same conflict rules as ``remove_rom``.
+through the uninstall's writer, no file is touched, the shortcut is left as it
+is, and it answers to the same conflict rules as ``remove_rom``.
 "Download again" is an ordinary download, which leaves the old record in place
 until the new one completes.
 """
@@ -29,14 +29,13 @@ from ._seed import seed_install, seed_rom
 pytestmark = pytest.mark.usefixtures("seeded_retrodeck")
 
 _ROM_ID = 7
-_STALE_LAUNCH = "flatpak run net.retrodeck.retrodeck /gone/game.gba"
 
 
 def _seed_missing_download(harness) -> str:
-    """An install record whose file is not on disk, bound and with a recorded launch command."""
+    """An install record whose file is not on disk, bound and with its shortcut recorded as applied."""
     file_path = seed_install(harness, _ROM_ID)
     with harness.uow_factory() as uow:
-        uow.roms.set_applied_launch_options(_ROM_ID, _STALE_LAUNCH)
+        uow.roms.set_shortcut_applied(_ROM_ID, True)
     return file_path
 
 
@@ -58,13 +57,12 @@ async def test_forget_drops_the_record_through_the_uninstall_writer(harness):
 
     result = await harness.endpoints.forget_download(_ROM_ID)
 
-    assert result["success"] is True
-    assert result["prune_lease_token"].startswith("rom_uninstall:")
+    assert result == {"success": True, "message": "Download forgotten"}
     with harness.uow_factory() as uow:
         assert uow.rom_installs.get(_ROM_ID) is None
         rom = uow.roms.get(_ROM_ID)
     assert rom is not None
-    assert rom.applied_launch_options == ""
+    assert rom.shortcut_applied is True
 
 
 async def test_forget_deletes_no_file(harness):
@@ -97,7 +95,7 @@ async def test_forget_is_refused_while_the_file_is_there(harness):
         assert uow.rom_installs.get(_ROM_ID) is not None
         rom = uow.roms.get(_ROM_ID)
     assert rom is not None
-    assert rom.applied_launch_options == _STALE_LAUNCH
+    assert rom.shortcut_applied is True
 
 
 async def test_forget_of_a_rom_with_no_record_is_not_installed(harness):

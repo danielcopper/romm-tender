@@ -544,9 +544,9 @@ class TestCommitUnitResults:
         assert rom.sgdb_id == 999
         assert rom.ra_id == 777
 
-    def test_commit_records_applied_launch_options_for_binding_target(self, library):
-        """A binding target this cycle records the launch command the frontend wrote
-        onto the shortcut, so the next sync skips the now-correct shortcut (#1383)."""
+    def test_commit_records_the_shortcut_applied_for_binding_target(self, library):
+        """A binding target this cycle records its shortcut applied, so the next
+        sync skips the now-correct shortcut (#1383, #2221 D17)."""
         uow = library.uow
         _stage(
             library.sync._box,
@@ -556,7 +556,6 @@ class TestCommitUnitResults:
                 "fs_name": "game.z64",
                 "platform_slug": "n64",
                 "cover_path": "",
-                "launch_options": "flatpak run net.retrodeck.retrodeck /game.z64",
             },
         )
 
@@ -565,20 +564,20 @@ class TestCommitUnitResults:
         with uow:
             rom = uow.roms.get(42)
         assert rom is not None
-        assert rom.applied_launch_options == "flatpak run net.retrodeck.retrodeck /game.z64"
+        assert rom.shortcut_applied is True
 
     def test_commit_preserves_applied_for_unacked_row(self, library):
         """A row committed this chunk but NOT acked (a skipped-unchanged item riding
         chunk 0's leftover) keeps its binding AND its recorded applied state — save()
-        excludes applied_launch_options, so the un-re-acked value is never wiped."""
+        excludes shortcut_applied, so the un-re-acked record is never wiped."""
         uow = library.uow
         _seed_rom(uow, 43, app_id=100043, platform_slug="n64", name="Keep")
         with uow:
-            uow.roms.set_applied_launch_options(43, "flatpak run … /keep.z64")
+            uow.roms.set_shortcut_applied(43, True)
         _stage(
             library.sync._box,
             43,
-            {"name": "Keep", "fs_name": "keep.z64", "platform_slug": "n64", "cover_path": "", "launch_options": ""},
+            {"name": "Keep", "fs_name": "keep.z64", "platform_slug": "n64", "cover_path": ""},
             emitted=False,
         )
 
@@ -589,7 +588,7 @@ class TestCommitUnitResults:
             rom = uow.roms.get(43)
         assert rom is not None
         assert rom.shortcut_app_id == 100043
-        assert rom.applied_launch_options == "flatpak run … /keep.z64"
+        assert rom.shortcut_applied is True
 
     def test_commit_stamps_confirmed_cover_source(self, library):
         """A fingerprint the artwork layer confirmed for this unit (staged in
@@ -1355,7 +1354,7 @@ class TestAckMatchesActiveUnit:
 
 class TestClearSyncCache:
     """Tests for clear_sync_cache() — Force Full Sync clears the per-platform stamps
-    and the recorded launch options but PRESERVES the run history, so the Last-sync
+    and every applied shortcut but PRESERVES the run history, so the Last-sync
     display stays truthful (#1318)."""
 
     async def test_preserves_completed_run_so_last_sync_survives(self, library):
@@ -1379,7 +1378,7 @@ class TestClearSyncCache:
 
     async def test_leaves_run_history_untouched(self, library):
         """Force Full Sync deletes no runs — a completed run AND a running run both
-        survive the reset (it clears stamps + recorded launch options only)."""
+        survive the reset (it clears stamps + applied shortcuts only)."""
         from domain.sync_run import SyncRun
 
         uow = library.uow
@@ -1396,22 +1395,22 @@ class TestClearSyncCache:
             assert uow.sync_runs.get("run-done") is not None
             assert uow.sync_runs.get_running() is not None
 
-    async def test_resets_recorded_launch_options_so_the_next_apply_skips_nothing(self, library):
+    async def test_clears_every_applied_shortcut_so_the_next_apply_skips_nothing(self, library):
         """Force Full Sync must force past the per-item delta skip (ADR-0025).
 
-        The recorded launch command is the skip's evidence; resetting it to NULL
-        (never matches a target) makes the next apply re-touch every shortcut —
-        the repair path for Steam-side drift the recorded value cannot see.
+        The applied record is the skip's evidence; clearing it makes the next
+        apply re-touch every shortcut — the repair path for Steam-side drift the
+        record cannot see (#2221 D17).
         """
         uow = library.uow
         _seed_rom(uow, 7, app_id=111, platform_slug="n64")
         with uow:
-            uow.roms.set_applied_launch_options(7, "flatpak run app 'x.zip'")
+            uow.roms.set_shortcut_applied(7, True)
 
         await library.sync.clear_sync_cache()
 
         with uow:
-            assert uow.roms.get(7).applied_launch_options is None
+            assert uow.roms.get(7).shortcut_applied is False
 
     async def test_preserves_last_sync_and_a_newer_cancelled_attempt(self, library):
         """After Force Full Sync, BOTH a completed run's last_sync AND a newer
@@ -1547,12 +1546,12 @@ def _stamp_collection(
         )
 
 
-def _record_launch_options(uow, rom_id: int, launch_options: str = "flatpak run app 'game.zip'") -> None:
-    """Record the launch command a sync ack-commit would have written for this ROM."""
+def _record_applied(uow, rom_id: int) -> None:
+    """Record the shortcut applied, as a sync ack-commit would have for this ROM."""
     with uow:
         rom = uow.roms.get(rom_id)
-        rom.record_applied_launch_options(launch_options)
-        uow.roms.set_applied_launch_options(rom_id, rom.applied_launch_options)
+        rom.record_shortcut_applied()
+        uow.roms.set_shortcut_applied(rom_id, rom.shortcut_applied)
 
 
 class TestGetSyncStatsResumeInputs:
@@ -1560,7 +1559,7 @@ class TestGetSyncStatsResumeInputs:
     progress the panel's "Resume Sync" offer reads (#1789).
 
     A completion stamp makes the next run pass over a whole platform or collection
-    at fetch time; a recorded launch command makes it pass over one game at apply
+    at fetch time; an applied shortcut makes it pass over one game at apply
     time. Both survive a stopped run and both are cleared together by Force Full
     Sync — which is why the run history, deliberately preserved by that clear
     (#1318), cannot carry the offer."""
@@ -1572,19 +1571,19 @@ class TestGetSyncStatsResumeInputs:
         assert stats["has_completion_stamp"] is False
 
     @pytest.mark.asyncio
-    async def test_counts_bound_roms_carrying_a_recorded_launch_command(self, library):
+    async def test_counts_bound_roms_whose_shortcut_was_applied(self, library):
         uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64")
         _seed_rom(uow, 20, app_id=1002, platform_slug="n64")
-        _record_launch_options(uow, 10)
-        _record_launch_options(uow, 20)
+        _record_applied(uow, 10)
+        _record_applied(uow, 20)
 
         stats = library.sync.get_sync_stats()
         assert stats["resumable_games"] == 2
 
     @pytest.mark.asyncio
-    async def test_a_bound_rom_with_no_recorded_command_is_not_resumable(self, library):
-        """A NULL recorded value never matches a target, so that row is always re-applied."""
+    async def test_a_bound_rom_never_applied_is_not_resumable(self, library):
+        """A row not recorded as applied is always re-applied."""
         uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64")
 
@@ -1593,33 +1592,19 @@ class TestGetSyncStatsResumeInputs:
         assert stats["resumable_games"] == 0
 
     @pytest.mark.asyncio
-    async def test_the_uninstalled_placeholder_still_counts(self, library):
-        """An empty string is a recorded value (the uninstall placeholder, #1146), not a missing one.
-
-        The shortcut it describes carries an empty launch command and is correct as
-        it stands, so the next run skips it exactly as it skips a full command.
-        """
-        uow = library.uow
-        _seed_rom(uow, 10, app_id=1001, platform_slug="n64")
-        _record_launch_options(uow, 10, "")
-
-        stats = library.sync.get_sync_stats()
-        assert stats["resumable_games"] == 1
-
-    @pytest.mark.asyncio
     async def test_an_unbound_rom_is_not_resumable_however_it_was_recorded(self, library):
         """Removing every shortcut must drop the offer, and unbinding KEEPS the row.
 
         ``Rom.unbind_shortcut`` clears only ``shortcut_app_id`` (ADR-0007), so the
-        recorded command survives Data Management's remove-all. It is not skip authority
+        applied record survives Data Management's remove-all. It is not skip authority
         there: ``classify_roms`` (``domain/sync_diff.py``) sends an unbound row down
-        the NEW branch before it reads the recorded value, because the next run has
+        the NEW branch before it reads the record, because the next run has
         to mint the shortcut regardless. A count over every row would keep offering to resume
         shortcuts that no longer exist.
         """
         uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64")
-        _record_launch_options(uow, 10)
+        _record_applied(uow, 10)
         assert library.sync.get_sync_stats()["resumable_games"] == 1
 
         await library.shortcut_removal.report_removal_results([10], None)
@@ -1628,19 +1613,19 @@ class TestGetSyncStatsResumeInputs:
         assert stats["roms"] == 0
         assert stats["resumable_games"] == 0
         with uow:
-            assert uow.roms.get(10).applied_launch_options is not None
+            assert uow.roms.get(10).shortcut_applied is True
 
     @pytest.mark.asyncio
     async def test_a_cancel_inside_the_first_platform_is_still_a_resume(self, library):
         """The case the stamp-only rule got wrong.
 
         A run cancelled before any unit reached its final chunk leaves no stamp,
-        but its committed chunks wrote shortcuts and recorded their launch
-        commands. The next run genuinely does less work, so this is a resume.
+        but its committed chunks wrote shortcuts and recorded them applied. The
+        next run genuinely does less work, so this is a resume.
         """
         uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64")
-        _record_launch_options(uow, 10)
+        _record_applied(uow, 10)
 
         stats = library.sync.get_sync_stats()
         assert stats["resumable_games"] == 1
@@ -1648,11 +1633,11 @@ class TestGetSyncStatsResumeInputs:
 
     @pytest.mark.asyncio
     async def test_a_platform_stamp_alone_is_still_a_resume(self, library):
-        """The mirror case: stamps with no recorded game.
+        """The mirror case: stamps with no applied game.
 
-        A row predating migration 015 carries a NULL recorded value while its
-        platform's stamp survives, so an upgraded install can hold stamps and no
-        recorded games — and those platforms still skip wholesale at fetch time.
+        A row the sync has not applied carries no record while its platform's
+        stamp survives, so an install can hold stamps and no applied games — and
+        those platforms still skip wholesale at fetch time.
         """
         uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64")
@@ -1699,7 +1684,7 @@ class TestGetSyncStatsResumeInputs:
     async def test_force_full_sync_takes_both_while_the_attempt_survives(self, library):
         """The #1789 case end to end: the clear takes both skip authorities, not the history.
 
-        Before the clear the panel holds an incomplete attempt, recorded games AND
+        Before the clear the panel holds an incomplete attempt, applied games AND
         a stamp — a genuine resume. Afterwards the attempt is still there (it feeds
         the "Last sync" display, #1318) while both authorities are gone, which is
         what takes the resume offer away.
@@ -1712,7 +1697,7 @@ class TestGetSyncStatsResumeInputs:
         with uow:
             uow.sync_runs.save(interrupted)
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64")
-        _record_launch_options(uow, 10)
+        _record_applied(uow, 10)
         _stamp_platform(uow, "n64")
         _stamp_collection(uow, "7")
 

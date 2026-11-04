@@ -543,7 +543,7 @@ and with the platforms and collections you turned on or off. Existing shortcuts 
 
 When the version a shortcut is bound to is no longer available on RomM — deleted there, or hidden from your RomM user by
 an admin, which RomM answers the same way — the shortcut **stays bound to it**, installed or not, with its name, launch
-command, artwork and playtime, and in its platform's Steam collection. The exception is a game that also has another
+options, artwork and playtime, and in its platform's Steam collection. The exception is a game that also has another
 shortcut: then the two converge to one, as described under [Multiple versions of a game](#multiple-versions-of-a-game).
 A Steam collection made from a RomM collection drops such a version, since RomM no longer lists it there. That holds
 when the game still has other versions on RomM and when every version of it is gone. A version you hid yourself is not

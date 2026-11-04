@@ -26,8 +26,8 @@ if TYPE_CHECKING:
     from domain.rom_install import RomInstall
     from domain.save_answer import SaveAnswer
     from domain.savestate_location import NoSavestates, SavestateLocation
-    from domain.shortcut_data import EmulatorInvocation
     from domain.source_roots import SourceRoots
+    from domain.start_command import StartAnswer
     from domain.tender_folder import SourceRomFolders
 
 
@@ -218,12 +218,11 @@ class CoreInfoProvider(Protocol):
     for that detected source instead of the answering one.
 
     ``get_active_core`` stays libretro-only — the first libretro command a
-    system declares, bakeable or not. It is carried and currently read by nothing
-    in production: the firmware layer's BIOS filter used to key on it and now
+    system declares. It is carried and currently read by nothing in
+    production: the firmware layer's BIOS filter used to key on it and now
     takes the platform's own pick, so the emulator a surface names and the core
-    it judges by come off one choice. The launch-layer default
-    (``get_default_emulator``) and the full picker (``get_emulator_options``) are
-    emulator-kind-aware (libretro OR standalone).
+    it judges by come off one choice. The full picker (``get_emulator_options``)
+    is emulator-kind-aware (libretro OR standalone).
 
     ``launchability`` answers for one game's file and one entry, asked when
     that game's page, its emulator menu or a press on Steam's own Play reads
@@ -233,10 +232,6 @@ class CoreInfoProvider(Protocol):
     def get_active_core(
         self, system_name: str, *, reading: SourcesReading | None = None
     ) -> tuple[str | None, str | None]: ...
-
-    def get_default_emulator(
-        self, system_name: str, *, reading: SourcesReading | None = None
-    ) -> EmulatorInvocation | None: ...
 
     def get_emulator_options(
         self,
@@ -372,6 +367,28 @@ class SystemKnownFn(Protocol):
     """
 
     def __call__(self, system_name: str) -> bool | None: ...
+
+
+class StartCommandReader(Protocol):
+    """How one game starts with one entry, as the resolver's launch command states it (#2221 D1, D2).
+
+    The composition root satisfies this with ``AtlasLaunchAdapter``.
+    ``start_command`` asks the answering source with the system, the game's own
+    path and the entry's label, and answers a complete command as Tender runs
+    it — the folders in *writable* and *read_only* granted to a Flatpak start —
+    or why the resolver gives no complete command.
+    """
+
+    def start_command(
+        self,
+        system: str,
+        content_path: str,
+        *,
+        label: str,
+        writable: tuple[str, ...] = (),
+        read_only: tuple[str, ...] = (),
+        reading: SourcesReading | None = None,
+    ) -> StartAnswer: ...
 
 
 class PlatformCoreReader(Protocol):

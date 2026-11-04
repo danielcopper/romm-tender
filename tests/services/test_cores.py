@@ -12,7 +12,6 @@ import pytest
 from _factories import (
     _make_conflict_rules,
     _make_prune_conflicts,
-    _record_operations_at_lease,
     _refused_by_conflict_rule,
 )
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
@@ -21,6 +20,7 @@ from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_emulator_sources import FakeSourcesReading
 from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
 from fakes.fake_settings_persister import FakeSettingsPersister
+from fakes.fake_start_commands import FakeStartCommands
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.uow_open_probe import record_uow_open
 
@@ -33,7 +33,14 @@ from domain.launchability import NEEDS_INSTALLING, NOT_THIS_EMULATOR, TAKES_NO_F
 from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
 from domain.rom import Rom
 from domain.rom_install import RomInstall
-from domain.shortcut_data import EmulatorInvocation
+from domain.start_command import (
+    DESKTOP_FILE,
+    PLACEHOLDER_UNFILLED,
+    SOURCE_STARTS_NO_GAMES,
+    StartCommand,
+    StartNote,
+    StartRefused,
+)
 from lib.errors import Refused
 from services.cores import CoreService, CoreServiceConfig
 
@@ -153,6 +160,11 @@ def prune_conflicts():
 
 
 @pytest.fixture
+def start_commands() -> FakeStartCommands:
+    return FakeStartCommands()
+
+
+@pytest.fixture
 def service(
     event_loop,
     prune_conflicts,
@@ -164,6 +176,7 @@ def service(
     uow_factory,
     active_core,
     disc_resolver,
+    start_commands,
 ) -> CoreService:
     return CoreService(
         config=CoreServiceConfig(
@@ -176,6 +189,7 @@ def service(
             uow_factory=uow_factory,
             active_core=active_core,
             disc_resolver=disc_resolver,
+            start_commands=start_commands,
             conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
         ),
     )
@@ -268,9 +282,7 @@ class TestGetPlatformCoreInfo:
         # names a ROW and the resolver names an EMULATOR, and a payload that
         # projected one of them twice would pass an assertion over equal ones.
         _seed_rom(uow, rom_id=42, platform_slug="ps2", emulator_override="PCSX2 (Standalone)")
-        active_core.per_rom_emulator[42] = EmulatorInvocation.run_game(
-            "%EMULATOR_PCSX2% %ROM%", "PCSX2 (Standalone)", "PCSX2"
-        )
+        active_core.per_rom_emulator[42] = standalone_option("PCSX2 (Standalone)", emulator="PCSX2")
         result = event_loop.run_until_complete(service.get_platform_core_info(42))
         assert result["active_core"] == "PCSX2"
         assert result["active_core_label"] == "PCSX2 (Standalone)"
@@ -280,7 +292,7 @@ class TestGetPlatformCoreInfo:
         # nothing may be keyed on it — the pane highlights nothing rather than
         # matching a row by accident.
         _seed_rom(uow, rom_id=42, platform_slug="n3ds")
-        active_core.per_rom_emulator[42] = EmulatorInvocation.run_game("%EMULATOR_X% %ROM%", "Citra", None)
+        active_core.per_rom_emulator[42] = standalone_option("Citra")
         result = event_loop.run_until_complete(service.get_platform_core_info(42))
         assert result["active_core"] is None
         assert result["active_core_label"] == "Citra"
@@ -381,7 +393,7 @@ class TestGetSystemCoreInfo:
         result = event_loop.run_until_complete(service.get_system_core_info("snes"))
         assert result["active_core_label"] == "Snes9x"
 
-    def test_no_bakeable_emulator_answers_no_label(self, event_loop, service, core_info):
+    def test_no_emulator_answers_no_label(self, event_loop, service, core_info):
         core_info.options = []
         result = event_loop.run_until_complete(service.get_system_core_info("snes"))
         assert result["active_core_label"] is None
@@ -473,85 +485,53 @@ class TestAnInstalledGameKeepsItsRecordedSystem:
 
 
 class TestSetGameCore:
-    def test_installed_and_bound_pins_and_returns_override_launch(self, event_loop, service, uow):
+    def test_installed_and_bound_pins_and_writes_nothing_to_the_shortcut(self, event_loop, service, uow):
+        # The shortcut carries its appId; the next start asks with the pin.
         _seed_rom(uow, rom_id=42, platform_slug="snes", shortcut_app_id=99)
         _seed_install(uow, rom_id=42, file_path="/roms/snes/mario.sfc")
         result = event_loop.run_until_complete(service.set_game_core(42, "bsnes"))
-        assert result["success"] is True
-        assert result["app_id"] == 99
-        # The -e override form bakes the resolved core for the pinned label. The
-        # available-cores map keys on the BARE core name (bsnes_libretro); the
-        # bake appends exactly one ".so" for the on-disk RetroArch core path.
-        assert result["launch_options"] == (
-            "flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "
-            '"%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/bsnes_libretro.so %ROM%" '
-            "'/roms/snes/mario.sfc'"
-        )
+        assert result == {"success": True}
         # The pin landed on the Rom aggregate.
         assert uow.roms.get(42).emulator_override == "bsnes"
 
-    def test_pins_standalone_emulator_and_bakes_verbatim_command(self, event_loop, service, uow, core_info):
-        # A per-game pin may name a STANDALONE emulator (#1210); the bake carries
-        # the full ES-DE command verbatim in the -e override, not an -L core path.
-        core_info.options = [standalone_option("%EMULATOR_PCSX2% -batch %ROM%", "PCSX2 (Standalone)")]
+    def test_pins_standalone_emulator(self, event_loop, service, uow, core_info):
+        # A per-game pin may name a STANDALONE emulator (#1210).
+        core_info.options = [standalone_option("PCSX2 (Standalone)")]
         _seed_rom(uow, rom_id=42, platform_slug="ps2", shortcut_app_id=99)
         _seed_install(uow, rom_id=42, file_path="/roms/ps2/gt4.iso", platform_slug="ps2")
         result = event_loop.run_until_complete(service.set_game_core(42, "PCSX2 (Standalone)"))
-        assert result["success"] is True
-        assert result["app_id"] == 99
-        assert result["launch_options"] == (
-            "flatpak run --nosocket=wayland net.retrodeck.retrodeck "
-            "-e \"%EMULATOR_PCSX2% -batch %ROM%\" '/roms/ps2/gt4.iso'"
-        )
+        assert result == {"success": True}
         assert uow.roms.get(42).emulator_override == "PCSX2 (Standalone)"
 
     def test_uninstalled_pins_without_live_launch(self, event_loop, service, uow):
-        # Bound but NOT installed → pin stored, but no shortcut to update live.
+        # Bound but NOT installed → pin stored.
         _seed_rom(uow, rom_id=42, platform_slug="snes", shortcut_app_id=99)
         result = event_loop.run_until_complete(service.set_game_core(42, "bsnes"))
-        assert result["success"] is True
-        assert result["launch_options"] is None
-        assert result["app_id"] is None
+        assert result == {"success": True}
         assert uow.roms.get(42).emulator_override == "bsnes"
 
     def test_unbound_pins_without_live_launch(self, event_loop, service, uow):
-        # Installed but UNBOUND (no shortcut_app_id) → pin stored, no app_id.
+        # Installed but UNBOUND (no shortcut_app_id) → pin stored.
         _seed_rom(uow, rom_id=42, platform_slug="snes", shortcut_app_id=None)
         _seed_install(uow, rom_id=42, file_path="/roms/snes/mario.sfc")
         result = event_loop.run_until_complete(service.set_game_core(42, "bsnes"))
-        assert result["success"] is True
-        assert result["launch_options"] is None
-        assert result["app_id"] is None
+        assert result == {"success": True}
         assert uow.roms.get(42).emulator_override == "bsnes"
 
-    def test_an_entry_tender_cannot_bake_is_pinned_and_bakes_the_empty_command(
-        self, event_loop, service, uow, core_info
-    ):
-        # Pinned like any other (#2195 D23); the game page then refuses Play, and
-        # its shortcut gets no start that would run ES-DE's own choice (D43).
-        core_info.options = [
-            standalone_option(
-                "%EMULATOR_OS-SHELL% %ROM%",
-                "RPCS3 Shortcut (Standalone)",
-                status="unbakeable",
-                reason="shortcut_script",
-            )
-        ]
+    def test_an_entry_tender_cannot_start_is_pinned_like_any_other(self, event_loop, service, uow, core_info):
+        # Pinned like any other (#2195 D23); the game page and the start then say
+        # Tender cannot start it yet.
+        core_info.options = [standalone_option("RPCS3 Shortcut (Standalone)")]
         _seed_rom(uow, rom_id=42, platform_slug="ps3", shortcut_app_id=99)
         _seed_install(uow, rom_id=42, file_path="/roms/ps3/Game.iso", platform_slug="ps3")
 
         result = event_loop.run_until_complete(service.set_game_core(42, "RPCS3 Shortcut (Standalone)"))
 
-        assert result["success"] is True
+        assert result == {"success": True}
         assert uow.roms.get(42).emulator_override == "RPCS3 Shortcut (Standalone)"
-        assert result["launch_options"] == ""
 
     def test_an_entry_not_installed_is_refused_and_nothing_written(self, event_loop, service, uow, core_info):
-        core_info.options = [
-            standalone_option(
-                "%EMULATOR_X% %ROM%", "Missing (Standalone)", status="needs_setup", reason="not_installed"
-            )
-        ]
+        core_info.options = [standalone_option("Missing (Standalone)", not_installed=True)]
         _seed_rom(uow, rom_id=42, platform_slug="snes", shortcut_app_id=99)
         _seed_install(uow, rom_id=42, file_path="/roms/snes/mario.sfc")
         setting = service.set_game_core(42, "Missing (Standalone)")
@@ -603,47 +583,21 @@ class TestSetGameCore:
 
 
 class TestClearGameCore:
-    def test_clears_and_bakes_resolved_active_core(self, event_loop, service, uow, active_core):
-        # After clearing the pin, the ROM follows the per-platform/system default.
-        # The resolver yields that default (here a per-platform bsnes); the bake
-        # must carry the -e override for the resolved core, NOT a plain launch.
+    def test_clear_drops_the_pin_and_resolves_no_emulator(self, event_loop, service, uow, active_core):
+        # After clearing the pin the ROM follows the per-platform/system default
+        # from its next start; nothing is resolved or written now.
         _seed_rom(uow, rom_id=42, platform_slug="snes", shortcut_app_id=99, emulator_override="Snes9x")
         _seed_install(uow, rom_id=42, file_path="/roms/snes/mario.sfc")
-        active_core.per_rom[42] = ("bsnes_libretro", "bsnes")
         result = event_loop.run_until_complete(service.clear_game_core(42))
-        assert result["success"] is True
-        assert result["app_id"] == 99
-        # The resolver was consulted AFTER the pin cleared, and the bake uses its
-        # resolved core (the per-platform default) with the -e override form.
-        assert active_core.emulator_calls == [42]
-        assert result["launch_options"] == (
-            "flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "
-            '"%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/bsnes_libretro.so %ROM%" '
-            "'/roms/snes/mario.sfc'"
-        )
+        assert result == {"success": True}
+        assert active_core.emulator_calls == []
         # The pin is gone (SQL NULL).
-        assert uow.roms.get(42).emulator_override is None
-
-    def test_clears_and_bakes_plain_when_platform_unresolvable(self, event_loop, service, uow, active_core):
-        # When the resolver yields (None, None) — a genuinely unresolvable
-        # platform — clearing bakes the plain launch (no -e).
-        _seed_rom(uow, rom_id=42, platform_slug="snes", shortcut_app_id=99, emulator_override="bsnes")
-        _seed_install(uow, rom_id=42, file_path="/roms/snes/mario.sfc")
-        active_core.per_rom[42] = (None, None)
-        result = event_loop.run_until_complete(service.clear_game_core(42))
-        assert result["success"] is True
-        assert (
-            result["launch_options"] == "flatpak run --nosocket=wayland net.retrodeck.retrodeck '/roms/snes/mario.sfc'"
-        )
-        assert "-e" not in result["launch_options"]
         assert uow.roms.get(42).emulator_override is None
 
     def test_clear_uninstalled_drops_pin_without_live_launch(self, event_loop, service, uow):
         _seed_rom(uow, rom_id=42, platform_slug="snes", shortcut_app_id=99, emulator_override="bsnes")
         result = event_loop.run_until_complete(service.clear_game_core(42))
-        assert result["success"] is True
-        assert result["launch_options"] is None
-        assert result["app_id"] is None
+        assert result == {"success": True}
         assert uow.roms.get(42).emulator_override is None
 
     def test_clear_unknown_rom_fails(self, event_loop, service):
@@ -679,27 +633,16 @@ class TestSetSystemCore:
         assert result["success"] is True
         assert settings["platform_cores"] == {}
 
-    def test_a_stored_switch_answers_success_with_exactly_the_rebake_list(self, event_loop, service, uow, active_core):
+    def test_a_stored_switch_answers_success_and_resolves_no_game(self, event_loop, service, uow, active_core):
+        # Every game following the platform asks with the new pick at its next
+        # start; the switch itself touches no shortcut and takes no lease.
         _seed_rom(uow, rom_id=1, platform_slug="snes", shortcut_app_id=101)
         _seed_install(uow, rom_id=1, file_path="/roms/snes/a.sfc")
-        active_core.per_rom[1] = ("bsnes_libretro", "bsnes")
 
-        result = dict(event_loop.run_until_complete(service.set_system_core("snes", "bsnes")))
+        result = event_loop.run_until_complete(service.set_system_core("snes", "bsnes"))
 
-        assert result.pop("prune_lease_token").startswith("system_core:")
-        assert result == {
-            "success": True,
-            "rebake_items": [
-                {
-                    "app_id": 101,
-                    "launch_options": (
-                        "flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "
-                        '"%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/bsnes_libretro.so %ROM%" '
-                        "'/roms/snes/a.sfc'"
-                    ),
-                }
-            ],
-        }
+        assert result == {"success": True}
+        assert active_core.emulator_calls == []
 
     def test_a_failed_settings_write_refuses_and_keeps_the_previous_core(
         self, event_loop, service, settings, settings_persister
@@ -733,227 +676,6 @@ class TestSetSystemCore:
 
         assert refused.value.reason == "save_failed"
         assert settings["platform_cores"] == {"snes": "bsnes"}
-
-    @pytest.mark.parametrize("failure", [RuntimeError("re-bake bug"), OSError("disc folder unreadable")])
-    def test_a_failure_after_the_settings_write_propagates_and_keeps_the_new_core(
-        self, event_loop, service, uow, settings, settings_persister, disc_resolver, failure
-    ):
-        _seed_rom(uow, rom_id=1, platform_slug="snes", shortcut_app_id=101)
-        _seed_install(uow, rom_id=1, file_path="/roms/snes/a.sfc")
-        settings["platform_cores"]["snes"] = "Snes9x"
-
-        def fail(*_args: object) -> str:
-            raise failure
-
-        disc_resolver.resolve_for_install = fail
-        setting = service.set_system_core("snes", "bsnes")
-
-        with pytest.raises(type(failure)) as raised:
-            event_loop.run_until_complete(setting)
-
-        assert raised.value is failure
-        assert settings["platform_cores"] == {"snes": {"label": "bsnes", "source": "retrodeck"}}
-        assert settings_persister.save_count == 1
-
-
-# ── set_system_core fan-out (re-bake installed+bound ROMs on the platform) ──
-
-
-class TestSetSystemCoreFanOut:
-    def test_includes_installed_and_bound_with_override_launch(self, event_loop, service, uow, active_core):
-        # Two installed+bound ROMs on snes; the new per-platform core resolves to
-        # bsnes for both → both appear in rebake_items with the -e override.
-        _seed_rom(uow, rom_id=1, platform_slug="snes", shortcut_app_id=101)
-        _seed_install(uow, rom_id=1, file_path="/roms/snes/a.sfc")
-        _seed_rom(uow, rom_id=2, platform_slug="snes", shortcut_app_id=102)
-        _seed_install(uow, rom_id=2, file_path="/roms/snes/b.sfc")
-        active_core.per_rom[1] = ("bsnes_libretro", "bsnes")
-        active_core.per_rom[2] = ("bsnes_libretro", "bsnes")
-        result = event_loop.run_until_complete(service.set_system_core("snes", "bsnes"))
-        items = {item["app_id"]: item["launch_options"] for item in result["rebake_items"]}
-        assert items == {
-            101: (
-                "flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "
-                '"%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/bsnes_libretro.so %ROM%" '
-                "'/roms/snes/a.sfc'"
-            ),
-            102: (
-                "flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "
-                '"%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/bsnes_libretro.so %ROM%" '
-                "'/roms/snes/b.sfc'"
-            ),
-        }
-
-    def test_fan_out_bakes_standalone_e_form(self, event_loop, service, uow, active_core):
-        # A per-platform pick may resolve to a STANDALONE emulator (#1210); the
-        # re-bake carries the full ES-DE command verbatim, not an -L core path.
-        _seed_rom(uow, rom_id=1, platform_slug="ps2", shortcut_app_id=101)
-        _seed_install(uow, rom_id=1, file_path="/roms/ps2/a.iso", platform_slug="ps2")
-        active_core.per_rom_emulator[1] = EmulatorInvocation.run_game(
-            "%EMULATOR_PCSX2% -batch %ROM%", "PCSX2 (Standalone)"
-        )
-        result = event_loop.run_until_complete(service.set_system_core("ps2", "PCSX2 (Standalone)"))
-        items = {item["app_id"]: item["launch_options"] for item in result["rebake_items"]}
-        assert items == {
-            101: (
-                "flatpak run --nosocket=wayland net.retrodeck.retrodeck "
-                "-e \"%EMULATOR_PCSX2% -batch %ROM%\" '/roms/ps2/a.iso'"
-            ),
-        }
-
-    def test_skips_per_game_overridden_rom(self, event_loop, service, uow, active_core):
-        # A ROM with its own emulator_override is NOT re-baked — the per-game pin
-        # wins over the platform default, so its shortcut must not be touched.
-        _seed_rom(uow, rom_id=1, platform_slug="snes", shortcut_app_id=101)
-        _seed_install(uow, rom_id=1, file_path="/roms/snes/a.sfc")
-        _seed_rom(uow, rom_id=2, platform_slug="snes", shortcut_app_id=102, emulator_override="Snes9x")
-        _seed_install(uow, rom_id=2, file_path="/roms/snes/b.sfc")
-        active_core.per_rom[1] = ("bsnes_libretro", "bsnes")
-        result = event_loop.run_until_complete(service.set_system_core("snes", "bsnes"))
-        app_ids = [item["app_id"] for item in result["rebake_items"]]
-        assert app_ids == [101]
-        # The overridden ROM's resolver is never consulted.
-        assert active_core.emulator_calls == [1]
-
-    def test_skips_uninstalled_rom(self, event_loop, service, uow, active_core):
-        # Bound but NOT installed → no live launch command to rewrite.
-        _seed_rom(uow, rom_id=1, platform_slug="snes", shortcut_app_id=101)
-        _seed_install(uow, rom_id=1, file_path="/roms/snes/a.sfc")
-        _seed_rom(uow, rom_id=2, platform_slug="snes", shortcut_app_id=102)  # no install
-        active_core.per_rom[1] = ("bsnes_libretro", "bsnes")
-        result = event_loop.run_until_complete(service.set_system_core("snes", "bsnes"))
-        app_ids = [item["app_id"] for item in result["rebake_items"]]
-        assert app_ids == [101]
-
-    def test_skips_unbound_rom(self, event_loop, service, uow, active_core):
-        # Installed but UNBOUND (no shortcut_app_id) → no shortcut to rewrite.
-        _seed_rom(uow, rom_id=1, platform_slug="snes", shortcut_app_id=101)
-        _seed_install(uow, rom_id=1, file_path="/roms/snes/a.sfc")
-        _seed_rom(uow, rom_id=2, platform_slug="snes", shortcut_app_id=None)
-        _seed_install(uow, rom_id=2, file_path="/roms/snes/b.sfc")
-        active_core.per_rom[1] = ("bsnes_libretro", "bsnes")
-        result = event_loop.run_until_complete(service.set_system_core("snes", "bsnes"))
-        app_ids = [item["app_id"] for item in result["rebake_items"]]
-        assert app_ids == [101]
-
-    def test_bakes_plain_launch_when_resolver_yields_none(self, event_loop, service, uow, active_core):
-        # Clearing the per-platform core: the resolver yields (None, None) for an
-        # unresolvable platform → the re-bake carries the plain launch (no -e).
-        _seed_rom(uow, rom_id=1, platform_slug="snes", shortcut_app_id=101)
-        _seed_install(uow, rom_id=1, file_path="/roms/snes/a.sfc")
-        active_core.per_rom[1] = (None, None)
-        result = event_loop.run_until_complete(service.set_system_core("snes", ""))
-        items = result["rebake_items"]
-        assert items == [
-            {
-                "app_id": 101,
-                "launch_options": "flatpak run --nosocket=wayland net.retrodeck.retrodeck '/roms/snes/a.sfc'",
-            }
-        ]
-
-    def test_only_platform_roms_are_rebaked(self, event_loop, service, uow, active_core):
-        # A ROM on a different platform must never appear in the fan-out.
-        _seed_rom(uow, rom_id=1, platform_slug="snes", shortcut_app_id=101)
-        _seed_install(uow, rom_id=1, file_path="/roms/snes/a.sfc")
-        _seed_rom(uow, rom_id=2, platform_slug="gba", shortcut_app_id=102)
-        _seed_install(uow, rom_id=2, file_path="/roms/gba/b.gba", platform_slug="gba")
-        active_core.per_rom[1] = ("bsnes_libretro", "bsnes")
-        result = event_loop.run_until_complete(service.set_system_core("snes", "bsnes"))
-        app_ids = [item["app_id"] for item in result["rebake_items"]]
-        assert app_ids == [101]
-
-    def test_empty_fan_out_when_no_matching_roms(self, event_loop, service):
-        # No ROMs on the platform → empty rebake_items, success still True.
-        result = event_loop.run_until_complete(service.set_system_core("snes", "bsnes"))
-        assert result["success"] is True
-        assert result["rebake_items"] == []
-
-
-# ── disc-pin preservation across core changes (#865 HIGH) ──────────────
-
-
-_DISC_DIR = "/roms/psx/sonic"
-_DISC1 = "Sonic (Disc 1).cue"
-_DISC2 = "Sonic (Disc 2).cue"
-
-
-def _multi_disc_list() -> list[Disc]:
-    return [
-        Disc(filename=_DISC1, path=f"{_DISC_DIR}/{_DISC1}", label="Disc 1", index=1),
-        Disc(filename=_DISC2, path=f"{_DISC_DIR}/{_DISC2}", label="Disc 2", index=2),
-    ]
-
-
-class TestCoreChangePreservesPinnedDisc:
-    """A core change must re-bake the PINNED disc, never revert to disc 1 (#865).
-
-    Every launch-bake site folds the ROM's persisted ``selected_disc`` over the
-    install. Before the fix these cores.py sites baked the raw ``file_path``, so
-    changing a per-game or per-platform core silently re-baked the shortcut back
-    to disc 1 / the m3u, dropping the user's pinned disc.
-    """
-
-    def test_set_game_core_rebakes_pinned_disc(self, event_loop, service, uow, disc_resolver):
-        # A multi-disc PSX ROM pinned to disc 2: pinning a per-game core must
-        # re-bake launch_options at DISC 2, not disc 1.
-        disc_resolver.set_discs(_DISC_DIR, _multi_disc_list())
-        _seed_rom(uow, rom_id=42, platform_slug="snes", shortcut_app_id=99, selected_disc=_DISC2)
-        _seed_install(uow, rom_id=42, file_path=f"{_DISC_DIR}/{_DISC1}", rom_dir=_DISC_DIR)
-        result = event_loop.run_until_complete(service.set_game_core(42, "bsnes"))
-        assert result["success"] is True
-        assert result["app_id"] == 99
-        assert f"'{_DISC_DIR}/{_DISC2}'" in result["launch_options"]
-        assert _DISC1 not in result["launch_options"]
-        # The disc seam was queried with the pin.
-        assert (_DISC_DIR, _DISC2) in disc_resolver.calls
-
-    def test_clear_game_core_rebakes_pinned_disc(self, event_loop, service, uow, active_core, disc_resolver):
-        # Clearing the per-game core (Follow default) must STILL re-bake the
-        # pinned disc 2 — clearing the CORE pin does not clear the DISC pin.
-        disc_resolver.set_discs(_DISC_DIR, _multi_disc_list())
-        _seed_rom(
-            uow,
-            rom_id=42,
-            platform_slug="snes",
-            shortcut_app_id=99,
-            emulator_override="bsnes",
-            selected_disc=_DISC2,
-        )
-        _seed_install(uow, rom_id=42, file_path=f"{_DISC_DIR}/{_DISC1}", rom_dir=_DISC_DIR)
-        active_core.per_rom[42] = ("snes9x_libretro", "Snes9x")
-        result = event_loop.run_until_complete(service.clear_game_core(42))
-        assert result["success"] is True
-        assert result["app_id"] == 99
-        assert f"'{_DISC_DIR}/{_DISC2}'" in result["launch_options"]
-        assert _DISC1 not in result["launch_options"]
-        # The DISC pin survives a core clear.
-        assert uow.roms.get(42).selected_disc == _DISC2
-
-    def test_set_system_core_fan_out_rebakes_pinned_disc(self, event_loop, service, uow, active_core, disc_resolver):
-        # The per-platform fan-out must re-bake each installed+bound ROM at its
-        # OWN pinned disc, not disc 1.
-        disc_resolver.set_discs(_DISC_DIR, _multi_disc_list())
-        _seed_rom(uow, rom_id=1, platform_slug="snes", shortcut_app_id=101, selected_disc=_DISC2)
-        _seed_install(uow, rom_id=1, file_path=f"{_DISC_DIR}/{_DISC1}", rom_dir=_DISC_DIR)
-        active_core.per_rom[1] = ("bsnes_libretro", "bsnes")
-        result = event_loop.run_until_complete(service.set_system_core("snes", "bsnes"))
-        items = {item["app_id"]: item["launch_options"] for item in result["rebake_items"]}
-        assert f"'{_DISC_DIR}/{_DISC2}'" in items[101]
-        assert _DISC1 not in items[101]
-        assert (_DISC_DIR, _DISC2) in disc_resolver.calls
-
-    def test_set_game_core_single_disc_unchanged(self, event_loop, service, uow, disc_resolver):
-        # A non-multi-disc ROM resolves to its own file_path — byte-identical to
-        # the pre-fix behavior (the resolver returns file_path for < 2 discs).
-        _seed_rom(uow, rom_id=42, platform_slug="snes", shortcut_app_id=99)
-        _seed_install(uow, rom_id=42, file_path="/roms/snes/mario.sfc")
-        result = event_loop.run_until_complete(service.set_game_core(42, "bsnes"))
-        assert result["success"] is True
-        assert result["launch_options"] == (
-            "flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "
-            '"%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/bsnes_libretro.so %ROM%" '
-            "'/roms/snes/mario.sfc'"
-        )
 
 
 # ── transaction boundary ───────────────────────────────────────────────
@@ -1054,7 +776,7 @@ class TestSetGameCoreTransactionBoundary:
             assert u.roms.get(42).emulator_override is None
 
 
-# ── The three writes' conflict rules and leases ───────────────────────────────
+# ── A per-game pin's conflict rules ─────────────────────────────────────────────
 
 
 def _seed_bound_install(uow: FakeUnitOfWork, rom_id: int = 42) -> None:
@@ -1063,65 +785,7 @@ def _seed_bound_install(uow: FakeUnitOfWork, rom_id: int = 42) -> None:
 
 
 class TestTheCoreWriteLeases:
-    """A write whose launch command the frontend applies to a live shortcut carries a lease for that write."""
-
-    def test_a_system_core_change_that_rebakes_carries_a_lease(self, event_loop, service, uow, prune_conflicts):
-        _seed_bound_install(uow)
-
-        result = event_loop.run_until_complete(service.set_system_core("snes", "bsnes"))
-
-        assert result["rebake_items"]
-        assert result["prune_lease_token"].startswith("system_core:")
-        assert prune_conflicts.conflicting_operations == 1
-
-    def test_a_system_core_change_with_nothing_to_rebake_carries_none(self, event_loop, service, prune_conflicts):
-        result = event_loop.run_until_complete(service.set_system_core("snes", "bsnes"))
-
-        assert result == {"success": True, "rebake_items": []}
-        assert prune_conflicts.conflicting_operations == 0
-
-    @pytest.mark.parametrize(
-        ("call", "label"),
-        [
-            (lambda service: service.set_system_core("snes", "bsnes"), "set_system_core"),
-            (lambda service: service.set_game_core(42, "bsnes"), "set_game_core"),
-            (lambda service: service.clear_game_core(42), "clear_game_core"),
-        ],
-    )
-    def test_the_lease_is_taken_while_the_writes_operation_still_holds(
-        self, event_loop, service, uow, prune_conflicts, monkeypatch, call, label
-    ):
-        """No cleanup can start between the write's operation and the lease that outlasts it."""
-        _seed_bound_install(uow)
-        seen = _record_operations_at_lease(prune_conflicts, monkeypatch)
-
-        event_loop.run_until_complete(call(service))
-
-        assert seen == [[label]]
-
-    @pytest.mark.parametrize(
-        "call",
-        [lambda service: service.set_game_core(42, "bsnes"), lambda service: service.clear_game_core(42)],
-    )
-    def test_a_per_game_write_to_a_live_shortcut_carries_a_lease(self, event_loop, service, uow, call):
-        _seed_bound_install(uow)
-
-        result = event_loop.run_until_complete(call(service))
-
-        assert result["prune_lease_token"].startswith("game_core:")
-
-    @pytest.mark.parametrize(
-        "call",
-        [lambda service: service.set_game_core(42, "bsnes"), lambda service: service.clear_game_core(42)],
-    )
-    def test_a_per_game_write_with_no_live_shortcut_carries_none(self, event_loop, service, uow, prune_conflicts, call):
-        _seed_rom(uow, rom_id=42, platform_slug="snes", shortcut_app_id=99)  # bound, not installed
-
-        result = event_loop.run_until_complete(call(service))
-
-        assert result["success"] is True
-        assert "prune_lease_token" not in result
-        assert prune_conflicts.conflicting_operations == 0
+    """A per-game pin its conflict rules refuse writes nothing and leaves the prune conflicts as they were."""
 
     @pytest.mark.parametrize(
         ("migration_pending", "cleanup_running", "reason"),
@@ -1183,7 +847,6 @@ class TestAVanishedPick:
                 option=snes9x, layer=DEFAULT, vanished=VanishedPick(pick=StoredPick("Gone", "retrodeck"), layer="game")
             ),
             options=[snes9x],
-            invocation=None,
         )
 
         result = event_loop.run_until_complete(service.get_platform_core_info(42))
@@ -1253,6 +916,7 @@ def _service_over(
             uow_factory=FakeUnitOfWorkFactory(uow=FakeUnitOfWork()),
             active_core=FakeActiveCoreResolver(),
             disc_resolver=FakeDiscResolver(),
+            start_commands=FakeStartCommands(),
             conflict_rules=_make_conflict_rules(prune_conflicts=_make_prune_conflicts()),
         ),
     )
@@ -1315,7 +979,7 @@ class TestEverySourcesDefault:
     def test_with_emudeck_first_no_line_of_the_starting_source_stands_under_its_default(self, event_loop):
         """No refusal and no vanished pick of RetroDECK's beneath EmuDeck's default (#2195 D24)."""
         missing = dataclasses.replace(
-            standalone_option("%EMULATOR_X% %ROM%", "Missing", status="needs_setup", reason="not_installed"),
+            standalone_option("Missing", not_installed=True),
             declared_index=0,
         )
         core_info = _TwoSourceCoreInfo(
@@ -1336,7 +1000,7 @@ class TestEverySourcesDefault:
     def test_with_emudeck_first_a_standing_pick_that_cannot_start_says_so(self, event_loop):
         """A pick is no default from elsewhere: its own refusal stands (#2195 D23, D24)."""
         missing = dataclasses.replace(
-            standalone_option("%EMULATOR_X% %ROM%", "Missing", status="needs_setup", reason="not_installed"),
+            standalone_option("Missing", not_installed=True),
             declared_index=0,
         )
         core_info = _TwoSourceCoreInfo(
@@ -1356,7 +1020,7 @@ class TestEverySourcesDefault:
     def test_with_retrodeck_first_its_own_lines_stand(self, event_loop):
         """The control: the same RetroDECK list first in the order says its default cannot start."""
         missing = dataclasses.replace(
-            standalone_option("%EMULATOR_X% %ROM%", "Missing", status="needs_setup", reason="not_installed"),
+            standalone_option("Missing", not_installed=True),
             declared_index=0,
         )
         core_info = _TwoSourceCoreInfo(
@@ -1412,19 +1076,23 @@ class TestAPickWhileItsSourceIsSwitchedOff:
 # ── get_emulator_launches (whether each entry starts the installed game) ──
 
 
+def _emudeck() -> dict[str, Any]:
+    """The answering source where RetroDECK is absent: one Tender starts no game through yet (#2221 D21)."""
+    return {"kind": "emudeck", "starts_games": False}
+
+
 def _resolved(*options: Any, chosen: Any | None = None) -> ResolvedEmulator:
     return ResolvedEmulator(
         choice=EmulatorChoice(option=chosen, layer=DEFAULT if chosen is not None else None, vanished=None),
         options=list(options),
-        invocation=None,
     )
 
 
 class TestGetEmulatorLaunches:
     """Each entry's verdict, asked with its own label, for the emulator menu (#2195 D22, D29)."""
 
-    _RPCS3_SHORTCUT = standalone_option("%EMULATOR_OS-SHELL% %ROM%", "RPCS3 Shortcut (Standalone)")
-    _RPCS3_DIRECTORY = standalone_option("%EMULATOR_RPCS3% --no-gui %ROM%", "RPCS3 Directory (Standalone)")
+    _RPCS3_SHORTCUT = standalone_option("RPCS3 Shortcut (Standalone)")
+    _RPCS3_DIRECTORY = standalone_option("RPCS3 Directory (Standalone)")
 
     def test_every_entry_is_asked_with_its_own_label_about_the_installed_file(
         self, event_loop, service, core_info, active_core, uow
@@ -1509,8 +1177,8 @@ class TestGetEmulatorLaunches:
 class TestTheChosenEntrysLaunch:
     """The page's core read carries whether the game starts with the entry it starts with (#2195 D2, D26)."""
 
-    _SHORTCUT = standalone_option("%EMULATOR_OS-SHELL% %ROM%", "RPCS3 Shortcut (Standalone)")
-    _DIRECTORY = standalone_option("%EMULATOR_RPCS3% --no-gui %ROM%", "RPCS3 Directory (Standalone)")
+    _SHORTCUT = standalone_option("RPCS3 Shortcut (Standalone)")
+    _DIRECTORY = standalone_option("RPCS3 Directory (Standalone)")
 
     def test_an_installed_game_is_asked_about_with_its_chosen_entry_alone(
         self, event_loop, service, core_info, active_core, uow
@@ -1612,3 +1280,124 @@ class TestTheChosenEntrysLaunch:
 
         assert result["launch"] is None
         assert core_info.launchability_calls == []
+
+
+class TestWhatTheResolversCommandSaysOfTheStart:
+    """The page's ``start`` and the menu's ``start_verdict`` carry the resolver's launch command (#2221 D2, D20)."""
+
+    _SHORTCUT = standalone_option("RPCS3 Shortcut (Standalone)")
+    _DIRECTORY = standalone_option("RPCS3 Directory (Standalone)")
+    _MISSING = standalone_option("RPCS3 Missing (Standalone)", not_installed=True)
+
+    @staticmethod
+    def _installed(uow: FakeUnitOfWork) -> None:
+        _seed_rom(uow, rom_id=42, platform_slug="ps3")
+        _seed_install(uow, rom_id=42, file_path="/roms/ps3/Game.iso", platform_slug="ps3")
+
+    def test_an_entry_the_resolver_gives_no_complete_command_for_cannot_start_with_its_reason(
+        self, event_loop, service, active_core, start_commands, uow
+    ):
+        self._installed(uow)
+        active_core.resolved[42] = _resolved(self._SHORTCUT, chosen=self._SHORTCUT)
+        start_commands.answers["RPCS3 Shortcut (Standalone)"] = StartRefused(DESKTOP_FILE)
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert result["start"] == {
+            "state": "cannot_start",
+            "reason": DESKTOP_FILE,
+            "entry": "RPCS3 Shortcut (Standalone)",
+        }
+        assert start_commands.asked == [("ps3", "/roms/ps3/Game.iso", "RPCS3 Shortcut (Standalone)")]
+
+    def test_a_complete_command_says_what_it_says_beside_the_start(
+        self, event_loop, service, active_core, start_commands, uow
+    ):
+        self._installed(uow)
+        active_core.resolved[42] = _resolved(self._DIRECTORY, chosen=self._DIRECTORY)
+        start_commands.answers["RPCS3 Directory (Standalone)"] = StartCommand(
+            argv=("rpcs3",), folder=None, notes=(StartNote(PLACEHOLDER_UNFILLED, "%RPCS3_GAMEID%"),)
+        )
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert result["start"]["state"] == "starts"
+        assert result["start"]["remarks"] == [{"reason": PLACEHOLDER_UNFILLED, "placeholder": "%RPCS3_GAMEID%"}]
+
+    def test_a_game_that_is_not_installed_asks_no_command(self, event_loop, service, active_core, start_commands, uow):
+        _seed_rom(uow, rom_id=42, platform_slug="ps3")
+        active_core.resolved[42] = _resolved(self._SHORTCUT, chosen=self._SHORTCUT)
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert result["start"]["state"] == "starts"
+        assert start_commands.asked == []
+
+    def test_an_entry_not_installed_says_so_and_asks_no_command(
+        self, event_loop, service, active_core, start_commands, uow
+    ):
+        self._installed(uow)
+        active_core.resolved[42] = _resolved(self._MISSING, chosen=self._MISSING)
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert (result["start"]["state"], result["start"]["reason"]) == ("cannot_start", "not_installed")
+        assert start_commands.asked == []
+
+    def test_the_menu_carries_each_entrys_command_verdict_asked_with_its_own_label(
+        self, event_loop, service, active_core, start_commands, uow
+    ):
+        self._installed(uow)
+        active_core.resolved[42] = _resolved(self._SHORTCUT, self._DIRECTORY, self._MISSING)
+        start_commands.answers["RPCS3 Shortcut (Standalone)"] = StartRefused(DESKTOP_FILE)
+
+        result = event_loop.run_until_complete(service.get_emulator_launches(42))
+
+        assert [entry["start_verdict"] for entry in result] == [
+            {"starts": False, "reason": DESKTOP_FILE, "remarks": []},
+            {"starts": True, "reason": None, "remarks": []},
+            None,
+        ]
+        assert start_commands.asked == [
+            ("ps3", "/roms/ps3/Game.iso", "RPCS3 Shortcut (Standalone)"),
+            ("ps3", "/roms/ps3/Game.iso", "RPCS3 Directory (Standalone)"),
+        ]
+
+    def test_a_game_the_answering_source_starts_no_game_through_cannot_start_and_asks_nothing(
+        self, event_loop, service, active_core, start_commands, uow
+    ):
+        """EmuDeck answers where RetroDECK is absent, and Tender starts no game through it yet (#2221 D21)."""
+        self._installed(uow)
+        resolved = _resolved(self._SHORTCUT, chosen=self._SHORTCUT)
+        active_core.resolved[42] = ResolvedEmulator(choice=resolved.choice, options=resolved.options, source=_emudeck())
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert result["start"] == {
+            "state": "cannot_start",
+            "reason": SOURCE_STARTS_NO_GAMES,
+            "entry": "RPCS3 Shortcut (Standalone)",
+            "source": "emudeck",
+        }
+        assert start_commands.asked == []
+
+    def test_the_menu_carries_the_sources_refusal_for_every_entry_and_asks_nothing(
+        self, event_loop, service, active_core, start_commands, uow
+    ):
+        self._installed(uow)
+        active_core.resolved[42] = ResolvedEmulator(
+            choice=_resolved().choice, options=[self._SHORTCUT, self._DIRECTORY, self._MISSING], source=_emudeck()
+        )
+
+        result = event_loop.run_until_complete(service.get_emulator_launches(42))
+
+        refusal = {"starts": False, "reason": SOURCE_STARTS_NO_GAMES, "remarks": [], "source": "emudeck"}
+        assert [entry["start_verdict"] for entry in result] == [refusal, refusal, None]
+        assert start_commands.asked == []
+
+    def test_a_platforms_own_read_asks_no_command(self, event_loop, service, start_commands):
+        """The platform page says nothing of the command (#2221 D20)."""
+        result = event_loop.run_until_complete(service.get_system_core_info("snes"))
+
+        assert result["start"]["state"] == "starts"
+        assert start_commands.asked == []

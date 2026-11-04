@@ -43,17 +43,8 @@ export interface DownloadCompleteEvent {
   rom_name: string;
   platform_name: string;
   file_path: string;
-  /**
-   * Bound Steam `app_id` for this ROM, or `null` when the ROM isn't synced
-   * yet (no shortcut). Resolved on the backend so the handler confirm-sets
-   * launch options on the exact shortcut without a full-library scan.
-   */
-  app_id: number | null;
-  /** Full launch command for the just-downloaded ROM (now installed/launchable). */
-  launch_options: string;
   /** Whether the just-finished transfer was resumable (carried for store parity). */
   resumable?: boolean;
-  prune_lease_token?: string;
 }
 
 export interface DownloadFailedEvent {
@@ -204,16 +195,12 @@ export interface RenameCollisionsResult {
 /** The user's one answer to the whole colliding set. */
 export type CollisionChoice = "overwrite" | "keep";
 
-/** A completed adoption — shaped like a completed download's bake. */
+/** A completed adoption: the install record it wrote. */
 interface AdoptDone {
   success: true;
   message: string;
   file_path?: string;
   rom_dir?: string | null;
-  /** Bound Steam `app_id`, or `null` when the ROM has no shortcut yet. */
-  app_id?: number | null;
-  launch_options?: string;
-  prune_lease_token?: string;
 }
 
 /**

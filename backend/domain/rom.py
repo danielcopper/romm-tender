@@ -60,7 +60,7 @@ class Rom:
     emulator_override: str | None = None
     emulator_override_source: str | None = None
     selected_disc: str | None = None
-    applied_launch_options: str | None = None
+    shortcut_applied: bool = False
     last_fetch_id: str | None = None
     sibling_group_key: str | None = None
     regions: tuple[str, ...] = ()
@@ -215,7 +215,7 @@ class Rom:
         moves the binding here from the previous representative; the repository's
         collision-unbind then clears the old holder so the one-binding-per-appId
         rule (migration 003) holds. The shortcut's name/appId stay sticky — only
-        the binding (and the baked ``launch_options``) move. *app_id* must be a
+        the binding moves. *app_id* must be a
         positive Steam shortcut id.
         """
         if app_id <= 0:
@@ -262,7 +262,7 @@ class Rom:
         """Pin a per-game emulator/core override to the core *label* of the emulator source *source*.
 
         Stores the LABEL the user chose (e.g. ``"PCSX ReARMed"``), not a
-        resolved ``.so`` — the ``.so`` is resolved live at launch-bake time, so
+        resolved ``.so`` — the ``.so`` is resolved live at each start, so
         the override survives RetroDECK/ES-DE default changes — and the kind of
         the source whose catalogue it was chosen from, so a label that later
         disappears from it can be named with it. A blank or whitespace-only
@@ -284,7 +284,7 @@ class Rom:
         """Pin the multi-disc launch target to the disc named *filename*.
 
         Stores the disc's basename (the stable selection key), not a resolved
-        path — the absolute path is re-derived live at launch-bake time, so the
+        path — the absolute path is re-derived live at each start, so the
         pin survives uninstall/reinstall and RetroDECK-home migration. A blank
         or whitespace-only *filename* is meaningless and raises ``ValueError``;
         clear the selection with :meth:`clear_selected_disc` instead.
@@ -298,18 +298,13 @@ class Rom:
         """Drop the disc pin so the ROM follows the default (m3u or disc 1)."""
         self.selected_disc = None
 
-    def record_applied_launch_options(self, launch_options: str) -> None:
-        """Record the ``launch_options`` last written to this ROM's Steam shortcut.
+    def record_shortcut_applied(self) -> None:
+        """Record that the sync applied this ROM's Steam shortcut (#2221 D17).
 
-        The delta-restricted apply (#1383) compares each item's freshly built
-        target ``launch_options`` against this recorded value to decide whether
-        the shortcut is already correct (skip) or must be re-applied (changed).
-        Written by the six recorded-state writer sites — sync ack-commit,
-        download-complete, adopt-complete, uninstall (records ``""``),
-        RetroDECK-home migration re-resolve, and version switch — each recording
-        the value it just had the frontend write onto the shortcut. ``""`` is the uninstalled placeholder,
-        not a missing value; ``None`` (never set here) is "unknown" and always
-        forces a re-apply. Excluded from the sync UPSERT (persisted only via the
-        pin-only ``set_applied_launch_options`` write path) so an unrelated
-        re-save never wipes it, mirroring :meth:`pin_emulator_override`."""
-        self.applied_launch_options = launch_options
+        The delta-restricted apply (#1383) skips a shortcut whose row is applied
+        and whose identity is unchanged; an unapplied row is always re-applied.
+        Only the sync's commit records it, for a binding target, and Force Full
+        Sync clears it on every row. Excluded from the sync UPSERT (persisted
+        only through ``set_shortcut_applied``) so an unrelated re-save never
+        wipes it, mirroring :meth:`pin_emulator_override`."""
+        self.shortcut_applied = True

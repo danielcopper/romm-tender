@@ -1,7 +1,8 @@
 ---
 status: accepted
 decided: 2026-06-24
-updated: 2026-10-02
+updated: 2026-11-04
+amended-by: [0044]
 ---
 
 # Every gaming-mode launch is gated through one shared path via cancel-then-relaunch
@@ -203,3 +204,14 @@ The re-confirm's own sentence in Consequences no longer holds either: since
 [#1577](https://github.com/danielcopper/romm-tender/issues/1577) a re-confirm that hangs past its 3 s **stops** the
 launch instead of launching — the Play button returns to Play, and the watcher says "Launch cancelled — try again". A
 `None` item or an ordinary failure still launches.
+
+## Amendment — the gate prepares the start instead of re-confirming a command
+
+Both funnels still run the one gate before a start. What its last step does changed
+([ADR-0044](0044-every-start-asks-the-resolver.md), [#2221](https://github.com/danielcopper/romm-tender/issues/2221)
+D15, D16, D19): instead of re-confirming the launch command baked into the shortcut, the gate asks the backend to
+prepare the start (`prepare_game_start`), which asks the resolver for the command and hands it to the launcher for that
+start only, and it sets the shortcut's launch options back to its appId. A start whose preparation does not come about
+is refused with a sentence saying why, rather than started: the launcher would find no hand-over and start nothing.
+Where Steam's own Play gets no answer from Tender within 5 seconds the sentence is "Tender isn't responding — couldn't
+start the game."; a "Launch Anyway" after a check that got no answer still prepares the start first.

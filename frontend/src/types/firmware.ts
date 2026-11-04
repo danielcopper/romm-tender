@@ -381,18 +381,18 @@ interface FirmwareFile extends FirmwareVerdict {
 }
 
 /**
- * One ES-DE `<command>` classified for launch-bakeability (#1210), the shape the
- * backend `get_emulator_options` / picker payloads carry. `kind` is Tender's word
+ * One ES-DE `<command>` of a system (#1210), the shape the backend
+ * `get_emulator_options` / picker payloads carry. `kind` is Tender's word
  * for what the resolver states the entry launches: `"core"` (a RetroArch core of
  * this machine, `core_so` set to its bare name), `"program"` (an emulator program
  * of its own) or `"foreign_core"` (a RetroArch launch naming a core this machine
  * cannot load); `core_so` is null on the last two.
- * `bakeable` is false for an entry Tender cannot bake into a shortcut. `reason`
- * is the entry's not-established note where the resolver could not establish
- * whether its emulator is installed (worded by `utils/emulatorInstallation.ts`),
- * else why it cannot be baked (worded by `reasonCopy` in
- * `utils/emulatorMenu.tsx`), `"not_installed"` among them — the one reason an
- * entry is not offered as a pick (`isChoosable`) — and `null` otherwise.
+ * `reason` is the entry's not-established note where the resolver could not
+ * establish whether its emulator is installed (worded by
+ * `utils/emulatorInstallation.ts`), `"not_installed"` where it states it is not
+ * — the one reason an entry is not offered as a pick (`isChoosable`) — and
+ * `null` otherwise. Whether Tender can start a game with an entry is the
+ * resolver's launch command, asked for one game (`GameLaunch.start_verdict`).
  *
  * `emulator` is the resolver's identity for the emulator behind the row and the
  * only field that names one for every kind — `dolphin_libretro.so` for a core
@@ -420,15 +420,51 @@ export interface EmulatorOption {
   declared_index: number | null;
   is_default: boolean;
   chosen_in_frontend: boolean;
-  bakeable: boolean;
   reason: string | null;
 }
 
 /**
+ * Why the resolver gives no complete command for a game with an entry, in Tender's words (#2221 D2,
+ * `backend/domain/start_command.py`), worded by `utils/emulatorStart.ts`.
+ */
+export type StartCommandReason =
+  | "command_unread"
+  | "desktop_file"
+  | "injected_file_unread"
+  | "no_program"
+  | "rom_root_unknown"
+  | "command_too_long"
+  | "frontend_build_unread"
+  | "environment_unread"
+  | "environment_unknown"
+  | "folder_unplaced"
+  | "entry_unknown";
+
+/**
+ * Why the entry's installation could not be established, where the resolver gives no command for that reason —
+ * the same words an entry's `reason` carries (`utils/emulatorInstallation.ts`), worded as those are.
+ */
+export type StartInstallationReason =
+  "not_established" | "no_find_rule" | "find_rules_unread" | "lookup_unsupported" | "path_unseen";
+
+/**
+ * Why a start is refused: the answering source is one Tender starts no game through yet (#2221 D21); `source` on
+ * the start or the verdict names its kind.
+ */
+export type StartSourceReason = "source_starts_no_games";
+
+/** What is said beside a start that goes ahead: a placeholder ES-DE leaves in the command as written. */
+export interface StartRemark {
+  reason: "placeholder_unfilled";
+  placeholder: string | null;
+}
+
+/**
  * What starting with the entry a game or a platform resolves to comes to.
- * `starts` — nothing stands in its way; `cannot_start` — `reason` says why
- * (`not_installed`, `start_script_runs_nothing`); `choose` — there is
- * no default, because the shipped entry's installation could not be
+ * `starts` — nothing stands in its way, `remarks` saying what is said beside it;
+ * `cannot_start` — `reason` says why: `not_installed`, or, for a game, why the
+ * resolver gives no complete command for it (`StartCommandReason`); `choose` —
+ * there is no default, because the shipped entry's installation could not be
  * established (`reason` is its note); `no_entry` — nothing to start with.
  * `entry` is the label of the entry it is about — for `choose`, the shipped one.
  */
@@ -436,6 +472,21 @@ export interface EmulatorStart {
   state: "starts" | "cannot_start" | "choose" | "no_entry";
   reason: string | null;
   entry: string | null;
+  remarks?: StartRemark[];
+  /** The kind of the answering source, with `source_starts_no_games` only. */
+  source?: string;
+}
+
+/**
+ * Whether the resolver gives a complete command for one game with one entry (#2221 D2): `reason` says why not
+ * where `starts` is false, `remarks` what is said beside a start that goes ahead.
+ */
+export interface StartCommandVerdict {
+  starts: boolean;
+  reason: StartCommandReason | StartInstallationReason | StartSourceReason | "not_installed" | null;
+  remarks: StartRemark[];
+  /** The kind of the answering source, with `source_starts_no_games` only. */
+  source?: string;
 }
 
 /** Why a launch verdict could not be established, in Tender's words. */
@@ -546,6 +597,8 @@ export interface GameLaunch {
   statements?: LaunchStatement[];
   contents_unread: boolean;
   format_unestablished: boolean;
+  /** The emulator menu's answers only: whether the resolver gives a complete command for the game with this entry. */
+  start_verdict?: StartCommandVerdict | null;
 }
 
 /**

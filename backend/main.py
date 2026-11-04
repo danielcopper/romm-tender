@@ -533,15 +533,14 @@ class Endpoints:
         return await self._services.save_sync_service.check_local_drift(rom_id)
 
     @route
-    async def get_rom_relaunch_options(self, rom_id):
-        """Return one lease-bearing relaunch item, or ``None``.
+    async def prepare_game_start(self, rom_id):
+        """Hand the next start of ``rom_id``'s shortcut its command, and answer the launch options to set (#2221 D15).
 
-        Both launch funnels — the game-detail Play button and Steam's
-        direct-launch watcher — re-confirm the shortcut's launch command from
-        this just before a launch to heal mid-session ``launch_options`` drift
-        (#1150). The lease covers the subsequent frontend Steam write.
+        Both launch funnels — the game-detail Play button and Steam's own Play,
+        caught by the launch interceptor — call it just before the start; a
+        refusal stops the start. The lease covers the frontend's Steam write.
         """
-        return await self._services.relaunch_options_resolver.get_rom_relaunch_options(rom_id)
+        return await self._services.game_start_service.prepare_game_start(rom_id)
 
     @route
     async def probe_reachability(self):
@@ -887,12 +886,13 @@ class Endpoints:
         return self._services.metadata_service.get_app_id_rom_id_map()
 
     @route
-    async def get_installed_relaunch_options(self):
-        """Return lease-bearing relaunch items for installed and bound ROMs.
+    async def get_bound_launch_options(self):
+        """Return the lease-bearing items for every bound shortcut whose launch options are not its appId.
 
-        The frontend uses them to heal Steam-shortcut drift at startup (#1043).
+        The frontend sets them at startup and after a sync, so a shortcut edited
+        in Steam or written by an older version carries its appId again (#1043).
         """
-        return await self._services.startup_healing_service.get_installed_relaunch_options()
+        return await self._services.startup_healing_service.get_bound_launch_options()
 
     # ── Achievements delegation to AchievementsService ───────
 

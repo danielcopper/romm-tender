@@ -34,7 +34,7 @@ import { getAppIdRomIdMapSnapshot, readGameRunning, refreshAppIdMap } from "./se
 import { markLaunchSkipped, consumeLaunchSkip, SERVER_CALL_LIMIT_MS } from "./launchGate";
 import { ensureTrackingConfiguredSilently, makeLaunchGateOps } from "./launchGateOps";
 import { runGateLoop, type LaunchPrompts } from "./launchVerdict";
-import { reconfirmLaunchOptions } from "./launchOptionsReconcile";
+import { couldNotStart, NOT_RESPONDING_START, prepareStart, UNKNOWN_GAME_START } from "./launchOptionsReconcile";
 import { detach } from "./detach";
 import { tellStrandedPress } from "./strandedPanelStore";
 import { strandedPanelSentence } from "./strandedPanelWording";
@@ -57,10 +57,9 @@ const MIGRATION_TOAST_BODY = "Pending RetroDECK migration. Open the Tender menu 
 
 const WATCHER_TAG = "Watcher";
 
-/** Relaunch a previously-cancelled launch. Marks the appId as skipped FIRST so
- *  this RunGame doesn't re-enter the watcher and re-gate. Used directly only for
- *  the paths with nothing to re-confirm (unknown appId, no backend answer, error
- *  fallback); the gated path goes through {@link relaunch}. */
+/** Relaunch a previously-cancelled launch whose start is prepared. Marks the
+ *  appId as skipped FIRST so this RunGame doesn't re-enter the watcher and
+ *  re-gate. Only {@link relaunch} calls it. */
 function bareRelaunch(start: CancelledStart): void {
   markLaunchSkipped(start.appId);
   SteamClient.Apps.RunGame(relaunchGameId(start), "", -1, 100);
@@ -78,21 +77,17 @@ function relaunchGameId(start: CancelledStart): string {
   return appStore.GetAppOverviewByAppID(start.appId)?.GetGameID?.() ?? start.gameId;
 }
 
-/** Relaunch a previously-cancelled, now-approved launch. Heals any mid-session
- *  `launch_options` drift on the shortcut first (shared bounded-race re-confirm;
- *  ordinary I/O failure is best-effort, timeout stops), then marks the appId as
- *  skipped immediately before this RunGame so it doesn't re-enter the watcher
- *  and re-gate. The re-confirm runs in the already-detached post-cancel portion,
- *  so it only adds a bounded wait to the cancel→relaunch window: the command
- *  fetch, the confirm's report wait, re-read and reading of Steam's shortcut
- *  file, and the lease release each run under a timeout of their own. */
+/** Relaunch a previously-cancelled, now-approved launch once its start is
+ *  prepared: the backend hands the resolver's command to the launcher for this
+ *  start and the shortcut's launch options are set back to its appId (#2221
+ *  D15, D16). A preparation that does not come about refuses the start, said
+ *  out loud — the watcher has no game page to fall back to (D19). It runs in the
+ *  already-detached post-cancel portion, so it only adds a bounded wait to the
+ *  cancel→relaunch window. */
 async function relaunch(start: CancelledStart, romId: number): Promise<void> {
-  const reconfirm = await reconfirmLaunchOptions(romId, start.appId, WATCHER_TAG);
-  if (reconfirm.status === "timeout") {
-    // The watcher has no game-page UI to fall back to, so the refusal would
-    // otherwise be a silently dead Play press — say it out loud instead
-    // (CustomPlayButton's twin path returns its trigger to "Play").
-    showToast("Launch cancelled — try again");
+  const prepared = await prepareStart(romId, start.appId, WATCHER_TAG);
+  if (prepared.status === "refused") {
+    showToast(prepared.sentence);
     return;
   }
   bareRelaunch(start);
@@ -107,7 +102,8 @@ const nothingToShow = (): void => undefined;
  * ends without a launch only the migration block's shows anything. The gate
  * itself fails open to `allow` so a gate bug never traps the user's
  * already-cancelled launch; an unexpected throw while acting on the verdict or
- * relaunching is caught by the listener's own catch, which falls back to a bare relaunch.
+ * relaunching is caught by the listener's own catch, which refuses the start
+ * with the error's own message.
  */
 async function runWatcherGate(start: CancelledStart, romId: number, prompts: LaunchPrompts): Promise<void> {
   const ops = makeLaunchGateOps(romId, {
@@ -125,13 +121,7 @@ async function runWatcherGate(start: CancelledStart, romId: number, prompts: Lau
   });
   await runGateLoop(start.appId, romId, ops, {
     prompts,
-    launch: async (options) => {
-      if (options?.skipReconfirm) {
-        bareRelaunch(start);
-        return;
-      }
-      await relaunch(start, romId);
-    },
+    launch: () => relaunch(start, romId),
     onDeclined: nothingToShow,
     onConflictCancelled: nothingToShow,
     onRetry: nothingToShow,
@@ -162,12 +152,10 @@ async function isRomInstalled(appId: number, romId: number): Promise<boolean> {
 
 /**
  * How long a cancelled start waits for the watcher's first backend answer
- * before it goes ahead without the pre-launch sync. Why the wait is bounded:
+ * before it is refused (#2221 D19). Why the wait is bounded:
  * `docs/architecture/save-file-sync-architecture.md`, "Pre-launch sync".
  */
 export const FIRST_CONTACT_DEADLINE_MS = 5000;
-
-const NOT_RESPONDING_TOAST_BODY = "Tender isn't responding — started without syncing saves.";
 
 /**
  * Why a start of a version that is not installed is refused. A press from the
@@ -273,16 +261,16 @@ export function registerLaunchInterceptor(promptsForStart: () => LaunchPrompts):
             } catch (e) {
               if (!(e instanceof TimeoutError)) throw e;
               logError(
-                `Launch interceptor: no backend answer for appId=${appId} within ${FIRST_CONTACT_DEADLINE_MS}ms — starting without the pre-launch sync`,
+                `Launch interceptor: no backend answer for appId=${appId} within ${FIRST_CONTACT_DEADLINE_MS}ms — start refused`,
               );
-              showToast(NOT_RESPONDING_TOAST_BODY);
-              bareRelaunch(start);
+              showToast(NOT_RESPONDING_START);
               return;
             }
 
-            // An appId the map does not know is not ours to gate — relaunch and bail.
+            // An appId the map does not know has no start to hand over, so
+            // nothing starts (#2221 D19).
             if (rom === null) {
-              bareRelaunch(start);
+              showToast(UNKNOWN_GAME_START);
               return;
             }
 
@@ -304,12 +292,10 @@ export function registerLaunchInterceptor(promptsForStart: () => LaunchPrompts):
 
             await runWatcherGate(start, rom.romId, promptsForStart());
           } catch (e) {
-            // An unexpected error must not trap the launch. Use the bare
-            // relaunch (no re-confirm): the failure may be the re-confirm's own
-            // dependency, and the priority here is escaping the cancelled state,
-            // not healing drift.
+            // A start nothing prepared runs nothing, so an unexpected error
+            // refuses it, in the error's own words (#2221 D19).
             logError(`Launch interceptor error: ${e}`);
-            bareRelaunch(start);
+            showToast(couldNotStart(e));
           }
         })(),
       );

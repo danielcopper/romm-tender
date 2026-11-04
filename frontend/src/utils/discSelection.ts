@@ -1,14 +1,13 @@
 /**
  * A multi-disc game's disc selection: what the picker shows for it, reading it,
- * and applying a pick under a prune lease. The glyphs and the menu's options are
+ * and applying a pick. The glyphs and the menu's options are
  * UI, in `shared/DiscGlyphs.tsx`.
  */
 
 import { getDiscSelection, selectDisc, logError, logWarn } from "../api/backend";
 import type { DiscSelection } from "../api/backend";
-import { setLaunchOptionsConfirmed } from "./steamShortcuts";
 import { showToast } from "./toast";
-import { capturePruneLeaseAdmission, isPruneLeaseCancellation, withPruneLease } from "./pruneLease";
+import { capturePruneLeaseAdmission, isPruneLeaseCancellation } from "./pruneLease";
 
 /** A disc option's data value: a disc filename, or null for the m3u default. */
 export type DiscOptionData = string | null;
@@ -66,7 +65,6 @@ export async function fetchDiscSelection(romId: number, logTag = "DiscSelector")
 }
 
 export interface ExecuteDiscSelectionParams {
-  appId: number;
   romId: number;
   data: DiscOptionData;
   leaseOwner: string;
@@ -74,10 +72,9 @@ export interface ExecuteDiscSelectionParams {
   logTag?: string;
 }
 
-/** Pin the disc *data* (`null` follows the default again) and confirm the re-baked
- *  launch command on the shortcut; *onSelected* hears the pin once it holds. */
+/** Pin the disc *data* (`null` follows the default again); *onSelected* hears the
+ *  pin once it holds. The next start opens that disc. */
 export async function executeDiscSelection({
-  appId,
   romId,
   data,
   leaseOwner,
@@ -87,27 +84,14 @@ export async function executeDiscSelection({
   const admission = capturePruneLeaseAdmission(leaseOwner);
   try {
     const result = await selectDisc(romId, data);
-    await withPruneLease(
-      result.success ? result.prune_lease_token : undefined,
-      logTag,
-      async (signal) => {
-        if (result.success) {
-          if (result.launch_options !== undefined) {
-            if (signal.aborted) return;
-            await setLaunchOptionsConfirmed(appId, result.launch_options);
-          }
-          if (signal.aborted) return;
-          onSelected?.(result.selected ?? null);
-        } else {
-          showToast(result.message || "Failed to select disc");
-        }
-      },
-      leaseOwner,
-      admission,
-    );
+    if (result.success) {
+      onSelected?.(result.selected ?? null);
+    } else {
+      showToast(result.message || "Failed to select disc");
+    }
   } catch (e) {
-    // Leaving the game page cancels the pick's continuation — the disc is
-    // already persisted backend-side, so that is teardown and not a failure.
+    // Leaving the game page cancels the pick — the disc may already be
+    // persisted backend-side, so that is teardown and not a failure.
     if (isPruneLeaseCancellation(e, admission)) {
       logWarn(`${logTag}: disc selection continuation was cancelled: ${e}`);
       return;

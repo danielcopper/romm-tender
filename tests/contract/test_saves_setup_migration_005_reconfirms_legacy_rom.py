@@ -33,8 +33,8 @@ def _rewind_to_v4(db_path: str) -> None:
     (006's play-session outbox table absent and ``note_id`` present, 007's
     ``last_played`` column absent, 008's version-metadata columns absent, 009's
     ``last_session_start_monotonic`` column absent, 010's sibling_group_key index
-    absent, 012's platform_sync_state table absent, 015's
-    ``applied_launch_options`` column absent, 016's ``cover_source`` column
+    absent, 012's platform_sync_state table absent, 041's
+    ``shortcut_applied`` column absent, 016's ``cover_source`` column
     absent, 017's ``last_sync_server_hash`` column absent, 018's save-sync
     scalar table under its pre-rename name ``rom_save_states``, 019's
     collection_sync_state table absent, 020's fetch-generation columns
@@ -59,8 +59,9 @@ def _rewind_to_v4(db_path: str) -> None:
         # Reverse 008 so its ADD COLUMNs re-apply instead of duplicating.
         for column in ("sibling_group_key", "regions", "languages", "revision", "tags", "is_main_sibling"):
             conn.execute(f"ALTER TABLE roms DROP COLUMN {column}")
-        # Reverse 015 so its ADD COLUMN re-applies instead of duplicating.
-        conn.execute("ALTER TABLE roms DROP COLUMN applied_launch_options")
+        # Reverse 041 so its ADD COLUMN re-applies instead of duplicating. 015's
+        # column needs no reversal: 041 dropped it, and 015 re-adds it for 041.
+        conn.execute("ALTER TABLE roms DROP COLUMN shortcut_applied")
         # Reverse 016 so its ADD COLUMN re-applies instead of duplicating.
         conn.execute("ALTER TABLE roms DROP COLUMN cover_source")
         # Reverse 020 so its ADD COLUMN re-applies instead of duplicating. Its

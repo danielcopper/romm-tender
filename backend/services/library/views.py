@@ -149,8 +149,8 @@ class LibraryViews:
         The last two are what makes the panel's resume offer honest, and
         they are two facts rather than one because Tender keeps **two** kinds
         of durable progress. A **completion stamp** makes the next run pass over a
-        whole platform or collection at fetch time; a **recorded launch command**
-        makes it pass over one game at apply time. Both survive a stopped run and
+        whole platform or collection at fetch time; an **applied shortcut**
+        (``roms.shortcut_applied``) makes it pass over one game at apply time. Both survive a stopped run and
         both are cleared together by Force Full Sync, which is the entire #1789
         defect: the offer used to be derived from the run history, which Force
         Full Sync deliberately preserves (#1318), so it outlived the progress it
@@ -158,17 +158,17 @@ class LibraryViews:
 
         Neither fact subsumes the other, so the offer reads both. A run cancelled
         inside its very first platform unit has written shortcuts and recorded
-        their launch commands but reached no final chunk, so it holds recorded
-        games and no stamp — and it is a genuine resume, because the next run
-        really does less work. In the other direction, a row predating migration
-        015 carries a NULL recorded value while its platform's stamp survives, so
-        an upgraded install can hold stamps with zero recorded games and still
-        skip those platforms wholesale. Counting only one kind declares one of
+        them applied but reached no final chunk, so it holds applied games and
+        no stamp — and it is a genuine resume, because the next run really does
+        less work. In the other direction, a row the sync has not applied since
+        Force Full Sync or since it was created carries no record while its
+        platform's stamp may survive, so an install can hold stamps with zero
+        applied games and still skip those platforms wholesale. Counting only one kind declares one of
         these two a fresh start when it is not.
 
         Everything here rides in the read UoW that already scans ``roms``: the
-        recorded-game count is one more condition inside that same loop (``iter_all``
-        already selects ``applied_launch_options``), and each stamp probe is a
+        applied-game count is one more condition inside that same loop (``iter_all``
+        already selects ``shortcut_applied``), and each stamp probe is a
         ``SELECT 1 … LIMIT 1`` over a leaf table. The panel mount pays nothing
         measurable for any of it.
         """
@@ -181,17 +181,17 @@ class LibraryViews:
                 if rom.shortcut_app_id is None:
                     continue
                 rom_count += 1
-                # Bound AND recorded, never recorded alone. ``classify_roms``
+                # Bound AND applied, never applied alone. ``classify_roms``
                 # (``domain/sync_diff.py``) sends an unbound row down the NEW branch
                 # — ``if not reg or not reg.get("app_id")`` — before it ever reads
-                # the recorded value, so a recorded command with no shortcut is not
-                # skip authority: the next run has to mint the shortcut regardless.
+                # the record, so an applied row with no shortcut is not skip
+                # authority: the next run has to mint the shortcut regardless.
                 # Requiring the binding is therefore what makes this count fall to
                 # zero after Data Management's remove-all by construction: unbinding
-                # keeps the row and its recorded command on purpose (ADR-0007), so
+                # keeps the row and its record on purpose (ADR-0007), so
                 # a count over all rows would keep offering a resume of shortcuts
                 # that no longer exist. Do not "simplify" this to every row.
-                if rom.applied_launch_options is not None:
+                if rom.shortcut_applied:
                     resumable_games += 1
             has_completion_stamp = uow.platform_sync_state.has_any() or uow.collection_sync_state.has_any()
         return _SyncStatsReading(

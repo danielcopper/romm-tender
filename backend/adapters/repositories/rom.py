@@ -67,7 +67,7 @@ _SYNC_COLUMNS = (
 )
 
 # Read set: the synced columns plus the pin-only emulator_override, selected_disc,
-# applied_launch_options (the recorded applied launch command, #1383),
+# shortcut_applied (whether the sync applied the shortcut, #2221 D17),
 # chosen_sgdb_id (the SteamGridDB game the user chose) and artwork_checked_at
 # (when its automatic artwork was last checked against SteamGridDB). Like the
 # two pins, the last three are read here but written only by their own set_*()
@@ -78,7 +78,7 @@ _SELECT_COLUMNS = ", ".join(
         "emulator_override",
         "emulator_override_source",
         "selected_disc",
-        "applied_launch_options",
+        "shortcut_applied",
         "chosen_sgdb_id",
         "artwork_checked_at",
     )
@@ -110,7 +110,7 @@ def _row_to_rom(row: sqlite3.Row) -> Rom:
         emulator_override=row["emulator_override"],
         emulator_override_source=row["emulator_override_source"],
         selected_disc=row["selected_disc"],
-        applied_launch_options=row["applied_launch_options"],
+        shortcut_applied=bool(row["shortcut_applied"]),
         sibling_group_key=row["sibling_group_key"],
         regions=tuple(json.loads(row["regions"])),
         languages=tuple(json.loads(row["languages"])),
@@ -235,19 +235,17 @@ class SqliteRomRepository(BaseRepository):
             (filename, rom_id),
         )
 
-    def set_applied_launch_options(self, rom_id: int, launch_options: str | None) -> None:
-        """Record the ``launch_options`` last written to ``rom_id``'s shortcut (#1383).
+    def set_shortcut_applied(self, rom_id: int, applied: bool) -> None:
+        """Write whether the sync applied ``rom_id``'s shortcut, as ``Rom.record_shortcut_applied`` has just set it.
 
-        ``launch_options`` is the full launch command that was applied (``""`` for
-        an uninstalled ROM), or ``None`` to leave it "unknown". The delta apply
-        reads this back to skip already-correct shortcuts. This is the only write
-        path for the column — the sync UPSERT in :meth:`save` never touches it, so
-        a re-sync of an unchanged row (which never re-acks it) preserves the
-        recorded value.
+        The delta apply reads this back to skip already-correct shortcuts. This
+        is the only write path for the column but Force Full Sync's clear — the
+        sync UPSERT in :meth:`save` never touches it, so a re-sync of an
+        unchanged row (which never re-acks it) keeps it.
         """
         self._conn.execute(
-            "UPDATE roms SET applied_launch_options = ? WHERE rom_id = ?",
-            (launch_options, rom_id),
+            "UPDATE roms SET shortcut_applied = ? WHERE rom_id = ?",
+            (int(applied), rom_id),
         )
 
     def set_chosen_sgdb_id(self, rom_id: int, sgdb_id: int | None) -> None:
@@ -274,15 +272,14 @@ class SqliteRomRepository(BaseRepository):
             (checked_at, rom_id),
         )
 
-    def clear_all_applied_launch_options(self) -> None:
-        """Reset every ROM's recorded launch command to "unknown" (NULL).
+    def clear_all_shortcut_applied(self) -> None:
+        """Mark every ROM's shortcut as not applied.
 
-        The Force Full Sync escape hatch: NULL never matches a target, so the
-        next apply re-touches every shortcut instead of delta-skipping it —
-        the repair path for Steam-side drift the recorded value cannot see
-        (e.g. a manually edited shortcut).
+        The Force Full Sync escape hatch: the next apply re-touches every
+        shortcut instead of delta-skipping it — the repair path for Steam-side
+        drift the record cannot see (e.g. a manually edited shortcut).
         """
-        self._conn.execute("UPDATE roms SET applied_launch_options = NULL")
+        self._conn.execute("UPDATE roms SET shortcut_applied = 0")
 
     def set_fs_size_bytes(self, rom_id: int, size: int | None) -> None:
         """Write the ROM size ``Rom.record_fs_size_bytes`` has just recorded for ``rom_id``.
@@ -290,7 +287,7 @@ class SqliteRomRepository(BaseRepository):
         An install records the size from the ROM detail it already fetched,
         which keeps the Data Management page's installed size current until the
         next sync. Unlike the pin columns (``emulator_override`` /
-        ``selected_disc`` / ``applied_launch_options``),
+        ``selected_disc`` / ``shortcut_applied``),
         ``fs_size_bytes`` ALSO rides the sync UPSERT in :meth:`save`, and the
         next sync writes RomM's listing value over this one; Database Design's
         ``roms`` table row says why the two writes agree. ``size`` is the byte

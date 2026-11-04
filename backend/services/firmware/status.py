@@ -212,7 +212,7 @@ class FirmwareStatusReader:
 
         A non-``None`` *launching_emulator* is the ROM's chosen entry (the
         game-detail path runs ``ActiveCoreResolver.resolve_rom`` upstream),
-        whether or not Tender can bake it, and is used as-is — libretro or
+        whatever starting with it comes to, and is used as-is — libretro or
         standalone, since the identity names both. ``None`` is the
         platform-level callers' "use the platform's own pick" signal, and it is
         also what the per-game path passes where the ROM has no system to ask or

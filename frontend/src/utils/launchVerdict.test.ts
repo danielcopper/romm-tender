@@ -164,26 +164,23 @@ describe("actOnGateVerdict", () => {
     expect(await actOnGateVerdict({ decision: "sync_failed", message: "Server said no" }, ROM_ID, hooks)).toBe("done");
     expect(hooks.prompts.confirmFallbackLaunch).toHaveBeenCalledWith("Server said no");
     expectOnly(hooks, ["launch"]);
-    expect(hooks.launch).toHaveBeenCalledWith({ skipReconfirm: false });
+    expect(hooks.launch).toHaveBeenCalledWith();
   });
 
-  it("sync failed with no answer: a yes launches without the re-confirm", async () => {
+  it("sync failed with no answer: a yes launches the same way, the start prepared like any other", async () => {
     hooks.prompts.confirmFallbackLaunch.mockResolvedValue(true);
     const verdict = { decision: "sync_failed", message: "Couldn't check your saves in time", noAnswer: true } as const;
     expect(await actOnGateVerdict(verdict, ROM_ID, hooks)).toBe("done");
     expectOnly(hooks, ["launch"]);
-    expect(hooks.launch).toHaveBeenCalledWith({ skipReconfirm: true });
+    expect(hooks.launch).toHaveBeenCalledWith();
   });
 
-  it.each([
-    [false, { skipReconfirm: false }],
-    [true, { skipReconfirm: true }],
-  ])(
-    "play anyway launches, re-confirming the launch options unless Tender did not answer (no answer: %s)",
-    async (noAnswer, options) => {
+  it.each([false, true])(
+    "play anyway launches the same way whether Tender answered or not (no answer: %s)",
+    async (noAnswer) => {
       expect(await actOnGateVerdict({ decision: "play_anyway", noAnswer }, ROM_ID, hooks)).toBe("done");
       expectOnly(hooks, ["launch"]);
-      expect(hooks.launch).toHaveBeenCalledWith(options);
+      expect(hooks.launch).toHaveBeenCalledWith();
       expect(hooks.prompts.confirmFallbackLaunch).not.toHaveBeenCalled();
     },
   );

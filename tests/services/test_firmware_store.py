@@ -385,7 +385,7 @@ class TestAPlaceOutsideTheBiosFolder:
     ):
         cemu = tmp_path / "data" / "Cemu"
         cemu.mkdir(parents=True)
-        machine.core_info.options = [standalone_option("CEMU", "Cemu", emulator="CEMU")]
+        machine.core_info.options = [standalone_option("Cemu", emulator="CEMU")]
         machine.resolver.declare("keys.txt", required_by=["CEMU"], place=str(cemu / "keys.txt"))
         machine.romm.add(1, "wiiu", "keys.txt", b"keys")
 
@@ -399,7 +399,7 @@ class TestAPlaceOutsideTheBiosFolder:
 
     async def test_a_folder_that_does_not_exist_is_not_created_and_the_row_names_it(self, machine, tmp_path):
         cemu = tmp_path / "data" / "Cemu"
-        machine.core_info.options = [standalone_option("CEMU", "Cemu", emulator="CEMU")]
+        machine.core_info.options = [standalone_option("Cemu", emulator="CEMU")]
         machine.resolver.declare("keys.txt", required_by=["CEMU"], place=str(cemu / "keys.txt"))
         machine.romm.add(1, "wiiu", "keys.txt", b"keys")
 
@@ -1230,7 +1230,7 @@ class TestAFolderTheEmulatorLists:
 
 class TestOnlyTheStore:
     async def test_for_an_emulator_the_resolver_does_not_cover_a_download_lands_in_the_store_only(self, machine):
-        machine.core_info.options = [standalone_option("RYUBING", "Ryubing", emulator="RYUBING")]
+        machine.core_info.options = [standalone_option("Ryubing", emulator="RYUBING")]
         machine.resolver.describe_emulator("RYUBING", declaration="unsupported")
         machine.romm.add(1, "switch", "prod.keys", b"keys")
 

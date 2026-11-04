@@ -59,7 +59,6 @@ if TYPE_CHECKING:
     from services.library.fetcher import LibraryFetcher
     from services.library.local_library_reader import LocalLibraryReader
     from services.library.run_finalizer import RunFinalizer
-    from services.library.shortcut_launch_resolver import ShortcutLaunchResolver
     from services.library.sync_progress import SyncProgress
     from services.library.sync_run_recorder import SyncRunRecorder
     from services.library.unit_apply import UnitApplier
@@ -90,8 +89,7 @@ class SyncOrchestratorConfig:
     :class:`LibraryFetcher` peer the orchestrator takes the work queue from and
     asks RomM about a stale row through, and the :class:`UnitApplier` each unit
     is applied by. The ``run_finalizer`` finalises the run's collections and emits
-    ``sync_complete``. The ``shortcut_launch_resolver`` peer is asked for the one
-    reading of the emulator sources a run takes. The ``local_library_reader``
+    ``sync_complete``. The ``local_library_reader``
     peer answers what the run asks of this device's own record of the library —
     the members the collections listed at their last completed apply, the
     resident sibling-group keys and the stale-row scan — each in its own short
@@ -116,7 +114,6 @@ class SyncOrchestratorConfig:
     fetcher: LibraryFetcher
     unit_applier: UnitApplier
     run_finalizer: RunFinalizer
-    shortcut_launch_resolver: ShortcutLaunchResolver
     local_library_reader: LocalLibraryReader
     session_budget: SessionBudgetMonitor
     sync_run_recorder: SyncRunRecorder
@@ -157,7 +154,6 @@ class SyncOrchestrator:
         self._fetcher = config.fetcher
         self._unit_applier = config.unit_applier
         self._run_finalizer = config.run_finalizer
-        self._shortcut_launch_resolver = config.shortcut_launch_resolver
         self._local_library_reader = config.local_library_reader
         self._session_budget = config.session_budget
         self._sync_run_recorder = config.sync_run_recorder
@@ -357,10 +353,6 @@ class SyncOrchestrator:
                 None, self._local_library_reader.do_read_collection_listed_rom_ids
             )
 
-            # One reading of the emulator sources for the whole run: every unit
-            # resolves its ROMs' emulators through it, and a change to the
-            # sources during the run takes effect from the next one.
-            sources = await self._loop.run_in_executor(None, self._shortcut_launch_resolver.do_read_sources)
             deliveries: dict[tuple[str, str], CollectionDelivery] = {}
             try:
                 for unit_index, unit in enumerate(work_queue):
@@ -373,7 +365,6 @@ class SyncOrchestrator:
                     )
                     applied = await self._unit_applier.apply_unit(
                         unit,
-                        sources=sources,
                         unit_index=unit_index,
                         total_units=total_units,
                         synced_rom_ids=synced_rom_ids,

@@ -1,8 +1,15 @@
+---
+status: accepted
+decided: 2026-06-23
+updated: 2026-11-04
+amended-by: [0044]
+---
+
 # Per-game disc selection lives in the plugin DB and is applied as a bake-time launch-path override; disc identity is format-semantic, the per-system accept-list is read live from es_systems
 
-## Status
+## Scope
 
-Accepted. Implements the cross-emulator disc picker deferred by [ADR-0013](0013-platform-gated-m3u-via-es-systems.md)
+Implements the cross-emulator disc picker deferred by [ADR-0013](0013-platform-gated-m3u-via-es-systems.md)
 §Consequences and tracked under [#865](https://github.com/danielcopper/decky-romm-sync/issues/865). Extends
 [ADR-0009](0009-launcher-pure-exec-wrapper-baked-launch-options.md) (the baked-`launch_options` model) with a disc-aware
 launch-path layer, and **mirrors [ADR-0011](0011-per-game-core-override-in-db-applied-via-e-flag.md) almost exactly** —
@@ -198,3 +205,12 @@ override this mirrors — storage, UPSERT exclusion, one-seam-three-bake-sites),
 the live es_systems accept-list it intersects with),
 [Core and Emulator Selection](../architecture/core-emulator-selection.md#multi-disc-selection) (the resolver, the bake
 sites, and how the disc path composes with the core in the launch command).
+
+## Amendment — the picked disc is the path a start is asked with
+
+The disc pick, its storage and its resolution over the enumerated discs stand. What changed is where the resolved path
+goes ([ADR-0044](0044-every-start-asks-the-resolver.md),
+[#2221](https://github.com/danielcopper/romm-tender/issues/2221) D3, D7, D8): nothing is baked into a shortcut, so a
+pick rewrites nothing in Steam. At every start the resolver is asked for the command with the path the emulator gets —
+the picked disc, else the default — and the emulator is handed that same path, unresolved
+(`domain/rom_files.py::asked_path`). The seam is `DiscResolver.resolve_disc_path`, no longer a bake site's.

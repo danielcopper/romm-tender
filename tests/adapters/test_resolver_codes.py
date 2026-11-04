@@ -66,10 +66,7 @@ def _classified() -> frozenset[str]:
 
 # The codes no reading module classifies today. The list only shrinks: a code a
 # reading module comes to classify leaves it, and a code the resolver adds is
-# classified rather than added here — except a code of an answer no reading
-# module reads yet (``launch_command``'s codes), which waits here with that
-# answer's other codes until its reading module classifies them (#2644 D1,
-# #2658 D1).
+# classified rather than added here.
 _UNCLASSIFIED = frozenset(
     {
         "CAVEAT_APPENDED_CONFIG_NOT_READ",
@@ -135,28 +132,11 @@ _UNCLASSIFIED = frozenset(
         "CAVEAT_FIRMWARE_ROOT_UNUSABLE",
         "CAVEAT_FIRMWARE_SEARCH_CANDIDATES",
         "CAVEAT_FIRMWARE_SUPPLIED_SOURCE_UNREADABLE",
-        "CAVEAT_FRONTEND_BUILD_SEALED",
-        "CAVEAT_FRONTEND_BUILD_UNPINNED",
         "CAVEAT_FRONTEND_MARKER_MISMATCH",
         "CAVEAT_FRONTEND_SETTINGS_UNREADABLE",
         "CAVEAT_INFO_PATH_UNRESOLVED",
         "CAVEAT_INVALID_SAVE_DIRECTORY",
         "CAVEAT_INVALID_SCREENSHOT_DIRECTORY",
-        "CAVEAT_LAUNCHER_SCRIPT_UNPINNED",
-        "CAVEAT_LAUNCH_COMMAND_ARGUMENT_BROKEN",
-        "CAVEAT_LAUNCH_COMMAND_BEYOND_LIMITS",
-        "CAVEAT_LAUNCH_COMMAND_DESKTOP_FILE",
-        "CAVEAT_LAUNCH_COMMAND_ENTRY_INVALID",
-        "CAVEAT_LAUNCH_COMMAND_ENV_OPTION",
-        "CAVEAT_LAUNCH_COMMAND_INJECT_LOOP",
-        "CAVEAT_LAUNCH_COMMAND_INJECT_UNREADABLE",
-        "CAVEAT_LAUNCH_COMMAND_NO_PROGRAM",
-        "CAVEAT_LAUNCH_COMMAND_PLACEHOLDER_UNKNOWN",
-        "CAVEAT_LAUNCH_COMMAND_ROM_ROOT_UNESTABLISHED",
-        "CAVEAT_LAUNCH_COMMAND_SECOND_SHELL_UNSAFE",
-        "CAVEAT_LAUNCH_COMMAND_SHELL_SYNTAX",
-        "CAVEAT_LAUNCH_ENVIRONMENT_UNPINNED",
-        "CAVEAT_LAUNCH_ENVIRONMENT_UNREAD",
         "CAVEAT_NO_CORE",
         "CAVEAT_NO_FIRMWARE_DECLARATION",
         "CAVEAT_NO_FIRMWARE_REQUIREMENT",

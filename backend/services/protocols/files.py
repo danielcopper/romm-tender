@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
     from contextlib import AbstractContextManager
 
     from domain.firmware_places import PlaceLook
@@ -896,6 +896,30 @@ class TenderFolderStore(Protocol):
     def drives(self) -> tuple[Drive, ...]: ...
     def free_bytes(self, path: str) -> int: ...
     def drive_kind(self, mount_point: str) -> str: ...
+
+
+class TenderFolderPlace(Protocol):
+    """Where Tender's folder lies as the settings name it — the one question a start asks of it.
+
+    The composition root satisfies this with ``TenderFolderAdapter``, the same
+    object as :class:`TenderFolderStore`.
+    """
+
+    def place(self) -> TenderPlace: ...
+
+
+class StartHandover(Protocol):
+    """Hands one start's command to the shortcut launcher (#2221 D15).
+
+    The composition root satisfies this with ``StartHandoverAdapter``.
+    ``hand_over`` writes the command, started in *folder*, where the launcher
+    claims it at the next start of *app_id*, created whole and readable by the
+    user only; *create_folder* creates *folder* where it is missing. Raises
+    ``OSError`` where it cannot be written, ``ValueError`` for a value it
+    cannot hold.
+    """
+
+    def hand_over(self, app_id: int, folder: str, argv: Sequence[str], *, create_folder: bool) -> None: ...
 
 
 class PruneArtifactStore(Protocol):

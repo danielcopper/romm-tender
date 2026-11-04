@@ -37,7 +37,6 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Awaitable, Callable
 
-    from domain.emulator_sources import SourcesReading
     from domain.sync_diff import ConvergedBinding
     from domain.work_unit import WorkUnit
     from services.library._state import CollectionMembership, LibrarySyncStateBox
@@ -46,7 +45,6 @@ if TYPE_CHECKING:
     from services.library.cover_preparer import CoverPreparer
     from services.library.fetcher import LibraryFetcher
     from services.library.local_library_reader import LocalLibraryReader
-    from services.library.shortcut_launch_resolver import ShortcutLaunchResolver
     from services.protocols import Clock, RunningRomIdsFn, UnitOfWorkFactory
 
     EmitProgressFn = Callable[..., Awaitable[None]]
@@ -62,10 +60,9 @@ class UnitApplierConfig:
     (which opens exactly one transaction from this module: the platform stamp's
     DELETE at a unit's apply start), the shared :class:`LibrarySyncStateBox`, the
     :class:`LibraryFetcher` and :class:`CollectionFetcher` peers a platform and a
-    collection unit are fetched through, the :class:`ShortcutLaunchResolver` that
-    answers each bake's installed path and emulator, the
-    :class:`LocalLibraryReader` the bound-row registry and the resident group
-    keys are read through,
+    collection unit are fetched through, the :class:`LocalLibraryReader` the
+    bound-row registry, the resident group keys and the installed ROMs are read
+    through,
     the :class:`CoverPreparer` that holds the unit's covers, the
     :class:`ChunkDispatcher` that takes the built delta the rest of the way, the
     ``emit_progress`` callback the unit's coarse frame goes out through, and the
@@ -82,7 +79,6 @@ class UnitApplierConfig:
     sync_state_box: LibrarySyncStateBox
     fetcher: LibraryFetcher
     collection_fetcher: CollectionFetcher
-    shortcut_launch_resolver: ShortcutLaunchResolver
     local_library_reader: LocalLibraryReader
     cover_preparer: CoverPreparer
     chunk_dispatcher: ChunkDispatcher
@@ -101,7 +97,6 @@ class UnitApplier:
         self._sync_state = config.sync_state_box
         self._fetcher = config.fetcher
         self._collection_fetcher = config.collection_fetcher
-        self._shortcut_launch_resolver = config.shortcut_launch_resolver
         self._local_library_reader = config.local_library_reader
         self._cover_preparer = config.cover_preparer
         self._chunk_dispatcher = config.chunk_dispatcher
@@ -150,7 +145,7 @@ class UnitApplier:
         delivered_roms = [rom for delivery in fetched for rom in delivery.roms]
         converged = await converge_collection_deliveries(
             # Built for the ranking alone: its version fields, not its launch command.
-            build_shortcuts_data(delivered_roms, self._launcher_exe, {}, {}),
+            build_shortcuts_data(delivered_roms, self._launcher_exe),
             {rom["id"]: rom.get("sibling_roms") or [] for rom in delivered_roms},
             registry,
             loop=self._loop,
@@ -171,7 +166,6 @@ class UnitApplier:
         self,
         unit: WorkUnit,
         *,
-        sources: SourcesReading,
         unit_index: int,
         total_units: int,
         synced_rom_ids: set[int],
@@ -255,14 +249,8 @@ class UnitApplier:
             box.run_skip_rebuilt_rows.update((rom["id"], rom["platform_slug"]) for rom in unit_roms)
             return len(unit_roms)
 
-        # Build shortcut data for every fetched ROM. Installed ROMs carry the
-        # full launch command; uninstalled ROMs get an empty placeholder until
-        # they are downloaded.
-        installed_paths = await self._loop.run_in_executor(
-            None, self._shortcut_launch_resolver.do_read_installed_paths, {rom["id"] for rom in unit_roms}, sources
-        )
-        core_overrides = await self._loop.run_in_executor(
-            None, self._shortcut_launch_resolver.do_build_core_overrides, unit_roms, sources
+        installed = await self._loop.run_in_executor(
+            None, self._local_library_reader.do_read_installed_rom_ids, {rom["id"] for rom in unit_roms}
         )
 
         # Read the bound-row registry once, before the build: it drives the group
@@ -280,7 +268,7 @@ class UnitApplier:
         # collapse below group them by the keys the commit records.
         followed_keys = self._stamp_unit_group_keys(unit_roms, resident_keys, unlisted, complete_view=complete_view)
         registry = with_followed_keys(registry, followed_keys)
-        shortcuts_data = build_shortcuts_data(unit_roms, self._launcher_exe, installed_paths, core_overrides)
+        shortcuts_data = build_shortcuts_data(unit_roms, self._launcher_exe)
         preferred_region = self._settings.get("preferred_region", AUTO_REGION)
 
         # A group holding more than one bound shortcut converges here in a
@@ -288,7 +276,6 @@ class UnitApplier:
         # already, once for the run, in :meth:`fetch_collection_units` (#2661),
         # and a collection unit's collapse leaves out every loser the run holds.
         # The finalize of a run that was not stopped removes them.
-        installed = set(installed_paths)
         converged: list[ConvergedBinding] = []
         if complete_view:
             installed |= await self._loop.run_in_executor(
@@ -333,9 +320,8 @@ class UnitApplier:
 
         # Delta-restricted apply (#1383 / #1382-M3): split the collapsed entries
         # against the recorded applied state and emit ONLY new + changed. An
-        # unchanged entry — identity matches AND its built target launch_options
-        # matches the recorded ``applied_launch_options`` — is already correct on
-        # the shortcut, so it never reaches the frontend (no Set* walk, no confirm
+        # unchanged entry — its identity matches — is already correct on the
+        # shortcut, so it never reaches the frontend (no Set* walk, no confirm
         # poll). Its ``roms`` row still commits: chunking routes the skipped
         # groups' rows to chunk 0's leftover (sync_chunking), so DB work is never
         # dropped and the platform stamp still rides the final chunk. A rebind

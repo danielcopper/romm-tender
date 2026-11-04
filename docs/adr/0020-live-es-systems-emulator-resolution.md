@@ -1,8 +1,8 @@
 ---
 status: accepted
 decided: 2026-07-04
-updated: 2026-10-28
-amended-by: [0030]
+updated: 2026-11-04
+amended-by: [0030, 0044]
 ---
 
 # The live `es_systems.xml` is the sole source for per-system emulator resolution; the curated `core_defaults.json` snapshot is deleted
@@ -321,3 +321,12 @@ picks one. A choice made inside ES-DE (`alternativeEmulator`, a per-game `altemu
 (ADR-0012 stands); it is shown beside Tender's own choice. The effective default, which follows those choices, was not
 chosen: what the user sets in ES-DE is ES-DE's, and Tender's choice is made in Tender. The rows the picker lists are
 every entry, in the resolver's order, two labels that run one command included (D8).
+
+## Amendment — the live list decides the entry, the resolver's command decides the start
+
+The live catalogue is still the sole source of the entries and of the default. What an entry starts with is no longer
+Tender's to judge ([ADR-0044](0044-every-start-asks-the-resolver.md),
+[#2221](https://github.com/danielcopper/romm-tender/issues/2221) D2, D20): the safely-bakeable rule and its classifier
+are gone, and an entry is startable through Tender exactly where the resolver gives a complete command for the game,
+asked on the game's page, in its emulator menu and at a start. One the resolver gives none for says why, in the
+resolver's reason. A game for which no entry is in effect is not started, rather than handed to RetroDECK's own choice.

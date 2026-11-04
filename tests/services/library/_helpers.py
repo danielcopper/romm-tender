@@ -62,12 +62,11 @@ def _make_rom(rom_id, name, platform_name, platform_slug="gba"):
     }
 
 
-def _make_registry_entry(name, platform_name, app_id, platform_slug="gba", applied_launch_options=""):
+def _make_registry_entry(name, platform_name, app_id, platform_slug="gba", shortcut_applied=True):
     """Build a minimal shortcut registry entry.
 
-    ``applied_launch_options`` defaults to ``""`` (the recorded uninstalled
-    placeholder) so an identity-matching fetch with no ``launch_options`` reads as
-    unchanged by the delta-restricted classify (#1383).
+    ``shortcut_applied`` defaults to ``True`` so an identity-matching fetch
+    reads as unchanged by the delta-restricted classify (#1383).
     """
     return {
         "app_id": app_id,
@@ -76,7 +75,7 @@ def _make_registry_entry(name, platform_name, app_id, platform_slug="gba", appli
         "platform_name": platform_name,
         "platform_slug": platform_slug,
         "cover_path": "",
-        "applied_launch_options": applied_launch_options,
+        "shortcut_applied": shortcut_applied,
     }
 
 
@@ -122,7 +121,7 @@ def _seed_rom_row(
     name="Game",
     fs_name=None,
     sibling_group_key: str | None = "romm:seed:1",
-    applied_launch_options: str | None = "",
+    shortcut_applied: bool = True,
     cover_source: str | None = None,
 ):
     """Insert a bound (or unbound when app_id is None) ROM into the shared fake UoW.
@@ -131,10 +130,9 @@ def _seed_rom_row(
     path treats the registry as already backfilled (#1295); pass ``None`` to
     seed a pre-migration row that must force a full fetch for backfill.
 
-    ``applied_launch_options`` defaults to ``""`` — the recorded uninstalled
-    placeholder — so an uninstalled bound baseline (built launch_options "")
-    reads as unchanged by the delta-restricted classify (#1383); pass ``None`` to
-    seed a pre-migration-015 row (unknown → always "changed").
+    ``shortcut_applied`` defaults to ``True`` so a bound baseline reads as
+    unchanged by the delta-restricted classify (#1383); pass ``False`` to seed
+    a row the sync has not applied (always "changed").
 
     ``cover_source`` is the persisted cover-cache fingerprint (#1386); defaults
     to ``None`` (a pre-migration-016 row — the NULL-adopt path).
@@ -153,7 +151,7 @@ def _seed_rom_row(
     )
     with library.uow:
         library.uow.roms.save(rom)
-        library.uow.roms.set_applied_launch_options(rom_id, applied_launch_options)
+        library.uow.roms.set_shortcut_applied(rom_id, shortcut_applied)
 
 
 def _seed_platform(fake_romm_api, *, platform_id, name, slug, roms):

@@ -2,15 +2,14 @@
 
 The disc-picker's compute layer: turn a flat list of files in a ROM's install
 directory into an ordered, labelled list of launchable discs, and resolve which
-one a launch should bake given the user's persisted selection. A "disc" is a
+one a start opens given the user's persisted selection. A "disc" is a
 disc-image container (see :mod:`domain.disc_formats`) the emulator can launch
 directly — never a ``.bin`` sidecar, never the ``.m3u`` playlist.
 
-Resolution is a bake-time path-override layer only: it returns the path to bake
-into the Steam shortcut's launch_options, it never rewrites the install's
-``file_path`` (save-path / core / displayed-filename derivations stay stable),
-mirroring how ``emulator_override`` overrides the invocation without touching
-``file_path``. The NULL-selection default is the ``.m3u`` when the install's
+Resolution is a path-override layer only: it returns the path a start opens,
+it never rewrites the install's ``file_path`` (save-path / core /
+displayed-filename derivations stay stable), as ``emulator_override`` picks the
+entry without touching ``file_path``. The NULL-selection default is the ``.m3u`` when the install's
 ``file_path`` is one (in-emulator disc swap), else the first enumerated disc.
 
 No I/O, no service/adapter/lib imports. Pure functions only. See ADR-0014.
@@ -38,7 +37,7 @@ class Disc:
     """One launchable disc image within a multi-disc ROM's install directory.
 
     ``filename`` is the basename (the stable selection key persisted in
-    ``roms.selected_disc``); ``path`` is the absolute path to bake; ``label``
+    ``roms.selected_disc``); ``path`` is the absolute path a start opens; ``label``
     is the user-facing face ("Disc 1", or the basename stem when unparseable);
     ``index`` is the 1-based position in enumeration order.
     """
@@ -124,9 +123,9 @@ def enumerate_discs(files: list[str], supported_extensions: frozenset[str] | Non
 
 
 def resolve_launch_path(file_path: str, discs: list[Disc], selected_disc: str | None) -> tuple[str, bool]:
-    """Resolve the path to bake into launch_options for a (possibly pinned) ROM.
+    """Resolve the path a start of a (possibly pinned) ROM opens.
 
-    Returns ``(path_to_bake, stale)``. ``stale`` is ``True`` when a non-NULL
+    Returns ``(path, stale)``. ``stale`` is ``True`` when a non-NULL
     *selected_disc* no longer matches any enumerated disc (the pinned file is
     gone) — the caller degrades to the default and should log a WARNING, never
     fail. A non-multi-disc ROM (fewer than two discs) resolves to its own

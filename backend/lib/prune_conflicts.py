@@ -31,20 +31,13 @@ _LEASE_SECONDS = 300.0
 # A key with no entry here falls back to the generic refusal text rather than
 # leaking an internal token into the UI.
 _HOLDER_NAMES = {
-    "launch_reconfirm": "checking a game's launch settings",
+    "launch_reconfirm": "preparing a game's start",
     "installed_reconcile": "checking which games are installed",
     "sgdb_artwork": "downloading artwork",
     "version_switch": "switching versions",
     "shortcut_removal": "updating Steam shortcuts",
-    "rom_uninstall": "uninstalling a game",
-    "bulk_uninstall": "uninstalling games",
-    "system_core": "changing an emulator core",
-    "game_core": "changing an emulator core",
-    "disc_selection": "changing the selected disc",
     "sync_complete": "finishing a library sync",
     "sync_stale": "finishing a library sync",
-    "download_complete": "finishing a download",
-    "migration_relaunch_options": "finishing a RetroDECK move",
     "shortcut_artwork": "setting shortcut artwork",
 }
 

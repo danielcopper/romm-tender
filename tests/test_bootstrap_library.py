@@ -6,9 +6,6 @@ import logging
 
 import pytest
 from _factories import _make_conflict_rules
-from fakes.fake_active_core_resolver import FakeActiveCoreResolver
-from fakes.fake_disc_resolver import FakeDiscResolver
-from fakes.fake_emulator_sources import FakeEmulatorSources
 from fakes.fake_event_sink import FakeEventSink
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
@@ -45,9 +42,6 @@ def parts(home) -> LibraryParts:
             log_debug=lambda msg: None,
             artwork=FakeArtworkManager(),
             uow_factory=FakeUnitOfWorkFactory(FakeUnitOfWork()),
-            active_core=FakeActiveCoreResolver(default=(None, None)),
-            disc_resolver=FakeDiscResolver(),
-            emulator_sources=FakeEmulatorSources(),
             renderer_rss=FakeRendererRss(),
             renderer_gc=FakeRendererGc(),
             conflict_rules=_make_conflict_rules(),
@@ -72,13 +66,11 @@ _HELD = [
     ("chunk_dispatcher", "_session_budget", "session_budget"),
     ("unit_applier", "_fetcher", "fetcher"),
     ("unit_applier", "_collection_fetcher", "collection_fetcher"),
-    ("unit_applier", "_shortcut_launch_resolver", "shortcut_launch_resolver"),
     ("unit_applier", "_local_library_reader", "local_library_reader"),
     ("unit_applier", "_cover_preparer", "cover_preparer"),
     ("unit_applier", "_chunk_dispatcher", "chunk_dispatcher"),
     ("preview", "_fetcher", "fetcher"),
     ("preview", "_collection_fetcher", "collection_fetcher"),
-    ("preview", "_shortcut_launch_resolver", "shortcut_launch_resolver"),
     ("preview", "_local_library_reader", "local_library_reader"),
     ("preview", "_session_budget", "session_budget"),
     ("preview", "_cover_preparer", "cover_preparer"),
@@ -86,7 +78,6 @@ _HELD = [
     ("orchestrator", "_fetcher", "fetcher"),
     ("orchestrator", "_unit_applier", "unit_applier"),
     ("orchestrator", "_run_finalizer", "run_finalizer"),
-    ("orchestrator", "_shortcut_launch_resolver", "shortcut_launch_resolver"),
     ("orchestrator", "_local_library_reader", "local_library_reader"),
     ("orchestrator", "_session_budget", "session_budget"),
     ("orchestrator", "_sync_run_recorder", "sync_run_recorder"),

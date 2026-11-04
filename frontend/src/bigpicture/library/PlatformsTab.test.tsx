@@ -71,7 +71,6 @@ const MGBA = {
   core_so: "mgba_libretro",
   emulator: "mgba_libretro.so",
   is_default: true,
-  bakeable: true,
   reason: null,
 };
 const VBA = {
@@ -82,7 +81,6 @@ const VBA = {
   core_so: "vba_next_libretro",
   emulator: "vba_next_libretro.so",
   is_default: false,
-  bakeable: true,
   reason: null,
 };
 // RetroDECK's PlayStation 2 core under the one command it lists twice, as
@@ -1487,7 +1485,7 @@ describe("Library › Platforms", () => {
     it("names a default that is not installed, and says these games cannot start, pointing at no menu with nothing to pin", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
-          emulators: [{ ...LRPS2_PCSX2, bakeable: false, reason: "not_installed" }],
+          emulators: [{ ...LRPS2_PCSX2, reason: "not_installed" }],
           active_core_label: "LRPS2",
           start: emulatorStart({ state: "cannot_start", reason: "not_installed", entry: "LRPS2" }),
         }),
@@ -1501,10 +1499,10 @@ describe("Library › Platforms", () => {
       expect(coreButton(container)!.title).toBe(sentence);
     });
 
-    it("offers the pick where no default stands and the one entry is one Tender cannot bake (#2195 D23)", async () => {
+    it("offers the pick where no default stands and the one entry's installation is not established (#2195 D23)", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
-          emulators: [{ ...LRPS2_PCSX2, is_default: false, bakeable: false, reason: "lookup_unsupported" }],
+          emulators: [{ ...LRPS2_PCSX2, is_default: false, reason: "lookup_unsupported" }],
           active_core_label: null,
           start: emulatorStart({ state: "choose", reason: "lookup_unsupported", entry: "LRPS2" }),
         }),
@@ -1518,7 +1516,7 @@ describe("Library › Platforms", () => {
     it("says no emulator is the default where the default's installation could not be established, and still offers the pick", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
-          emulators: [{ ...LRPS2_PCSX2, is_default: false, bakeable: true, reason: "lookup_unsupported" }],
+          emulators: [{ ...LRPS2_PCSX2, is_default: false, reason: "lookup_unsupported" }],
           active_core_label: null,
           start: emulatorStart({ state: "choose", reason: "lookup_unsupported", entry: "LRPS2" }),
         }),
@@ -1534,39 +1532,35 @@ describe("Library › Platforms", () => {
       expect(coreButton(container)).not.toBeDisabled();
     });
 
-    it.each([
-      ["not installed", "not_installed", "mGBA is not installed, so these games cannot start."],
-      [
-        "one Tender cannot bake",
-        "inject",
-        "Tender cannot start mGBA yet. Choose another emulator in the emulator menu.",
-      ],
-    ])("keeps the picker open beside a default that is %s", async (_shape, reason, sentence) => {
-      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
-        coreInfo({
-          emulators: [
-            { ...MGBA, bakeable: false, reason },
-            { ...LRPS2_PCSX2, is_default: false, bakeable: true, reason: "no_find_rule" },
-          ],
-          active_core_label: "mGBA",
-          start: emulatorStart({
-            state: "cannot_start",
-            reason: reason === "not_installed" ? reason : "not_bakeable",
-            entry: "mGBA",
+    it.each([["not installed", "not_installed", "mGBA is not installed, so these games cannot start."]])(
+      "keeps the picker open beside a default that is %s",
+      async (_shape, reason, sentence) => {
+        vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+          coreInfo({
+            emulators: [
+              { ...MGBA, reason },
+              { ...LRPS2_PCSX2, is_default: false, reason: "no_find_rule" },
+            ],
+            active_core_label: "mGBA",
+            start: emulatorStart({
+              state: "cannot_start",
+              reason,
+              entry: "mGBA",
+            }),
           }),
-        }),
-      );
-      const { container } = render(<LibraryPage onBack={vi.fn()} />);
-      await flushAsync();
+        );
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
 
-      expect(container.textContent).toContain(sentence);
-      expect(coreButton(container)).not.toBeDisabled();
-    });
+        expect(container.textContent).toContain(sentence);
+        expect(coreButton(container)).not.toBeDisabled();
+      },
+    );
 
     it("says so under the header where the platform's own pick could not be established", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
-          emulators: [MGBA, { ...LRPS2_PCSX2, is_default: false, bakeable: true, reason: "path_unseen" }],
+          emulators: [MGBA, { ...LRPS2_PCSX2, is_default: false, reason: "path_unseen" }],
           active_core_label: "LRPS2",
         }),
       );
@@ -1610,7 +1604,7 @@ describe("Library › Platforms", () => {
       expect(coreButton(container)).toBeDisabled();
     });
 
-    it.each([["one option", [{ ...MGBA, bakeable: false, reason: "not_installed" }]]])(
+    it.each([["one option", [{ ...MGBA, reason: "not_installed" }]]])(
       "names a default that is not installed in red, with nothing else to pin (%s)",
       async (_shape, emulators) => {
         vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
@@ -1633,31 +1627,10 @@ describe("Library › Platforms", () => {
       },
     );
 
-    it("names a default Tender cannot bake in red, saying Tender cannot start it yet", async () => {
+    it("keeps the picker open beside a default that is not installed where another entry stands", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
-          emulators: [{ ...MGBA, bakeable: false, reason: "inject" }],
-          active_core_label: "mGBA",
-          start: emulatorStart({ state: "cannot_start", reason: "not_bakeable", entry: "mGBA" }),
-        }),
-      );
-      const { container } = render(<LibraryPage onBack={vi.fn()} />);
-      await flushAsync();
-
-      const clause = factPart(container, "mGBA");
-      expect(clause).toBeTruthy();
-      expect(clause!.style.color).toBe(RED);
-      expect(container.textContent).toContain("Tender cannot start mGBA yet.");
-      expect(coreButton(container)).toBeDisabled();
-    });
-
-    it("keeps the picker open beside a default that is not installed where another entry Tender cannot bake stands", async () => {
-      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
-        coreInfo({
-          emulators: [
-            { ...MGBA, bakeable: false, reason: "not_installed" },
-            { ...VBA, bakeable: false, reason: "inject" },
-          ],
+          emulators: [{ ...MGBA, reason: "not_installed" }, VBA],
           active_core_label: "mGBA",
           start: emulatorStart({ state: "cannot_start", reason: "not_installed", entry: "mGBA" }),
         }),
@@ -1764,7 +1737,7 @@ describe("Library › Platforms", () => {
     it("draws a standing pick that cannot start in red with another source first, never gold (#2195 D23, D24)", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
-          emulators: [{ ...VBA, bakeable: false, reason: "not_installed" }, MGBA],
+          emulators: [{ ...VBA, reason: "not_installed" }, MGBA],
           source_defaults: [
             { kind: "emudeck", default: "PicoDrive", chosen_in_frontend: null, reason: null },
             { kind: "retrodeck", default: "mGBA", chosen_in_frontend: null, reason: null },
@@ -2139,7 +2112,7 @@ describe("Library › Platforms", () => {
       // be read is the one holding no answer at all, which is a different pane
       // and a different sentence.
       mockFirmware([]);
-      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true, rebake_items: [] });
+      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
       expect(container.textContent).toContain("Nothing could be established about what the launching emulator needs");
@@ -2273,7 +2246,7 @@ describe("Library › Platforms", () => {
   // ------------------------------------------------------------------
   describe("changing the core", () => {
     beforeEach(() => {
-      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true, rebake_items: [] });
+      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true });
     });
 
     async function openCoreMenu(container: HTMLElement): Promise<void> {
@@ -2294,7 +2267,7 @@ describe("Library › Platforms", () => {
           active_core_label: "mGBA",
         }),
       );
-      let finish: (v: { success: true; rebake_items: never[] }) => void = () => {};
+      let finish: (v: { success: true }) => void = () => {};
       vi.mocked(backend.setSystemCore).mockReturnValue(
         new Promise((resolve) => {
           finish = resolve;
@@ -2308,7 +2281,7 @@ describe("Library › Platforms", () => {
       expect(backend.setSystemCore).toHaveBeenCalledWith("gba", "PCSX2");
       expect(within(container).getByTestId("status-core").textContent).toBe("Switching to PCSX2…");
       await act(async () => {
-        finish({ success: true, rebake_items: [] });
+        finish({ success: true });
         for (let i = 0; i < 10; i++) await Promise.resolve();
       });
     });
@@ -2361,7 +2334,7 @@ describe("Library › Platforms", () => {
       // The per-platform core is a setting read when a game is resolved, so it
       // applies to games synced later; choosing it first is the ordinary case.
       vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({ platforms: [] });
-      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true, rebake_items: [] });
+      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -2382,12 +2355,8 @@ describe("Library › Platforms", () => {
       expect(vi.mocked(backend.setSystemCore)).toHaveBeenCalledWith("gba", "");
     });
 
-    it("re-bakes every affected shortcut, re-reads the core and the BIOS state, and tells the game page", async () => {
-      vi.mocked(backend.setSystemCore).mockResolvedValue({
-        success: true,
-        rebake_items: [{ app_id: 7, launch_options: "flatpak run … -e vba_next_libretro" }],
-      });
-      vi.mocked(setLaunchOptionsConfirmed).mockResolvedValue(true);
+    it("re-reads the core and the BIOS state, writes nothing to a shortcut, and tells the game page", async () => {
+      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true });
       const events: CustomEvent[] = [];
       const listener = ((e: Event) => events.push(e as CustomEvent)) as EventListener;
       globalThis.addEventListener("romm_data_changed", listener);
@@ -2399,12 +2368,8 @@ describe("Library › Platforms", () => {
         await pickFromCoreMenu("VBA Next");
         await flushAsync();
 
-        expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(
-          7,
-          "flatpak run … -e vba_next_libretro",
-          undefined,
-          expect.any(Function),
-        );
+        // Every game following the platform asks with the new pick at its next start.
+        expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
         expect(vi.mocked(backend.getPlatformFirmwareStatus).mock.calls.length).toBeGreaterThan(firmwareReadsBefore);
         expect(vi.mocked(backend.getSystemCoreInfo)).toHaveBeenCalledTimes(2);
         expect(events.map((e) => e.detail.type)).toContain("core_changed");
@@ -2441,9 +2406,9 @@ describe("Library › Platforms", () => {
     });
 
     it("holds the page busy while the switch runs, and gives it back afterwards", async () => {
-      // The re-bake walks every bound shortcut, so a second pick would start a
-      // second continuation over the same set — the page's own busy state is
-      // what forbids it, and this action used to skip it.
+      // A second pick while the first is still being stored would race it —
+      // the page's own busy state is what forbids it, and this action used to
+      // skip it.
       vi.mocked(backend.getPlatforms).mockResolvedValue({
         success: true,
         platforms: [
@@ -2460,7 +2425,7 @@ describe("Library › Platforms", () => {
           { slug: "n64", name: "N64", count: 4, reachable_count: 4 },
         ],
       });
-      let finish: (v: { success: true; rebake_items: never[] }) => void = () => {};
+      let finish: (v: { success: true }) => void = () => {};
       vi.mocked(backend.setSystemCore).mockReturnValue(
         new Promise((resolve) => {
           finish = resolve;
@@ -2481,7 +2446,7 @@ describe("Library › Platforms", () => {
       expect(container.textContent).toContain("Working on Game Boy Advance");
 
       await act(async () => {
-        finish({ success: true, rebake_items: [] });
+        finish({ success: true });
         for (let i = 0; i < 10; i++) await Promise.resolve();
       });
 
@@ -2528,7 +2493,7 @@ describe("Library › Platforms", () => {
       await pickFromCoreMenu("VBA Next");
       expect(within(container).getByTestId("status-core").textContent).toBe("RetroDECK is not installed");
 
-      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true, rebake_items: [] });
+      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true });
       await openCoreMenu(container);
       await pickFromCoreMenu("VBA Next");
       await flushAsync();
@@ -2601,7 +2566,7 @@ describe("Library › Platforms", () => {
         ],
       });
       mockFirmware([firmwarePlatform(), firmwarePlatform({ platform_slug: "n64" })]);
-      let finish: (v: { success: true; rebake_items: never[] }) => void = () => {};
+      let finish: (v: { success: true }) => void = () => {};
       vi.mocked(backend.setSystemCore).mockReturnValue(
         new Promise((resolve) => {
           finish = resolve;
@@ -2618,7 +2583,7 @@ describe("Library › Platforms", () => {
       expect(container.textContent).toContain("Working on Game Boy Advance");
 
       await act(async () => {
-        finish({ success: true, rebake_items: [] });
+        finish({ success: true });
         for (let i = 0; i < 10; i++) await Promise.resolve();
       });
       await focusRow(container, "Game Boy Advance");
@@ -5489,7 +5454,7 @@ describe("Library › Platforms", () => {
 
     it("brings the links up to date again once the emulator is switched", async () => {
       vi.mocked(backend.updateBiosLinks).mockResolvedValue(linked());
-      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true, rebake_items: [] });
+      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
       await act(async () => {

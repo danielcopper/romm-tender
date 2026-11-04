@@ -122,35 +122,6 @@ async def test_adopt_leaves_the_bytes_untouched(harness):
     assert path.read_bytes() == b"user's own dump"
 
 
-async def test_a_bound_adopt_carries_a_prune_lease_for_the_frontend_s_steam_write(harness):
-    seed_rom(harness, _ROM_ID, platform_slug="gba")
-    _stage_detail(harness)
-    _place_single_file(harness)
-
-    result = await harness.endpoints.adopt_existing_rom(_ROM_ID)
-
-    assert result["app_id"] == _ROM_ID  # seed_rom binds shortcut_app_id to rom_id
-    assert isinstance(result["prune_lease_token"], str)
-    assert result["prune_lease_token"]
-
-
-async def test_an_unbound_adopt_is_issued_no_prune_lease(harness):
-    # The lease covers the frontend's write of the launch command onto the
-    # shortcut. An unbound ROM has no shortcut, so the frontend has nothing to
-    # do and nothing to release — a token here would be held for its full TTL,
-    # blocking prune. Acquisition is guarded, exactly as the download-complete
-    # emit guards it.
-    seed_rom(harness, _ROM_ID, platform_slug="gba", shortcut_app_id=None)
-    _stage_detail(harness)
-    _place_single_file(harness)
-
-    result = await harness.endpoints.adopt_existing_rom(_ROM_ID)
-
-    assert result["success"] is True
-    assert result["app_id"] is None
-    assert "prune_lease_token" not in result
-
-
 async def test_adopting_supersedes_the_group_s_other_installed_version(harness):
     # #1298 through the real removal service: one installed version per shortcut
     # binding, whichever route produced it. The sibling's files are content

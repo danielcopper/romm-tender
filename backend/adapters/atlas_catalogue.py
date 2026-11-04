@@ -2,8 +2,7 @@
 
 The single place the vendored `emu-atlas <https://github.com/danielcopper/emu-atlas>`_
 resolver is asked what a frontend's catalogue declares for a system: the emulator
-list behind the picker, the system-layer default the launch bakes, the libretro
-core the firmware filter keys on, the accept-list a candidate file is matched
+list behind the picker, the libretro core the firmware filter keys on, the accept-list a candidate file is matched
 against, and whether one game's file starts with the entry Tender starts it
 through. Services see :class:`domain.emulator_commands.EmulatorOption` values and
 plain sets and never an atlas type — ``domain/`` may not import ``_vendor`` at
@@ -135,9 +134,7 @@ from domain.emulator_commands import (
     NOT_ESTABLISHED_PATH_UNSEEN,
     NOT_INSTALLED,
     PROGRAM,
-    classify_command,
-    default_option,
-    option_to_invocation,
+    emulator_option,
 )
 from domain.emulator_sources import (
     CATALOGUE_INVALID,
@@ -198,7 +195,6 @@ from domain.launchability import (
     LaunchStatement,
 )
 from domain.launchability import NOT_ESTABLISHED as LAUNCH_NOT_ESTABLISHED
-from domain.shortcut_data import RETRODECK_APP_ID
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -206,7 +202,6 @@ if TYPE_CHECKING:
     from adapters.emulator_sources import EmulatorSourcesAdapter
     from domain.emulator_commands import EmulatorOption
     from domain.emulator_sources import SourcesReading
-    from domain.shortcut_data import EmulatorInvocation
 
 # The codes on which Tender declines to answer from a catalogue. The first
 # four are the resolver's own "nobody could answer" family: the arrangement ships
@@ -268,11 +263,11 @@ _NOT_INSTALLED_BECAUSE = frozenset(
     {CAVEAT_EMULATOR_NOT_FOUND, CAVEAT_PROGRAM_NOT_FOUND, CAVEAT_LAUNCHER_SCRIPT_MISSING, CAVEAT_CORE_NOT_INSTALLED}
 )
 
-# Notes beside a verdict. Only ``run-game-differs`` naming nothing is acted on
-# (:func:`_start_script_runs_nothing`); naming a path, it says RetroDECK's
-# ``run_game.sh`` would run that rather than what ES-DE runs, which changes
-# nothing here. The other three state assumptions of a frontend on the host
-# (EmuDeck's), which starts no game through Tender.
+# Notes beside a verdict, none of which changes anything here.
+# ``run-game-differs`` says RetroDECK's ``run_game.sh`` would run something
+# other than ES-DE does, and no game starts through that script (#2221 D7). The
+# other three state assumptions of a frontend on the host (EmuDeck's), through
+# which Tender starts no game yet (#2221 D21).
 _LAUNCH_NOTES = frozenset(
     {
         CAVEAT_RUN_GAME_DIFFERS,
@@ -479,11 +474,13 @@ def _caveat_codes(answer: Any) -> tuple[str, ...]:
     return tuple(caveat.code for caveat in answer.caveats)
 
 
-def _installation(entry: Any) -> str | None:
+def installation_word(entry: Any) -> str | None:
     """Tender's word for what the resolver states about *entry*'s program, ``None`` where it states it startable.
 
     Anything but ``startable`` and ``not-installed`` reads as not established —
-    the resolver's own rule for a value a client does not know.
+    the resolver's own rule for a value a client does not know. Public for
+    :mod:`adapters.atlas_launch`, which words a launch command refused for the
+    entry's installation the same way.
     """
     if entry.availability == AVAILABILITY_STARTABLE:
         return None
@@ -495,44 +492,14 @@ def _installation(entry: Any) -> str | None:
     )
 
 
-def _start_script_runs_nothing(entry: Any) -> bool:
-    """Whether the resolver states RetroDECK's ``run_game.sh`` would run nothing for *entry*.
-
-    That is ``run-game-differs`` with an empty ``run_game_path``: the script
-    would run nothing for the command's ``%EMULATOR_X%`` token, so a shortcut
-    baked through its ``-e`` starts nothing.
-    """
-    return any(
-        caveat.code == CAVEAT_RUN_GAME_DIFFERS and caveat.data.get("run_game_path") == "" for caveat in entry.caveats
-    )
-
-
-def _sandbox_launcher(entry: Any) -> str | None:
-    """The path inside RetroDECK's sandbox the resolver states ES-DE runs for *entry*, or ``None``.
-
-    The folder-boot bake execs it with ``flatpak run --command=`` in RetroDECK's
-    sandbox, so a launcher spelled anywhere else is none. Nor is a launcher
-    whose rule entry carries a replacement command: ES-DE then runs that
-    command, and the path only selected it.
-    """
-    launcher = entry.launcher
-    if launcher is None or launcher.app_id != RETRODECK_APP_ID or launcher.replacement_command is not None:
-        return None
-    return launcher.path
-
-
-def _classify_entry(entry: Any, *, chosen_in_frontend: bool) -> EmulatorOption:
-    """*entry* classified for bakeability, with everything the resolver states about it in Tender's words."""
-    return classify_command(
+def _entry_option(entry: Any, *, chosen_in_frontend: bool) -> EmulatorOption:
+    """*entry* as an option, with everything the resolver states about it in Tender's words."""
+    return emulator_option(
         entry.label,
-        entry.command,
         kind=_KINDS.get(entry.kind, PROGRAM),
         core_so=_own_core_so(entry.core_so) if entry.core_so else None,
-        core_path=entry.core_path,
         emulator=emulator_identity(entry),
-        installation=_installation(entry),
-        launcher=_sandbox_launcher(entry),
-        start_script_runs_nothing=_start_script_runs_nothing(entry),
+        installation=installation_word(entry),
         declared_index=entry.declared_index,
         chosen_in_frontend=chosen_in_frontend,
     )
@@ -756,10 +723,8 @@ class AtlasCatalogueAdapter:
         offers no libretro entry, when the catalogue could not be read, or when
         no source answers.
 
-        Reads the resolver's own ``kind``, not the bake classifier's: whether a
-        command loads a core is a fact about the command, where bakeability is a
-        fact about Tender's ``-e`` override. A libretro command Tender
-        cannot bake still names the core the BIOS filter is about.
+        Reads the resolver's own ``kind``: whether a command loads a core is a
+        fact about the command, whatever starting the entry comes to.
 
         **Carried, and currently read by nothing in production.** The firmware
         surfaces take the platform's own pick instead
@@ -781,27 +746,6 @@ class AtlasCatalogueAdapter:
         first = min(cores, key=lambda entry: entry.declared_index, default=None)
         return (None, None) if first is None else (_own_core_so(first.core_so), first.label)
 
-    def get_default_emulator(
-        self, system_name: str, *, reading: SourcesReading | None = None
-    ) -> EmulatorInvocation | None:
-        """Resolve the system-layer default **emulator** (libretro OR standalone).
-
-        The default (:func:`domain.emulator_commands.default_option`, the entry
-        the source ships first) rendered into an :class:`EmulatorInvocation` — a
-        libretro core or a standalone emulator. Returns ``None`` when that entry
-        cannot be baked, when there is no default, or when the catalogue could not
-        be read; the active-core resolver bakes the empty command where the
-        system lists entries (#2195 D43) and the plain RetroDECK launch where it
-        lists none or the catalogue could not be read.
-
-        Keeps the read-path/launch-path invariant: the resolved emulator is both
-        what the ROM launches with and what derived values key on.
-        """
-        result = self.get_emulator_options(system_name, reading=reading)
-        if not result["available"]:
-            return None
-        return option_to_invocation(default_option(result["options"]))
-
     def get_emulator_options(
         self,
         system_name: str,
@@ -810,7 +754,7 @@ class AtlasCatalogueAdapter:
         content_path: str | None = None,
         source: str | None = None,
     ) -> dict[str, Any]:
-        """Return every catalogue entry for a system, classified for bakeability.
+        """Return every catalogue entry for a system, as the picker offers them.
 
         Returns ``{"available", "options", "reason", "source"}``. ``available``
         is ``False`` when no source answers, when the answer carries one of the
@@ -827,17 +771,13 @@ class AtlasCatalogueAdapter:
         inside ES-DE first, marked ``chosen_in_frontend``, the rest as declared.
         Asked with *content_path*, a game's own choice in ES-DE counts too. The
         shipped default is the entry with the lowest ``declared_index``. What an
-        entry launches, the core it loads and that core's path are the
-        resolver's ``kind``, ``core_so`` and ``core_path``, and an entry it
-        states ``run_game.sh`` would run nothing for is not bakeable. Whether
-        what an entry launches is there is the resolver's ``availability``,
-        libretro cores included: one it states not installed is
-        ``needs_setup`` with ``not_installed``, so it bakes into no shortcut
-        and, as the default, cannot start; one it could not
+        entry launches and the core it loads are the resolver's ``kind`` and
+        ``core_so``. Whether what an entry launches is there is the resolver's
+        ``availability``, libretro cores included: one it states not installed
+        is ``not_installed``, and as the default cannot start; one it could not
         establish carries a ``not_established`` note and is never the default
-        by itself. Each entry's launcher is the one the resolver states. A
-        system the catalogue does not declare yields ``available: True`` with
-        an empty list.
+        by itself. A system the catalogue does not declare yields
+        ``available: True`` with an empty list.
 
         *source* names a detected source to ask instead of the answering one,
         for a surface that shows every source's own default; ``source`` in the
@@ -854,7 +794,7 @@ class AtlasCatalogueAdapter:
         if catalogue_refused(answer):
             return _unavailable(_refusal_reason(answer), payload)
         chosen = _frontend_choice(answer.entries)
-        options = [_classify_entry(entry, chosen_in_frontend=entry is chosen) for entry in answer.entries]
+        options = [_entry_option(entry, chosen_in_frontend=entry is chosen) for entry in answer.entries]
         return {"available": True, "options": options, "reason": None, "source": payload}
 
     def sources_reading(self) -> SourcesReading:

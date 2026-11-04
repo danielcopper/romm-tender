@@ -32,7 +32,7 @@ import { DiscSelector } from "./DiscSelector";
 import { VersionPicker } from "./VersionPicker";
 import { VanishedVersionBanner } from "./VanishedVersionBanner";
 import { Muted, SELECTION_ACCENT } from "./layout/pane";
-import { activeEmulatorNote } from "../utils/emulatorInstallation";
+import { activeEmulatorNote, isNotEstablished } from "../utils/emulatorInstallation";
 import { useTriggerHandler } from "./emulatorStepping";
 import { useBumperHandler, usePlayRowRef } from "./tabStepping";
 import { applyAutomaticArtwork, applyTabSlotImage, cancelArtworkApply } from "../utils/artwork";
@@ -66,7 +66,13 @@ import {
   releasePruneLeasesByOwner,
 } from "../utils/pruneLease";
 import { executeGameCoreChange } from "../utils/coreOverride";
-import { frontendChoiceSentence, gameCanPickAnother, startRefusal, vanishedPickSentence } from "../utils/emulatorStart";
+import {
+  frontendChoiceSentence,
+  gameCanPickAnother,
+  startRefusal,
+  startRemarkSentences,
+  vanishedPickSentence,
+} from "../utils/emulatorStart";
 import { launchNotes } from "../utils/gameLaunch";
 import { askEntryLaunches } from "../utils/emulatorLaunches";
 import { useGamePlaytime } from "../utils/playtimeReconcile";
@@ -605,10 +611,8 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     try {
       await executeRomUninstall({
         romId: detail.romId,
-        appId,
         romName: detail.romName,
         leaseOwner: `game-detail:${appId}`,
-        context: "Game detail uninstall",
         tag: "handleUninstall",
       });
     } finally {
@@ -958,7 +962,9 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       ? null
       : startRefusal(detail.emulatorStart, gameLaunch, canPick);
   const startNotes =
-    stranded || fileMissing || startCheckFailed || emulatorRefusal !== null ? [] : launchNotes(gameLaunch, detail.emulatorSource);
+    stranded || fileMissing || startCheckFailed || emulatorRefusal !== null
+      ? []
+      : [...launchNotes(gameLaunch, detail.emulatorSource), ...startRemarkSentences(detail.emulatorStart?.remarks)];
 
   const warningLine = (testId: string, text: string) => (
     <div
@@ -1084,7 +1090,13 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   // and React would unmount the whole row — the play button drops back to
   // "loading" and re-runs its init (#1682). A Fragment adds no DOM node, so the
   // row stays a direct child of the injected panel either way.
-  const emulatorNote = activeEmulatorNote(detail.emulators, detail.activeCoreLabel);
+  // A refused start that already says the installation could not be
+  // established is the same sentence; it is said once, as the refusal.
+  const refusedForInstallation =
+    emulatorRefusal !== null &&
+    detail.emulatorStart?.state === "cannot_start" &&
+    isNotEstablished(detail.emulatorStart.reason);
+  const emulatorNote = refusedForInstallation ? null : activeEmulatorNote(detail.emulators, detail.activeCoreLabel);
   // The pick that no longer exists and the user's own choice in ES-DE — each
   // said once, under the row.
   const emulatorLines =

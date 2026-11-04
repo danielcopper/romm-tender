@@ -406,6 +406,18 @@ the menu says, for each emulator, whether it can start the game.
 
 To find the files, open the game's detail page — the **ROM File** section shows the filename the download produced.
 
+### Play says "Couldn't start the game"
+
+**Symptom**: Pressing Play — Tender's or Steam's own — starts nothing, and a notification says _"Tender isn't responding
+— couldn't start the game."_ or _"Couldn't start the game: …"_ with what went wrong.
+
+**What happened**: Tender starts every game itself, at the moment you press Play: it asks the emulator source how the
+game starts and hands that to the game's shortcut for that one start. When Tender does not answer, or something stops it
+from handing the start over, nothing starts — a shortcut started without Tender runs nothing.
+
+**Fix**: Make sure Tender is running (its panel opens in the QAM) and press Play again. If the message names something
+else, it says what stood in the way.
+
 ### Play asks whether to launch with local saves
 
 **Symptom**: You start a game — with **Play** on its detail page, where the button reads **Preparing...**, or with
@@ -470,9 +482,10 @@ one, on purpose.
 invisible. Started on Wayland, RetroArch opens such a window, and so can a standalone emulator that supports Wayland;
 Steam cannot tell that it belongs to the running game, and it applies Steam Input's Desktop Layout to every controller:
 the Deck's built-in controls act as mouse and keyboard, and the game gets no controller input at all. So Tender starts
-RetroDECK with `flatpak run --nosocket=wayland`, which leaves it no Wayland connection and makes every emulator draw
-through XWayland, where Steam sees the window and applies the game's controller configuration. Under Steam's 64-bit
-client Steam sees the window but cannot tell that it belongs to the game; what Tender does about that is under
+every Flatpak emulator with `flatpak run --nosocket=wayland`, which leaves it no Wayland connection and makes every
+emulator draw through XWayland, where Steam sees the window and applies the game's controller configuration. Under
+Steam's 64-bit client Steam sees the window but cannot tell that it belongs to the game; what Tender does about that is
+under
 [The controller acts as mouse and keyboard in a game in Desktop Mode](#the-controller-acts-as-mouse-and-keyboard-in-a-game-in-desktop-mode).
 In Gaming Mode games already draw through gamescope's XWayland, so nothing changes there.
 
@@ -480,9 +493,8 @@ This is a workaround for a Steam limitation
 ([ValveSoftware/steam-for-linux#8020](https://github.com/ValveSoftware/steam-for-linux/issues/8020)). It will be removed
 once Steam handles Wayland windows; that is tracked in [#2271](https://github.com/danielcopper/romm-tender/issues/2271).
 
-Shortcuts an earlier version of Tender made need nothing from you: Tender writes an installed game's launch command
-again when Tender's panel loads, after every sync, and just before the game starts, so an existing shortcut normally
-carries the new command by its next launch.
+Shortcuts an earlier version of Tender made need nothing from you: every start asks for the command afresh, so the next
+start of any game carries it.
 
 ### The controller acts as mouse and keyboard in a game in Desktop Mode
 
@@ -710,9 +722,6 @@ nothing to sync.
   or, if that save had changed since its last sync, you were asked first.
 - Whether the other device uploaded to the same save slot. Each device syncs the slot that is active for the game on it;
   the game's **Saves** tab shows which one that is.
-- Whether the message "Tender isn't responding — started without syncing saves." appeared. It comes only with a start
-  through Steam's own Play or a `steam://rungameid` link: Tender did not answer within about five seconds of the start,
-  so the game started without the sync before it.
 - Whether you chose **Launch Anyway** in the **Save Sync Unavailable** dialog. It asks when the sync before the start
   failed, or when a step of the check before it got no answer in time, and Launch Anyway starts the game on the save
   already on the device — see

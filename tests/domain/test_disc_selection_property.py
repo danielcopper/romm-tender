@@ -4,9 +4,9 @@ Two safety invariants the disc picker must never break:
 
 1. **Containment** — ``resolve_launch_path`` never returns a path the caller
    didn't supply: the result is always either the install's ``file_path`` or
-   one of the enumerated discs' paths. A disc selection is a bake-time
-   *path-override*, so an out-of-set path would point launch_options at a file
-   that doesn't belong to this ROM.
+   one of the enumerated discs' paths. A disc selection is a
+   *path-override*, so an out-of-set path would start a file that doesn't
+   belong to this ROM.
 2. **Order-independence of the default** — with no selection, the chosen
    default (m3u or disc 1) is a function of the file *set*, not the order the
    filesystem happened to list them in. Permuting the input file order must not

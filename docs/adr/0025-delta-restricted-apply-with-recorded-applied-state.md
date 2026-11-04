@@ -1,8 +1,15 @@
+---
+status: accepted
+decided: 2026-07-14
+updated: 2026-11-04
+amended-by: [0044]
+---
+
 # The apply emits only new and changed shortcuts, tracked against a recorded applied launch command
 
-## Status
+## Scope
 
-Accepted. Tracked under [#1383](https://github.com/danielcopper/decky-romm-sync/issues/1383) (with the estimate work of
+Tracked under [#1383](https://github.com/danielcopper/decky-romm-sync/issues/1383) (with the estimate work of
 [#1382](https://github.com/danielcopper/decky-romm-sync/issues/1382) in lockstep). Completes the scale epic that
 [ADR-0023](0023-chunked-per-unit-apply.md) (chunked durable apply) and [ADR-0024](0024-session-budget-rss-gate.md)
 (RSS-based pause) opened: ADR-0024 explicitly booked "a single oversized platform re-touches its chunks across restarts
@@ -121,3 +128,13 @@ to its shortcut and comparing the freshly built target against it.**
   value tracks)
 - [Backend Architecture](../architecture/backend-architecture.md) ·
   [Database Design](../architecture/database-design.md)
+
+## Amendment — the record is whether the shortcut was applied
+
+The apply still emits only new and changed shortcuts. Its skip authority changed
+([ADR-0044](0044-every-start-asks-the-resolver.md), [#2221](https://github.com/danielcopper/romm-tender/issues/2221)
+D17): every bound shortcut carries its appId, so there is no command to compare. Migration `041` replaces
+`applied_launch_options` with `roms.shortcut_applied`, set on every row that had a command recorded; only the sync's
+commit sets it, for a binding target, and Force Full Sync clears it on every row. An item is changed on an identity
+mismatch or where its row is not recorded as applied. The five other writer sites are gone with what they wrote, and the
+resume offer counts applied rows where it counted recorded ones.

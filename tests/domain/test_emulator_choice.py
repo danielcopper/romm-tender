@@ -17,29 +17,27 @@ from domain.emulator_choice import (
     vanished_payload,
 )
 from domain.emulator_commands import (
-    CORE,
-    NOT_BAKEABLE,
     NOT_ESTABLISHED_NO_FIND_RULE,
     NOT_INSTALLED,
     PROGRAM,
     EmulatorOption,
-    classify_command,
+    emulator_option,
 )
 from domain.emulator_pick import StoredPick
+from domain.start_command import (
+    FRONTEND_BUILD_UNREAD,
+    PLACEHOLDER_UNFILLED,
+    SOURCE_STARTS_NO_GAMES,
+    StartCommand,
+    StartNote,
+    StartRefused,
+    source_refusal,
+)
 
 
-def _entry(
-    label: str, index: int, *, installation: str | None = None, start_script_runs_nothing: bool = False
-) -> EmulatorOption:
+def _entry(label: str, index: int, *, installation: str | None = None) -> EmulatorOption:
     """An emulator program's entry, declared at *index*, with what the resolver states about it."""
-    option = classify_command(
-        label,
-        f"%EMULATOR_E{index}% %ROM%",
-        kind=PROGRAM,
-        installation=installation,
-        start_script_runs_nothing=start_script_runs_nothing,
-    )
-    return dataclasses.replace(option, declared_index=index)
+    return dataclasses.replace(emulator_option(label, kind=PROGRAM, installation=installation), declared_index=index)
 
 
 SHIPPED = _entry("Shipped", 0)
@@ -98,42 +96,6 @@ class TestStartPayload:
             "entry": "Shipped",
         }
 
-    def test_an_entry_tender_cannot_bake_cannot_start(self):
-        """Its plain start would run ES-DE's own choice, so Tender does not start it (#2195 D7, D23)."""
-        script = dataclasses.replace(
-            classify_command("Shortcut", "%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%", kind=PROGRAM),
-            declared_index=0,
-        )
-        choice = choose_emulator([script], game=None, platform=None)
-        assert start_payload(choice, [script]) == {
-            "state": CANNOT_START_STATE,
-            "reason": NOT_BAKEABLE,
-            "entry": "Shortcut",
-        }
-
-    def test_an_entry_tender_cannot_bake_cannot_start_whichever_layer_it_comes_from(self):
-        """Its plain start would run ES-DE's own choice, so Tender does not start it (#2195 D7, D23)."""
-        serial = dataclasses.replace(
-            classify_command(
-                "Game Serial", "%EMULATOR_RPCS3% --no-gui %RPCS3_GAMEID%:%INJECT%=%BASENAME%.ps3", kind=PROGRAM
-            ),
-            declared_index=1,
-        )
-        choice = choose_emulator([SHIPPED, serial], game=StoredPick("Game Serial", "retrodeck"), platform=None)
-        assert start_payload(choice, [SHIPPED, serial]) == {
-            "state": CANNOT_START_STATE,
-            "reason": NOT_BAKEABLE,
-            "entry": "Game Serial",
-        }
-
-    def test_a_core_entry_without_its_core_path_cannot_start(self):
-        unlocated = dataclasses.replace(
-            classify_command("mGBA", "%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%", kind=CORE),
-            declared_index=0,
-        )
-        choice = choose_emulator([unlocated], game=None, platform=None)
-        assert start_payload(choice, [unlocated])["reason"] == NOT_BAKEABLE
-
     def test_an_entry_not_installed_cannot_start(self):
         missing = _entry("Missing", 0, installation=NOT_INSTALLED)
         choice = choose_emulator([missing], game=None, platform=None)
@@ -143,11 +105,6 @@ class TestStartPayload:
             "entry": "Missing",
         }
 
-    def test_an_entry_the_start_script_runs_nothing_for_cannot_start(self):
-        nothing = _entry("PICO-8", 0, start_script_runs_nothing=True)
-        choice = choose_emulator([nothing], game=None, platform=None)
-        assert start_payload(choice, [nothing])["reason"] == "start_script_runs_nothing"
-
     def test_a_shipped_default_not_established_asks_for_a_choice_with_its_note(self):
         unseen = _entry("Unseen", 0, installation=NOT_ESTABLISHED_NO_FIND_RULE)
         choice = choose_emulator([unseen], game=None, platform=None)
@@ -156,6 +113,49 @@ class TestStartPayload:
             "reason": NOT_ESTABLISHED_NO_FIND_RULE,
             "entry": "Unseen",
         }
+
+    def test_an_entry_the_resolver_gives_no_complete_command_for_cannot_start_with_its_reason(self):
+        """The resolver's own reason, whichever layer the entry comes from (#2221 D2)."""
+        choice = choose_emulator(OPTIONS, game=StoredPick("Other", "retrodeck"), platform=None)
+        assert start_payload(choice, OPTIONS, StartRefused(FRONTEND_BUILD_UNREAD)) == {
+            "state": CANNOT_START_STATE,
+            "reason": FRONTEND_BUILD_UNREAD,
+            "entry": "Other",
+        }
+
+    def test_an_entry_not_installed_says_so_whatever_the_command(self):
+        missing = _entry("Missing", 0, installation=NOT_INSTALLED)
+        choice = choose_emulator([missing], game=None, platform=None)
+        assert start_payload(choice, [missing], StartRefused(FRONTEND_BUILD_UNREAD))["reason"] == NOT_INSTALLED
+
+    def test_a_source_that_starts_no_game_is_said_ahead_of_the_entry_and_named(self):
+        """EmuDeck answers, and Tender starts no game through it yet (#2221 D21)."""
+        missing = _entry("Missing", 0, installation=NOT_INSTALLED)
+        choice = choose_emulator([missing], game=None, platform=None)
+        refusal = source_refusal({"kind": "emudeck", "starts_games": False})
+        assert start_payload(choice, [missing], refusal) == {
+            "state": CANNOT_START_STATE,
+            "reason": SOURCE_STARTS_NO_GAMES,
+            "entry": "Missing",
+            "source": "emudeck",
+        }
+
+    def test_a_complete_command_starts_and_says_what_it_says_beside_the_start(self):
+        """A placeholder ES-DE leaves unfilled is said beside a start that goes ahead (#2708 D1)."""
+        choice = choose_emulator(OPTIONS, game=None, platform=None)
+        command = StartCommand(
+            argv=("rpcs3", "%RPCS3_GAMEID%"), folder=None, notes=(StartNote(PLACEHOLDER_UNFILLED, "%RPCS3_GAMEID%"),)
+        )
+        assert start_payload(choice, OPTIONS, command) == {
+            "state": STARTS,
+            "reason": None,
+            "entry": "Shipped",
+            "remarks": [{"reason": PLACEHOLDER_UNFILLED, "placeholder": "%RPCS3_GAMEID%"}],
+        }
+
+    def test_a_complete_command_with_nothing_to_say_carries_no_remarks(self):
+        choice = choose_emulator(OPTIONS, game=None, platform=None)
+        assert "remarks" not in start_payload(choice, OPTIONS, StartCommand(argv=("mgba",), folder=None))
 
     def test_no_entry_at_all(self):
         choice = choose_emulator([], game=None, platform=None)

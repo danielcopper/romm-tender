@@ -28,6 +28,7 @@ import type {
   BiosStatus,
   BiosFileStatus,
   CoreInfo,
+  EmulatorStart,
   GameLaunch,
   SystemCoreInfo,
   RomMetadata,
@@ -410,11 +411,16 @@ export interface LocalDriftAnswer {
   stranding: SaveStranding;
 }
 export const checkLocalDrift = endpoint<[number], LocalDriftAnswer>("check_local_drift");
-export type RelaunchOptionsResult =
+/**
+ * `prepare_game_start` result: the next start of the game's shortcut has its command handed to the launcher
+ * (#2221 D15), and `launch_options` — the shortcut's appId — are what the shortcut is set to before it starts
+ * (D16), under the lease in `prune_lease_token`. A refusal stops the start; `cannot_start` carries the `start`
+ * it comes to, which the panel words as the game page does (D2, D20).
+ */
+export type GameStartResult =
   | { success: true; app_id: number; launch_options: string; prune_lease_token: string }
-  | { success: false; reason: WireReason; message: string }
-  | null;
-export const getRomRelaunchOptions = endpoint<[number], RelaunchOptionsResult>("get_rom_relaunch_options");
+  | { success: false; reason: WireReason; message: string; start?: EmulatorStart };
+export const prepareGameStart = endpoint<[number], GameStartResult>("prepare_game_start");
 /**
  * `stop_running_game` result. On success the counts describe what the backend's
  * stop ladder did to the processes of the ROM it was called for: `stopped`
@@ -446,7 +452,6 @@ export interface ForgetDownloadResult {
   reason?: WireReason;
   /** With `file_present`: the recorded file or folder found on disk. */
   path?: string;
-  prune_lease_token?: string;
 }
 export const forgetDownload = endpoint<[number], ForgetDownloadResult>("forget_download");
 export const getPlatforms = endpoint<[], { success: boolean; platforms: PlatformSyncSetting[] }>("get_platforms");
@@ -791,17 +796,15 @@ export const uninstallAllRoms = endpoint<
   [],
   {
     success: boolean;
-    // The removal path always carries removed_count/errors/app_ids — success
-    // is False on a PARTIAL failure (some deletions failed) but the payload
-    // stays. A refusal by the update, migration, sync or prune rule answers
-    // success/reason/message with NO payload, so a missing app_ids is the
+    // The removal path always carries removed_count/errors — success is False
+    // on a PARTIAL failure (some deletions failed) but the payload stays. A
+    // refusal by the update, migration, sync or prune rule answers
+    // success/reason/message with NO payload, so a missing removed_count is the
     // refusal discriminant.
     removed_count?: number;
     errors?: { rom_id: string; error: string }[];
-    app_ids?: number[];
     reason?: WireReason;
     message?: string;
-    prune_lease_token?: string | null;
   }
 >("uninstall_all_roms");
 export const saveSgdbApiKey = endpoint<[string], { success: boolean; message: string }>("save_sgdb_api_key");
@@ -858,44 +861,16 @@ export const identifyLibraryFirmware = endpoint<[string], FirmwareIdentification
 );
 export const checkPlatformBios = endpoint<[string], BiosStatus>("check_platform_bios");
 export const getBiosStatus = endpoint<[number], BiosAnswer>("get_bios_status");
-/**
- * A single shortcut whose baked `launch_options` must be confirm-set after a
- * per-platform core change. The backend returns one entry per installed + bound
- * ROM on the platform (minus per-game-overridden ROMs); the frontend fans out
- * `setLaunchOptionsConfirmed(app_id, launch_options)` over the list.
- */
-export interface RebakeItem {
-  app_id: number;
-  launch_options: string;
-}
-
-export const setSystemCore = endpoint<
-  [string, string],
-  | {
-      success: true;
-      rebake_items?: RebakeItem[];
-      prune_lease_token?: string;
-    }
-  | EndpointFailure
->("set_system_core");
+// A per-platform core change touches no shortcut: the next start of each game
+// that follows the platform asks with it.
+export const setSystemCore = endpoint<[string, string], { success: true } | EndpointFailure>("set_system_core");
 
 /**
- * Result of pinning / clearing a per-game emulator override. On success for an
- * installed + bound ROM, the backend re-bakes and returns the fresh
- * `launch_options` (the `-e`-wrapped command for a pin, the plain command for a
- * clear) plus the shortcut's `app_id` — the frontend confirm-sets them via
- * `setLaunchOptionsConfirmed`. Both are absent/None when the ROM is uninstalled
- * or unbound (no shortcut to update). Its refusals:
+ * Result of pinning / clearing a per-game emulator override. It touches no
+ * shortcut: the next start asks with the new pin. Its refusals:
  * docs/architecture/core-emulator-selection.md.
  */
-export type GameCoreApplyResult =
-  | {
-      success: true;
-      launch_options?: string;
-      app_id?: number | null;
-      prune_lease_token?: string;
-    }
-  | EndpointFailure;
+export type GameCoreApplyResult = { success: true } | EndpointFailure;
 
 // Per-game override (epic #945). Keyed by rom_id — the DB pin survives
 // uninstall/reinstall (roms.emulator_override). set_game_core pins a label;
@@ -985,17 +960,14 @@ export interface DiscSelection {
 
 /**
  * Result of pinning / clearing a disc selection. On success the backend persists
- * the pick (or NULL when clearing back to the default) and re-bakes the
- * `launch_options` for the now-selected disc — the frontend confirm-sets it via
- * `setLaunchOptionsConfirmed`. `selected` echoes the now-effective pin (null when
- * cleared). Its refusals: docs/architecture/core-emulator-selection.md.
+ * the pick (or NULL when clearing back to the default), which the next start
+ * opens. `selected` echoes the now-effective pin (null when cleared). Its
+ * refusals: docs/architecture/core-emulator-selection.md.
  */
 export type SelectDiscResult =
   | {
       success: true;
-      launch_options?: string;
       selected?: string | null;
-      prune_lease_token?: string;
     }
   | EndpointFailure;
 
@@ -1075,17 +1047,13 @@ export interface VersionList {
 
 /**
  * Success outcome of a version switch (uniform across all switch paths, #1298).
- * The binding moved to `rom_id`; `launch_options` is the target install's full
- * Steam launch command when `target_installed`, or `""` for an uninstalled
- * target (the ADR-0009 placeholder). The frontend confirm-writes `launch_options`
- * onto the shortcut identified by `app_id` — even when blank, so the shortcut
- * never keeps the old version's command.
+ * The binding of the shortcut identified by `app_id` moved to `rom_id`; its
+ * launch options stay its appId, and the next start asks for `rom_id`'s command.
  */
 export interface SwitchVersionSuccess {
   success: true;
   rom_id: number;
   target_installed: boolean;
-  launch_options: string;
   app_id: number;
   prune_lease_token?: string;
 }
@@ -1309,16 +1277,19 @@ export const getMetadataCachePage = endpoint<[number, number], { items: Record<s
   "get_metadata_cache_page",
 );
 export const getAppIdRomIdMap = endpoint<[], Record<string, number>>("get_app_id_rom_id_map");
-export type InstalledRelaunchOptionsResult =
+/**
+ * Every bound shortcut whose launch options in Steam's shortcut file are not its
+ * appId, with the value it must carry, under an `installed_reconcile` lease when
+ * there are any.
+ */
+export type BoundLaunchOptionsResult =
   | {
       success: true;
       items: { app_id: number; launch_options: string }[];
       prune_lease_token: string | null;
     }
   | { success: false; reason: WireReason; message: string };
-export const getInstalledRelaunchOptions = endpoint<[], InstalledRelaunchOptionsResult>(
-  "get_installed_relaunch_options",
-);
+export const getBoundLaunchOptions = endpoint<[], BoundLaunchOptionsResult>("get_bound_launch_options");
 
 /** The icon `saveShortcutIcon` wrote: its path, and what `reportSgdbSlotArtwork` records for it. */
 export interface SavedShortcutIcon {

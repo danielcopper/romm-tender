@@ -2,16 +2,14 @@
 
 The one place that answers "which file will this multi-disc ROM actually launch
 with?", folding the user's persisted ``roms.selected_disc`` pick over the live
-enumeration of disc images in the ROM's install directory. Every launch-bake
-site draws the bake path from this seam so the baked launch_options never
-diverge from the picker's current selection, and the picker use cases enumerate
-through the same seam so the list they show is the list the bake resolves over.
+enumeration of disc images in the ROM's install directory. The start and every
+question about it draw the path from this seam, so what starts never diverges
+from the picker's current selection, and the picker use cases enumerate through
+the same seam so the list they show is the list a start resolves over.
 
-Resolution is a bake-time path-override layer only: it returns the path to bake
-into the Steam shortcut's launch_options, it never rewrites the install's
-``file_path`` (save-path / core / displayed-filename derivations stay stable),
-mirroring how :class:`ActiveCoreResolver` overrides the invocation without
-touching ``file_path``. A non-multi-disc ROM (single-file install, or a folder
+Resolution is a path-override layer only: it returns the path a start opens,
+it never rewrites the install's ``file_path`` (save-path / core /
+displayed-filename derivations stay stable). A non-multi-disc ROM (single-file install, or a folder
 with fewer than two disc images) resolves to its own ``file_path`` unchanged —
 zero behavior change. A stale pin (the selected disc is no longer present)
 degrades to the default with a WARNING, never fatal, mirroring
@@ -54,7 +52,7 @@ class DiscLaunchResolverConfig:
 
 
 class DiscLaunchResolver:
-    """Resolve the launch-bake path and disc list for one installed ROM."""
+    """Resolve the path a start opens and the disc list for one installed ROM."""
 
     def __init__(self, *, config: DiscLaunchResolverConfig) -> None:
         self._list_files = config.list_files
@@ -81,8 +79,8 @@ class DiscLaunchResolver:
         # full disc set (pass None) rather than intersecting to nothing.
         return enumerate_discs(files, supported or None)
 
-    def resolve_bake_path(self, install: RomInstall, discs: list[Disc], selected_disc: str | None) -> str:
-        """Return the path to bake into launch_options for *install*.
+    def resolve_disc_path(self, install: RomInstall, discs: list[Disc], selected_disc: str | None) -> str:
+        """Return the path a start of *install* opens.
 
         Every installed game gets one, whether or not its file starts: that is
         asked when the game's page reads it, never here (#2195 D26, D28).
@@ -94,7 +92,7 @@ class DiscLaunchResolver:
         is one, else disc 1), a valid pin resolves to that disc, and a stale pin
         degrades to the default with a WARNING — never fatal, never a bogus path.
 
-        A final folder-boot override layer (``folder_boot_root``) then bakes the
+        A final folder-boot override layer (``folder_boot_root``) then answers the
         game **directory** for a system whose emulator boots a folder rather than
         the nested launch file (PS3/RPCS3 — ``…/PS3_GAME/USRDIR/EBOOT.BIN`` →
         ``…``, ADR-0019). It only fires when the resolved path still carries a
@@ -115,12 +113,12 @@ class DiscLaunchResolver:
     def resolve_for_install(
         self, install: RomInstall, selected_disc: str | None, *, reading: SourcesReading | None = None
     ) -> str:
-        """Enumerate *install* and resolve the launch-bake path in one call.
+        """Enumerate *install* and resolve the path a start opens in one call.
 
-        The bake-site convenience wrapper: enumerate the discs, then resolve the
+        The convenience wrapper: enumerate the discs, then resolve the
         *selected_disc* pin over them. Equivalent to :meth:`enumerate_discs`
-        followed by :meth:`resolve_bake_path`; callers that also need the disc
+        followed by :meth:`resolve_disc_path`; callers that also need the disc
         list (the picker) call the two halves directly to avoid re-scanning.
         """
         discs = self.enumerate_discs(install, reading=reading)
-        return self.resolve_bake_path(install, discs, selected_disc)
+        return self.resolve_disc_path(install, discs, selected_disc)

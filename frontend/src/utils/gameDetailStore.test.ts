@@ -106,8 +106,6 @@ const downloadComplete = (romId: number): DownloadCompleteEvent => ({
   rom_name: "Test ROM",
   platform_name: "SNES",
   file_path: "/roms/test.sfc",
-  app_id: null,
-  launch_options: "",
 });
 
 const coreInfo: CoreInfo = coreInfoFixture({
@@ -128,7 +126,6 @@ const coreInfo: CoreInfo = coreInfoFixture({
       core_so: "snes9x.so",
       emulator: "snes9x.so",
       is_default: true,
-      bakeable: true,
       reason: null,
     },
   ],
@@ -155,7 +152,6 @@ const laterCoreInfo: CoreInfo = coreInfoFixture({
       core_so: "genesis_plus_gx.so",
       emulator: "genesis_plus_gx.so",
       is_default: true,
-      bakeable: true,
       reason: null,
     },
   ],

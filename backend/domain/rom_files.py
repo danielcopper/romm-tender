@@ -192,7 +192,7 @@ FOLDER_BOOT_MARKERS: tuple[tuple[str, ...], ...] = (("PS3_GAME", "USRDIR", "EBOO
 
 
 def folder_boot_root(launch_path: str, rom_dir: str | None) -> str | None:
-    """Return the game-root directory to bake for a folder-boot ROM, or ``None``.
+    """Return the game-root directory a start of a folder-boot ROM opens, or ``None``.
 
     Some emulators boot a game **directory** rather than the nested launch file
     ``detect_launch_file`` selects: RPCS3 rejects ``…/PS3_GAME/USRDIR/EBOOT.BIN``
@@ -205,8 +205,8 @@ def folder_boot_root(launch_path: str, rom_dir: str | None) -> str | None:
     The root is returned only when *rom_dir* is set — a single-file ROM owns no
     folder and is never a folder-boot game — **and** the derived root is
     inside-or-equal *rom_dir*, so a bare ``<roms>/<system>/PS3_GAME/USRDIR/EBOOT.BIN``
-    sitting directly in the shared system directory never bakes that shared
-    directory as the launch target. Returns ``None`` when no marker matches or the
+    sitting directly in the shared system directory never makes that shared
+    directory the launch target. Returns ``None`` when no marker matches or the
     containment guard fails; the caller then keeps the launch file unchanged.
 
     Pure path algebra, stdlib only.
@@ -423,7 +423,7 @@ def resolve_extract_dir_name(rom_detail: dict[str, Any]) -> str:
 
     The extract directory must carry the ROM's own identity, because
     everything downstream inherits it — the launch ``file_path``, the
-    ``rom_dir`` install record, and any folder-boot launch bake. RomM reports
+    ``rom_dir`` install record, and a folder-boot game's launch target. RomM reports
     the extensionless ROM name as ``fs_name_no_ext``; when that is absent the
     extension is stripped from ``fs_name``, and when ``fs_name`` is also
     missing the synthetic ``rom_<id>`` (or ``rom_unknown``) mirrors
@@ -439,3 +439,16 @@ def resolve_extract_dir_name(rom_detail: dict[str, Any]) -> str:
         return fs_name_no_ext
     fs_name = rom_detail.get("fs_name", synthetic_rom_name(rom_detail))
     return os.path.splitext(fs_name)[0]
+
+
+def asked_path(file_path: str, rom_dir: str | None, disc_path: str) -> str:
+    """The path an installed game is started with and asked about: its folder for a game kept as one, else *disc_path*.
+
+    *disc_path* is the disc pick folded over the install (``DiscResolver``).
+    A game kept as a folder is asked about as ES-DE scans it (#2195 D11). One
+    answer for every question about the game's start — the launch verdict, the
+    launch command and the start itself (#2221 D3).
+    """
+    if rom_dir is not None and folder_boot_root(file_path, rom_dir) is not None:
+        return rom_dir
+    return disc_path

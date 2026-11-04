@@ -32,9 +32,8 @@ transactions actually held the lock.
 
 The established fix is the same for both: snapshot the rows a seam needs
 *inside* one short UoW, close it, then call the seam *outside* any open UoW
-(``services/relaunch_options_resolver.py``, ``services/cores.py``,
-``services/disc.py``, ``services/downloads/service.py``,
-``services/library/shortcut_launch_resolver.py`` are the reference shape).
+(``services/cores.py``, ``services/disc.py``, ``services/game_start.py`` and
+``services/downloads/service.py`` are the reference shape).
 Re-read anything the write then depends on: the second transaction runs on its
 own connection, so the snapshot may have gone stale.
 
@@ -156,11 +155,9 @@ SEAM_METHODS: frozenset[str] = frozenset(
         "active_core_for_rom",  # ActiveCoreResolver (services/active_core_resolver.py)
         "active_emulator_for_rom",  # ActiveCoreResolver (services/active_core_resolver.py)
         "has_adoption_candidate",  # RomAdoptionService — via an AdoptionCandidateProbeFn
-        "installed_relaunch_items",  # RelaunchOptionsResolver (services/relaunch_options_resolver.py)
         # PlatformSystems (services/platform_systems.py), which reads the kept
         # ids in a UoW of its own and then asks the resolver — the disk too.
         "platform_system",
-        "relaunch_item_for_rom",  # RelaunchOptionsResolver (services/relaunch_options_resolver.py)
         "rom_system",  # PlatformSystems (services/platform_systems.py), as platform_system
     }
 )
@@ -180,20 +177,23 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # DiscResolver — the same recursive walk, resolving the persisted disc
         # pin over it.
         "resolve_for_install",
-        # CoreInfoProvider (services/protocols/paths.py) — the three catalogue
+        # CoreInfoProvider (services/protocols/paths.py) — the two catalogue
         # reads. Each is answered by the vendored emu-atlas resolver, which reads
         # ES-DE's own catalogue off the flatpak install: every call from the
         # panel opens it again, and only a run's one reading of the emulator
         # sources keeps a system's answer for the run, and the answer carries the
-        # resolver's lookup of each entry's emulator on the machine. Listing one
-        # of the three would be arbitrary: every consumer pairs
-        # two of them. FirmwareStatusReader._enrich_platform calls
-        # get_active_core beside get_emulator_options for one platform, and
-        # ActiveCoreResolver reaches get_emulator_options (active_emulator_for_rom)
-        # and get_default_emulator (_resolve_by_precedence) on one resolution.
+        # resolver's lookup of each entry's emulator on the machine.
+        # No service calls get_active_core today; it stays listed while the
+        # protocol offers it.
         "get_active_core",
-        "get_default_emulator",
         "get_emulator_options",
+        # StartCommandReader (services/protocols/paths.py) — the resolver's
+        # launch command for one game and one entry: the same catalogue read,
+        # plus the files the command reads in and the distribution's own start.
+        # StartHandover.hand_over, which writes the start's file, is unlisted:
+        # its name is also ArtworkSlotHandover.hand_over, a domain verb called
+        # inside a UoW, which this name-only match would flag.
+        "start_command",
         # SaveLocationReader (services/protocols/paths.py) — asks the vendored
         # resolver where one ROM's save lives and what it consists of. Reads
         # ES-DE's catalogue for the entry, the emulator's own configuration for
@@ -515,7 +515,7 @@ def main(argv: list[str]) -> int:
         if any(_DEADLOCK_REMEDY in line for line in findings):
             print()
             print(
-                "ERROR: a UoW-opening seam (ActiveCoreResolver / RelaunchOptionsResolver / "
+                "ERROR: a UoW-opening seam (ActiveCoreResolver / "
                 "PlatformSystems / uow_factory) must not be called while a UoW is open on the same path "
                 "(CLAUDE.md → Invariant register). Snapshot inside the UoW, close it, then "
                 "resolve outside."

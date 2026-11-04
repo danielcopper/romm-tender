@@ -183,7 +183,7 @@ interface Said {
 
 /**
  * *statement* in its own group's words (#2698 D8), or `null` where Tender words none. `tenderStarts` false drops
- * the menu's "can start it" (#2195 D42) and keeps the rest of the line.
+ * the menu's "can start it" and keeps the rest of the line.
  */
 function said(launch: GameLaunch, statement: LaunchStatement, tenderStarts: boolean): Said | null {
   const file = statement.file ?? launch.file;
@@ -392,30 +392,36 @@ export function launchNote(launch: GameLaunch | null, source: AnsweringSource | 
  * The short line the emulator menu shows under an entry for its verdict on the
  * game (#2195 D22, D29, D36), or `null` where there is nothing to say: the first
  * statement, with how many more there are (#2698 D8), or a plain "can start it"
- * — none for an entry Tender cannot start (`tenderStarts` false), which its row
- * already says it cannot (D42); beside a statement, only the "can start it"
- * goes. `source` is the source the answer came from.
+ * — none for an entry Tender cannot start (`tenderStarts` false); beside a
+ * statement, only the "can start it" goes. `commandLine` is what is said of
+ * such an entry where the resolver gives no complete command for it (#2221
+ * D20): it comes after the file's statements, counted among them, and stands
+ * alone where the file has none. `source` is the source the answer came from.
  */
 export function entryLaunchLine(
   launch: GameLaunch,
   source: AnsweringSource | null,
   tenderStarts = true,
+  commandLine: string | null = null,
 ): string | null {
+  const extra = !tenderStarts && commandLine !== null ? 1 : 0;
+  const first = (line: string, more: number): string => withMore(line, more + extra);
   switch (launch.state) {
     case "needs_installing":
-      return "cannot start it: the game has to be installed first";
+      return first("cannot start it: the game has to be installed first", 0);
     case "not_a_launch_file":
-      return `${launch.platform_name} does not start from ${launch.extension}`;
+      return first(`${launch.platform_name} does not start from ${launch.extension}`, 0);
     case "not_this_emulator": {
       const more = besideARefusal(launch).length;
-      return withMore(refusedBecause(launch)?.line(launch) ?? `cannot start ${launch.extension} files`, more);
+      return first(refusedBecause(launch)?.line(launch) ?? `cannot start ${launch.extension} files`, more);
     }
     case "not_established":
-      return `whether it starts cannot be established: ${notEstablishedBecause(launch, source)}`;
+      return first(`whether it starts cannot be established: ${notEstablishedBecause(launch, source)}`, 0);
     default: {
       const lines = allSaid(launch, tenderStarts).map((each) => each.line);
-      if (lines.length > 0) return withMore(lines[0]!, lines.length - 1);
-      return tenderStarts ? "can start it" : null;
+      if (lines.length > 0) return first(lines[0]!, lines.length - 1);
+      if (tenderStarts) return "can start it";
+      return commandLine;
     }
   }
 }

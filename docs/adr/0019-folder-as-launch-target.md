@@ -1,8 +1,15 @@
+---
+status: accepted
+decided: 2026-07-04
+updated: 2026-11-04
+amended-by: [0044]
+---
+
 # Folder-boot systems bake the game directory as the launch target; `file_path` stays the launch FILE anchor
 
-## Status
+## Scope
 
-Accepted, **revised after on-device testing** (see "Empirical revision" below). Extends
+**Revised after on-device testing** (see "Empirical revision" below). Extends
 [ADR-0009](0009-launcher-pure-exec-wrapper-baked-launch-options.md) (the baked-`launch_options` model) and
 [ADR-0014](0014-per-game-disc-selection-in-db-applied-as-bake-time-launch-path-override.md) (the bake-time launch-path
 override layer) with a folder-as-target branch, and **refines** [ADR-0008](0008-rom-install-launch-file-and-rom-dir.md)
@@ -250,3 +257,13 @@ model the folder path rides),
 override this extends — same seam, same "never rewrite `file_path`" discipline),
 [Core and Emulator Selection](../architecture/core-emulator-selection.md#folder-boot-launch-target) (the resolver, the
 bake sites, and how the folder target composes with the disc path and the core).
+
+## Amendment — the folder is the path a start is asked with, and `run_game.sh` is out of the way
+
+A game kept as a folder is still started with the folder rather than the nested launch file, and `file_path` stays the
+launch file anchor. Two things changed ([ADR-0044](0044-every-start-asks-the-resolver.md),
+[#2221](https://github.com/danielcopper/romm-tender/issues/2221) D3, D7, D8): nothing is baked, so the folder is the
+path the resolver is asked with at every start and the path the emulator gets; and the direct sandbox invocation this
+ADR added to get past `run_game.sh` is gone: no start runs that script, and every start runs the resolver's command as
+it answers it. The marker table (`FOLDER_BOOT_MARKERS`) still decides which folder that is, until a later cut of #2221
+reads the folder the resolver names.

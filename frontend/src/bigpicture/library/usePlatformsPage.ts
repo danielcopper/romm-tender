@@ -46,7 +46,6 @@ import {
 import type { FirmwarePlatformExt, PlatformSyncSetting, SystemCoreInfo } from "../../types";
 import { placedSentence } from "../../utils/biosPlaceWords";
 import { detach } from "../../utils/detach";
-import { batchConfirmLaunchOptions } from "../../utils/launchOptionsReconcile";
 import { clearPlatformCollection } from "../../utils/collections";
 import {
   capturePruneLeaseAdmission,
@@ -654,25 +653,11 @@ export function usePlatformsPage(): PlatformsPageState {
             const result = await setSystemCore(slug, label);
             detach(debugLog(`setSystemCore: result success=${result.success}`));
             if (!result.success) {
-              // Nothing below re-bakes a failed switch, so every live shortcut
-              // keeps its old command: report the failure rather than leaving
-              // the detail looking as though the switch took effect.
+              // Report the failure rather than leaving the detail looking as
+              // though the switch took effect.
               setStatus({ slug, scope: "core", text: result.message });
               return;
             }
-            // Re-bake launch_options for every affected installed ROM on this
-            // platform. The backend returns the fresh command per bound
-            // shortcut; confirm-set each so existing shortcuts launch with the
-            // new core. Bounded-concurrency batches, so a platform with many
-            // ROMs does not serialize worst-case per-shortcut confirm-poll
-            // timeouts.
-            await withPruneLease(
-              result.prune_lease_token,
-              "setSystemCore",
-              (signal) => batchConfirmLaunchOptions(result.rebake_items ?? [], "setSystemCore", signal),
-              LEASE_OWNER,
-              admission,
-            );
             clearCoreLine(slug);
             reloadCore(slug);
             // A different core wants different BIOS files, at other places: its

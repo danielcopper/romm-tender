@@ -44,7 +44,7 @@ import {
   getSettings,
   getAllPlaytime,
   getMigrationStatus,
-  getInstalledRelaunchOptions,
+  getBoundLaunchOptions,
   testConnection,
   invalidateCachedGameDetail,
   getUpdateInstallState,
@@ -99,7 +99,6 @@ import type {
   NavTarget,
   SettingsSection,
 } from "./types";
-import { setLaunchOptionsConfirmed } from "./utils/steamShortcuts";
 import { removeShortcutsPaced } from "./utils/shortcutRemoval";
 import { reportSyncRemovalsGone } from "./utils/syncRemovalReport";
 import { pacedForEach } from "./utils/pacedOps";
@@ -535,8 +534,8 @@ const tender = definePanel(() => {
           initAttempt++;
         }
       }
-      // After backend reachability is confirmed, reconcile launch_options for
-      // all installed+bound ROMs to heal any drift from a missed bake (#1043).
+      // After backend reachability is confirmed, set every bound shortcut whose
+      // launch options are not its appId back to it (#1043).
       // This lease-issuing call must stay behind the awaited init round-trips:
       // the orphan-lease disown dispatched at the start of the panel load has
       // to land before any lease is issued to this mount — a lease issued
@@ -545,7 +544,7 @@ const tender = definePanel(() => {
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- `initDone` is flipped to true inside the awaited `loadAppIdsAndMetadata()`; TS's control-flow analysis can't see that cross-function mutation and narrows it to the `false` literal here. The guard is real: it gates the reconcile on the loop having actually reached a reachable backend.
       if (initDone) {
         try {
-          const result = await getInstalledRelaunchOptions();
+          const result = await getBoundLaunchOptions();
           if (result.success) {
             await withPruneLease(
               result.prune_lease_token,
@@ -777,7 +776,7 @@ const tender = definePanel(() => {
 
     const reconcileLaunchOptions = async (signal: AbortSignal): Promise<void> => {
       try {
-        const result = await getInstalledRelaunchOptions();
+        const result = await getBoundLaunchOptions();
         if (result.success) {
           await withPruneLease(
             result.prune_lease_token,
@@ -1090,31 +1089,6 @@ const tender = definePanel(() => {
       resumable: data.resumable ?? prev?.resumable ?? false,
     });
     showToast(`Downloaded ${data.rom_name}`);
-
-    // The ROM is now installed — its shortcut's launch options must carry the
-    // full launch command (was "" while uninstalled). The backend resolved
-    // the bound appId for this rom_id and put it on the payload, so confirm-set
-    // the new launch options directly. ``app_id`` is null when the ROM isn't
-    // synced yet (no shortcut) — no-op; the next sync writes the command at
-    // creation time.
-    if (data.app_id !== null) {
-      const appId = data.app_id;
-      detach(
-        (async () => {
-          try {
-            const ok = await withPruneLease(data.prune_lease_token, "Download completion", async (signal) => {
-              if (isPruneLeaseCancelled(signal)) return false;
-              return setLaunchOptionsConfirmed(appId, data.launch_options);
-            });
-            if (!ok) {
-              logError(`download_complete: failed to confirm launch options for rom ${data.rom_id} (appId ${appId})`);
-            }
-          } catch (e) {
-            logError(`download_complete: failed to set launch options for rom ${data.rom_id}: ${e}`);
-          }
-        })(),
-      );
-    }
   });
 
   addEventListener<DownloadFailedEvent>("download_failed", (data: DownloadFailedEvent) =>
@@ -1141,20 +1115,6 @@ const tender = definePanel(() => {
       new CustomEvent("romm_data_changed", {
         detail: { type: "save_sync", rom_id: data.rom_id, save_status: data, has_conflict: hasConflict },
       }),
-    );
-  });
-
-  // After a RetroDECK-home migration the backend rewrites each installed ROM's
-  // launch command to the new path and emits the new command per shortcut.
-  // Confirm-set each so existing shortcuts launch from the migrated location.
-  addEventListener<{
-    items: { app_id: number; launch_options: string }[];
-    prune_lease_token?: string;
-  }>("migration_relaunch_options", (data) => {
-    detach(
-      withPruneLease(data.prune_lease_token, "RetroDECK migration", (signal) =>
-        batchConfirmLaunchOptions(data.items, "migration_relaunch_options", signal),
-      ),
     );
   });
 

@@ -10,7 +10,7 @@ vi.mock("@decky/ui", () => ({
   MenuSeparator: "MenuSeparator",
 }));
 
-import { buildEmulatorMenu, reasonCopy, type EmulatorMenuConfig } from "./emulatorMenu";
+import { buildEmulatorMenu, type EmulatorMenuConfig } from "./emulatorMenu";
 import { libretroEmu, standaloneEmu } from "../test-utils/coreFixtures";
 
 // The builder returns a <Menu> element; walk its child MenuItem elements without
@@ -57,25 +57,6 @@ function baseConfig(overrides: Partial<EmulatorMenuConfig> = {}): EmulatorMenuCo
     ...overrides,
   };
 }
-
-describe("reasonCopy", () => {
-  it("maps known reason slugs to distinct copy", () => {
-    expect(reasonCopy("inject")).toBe("Tender cannot start it yet");
-    expect(reasonCopy("not_installed")).toBe("emulator not installed");
-    expect(reasonCopy("shortcut_script")).toBe("Tender cannot start it yet");
-  });
-
-  it("words the two refusals the resolver's statements cause", () => {
-    expect(reasonCopy("core_unlocated")).toBe("core location not established");
-    expect(reasonCopy("start_script_runs_nothing")).toBe("RetroDECK's start script finds no emulator for it");
-  });
-
-  it("falls back to a generic message for other slugs", () => {
-    for (const r of ["no_rom_target", "quoting", "startdir", "unknown_placeholder", null]) {
-      expect(reasonCopy(r)).toBe("Tender cannot start it yet");
-    }
-  });
-});
 
 describe("buildEmulatorMenu", () => {
   it("renders a single disabled notice saying why when emulator data is unavailable", () => {
@@ -127,24 +108,24 @@ describe("buildEmulatorMenu", () => {
     expect(onPick).toHaveBeenCalledWith("mGBA");
   });
 
-  it("offers an un-bakeable emulator, saying Tender cannot start it yet", () => {
+  it("offers an entry whatever its command, as a plain choosable row (#2221 D20)", () => {
     const menu = buildEmulatorMenu(
       baseConfig({
         emulators: [
           libretroEmu("mgba_libretro", "mGBA", true),
-          standaloneEmu("RPCS3 Shortcut (Standalone)", false, { bakeable: false, reason: "shortcut_script" }),
-          standaloneEmu("Vita3K (Standalone)", false, { bakeable: false, reason: "inject" }),
+          standaloneEmu("RPCS3 Shortcut (Standalone)", false),
+          standaloneEmu("Vita3K (Standalone)", false),
         ],
       }),
     );
     const its = items(menu);
     const shortcut = its.find((i) => i.text.startsWith("RPCS3 Shortcut"))!;
     expect(shortcut.disabled).toBe(false);
-    expect(shortcut.text).toBe("RPCS3 Shortcut (Standalone) — Tender cannot start it yet");
+    expect(shortcut.text).toBe("RPCS3 Shortcut (Standalone)");
     expect(shortcut.onClick).toBeDefined();
     const inject = its.find((i) => i.text.startsWith("Vita3K"))!;
     expect(inject.disabled).toBe(false);
-    expect(inject.text).toBe("Vita3K (Standalone) — Tender cannot start it yet");
+    expect(inject.text).toBe("Vita3K (Standalone)");
     expect(inject.onClick).toBeDefined();
   });
 
@@ -153,7 +134,7 @@ describe("buildEmulatorMenu", () => {
       baseConfig({
         emulators: [
           libretroEmu("mgba_libretro", "mGBA", true),
-          standaloneEmu("Ryubing (Standalone)", false, { bakeable: false, reason: "not_installed" }),
+          standaloneEmu("Ryubing (Standalone)", false, { reason: "not_installed" }),
         ],
       }),
     );
@@ -181,7 +162,7 @@ describe("buildEmulatorMenu", () => {
     expect(onPick).toHaveBeenCalledWith("Paprium");
   });
 
-  it("dispatches a bakeable standalone emulator's label on pick", () => {
+  it("dispatches a standalone emulator's label on pick", () => {
     const onPick = vi.fn();
     const menu = buildEmulatorMenu(
       baseConfig({
@@ -247,41 +228,27 @@ describe("buildEmulatorMenu", () => {
 });
 
 describe("every entry the resolver does not state not installed is choosable (#2195 D7, D9, D23, D31)", () => {
-  it("offers an entry Tender cannot bake, saying Tender cannot start it yet, and dispatches its label", () => {
+  it("offers an entry whatever its command and dispatches its label", () => {
     const onPick = vi.fn();
-    const serial = standaloneEmu("RPCS3 Game Serial (Standalone)", false, { bakeable: false, reason: "inject" });
+    const serial = standaloneEmu("RPCS3 Game Serial (Standalone)", false);
     const row = items(
       buildEmulatorMenu(baseConfig({ emulators: [libretroEmu("mgba_libretro", "mGBA", true), serial], onPick })),
     ).find((i) => i.text.startsWith("RPCS3 Game Serial"))!;
     expect(row.disabled).toBe(false);
-    expect(row.text).toBe("RPCS3 Game Serial (Standalone) — Tender cannot start it yet");
+    expect(row.text).toBe("RPCS3 Game Serial (Standalone)");
     row.onClick!();
     expect(onPick).toHaveBeenCalledWith("RPCS3 Game Serial (Standalone)");
   });
 
-  it("says first why an un-bakeable entry's installation could not be established", () => {
-    const unseen = standaloneEmu("RPCS3 Shortcut (Standalone)", false, { bakeable: false, reason: "no_find_rule" });
+  it("says why an entry's installation could not be established", () => {
+    const unseen = standaloneEmu("RPCS3 Shortcut (Standalone)", false, { reason: "no_find_rule" });
     const row = items(
       buildEmulatorMenu(baseConfig({ emulators: [libretroEmu("mgba_libretro", "mGBA", true), unseen] })),
     ).find((i) => i.text.startsWith("RPCS3 Shortcut"))!;
     expect(row.disabled).toBe(false);
-    expect(row.text).toMatch(/^RPCS3 Shortcut \(Standalone\) — .+ — Tender cannot start it yet$/);
+    expect(row.text).toMatch(/^RPCS3 Shortcut \(Standalone\) — [^—]+$/);
     expect(row.text).not.toContain("not installed");
   });
-
-  it.each([["start_script_runs_nothing", "RetroDECK's start script finds no emulator for it"]])(
-    "offers an entry the resolver states %s for, with that line",
-    (reason, line) => {
-      const onPick = vi.fn();
-      const entry = standaloneEmu("PICO-8 (Standalone)", false, { bakeable: false, reason });
-      const row = items(
-        buildEmulatorMenu(baseConfig({ emulators: [libretroEmu("mgba_libretro", "mGBA", true), entry], onPick })),
-      ).find((i) => i.text.startsWith("PICO-8"))!;
-      expect(row.text).toBe(`PICO-8 (Standalone) — ${line}`);
-      row.onClick!();
-      expect(onPick).toHaveBeenCalledWith("PICO-8 (Standalone)");
-    },
-  );
 });
 
 describe("two labels that run one command", () => {
@@ -344,10 +311,10 @@ describe("the choice made in ES-DE", () => {
     expect(texts).toContain("Genesis Plus GX (default) ✓");
   });
 
-  it("marks a default Tender cannot bake as the default, choosable, saying Tender cannot start it yet", () => {
-    const shortcut = standaloneEmu("RPCS3 Shortcut (Standalone)", true, { bakeable: false, reason: "shortcut_script" });
+  it("marks a default as the default and choosable, whatever its command", () => {
+    const shortcut = standaloneEmu("RPCS3 Shortcut (Standalone)", true);
     const texts = items(buildEmulatorMenu(baseConfig({ emulators: [shortcut] }))).map((item) => item.text);
 
-    expect(texts).toContain("RPCS3 Shortcut (Standalone) (default) ✓ — Tender cannot start it yet");
+    expect(texts).toContain("RPCS3 Shortcut (Standalone) (default) ✓");
   });
 });

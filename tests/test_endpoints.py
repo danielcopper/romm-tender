@@ -286,16 +286,19 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "get_download_queue",
     "get_installed_rom",
     # Probes that change no RetroDECK state: a local-only drift hash check, a
-    # version-free reachability heartbeat, a fire-and-forget save-status refresh,
-    # and the pre-launch relaunch re-confirm read. None mutate RetroDECK state, so
-    # they are never refused during a migration.
+    # version-free reachability heartbeat and a fire-and-forget save-status
+    # refresh. None mutate RetroDECK state, so they are never refused during a
+    # migration.
     "check_local_drift",
     # The SAVES tab's read with save sync off lists local save files and changes no
     # RetroDECK state; its directory follow checks a pending migration itself.
     "get_local_save_files",
     "probe_reachability",
     "refresh_save_status",
-    "get_rom_relaunch_options",
+    # The start check's hand-over of one start's command to the launcher: it
+    # writes into the runtime directory and changes no RetroDECK state; the
+    # start's own gate refuses during a pending migration.
+    "prepare_game_start",
     # End-of-session orchestration — composes the playtime session-end record,
     # the post-exit save sync, the fire-and-forget achievement refresh and the
     # migration-state refresh. Only the save sync writes to a RetroDECK path,
@@ -349,7 +352,7 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "get_app_id_rom_id_map",
     # Read-only startup launch-options reconcile pull (#1043) — heals drifted
     # shortcut launch commands; pure read, never gated.
-    "get_installed_relaunch_options",
+    "get_bound_launch_options",
     # Achievements queries (server-side).
     "get_achievements",
     "get_achievement_progress",

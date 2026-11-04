@@ -1,32 +1,30 @@
 /**
- * Uninstalling a ROM: the backend removal, the launch-command reset that follows
- * it, and saying how it went.
+ * Uninstalling a ROM: the backend removal, and saying how it went.
  */
 
 import { removeRom, debugLog } from "../api/backend";
-import { setLaunchOptionsConfirmed } from "./steamShortcuts";
-import {
-  capturePruneLeaseAdmission,
-  isPruneLeaseCancelled,
-  isPruneLeaseCancellation,
-  withPruneLease,
-} from "./pruneLease";
+import { capturePruneLeaseAdmission, isPruneLeaseAdmissionCurrent } from "./pruneLease";
 import { showToast } from "./toast";
 import { detach } from "./detach";
 
 export interface RomUninstallOptions {
   romId: number;
-  appId: number;
   romName?: string | undefined;
   leaseOwner: string;
   tag?: string | undefined;
-  context?: string | undefined;
 }
 
-/** Remove the ROM's files and announce it; true once the removal is done and announced. */
+/**
+ * Remove the ROM's files and announce it; true once the removal is done and announced.
+ *
+ * The shortcut is left as it is: its launch options are its appId, and a start of
+ * a game that is not installed is refused before anything runs. A removal that
+ * answers after the page was left is not announced from here: that is the
+ * page's teardown, not a failure the user can act on.
+ */
 export async function executeRomUninstall(options: RomUninstallOptions): Promise<boolean> {
-  const { romId, appId, romName, leaseOwner, tag = "handleUninstall", context = "ROM uninstall" } = options;
-  const currentAdmission = capturePruneLeaseAdmission(leaseOwner);
+  const { romId, romName, leaseOwner, tag = "handleUninstall" } = options;
+  const admission = capturePruneLeaseAdmission(leaseOwner);
 
   const result = await removeRom(romId).catch(() => null);
   if (!result) {
@@ -37,38 +35,13 @@ export async function executeRomUninstall(options: RomUninstallOptions): Promise
     showToast(result.message || "Uninstall failed");
     return false;
   }
-
-  try {
-    // Reset the shortcut's now-stale launch command to the uninstalled ""
-    // placeholder under the removal's lease. The reset keeps a raced-past
-    // not_installed launch from exec'ing a stale `flatpak run … '<path>'` (#1051);
-    // it is best-effort, so a launch-options hiccup never turns a removal that
-    // happened into an error.
-    await withPruneLease(
-      result.prune_lease_token,
-      context,
-      async (signal) => {
-        if (isPruneLeaseCancelled(signal)) return;
-        await setLaunchOptionsConfirmed(appId, "").catch(() => false);
-      },
-      leaseOwner,
-      currentAdmission,
-    );
-    // The backend has removed the ROM whether the reset above ran to the end or
-    // its signal aborted it, so the game page and the pickers hear about it in
-    // both cases.
-    globalThis.dispatchEvent(new CustomEvent("romm_rom_uninstalled", { detail: { rom_id: romId } }));
-
-    showToast(`${romName || "ROM"} uninstalled`);
-    return true;
-  } catch (e) {
-    // The backend uninstall has committed, so a throw once the page's admission is
-    // stale is its teardown, not a failure the user can act on.
-    if (isPruneLeaseCancellation(e, currentAdmission)) {
-      detach(debugLog(`${tag}: continuation was cancelled: ${e}`));
-      return false;
-    }
-    showToast("Uninstall failed");
+  if (!isPruneLeaseAdmissionCurrent(admission)) {
+    detach(debugLog(`${tag}: continuation was cancelled: the removal answered after the page was left`));
     return false;
   }
+
+  // The game page and the pickers hear about it.
+  globalThis.dispatchEvent(new CustomEvent("romm_rom_uninstalled", { detail: { rom_id: romId } }));
+  showToast(`${romName || "ROM"} uninstalled`);
+  return true;
 }

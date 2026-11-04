@@ -5,10 +5,9 @@
  * For a multi-disc install it renders a compact, icon-only trigger whose face
  * IS the badge: a stacked-discs glyph (neutral) for the m3u "all discs" default,
  * or a single disc + number (accent) when a specific disc is pinned. Clicking it
- * opens an anchored `showContextMenu` list of discs. Picking a disc rewrites the
- * Steam shortcut's `launch_options` to that disc's file (emulator-agnostic) and
- * persists the choice in the backend DB, so the Play button always launches the
- * currently-selected disc.
+ * opens an anchored `showContextMenu` list of discs. Picking a disc persists the
+ * choice in the backend DB, and every start asks with it, so the Play button
+ * always launches the currently-selected disc.
  *
  * Single-disc / unknown / not-installed ROMs render nothing (zero footprint).
  * The picker re-fetches on `download_complete` (a newly installed ROM may now
@@ -107,7 +106,6 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId }) => {
     const rid = romIdRef.current;
     if (rid == null) return;
     await executeDiscSelection({
-      appId,
       romId: rid,
       data,
       leaseOwner,

@@ -10,13 +10,11 @@ split was for stops being checkable by reading one file.
 Three confinements are enforced here, each recording a promise a module
 docstring already makes:
 
-* ``active_core`` / ``disc_resolver`` / ``emulator_sources`` belong to
-  ``shortcut_launch_resolver.py``. The first two are the only reason the sync
-  ever resolves a ROM's emulator or its disc-pinned launch path, and holding
-  them in one module is what keeps the per-ROM UoW the ``active_core`` seam
-  opens out of the read UoW the install-path scan holds; the third is where a
-  run takes its one reading of the emulator sources
-  (:mod:`services.library.shortcut_launch_resolver`).
+* ``active_core`` / ``disc_resolver`` / ``emulator_sources`` belong to no module
+  of the package. A shortcut carries its appId and nothing about what starts
+  the game, so the sync has no question about a ROM's emulator, its disc or the
+  emulator sources. What starts a game is asked at the start, outside the
+  package (:mod:`services.game_start`).
 * ``renderer_rss`` / ``renderer_gc`` belong to ``session_budget.py``. Its
   contract is that no renderer-RSS **reading** is taken anywhere else in the
   package — every other budget site prices against a reading that module handed
@@ -66,7 +64,7 @@ whatever the field is called and however its type was imported, the constructor
 that unpacks it reads ``config.<seam>``, and that read is flagged. What
 actually stays on review is a seam reached without ever naming it.
 
-Exit 0 when every seam is held only by its owner, 1 (one line per offending
+Exit 0 when every seam is held only by its owners, 1 (one line per offending
 site) otherwise.
 """
 
@@ -84,9 +82,9 @@ LIBRARY_DIR = REPO_ROOT / "backend" / "services" / "library"
 # to hold it. A new confinement is a one-line addition here plus its Protocol
 # type in SEAM_PROTOCOLS below.
 SEAM_OWNERS: dict[str, frozenset[str]] = {
-    "active_core": frozenset({"shortcut_launch_resolver.py"}),
-    "disc_resolver": frozenset({"shortcut_launch_resolver.py"}),
-    "emulator_sources": frozenset({"shortcut_launch_resolver.py"}),
+    "active_core": frozenset(),
+    "disc_resolver": frozenset(),
+    "emulator_sources": frozenset(),
     "renderer_rss": frozenset({"session_budget.py"}),
     "renderer_gc": frozenset({"session_budget.py"}),
     "artwork": frozenset({"cover_preparer.py", "reporter.py"}),
@@ -179,6 +177,8 @@ def _report(seam: str, node: ast.expr, *, module: str, rel: Path, held_as: str) 
     owners = SEAM_OWNERS[seam]
     if module in owners:
         return []
+    if not owners:
+        return [f"{rel}:{node.lineno}:{node.col_offset} {held_as} — no module of the package holds the '{seam}' seam."]
     owner_list = " / ".join(sorted(owners))
     return [f"{rel}:{node.lineno}:{node.col_offset} {held_as} — the '{seam}' seam is held only by {owner_list}."]
 

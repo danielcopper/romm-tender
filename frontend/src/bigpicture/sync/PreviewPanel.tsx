@@ -52,7 +52,7 @@ const LONG_SYNC_HINT_THRESHOLD_SEC = 600;
  * True when every platform this run spans is being re-fetched AND re-applied —
  * the derived "Force Full Sync" signal (#1318). After Force Full Sync every
  * platform loses its completion stamp, so ``restamp_platform_count`` equals
- * ``sync_platform_count``; and the recorded launch options are cleared, so the
+ * ``sync_platform_count``; and the applied shortcuts are cleared, so the
  * whole library counts as ``changed``. The ``changed_count`` leg is what
  * separates a force from a first-ever sync — a fresh install is all-unstamped
  * too, but its delta is pure ``new_count``, so the odd wording is suppressed

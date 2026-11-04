@@ -723,6 +723,8 @@ class TestWireServices:
                 journal=FakeJournal(),
                 downscale_icon=deps["downscale_icon"],
                 tender_logo=deps["tender_logo"],
+                start_commands=MagicMock(),
+                start_handover=None,
             ),
             stores=StateBundle(
                 settings=deps["settings"],

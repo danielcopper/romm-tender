@@ -29,17 +29,18 @@ await waitForAppOverview(appId, 1000);
 SteamClient.Apps.SetShortcutName(appId, name);
 SteamClient.Apps.SetShortcutExe(appId, exe);
 SteamClient.Apps.SetShortcutStartDir(appId, startDir);
-// An empty launch_options (uninstalled placeholder) needs no write or confirm —
-// a fresh shortcut's launch options are already empty, so skip both. A non-empty
-// command takes the confirmed write (setLaunchOptionsConfirmed).
-if (launchOptions !== "") await setLaunchOptionsConfirmed(appId, launchOptions);
+// Every shortcut's launch options are its own appId (shortcutLaunchOptions).
+// Unconfirmed here; the reconcile after the sync confirms it.
+SteamClient.Apps.SetAppLaunchOptions(appId, shortcutLaunchOptions(appId));
 ```
 
 Steam must finish registering the new app internally before the `Set*` calls land, or they silently fail. Rather than a
 fixed worst-case wait, Tender polls `appStore` for the new overview (readiness) — the common case proceeds in ~100ms
-instead of a blind 500ms, and the 1000ms ceiling keeps the old wait's safety net when the overview is slow. Skipping the
-launch-options write for the (majority) uninstalled case also avoids `setLaunchOptionsConfirmed`'s
-`RegisterForAppDetails` poll, which forces Steam to load and cache a fat `AppDetails` object per call.
+instead of a blind 500ms, and the 1000ms ceiling keeps the old wait's safety net when the overview is slow. The
+launch-options write is not confirmed at creation: `setLaunchOptionsConfirmed`'s `RegisterForAppDetails` poll forces
+Steam to load and cache a fat `AppDetails` object per call, which a sync creating hundreds of shortcuts cannot afford.
+The reconcile after the sync (`get_bound_launch_options`) lists every bound shortcut whose launch options in
+`shortcuts.vdf` are not its appId, and confirm-sets those.
 
 ### Where the exe points
 
@@ -91,11 +92,12 @@ them. Measured on the reference device: a `$HOME` inside double quotes in the la
 expanded, and a `$(…)` inside them was run. Double quotes therefore do not keep a file name literal — `$`, backticks and
 `$(…)` in it are still expanded.
 
-So `build_launch_options` (`backend/domain/shortcut_data.py`) puts the ROM path in **single** quotes, writing a `'`
-inside it as `'\''`; nothing inside single quotes is expanded, and the launched program receives the path exactly as the
-file is named. Only the path is quoted that way: the invocation before it is Tender's own text, and its `-e "…"` is
-meant for the shell as written. `TestTheShellHandsThePathOverAsNamed` in `tests/domain/test_shortcut_data.py` runs built
-launch options through `sh -c` and checks the arguments the program receives.
+So nothing but the appId is written there (`backend/domain/shortcut_data.py::shortcut_launch_options`): digits, which no
+shell changes. What a start runs never passes through that shell. The start check hands the command to the launcher in a
+file, one argument per record, and the launcher runs those records as they are
+([Core & emulator selection](core-emulator-selection.md#the-start-one-command-handed-over-for-one-start));
+`tests/scripts/test_tender_rom_launcher.py` checks that an argument holding spaces or a quote reaches the program as
+written, and that anything after the appId is ignored.
 
 ### Updating existing shortcuts
 
@@ -109,8 +111,8 @@ consequences follow:
   the shortcut's identity, artwork, collection membership, and `roms.shortcut_app_id` binding all survive.
   `SetAppLaunchOptions` on an existing shortcut is **reliable** — confirmed on hardware in
   [#827](https://github.com/danielcopper/romm-tender/issues/827) across in-session writes, a Steam restart, and
-  removal-churn re-syncs. Tender uses it directly to bake the launch command in at download-complete and to re-resolve
-  paths after a RetroDECK-home migration.
+  removal-churn re-syncs. Tender uses it to set a shortcut's launch options back to its appId before a start and in the
+  reconcile at startup and after a sync.
 - **`exe` is appId-safe too, and that is now measured.** Every one of a 826-shortcut library had its `exe` and
   `startDir` rewritten in one pass — the relocation 0.33 ran at start-up, into the launcher home of
   [ADR-0032](../adr/0032-shortcuts-are-rewritten-in-place.md) that ADR-0038 has since superseded (see
@@ -186,9 +188,9 @@ three lanes:
   leave a duplicate (`#1366`). When such a ROM reaches the create path, the frontend **adopts** the orphan instead: it
   matches the built entry's display name against a once-per-run pool of live-but-unbound RomM appIds
   (`getLiveRomMShortcutAppIds()` minus the run's already-bound appIds, resolved to names via
-  `appStore.GetAppOverviewByAppID`), reuses the matched appId, and rewrites its identity + launch bake (the same `Set*`
-  writes as an update). The pool is built **lazily** on the first create candidate (a pure-update run pays no scan
-  cost); each orphan is adopted at most once per run; a name collision adopts the lowest appId deterministically; a
+  `appStore.GetAppOverviewByAppID`), reuses the matched appId, and rewrites its identity and launch options (the same
+  `Set*` writes as an update). The pool is built **lazily** on the first create candidate (a pure-update run pays no
+  scan cost); each orphan is adopted at most once per run; a name collision adopts the lowest appId deterministically; a
   `null` live scan (store unreadable) disables adoption for the run rather than guess. An adoption counts as "added" in
   the post-sync toast (a game came under management) but skips the `AddShortcut` a duplicate would cost. See
   `resolveShortcutAppId` in `frontend/src/utils/syncManager.ts`.
@@ -332,9 +334,9 @@ binding onto an already-local target, it checks that exact target id again throu
 `get_rom_once` path. The request runs on the worker executor outside the write UoW and after the save-stranding guard
 permits the attempt. Consequently an initial unsynced-save warning makes no target request, while both `Sync now` and
 `Switch anyway` retries are protected; `allow_stranded` never bypasses liveness. A typed target 404 refuses with
-`version_vanished` without changing the binding or any recorded launch state. Every other optional-probe outcome fails
-open, so a local switch remains fast when RomM is uncertain or offline. The active-target no-op does not probe because
-it moves no binding.
+`version_vanished` without changing the binding or any recorded state. Every other optional-probe outcome fails open, so
+a local switch remains fast when RomM is uncertain or offline. The active-target no-op does not probe because it moves
+no binding.
 
 A server-only target already requires its full RomM detail for membership validation and row construction. That fetch
 keeps its normal retry policy, doubles as the liveness verdict, and receives no second probe. Its typed 404 produces the
@@ -397,9 +399,9 @@ reattach those values to a newly created shortcut.
 
 A user can delete a RomM shortcut through **Steam's own UI** (remove from library), which Tender never observes. The
 `roms` row keeps its now-dead `shortcut_app_id`, so `get_app_id_rom_id_map` keeps serving it (playtime writes and
-launch-options bakes aim at a Steam app that no longer exists) and the **incremental skip never recreates it**: the skip
-reads RomM's answer and rebuilds the platform from its bound `roms` rows, not from live Steam shortcuts, so the platform
-reports "unchanged" forever. The game stays gone until a server-side change or a Force Full Sync (`#1046`).
+launch-options writes aim at a Steam app that no longer exists) and the **incremental skip never recreates it**: the
+skip reads RomM's answer and rebuilds the platform from its bound `roms` rows, not from live Steam shortcuts, so the
+platform reports "unchanged" forever. The game stays gone until a server-side change or a Force Full Sync (`#1046`).
 
 The fix is a **frontend-assisted reconcile at sync start**, because only the frontend can read Steam's shortcut store.
 It runs **before** the sync builds its work queue — so the unbind lands before the incremental-skip decision — on both
@@ -501,15 +503,15 @@ Steam stores non-Steam shortcuts in a binary VDF file at:
 
 Each entry has these key fields:
 
-| VDF Field       | Format       | Notes                                                                                                                                                                                                                                                                           |
-| --------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AppName`       | string       | Display name                                                                                                                                                                                                                                                                    |
-| `Exe`           | string       | Executable path. `AddShortcut`-created entries store it **unquoted** (on-device inspection) — the API handles any quoting internally                                                                                                                                            |
-| `StartDir`      | string       | Start directory. Stored **unquoted** for `AddShortcut`-created entries                                                                                                                                                                                                          |
-| `LaunchOptions` | string       | The full launch command the `bin/tender-rom-launcher` exec wrapper runs, e.g. `flatpak run --nosocket=wayland net.retrodeck.retrodeck '/path/to/game.iso'` — or `""` (placeholder) for an uninstalled ROM. No `romm:<id>` marker; ownership is detected by the exe path instead |
-| `appid`         | signed int32 | Assigned by Steam when `AddShortcut` runs; stored as the signed int32 form (`to_signed_app_id`)                                                                                                                                                                                 |
-| `icon`          | string       | Icon path or hash                                                                                                                                                                                                                                                               |
-| `tags`          | object       | Steam collection tags. Tender manages collections via `collectionStore` (machine-scoped names like `RomM: N64 (steamdeck)`), not by writing this VDF field.                                                                                                                     |
+| VDF Field       | Format       | Notes                                                                                                                                                                                                                                                                                                        |
+| --------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AppName`       | string       | Display name                                                                                                                                                                                                                                                                                                 |
+| `Exe`           | string       | Executable path. `AddShortcut`-created entries store it **unquoted** (on-device inspection) — the API handles any quoting internally                                                                                                                                                                         |
+| `StartDir`      | string       | Start directory. Stored **unquoted** for `AddShortcut`-created entries                                                                                                                                                                                                                                       |
+| `LaunchOptions` | string       | The shortcut's own appId, the same for every bound shortcut, installed or not ([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D7, D10); `bin/tender-rom-launcher` reads only the appId and ignores anything after it. No `romm:<id>` marker; ownership is detected by the exe path instead |
+| `appid`         | signed int32 | Assigned by Steam when `AddShortcut` runs; stored as the signed int32 form (`to_signed_app_id`)                                                                                                                                                                                                              |
+| `icon`          | string       | Icon path or hash                                                                                                                                                                                                                                                                                            |
+| `tags`          | object       | Steam collection tags. Tender manages collections via `collectionStore` (machine-scoped names like `RomM: N64 (steamdeck)`), not by writing this VDF field.                                                                                                                                                  |
 
 ### shortcuts.vdf is memory-authoritative
 
@@ -1166,29 +1168,29 @@ cover is filled from SteamGridDB is "The cover where RomM has none", above. The 
 
 ## Pre-launch launch-options confirmation
 
-Both launch funnels (the game-detail Play button and Steam's direct-launch watcher) re-fetch the selected ROM's resolved
-command and confirm-write it immediately before `RunGame`. Ordinary fetch or Steam-write failures remain best-effort and
-the launch proceeds. A three-second endpoint timeout is different: the already-cancelled launch remains blocked, while
-the unresolved endpoint call stays observed so a lease token returned later is released without a Steam write. The Play
-button's launch captures its component generation before gate and modal waits; the button's unmount makes that admission
-stale, and even an immediate remount cannot let the old chain write launch options or invoke `RunGame` under the new
-generation. The watcher's launch has no component owner, so no teardown short of a JS-context rebuild stops its chain;
-the timeout above still does.
+Both launch funnels (the game-detail Play button and Steam's direct-launch watcher) ask `prepare_game_start` immediately
+before `RunGame`: the backend writes the start hand-over and answers the shortcut's launch options, its appId, which the
+panel confirm-writes. A start without an answer, or with a refusal, is refused with a toast, because without the
+hand-over the launcher starts nothing; a Steam write that fails does not stop it. The Play button's launch captures its
+component generation before gate and modal waits; the button's unmount makes that admission stale, and even an immediate
+remount cannot let the old chain write launch options or invoke `RunGame` under the new generation. The watcher's launch
+has no component owner, so no teardown short of a JS-context rebuild stops its chain; the endpoint timeout still does.
+Which starts are refused and with what is [Save-file sync](save-file-sync-architecture.md)'s, step 9.
 
 ## Key Files
 
-| File                                                  | Purpose                                                                                                                                                                                                                                                                                                                                        |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `frontend/src/utils/steamShortcuts.ts`                | `addShortcut()`, `removeShortcut()`, `getExistingRomMShortcuts()`, `getLiveRomMShortcutAppIds()` (raw live appId scan for the sync-start reconcile) — frontend shortcut CRUD. The existing-shortcut scan emits a sync heartbeat every 10s between batches so a large library can't stall the run past the backend's per-unit heartbeat timeout |
-| `frontend/src/utils/syncManager.ts`                   | Listens for sync events, orchestrates shortcut creation/removal, artwork application, collection management. `reconcileStaleShortcuts()` runs the sync-start reconcile of Steam-UI-deleted shortcuts. Caches the existing-shortcut scan per run (keyed by the `sync_apply_unit` `run_id`) so it scans Steam once per run, not once per unit    |
-| `backend/services/shortcut_removal.py`                | `ShortcutRemovalService` — resolves shortcut-removal sets, unbinds removed ROMs, and runs `reconcile_live_shortcuts` (the sync-start reconcile of Steam-UI-deleted bindings)                                                                                                                                                                   |
-| `frontend/src/utils/collections.ts`                   | Machine-scoped Steam collection management                                                                                                                                                                                                                                                                                                     |
-| `frontend/src/bigpicture/patches/gameDetailPatch.tsx` | The tree patch for Steam's game page — injects RomMPlaySection for custom game detail UI. Installed on the route component's render by `installGamePagePatch.ts` ([frontend-bundles.md](frontend-bundles.md#tenders-section-on-steams-game-page))                                                                                              |
-| `frontend/src/utils/metadataPatches.ts`               | Store patches for description, associations, categories, release date display                                                                                                                                                                                                                                                                  |
-| `backend/adapters/steam_config.py`                    | `SteamConfigAdapter` — VDF read/write, grid dir, shortcut icon write, Steam Input config                                                                                                                                                                                                                                                       |
-| `backend/services/library/`                           | LibraryService — builds shortcut data, drives per-unit sync apply                                                                                                                                                                                                                                                                              |
-| `backend/domain/sgdb_artwork.py`                      | `to_signed_app_id`, SGDB asset-type/endpoint maps and their queries, the image choice by stated size (`choose_candidate`), the artwork cache's file names (`cached_artwork_name`, `cached_image_id`)                                                                                                                                           |
-| `bin/tender-rom-launcher`                             | Pure `exec "$@"` wrapper invoked by Steam — runs the full launch command baked into the shortcut's launch options; owns no state, no path resolution, no emulator knowledge. Shipped here, **run from `<bin root>/tender-rom-launcher`**: `bootstrap()` installs this copy there at every start (ADR-0038)                                     |
+| File                                                  | Purpose                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `frontend/src/utils/steamShortcuts.ts`                | `addShortcut()`, `removeShortcut()`, `getExistingRomMShortcuts()`, `getLiveRomMShortcutAppIds()` (raw live appId scan for the sync-start reconcile) — frontend shortcut CRUD. The existing-shortcut scan emits a sync heartbeat every 10s between batches so a large library can't stall the run past the backend's per-unit heartbeat timeout                                                                   |
+| `frontend/src/utils/syncManager.ts`                   | Listens for sync events, orchestrates shortcut creation/removal, artwork application, collection management. `reconcileStaleShortcuts()` runs the sync-start reconcile of Steam-UI-deleted shortcuts. Caches the existing-shortcut scan per run (keyed by the `sync_apply_unit` `run_id`) so it scans Steam once per run, not once per unit                                                                      |
+| `backend/services/shortcut_removal.py`                | `ShortcutRemovalService` — resolves shortcut-removal sets, unbinds removed ROMs, and runs `reconcile_live_shortcuts` (the sync-start reconcile of Steam-UI-deleted bindings)                                                                                                                                                                                                                                     |
+| `frontend/src/utils/collections.ts`                   | Machine-scoped Steam collection management                                                                                                                                                                                                                                                                                                                                                                       |
+| `frontend/src/bigpicture/patches/gameDetailPatch.tsx` | The tree patch for Steam's game page — injects RomMPlaySection for custom game detail UI. Installed on the route component's render by `installGamePagePatch.ts` ([frontend-bundles.md](frontend-bundles.md#tenders-section-on-steams-game-page))                                                                                                                                                                |
+| `frontend/src/utils/metadataPatches.ts`               | Store patches for description, associations, categories, release date display                                                                                                                                                                                                                                                                                                                                    |
+| `backend/adapters/steam_config.py`                    | `SteamConfigAdapter` — VDF read/write, grid dir, shortcut icon write, Steam Input config                                                                                                                                                                                                                                                                                                                         |
+| `backend/services/library/`                           | LibraryService — builds shortcut data, drives per-unit sync apply                                                                                                                                                                                                                                                                                                                                                |
+| `backend/domain/sgdb_artwork.py`                      | `to_signed_app_id`, SGDB asset-type/endpoint maps and their queries, the image choice by stated size (`choose_candidate`), the artwork cache's file names (`cached_artwork_name`, `cached_image_id`)                                                                                                                                                                                                             |
+| `bin/tender-rom-launcher`                             | Invoked by Steam with the shortcut's appId — claims that start's hand-over in the runtime directory and runs the command it holds, in the folder it names; without a hand-over, or with one older than 30 s, it starts nothing. Owns no path resolution and no emulator knowledge. Shipped here, **run from `<bin root>/tender-rom-launcher`**: `bootstrap()` installs this copy there at every start (ADR-0038) |
 
 ## Common Pitfalls
 

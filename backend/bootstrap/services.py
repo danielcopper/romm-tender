@@ -44,6 +44,7 @@ from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.firmware.store import FirmwareStore, FirmwareStoreConfig
 from services.game_detail import GameDetailService, GameDetailServiceConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
+from services.game_start import START_FOLDER, GameStartService, GameStartServiceConfig
 from services.leftover_tmp_cleanup import LeftoverTmpCleanupService, LeftoverTmpCleanupServiceConfig
 from services.metadata import MetadataService, MetadataServiceConfig
 from services.migration import MigrationService, MigrationServiceConfig
@@ -52,7 +53,6 @@ from services.playtime import PlaytimeService, PlaytimeServiceConfig
 from services.prune import PruneService, PruneServiceConfig
 from services.prune_leases import PruneLeaseService, PruneLeaseServiceConfig
 from services.ps3_folder_naming import Ps3FolderNamingService, Ps3FolderNamingServiceConfig
-from services.relaunch_options_resolver import RelaunchOptionsResolver, RelaunchOptionsResolverConfig
 from services.rom_adoption import RomAdoptionService, RomAdoptionServiceConfig
 from services.rom_install_recorder import RomInstallRecorder, RomInstallRecorderConfig
 from services.rom_removal import RomRemovalService, RomRemovalServiceConfig
@@ -173,7 +173,7 @@ class ServicesBundle:
     update_output_service: UpdateOutputService
     session_lifecycle_service: SessionLifecycleService
     game_process_service: GameProcessService
-    relaunch_options_resolver: RelaunchOptionsResolver
+    game_start_service: GameStartService
     leftover_tmp_cleanup_service: LeftoverTmpCleanupService
     controller_focus_service: ControllerFocusService
 
@@ -322,28 +322,13 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     # The single read-path disc resolver (#865): folds the per-game
     # selected_disc pick over the live disc-image enumeration of an installed
     # ROM's directory. Built alongside active_core_resolver (no service deps) so
-    # every launch-bake site and the picker use cases draw the bake path from the
-    # SAME seam and the baked launch_options never diverge from the selection.
+    # the start and the picker use cases draw the disc from the SAME seam and the
+    # disc a start opens never diverges from the selection.
     disc_launch_resolver = DiscLaunchResolver(
         config=DiscLaunchResolverConfig(
             list_files=cfg.callbacks.list_rom_dir_files,
             system_extensions=cfg.callbacks.system_extensions,
             logger=cfg.runtime.logger,
-        ),
-    )
-
-    # The single installed+bound relaunch-items resolver (#1154): snapshots the
-    # rows in one short read UoW it closes before resolving core + disc, so the
-    # nested resolver UoW never deadlocks. Both the RetroDECK-home migration and
-    # the startup launch-options reconcile draw their relaunch items from this
-    # SAME seam, so the two never carry a divergent build of the list.
-    relaunch_options_resolver = RelaunchOptionsResolver(
-        config=RelaunchOptionsResolverConfig(
-            uow_factory=cfg.callbacks.uow_factory,
-            active_core=active_core_resolver,
-            disc_resolver=disc_launch_resolver,
-            loop=cfg.runtime.loop,
-            conflict_rules=conflict_rules,
         ),
     )
 
@@ -360,7 +345,6 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             emit=cfg.runtime.emit,
             firmware_resolver=cfg.adapters.firmware_resolver,
             retrodeck_folders=cfg.callbacks.retrodeck_folders,
-            relaunch_options=relaunch_options_resolver,
             save_directories=save_directories_binding.get,
             uow_factory=cfg.callbacks.uow_factory,
             conflict_rules=conflict_rules,
@@ -514,9 +498,6 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             log_debug=cfg.callbacks.log_debug,
             artwork=artwork_service,
             uow_factory=cfg.callbacks.uow_factory,
-            active_core=active_core_resolver,
-            disc_resolver=disc_launch_resolver,
-            emulator_sources=cfg.adapters.emulator_sources,
             renderer_rss=cfg.adapters.renderer_rss,
             renderer_gc=cfg.adapters.renderer_gc,
             conflict_rules=conflict_rules,
@@ -532,8 +513,6 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         config=RomInstallRecorderConfig(
             clock=cfg.runtime.clock,
             uow_factory=cfg.callbacks.uow_factory,
-            active_core=active_core_resolver,
-            disc_resolver=disc_launch_resolver,
         ),
     )
 
@@ -587,8 +566,6 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             queue=download_queue,
             unpacker=download_unpacker,
             romm_api=cfg.adapters.romm_api,
-            install_recorder=rom_install_recorder,
-            conflict_rules=conflict_rules,
             loop=cfg.runtime.loop,
             emit=cfg.runtime.emit,
             logger=cfg.runtime.logger,
@@ -712,6 +689,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             uow_factory=cfg.callbacks.uow_factory,
             active_core=active_core_resolver,
             disc_resolver=disc_launch_resolver,
+            start_commands=cfg.adapters.start_commands,
             conflict_rules=conflict_rules,
         ),
     )
@@ -731,7 +709,6 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             logger=cfg.runtime.logger,
             uow_factory=cfg.callbacks.uow_factory,
             disc_resolver=disc_launch_resolver,
-            active_core=active_core_resolver,
             conflict_rules=conflict_rules,
         ),
     )
@@ -758,7 +735,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             path_probe=cfg.adapters.path_probe,
             resolve_path=cfg.adapters.resolve_path,
             uow_factory=cfg.callbacks.uow_factory,
-            relaunch_options=relaunch_options_resolver,
+            steam_config=cfg.adapters.steam_config,
             loop=cfg.runtime.loop,
             conflict_rules=conflict_rules,
         ),
@@ -794,8 +771,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     # Built after SaveService + ConnectionService: the version-switch
     # save-stranding gate reads the stranding verdict of
     # SaveService.check_local_drift and reachability from
-    # ConnectionService.probe_reachability, and re-bakes a switched-onto install
-    # via the relaunch resolver. The active-download guard reads
+    # ConnectionService.probe_reachability. The active-download guard reads
     # DownloadService's in-progress set (built earlier — no LateBinding).
     version_switch_service = VersionSwitchService(
         config=VersionSwitchServiceConfig(
@@ -806,9 +782,24 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             romm_api=cfg.adapters.romm_api,
             drift_probe=save_sync_service.check_local_drift,
             reachability_probe=connection_service.probe_reachability,
-            relaunch_resolver=relaunch_options_resolver,
             active_downloads=download_service.active_download_rom_ids,
             conflict_rules=conflict_rules,
+        ),
+    )
+
+    # Every start of a game: the resolver's command, handed to the launcher for that start only (#2221 D7, D15).
+    game_start_service = GameStartService(
+        config=GameStartServiceConfig(
+            uow_factory=cfg.callbacks.uow_factory,
+            active_core=active_core_resolver,
+            disc_resolver=disc_launch_resolver,
+            start_commands=cfg.adapters.start_commands,
+            handover=cfg.adapters.start_handover,
+            tender_folder=cfg.adapters.tender_folder,
+            start_folder=os.path.join(cfg.directories.data_dir, START_FOLDER),
+            loop=cfg.runtime.loop,
+            conflict_rules=conflict_rules,
+            log_debug=cfg.callbacks.log_debug,
         ),
     )
 
@@ -992,7 +983,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         update_output_service=update_output_service,
         session_lifecycle_service=session_lifecycle_service,
         game_process_service=game_process_service,
-        relaunch_options_resolver=relaunch_options_resolver,
+        game_start_service=game_start_service,
         leftover_tmp_cleanup_service=leftover_tmp_cleanup_service,
         controller_focus_service=controller_focus_service,
     )

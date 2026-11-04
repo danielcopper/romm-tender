@@ -190,12 +190,11 @@ describe("DiscSelector — selecting a disc", () => {
     vi.mocked(toaster.toast).mockReset();
   });
 
-  it("calls selectDisc then setLaunchOptionsConfirmed with the re-baked launch_options", async () => {
+  it("calls selectDisc and writes nothing to the shortcut", async () => {
     mockCachedDetail();
     vi.mocked(backend.getDiscSelection).mockResolvedValue(m3uSelection);
     vi.mocked(backend.selectDisc).mockResolvedValue({
       success: true,
-      launch_options: "flatpak run net.retrodeck.retrodeck '/roms/ff7 (Disc 2).cue'",
       selected: "ff7 (Disc 2).cue",
     });
 
@@ -207,10 +206,8 @@ describe("DiscSelector — selecting a disc", () => {
     });
 
     expect(backend.selectDisc).toHaveBeenCalledWith(42, "ff7 (Disc 2).cue");
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(
-      100,
-      "flatpak run net.retrodeck.retrodeck '/roms/ff7 (Disc 2).cue'",
-    );
+    // The next start opens the picked disc; the shortcut carries its appId.
+    expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
   });
 
   it("selecting the m3u default clears the pin via selectDisc(rid, null)", async () => {
@@ -218,7 +215,6 @@ describe("DiscSelector — selecting a disc", () => {
     vi.mocked(backend.getDiscSelection).mockResolvedValue({ ...m3uSelection, selected: "ff7 (Disc 2).cue" });
     vi.mocked(backend.selectDisc).mockResolvedValue({
       success: true,
-      launch_options: "flatpak run net.retrodeck.retrodeck '/roms/ff7.m3u'",
       selected: null,
     });
 
@@ -230,7 +226,7 @@ describe("DiscSelector — selecting a disc", () => {
     });
 
     expect(backend.selectDisc).toHaveBeenCalledWith(42, null);
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(100, "flatpak run net.retrodeck.retrodeck '/roms/ff7.m3u'");
+    expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
   });
 
   it("updates the icon-only face after a successful pick", async () => {
@@ -238,7 +234,6 @@ describe("DiscSelector — selecting a disc", () => {
     vi.mocked(backend.getDiscSelection).mockResolvedValue(m3uSelection);
     vi.mocked(backend.selectDisc).mockResolvedValue({
       success: true,
-      launch_options: "cmd '/roms/ff7 (Disc 3).cue'",
       selected: "ff7 (Disc 3).cue",
     });
 
@@ -328,8 +323,6 @@ describe("DiscSelector — event-driven re-fetch + cleanup", () => {
         rom_name: "Final Fantasy VII",
         platform_name: "PSX",
         file_path: "/roms/ff7.m3u",
-        app_id: 100,
-        launch_options: "cmd",
       };
       emitHostEvent<DownloadCompleteEvent>("download_complete", event);
       await Promise.resolve();
@@ -353,8 +346,6 @@ describe("DiscSelector — event-driven re-fetch + cleanup", () => {
         rom_name: "Other",
         platform_name: "PSX",
         file_path: "/roms/other.m3u",
-        app_id: 1,
-        launch_options: "cmd",
       });
       await Promise.resolve();
     });

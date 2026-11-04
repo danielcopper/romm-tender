@@ -34,7 +34,7 @@ vi.mock("./vanishedBinding", async (importOriginal) => ({
 }));
 
 vi.mock("./versionSwitchApplication", () => ({
-  applyCommittedVersionSwitch: vi.fn().mockResolvedValue({ confirmed: true, broadcast: true }),
+  applyCommittedVersionSwitch: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock("./toast", () => ({
@@ -196,7 +196,6 @@ describe("executeVersionSwitch", () => {
       app_id: 100,
       rom_id: 2,
       target_installed: true,
-      launch_options: "run",
     });
 
     await executeVersionSwitch({
@@ -224,12 +223,11 @@ describe("executeVersionSwitch", () => {
       app_id: 100,
       rom_id: 2,
       target_installed: true,
-      launch_options: "run",
     });
 
   it("has the caller read the list again when a committed switch was stopped short of its broadcast", async () => {
     committed();
-    vi.mocked(versionApp.applyCommittedVersionSwitch).mockResolvedValueOnce({ confirmed: true, broadcast: false });
+    vi.mocked(versionApp.applyCommittedVersionSwitch).mockResolvedValueOnce(false);
     const setSwitching = vi.fn();
     const onUnbroadcastSwitch = vi.fn();
 
@@ -250,7 +248,7 @@ describe("executeVersionSwitch", () => {
     committed();
     vi.mocked(versionApp.applyCommittedVersionSwitch).mockImplementationOnce(async () => {
       await pruneLease.releasePruneLeasesByOwner(leaseOwner);
-      return { confirmed: false, broadcast: false };
+      return false;
     });
     const onUnbroadcastSwitch = vi.fn();
 
@@ -267,25 +265,6 @@ describe("executeVersionSwitch", () => {
     await executeVersionSwitch({ appId: 100, target: mockTarget, leaseOwner, askUnsyncedSaves, onUnbroadcastSwitch });
 
     expect(onUnbroadcastSwitch).not.toHaveBeenCalled();
-  });
-
-  it("warns user if shortcut confirm fails on successful switch", async () => {
-    vi.mocked(backend.switchVersion).mockResolvedValueOnce({
-      success: true,
-      app_id: 100,
-      rom_id: 2,
-      target_installed: true,
-      launch_options: "run",
-    });
-    vi.mocked(versionApp.applyCommittedVersionSwitch).mockResolvedValueOnce({ confirmed: false, broadcast: true });
-
-    await executeVersionSwitch({
-      appId: 100,
-      target: mockTarget,
-      leaseOwner,
-      askUnsyncedSaves,
-    });
-    expect(toast.showToast).toHaveBeenCalledWith("Switched — re-switch if launch fails");
   });
 
   it("handles soft-block unsynced saves when user cancels", async () => {
@@ -328,7 +307,6 @@ describe("executeVersionSwitch", () => {
         app_id: 100,
         rom_id: 2,
         target_installed: true,
-        launch_options: "run",
       });
     askUnsyncedSaves.mockResolvedValueOnce("switch_anyway");
 
@@ -360,7 +338,6 @@ describe("executeVersionSwitch", () => {
         app_id: 100,
         rom_id: 2,
         target_installed: true,
-        launch_options: "run",
       });
     askUnsyncedSaves.mockResolvedValueOnce("sync_and_switch");
     vi.mocked(backend.syncRomSaves).mockResolvedValueOnce({

@@ -1,15 +1,26 @@
 /**
  * The words for an emulator a game or a platform cannot start with, and for a
- * stored pick whose label no longer exists (#2195 D5, D7, D23). One home
- * for each sentence: the game page, the platform page and a refused start —
- * the Play button's and Steam's own — say the same words.
+ * stored pick whose label no longer exists (#2195 D5, D7, D23), and for an entry
+ * the resolver gives no complete start command for (#2221 D2, D20). One home
+ * for each sentence: the game page, the emulator menu, the platform page and a
+ * refused start — the Play button's and Steam's own — say the same words.
  */
 
 import { getPlatformCoreInfo, logError } from "../api/backend";
-import type { CoreInfo, EmulatorOption, EmulatorStart, GameLaunch, SourceDefault, VanishedPick } from "../types";
-import { notEstablishedCause } from "./emulatorInstallation";
+import type {
+  CoreInfo,
+  EmulatorOption,
+  EmulatorStart,
+  GameLaunch,
+  SourceDefault,
+  StartCommandReason,
+  StartCommandVerdict,
+  StartRemark,
+  VanishedPick,
+} from "../types";
+import { installationSentence, isNotEstablished, notEstablishedCause } from "./emulatorInstallation";
 import { launchRefusal } from "./gameLaunch";
-import { sourceName } from "./emulatorSourceWording";
+import { cannotStartSentence, sourceName } from "./emulatorSourceWording";
 import { LOCAL_CALL_LIMIT_MS } from "./launchGate";
 import { withTimeout } from "./withTimeout";
 
@@ -17,7 +28,7 @@ const CHOOSE_ANOTHER = " Choose another emulator in the emulator menu.";
 
 /**
  * Whether the emulator menu offers *entry* as a pick: every entry but one the
- * resolver states not installed (#2195 D9, D23), whether Tender can bake it or not.
+ * resolver states not installed (#2195 D9, D23), whether Tender can start a game with it or not.
  */
 export function isChoosable(entry: EmulatorOption): boolean {
   return entry.reason !== "not_installed";
@@ -37,6 +48,80 @@ export function gameCanPickAnother(emulators: readonly EmulatorOption[], activeL
 }
 
 /**
+ * Why the resolver gives no complete command for an entry, as the words after "Tender cannot start <entry> yet: ".
+ * A reason this map does not hold reads as the command not being read.
+ */
+const COMMAND_REFUSED_BECAUSE: Record<Exclude<StartCommandReason, "entry_unknown">, string> = {
+  command_unread: "how ES-DE starts it could not be read",
+  desktop_file: "it starts through a .desktop file",
+  injected_file_unread: "a file its command reads in could not be read",
+  no_program: "its command names no program",
+  rom_root_unknown: "where its games are kept could not be established",
+  command_too_long: "its command is longer than can be read",
+  frontend_build_unread: "which ES-DE build the source ships could not be read",
+  environment_unread: "what it needs from RetroDECK's start could not be read",
+  environment_unknown: "what it needs from RetroDECK's start is not known yet",
+  folder_unplaced: "the folder it starts in could not be placed",
+};
+
+/** The words for a launch-command refusal: its own, else that the command could not be read. */
+function commandRefusedBecause(reason: string): string {
+  return reason in COMMAND_REFUSED_BECAUSE
+    ? COMMAND_REFUSED_BECAUSE[reason as keyof typeof COMMAND_REFUSED_BECAUSE]
+    : COMMAND_REFUSED_BECAUSE.command_unread;
+}
+
+/** Whether `reason` is one of the resolver's launch-command refusals rather than the entry's installation. */
+function isCommandReason(reason: string | null): boolean {
+  return reason !== null && (reason in COMMAND_REFUSED_BECAUSE || reason === "entry_unknown");
+}
+
+/** The reason a start is refused where the answering source is one Tender starts no game through yet (#2221 D21). */
+const SOURCE_STARTS_NO_GAMES = "source_starts_no_games";
+
+/** Whether `reason` refuses the start for the entry's command or its installation — what is said beside the file's
+ *  own refusal rather than instead of it (#2221 D20, #2698 D8). */
+function isEntryStartReason(reason: string | null): boolean {
+  return isCommandReason(reason) || isNotEstablished(reason);
+}
+
+/**
+ * What the emulator menu says under an entry about the resolver's command for the game, or `null`, and whether
+ * Tender can start the game with it: a refusal for the answering source names that source (#2221 D21), one for the
+ * entry's installation says nothing beside the row's own note, any other one says why (#2221 D20).
+ */
+export function startVerdictLine(verdict: StartCommandVerdict | null): { tenderStarts: boolean; line: string | null } {
+  if (verdict === null || verdict.starts || verdict.reason === null || verdict.reason === "not_installed") {
+    return { tenderStarts: true, line: null };
+  }
+  if (verdict.reason === SOURCE_STARTS_NO_GAMES)
+    return { tenderStarts: false, line: cannotStartSentence(verdict.source ?? "") };
+  if (isNotEstablished(verdict.reason)) return { tenderStarts: false, line: null };
+  return { tenderStarts: false, line: commandRefusalLine(verdict.reason) };
+}
+
+/** Why the resolver gives no complete command for `entry`, as one sentence (#2221 D2). */
+export function commandRefusalSentence(reason: string, entry: string): string {
+  if (reason === "entry_unknown") return `Your choice '${entry}' no longer exists in its emulator source.`;
+  return `Tender cannot start ${entry} yet: ${commandRefusedBecause(reason)}.`;
+}
+
+/** The emulator menu's short line for an entry the resolver gives no complete command for (#2221 D20). */
+export function commandRefusalLine(reason: string): string {
+  if (reason === "entry_unknown") return "no longer exists in its emulator source";
+  return `Tender cannot start it yet: ${commandRefusedBecause(reason)}`;
+}
+
+/** What is said beside a start the resolver's command lets go ahead, one sentence each (#2708 D1). */
+export function startRemarkSentences(remarks: readonly StartRemark[] | undefined): string[] {
+  return (remarks ?? []).map((remark) =>
+    remark.placeholder === null
+      ? "ES-DE leaves a placeholder unfilled in this command."
+      : `ES-DE leaves ${remark.placeholder} unfilled in this command.`,
+  );
+}
+
+/**
  * Why a start with this answer is refused, as one sentence about `subject`
  * ("this game", "these games"), or `null` where nothing stands in its way.
  * `canPick` says the emulator menu offers another entry; only then does the
@@ -44,26 +129,27 @@ export function gameCanPickAnother(emulators: readonly EmulatorOption[], activeL
  */
 export function emulatorStartRefusal(start: EmulatorStart, subject: string, canPick: boolean): string | null {
   const entry = start.entry ?? "The emulator";
-  const pointer = canPick ? CHOOSE_ANOTHER : "";
-  if (start.state === "cannot_start") {
-    switch (start.reason) {
-      case "not_installed":
-        return `${entry} is not installed, so ${subject} cannot start.${pointer}`;
-      case "start_script_runs_nothing":
-        return `RetroDECK's start script cannot start ${entry}, so ${subject} cannot start.${pointer}`;
-      case "not_bakeable":
-        return `Tender cannot start ${entry} yet.${pointer}`;
-      default:
-        return `${entry} cannot start ${subject}.${pointer}`;
-    }
-  }
-  if (start.state === "choose") {
-    const cause = notEstablishedCause(start.reason);
-    const why = cause === null ? "" : ` (${cause})`;
-    const choose = canPick ? " Choose an emulator in the emulator menu." : "";
-    return `No emulator is the default, because whether ${entry} is installed could not be established${why}.${choose}`;
-  }
+  if (start.state === "cannot_start") return cannotStartRefusal(start, entry, subject, canPick ? CHOOSE_ANOTHER : "");
+  if (start.state === "choose") return noDefaultRefusal(start.reason, entry, canPick);
   return null;
+}
+
+/** {@link emulatorStartRefusal} for a `cannot_start` answer, `pointer` ending the sentence where one is said. */
+function cannotStartRefusal(start: EmulatorStart, entry: string, subject: string, pointer: string): string {
+  const reason = start.reason;
+  if (reason === "not_installed") return `${entry} is not installed, so ${subject} cannot start.${pointer}`;
+  if (reason === SOURCE_STARTS_NO_GAMES) return cannotStartSentence(start.source ?? "");
+  if (reason !== null && isNotEstablished(reason)) return `${installationSentence(entry, reason)}${pointer}`;
+  if (reason !== null && isCommandReason(reason)) return `${commandRefusalSentence(reason, entry)}${pointer}`;
+  return `${entry} cannot start ${subject}.${pointer}`;
+}
+
+/** {@link emulatorStartRefusal} for a `choose` answer: no default, the shipped entry's installation not established. */
+function noDefaultRefusal(reason: string | null, entry: string, canPick: boolean): string {
+  const cause = notEstablishedCause(reason);
+  const why = cause === null ? "" : ` (${cause})`;
+  const choose = canPick ? " Choose an emulator in the emulator menu." : "";
+  return `No emulator is the default, because whether ${entry} is installed could not be established${why}.${choose}`;
 }
 
 /** Whether this answer refuses a start. */
@@ -109,16 +195,22 @@ export function frontendChoiceSentence(
   return `${chosen.label} is chosen in ES-DE; Tender starts this game with the emulator chosen in its emulator menu.`;
 }
 
+/** The sentence for a game no emulator starts: no entry is in effect, or its system lists none (#2221 D20). */
+export const NO_EMULATOR_STARTS = "No emulator starts this game.";
+
 /**
  * Why a game cannot start, or `null`: its emulator's refusal first, then its
- * file's (#2195 D2) — except that Tender's own "cannot start it yet" gives way
- * to the resolver's refusal of the file, which says more (D42). The one
- * composition the game page and a refused start both say.
+ * file's (#2195 D2) — except where the resolver gives no complete command for
+ * the entry: then both are said, the file's first (#2221 D20, #2698 D8). A game
+ * no emulator starts says so. The one composition the game page and a refused
+ * start both say.
  */
 export function startRefusal(start: EmulatorStart, launch: GameLaunch | null, canPick: boolean): string | null {
+  if (start.state === "no_entry") return NO_EMULATOR_STARTS;
   const emulator = emulatorStartRefusal(start, "this game", canPick);
   const file = launchRefusal(launch, canPick);
-  return start.reason === "not_bakeable" ? (file ?? emulator) : (emulator ?? file);
+  if (isEntryStartReason(start.reason) && file !== null && emulator !== null) return `${file} ${emulator}`;
+  return emulator ?? file;
 }
 
 /**

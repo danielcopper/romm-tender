@@ -387,16 +387,21 @@ async def test_detached_writer_lifetime_blocks_prune_start(harness, monkeypatch,
     await running
 
 
-async def test_frontend_core_continuation_lease_blocks_prune_until_ack(harness, monkeypatch):
+async def _switch_with_a_lease(harness, monkeypatch) -> str:
+    """A version switch's answer, whose lease covers the frontend's Steam writes after it."""
+
+    async def move_binding(_app_id, _target_rom_id, _allow_stranded):
+        return {"success": True, "rom_id": 41, "target_installed": False, "app_id": 0x80000041}
+
+    monkeypatch.setattr(harness.app.services.version_switch_service, "_move_binding", move_binding)
+    return (await harness.endpoints.switch_version(0x80000041, 41, False))["prune_lease_token"]
+
+
+async def test_frontend_switch_continuation_lease_blocks_prune_until_ack(harness, monkeypatch):
     _seed_bulk_candidate(harness)
     preview = await harness.endpoints.get_prune_preview(_preview_request())
 
-    def set_game_core_io(_rom_id, _label):
-        return {"success": True, "app_id": 0x80000001, "launch_options": "launch"}
-
-    monkeypatch.setattr(harness.app.services.core_service, "_set_game_core_io", set_game_core_io)
-    result = await harness.endpoints.set_game_core(41, "core")
-    token = result["prune_lease_token"]
+    token = await _switch_with_a_lease(harness, monkeypatch)
 
     blocked = await harness.endpoints.start_prune(
         {
@@ -610,11 +615,7 @@ async def test_stage_selection_rejects_a_page_after_the_selection_was_finalized(
 async def test_conflict_lease_renewal_extends_a_live_lease_and_denies_a_released_one(harness, monkeypatch):
     _seed_bulk_candidate(harness)
 
-    def set_game_core_io(_rom_id, _label):
-        return {"success": True, "app_id": 0x80000041, "launch_options": "launch"}
-
-    monkeypatch.setattr(harness.app.services.core_service, "_set_game_core_io", set_game_core_io)
-    token = (await harness.endpoints.set_game_core(41, "core"))["prune_lease_token"]
+    token = await _switch_with_a_lease(harness, monkeypatch)
 
     assert await harness.endpoints.renew_prune_conflict_lease(token) == {
         "success": True,

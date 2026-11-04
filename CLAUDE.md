@@ -482,9 +482,11 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `AppDirectories`** — prompt-only — `domain/app_directories.py` is the pure ladder (`TENDER_*`, then XDG, then the
   built-in defaults); `main.run()` resolves it once and hands it to `bootstrap()`, which derives nothing, and
   `RuntimeBundle` carries no directory. Re-derivable data goes under `cache_dir`, data that is not re-derivable under
-  `data_dir`, and nothing under `bin_dir` is ours to remove. Nothing mechanical tells its seven `str` fields apart. A
-  second read of `TENDER_CODE_DIR` is deliberate: `domain/update_release.py::resolve_update_source` asks whether the
-  variable was SET, which `AppDirectories.code_dir` has already erased
+  `data_dir`, and nothing under `bin_dir` is ours to remove. Nothing mechanical tells its eight fields apart. The one
+  reader outside the backend is `bin/tender-rom-launcher`, which starts without it and spells the hand-over folder from
+  `XDG_RUNTIME_DIR` itself, as `AppDirectories.handover_dir` does. A second read of `TENDER_CODE_DIR` is deliberate:
+  `domain/update_release.py::resolve_update_source` asks whether the variable was SET, which `AppDirectories.code_dir`
+  has already erased
 - **The identifier's four homes are never derived from one another — in particular `APP_DIR_NAME`
   (`domain/user_data_location.py`) is never read from `PACKAGE_NAME` (`domain/identity.py`), and the database's file
   name `DB_FILENAME` (`bootstrap/adapters.py`) from neither** — test + prompt-only —
@@ -523,30 +525,30 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `Application.shutdown` cancels and awaits its tasks there; a task `gather` or `shield` makes from a coroutine its
   caller awaits on the spot is outside the rule, and so are `host/`, `_vendor/` and `native/`** — check —
   `scripts/check_background_tasks.py` (AST call names, no pragma); what it does not see is listed in its docstring
-- **A library-sync seam is held only by the module owning the job it belongs to — in `services/library/`, `active_core`
-  / `disc_resolver` / `emulator_sources` by `shortcut_launch_resolver.py`, `renderer_rss` / `renderer_gc` by
-  `session_budget.py`, and `artwork` by `cover_preparer.py` **and** `reporter.py`, the one confinement with two owners,
-  never a third. No module of the package but a seam's owner names it — `bootstrap/library.py` hands each to its owner's
-  config, so a seam named anywhere else in the package, the façade included, is a finding** — check —
-  `scripts/check_seam_owner.py` (an aliased seam, a `getattr`, or a seam passed positionally into a helper slips past
-  it); unchecked: `shortcut_launch_resolver`'s install-path read UoW is never held across the `active_core` seam's calls
-  (`check_uow_seam_nesting.py` catches only the inline form)
+- **A library-sync seam is held only by the module owning the job it belongs to — in `services/library/`, `renderer_rss`
+  / `renderer_gc` by `session_budget.py` and `artwork` by `cover_preparer.py` **and** `reporter.py`, the one confinement
+  with two owners, never a third; `active_core` / `disc_resolver` / `emulator_sources` by no module, because a shortcut
+  carries nothing about what starts its game. No module of the package but a seam's owner names it —
+  `bootstrap/library.py` hands each to its owner's config, so a seam named anywhere else in the package, the façade
+  included, is a finding** — check — `scripts/check_seam_owner.py` (an aliased seam, a `getattr`, or a seam passed
+  positionally into a helper slips past it)
 - **The resolver's answer is read only in the adapter that asks for it — `adapters/atlas_catalogue.py`,
-  `atlas_firmware.py`, `atlas_platforms.py`, `atlas_saves.py`, `emulator_sources.py` and `retrodeck_folders.py`: only
-  they import the resolver, and only names in `atlas.__all__`; outside them no backend module and no panel code names
-  one of the resolver's codes, a distinctive value of any other closed vocabulary it exports or one of its distinctive
-  answer field names; and every caveat, health-issue, unresolved and reason code the vendored resolver states is
-  classified by one of them or stands on the list of codes nothing classifies today. Only infrastructure and homonyms
-  are excepted: by name, each with its reason, `adapters/atlas_zstd.py` imports the resolver to hand it the zstd codec
-  and `adapters/emulator_sources.py` holds `RealMachine` (`IMPORT_GRANTS`, `INTERNALS_GRANTED`); `tests/` is excepted as
-  a whole, because tests build the resolver's machines and answers rather than read an answer for display; and a name
-  that means something else in a module stands on `NOT_THE_RESOLVERS`, in the backend's check and in the panel's rule.
-  The modules that read the answer today (`READERS_TODAY`, `RESOLVER_READERS_TODAY`), `atlas_firmware.py`'s three
-  private imports (`INTERNALS_TO_REMOVE`), the homonyms, the generic words left unwatched (`GENERIC_VALUES`, and in the
-  panel alone `PANEL_GENERIC_VALUES`) and the codes nothing classifies (`_UNCLASSIFIED`) stand on lists that only
-  shrink** — check + test + prompt-only — `scripts/check_resolver_reading.py` (the backend's imports and vocabulary, and
-  that `frontend/resolver-vocabulary.json` is what it writes today; what it does not see is listed in its docstring),
-  the ESLint rule `tender/no-resolver-vocabulary` in `frontend/eslint.config.js`, kept live by
+  `atlas_firmware.py`, `atlas_launch.py`, `atlas_platforms.py`, `atlas_saves.py`, `emulator_sources.py` and
+  `retrodeck_folders.py`: only they import the resolver, and only names in `atlas.__all__`; outside them no backend
+  module and no panel code names one of the resolver's codes, a distinctive value of any other closed vocabulary it
+  exports or one of its distinctive answer field names; and every caveat, health-issue, unresolved and reason code the
+  vendored resolver states is classified by one of them or stands on the list of codes nothing classifies today. Only
+  infrastructure and homonyms are excepted: by name, each with its reason, `adapters/atlas_zstd.py` imports the resolver
+  to hand it the zstd codec and `adapters/emulator_sources.py` holds `RealMachine` (`IMPORT_GRANTS`,
+  `INTERNALS_GRANTED`); `tests/` is excepted as a whole, because tests build the resolver's machines and answers rather
+  than read an answer for display; and a name that means something else in a module stands on `NOT_THE_RESOLVERS`, in
+  the backend's check and in the panel's rule. The modules that read the answer today (`READERS_TODAY`,
+  `RESOLVER_READERS_TODAY`), `atlas_firmware.py`'s three private imports (`INTERNALS_TO_REMOVE`), the homonyms, the
+  generic words left unwatched (`GENERIC_VALUES`, and in the panel alone `PANEL_GENERIC_VALUES`) and the codes nothing
+  classifies (`_UNCLASSIFIED`) stand on lists that only shrink** — check + test + prompt-only —
+  `scripts/check_resolver_reading.py` (the backend's imports and vocabulary, and that
+  `frontend/resolver-vocabulary.json` is what it writes today; what it does not see is listed in its docstring), the
+  ESLint rule `tender/no-resolver-vocabulary` in `frontend/eslint.config.js`, kept live by
   `frontend/src/eslintNoResolverVocabulary.test.ts`, and `tests/adapters/test_resolver_codes.py` (a code is classified
   once a reading module imports its constant). Unseen by the ESLint rule: a second site in a listed or excepted file
   reading the name it stands there for; a name as a plain string (`"satisfied" in row`, `Pick<T, "satisfied">`,
@@ -559,16 +561,14 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   vocabularies (`"rejected"`); and a watched value handed on through a parameter or a field of Tender's own name. Unseen
   by the classification test: whether a reading module that names a code reads it rightly. Prompt-only: an entry on
   `NOT_THE_RESOLVERS` is a name that means something else in its module, never a read of the resolver's answer; a code
-  the resolver adds is classified by a reading module rather than added to the list — except a code of an answer no
-  reading module reads yet (`launch_command`'s codes), which waits there with that answer's other codes until its
-  reading module classifies them ([#2644](https://github.com/danielcopper/romm-tender/issues/2644) D1,
-  [#2658](https://github.com/danielcopper/romm-tender/issues/2658) D1); Tender keeps no table of its own for anything
-  the resolver answers (find rules, launch command patterns, launch-file types, RomM regions); a join is on the
-  resolver's keys (`declared`, `(emulator, declared_index)`), never on `file_name` alone or a label; where the resolver
-  gives no answer, Tender says it could not be established and an emu-atlas issue asks for it; no decision is proposed
-  that lets Tender work out a fact the resolver states — because the resolver is slow, cannot answer yet, or another
-  page already does it; and the derivations and imports on today's lists stand until the issue that builds their kind's
-  reading module removes them (#2579 D5): fixing one is not a finding, extending one or copying it to a new page is
+  the resolver adds is classified by a reading module rather than added to the list; Tender keeps no table of its own
+  for anything the resolver answers (find rules, launch command patterns, launch-file types, RomM regions); a join is on
+  the resolver's keys (`declared`, `(emulator, declared_index)`), never on `file_name` alone or a label; where the
+  resolver gives no answer, Tender says it could not be established and an emu-atlas issue asks for it; no decision is
+  proposed that lets Tender work out a fact the resolver states — because the resolver is slow, cannot answer yet, or
+  another page already does it; and the derivations and imports on today's lists stand until the issue that builds their
+  kind's reading module removes them (#2579 D5): fixing one is not a finding, extending one or copying it to a new page
+  is
 - **The resolver's installations are detected in one place, `adapters/emulator_sources.py`, through the one
   `RealMachine` the process keeps; every other adapter asks it, and a game's questions go to the source
   `domain/emulator_sources.py::answering_source` names** — test + prompt-only —
@@ -949,18 +949,17 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   bare `self`; `tests/` and `scripts/`; a file it cannot read or parse, which it skips without a word. This list is the
   one home of what the check misses; the script's docstring and Database Design point here. Prompt-only: those shapes,
   and the repository's column writers, which assign no field and so are no field assignment to the check.
-  `RomRepository`'s `set_selected_disc`, `set_chosen_sgdb_id`, `set_artwork_checked_at` and `set_applied_launch_options`
-  each persist one column the aggregate's own verb has just set, and `set_emulator_override` the two
-  (`emulator_override` and `emulator_override_source`) `Rom.pin_emulator_override` has just set, so the sync upsert
-  never touches them; `set_fs_size_bytes` persists the size `Rom.record_fs_size_bytes` has just set into a column the
-  sync upsert also writes. Two more change aggregate state with no verb:
-  `RomRepository.clear_all_applied_launch_options` (Force Full Sync, the reset the `applied_launch_options` entry
-  sanctions) and `PlatformSyncStateRepository.revoke_skip` (by design, `domain/platform_sync_state.py`'s docstring)
-- **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, PlatformSystems, uow_factory) is called while a
-  UoW is open on the same path** — check — `scripts/check_uow_seam_nesting.py`, first seam family (a seam reached as a
-  bound method, through a helper, a local alias or a nested `def`/`lambda`, inside a UoW opened through a factory
-  attribute not ending in `uow_factory`, a `__call__`-only seam, and a seam whose implementation later grows a UoW open
-  slip past it)
+  `RomRepository`'s `set_selected_disc`, `set_chosen_sgdb_id`, `set_artwork_checked_at` and `set_shortcut_applied` each
+  persist one column the aggregate's own verb has just set, and `set_emulator_override` the two (`emulator_override` and
+  `emulator_override_source`) `Rom.pin_emulator_override` has just set, so the sync upsert never touches them;
+  `set_fs_size_bytes` persists the size `Rom.record_fs_size_bytes` has just set into a column the sync upsert also
+  writes. Two more change aggregate state with no verb: `RomRepository.clear_all_shortcut_applied` (Force Full Sync, the
+  reset the `shortcut_applied` entry sanctions) and `PlatformSyncStateRepository.revoke_skip` (by design,
+  `domain/platform_sync_state.py`'s docstring)
+- **No UoW-opening seam (ActiveCoreResolver, PlatformSystems, uow_factory) is called while a UoW is open on the same
+  path** — check — `scripts/check_uow_seam_nesting.py`, first seam family (a seam reached as a bound method, through a
+  helper, a local alias or a nested `def`/`lambda`, inside a UoW opened through a factory attribute not ending in
+  `uow_factory`, a `__call__`-only seam, and a seam whose implementation later grows a UoW open slip past it)
 - **No file-I/O seam is called while a UoW is open — a Unit of Work wraps database reads and writes, never file or
   server I/O** — check — `scripts/check_uow_seam_nesting.py`, second seam family (`IO_SEAM_METHODS`, which carries each
   `__call__`-only seam's bound attribute); one `# pragma: no uow-check` suppresses the line for both families.
@@ -1135,7 +1134,7 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `domain/emulator_pick.py::pick_for`, while its label exists, else the shipped default whatever its state; the
   platform's core read names the pick or Tender's default, #2195 D4), `.label` and `.emulator` come off one call, the
   key is the emulator identity and never `.core_so`, and both game-page services ask `ActiveCoreReader.resolve_rom` —
-  the picker for its rows, the BIOS question for the chosen entry whether or not it can be baked — never
+  the picker for its rows, the BIOS question for the chosen entry whether or not it can start — never
   `active_core_for_rom`; the one-of groups an answer judges are that same pick's (`groups_for(identity)`), and so are
   the rows (`FirmwareCatalogue.placements_for(identity)`, #2190 D2/D9); every other emulator's answer is an entry of its
   own (`emulator_tabs`) the BIOS tables' emulator selector shows, which never changes the level, the header's counts or
@@ -1296,14 +1295,14 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `tests/services/saves/test_status.py::TestTheStatusReadAndAnAdopt`. Prompt-only: a new consumer of an adopting `Skip`
   adopts through `SaveTransfer.adopt_server_head` when it reads `acknowledge`, and records through
   `SaveTransfer.record_server_head` only when it does not
-- **`applied_launch_options` is written only by the six recorded-state writer sites (sync ack-commit, download-complete,
-  adopt-complete, uninstall, home-migration, version-switch), each recording the exact command the frontend wrote;
-  excluded from the sync UPSERT; the only sanctioned reset is Force Full Sync's clear-to-NULL** — test + prompt-only —
-  each writer site carries a value-exact test; new launch-options write paths are prompt-only — mechanize via a
-  `set_applied_launch_options` / `record_applied_launch_options` call-site audit. Download- and adopt-complete share one
-  code site, `RomInstallRecorder.do_record_applied_launch_options`; the uninstall site —
-  `RomRemovalService._drop_install_record` for one ROM, `_uninstall_all_roms_io` for the bulk run — also serves "Forget
-  this download" (`forget_download`), which is therefore not a seventh writer site
+- **`roms.shortcut_applied` is set only by the sync's commit, for a binding target (`SyncReporter`, through
+  `Rom.record_shortcut_applied` and `set_shortcut_applied`); excluded from the sync UPSERT; the only sanctioned reset is
+  Force Full Sync's clear (`clear_all_shortcut_applied`)** — test + prompt-only —
+  `tests/services/library/test_reporter.py`
+  (`TestCommitUnitResults::test_commit_records_the_shortcut_applied_for_binding_target`,
+  `TestClearSyncCache::test_clears_every_applied_shortcut_so_the_next_apply_skips_nothing`) and
+  `tests/adapters/repositories/test_rom.py::TestShortcutApplied`; a new writer is prompt-only — mechanize via a
+  `set_shortcut_applied` call-site audit
 - **An abandoned-chunk stash's whole-unit apply staging (`pending_sync` / `pending_all_roms` / `pending_cover_sources` /
   `pending_followed_keys`) is never mutated while the stash is pending (box IDLE) — every run-entry path passes
   `try_begin_run`, which clears the stash before any staging write** — prompt-only — mechanize via a staging-writer

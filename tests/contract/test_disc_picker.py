@@ -128,12 +128,10 @@ async def test_get_disc_selection_unknown_rom_not_multi(harness):
 
 
 async def test_select_disc_pin_happy_path(harness):
-    """Pinning a valid disc succeeds, persists, and bakes its path."""
+    """Pinning a valid disc succeeds and persists; the next start opens it."""
     _seed_multi_disc_install(harness, 10, disc_names=[_DISC1, _DISC2])
     result = await harness.endpoints.select_disc(10, _DISC2)
-    assert result["success"] is True
-    assert result["selected"] == _DISC2
-    assert _DISC2 in result["launch_options"]
+    assert result == {"success": True, "selected": _DISC2}
     # Pin persisted — a follow-up read reflects it.
     follow_up = await harness.endpoints.get_disc_selection(10)
     assert follow_up["selected"] == _DISC2
@@ -143,9 +141,7 @@ async def test_select_disc_clear_to_default(harness):
     """Clearing with literal None resets to the default and persists NULL."""
     _seed_multi_disc_install(harness, 11, disc_names=[_DISC1, _DISC2], selected_disc=_DISC2)
     result = await harness.endpoints.select_disc(11, None)
-    assert result["success"] is True
-    assert result["selected"] is None
-    assert _DISC1 in result["launch_options"]  # default → disc 1
+    assert result == {"success": True, "selected": None}
     follow_up = await harness.endpoints.get_disc_selection(11)
     assert follow_up["selected"] is None
 

@@ -1900,7 +1900,7 @@ the save change to the page and then launch. A path supplies only what is its ow
 | Tracking setup                     | `ensureTrackingConfiguredBigPicture` — an answer it cannot settle aborts and opens the Saves tab (`applyLaunchGateSetupOutcome`) | `ensureTrackingConfiguredSilently` — adopts a default silently and always proceeds | `ensureTrackingConfiguredSilently`, as the launch watcher's                         |
 | Toast for a sync that moved saves  | yes                                                                                                                              | no                                                                                 | yes                                                                                 |
 | A start that ends without a launch | the trigger returns to Play, or to Resolve Conflict after a cancelled conflict                                                   | nothing of its own; a pending migration is toasted                                 | the button returns to Play, or to Resolve Conflict after a cancelled conflict       |
-| Acting on a verdict throws         | the trigger returns to Play                                                                                                      | fails open: the game starts (bare relaunch)                                        | the button returns to Play                                                          |
+| Acting on a verdict throws         | the trigger returns to Play                                                                                                      | the start is refused, toasted in the error's own words                             | the button returns to Play                                                          |
 
 The watcher has no surface of its own, so `index.tsx` hands it a function rather than a set of prompts:
 `() => launchPromptsForThisStart(gamepadLaunchPrompts)` (`frontend/src/utils/launchPromptRouter.ts`), which it calls
@@ -1921,9 +1921,10 @@ reported by a value that fits in 32 bits, the shortcut's game ID from Steam's ap
 The start is cancelled before the watcher asks the backend anything, and an endpoint call has no timeout: it waits for a
 backend that is away, and one uninstalled while Steam keeps running never comes back. So the watcher's first backend
 contact — the map refresh below, when one is needed, and the installed check — races `FIRST_CONTACT_DEADLINE_MS` (5 s).
-Past it the watcher fails open: it starts the game again without the pre-launch sync, shows "Tender isn't responding —
-started without syncing saves." and logs it. An answer that arrives after the deadline is abandoned and starts nothing
-more. The later steps are not bounded by this deadline but by limits of their own, which both funnels share (below).
+Past it the start is refused: nothing can be handed to the launcher without the backend
+([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D19), so the watcher shows "Tender isn't responding —
+couldn't start the game." and logs it. An answer that arrives after the deadline is abandoned and starts nothing more.
+The later steps are not bounded by this deadline but by limits of their own, which both funnels share (below).
 
 Neither funnel waits for the backend without end. Every backend call the gate makes has a limit: `LOCAL_CALL_LIMIT_MS`
 (5 s) for the calls that stay on this machine — `check_start_source`, `is_save_tracking_configured`,
@@ -1937,14 +1938,14 @@ with them too the backend calls it waits for while handling Steam's start and st
 "Save Sync Unavailable" dialog, reading "Couldn't check your saves in time — launch with local saves?". The limit can
 expire on a slow RomM while Tender itself is fine, and `check_local_drift`'s while another holder keeps the game's
 `rom_lock` (step 8 below), which is why the dialog does not blame either. "Launch Anyway" starts the game on the local
-save without re-confirming the launch options, because that re-confirm asks the same backend and its own timeout stops a
-start; "Cancel" leaves the game unstarted — the Play button back on Play, the watcher's start still cancelled. An answer
-that arrives after the dialog appeared starts nothing more. The one exception is `check_start_source`, whose every
-unanswered case — no answer, a failed call, a failed detection — asks a question of its own instead of opening that
-dialog ([Which emulator source answers](core-emulator-selection.md#which-emulator-source-answers)). A wait on the user's
-answer in a dialog is never bounded. One wait has no limit: once an action is picked in the conflict dialog, the dialog
-waits for `resolve_sync_conflict` with its Cancel disabled
-([#2176](https://github.com/danielcopper/romm-tender/issues/2176)).
+save, its start prepared as every start is (step 9 below) — a backend that is still silent refuses it there, with
+"Tender isn't responding — couldn't start the game." (#2221 D19); "Cancel" leaves the game unstarted — the Play button
+back on Play, the watcher's start still cancelled. An answer that arrives after the dialog appeared starts nothing more.
+The one exception is `check_start_source`, whose every unanswered case — no answer, a failed call, a failed detection —
+asks a question of its own instead of opening that dialog
+([Which emulator source answers](core-emulator-selection.md#which-emulator-source-answers)). A wait on the user's answer
+in a dialog is never bounded. One wait has no limit: once an action is picked in the conflict dialog, the dialog waits
+for `resolve_sync_conflict` with its Cancel disabled ([#2176](https://github.com/danielcopper/romm-tender/issues/2176)).
 
 **The pre-launch sync goes on past its limit, and no start goes past it without the user.** The backend gives it no time
 limit of its own: `SyncEngine.pre_launch_sync` waits for the device gate and for the game's `rom_lock` until each is
@@ -1961,8 +1962,8 @@ sync is running, or Tender is not answering. Its three answers:
   the first limit — the game starts, or the conflict or fallback dialog asks. One that does not brings the question
   back, with its reason read again.
 - **Play Anyway** calls `stop_pre_launch_sync`, waits for its answer within `LOCAL_CALL_LIMIT_MS`, and starts the game,
-  re-confirming the launch options. After "Tender is not answering" the stop is sent without waiting for it and the
-  start skips the re-confirm, as "Launch Anyway" does after a step that got no answer.
+  its start prepared (step 9 below). After "Tender is not answering" the stop is sent without waiting for it; the start
+  is still prepared, and refused if that gets no answer either.
 - **Cancel** starts nothing — the Play button back on Play, the watcher's start still cancelled. The sync runs to its
   end, since no game is running; its late answer tells the game's page to re-read its saves, and on the Play button a
   sync that moved saves is toasted as an answered one is.
@@ -2050,9 +2051,13 @@ The Play button's path:
    waits while another holder — a sync of the same game, say — keeps the lock; held past `LOCAL_CALL_LIMIT_MS`, Play
    gets the "Save Sync Unavailable" dialog ("Couldn't check your saves in time", Launch Anyway offered) instead of
    starting at once.
-9. Re-confirm: `get_rom_relaunch_options`, bounded at 3 s, heals the shortcut's launch options. A timeout stops the
-   launch and the button returns to Play. A start chosen in the dialog after a check that got no answer skips this step,
-   and so does Play Anyway after "Tender is not answering".
+9. Prepare the start: `prepare_game_start`, bounded at 3 s, hands the resolver's command to the launcher for this start
+   and answers the shortcut's launch options, its appId, which are confirm-set back onto it
+   ([Core and Emulator Selection](core-emulator-selection.md#the-start-one-command-handed-over-for-one-start)). A
+   refusal, a failed call and no answer in time each stop the start with a toast saying why, and the button returns to
+   Play (#2221 D19); a Steam write that fails does not. Every start goes through it — one chosen in a dialog after a
+   check that got no answer included — except a press that brings a game already running to the front, which starts
+   nothing.
 10. `SteamClient.Apps.RunGame`, with the button on "Launching...".
 
 Every backend call in steps 3–8 has the limit stated above, and one that expires ends in the "Save Sync Unavailable"
@@ -2835,8 +2840,8 @@ SQLite table, via `get_app_id_rom_id_map`). This map is refreshed:
 - When a library sync run ends — on every `sync_progress` frame that stops the run with a terminal stage, so a run that
   completed, was cancelled or paused, or stopped with an error alike — and when a version switch has committed, since
   each can move a shortcut's binding onto another `romId` in the running session — without it, Steam's own Play on a
-  shortcut whose binding moved would be gated, and its launch command re-confirmed, for the version it is no longer
-  bound to. A unit acknowledged only after its run ended is left to the refresh before the next start
+  shortcut whose binding moved would be gated, and its start prepared, for the version it is no longer bound to. A unit
+  acknowledged only after its run ended is left to the refresh before the next start
 
 The refresh before a start waits at most 5 s (`LOCAL_CALL_LIMIT_MS`), because the start and stop notifications are
 handled one after another and a refresh without an answer would hold them all (see [Post-exit sync](#post-exit-sync)).

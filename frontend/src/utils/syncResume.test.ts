@@ -34,7 +34,7 @@ describe("syncResumeState", () => {
 
   it("falls back to a fresh sync once a force-clear left NEITHER kind of progress", () => {
     // The #1789 regression. Force Full Sync deletes the completion stamps and
-    // the recorded launch commands but not the shortcuts, and it deliberately
+    // clears the applied shortcuts but not the shortcuts, and it deliberately
     // preserves the run history (#1318) — so the incomplete attempt and the
     // bound shortcuts both survive while everything the next run could skip is
     // gone. Whichever button is pressed the next run is a full one.
@@ -55,9 +55,9 @@ describe("syncResumeState", () => {
   });
 
   it("resumes on a completion stamp alone, and says nothing under it", () => {
-    // The mirror case: rows predating migration 015 carry no recorded command
-    // while their platform's stamp survives, so an upgraded install can hold
-    // stamps and zero recorded games — those platforms still skip wholesale.
+    // The mirror case: rows the sync has not applied carry no record while
+    // their platform's stamp survives, so an install can hold stamps and zero
+    // applied games — those platforms still skip wholesale.
     // With no number to state, the line is omitted rather than reading "0 games".
     const state = syncResumeState(resumeStats({ resumable_games: 0, has_completion_stamp: true }));
     expect(state.canResume).toBe(true);
@@ -95,7 +95,7 @@ describe("syncResumeState", () => {
   });
 
   it("refuses when there is no last attempt (clean state)", () => {
-    // A fully-synced library carries recorded launch commands for every game, so
+    // A fully-synced library records every game's shortcut applied, so
     // the absent last_attempt is what has to withhold the offer.
     const state = syncResumeState(resumeStats({ last_attempt: null }));
     expect(state.canResume).toBe(false);

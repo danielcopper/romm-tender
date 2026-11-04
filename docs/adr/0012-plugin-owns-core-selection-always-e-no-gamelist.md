@@ -1,8 +1,15 @@
+---
+status: accepted
+decided: 2026-06-08
+updated: 2026-11-04
+amended-by: [0044]
+---
+
 # The plugin owns core selection end to end: per-platform core in `settings.json`, every installed ROM baked with `-e`, the ES-DE gamelist never read or written
 
-## Status
+## Scope
 
-Accepted. **Partially supersedes [ADR-0011](0011-per-game-core-override-in-db-applied-via-e-flag.md):** §2
+**Partially supersedes [ADR-0011](0011-per-game-core-override-in-db-applied-via-e-flag.md):** §2
 (`-e`-only-for-overrides) is reversed to **always `-e`** for every installed ROM, and §4 (the one remaining system-level
 gamelist write is kept) is reversed to **all gamelist read and write dropped**. It **refines §3** — the precedence chain
 loses its gamelist `<alternativeEmulator>` layer and gains a per-platform `settings.json` layer. ADR-0011 §1 (the
@@ -149,3 +156,14 @@ boundary that places `platform_cores` in `settings.json` and keeps the `Platform
 `resolve_emulator_invocation` seam every bake site shares),
 [Core and Emulator Selection](../architecture/core-emulator-selection.md) (the resolver, precedence, and bake sites in
 detail).
+
+## Amendment — the entry is asked for, not written with `-e`
+
+Tender still owns the choice of entry end to end, and still neither reads nor writes the gamelist. What changed is how
+the choice reaches a start ([ADR-0044](0044-every-start-asks-the-resolver.md),
+[#2221](https://github.com/danielcopper/romm-tender/issues/2221) D7, D20, going on from
+[ADR-0042](0042-tender-takes-emulator-answers-starts-emulators-and-keeps-its-own-store.md)): no command is baked with
+`-e` into any shortcut, installed or not. At every start Tender asks the resolver for the command of the entry in effect
+— the per-game pick, else the per-platform one, else the default — and hands it to the launcher for that start.
+RetroDECK's `run_game.sh` is no longer in the path, so neither its gamelist lookup nor its `-e` handling bears on a
+start. A pick changes nothing in Steam; the next start asks with it.

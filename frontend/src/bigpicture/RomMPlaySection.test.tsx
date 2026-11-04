@@ -34,6 +34,7 @@ import type {
   AnsweringSource,
   DownloadCompleteEvent,
   EmulatorDataReason,
+  EmulatorStart,
   GameLaunch,
   SaveStatus,
   SyncProgress,
@@ -160,10 +161,9 @@ vi.mock("../utils/cachedGameDetailStore", () => ({
   invalidateCachedGameDetail: vi.fn(),
 }));
 
-// ----- steamShortcuts — the set/clear core apply flow confirms the re-baked
-// launch_options landed via setLaunchOptionsConfirmed (the fire-then-poll
-// helper). Mock it so tests drive the confirmed (true) / unconfirmed (false)
-// branches without touching the real RegisterForAppDetails poll. -----
+// ----- steamShortcuts — no core action writes a shortcut's launch options any
+// more (#2221 D10); mocked so a test can assert none is written, without
+// touching the real RegisterForAppDetails poll. -----
 vi.mock("../utils/steamShortcuts", () => ({
   setLaunchOptionsConfirmed: vi.fn(),
 }));
@@ -429,8 +429,7 @@ describe("RomMPlaySection", () => {
     });
     vi.mocked(playSectionUtils.resolveSaveSyncLabel).mockReturnValue("synced label");
     vi.mocked(playSectionUtils.timeoutMs).mockImplementation(() => new Promise(() => {}));
-    // Default: the re-baked launch_options confirm-set succeeds. Tests opt into
-    // the unconfirmed (false) branch per case.
+    // Default: a confirm-set would succeed; no core action reaches it.
     vi.mocked(setLaunchOptionsConfirmed).mockResolvedValue(true);
     // Default core-info path — empty cores. Tests opt into specific shapes.
     vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(
@@ -2554,7 +2553,6 @@ describe("RomMPlaySection", () => {
               core_so: "snes9x.so",
               emulator: "snes9x.so",
               is_default: true,
-              bakeable: true,
               reason: null,
             },
             {
@@ -2565,7 +2563,6 @@ describe("RomMPlaySection", () => {
               core_so: "blastem.so",
               emulator: "blastem.so",
               is_default: false,
-              bakeable: true,
               reason: null,
             },
           ],
@@ -2632,7 +2629,6 @@ describe("RomMPlaySection", () => {
               core_so: "snes9x.so",
               emulator: "snes9x.so",
               is_default: true,
-              bakeable: true,
               reason: null,
             },
             {
@@ -2643,7 +2639,6 @@ describe("RomMPlaySection", () => {
               core_so: "blastem.so",
               emulator: "blastem.so",
               is_default: false,
-              bakeable: true,
               reason: null,
             },
           ],
@@ -3431,12 +3426,7 @@ describe("RomMPlaySection", () => {
 
     it("happy path: dispatches romm_rom_uninstalled + toast", async () => {
       const items = await setupUninstallAction("Mario");
-      vi.mocked(backend.removeRom).mockResolvedValue({
-        success: true,
-        message: "removed",
-        prune_lease_token: "uninstall-lease",
-      });
-      vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
+      vi.mocked(backend.removeRom).mockResolvedValue({ success: true, message: "removed" });
       vi.mocked(setLaunchOptionsConfirmed).mockClear();
       vi.mocked(toaster.toast).mockClear();
       const listener = vi.fn();
@@ -3451,11 +3441,8 @@ describe("RomMPlaySection", () => {
           await settleDetachedUninstall();
         });
         expect(vi.mocked(backend.removeRom)).toHaveBeenCalledWith(42);
-        expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(testAppId, "");
-        expect(backend.releasePruneConflictLease).toHaveBeenCalledWith("uninstall-lease");
-        expect(vi.mocked(setLaunchOptionsConfirmed).mock.invocationCallOrder[0]).toBeLessThan(
-          vi.mocked(backend.releasePruneConflictLease).mock.invocationCallOrder[0]!,
-        );
+        // The kept shortcut carries its appId, installed or not.
+        expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
         const ev = listener.mock.calls[0]?.[0] as CustomEvent;
         expect(ev.detail).toEqual({ rom_id: 42 });
         expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(expect.objectContaining({ body: "Mario uninstalled" }));
@@ -3726,7 +3713,6 @@ describe("RomMPlaySection", () => {
               core_so: "snes9x.so",
               emulator: "snes9x.so",
               is_default: true,
-              bakeable: true,
               reason: null,
             },
             {
@@ -3737,7 +3723,6 @@ describe("RomMPlaySection", () => {
               core_so: "blastem.so",
               emulator: "blastem.so",
               is_default: false,
-              bakeable: true,
               reason: null,
             },
           ],
@@ -3759,7 +3744,6 @@ describe("RomMPlaySection", () => {
             core_so: "snes9x.so",
             emulator: "snes9x.so",
             is_default: true,
-            bakeable: true,
             reason: null,
           },
           {
@@ -3770,7 +3754,6 @@ describe("RomMPlaySection", () => {
             core_so: "blastem.so",
             emulator: "blastem.so",
             is_default: false,
-            bakeable: true,
             reason: null,
           },
         ],
@@ -3787,13 +3770,9 @@ describe("RomMPlaySection", () => {
     // the dedicated "Use System Override" item at index 1 is the clear path.
     const BLASTEM_IDX = 3;
 
-    it("happy path: setGameCore(rom_id, label) → confirms re-baked launch_options, toasts, invalidates + dispatches core_changed", async () => {
+    it("happy path: setGameCore(rom_id, label) → toasts, invalidates + dispatches core_changed, writes nothing to the shortcut", async () => {
       await setupCoreAction();
-      vi.mocked(backend.setGameCore).mockResolvedValue({
-        success: true,
-        launch_options: 'flatpak run net.retrodeck.retrodeck -e "...blastem.so..." "/roms/mario.sfc"',
-        app_id: 777,
-      });
+      vi.mocked(backend.setGameCore).mockResolvedValue({ success: true });
       vi.mocked(backend.getBiosStatus).mockResolvedValue({
         bios_status: null,
         bios_level: null,
@@ -3813,12 +3792,8 @@ describe("RomMPlaySection", () => {
         });
         // Keyed by rom_id + label (#945) — no platform_slug/romPath args.
         expect(vi.mocked(backend.setGameCore)).toHaveBeenCalledWith(42, "BlastEm");
-        // The re-baked launch_options is confirm-set on the bound shortcut BEFORE
-        // toasting success (R1).
-        expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(
-          777,
-          'flatpak run net.retrodeck.retrodeck -e "...blastem.so..." "/roms/mario.sfc"',
-        );
+        // The shortcut carries its appId; the next start asks with the pin.
+        expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
         // Core display refreshed via the dedicated rom_id path (#923/#945).
         expect(vi.mocked(backend.getPlatformCoreInfo)).toHaveBeenCalledWith(42);
         expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(expect.objectContaining({ body: "Core set to BlastEm" }));
@@ -3833,40 +3808,8 @@ describe("RomMPlaySection", () => {
       }
     });
 
-    // R1 — the silent-success guard. An unconfirmed bake must NOT toast success;
-    // it shows the DISTINCT "restart Steam" toast and keeps the DB row.
-    it("false-confirm: launch_options set but setLaunchOptionsConfirmed → false yields the DISTINCT restart toast, NOT success", async () => {
-      await setupCoreAction();
-      vi.mocked(backend.setGameCore).mockResolvedValue({
-        success: true,
-        launch_options: 'flatpak run net.retrodeck.retrodeck -e "...blastem.so..." "/roms/mario.sfc"',
-        app_id: 777,
-      });
-      // The confirm poll never sees the read-back match → false.
-      vi.mocked(setLaunchOptionsConfirmed).mockResolvedValue(false);
-      render(<RomMPlaySection appId={testAppId} />);
-      await flushAsync();
-      const coreItems = await openCoreMenuAndGetItems(testAppId);
-      vi.mocked(toaster.toast).mockClear();
-      vi.mocked(cachedStore.invalidateCachedGameDetail).mockClear();
-      await act(async () => {
-        await coreItems[BLASTEM_IDX]!.props.onClick?.();
-      });
-      // Post-confirm state (non-vacuous): the DISTINCT restart toast fired …
-      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
-        expect.objectContaining({ body: "Core saved — restart Steam to apply" }),
-      );
-      // … and the success toast did NOT.
-      expect(vi.mocked(toaster.toast)).not.toHaveBeenCalledWith(
-        expect.objectContaining({ body: "Core set to BlastEm" }),
-      );
-      // The DB row is kept; no cache invalidate / refresh happens on the
-      // unconfirmed branch (re-sync/migration re-bake from the pin).
-      expect(vi.mocked(cachedStore.invalidateCachedGameDetail)).not.toHaveBeenCalled();
-    });
-
-    // Uninstalled/unbound: backend persists the pin but returns no launch_options
-    // / app_id → no SetAppLaunchOptions, still toasts the saved state.
+    // Setting a core writes nothing to Steam: the next start asks with the new
+    // entry (#2221 D10). The backend persists the pin and the toast names it.
     it("uninstalled/unbound: success without launch_options/app_id → success toast, no confirm-set", async () => {
       await setupCoreAction();
       vi.mocked(backend.setGameCore).mockResolvedValue({ success: true });
@@ -3964,13 +3907,9 @@ describe("RomMPlaySection", () => {
 
     // Regression guard (#945): a successful set with a valid rom_id must NOT
     // silently no-op — it must reach the confirm + success toast.
-    it("does NOT silently no-op: a valid rom_id drives the confirm + success toast", async () => {
+    it("does NOT silently no-op: a valid rom_id drives the pin + success toast", async () => {
       await setupCoreAction();
-      vi.mocked(backend.setGameCore).mockResolvedValue({
-        success: true,
-        launch_options: "lo",
-        app_id: 5,
-      });
+      vi.mocked(backend.setGameCore).mockResolvedValue({ success: true });
       render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
       const coreItems = await openCoreMenuAndGetItems(testAppId);
@@ -3979,7 +3918,7 @@ describe("RomMPlaySection", () => {
         await coreItems[BLASTEM_IDX]!.props.onClick?.();
       });
       expect(vi.mocked(backend.setGameCore)).toHaveBeenCalledWith(42, "BlastEm");
-      expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(5, "lo");
+      expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(expect.objectContaining({ body: "Core set to BlastEm" }));
     });
 
@@ -4044,7 +3983,6 @@ describe("RomMPlaySection", () => {
               core_so: "snes9x.so",
               emulator: "snes9x.so",
               is_default: true,
-              bakeable: true,
               reason: null,
             },
             {
@@ -4055,7 +3993,6 @@ describe("RomMPlaySection", () => {
               core_so: "blastem.so",
               emulator: "blastem.so",
               is_default: false,
-              bakeable: true,
               reason: null,
             },
           ],
@@ -4079,7 +4016,6 @@ describe("RomMPlaySection", () => {
             core_so: "snes9x.so",
             emulator: "snes9x.so",
             is_default: true,
-            bakeable: true,
             reason: null,
           },
           {
@@ -4090,7 +4026,6 @@ describe("RomMPlaySection", () => {
             core_so: "blastem.so",
             emulator: "blastem.so",
             is_default: false,
-            bakeable: true,
             reason: null,
           },
         ],
@@ -4106,13 +4041,9 @@ describe("RomMPlaySection", () => {
     const FOLLOW_SYSTEM_IDX = 1;
     const DEFAULT_CORE_IDX = 2;
 
-    it("the Use System Override item calls clearGameCore(rom_id) + confirms the PLAIN launch_options + toasts 'Now following the system core'", async () => {
+    it("the Use System Override item calls clearGameCore(rom_id) + toasts 'Now following the system core'", async () => {
       await setupCoreAction();
-      vi.mocked(backend.clearGameCore).mockResolvedValue({
-        success: true,
-        launch_options: 'flatpak run net.retrodeck.retrodeck "/roms/mario.sfc"',
-        app_id: 888,
-      });
+      vi.mocked(backend.clearGameCore).mockResolvedValue({ success: true });
       vi.mocked(backend.getBiosStatus).mockResolvedValue({
         bios_status: null,
         bios_level: null,
@@ -4136,11 +4067,7 @@ describe("RomMPlaySection", () => {
         expect(vi.mocked(backend.clearGameCore)).toHaveBeenCalledWith(42);
         // The reset item must NOT pin a core.
         expect(vi.mocked(backend.setGameCore)).not.toHaveBeenCalled();
-        // The PLAIN (no -e) launch_options is confirm-set on the bound shortcut.
-        expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(
-          888,
-          'flatpak run net.retrodeck.retrodeck "/roms/mario.sfc"',
-        );
+        expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
         expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
           expect.objectContaining({ body: "Now following the system core" }),
         );
@@ -4157,8 +4084,6 @@ describe("RomMPlaySection", () => {
       await setupCoreAction();
       vi.mocked(backend.setGameCore).mockResolvedValue({
         success: true,
-        launch_options: 'flatpak run net.retrodeck.retrodeck -e "...snes9x.so..." "/roms/mario.sfc"',
-        app_id: 777,
       });
       vi.mocked(backend.getBiosStatus).mockResolvedValue({
         bios_status: null,
@@ -4178,29 +4103,6 @@ describe("RomMPlaySection", () => {
       expect(vi.mocked(backend.setGameCore)).toHaveBeenCalledWith(42, "Snes9x");
       expect(vi.mocked(backend.clearGameCore)).not.toHaveBeenCalled();
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(expect.objectContaining({ body: "Core set to Snes9x" }));
-    });
-
-    it("reset-item false-confirm → DISTINCT restart toast, NOT success", async () => {
-      await setupCoreAction();
-      vi.mocked(backend.clearGameCore).mockResolvedValue({
-        success: true,
-        launch_options: 'flatpak run net.retrodeck.retrodeck "/roms/mario.sfc"',
-        app_id: 888,
-      });
-      vi.mocked(setLaunchOptionsConfirmed).mockResolvedValue(false);
-      render(<RomMPlaySection appId={testAppId} />);
-      await flushAsync();
-      const coreItems = await openCoreMenuAndGetItems(testAppId);
-      vi.mocked(toaster.toast).mockClear();
-      await act(async () => {
-        await coreItems[FOLLOW_SYSTEM_IDX]!.props.onClick?.();
-      });
-      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
-        expect.objectContaining({ body: "Core saved — restart Steam to apply" }),
-      );
-      expect(vi.mocked(toaster.toast)).not.toHaveBeenCalledWith(
-        expect.objectContaining({ body: "Now following the system core" }),
-      );
     });
 
     it("reset-item uninstalled/unbound: success without launch_options/app_id → success toast, no confirm-set", async () => {
@@ -4272,7 +4174,6 @@ describe("RomMPlaySection", () => {
           core_so: "snes9x.so",
           emulator: "snes9x.so",
           is_default: true,
-          bakeable: true,
           reason: null,
         },
         {
@@ -4283,7 +4184,6 @@ describe("RomMPlaySection", () => {
           core_so: "blastem.so",
           emulator: "blastem.so",
           is_default: false,
-          bakeable: true,
           reason: null,
         },
       ],
@@ -4386,7 +4286,6 @@ describe("RomMPlaySection", () => {
             core_so: "snes9x.so",
             emulator: "snes9x.so",
             is_default: true,
-            bakeable: true,
             reason: null,
           },
           {
@@ -4397,7 +4296,6 @@ describe("RomMPlaySection", () => {
             core_so: "blastem.so",
             emulator: "blastem.so",
             is_default: false,
-            bakeable: true,
             reason: null,
           },
         ],
@@ -4547,7 +4445,6 @@ describe("RomMPlaySection", () => {
             core_so: "snes9x.so",
             emulator: "snes9x.so",
             is_default: true,
-            bakeable: true,
             reason: null,
           },
           {
@@ -4558,7 +4455,6 @@ describe("RomMPlaySection", () => {
             core_so: "blastem.so",
             emulator: "blastem.so",
             is_default: false,
-            bakeable: true,
             reason: null,
           },
         ],
@@ -4598,7 +4494,6 @@ describe("RomMPlaySection", () => {
             core_so: "snes9x.so",
             emulator: "snes9x.so",
             is_default: true,
-            bakeable: true,
             reason: null,
           },
           {
@@ -4609,7 +4504,6 @@ describe("RomMPlaySection", () => {
             core_so: "blastem.so",
             emulator: "blastem.so",
             is_default: false,
-            bakeable: true,
             reason: null,
           },
         ],
@@ -4647,7 +4541,6 @@ describe("RomMPlaySection", () => {
             core_so: "snes9x.so",
             emulator: "snes9x.so",
             is_default: true,
-            bakeable: true,
             reason: null,
           },
           {
@@ -4658,7 +4551,6 @@ describe("RomMPlaySection", () => {
             core_so: "blastem.so",
             emulator: "blastem.so",
             is_default: false,
-            bakeable: true,
             reason: null,
           },
         ],
@@ -4694,7 +4586,6 @@ describe("RomMPlaySection", () => {
             core_so: "snes9x.so",
             emulator: "snes9x.so",
             is_default: true,
-            bakeable: true,
             reason: null,
           },
           {
@@ -4705,7 +4596,6 @@ describe("RomMPlaySection", () => {
             core_so: "blastem.so",
             emulator: "blastem.so",
             is_default: false,
-            bakeable: true,
             reason: null,
           },
         ],
@@ -4737,7 +4627,6 @@ describe("RomMPlaySection", () => {
             core_so: "snes9x.so",
             emulator: "snes9x.so",
             is_default: true,
-            bakeable: true,
             reason: null,
           },
           {
@@ -4748,7 +4637,6 @@ describe("RomMPlaySection", () => {
             core_so: "blastem.so",
             emulator: "blastem.so",
             is_default: false,
-            bakeable: true,
             reason: null,
           },
         ],
@@ -4784,7 +4672,6 @@ describe("RomMPlaySection", () => {
             core_so: "snes9x.so",
             emulator: "snes9x.so",
             is_default: true,
-            bakeable: true,
             reason: null,
           },
           {
@@ -4795,7 +4682,6 @@ describe("RomMPlaySection", () => {
             core_so: "blastem.so",
             emulator: "blastem.so",
             is_default: false,
-            bakeable: true,
             reason: null,
           },
         ],
@@ -5073,7 +4959,6 @@ describe("RomMPlaySection", () => {
             core_so: "x.so",
             emulator: "x.so",
             is_default: true,
-            bakeable: true,
             reason: null,
           },
         ],
@@ -5166,7 +5051,6 @@ describe("RomMPlaySection", () => {
             core_so: "genesis_plus_gx_libretro",
             emulator: "genesis_plus_gx_libretro.so",
             is_default: true,
-            bakeable: true,
             reason: null,
           },
           {
@@ -5177,14 +5061,13 @@ describe("RomMPlaySection", () => {
             core_so: "genesis_plus_gx_expanded_libretro",
             emulator: "genesis_plus_gx_expanded_libretro.so",
             is_default: false,
-            bakeable: true,
             reason,
           },
         ],
       });
     }
 
-    async function mountWith(reason: string | null) {
+    async function mountWith(reason: string | null, emulatorStart: EmulatorStart | null = null) {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 60,
@@ -5203,13 +5086,25 @@ describe("RomMPlaySection", () => {
         emulators: core.emulators,
         platformCoreLabel: null,
         hasGameOverride: true,
-        emulatorStart: null,
+        emulatorStart,
         vanishedPick: null,
       });
       const view = render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
       return view;
     }
+
+    it("says it once where the start is refused for the same reason", async () => {
+      const { container } = await mountWith("path_unseen", {
+        state: "cannot_start",
+        reason: "path_unseen",
+        entry: "Paprium",
+      });
+      const sentence =
+        "Whether Paprium is installed could not be established: ES-DE looks for it where Tender cannot see.";
+      expect(container.textContent).toContain(sentence);
+      expect(container.textContent!.split(sentence).length - 1).toBe(1);
+    });
 
     it("says so under the play row, with the cause, when the game launches with it", async () => {
       const { container } = await mountWith("path_unseen");
@@ -5332,6 +5227,21 @@ describe("RomMPlaySection", () => {
         "SwanStation can start this game, but goes on without Disc 2.cue: it is missing.",
         "Whether SwanStation starts this game cannot be established: how it opens Disc 3.chd was not checked.",
       ]);
+      expect(capturedPlayButton[capturedPlayButton.length - 1]!.emulatorRefusal).toBeNull();
+    });
+
+    it("says under the row what ES-DE leaves unfilled in the command of a start that goes ahead (#2708 D1)", async () => {
+      const { container } = await mountWith({
+        emulatorStart: {
+          state: "starts",
+          reason: null,
+          entry: "RPCS3 Game Serial (Standalone)",
+          remarks: [{ reason: "placeholder_unfilled", placeholder: "%RPCS3_GAMEID%" }],
+        },
+      });
+
+      const notes = [...container.querySelectorAll<HTMLElement>('.romm-play-section-row [data-testid="start-note"]')];
+      expect(notes.map((note) => note.textContent)).toContain("ES-DE leaves %RPCS3_GAMEID% unfilled in this command.");
       expect(capturedPlayButton[capturedPlayButton.length - 1]!.emulatorRefusal).toBeNull();
     });
 
@@ -5643,8 +5553,6 @@ describe("RomMPlaySection", () => {
       rom_name: "Test ROM",
       platform_name: "SNES",
       file_path: "/roms/test.sfc",
-      app_id: null,
-      launch_options: "",
     });
 
     it("happy: an uninstalled ROM with a known size renders the SPACE REQUIRED cell with the formatted value", async () => {

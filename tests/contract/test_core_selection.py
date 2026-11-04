@@ -1,9 +1,9 @@
 """Contract tests for the core-selection endpoints over the real nesting.
 
 ``CoreService.clear_game_core`` (Reset / Follow default) and
-``set_system_core`` (per-platform core change fan-out) both re-bake a ROM's
-Steam ``launch_options`` from its active core, resolved through the real
-:class:`ActiveCoreResolver` — which opens its **own** Unit of Work.
+``set_system_core`` (per-platform core change) both change which entry a ROM's
+next start asks for, read back through the real :class:`ActiveCoreResolver` —
+which opens its **own** Unit of Work.
 
 The unit tests inject a ``FakeActiveCoreResolver`` (no real UoW), so they never
 exercise the nesting. This tier drives the **real** endpoints over the
@@ -11,10 +11,9 @@ exercise the nesting. This tier drives the **real** endpoints over the
 ``BEGIN IMMEDIATE`` (the per-connection write lock), and the lock is not
 re-entrant. Resolving the active core inside the still-open write UoW would
 block the resolver's own UoW until ``busy_timeout`` then raise
-``database is locked`` (#1047 / #1134) — which is why the write UoW is closed
-before the resolve. ``clear_game_core`` additionally must resolve *after* the
-pin-clear commits so the resolver reads the landed NULL and bakes the
-POST-clear core, never the just-cleared pin (#1047).
+``database is locked`` (#1047 / #1134) — which is why every write UoW is closed
+before a resolve. A read after ``clear_game_core`` must see the landed NULL and
+resolve the POST-clear core, never the just-cleared pin (#1047).
 
 The resolution reads the live ``es_systems.xml`` the harness seeds under
 ``tmp_path`` (#1210) — there is no ``core_defaults`` snapshot. The last block
@@ -56,7 +55,6 @@ _MGBA_ENTRY = {
     "declared_index": 0,
     "is_default": True,
     "chosen_in_frontend": False,
-    "bakeable": True,
     "reason": None,
 }
 _VBA_NEXT_ENTRY = {
@@ -67,18 +65,16 @@ _VBA_NEXT_ENTRY = {
     "declared_index": 1,
     "is_default": False,
     "chosen_in_frontend": False,
-    "bakeable": True,
     "reason": None,
 }
 
 
-async def test_clear_game_core_bakes_post_clear_core_not_old_pin(harness):
-    """Clearing a pin bakes the resolved default, not the just-cleared override.
+async def test_clear_game_core_leaves_the_post_clear_core_in_effect_not_the_old_pin(harness):
+    """Clearing a pin leaves the resolved default in effect, not the just-cleared override.
 
-    A ``gba`` ROM pinned to VBA Next is cleared. The resolver runs after the
-    pin-clear commits, so it reads the landed NULL and resolves to the live
-    es_systems default (mGBA); the re-baked ``launch_options`` must carry the
-    mGBA core, never the cleared VBA Next pin.
+    A ``gba`` ROM pinned to VBA Next is cleared. Its next read — the one a start
+    asks through — resolves the live es_systems default (mGBA), never the cleared
+    VBA Next pin, and nothing is written to the shortcut.
     """
     seed_es_systems(harness)
     seed_install(harness, 42, system="gba", platform_slug="gba", file_name="pokemon.gba")
@@ -86,12 +82,10 @@ async def test_clear_game_core_bakes_post_clear_core_not_old_pin(harness):
         uow.roms.set_emulator_override(42, "VBA Next", "retrodeck")
 
     result = await harness.endpoints.clear_game_core(42)
+    info = await harness.endpoints.get_platform_core_info(42)
 
-    assert result["success"] is True
-    assert result["app_id"] == 42
-    # The POST-clear core (system default mGBA) is baked, NOT the cleared pin.
-    assert "mgba_libretro.so" in result["launch_options"]
-    assert "vba_next_libretro.so" not in result["launch_options"]
+    assert result == {"success": True}
+    assert info["active_core"] == "mgba_libretro.so"
     # The pin is gone (SQL NULL) — read back through a fresh UoW.
     with harness.uow_factory() as uow:
         assert uow.roms.get(42).emulator_override is None
@@ -107,12 +101,12 @@ async def test_clear_game_core_unknown_rom_returns_canonical_failure(harness):
     assert result["message"]
 
 
-async def test_set_system_core_rebakes_only_unpinned_rom(harness):
-    """The per-platform fan-out re-bakes each unpinned ROM through the real resolver.
+async def test_set_system_core_takes_effect_for_the_unpinned_rom_only(harness):
+    """The per-platform pick is in effect for each unpinned ROM, through the real resolver.
 
     Two installed+bound ``gba`` ROMs: one plain, one with a per-game pin. Setting
-    the platform core to VBA Next must re-bake only the unpinned ROM (the pin
-    wins over the platform default for the other), with the VBA Next core baked.
+    the platform core to VBA Next puts it in effect for the unpinned ROM only (the
+    pin wins over the platform default for the other).
     """
     seed_es_systems(harness)
     seed_install(harness, 1, system="gba", platform_slug="gba", file_name="a.gba")
@@ -122,24 +116,19 @@ async def test_set_system_core_rebakes_only_unpinned_rom(harness):
 
     result = await harness.endpoints.set_system_core("gba", "VBA Next")
 
-    assert result["success"] is True
-    items = result["rebake_items"]
-    # Exactly the unpinned ROM (app_id 1) is re-baked; the pinned ROM is absent.
-    assert len(items) == 1
-    assert items[0]["app_id"] == 1
-    assert "vba_next_libretro.so" in items[0]["launch_options"]
-    assert all(item["app_id"] != 2 for item in items)
+    assert result == {"success": True}
+    assert (await harness.endpoints.get_platform_core_info(1))["active_core"] == "vba_next_libretro.so"
+    assert (await harness.endpoints.get_platform_core_info(2))["active_core"] == "mgba_libretro.so"
 
 
-async def test_set_system_core_answers_exactly_its_rebake_list_and_lease(harness):
-    """A stored switch answers its re-bake list and the lease for it, and no BIOS verdict."""
+async def test_set_system_core_answers_success_alone(harness):
+    """A stored switch answers success alone: no list for the shortcuts, no lease, no BIOS verdict."""
     seed_es_systems(harness)
     seed_install(harness, 1, system="gba", platform_slug="gba", file_name="a.gba")
 
     result = await harness.endpoints.set_system_core("gba", "VBA Next")
 
-    assert set(result) == {"success", "rebake_items", "prune_lease_token"}
-    assert result["success"] is True
+    assert result == {"success": True}
 
 
 async def test_set_game_core_unknown_label_returns_canonical_failure(harness):
@@ -319,7 +308,7 @@ async def test_a_platforms_answer_flags_unavailable_emulator_data(harness):
     assert gba["emulators"] == []
 
 
-# A switch system whose only bakeable standalone command names Ryubing — a
+# A switch system whose only standalone command names Ryubing — a
 # RetroDECK component that the seeded deploy does not carry, so the resolver's
 # launch lookup states it not installed.
 _SWITCH_ES_SYSTEMS_XML = """\
@@ -378,10 +367,10 @@ async def test_a_standalone_whose_component_is_absent_stays_the_default_and_cann
     """An emulator the resolver states not installed is withheld from picking, and stays the default (#2195 D7).
 
     Ryubing is declared first and is the only standalone; its component launcher
-    is not in the seeded deploy, so the picker must show it ``needs_setup`` /
-    ``not_installed``. Nothing behind it is taken instead: the platform names
-    Ryubing and says it cannot start. Drives the real catalogue read and the
-    resolver's own launch lookup over the seeded find rules.
+    is not in the seeded deploy, so the picker must show it ``not_installed``.
+    Nothing behind it is taken instead: the platform names Ryubing and says it
+    cannot start. Drives the real catalogue read and the resolver's own launch
+    lookup over the seeded find rules.
     """
     seed_es_systems(harness, _SWITCH_ES_SYSTEMS_XML)
     seed_es_find_rules(harness, _SWITCH_ES_FIND_RULES_XML)
@@ -398,7 +387,6 @@ async def test_a_standalone_whose_component_is_absent_stays_the_default_and_cann
             "declared_index": 0,
             "is_default": True,
             "chosen_in_frontend": False,
-            "bakeable": False,
             "reason": "not_installed",
         },
         {
@@ -409,7 +397,6 @@ async def test_a_standalone_whose_component_is_absent_stays_the_default_and_cann
             "declared_index": 1,
             "is_default": False,
             "chosen_in_frontend": False,
-            "bakeable": True,
             "reason": None,
         },
     ]
@@ -429,9 +416,9 @@ async def test_the_same_standalone_is_the_default_once_its_component_is_there(ha
 
     result = await harness.endpoints.get_system_core_info("switch")
 
-    assert [(e["label"], e["bakeable"], e["is_default"]) for e in result["emulators"]] == [
-        ("Ryubing (Standalone)", True, True),
-        ("Yuzu", True, False),
+    assert [(e["label"], e["reason"], e["is_default"]) for e in result["emulators"]] == [
+        ("Ryubing (Standalone)", None, True),
+        ("Yuzu", None, False),
     ]
     assert result["active_core_label"] == "Ryubing (Standalone)"
 
@@ -452,13 +439,12 @@ _NEOGEOCD_ES_SYSTEMS_XML = """\
 """
 
 
-async def test_finalburn_neo_on_neo_geo_cd_reads_as_its_core_and_starts_with_its_subsystem(harness):
-    """The resolver's kind and core path, end to end: FinalBurn Neo is a core, and its bake keeps its subsystem."""
+async def test_finalburn_neo_on_neo_geo_cd_reads_as_its_core(harness):
+    """The resolver's kind, end to end: FinalBurn Neo, which passes RetroArch more than its core, is a core."""
     seed_es_systems(harness, _NEOGEOCD_ES_SYSTEMS_XML)
     seed_install(harness, 7, system="neogeocd", platform_slug="neogeocd", file_name="game.chd")
 
     info = await harness.endpoints.get_system_core_info("neogeocd")
-    result = await harness.endpoints.clear_game_core(7)
 
     fbneo = info["emulators"][0]
     assert (fbneo["label"], fbneo["kind"], fbneo["core_so"], fbneo["is_default"]) == (
@@ -466,9 +452,4 @@ async def test_finalburn_neo_on_neo_geo_cd_reads_as_its_core_and_starts_with_its
         "core",
         "fbneo_libretro",
         True,
-    )
-    assert result["success"] is True
-    assert (
-        '-e "%EMULATOR_RETROARCH% --subsystem neocd -L /var/config/retroarch/cores/fbneo_libretro.so %ROM%"'
-        in result["launch_options"]
     )
