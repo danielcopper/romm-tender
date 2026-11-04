@@ -248,34 +248,36 @@ would carry, no un-uploaded local changes on tracked files, server reachable —
 a failure answer, `pending_uploads` names the changed files in `files`, and a RomM error from the fetch answers
 `classify_error`'s reason rather than a refusal):
 
-1. Every local save file the target slot does **not** provide is backed up into `.romm-backup` (never deleted outright)
-   and dropped from tracking — so no stale extension (e.g. a `.rtc` left behind when the new slot holds only `.srm`)
-   lingers to upload into the new slot, and a never-synced local save is always recoverable (#965, #1058). Before the
-   switch's first move — a backup in this step, or a download in step 3 that backs up the local file it overwrites — the
-   save backup checks that the folder can take backups (`SaveBackup.prepare_save_backup_folder`: not a link, inside the
-   saves directory, created if missing, listable); a switch that will move nothing neither checks nor creates it. A file
-   loses its tracking only once it was moved; once every backup went through, every tracked name the new slot does not
-   provide loses its tracking too. The local files are those of the save answer the switch took at its start, as for the
-   pending-changes check: one switch never reads two save answers.
-2. Only then is the active slot flipped, and the save state written with it before the first download, every baseline as
-   it stands — a file the backup could not move would otherwise sit under the new slot, and the next sync would upload
-   the previous slot's save into it.
+1. Every local save file is backed up into `.romm-backup` (never deleted outright) and dropped from tracking, the ones
+   the target slot provides included. A file the target slot does not provide would otherwise linger to upload into it
+   (e.g. a `.rtc` left behind when the new slot holds only `.srm`), and a never-synced local save is always recoverable
+   (#965, #1058). A file the target slot provides would otherwise keep the previous slot's bytes under the previous
+   slot's baseline wherever its download does not happen. The decision core is not given the save id a baseline was
+   recorded against (`_Bookkeeping` in `adapters/gavel_native.py`), so on a device current on the new slot's head from
+   an earlier sync of that slot such a file reads as in sync (row 7), and the previous slot's save would stay as the new
+   slot's. Before the first move the save backup checks that the folder can take backups
+   (`SaveBackup.prepare_save_backup_folder`: not a link, inside the saves directory, created if missing, listable); a
+   switch with no local save file neither checks nor creates it. A file loses its tracking only once it was moved; once
+   every backup went through, every tracked name loses its tracking too. The local files are those of the save answer
+   the switch took at its start, as for the pending-changes check: one switch never reads two save answers.
+2. Only then is the active slot flipped — a file the backup could not move would otherwise sit under the new slot, and
+   the next sync would upload the previous slot's save into it. The save state is written with the new slot active
+   before the first download.
 3. For each canonical local target the new slot **does** provide, the **newest** server save by `updated_at` is
    downloaded. Two server saves mapping to one target collapse to the newest, so the on-disk result and
-   `tracked_save_id` are deterministic, not server-list-order dependent (#1058). The download backs up the file it
-   overwrites through the same save backup. After each download that succeeds the state is written again, so the file is
-   recorded with its new baseline before the next download starts; a failed download writes nothing new for its file,
-   which keeps the baseline it had.
+   `tracked_save_id` are deterministic, not server-list-order dependent (#1058). Step 1 left no local file at a target's
+   name, so the download has nothing to back up. A download succeeds once its file is placed, acknowledged
+   ([A download is acknowledged once placed, never marked at the GET](#a-download-is-acknowledged-once-placed-never-marked-at-the-get))
+   and recorded with its new baseline, and after each one that succeeds the state is written again, before the next
+   download starts. A download that fails, its acknowledgement included, writes nothing new.
 4. The state is written a last time with the sync evaluation recorded, whatever the downloads answered: a failed leg
    answers the partial failure `SlotSwitchIncomplete` (`reason="switch_incomplete"`) so the caller can retry — the
-   completed targets are already correct. A target whose acknowledgement failed is one of the failed downloads, with its
-   file in place
-   ([A download is acknowledged once placed, never marked at the GET](#a-download-is-acknowledged-once-placed-never-marked-at-the-get)).
-   On the next sync a failed target with a baseline re-resolves as `Download` (row 10b), or adopts the head when the
-   local file is byte-identical to it (row 10a); one with no local file re-resolves as `Download`; a never-synced local
-   file at a target's name has no baseline, so the next sync answers a conflict (row 11b), or adopts the head when the
-   file is byte-identical to it (row 11a) — [row 11](#why-row-11-splits-into-adopt-11a-vs-conflict-11b) gives why. Saves
-   are never carried between slots; the switch only downloads or backs up, never uploads.
+   completed targets are already correct. A target whose download failed has no baseline; until the next sync the game
+   finds no save at its name unless the failure came at the acknowledgement, which leaves the file in place. On the next
+   sync a target with no local file is downloaded from the new slot whether or not this device is current there (rows
+   3–5), and one whose acknowledgement failed is byte-identical to a head this device is not current on, so it is
+   adopted and acknowledged (row 11a). Saves are never carried between slots; the switch only downloads or backs up,
+   never uploads.
 
 A backup that fails in step 1 ends the switch there, with the previous slot still active and nothing downloaded. Where
 nothing was moved yet it refuses, and the state is not written: with `backup_folder_unusable`
@@ -283,16 +285,18 @@ nothing was moved yet it refuses, and the state is not written: with `backup_fol
 when the first move did. Where some files were already moved, those stop being tracked, the state is persisted with the
 previous slot active, and the answer is the partial failure `SlotSwitchStopped` (`reason="switch_stopped"`), whose
 `set_aside` names the files now in `.romm-backup`. Nothing is put back: a move back could overwrite what an emulator
-wrote in between, and one that failed would leave this answer anyway.
+wrote in between, and one that failed would leave this answer anyway. The previous slot's next sync finds a moved file
+missing with no baseline and downloads it from that slot where RomM holds it there (rows 3–5); a moved file RomM does
+not hold stays in `.romm-backup` only.
 
 Once step 2's write has gone through, a switch that stops — a later state write that fails, or the backend going away
-between two downloads — leaves the new slot active in the database, and the next sync settles the folder against the new
-slot alone: a file placed and recorded is in sync, one not yet downloaded keeps the baseline it had and is downloaded as
-a failed leg is, and one set aside stays in `.romm-backup`. Nothing is uploaded into the previous slot. One window is
-left: a stop between a file being placed and its write leaves that file under its previous baseline, so the next sync
-uploads it into the new slot once more, as a new version with the same content. Where step 2's write itself fails,
-nothing has been downloaded and the database still holds the previous slot, whose next sync downloads the files set
-aside from it again.
+while the downloads run — leaves the new slot active in the database, and the next sync settles the folder against the
+new slot alone: a file downloaded and recorded is in sync (row 7), one not yet downloaded is missing and downloaded from
+the new slot (rows 3–5), and one placed and acknowledged but not yet recorded has no baseline and is byte-identical to a
+head this device is current on, so it is adopted (row 8a). Nothing is uploaded into either slot. Where step 2's write
+itself fails, or the write that ends a backup that stopped, the database still holds the previous slot with the
+baselines it had before the switch, and that slot's next sync downloads again from it every file step 1 moved that RomM
+holds there (rows 4 and 5); the rest stay in `.romm-backup` only.
 
 A **named** target slot with no server saves is just the case where step 3 is a no-op: every local file is backed up,
 tracking is cleared, and the slot starts fresh — with every prior save recoverable under `.romm-backup`. (An empty /
