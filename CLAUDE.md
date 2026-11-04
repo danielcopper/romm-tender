@@ -482,9 +482,11 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `AppDirectories`** — prompt-only — `domain/app_directories.py` is the pure ladder (`TENDER_*`, then XDG, then the
   built-in defaults); `main.run()` resolves it once and hands it to `bootstrap()`, which derives nothing, and
   `RuntimeBundle` carries no directory. Re-derivable data goes under `cache_dir`, data that is not re-derivable under
-  `data_dir`, and nothing under `bin_dir` is ours to remove. Nothing mechanical tells its seven `str` fields apart. A
-  second read of `TENDER_CODE_DIR` is deliberate: `domain/update_release.py::resolve_update_source` asks whether the
-  variable was SET, which `AppDirectories.code_dir` has already erased
+  `data_dir`, and nothing under `bin_dir` is ours to remove. Nothing mechanical tells its eight fields apart. The one
+  reader outside the backend is `bin/tender-rom-launcher`, which starts without it and spells the hand-over folder from
+  `XDG_RUNTIME_DIR` itself, as `AppDirectories.handover_dir` does. A second read of `TENDER_CODE_DIR` is deliberate:
+  `domain/update_release.py::resolve_update_source` asks whether the variable was SET, which `AppDirectories.code_dir`
+  has already erased
 - **The identifier's four homes are never derived from one another — in particular `APP_DIR_NAME`
   (`domain/user_data_location.py`) is never read from `PACKAGE_NAME` (`domain/identity.py`), and the database's file
   name `DB_FILENAME` (`bootstrap/adapters.py`) from neither** — test + prompt-only —
@@ -954,11 +956,10 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   writes. Two more change aggregate state with no verb: `RomRepository.clear_all_shortcut_applied` (Force Full Sync, the
   reset the `shortcut_applied` entry sanctions) and `PlatformSyncStateRepository.revoke_skip` (by design,
   `domain/platform_sync_state.py`'s docstring)
-- **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, PlatformSystems, uow_factory) is called while a
-  UoW is open on the same path** — check — `scripts/check_uow_seam_nesting.py`, first seam family (a seam reached as a
-  bound method, through a helper, a local alias or a nested `def`/`lambda`, inside a UoW opened through a factory
-  attribute not ending in `uow_factory`, a `__call__`-only seam, and a seam whose implementation later grows a UoW open
-  slip past it)
+- **No UoW-opening seam (ActiveCoreResolver, PlatformSystems, uow_factory) is called while a UoW is open on the same
+  path** — check — `scripts/check_uow_seam_nesting.py`, first seam family (a seam reached as a bound method, through a
+  helper, a local alias or a nested `def`/`lambda`, inside a UoW opened through a factory attribute not ending in
+  `uow_factory`, a `__call__`-only seam, and a seam whose implementation later grows a UoW open slip past it)
 - **No file-I/O seam is called while a UoW is open — a Unit of Work wraps database reads and writes, never file or
   server I/O** — check — `scripts/check_uow_seam_nesting.py`, second seam family (`IO_SEAM_METHODS`, which carries each
   `__call__`-only seam's bound attribute); one `# pragma: no uow-check` suppresses the line for both families.

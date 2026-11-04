@@ -605,7 +605,7 @@ in-place rebuild as 013.
 on `roms` (after `emulator_override` and `selected_disc`): `NULL` means "unknown" (never skipped, so a pre-migration row
 re-applies exactly like today and records its value), and only the six recorded-state writer sites ever write it via the
 pin-only `set_applied_launch_options` path — the sync UPSERT excludes it, so a re-sync never wipes the recorded value.
-Migration `041` drops it again for `shortcut_applied`.
+Migration `041` replaces it with `shortcut_applied`.
 
 `016_add_cover_source.sql` (`user_version = 16`) adds the nullable `cover_source TEXT` column to `roms` for cover-cache
 invalidation ([#1386](https://github.com/danielcopper/romm-tender/issues/1386)) — a single
@@ -849,16 +849,16 @@ the game starts through. Written only with the pick, through `set_emulator_overr
 ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D13, D26, D28). Whether an installed game's file
 starts is the resolver's answer, asked with the entry Tender starts the game through, when its page, its emulator menu
 or a press on Steam's own Play reads it; a stored yes or no would go stale with the emulator choice and with the
-resolver's next release. A start asks for the command with every installed game whatever the answer
+resolver's next release. A start asks for an installed game's command whatever that answer is
 ([Launch-target validation](backend-architecture.md#launch-target-validation)).
 
 `041_replace_applied_launch_options_with_shortcut_applied.sql` (`user_version = 41`) replaces
 `roms.applied_launch_options` with `roms.shortcut_applied INTEGER NOT NULL DEFAULT 0`
 ([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D7, D17). Every bound shortcut carries its appId and a
 start asks the resolver for its command, so there is no command left to record; a row keeps only whether the sync
-applied its shortcut. The rung sets it on every row that had a command recorded, so the first sync after it skips
-exactly the shortcuts the one before would have skipped, and then drops the old column. One `ALTER TABLE … ADD COLUMN`,
-one `UPDATE`, one `ALTER TABLE … DROP COLUMN`.
+applied its shortcut. The rung sets it on every row that had a command recorded, whose shortcut a sync has applied
+before — the command such a shortcut still carries is set to its appId by the reconcile at panel load, not by the sync —
+and then drops the old column. One `ALTER TABLE … ADD COLUMN`, one `UPDATE`, one `ALTER TABLE … DROP COLUMN`.
 
 ## The runtime Unit of Work
 

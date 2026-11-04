@@ -675,6 +675,12 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
   could not be read, what it needs from RetroDECK's start could not be read or is not known yet, or the folder it starts
   in could not be placed. Where the emulator's own reading of the game refuses it too, that sentence comes first.
   **Play** is off; choose another emulator in the emulator menu, whose rows say the same of each emulator.
+- **"Whether _emulator_ is installed could not be established: _cause_."** — the emulator source gives no command for an
+  emulator whose installation it cannot establish, so Tender cannot start it. **Play** is off; the emulator menu marks
+  the same emulator "installation not established".
+- **"Tender cannot start games through EmuDeck yet."** — the emulator source that answers for the game is one Tender
+  starts no game through yet, which is the case where RetroDECK is not found or switched off. **Play** is off, and every
+  row of the emulator menu says the same.
 - **"No emulator starts this game."** — no emulator is in effect for the game. **Play** is off.
 - **"ES-DE leaves _placeholder_ unfilled in this command."** — the command starts, with a placeholder ES-DE does not
   fill in left as it is written. **Play** stays on.

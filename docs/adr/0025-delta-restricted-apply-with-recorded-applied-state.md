@@ -7,9 +7,9 @@ amended-by: [0044]
 
 # The apply emits only new and changed shortcuts, tracked against a recorded applied launch command
 
-## Status
+## Scope
 
-Accepted. Tracked under [#1383](https://github.com/danielcopper/decky-romm-sync/issues/1383) (with the estimate work of
+Tracked under [#1383](https://github.com/danielcopper/decky-romm-sync/issues/1383) (with the estimate work of
 [#1382](https://github.com/danielcopper/decky-romm-sync/issues/1382) in lockstep). Completes the scale epic that
 [ADR-0023](0023-chunked-per-unit-apply.md) (chunked durable apply) and [ADR-0024](0024-session-budget-rss-gate.md)
 (RSS-based pause) opened: ADR-0024 explicitly booked "a single oversized platform re-touches its chunks across restarts

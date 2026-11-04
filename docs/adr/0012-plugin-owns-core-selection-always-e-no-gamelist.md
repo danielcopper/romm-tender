@@ -7,9 +7,9 @@ amended-by: [0044]
 
 # The plugin owns core selection end to end: per-platform core in `settings.json`, every installed ROM baked with `-e`, the ES-DE gamelist never read or written
 
-## Status
+## Scope
 
-Accepted. **Partially supersedes [ADR-0011](0011-per-game-core-override-in-db-applied-via-e-flag.md):** §2
+**Partially supersedes [ADR-0011](0011-per-game-core-override-in-db-applied-via-e-flag.md):** §2
 (`-e`-only-for-overrides) is reversed to **always `-e`** for every installed ROM, and §4 (the one remaining system-level
 gamelist write is kept) is reversed to **all gamelist read and write dropped**. It **refines §3** — the precedence chain
 loses its gamelist `<alternativeEmulator>` layer and gains a per-platform `settings.json` layer. ADR-0011 §1 (the

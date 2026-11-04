@@ -330,8 +330,8 @@ link, starts nothing and says **RetroDECK is switched off in Settings › Emulat
 games through RetroDECK yet.** Switch it on again and games start as before. Where Tender cannot check the switch — it
 gets no answer in time, or cannot find out which emulator sources are installed — a dialog titled **Emulator Source
 Unchecked** asks **Tender could not check whether the emulator source is switched on. Start anyway?**: **Start** starts
-the game, **Cancel** starts nothing. While Tender itself is not running, nothing checks the switch, and a game started
-from Steam's library starts through RetroDECK.
+the game, **Cancel** starts nothing. While Tender itself is not running, no game starts from Steam's library at all
+([Starting a game](managing-games.md#launching-games)).
 
 A game page that is open while you switch or move a source shows the change at once: its emulators and its BIOS state
 are read again, and its saves too while save sync is on.
@@ -345,7 +345,7 @@ found for the first time joins the end of the order, switched on.
 sources, but Tender cannot start games through it yet.** for every switched-on source but RetroDECK, whether or not it
 is the one that answers, in a smaller card without a warning sign, since nothing is wrong; a source you switched off
 says it only on its card. Where such a source answers, the platform page and the emulator menu keep saying why there is
-no emulator list.
+no emulator list, and a game it answers does not start: its page, its emulator menu and Play say the same sentence.
 
 **Problems.** Every problem a switched-on source reports also shows as a card on the main panel, named after the source
 — a RetroDECK that is installed but has not been set up yet (**RetroDECK is installed but has not been set up yet. Start

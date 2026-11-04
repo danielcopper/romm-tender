@@ -199,20 +199,24 @@ the end of the order); `domain/emulator_sources.py` holds the rules.
 detected and switched on it answers, wherever the user put it in the order; the stored picks are RetroDECK labels and
 are read against RetroDECK only, and a pick records that source (D20). That holds for a RetroDECK that has not been set
 up yet too: it is detected and answers, and every answer says it is not set up. Without it, the first switched-on source
-in the order answers, with `starts_games` false, and the panel says Tender cannot start games through it yet. Until
+in the order answers, with `starts_games` false, and the panel says Tender cannot start games through it yet. A game
+such a source answers is not started: the game page, every row of its emulator menu and the start check refuse with that
+sentence (`cannotStartSentence`, `frontend/src/utils/emulatorSourceWording.ts`), and no command is asked of the source
+(`domain/start_command.py::source_refusal`, [#2221](https://github.com/danielcopper/romm-tender/issues/2221) D21). Until
 Tender chooses among every source's emulators, the order decides only while RetroDECK is absent or switched off.
 
-**A switched-off starting source starts nothing.** A shortcut's launch command starts its game through its source
-whatever that source's switch says, so the shared launch gate refuses the start instead: while the source that would
-start the game is detected and switched off, `check_start_source` answers its kind
+**A switched-off starting source starts nothing.** The resolver's command starts a game through its source whatever that
+source's switch says, so the shared launch gate refuses the start instead: while the source that would start the game is
+detected and switched off, `check_start_source` answers its kind
 (`domain/emulator_sources.py::switched_off_starting_source`, over a detection and nothing else of the sources), and both
 funnels — the game page's Play and the launch watcher — refuse before any save-sync work and say, as a notification, the
 sentence `startingSourceOffSentence` (`frontend/src/utils/emulatorSourceWording.ts`) has for that kind. Today that
 source is always RetroDECK, the one with `starts_games`, and RetroDECK's is the only sentence there; a kind with no
 sentence of its own says only that it is switched off. A switched-on source that starts games takes the start over, and
 one that does not starts nothing, so it lifts no refusal. Where the starting source is not detected at all, the start
-goes ahead: a source that is not listed has no switch to turn back on. While the backend is not running there is no
-watcher, and a start from Steam's library goes through as before; the launcher reads no setting of Tender's.
+goes ahead: a source that is not listed has no switch to turn back on. While the backend is not running nothing hands a
+start its command, so a start from Steam's library starts nothing at all
+([The start](#the-start-one-command-handed-over-for-one-start)).
 
 Where the check cannot tell — no answer within `LOCAL_CALL_LIMIT_MS`, a call that fails, or a detection of the sources
 that raised, which `check_start_source` refuses as `detection_failed` rather than answer as if nothing were detected —
@@ -306,8 +310,7 @@ Selection is **data-derived from the live `es_systems.xml` alone** — there is 
 `shipped_default` returns **the entry with the lowest `declared_index`** — the one its source ships first, whatever
 Tender can do with it ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D7). `default_option` takes it
 unless its installation is not established (D9). Nothing later in the list is taken instead: an entry that cannot start
-is said so (above). This amends [ADR-0020](../adr/0020-live-es-systems-emulator-resolution.md)'s rule, which skipped to
-the first entry Tender could write into a shortcut.
+is said so (above; [ADR-0020](../adr/0020-live-es-systems-emulator-resolution.md), as amended).
 
 **The rows keep the resolver's order; the default is read off the declared position.** The resolver states its entries
 in _effective_ order, where a choice the user made in ES-DE — a per-game `<altemulator>`, a system-level
@@ -363,11 +366,11 @@ overlay); or it carries `not-set-up` (`not_set_up`), a RetroDECK the resolver fo
 `retrodeck.json` — not started for this home yet, or its first-run setup left unfinished — which answers every question
 with that finding and an empty enumeration. `source` is the answering source's `{kind, starts_games}`. The platform page
 and the picker say why, from `reason`, rather than show an empty list they cannot distinguish from a system the frontend
-knows no emulator for ([qam-panel.md](qam-panel.md#notices-and-homes)); the launch degrades to plain. The overlay
-entries the resolver gives beside `emulator-catalogue-sealed` are not read as a list — not for the emulator list, not
-for saves and not for the firmware rows and verdicts, whose answer beside a sealed catalogue reads as nothing
-established: an incomplete list would look complete. The one use is a BIOS link: a place such an answer states is a
-place a link may go, and the list never decides that a link is unwanted
+knows no emulator for ([qam-panel.md](qam-panel.md#notices-and-homes)); no entry is in effect, so a start is refused
+(#2221 D20). The overlay entries the resolver gives beside `emulator-catalogue-sealed` are not read as a list — not for
+the emulator list, not for saves and not for the firmware rows and verdicts, whose answer beside a sealed catalogue
+reads as nothing established: an incomplete list would look complete. The one use is a BIOS link: a place such an answer
+states is a place a link may go, and the list never decides that a link is unwanted
 ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D37, D40). An empty list carrying none of those codes
 is that real "knows none", and `emulator-catalogue-exclusive` is not a refusal at all: a custom `es_systems.xml`
 declaring itself the whole catalogue gives a complete answer, merely a small one. The test is the codes and never an
@@ -429,9 +432,12 @@ resolver's reading of the file could not establish, where it stopped short (D40)
 but …". Where the answer says more than one thing, the line is the first with "+_N_ more" (#2698 D8). The same request
 asks each installed entry's command for the game (`start_verdict`), and an entry the resolver gives no complete command
 for gets no "can start it" under it: its row says "Tender cannot start it yet: _reason_", after the file's statements
-and counted among them ([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D20). The menu's answer never
-moves the pick; a pick of an entry that cannot start the game is the user's, and Play is then off with the verdict's
-sentence — the resolver's refusal of the file where it states one, then "Tender cannot start _entry_ yet: _reason_."
+and counted among them ([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D20). An entry whose
+installation could not be established says nothing there beyond its row's own note, and where the answering source is
+one Tender starts no game through yet, every row says so in that source's sentence (D21). The menu's answer never moves
+the pick; a pick of an entry that cannot start the game is the user's, and Play is then off with the verdict's sentence
+— the resolver's refusal of the file where it states one, then "Tender cannot start _entry_ yet: _reason_.", or, for an
+entry whose installation could not be established, the sentence a page says under such an emulator
 (`frontend/src/utils/emulatorStart.ts::startRefusal`). What a game's own entry answers, and what each answer does to a
 start, is [Launch-target validation](backend-architecture.md#launch-target-validation).
 
@@ -451,7 +457,7 @@ host where it names one. Whether a variable is `provided` gates nothing; it is p
 
 For a Flatpak program Tender runs
 `flatpak run --nosocket=wayland --filesystem=<game folder> --filesystem=<firmware store>:ro --env=… --command=<program> <app id> <arguments…>`:
-the socket is left out as before (D18, the reason under
+the socket is left out (D18, the reason under
 [RetroDECK runs through XWayland in Desktop Mode](../user-guide/troubleshooting.md#retrodeck-runs-through-xwayland-in-desktop-mode)),
 the game's folder is granted writable and Tender's firmware store read-only for this start only (D4), the distribution's
 variables are set first and the command's own `env` after them, so the command wins on a shared name, and a `:` or `\`
@@ -600,9 +606,8 @@ and the folder rule applies only when disc resolution returned `file_path`.
 
 `RomInstall.file_path` stays the EBOOT (the [ADR-0008](../adr/0008-rom-install-launch-file-and-rom-dir.md) anchor), so
 save-path, core, and displayed-filename derivations are untouched. The resolver's command for the folder is run as it
-answers it, like any other ([Starting a game](#starting-a-game-the-resolvers-command)); RetroDECK's `run_game.sh`, which
-turned a folder `%ROM%` into a path inside it, is no longer in the way
-([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D7). See
+answers it, like any other ([Starting a game](#starting-a-game-the-resolvers-command),
+[#2221](https://github.com/danielcopper/romm-tender/issues/2221) D7). See
 [ADR-0019](../adr/0019-folder-as-launch-target.md).
 
 **The folder is named as ES-DE scans it.** A folder-boot download's folder is renamed `<game>.ps3` (`ps3_folder_rename`,
@@ -729,10 +734,9 @@ Every start runs the command the resolver states for the entry Tender chose, so 
 never reaches a start Tender makes, and the BIOS badge, the per-core save path and the core-change warning all follow
 the same choice the start does
 ([ADR-0012](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0012-plugin-owns-core-selection-always-e-no-gamelist.md),
-as amended). Before, the command went through RetroDECK's `run_game.sh` with `-e`, which skipped the script's gamelist
-lookup; that lookup matched the ROM path with an awk regex that any metacharacter in a file name broke
-([#210](https://github.com/danielcopper/romm-tender/issues/210) /
-[RetroDECK#1358](https://github.com/RetroDECK/RetroDECK/issues/1358)). A start no longer runs that script at all.
+as amended). RetroDECK's `run_game.sh`, whose gamelist lookup matches the ROM path with an awk regex that any
+metacharacter in a file name breaks ([#210](https://github.com/danielcopper/romm-tender/issues/210) /
+[RetroDECK#1358](https://github.com/RetroDECK/RetroDECK/issues/1358)), runs in no start of Tender's.
 
 Tender reads what the gamelist states only through the resolver, to show it: the entry the user chose in ES-DE is marked
 beside Tender's own choice ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D7) and never decides a
@@ -756,10 +760,12 @@ then on.
 ## What starts is the resolver's command
 
 What a start runs — the program, its arguments, its environment and the folder it starts in — is the resolver's answer
-for the entry, read in `adapters/atlas_launch.py`; Tender adds only the sandbox grants and the RetroDECK distribution
-environment the resolver states. The per-ROM **selection** (which entry does this ROM start with?) is a service-layer
-read. A launcher other than RetroDECK's ([#918](https://github.com/danielcopper/romm-tender/issues/918)) is one the
-resolver answers for, not a second seam in Tender.
+for the entry, read in `adapters/atlas_launch.py`, the distribution's environment included; Tender adds only
+`--nosocket=wayland` and the folder grants to a Flatpak start
+([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D4, D18). The per-ROM **selection** (which entry does
+this ROM start with?) is a service-layer read. A launcher other than RetroDECK's
+([#918](https://github.com/danielcopper/romm-tender/issues/918)) is one the resolver answers for, not a second seam in
+Tender.
 
 The **core picker now lists standalone emulators alongside libretro cores** (#1210 / ADR-0020) — you _can_ choose
 standalone PCSX2 vs the LRPS2 libretro core in the UI, at both per-game and per-platform scope. **BIOS** is no longer

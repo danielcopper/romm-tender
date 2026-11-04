@@ -482,9 +482,10 @@ one, on purpose.
 invisible. Started on Wayland, RetroArch opens such a window, and so can a standalone emulator that supports Wayland;
 Steam cannot tell that it belongs to the running game, and it applies Steam Input's Desktop Layout to every controller:
 the Deck's built-in controls act as mouse and keyboard, and the game gets no controller input at all. So Tender starts
-RetroDECK with `flatpak run --nosocket=wayland`, which leaves it no Wayland connection and makes every emulator draw
-through XWayland, where Steam sees the window and applies the game's controller configuration. Under Steam's 64-bit
-client Steam sees the window but cannot tell that it belongs to the game; what Tender does about that is under
+every Flatpak emulator with `flatpak run --nosocket=wayland`, which leaves it no Wayland connection and makes every
+emulator draw through XWayland, where Steam sees the window and applies the game's controller configuration. Under
+Steam's 64-bit client Steam sees the window but cannot tell that it belongs to the game; what Tender does about that is
+under
 [The controller acts as mouse and keyboard in a game in Desktop Mode](#the-controller-acts-as-mouse-and-keyboard-in-a-game-in-desktop-mode).
 In Gaming Mode games already draw through gamescope's XWayland, so nothing changes there.
 

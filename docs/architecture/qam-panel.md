@@ -1603,18 +1603,18 @@ it, for the focused platform:
   would spend a row of the pane reporting that nothing can be done, which is what the device round asked to remove.
   States that report a PROBLEM keep their line, because a tooltip is a hover and the Deck's controller cannot perform
   one: the read failed, the answering source gives no emulator list (worded by why, § Notices and homes), **ES-DE lists
-  no emulator at all**, nothing on its menu is choosable, the fallback is not installed or one Tender cannot start yet,
-  and the fallback or the platform's own pick is one whose installation could not be established. ES-DE listing no
-  emulator and nothing on the menu being choosable are the split above, and they are checked in that order: an empty
-  menu is the case where RetroDECK's own fallback fails too, so it is answered before the not-choosable one, and the
-  surviving count branch then speaks only for a menu that really does hold one choosable option. A switch the backend
-  refuses is reported in the same place, and the header keeps naming the old core, which every game following the
-  platform's pick still starts with. A switch takes the page's busy hold from the moment it is picked until it is over;
-  an accepted one brings the platform's BIOS links up to date and reads the platform again, which is why the hold has to
-  cover the whole of it. The chip and the pane's buttons disable, another platform's pane says `Working on X`, and the
-  acting pane says `Switching to <emulator>…` in the same status line the outcome lands in — a success takes that line
-  back, a refusal replaces it, and a continuation cancelled by leaving the page takes it back too, because such a switch
-  either committed or never ran and there is no pane left to report to either way.
+  no emulator at all**, nothing on its menu is choosable, the default is not installed, and the default or the
+  platform's own pick is one whose installation could not be established. ES-DE listing no emulator and nothing on the
+  menu being choosable are the split above, and they are checked in that order: an empty menu is the case where no game
+  of the platform starts at all, so it is answered before the not-choosable one, and the surviving count branch then
+  speaks only for a menu that really does hold one choosable option. A switch the backend refuses is reported in the
+  same place, and the header keeps naming the old core, which every game following the platform's pick still starts
+  with. A switch takes the page's busy hold from the moment it is picked until it is over; an accepted one brings the
+  platform's BIOS links up to date and reads the platform again, which is why the hold has to cover the whole of it. The
+  chip and the pane's buttons disable, another platform's pane says `Working on X`, and the acting pane says
+  `Switching to <emulator>…` in the same status line the outcome lands in — a success takes that line back, a refusal
+  replaces it, and a continuation cancelled by leaving the page takes it back too, because such a switch either
+  committed or never ran and there is no pane left to report to either way.
 
 - **BIOS files** — the summary, which this pane words nowhere: `frontend/src/utils/biosSummary.ts` holds every state and
   a one-of group's, and answers each in two lengths, and the pane takes both — the short `status` as the section's

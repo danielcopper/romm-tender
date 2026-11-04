@@ -7,9 +7,9 @@ amended-by: [0044]
 
 # Per-game disc selection lives in the plugin DB and is applied as a bake-time launch-path override; disc identity is format-semantic, the per-system accept-list is read live from es_systems
 
-## Status
+## Scope
 
-Accepted. Implements the cross-emulator disc picker deferred by [ADR-0013](0013-platform-gated-m3u-via-es-systems.md)
+Implements the cross-emulator disc picker deferred by [ADR-0013](0013-platform-gated-m3u-via-es-systems.md)
 §Consequences and tracked under [#865](https://github.com/danielcopper/decky-romm-sync/issues/865). Extends
 [ADR-0009](0009-launcher-pure-exec-wrapper-baked-launch-options.md) (the baked-`launch_options` model) with a disc-aware
 launch-path layer, and **mirrors [ADR-0011](0011-per-game-core-override-in-db-applied-via-e-flag.md) almost exactly** —

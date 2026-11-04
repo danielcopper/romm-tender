@@ -476,8 +476,8 @@ reads its format at all — and is said with it (D40, D41). Which of them refuse
 folds no case before it asks (D3).
 
 Launchability is a statement about a start, never about the download. Every installed game is recorded with its files
-and gets its launch command whatever its launchability (D28); installing a package by hand in the emulator is the
-documented RetroDECK procedure, and the files are what it needs.
+whatever its launchability, and a start asks for its command whatever that is (D28); installing a package by hand in the
+emulator is the documented RetroDECK procedure, and the files are what it needs.
 
 ### Start command / start hand-over
 
@@ -487,7 +487,7 @@ start and stored nowhere (D7). An entry the resolver gives no **complete** comma
 yet**, with the resolver's reason. The **start hand-over** is that command, given to `tender-rom-launcher` for one start
 only: a file in Tender's runtime directory the launcher claims, removes and runs; no hand-over, no start (D11, D15).
 _Avoid_: "bake" and "safely-bakeable" — they named writing a command into a shortcut and Tender's own rule for which
-commands could be written, both gone (D7, D20).
+commands could be written; Tender does neither (D7, D20).
 
 ### Missing download / forget a download
 

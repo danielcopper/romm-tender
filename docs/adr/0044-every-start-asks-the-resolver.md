@@ -9,7 +9,7 @@ amends: [0012, 0014, 0015, 0019, 0020, 0025]
 # Every start asks the resolver for its command, and a shortcut carries only its appId
 
 Recorded for [#2221](https://github.com/danielcopper/romm-tender/issues/2221), whose `## Decisions` D2, D3, D7, D10, D11
-and D15–D20 this ADR carries, and for its first cut, [#2708](https://github.com/danielcopper/romm-tender/issues/2708).
+and D15–D21 this ADR carries, and for its first cut, [#2708](https://github.com/danielcopper/romm-tender/issues/2708).
 It goes on from [ADR-0042](0042-tender-takes-emulator-answers-starts-emulators-and-keeps-its-own-store.md), under which
 Tender starts emulators itself.
 
@@ -43,7 +43,8 @@ the folder it starts in.
   after it (D16).
 - An entry the resolver gives no complete command for is not startable through Tender yet, with the resolver's reason,
   on the game's page, in its emulator menu and at a start; nothing is guessed, and no rule of Tender's own decides it
-  (D2, D20). A game no emulator is found for is not started (D20).
+  (D2, D20). A game no emulator is found for is not started (D20), and neither is one whose answering source is one
+  Tender starts no game through yet, which the start says in that source's sentence (D21).
 - A start whose hand-over does not come about is refused with a sentence saying why (D19).
 - `roms.applied_launch_options` gives way to `roms.shortcut_applied`, which only the sync's commit sets and Force Full
   Sync clears (D17).
