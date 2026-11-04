@@ -66,19 +66,20 @@ class TestTheRecord:
 class TestWhatItRefuses:
     @pytest.mark.parametrize(("folder", "argv"), [("/games", ["a\0b"]), ("/ga\0mes", ["/bin/true"]), ("/games", [])])
     def test_a_value_the_record_cannot_hold_writes_nothing(self, tmp_path, folder, argv):
+        adapter = _adapter(tmp_path)
+
         with pytest.raises(ValueError, match="NUL"):
-            _adapter(tmp_path).hand_over(42, folder, argv, create_folder=False)
+            adapter.hand_over(42, folder, argv, create_folder=False)
 
         assert not _folder(tmp_path).exists()
 
     def test_a_folder_that_cannot_be_created_raises(self, tmp_path):
         _folder(tmp_path).mkdir(parents=True)
         os.chmod(_folder(tmp_path), 0o500)
+        adapter = StartHandoverAdapter(folder=str(_folder(tmp_path) / "inner"))
         try:
             with pytest.raises(OSError):
-                StartHandoverAdapter(folder=str(_folder(tmp_path) / "inner")).hand_over(
-                    42, "/games", ["/bin/true"], create_folder=False
-                )
+                adapter.hand_over(42, "/games", ["/bin/true"], create_folder=False)
         finally:
             os.chmod(_folder(tmp_path), 0o700)
 
@@ -87,9 +88,10 @@ class TestWhatItRefuses:
             raise OSError("no room")
 
         monkeypatch.setattr(os, "replace", refuse)
+        adapter = _adapter(tmp_path)
 
         with pytest.raises(OSError, match="no room"):
-            _adapter(tmp_path).hand_over(42, "/games", ["/bin/true"], create_folder=False)
+            adapter.hand_over(42, "/games", ["/bin/true"], create_folder=False)
 
         assert list(_folder(tmp_path).iterdir()) == []
 
