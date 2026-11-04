@@ -129,30 +129,27 @@ export function startRemarkSentences(remarks: readonly StartRemark[] | undefined
  */
 export function emulatorStartRefusal(start: EmulatorStart, subject: string, canPick: boolean): string | null {
   const entry = start.entry ?? "The emulator";
-  const pointer = canPick ? CHOOSE_ANOTHER : "";
-  if (start.state === "cannot_start") {
-    switch (start.reason) {
-      case "not_installed":
-        return `${entry} is not installed, so ${subject} cannot start.${pointer}`;
-      case SOURCE_STARTS_NO_GAMES:
-        return cannotStartSentence(start.source ?? "");
-      default:
-        if (start.reason !== null && isNotEstablished(start.reason)) {
-          return `${installationSentence(entry, start.reason)}${pointer}`;
-        }
-        if (start.reason !== null && isCommandReason(start.reason)) {
-          return `${commandRefusalSentence(start.reason, entry)}${pointer}`;
-        }
-        return `${entry} cannot start ${subject}.${pointer}`;
-    }
-  }
-  if (start.state === "choose") {
-    const cause = notEstablishedCause(start.reason);
-    const why = cause === null ? "" : ` (${cause})`;
-    const choose = canPick ? " Choose an emulator in the emulator menu." : "";
-    return `No emulator is the default, because whether ${entry} is installed could not be established${why}.${choose}`;
-  }
+  if (start.state === "cannot_start") return cannotStartRefusal(start, entry, subject, canPick ? CHOOSE_ANOTHER : "");
+  if (start.state === "choose") return noDefaultRefusal(start.reason, entry, canPick);
   return null;
+}
+
+/** {@link emulatorStartRefusal} for a `cannot_start` answer, `pointer` ending the sentence where one is said. */
+function cannotStartRefusal(start: EmulatorStart, entry: string, subject: string, pointer: string): string {
+  const reason = start.reason;
+  if (reason === "not_installed") return `${entry} is not installed, so ${subject} cannot start.${pointer}`;
+  if (reason === SOURCE_STARTS_NO_GAMES) return cannotStartSentence(start.source ?? "");
+  if (reason !== null && isNotEstablished(reason)) return `${installationSentence(entry, reason)}${pointer}`;
+  if (reason !== null && isCommandReason(reason)) return `${commandRefusalSentence(reason, entry)}${pointer}`;
+  return `${entry} cannot start ${subject}.${pointer}`;
+}
+
+/** {@link emulatorStartRefusal} for a `choose` answer: no default, the shipped entry's installation not established. */
+function noDefaultRefusal(reason: string | null, entry: string, canPick: boolean): string {
+  const cause = notEstablishedCause(reason);
+  const why = cause === null ? "" : ` (${cause})`;
+  const choose = canPick ? " Choose an emulator in the emulator menu." : "";
+  return `No emulator is the default, because whether ${entry} is installed could not be established${why}.${choose}`;
 }
 
 /** Whether this answer refuses a start. */

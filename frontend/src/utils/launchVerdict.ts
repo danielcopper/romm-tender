@@ -83,6 +83,7 @@ export async function actOnGateVerdict(
 ): Promise<"done" | "retry"> {
   switch (verdict.decision) {
     case "allow":
+    case "play_anyway":
       await hooks.launch();
       return "done";
     case "abort":
@@ -128,9 +129,6 @@ export async function actOnGateVerdict(
       hooks.onDeclined();
       return "done";
     }
-    case "play_anyway":
-      await hooks.launch();
-      return "done";
   }
 }
 

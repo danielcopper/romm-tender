@@ -323,9 +323,7 @@ async function waitForAppOverview(appId: number, timeoutMs: number): Promise<boo
  * (`backend/domain/shortcut_data.py::shortcut_launch_options`); this is for a
  * shortcut the panel has just created or rewritten.
  */
-export function shortcutLaunchOptions(appId: number): string {
-  return String(appId);
-}
+export const shortcutLaunchOptions = (appId: number): string => String(appId); // NOSONAR(typescript:S7770) — the one named home of the launch-options format (#2221 D10), not a stand-in for String
 
 /**
  * Add a single Steam shortcut. Returns the new steam app_id, or null on failure.
