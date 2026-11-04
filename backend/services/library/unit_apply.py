@@ -159,7 +159,7 @@ class UnitApplier:
             preferred_region=self._settings.get("preferred_region", AUTO_REGION),
             running_rom_ids=self._running_rom_ids,
             logger=self._logger,
-            hidden_rom_ids=self._sync_state.run_hidden_rom_ids or frozenset(),
+            hidden_rom_ids=self._sync_state.run_hidden_rom_ids,
         )
         self._sync_state.run_converged.update((binding.rom_id, binding) for binding in converged)
         by_key = {collection_membership_key(delivery.unit): delivery for delivery in deliveries}
@@ -302,7 +302,7 @@ class UnitApplier:
                 preferred_region=preferred_region,
                 running_rom_ids=self._running_rom_ids,
                 logger=self._logger,
-                hidden_rom_ids=box.run_hidden_rom_ids or frozenset(),
+                hidden_rom_ids=box.run_hidden_rom_ids,
             )
         converged_ids = {binding.rom_id for binding in converged} if complete_view else set(box.run_converged)
 
