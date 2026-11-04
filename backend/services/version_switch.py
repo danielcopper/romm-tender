@@ -133,6 +133,7 @@ class _LocalGroup:
     """The local view of a bound ROM's sibling group (captured in one read UoW)."""
 
     bound_rom_id: int
+    app_id: int
     group_key: str | None
     platform_slug: str
     members: list[_MemberView] = field(default_factory=list)
@@ -140,6 +141,14 @@ class _LocalGroup:
     @property
     def member_ids(self) -> set[int]:
         return {m.rom_id for m in self.members}
+
+
+@dataclass(frozen=True)
+class _StubLocalRow:
+    """What the local row of a server-only stub holds for its picker entry."""
+
+    group_key: str | None
+    shortcut_app_id: int | None
 
 
 @dataclass(frozen=True)
@@ -198,7 +207,7 @@ class VersionSwitchService:
         server-query verdict, including the single-row shape. A multi-version
         result has one entry per version with ``rom_id`` / ``label`` / ``name`` /
         the version dimensions and the ``synced`` / ``installed`` / ``active`` /
-        ``is_default`` / ``switchable`` / ``vanished`` markers. Local rows always appear; the
+        ``is_default`` / ``switchable`` / ``vanished`` / ``hidden`` markers. Local rows always appear; the
         server's ``sibling_roms`` add any not-yet-synced versions
         (``synced: False``). ``switchable`` is the same membership authority
         ``switch_version`` decides by (:func:`target_in_sibling_group`): a RomM
@@ -237,8 +246,9 @@ class VersionSwitchService:
                 local,
                 server_only_stubs=[],
                 detail_by_id={},
-                stub_local_group_keys={},
+                stub_local_rows={},
                 vanished_ids=vanished_ids,
+                hidden_ids=await self._read_hidden_ids(),
                 live_main_flags={},
                 bound_vanished=True,
                 server_query_failed=False,
@@ -249,8 +259,9 @@ class VersionSwitchService:
                 local,
                 server_only_stubs=[],
                 detail_by_id={},
-                stub_local_group_keys={},
+                stub_local_rows={},
                 vanished_ids=set(),
+                hidden_ids=frozenset(),
                 live_main_flags={},
                 bound_vanished=False,
                 server_query_failed=True,
@@ -262,15 +273,16 @@ class VersionSwitchService:
         vanished_ids = await self._probe_vanished(suspect_ids)
         server_only_stubs = [s for s in stubs if int(s["id"]) not in local.member_ids]
         detail_by_id = await self._fetch_stub_details(server_only_stubs)
-        stub_local_group_keys = await self._loop.run_in_executor(
-            None, self._read_stub_local_group_keys, [int(s["id"]) for s in server_only_stubs]
+        stub_local_rows = await self._loop.run_in_executor(
+            None, self._read_stub_local_rows, [int(s["id"]) for s in server_only_stubs]
         )
         return self._build_version_list(
             local,
             server_only_stubs=server_only_stubs,
             detail_by_id=detail_by_id,
-            stub_local_group_keys=stub_local_group_keys,
+            stub_local_rows=stub_local_rows,
             vanished_ids=vanished_ids,
+            hidden_ids=await self._read_hidden_ids(),
             live_main_flags=self._live_main_flags(local.bound_rom_id, bound_detail, stubs),
             bound_vanished=False,
             server_query_failed=False,
@@ -326,6 +338,10 @@ class VersionSwitchService:
         except Exception as e:
             self._logger.warning(f"Version list: liveness probe failed open for rom {rom_id}: {e}")
         return False
+
+    async def _read_hidden_ids(self) -> frozenset[int]:
+        """Every ROM the user hid in RomM, asked once per list (#2502 D5); empty where the answer cannot be read."""
+        return await self._loop.run_in_executor(None, self._romm_api.read_hidden_rom_ids) or frozenset()
 
     async def _fetch_stub_details(self, stubs: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
         """Fetch each server-only sibling's full dims concurrently (best-effort).
@@ -384,32 +400,35 @@ class VersionSwitchService:
             ]
             return _LocalGroup(
                 bound_rom_id=bound.rom_id,
+                app_id=app_id,
                 group_key=group_key,
                 platform_slug=bound.platform_slug,
                 members=members,
             )
 
-    def _read_stub_local_group_keys(self, stub_ids: list[int]) -> dict[int, str | None]:
-        """Local ``sibling_group_key`` for each server-only stub id that IS local.
+    def _read_stub_local_rows(self, stub_ids: list[int]) -> dict[int, _StubLocalRow]:
+        """The local row's group key and shortcut for each server-only stub id that IS local.
 
         A server-only stub was excluded from the bound group's members, but it may
         still be a locally-synced ROM under a DIFFERENT group key — RomM's
         ``sibling_roms`` bridges two local groups when they share a lower-priority
         metadata id (see :func:`target_in_sibling_group`). An id present in the
-        returned map has such a local row (its group key); an absent id has no
-        local row (a genuine not-yet-synced sibling). The picker uses this to mark
-        the cross-group rows non-switchable so ``switch_version`` never rejects a
-        row the user could click. Read in its own short UoW after the server fetch.
+        returned map has such a local row; an absent id has no local row (a
+        genuine not-yet-synced sibling). The picker uses this to mark the
+        cross-group rows non-switchable so ``switch_version`` never rejects a row
+        the user could click, and, under a bound row with no group key, to mark a
+        stub from its local row (#2502 D6). Read in its own short UoW after the
+        server fetch.
         """
         if not stub_ids:
             return {}
         with self._uow_factory() as uow:
-            keys: dict[int, str | None] = {}
+            rows: dict[int, _StubLocalRow] = {}
             for rom_id in stub_ids:
                 row = uow.roms.get(rom_id)
                 if row is not None:
-                    keys[rom_id] = row.sibling_group_key
-            return keys
+                    rows[rom_id] = _StubLocalRow(group_key=row.sibling_group_key, shortcut_app_id=row.shortcut_app_id)
+            return rows
 
     def _build_version_list(
         self,
@@ -417,8 +436,9 @@ class VersionSwitchService:
         *,
         server_only_stubs: list[dict[str, Any]],
         detail_by_id: dict[int, dict[str, Any]],
-        stub_local_group_keys: dict[int, str | None],
+        stub_local_rows: dict[int, _StubLocalRow],
         vanished_ids: set[int],
+        hidden_ids: frozenset[int],
         live_main_flags: Mapping[int, bool],
         bound_vanished: bool,
         server_query_failed: bool,
@@ -439,9 +459,11 @@ class VersionSwitchService:
         installed (``no_file_on_romm``). ``bound_elsewhere`` marks a version another
         shortcut of the game is on, by :func:`target_bound_elsewhere`, the rule
         ``switch_version`` refuses such a target by; it says nothing about
-        membership, so ``switchable`` stays the membership verdict. A
-        single-version group renders no picker while preserving its bound/server
-        verdicts.
+        membership, so ``switchable`` stays the membership verdict. ``hidden``
+        marks a version in *hidden_ids*, the ROMs the user hid in RomM; it
+        refuses nothing, since a hidden version of a game with a visible one
+        keeps the game's shortcut (#2502 D1). A single-version group renders no
+        picker while preserving its bound/server verdicts.
 
         ``is_default`` is RomM's default-version flag and nothing else: each
         version's ``is_main_sibling`` as *live_main_flags* states it, else what
@@ -467,6 +489,7 @@ class VersionSwitchService:
                 "synced": True,
                 "installed": m.installed,
                 "vanished": m.rom_id in vanished_ids,
+                "hidden": m.rom_id in hidden_ids,
                 "no_file": not m.has_file,
                 "bound_elsewhere": m.bound_elsewhere,
                 "is_default": live_main_flags.get(m.rom_id, m.is_main_sibling),
@@ -483,7 +506,7 @@ class VersionSwitchService:
             for m in local.members
         ]
         entries += [
-            self._server_only_entry(stub, local, detail_by_id, stub_local_group_keys, live_main_flags)
+            self._server_only_entry(stub, local, detail_by_id, stub_local_rows, live_main_flags, hidden_ids)
             for stub in server_only_stubs
         ]
 
@@ -512,10 +535,11 @@ class VersionSwitchService:
         stub: dict[str, Any],
         local: _LocalGroup,
         detail_by_id: dict[int, dict[str, Any]],
-        stub_local_group_keys: dict[int, str | None],
+        stub_local_rows: dict[int, _StubLocalRow],
         live_main_flags: Mapping[int, bool],
+        hidden_ids: frozenset[int],
     ) -> dict[str, Any]:
-        """Build one server-only stub's picker entry (``synced: False`` + switchable verdict).
+        """Build one server-only stub's picker entry: ``synced: False`` unless its row marks it, and ``switchable``.
 
         A stub already synced under a (possibly different) local key is judged by key
         equality (#1359); a never-synced stub is judged by canonical compatibility
@@ -523,11 +547,20 @@ class VersionSwitchService:
         absent-or-equal (its raw ``detail`` carries those ids), so a conflicting match
         is listed but not switchable (#1360). A missing detail (a transient fetch
         miss) can't be judged → non-switchable.
+
+        Under a bound row with no group key, which accepts any target, a stub
+        with a local row is marked from that row: ``synced``, and
+        ``bound_elsewhere`` where another shortcut is on it, the rule the switch
+        refuses it by (#2502 D6). Under a keyed bound row such a stub sits in
+        another group, which the switch refuses ``not_in_group`` first, so it is
+        left unmarked.
         """
         rom_id = int(stub["id"])
         detail = detail_by_id.get(rom_id)
         meta = extract_version_metadata(detail) if detail is not None else {}
-        target_is_local = rom_id in stub_local_group_keys
+        local_row = stub_local_rows.get(rom_id)
+        target_is_local = local_row is not None
+        marked_from_row = local_row is not None and local.group_key is None
         return {
             "rom_id": rom_id,
             "name": (detail.get("name") if detail else None) or stub.get("name") or "",
@@ -536,21 +569,20 @@ class VersionSwitchService:
             "languages": list(meta.get("languages") or []),
             "revision": str(meta.get("revision") or ""),
             "tags": list(meta.get("tags") or []),
-            "synced": False,
+            "synced": marked_from_row,
             "installed": False,
             # Presence in the bound ROM's current direct sibling response is a
             # positive server statement, so a server-only stub is live.
             "vanished": False,
+            "hidden": rom_id in hidden_ids,
             "no_file": not has_file_on_romm(detail if detail is not None else stub),
-            # Never marked: a stub with a local row in another group is refused
-            # ``not_in_group`` before the bound-elsewhere check. Under a bound row
-            # with no group key, which accepts any target, a stub bound to another
-            # shortcut is offered and the switch refuses it as ``bound_elsewhere``.
-            "bound_elsewhere": False,
+            "bound_elsewhere": marked_from_row
+            and local_row is not None
+            and target_bound_elsewhere(target_app_id=local_row.shortcut_app_id, app_id=local.app_id),
             "is_default": live_main_flags.get(rom_id, bool(meta.get("is_main_sibling"))),
             "switchable": target_in_sibling_group(
                 bound_group_key=local.group_key,
-                target_group_key=stub_local_group_keys.get(rom_id) if target_is_local else None,
+                target_group_key=local_row.group_key if local_row is not None else None,
                 target_ids=None if target_is_local else detail,
                 target_is_local=target_is_local,
                 target_is_server_sibling=True,

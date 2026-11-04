@@ -1052,6 +1052,25 @@ class TestConvergeBoundGroups:
         removed = [rom_id for rom_id in (1, 2, 3) if rom_id != kept]
         assert self._kept(members, registry, installed) == [(rom_id, kept) for rom_id in removed]
 
+    def test_a_game_whose_every_bound_version_the_user_hid_is_left_to_the_stale_removal(self):
+        """No version of it is listed, and each bound one goes as a hidden stale row (#2502 D1)."""
+        members = [_gsd(9, group_key="other")]
+        registry = {str(rom_id): _greg(rom_id, app_id=1000 + rom_id) for rom_id in (1, 2)}
+        assert converge_bound_groups(members, registry, set(), platform_slugs={"n64"}, hidden_rom_ids={1, 2}) == []
+
+    def test_a_hidden_version_beside_one_romm_no_longer_lists_leaves_that_one_alone(self):
+        members = [_gsd(9, group_key="other")]
+        registry = {str(rom_id): _greg(rom_id, app_id=1000 + rom_id) for rom_id in (1, 2)}
+        assert converge_bound_groups(members, registry, {1}, platform_slugs={"n64"}, hidden_rom_ids={1}) == []
+
+    @pytest.mark.parametrize(("installed", "kept"), [((), 1), ((2,), 2)], ids=["none", "the-hidden"])
+    def test_a_hidden_version_of_a_listed_game_converges_as_an_unlisted_one(self, installed, kept):
+        members = [_gsd(1, fs_name_no_ext="game_jp")]
+        registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
+        removed = 2 if kept == 1 else 1
+        converged = converge_bound_groups(members, registry, set(installed), platform_slugs={"n64"}, hidden_rom_ids={2})
+        assert [(binding.rom_id, binding.kept_rom_id) for binding in converged] == [(removed, kept)]
+
     def test_the_binding_carries_both_app_ids(self):
         members = [_gsd(1), _gsd(2)]
         registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
@@ -1877,6 +1896,72 @@ class TestSortStaleRows:
         remove, keep = settle_asked_rows([gone, present, unknown, unasked], {1: "gone", 2: "present", 3: "unknown"})
 
         assert (remove, keep) == ([present], [gone, unknown, unasked])
+
+
+class TestAHiddenRowInTheStaleSort:
+    """A stale row the user hid in RomM goes unless its game was synced (#2502 D1, D2)."""
+
+    def test_a_hidden_row_whose_game_the_run_did_not_sync_is_removed_on_every_route_unasked(self):
+        read = StaleRow(1, 1001, "n64", "platform", "g1")
+        via_collection = StaleRow(2, 1002, "gba", "collection", "g2")
+        unrecorded_listed = StaleRow(3, 1003, "gba", None, "g3")
+
+        sort = sort_stale_rows(
+            [read, via_collection, unrecorded_listed],
+            read_platform_slugs={"n64"},
+            listed_platform_slugs={"n64", "gba"},
+            collection_listed_rom_ids={3},
+            synced_group_keys={"other"},
+            hidden_rom_ids={1, 2, 3},
+        )
+
+        assert sort == StaleSort(
+            remove=[read, via_collection, unrecorded_listed],
+            keep=[],
+            ask=[],
+            hidden=(read, via_collection, unrecorded_listed),
+        )
+
+    def test_a_hidden_row_whose_game_the_run_synced_lands_as_any_other_row(self):
+        read = StaleRow(1, 1001, "n64", "platform", "g")
+        via_collection = StaleRow(2, 1002, "gba", "collection", "g")
+
+        sort = sort_stale_rows(
+            [read, via_collection],
+            read_platform_slugs={"n64"},
+            listed_platform_slugs={"n64", "gba"},
+            collection_listed_rom_ids=(),
+            synced_group_keys={"g"},
+            hidden_rom_ids={1, 2},
+        )
+
+        assert sort == StaleSort(remove=[], keep=[read], ask=[], ask_only=(via_collection,))
+
+    def test_a_hidden_row_without_a_group_key_is_judged_alone(self):
+        row = StaleRow(1, 1001, "n64", "platform", None)
+
+        sort = sort_stale_rows(
+            [row],
+            read_platform_slugs={"n64"},
+            listed_platform_slugs={"n64"},
+            collection_listed_rom_ids=(),
+            synced_group_keys={"g"},
+            hidden_rom_ids={1},
+        )
+
+        assert (sort.remove, sort.keep) == ([row], [])
+
+    def test_a_removed_hidden_row_has_its_mark_cleared(self):
+        row = StaleRow(1, 1001, "n64", "platform", "g1")
+        sort = sort_stale_rows(
+            [row],
+            read_platform_slugs={"n64"},
+            listed_platform_slugs={"n64"},
+            collection_listed_rom_ids=(),
+            hidden_rom_ids={1},
+        )
+
+        assert sort.gone_from_romm_marks({}, {"n64"}) == {1: None}
 
 
 class TestGroupKeysOf:

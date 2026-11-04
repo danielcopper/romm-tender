@@ -63,6 +63,7 @@ async def settle_stale_rows(
     listed_platform_slugs: Collection[str] | None,
     collection_listed_rom_ids: Collection[int],
     synced_group_keys: Collection[str],
+    hidden_rom_ids: Collection[int] | None = None,
 ) -> tuple[list[StaleRow], list[StaleRow], dict[int, GoneEvidence | None]]:
     """``(remove, kept_in_platform_collections, gone_marks)`` for the stale *rows*.
 
@@ -74,7 +75,10 @@ async def settle_stale_rows(
     filed in its platform's collection only where the platform-groups setting
     files every bound row. Neither list holds a row whose game the run synced
     (*synced_group_keys*) on a platform the run did not read either, though
-    RomM is asked about it where it would be asked about any other row.
+    RomM is asked about it where it would be asked about any other row. A row
+    the user hid (*hidden_rom_ids*, the run's hidden set, ``None`` where RomM's
+    answer could not be read) whose game the run did not sync is removed
+    unasked.
     """
     sort = sort_stale_rows(
         rows,
@@ -82,6 +86,7 @@ async def settle_stale_rows(
         listed_platform_slugs=listed_platform_slugs,
         collection_listed_rom_ids=collection_listed_rom_ids,
         synced_group_keys=synced_group_keys,
+        hidden_rom_ids=hidden_rom_ids or frozenset(),
     )
     asked = [*sort.ask, *sort.ask_only]
     answers = await ask_romm([row.rom_id for row in asked]) if asked else {}

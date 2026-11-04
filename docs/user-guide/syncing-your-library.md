@@ -116,10 +116,11 @@ SteamGridDB game or key — after asking before it replaces a cover set in Steam
 although none of its shortcuts change reads "No shortcut changes — recording what RomM has now." and offers **Apply
 Sync** as well: applying records what RomM serves on that platform or in that collection, so the next sync can skip it
 again. You see it once after an update that introduced this check, while every platform or collection is read in full
-one time; after a game was hidden or deleted in RomM; after a game was changed in RomM in a way none of its shortcuts
-shows, such as a metadata edit or a rescan, since the last sync or shortly before it; and after a sync that stopped
-before it finished. With **Skip preview** on there is no preview to show it in: the sync records what RomM has now by
-itself. Only when there is truly nothing to do does the page read "Everything is up to date."
+one time; after a game was deleted in RomM or an admin hid it from you, or after you hid one version of a game that
+keeps another; after a game was changed in RomM in a way none of its shortcuts shows, such as a metadata edit or a
+rescan, since the last sync or shortly before it; and after a sync that stopped before it finished. With **Skip
+preview** on there is no preview to show it in: the sync records what RomM has now by itself. Only when there is truly
+nothing to do does the page read "Everything is up to date."
 
 A preview stays good for **30 minutes**, and it belongs to Tender rather than to the page you are looking at: you can
 leave for the settings or a submenu, come back, and the same preview is still there with **Apply Sync** ready. That
@@ -308,26 +309,26 @@ If one game has **several Steam shortcuts** — from a library synced before Ten
 RomM joined two games that each had one — the next sync of its platform that runs to its end keeps **one** and removes
 the others. The preview counts them under removals. A game a collection brings in, with its platform turned off, goes
 the same way, whichever of its versions the collection holds: the sync reads the versions RomM lists for the game. A
-version no collection holds that RomM no longer lists for the game — deleted or hidden in RomM, or moved to another game
-— keeps its shortcut, and the collection is then read again on every sync rather than skipped. If RomM instead moves the
-version the collection holds to another game, the version left behind is a game no collection holds: with its platform
-turned off, its shortcut is removed as any game's there is, and the collection is skipped again from the next sync. A
-version RomM joined to the game after Tender last read it, and that no collection holds, is not treated as part of the
-game: with its platform turned off, its shortcut is removed as any game's there is. The game then keeps one shortcut,
-the one of the version the collection holds, and the removed shortcut's Steam collections, Favorites, hidden state and
-artwork set in Steam are not moved over to it. An installed version stays installed, and the version picker still offers
-it. A game on a platform RomM no longer lists keeps its shortcuts for good, since no sync reads that platform. A game
-one of whose shortcuts is running when the sync reaches its platform or its collections, or when the sync removes
-shortcuts at its end, keeps them only for now: the next sync after it has quit converges it. The shortcut that stays is
-the one of the version you have installed, the ranking above choosing among several; with none installed, the one of the
-version Tender would pick among them, as above, a version RomM has a file for before one without. A version RomM no
-longer lists keeps its shortcut only when it is installed and no version RomM lists is, or when no version RomM lists
-has a shortcut — then the installed one, else the one added to RomM first. Before a shortcut goes, the one that stays is
-added to the Steam collections the removed one was in, Favorites included, is hidden if the removed one was, and takes
-over every image but the icon you set in Steam for the removed one where it has none set in Steam itself; that Favorites
-and Hidden carry over has not been checked on a device. The removed shortcut's icon set in Steam, its own Steam playtime
-and screenshots, and a controller layout saved under its name do not move. Tender keeps each version's saves, playtime
-and download, so switching to another version later finds them where they were.
+version no collection holds that RomM no longer lists for the game — deleted, hidden from your user by an admin, or
+moved to another game — keeps its shortcut, and the collection is then read again on every sync rather than skipped. If
+RomM instead moves the version the collection holds to another game, the version left behind is a game no collection
+holds: with its platform turned off, its shortcut is removed as any game's there is, and the collection is skipped again
+from the next sync. A version RomM joined to the game after Tender last read it, and that no collection holds, is not
+treated as part of the game: with its platform turned off, its shortcut is removed as any game's there is. The game then
+keeps one shortcut, the one of the version the collection holds, and the removed shortcut's Steam collections,
+Favorites, hidden state and artwork set in Steam are not moved over to it. An installed version stays installed, and the
+version picker still offers it. A game on a platform RomM no longer lists keeps its shortcuts for good, since no sync
+reads that platform. A game one of whose shortcuts is running when the sync reaches its platform or its collections, or
+when the sync removes shortcuts at its end, keeps them only for now: the next sync after it has quit converges it. The
+shortcut that stays is the one of the version you have installed, the ranking above choosing among several; with none
+installed, the one of the version Tender would pick among them, as above, a version RomM has a file for before one
+without. A version RomM no longer lists keeps its shortcut only when it is installed and no version RomM lists is, or
+when no version RomM lists has a shortcut — then the installed one, else the one added to RomM first. Before a shortcut
+goes, the one that stays is added to the Steam collections the removed one was in, Favorites included, is hidden if the
+removed one was, and takes over every image but the icon you set in Steam for the removed one where it has none set in
+Steam itself; that Favorites and Hidden carry over has not been checked on a device. The removed shortcut's icon set in
+Steam, its own Steam playtime and screenshots, and a controller layout saved under its name do not move. Tender keeps
+each version's saves, playtime and download, so switching to another version later finds them where they were.
 
 ## Per-Platform Toggles
 
@@ -540,14 +541,15 @@ Tender's pick anew for every image on automatic, while an image you chose and on
 Running sync again updates your library with any changes from RomM (new ROMs, renamed games, new artwork, and so on),
 and with the platforms and collections you turned on or off. Existing shortcuts are updated rather than duplicated.
 
-When the version a shortcut is bound to is no longer available on RomM — deleted there, or hidden from your RomM user,
-which RomM answers the same way — the shortcut **stays bound to it**, installed or not, with its name, launch command,
-artwork and playtime, and in its platform's Steam collection. The exception is a game that also has another shortcut:
-then the two converge to one, as described under [Multiple versions of a game](#multiple-versions-of-a-game). A Steam
-collection made from a RomM collection keeps a hidden version, since RomM still lists it there, and drops a deleted one,
-which RomM no longer lists. That holds when the game still has other versions on RomM and when every version of it is
-gone. The game's page says the version is no longer available and what that means for a downloaded copy; to play another
-version, choose it in the [version picker](managing-games.md#the-switch-version-control), and to remove the game, use
+When the version a shortcut is bound to is no longer available on RomM — deleted there, or hidden from your RomM user by
+an admin, which RomM answers the same way — the shortcut **stays bound to it**, installed or not, with its name, launch
+command, artwork and playtime, and in its platform's Steam collection. The exception is a game that also has another
+shortcut: then the two converge to one, as described under [Multiple versions of a game](#multiple-versions-of-a-game).
+A Steam collection made from a RomM collection drops such a version, since RomM no longer lists it there. That holds
+when the game still has other versions on RomM and when every version of it is gone. A version you hid yourself is not
+gone: see [Hiding a game in RomM](#hiding-a-game-in-romm). The game's page says the version is no longer available and
+what that means for a downloaded copy; to play another version, choose it in the
+[version picker](managing-games.md#the-switch-version-control), and to remove the game, use
 [Clean Up Removed RomM Games](managing-games.md#cleaning-up-versions-removed-from-romm).
 
 On a platform you sync, the game's other versions stay with that shortcut, also when the version that is gone was the
@@ -583,6 +585,29 @@ platform is read in full until they have.
 Sync itself never purges a retained local ROM row, installed content, saves, or playtime solely because RomM stopped
 returning that id. Removing that state requires the separate confirmed
 [Clean Up Removed RomM Games](managing-games.md#cleaning-up-versions-removed-from-romm) workflow.
+
+### Hiding a game in RomM
+
+RomM has two kinds of hidden, and Tender treats them differently:
+
+- **Hidden by you** — the game's own **Hidden** status in RomM. Tender takes it as a request to take the game out of
+  Steam. A game whose every version you hid loses its shortcut on the next sync that runs to its end, whether a platform
+  you sync or a RomM collection brings it in. The preview counts it under removals. Its downloaded files, its saves, its
+  download record and Tender's playtime stay, as for a platform you turn off. Unhide it in RomM and a later sync brings
+  the shortcut back as a new one: what was set only in Steam — the Steam collections you put it in yourself, Favorites,
+  artwork set in Steam, its own Steam playtime — is not restored. A hidden version of a game that still has a visible
+  version keeps the game's one shortcut, and the version picker labels it _"Hidden in RomM"_. A Steam collection made
+  from a RomM collection counts a version you hid as not in it, as RomM's own collection view does: where a collection
+  holds only a hidden version of a game that keeps a visible version elsewhere, the game leaves that Steam collection
+  and keeps its shortcut. A game that is running when the sync removes its shortcut keeps running.
+- **Hidden from you by an admin** — under _Hidden games_ or _Hidden platforms_ in RomM's settings. RomM answers such a
+  game as if it were deleted and lists it nowhere, so Tender cannot tell the two apart: it is no longer available on
+  RomM, as above: its shortcut stays, and
+  [Clean Up Removed RomM Games](managing-games.md#cleaning-up-versions-removed-from-romm) removes it from this device.
+  For an admin, such a hide has no effect.
+
+Each sync asks RomM once which games you hid. When that answer cannot be read, nothing counts as hidden, and no shortcut
+is removed on its account.
 
 ## Removing Shortcuts
 

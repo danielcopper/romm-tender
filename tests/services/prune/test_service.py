@@ -44,6 +44,9 @@ class FakeRomm:
         self.outcomes: dict[int, list[object]] = {}
         self.calls: list[int] = []
 
+    def read_hidden_rom_ids(self) -> frozenset[int] | None:
+        return frozenset()
+
     def get_rom_once(self, rom_id: int) -> dict[str, Any]:
         self.calls.append(rom_id)
         values = self.outcomes.setdefault(rom_id, [{"id": rom_id}])
@@ -586,6 +589,46 @@ async def test_only_exact_404_can_authorize_removal(harness, outcome, reason):
     complete = await _finish(harness)
     assert harness.uow.roms.get(1) is not None
     assert complete["results"][0]["reason"] == reason
+
+
+class TestAGameTheUserHidInRomm:
+    """The scan asks RomM once for the ROMs the user hid, and never offers one of them as gone (#2502 D5)."""
+
+    @staticmethod
+    def _answer_hidden(harness, answer: frozenset[int] | None) -> list[int]:
+        """Make the reader answer *answer*, ``None`` for an answer it could not read; the list counts each read."""
+        asked: list[int] = []
+
+        def read_hidden_rom_ids() -> frozenset[int] | None:
+            asked.append(1)
+            return answer
+
+        harness.romm.read_hidden_rom_ids = read_hidden_rom_ids
+        return asked
+
+    @pytest.mark.asyncio
+    async def test_a_hidden_game_is_not_offered_and_the_start_asks_no_second_time(self, harness):
+        _seed(harness.uow, _rom(1, fetch="old"), _rom(2, fetch="old"))
+        harness.romm.outcomes[2] = [RommNotFoundError("gone")] * 3
+        asked = self._answer_hidden(harness, frozenset({1}))
+
+        preview = await _preview(harness)
+        await _start(harness, preview["preview_id"], remove_fully_vanished=True)
+        complete = await _finish(harness)
+
+        assert [item["rom_id"] for item in preview["items"] if item["candidate"]] == [2]
+        assert (complete["removed_rom_ids"], harness.uow.roms.get(1) is not None) == ([2], True)
+        assert asked == [1]
+        assert 1 not in harness.romm.calls
+
+    @pytest.mark.asyncio
+    async def test_an_answer_that_cannot_be_read_takes_nothing_for_hidden(self, harness):
+        _seed(harness.uow, _rom(1, fetch="old"))
+        self._answer_hidden(harness, None)
+
+        preview = await _preview(harness)
+
+        assert [item["rom_id"] for item in preview["items"] if item["candidate"]] == [1]
 
 
 @pytest.mark.asyncio

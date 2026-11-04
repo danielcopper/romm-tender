@@ -192,8 +192,8 @@ def compute_group_keys_with_unfetched(
     is in *complete_rom_ids*: the ROMs a platform listing returned, which holds
     every version of a game RomM lists (a group is per-platform).
     *unfetched_bound_ids* are the bound rows of those platforms the listings left
-    out — versions deleted or hidden in RomM, which RomM's answers do not tell
-    apart. A component that is not complete is keyed exactly as
+    out — versions deleted or hidden in RomM, which the listings leave out alike.
+    A component that is not complete is keyed exactly as
     :func:`compute_component_group_keys` keys it; a complete one, three ways more:
 
     * Where its canonical source holds more than one value and every member

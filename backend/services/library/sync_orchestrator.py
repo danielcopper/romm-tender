@@ -575,6 +575,7 @@ class SyncOrchestrator:
             listed_platform_slugs=self._sync_state.run_listed_platform_slugs,
             collection_listed_rom_ids=collection_listed_rom_ids,
             synced_group_keys=group_keys_of(synced_rom_ids, group_keys),
+            hidden_rom_ids=self._sync_state.run_hidden_rom_ids,
         )
         platform_rom_ids.update(row.rom_id for row in kept)
         rebuilt = {} if cancelled else self._sync_state.run_skip_rebuilt_rows

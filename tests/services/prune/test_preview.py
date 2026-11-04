@@ -321,3 +321,15 @@ def test_the_trash_icon_offers_the_whole_game_where_its_version_was_the_last_one
     preview = builder.build("preview", "rom", 4375)
 
     assert preview.candidate_ids == frozenset({4375, 4377})
+
+
+def test_a_row_the_user_hid_in_romm_is_not_offered_as_gone() -> None:
+    """A hidden row is absent from every fetch and still on RomM, so discovery does not take it for gone (#2502 D5)."""
+    builder = _builder(_two_groups())
+
+    preview = builder.build("preview", "bulk", None, frozenset({4375}))
+    page = builder.page(preview, 0, 50)
+
+    assert {item["rom_id"] for item in page["items"] if item["candidate"]} == {4376}
+    assert [item["gone_from_romm"] for item in page["items"] if item["rom_id"] == 4375] == []
+    assert preview.hidden_rom_ids == frozenset({4375})

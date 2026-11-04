@@ -33,6 +33,7 @@ import pathlib
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from adapters.romm.romm_api import hidden_rom_ids_answered_by
 from domain.cover_refresh import _strip_cover_ts
 from fakes._romm_save_semantics import (
     check_add_save_conflict,
@@ -42,7 +43,7 @@ from fakes._romm_save_semantics import (
     order_sync_rows,
     tag_filename,
 )
-from lib.errors import RommSyncDisabledError, RommUnprocessableEntityError
+from lib.errors import RommNotFoundError, RommSyncDisabledError, RommUnprocessableEntityError
 from lib.romm_paging import LIST_PAGE_SIZE
 from models.cover import CoverRevalidation
 
@@ -73,10 +74,19 @@ class FakeRommApi:
         # In-memory seeded data — tests mutate these directly.
         self.platforms: list[dict[str, Any]] = []
         self.roms: dict[int, dict[str, Any]] = {}
-        # ROMs hidden from this user, as RomM's per-user ``rom_user.hidden`` or an
-        # admin hide does: left out of the platform list and the skip probe while
-        # ``roms`` keeps them, and none of the hides moves their ``updated_at``.
+        # ROMs the user hid themselves (``rom_user.hidden``): left out of every
+        # walk and the skip probe, still in a standard or virtual collection's
+        # listed ``rom_ids`` and in their siblings' ``sibling_roms``, answered by
+        # exact id with ``rom_user.hidden`` set, and listed by ``list_hidden_roms``.
+        # An own smart collection's listing is not recomputed here: a test clears
+        # the ROM's ``smart_collection_ids`` as RomM would.
         self.hidden_rom_ids: set[int] = set()
+        # ROMs an admin hid from this user (``hidden_entities``): left out of
+        # everything, listings and sibling stubs included, and answered 404 by
+        # exact id, as a deleted ROM is. Neither kind of hide moves ``updated_at``.
+        self.admin_hidden_rom_ids: set[int] = set()
+        # When set, ``list_hidden_roms`` answers this instead of its own answer.
+        self.list_hidden_roms_answer: Any = None
         self.firmware_files: list[dict[str, Any]] = []
         self.collections: list[dict[str, Any]] = []
         self.virtual_collections: dict[str, list[dict[str, Any]]] = {}
@@ -153,6 +163,7 @@ class FakeRommApi:
         self.get_rom_once_side_effect_by_id: dict[int, Exception] = {}
         self.list_roms_side_effect: Exception | None = None
         self.list_roms_newest_first_side_effect: Exception | None = None
+        self.list_hidden_roms_side_effect: Exception | None = None
         self.list_collections_side_effect: Exception | None = None
         self.list_virtual_collections_side_effect: Exception | None = None
         # Per-type failure injection: raise only for a specific virtual type
@@ -310,22 +321,36 @@ class FakeRommApi:
     # RommRomReader
     # ------------------------------------------------------------------
 
-    def get_rom(self, rom_id: int) -> dict[str, Any]:
-        self._log("get_rom", (rom_id,))
-        self._check_fail(self.get_rom_side_effect)
+    def _answer_rom(self, rom_id: int) -> dict[str, Any]:
+        """One ROM as its exact-id read answers it: a 404 for an admin's hide, ``rom_user.hidden`` for the user's."""
+        if rom_id in self.admin_hidden_rom_ids:
+            raise RommNotFoundError(f"Rom with id {rom_id} not found")
         rom = self.roms.get(rom_id)
         if rom is None:
             return {"id": rom_id}
-        return dict(rom)
+        answer = dict(rom)
+        if isinstance(answer.get("sibling_roms"), list):
+            answer["sibling_roms"] = [
+                stub for stub in answer["sibling_roms"] if stub.get("id") not in self.admin_hidden_rom_ids
+            ]
+        if rom_id in self.hidden_rom_ids:
+            answer["rom_user"] = {**(answer.get("rom_user") or {}), "hidden": True}
+        return answer
+
+    def _visible(self, rom: dict[str, Any]) -> bool:
+        """Whether a walk lists *rom*: neither kind of hide does."""
+        return rom.get("id") not in self.hidden_rom_ids and rom.get("id") not in self.admin_hidden_rom_ids
+
+    def get_rom(self, rom_id: int) -> dict[str, Any]:
+        self._log("get_rom", (rom_id,))
+        self._check_fail(self.get_rom_side_effect)
+        return self._answer_rom(rom_id)
 
     def get_rom_simple(self, rom_id: int) -> dict[str, Any]:
         """The simple-schema read: the same answer as ``get_rom``, logged under its own name."""
         self._log("get_rom_simple", (rom_id,))
         self._check_fail(self.get_rom_simple_side_effect)
-        rom = self.roms.get(rom_id)
-        if rom is None:
-            return {"id": rom_id}
-        return dict(rom)
+        return self._answer_rom(rom_id)
 
     def get_rom_once(self, rom_id: int) -> dict[str, Any]:
         """Single-attempt exact-ROM fake with per-id failure injection."""
@@ -334,10 +359,7 @@ class FakeRommApi:
         per_id = self.get_rom_once_side_effect_by_id.get(rom_id)
         if per_id is not None:
             raise per_id
-        rom = self.roms.get(rom_id)
-        if rom is None:
-            return {"id": rom_id}
-        return dict(rom)
+        return self._answer_rom(rom_id)
 
     def _paginate(self, items: list[dict[str, Any]], limit: int, offset: int) -> dict[str, Any]:
         sliced = items[offset : offset + limit]
@@ -346,31 +368,40 @@ class FakeRommApi:
     def list_roms(self, platform_id: int, limit: int = LIST_PAGE_SIZE, offset: int = 0) -> dict[str, Any]:
         self._log("list_roms", (platform_id,), {"limit": limit, "offset": offset})
         self._check_fail(self.list_roms_side_effect)
-        items = [
-            r
-            for r in self.roms.values()
-            if r.get("platform_id") == platform_id and r.get("id") not in self.hidden_rom_ids
-        ]
+        items = [r for r in self.roms.values() if r.get("platform_id") == platform_id and self._visible(r)]
         return self._paginate(items, limit, offset)
 
     def list_roms_newest_first(self, platform_id: int) -> dict[str, Any]:
         """RomM's skip-probe answer: the newest ``updated_at`` first, ``limit=1``, and every visible id.
 
-        A ROM in ``hidden_rom_ids`` is left out of both, as RomM's visibility
-        filter leaves a hidden ROM out of the list and its id index.
+        A hidden ROM, of either kind, is left out of both, as RomM's visibility
+        filter leaves it out of the list and its id index.
         """
         self._log("list_roms_newest_first", (platform_id,))
         self._check_fail(self.list_roms_newest_first_side_effect)
-        items = [
-            r
-            for r in self.roms.values()
-            if r.get("platform_id") == platform_id and r.get("id") not in self.hidden_rom_ids
-        ]
+        items = [r for r in self.roms.values() if r.get("platform_id") == platform_id and self._visible(r)]
         newest = sorted(items, key=lambda r: r.get("updated_at") or "", reverse=True)
         return {
             "items": [dict(r) for r in newest[:1]],
             "total": len(items),
             "rom_id_index": [r["id"] for r in items],
+        }
+
+    def read_hidden_rom_ids(self) -> frozenset[int] | None:
+        """The adapter's own reading of :meth:`list_hidden_roms`, so the fake reads an answer as the adapter does."""
+        return hidden_rom_ids_answered_by(self.list_hidden_roms)
+
+    def list_hidden_roms(self) -> dict[str, Any]:
+        """RomM's ``statuses=hidden`` answer: the ROMs the user hid, ``limit=1``, and every one's id."""
+        self._log("list_hidden_roms")
+        self._check_fail(self.list_hidden_roms_side_effect)
+        if self.list_hidden_roms_answer is not None:
+            return self.list_hidden_roms_answer
+        hidden = sorted(rid for rid in self.hidden_rom_ids if rid in self.roms and rid not in self.admin_hidden_rom_ids)
+        return {
+            "items": [self._answer_rom(rid) for rid in hidden[:1]],
+            "total": len(hidden),
+            "rom_id_index": hidden,
         }
 
     @staticmethod
@@ -396,7 +427,7 @@ class FakeRommApi:
             {"limit": limit, "offset": offset, "platform_ids": platform_ids},
         )
         self._check_fail(self.list_roms_by_collection_side_effect)
-        items = [r for r in self.roms.values() if collection_id in (r.get("collection_ids") or [])]
+        items = [r for r in self.roms.values() if collection_id in (r.get("collection_ids") or []) and self._visible(r)]
         return self._paginate(self._on_platforms(items, platform_ids), limit, offset)
 
     def list_collection_roms_updated_after(
@@ -421,7 +452,9 @@ class FakeRommApi:
         items = [
             r
             for r in self.roms.values()
-            if collection_id in (r.get(membership_key) or []) and (r.get("updated_at") or "") > updated_after
+            if collection_id in (r.get(membership_key) or [])
+            and (r.get("updated_at") or "") > updated_after
+            and self._visible(r)
         ]
         return self._paginate(items, limit, offset)
 
@@ -438,7 +471,9 @@ class FakeRommApi:
             {"limit": limit, "offset": offset, "platform_ids": platform_ids},
         )
         self._check_fail(self.list_roms_by_virtual_collection_side_effect)
-        items = [r for r in self.roms.values() if virtual_id in (r.get("virtual_collection_ids") or [])]
+        items = [
+            r for r in self.roms.values() if virtual_id in (r.get("virtual_collection_ids") or []) and self._visible(r)
+        ]
         return self._paginate(self._on_platforms(items, platform_ids), limit, offset)
 
     def list_roms_by_smart_collection(
@@ -454,7 +489,9 @@ class FakeRommApi:
             {"limit": limit, "offset": offset, "platform_ids": platform_ids},
         )
         self._check_fail(self.list_roms_by_smart_collection_side_effect)
-        items = [r for r in self.roms.values() if smart_id in (r.get("smart_collection_ids") or [])]
+        items = [
+            r for r in self.roms.values() if smart_id in (r.get("smart_collection_ids") or []) and self._visible(r)
+        ]
         return self._paginate(self._on_platforms(items, platform_ids), limit, offset)
 
     def _listed(self, entries: list[dict[str, Any]], membership_key: str) -> list[dict[str, Any]]:
@@ -462,7 +499,8 @@ class FakeRommApi:
 
         An entry seeded without ``rom_ids`` lists the ROMs that name its id
         under *membership_key*, the set RomM keeps for a collection; a seeded
-        ``rom_ids`` is answered as given.
+        ``rom_ids`` is answered as given. Either way a ROM an admin hid is left
+        out, and one the user hid stays.
         """
         listed = []
         for entry in entries:
@@ -471,6 +509,7 @@ class FakeRommApi:
                 copy["rom_ids"] = [
                     rid for rid, rom in self.roms.items() if copy.get("id") in (rom.get(membership_key) or [])
                 ]
+            copy["rom_ids"] = [rid for rid in copy["rom_ids"] if rid not in self.admin_hidden_rom_ids]
             listed.append(copy)
         return listed
 

@@ -1499,12 +1499,12 @@ Steam" ("1 version" on either half) — "version" is the glossary's word for one
 count on the Remove button. `M` is not claimed to be a part of `N`, because it need not be one (below). `N` is RomM's
 own `rom_count` for the platform; `M` is `reachable_count` — the platform's reachable ROMs (every member of a sibling
 group that holds a binding, because one shortcut serves the group (ADR-0021 §2) and the game's page switches versions
-across it), less the versions RomM no longer serves (below). `M` is **not** the number of shortcuts: a fully-synced
-665-ROM platform behind 458 shortcuts reads `665 · 665`, where counting bindings read `665 · 458` and so reported 207
-games as missing when none was. The number of shortcuts is `count` on the same payload, and it is what the Remove group
-says and acts on — the two must not be folded, or the button offers to remove more shortcuts than exist. Where a whole
-game never reached Steam the two halves genuinely differ (`3084 versions on RomM · 8 versions in Steam` for a platform
-with one applied game), and that difference is the line doing its job.
+across it), less the versions RomM's listings no longer return (below). `M` is **not** the number of shortcuts: a
+fully-synced 665-ROM platform behind 458 shortcuts reads `665 · 665`, where counting bindings read `665 · 458` and so
+reported 207 games as missing when none was. The number of shortcuts is `count` on the same payload, and it is what the
+Remove group says and acts on — the two must not be folded, or the button offers to remove more shortcuts than exist.
+Where a whole game never reached Steam the two halves genuinely differ (`3084 versions on RomM · 8 versions in Steam`
+for a platform with one applied game), and that difference is the line doing its job.
 
 Two things the line does not claim. The halves count **different populations** — the left is what RomM holds now, the
 right is what our own rows say — so ROMs added on RomM since the last sync widen the gap, and equality means "nothing
@@ -1513,11 +1513,14 @@ reachable but not counted**: nothing deletes such a row — ADR-0007 keeps it as
 removed-game cleanup removes one — and its group's shortcut still reaches it (GLOSSARY.md → Reachable), but the right
 half does not count a version RomM has stopped serving as in Steam. `reachable_count` is the reachable rows less the
 ones the cleanup's own discovery lists — `domain/fetch_generation.py::gone_from_romm_ids` answers for both, so the count
-leaves out the same versions the Gone from RomM list shows: every row not carrying the fetch generation the platform's
+leaves out every version the Gone from RomM list shows: every row not carrying the fetch generation the platform's
 completion stamp recorded, a row carrying none included, and every row carrying a gone-from-RomM mark
-(`roms.gone_from_romm`, [Removed-game cleanup](removed-game-cleanup.md#discovery)). Where no usable stamp exists — none,
-one with no generation, or one recording an empty fetch — the stamp names nothing and only the marked rows are left out,
-so the exclusion's worst case is the number printed before it.
+(`roms.gone_from_romm`, [Removed-game cleanup](removed-game-cleanup.md#discovery)). A version the user hid in RomM is
+left out too, though RomM still serves it: no listing returns it, so from the first apply of its platform after the hide
+its row no longer carries the generation the stamp recorded. The Gone from RomM list leaves it out only because its scan
+asks RomM for the hidden list ([#2502](https://github.com/danielcopper/romm-tender/issues/2502) D5); this read asks RomM
+nothing (D10). Where no usable stamp exists — none, one with no generation, or one recording an empty fetch — the stamp
+names nothing and only the marked rows are left out, so the exclusion's worst case is the number printed before it.
 
 **That leaves one window in which the line can read right > left.** A ROM deleted on RomM drops out of the left number
 at once, while its row, where its group holds a binding, still carries the generation the stamp recorded and so still
@@ -1534,11 +1537,13 @@ offline, and that is what keeps the pane useful with RomM unreachable.
 
 The exclusion also means **`reachable_count` is not bounded below by `count`**: a _bound_ row the stamp's fetch did not
 return raises the shortcut count without raising the header, so a pane can read
-`2 versions on RomM · 3 versions in Steam` beside `Remove 4 shortcuts`. Two shapes reach it — a bound version deleted on
-RomM, which the stale removal keeps bound, and a collection-added row on an already-stamped platform, which commits with
-no generation, so the exclusion leaves out a row RomM still serves. The second heals at the platform's next commit. The
-first lasts until the user switches the game to another version or removes the gone one with this cleanup. The direction
-is a conservative under-count, which is why it is recorded rather than guarded.
+`2 versions on RomM · 3 versions in Steam` beside `Remove 4 shortcuts`. Three shapes reach it — a bound version deleted
+on RomM, which the stale removal keeps bound; a bound version the user hid beside a visible one, which it keeps bound
+too; and a collection-added row on an already-stamped platform, which commits with no generation, so the exclusion
+leaves out a row RomM still serves. The second heals at the platform's next commit. The first lasts until the user
+switches the game to another version or removes the gone one with this cleanup. The second lasts until the user unhides
+it in RomM or switches the game to another version. The direction is a conservative under-count, which is why it is
+recorded rather than guarded.
 
 **The BIOS ratio is not on the second line** — it was, and its width is what wrapped the line three times on a platform
 with a long name and a long core label. It is stated once instead, beside `BIOS FILES` eight pixels below, in the colour
@@ -2508,14 +2513,14 @@ cannot answer at all, while an inventory answers it before anything is pressed. 
 from is [data-management-layouts.html](../assets/data-management-layouts.html). The list needs no headings for the same
 reason Settings needs none: six rows that each name a thing are their own order.
 
-| Row                   | What it says on arrival                                         | What the pane offers                            |
-| --------------------- | --------------------------------------------------------------- | ----------------------------------------------- |
-| Tender's shortcuts    | `total_shortcuts` — the bound shortcuts Main counts every visit | Remove all shortcuts                            |
-| Installed ROMs        | one count per install — two kept versions count twice           | Uninstall all ROM files                         |
-| Grid images           | `scan` until asked — then how many are orphaned                 | Remove the orphaned images                      |
-| Other non-Steam games | Steam's own store less Tender's entries                         | the whitelist, the removal, the RetroDECK guard |
-| Gone from RomM        | `scan` until asked — a local scan, no request to RomM           | Review, which opens the dialog below            |
-| Recovery bundles      | how many are sealed and what they take                          | the bundles one by one, and nothing to press    |
+| Row                   | What it says on arrival                                                              | What the pane offers                            |
+| --------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------- |
+| Tender's shortcuts    | `total_shortcuts` — the bound shortcuts Main counts every visit                      | Remove all shortcuts                            |
+| Installed ROMs        | one count per install — two kept versions count twice                                | Uninstall all ROM files                         |
+| Grid images           | `scan` until asked — then how many are orphaned                                      | Remove the orphaned images                      |
+| Other non-Steam games | Steam's own store less Tender's entries                                              | the whitelist, the removal, the RetroDECK guard |
+| Gone from RomM        | `scan` until asked — a local scan and one request to RomM, for the ROMs the user hid | Review, which opens the dialog below            |
+| Recovery bundles      | how many are sealed and what they take                                               | the bundles one by one, and nothing to press    |
 
 **Every figure is reading, failed or answered, and its row's count slot shows which**: the throbber while it is being
 read, a dash where the read failed, the number once it is answered. The two scan rows add a fourth state before those
@@ -2527,20 +2532,20 @@ figure read on arrival, pressing the scan button again for a scan.
 **A number that costs a backend scan sits behind a press.** Focus selects on this layout, so a reading that rode on the
 selection would fire under every row the stick passes — a scan of the grid directory for one row, and for the other a
 scan of the library's records, each row against its platform's completion stamp and its gone-from-RomM mark, and of the
-downloaded files' sizes, which sends no request to RomM ([Removed-game cleanup](removed-game-cleanup.md#discovery)).
-Grid images and Gone from RomM therefore read `scan` until they are asked, and keep the answer until something makes it
-wrong, because a stale number is worse than no number. A finished cleanup puts Gone from RomM back to `scan`. Grid
-images goes back to `scan` after any removal of shortcuts from this page — Tender's shortcuts once the backend has
-accepted, other non-Steam games, and a finished Gone from RomM cleanup — because each can leave images the scan did not
-count: a shortcut Tender created but had no record of, or one whose removal report did not complete (that report is what
-deletes a bound shortcut's images), a foreign entry whose art nothing here deletes, or a cleanup run without recovery,
-which leaves its shortcuts' images in place. A grid-image removal re-derives its candidates rather than taking the
-scan's, and answers how many it found beside how many it removed; the row reads `0` only when the two match, since then
-nothing orphaned at the moment of the removal is left. Fewer removed than found means files that would not delete, and
-the row goes back to `scan` with the pane's status line saying how many; so does an answer missing either count or
-removing more than it found, or no answer at all. A refused removal deleted nothing, so the scanned count stands. The
-grid removal holds the page's busy state like the other removals, so no removal button — its own included — can start
-another while it runs.
+downloaded files' sizes, with one request to RomM for the ROMs the user hid
+([Removed-game cleanup](removed-game-cleanup.md#discovery)). Grid images and Gone from RomM therefore read `scan` until
+they are asked, and keep the answer until something makes it wrong, because a stale number is worse than no number. A
+finished cleanup puts Gone from RomM back to `scan`. Grid images goes back to `scan` after any removal of shortcuts from
+this page — Tender's shortcuts once the backend has accepted, other non-Steam games, and a finished Gone from RomM
+cleanup — because each can leave images the scan did not count: a shortcut Tender created but had no record of, or one
+whose removal report did not complete (that report is what deletes a bound shortcut's images), a foreign entry whose art
+nothing here deletes, or a cleanup run without recovery, which leaves its shortcuts' images in place. A grid-image
+removal re-derives its candidates rather than taking the scan's, and answers how many it found beside how many it
+removed; the row reads `0` only when the two match, since then nothing orphaned at the moment of the removal is left.
+Fewer removed than found means files that would not delete, and the row goes back to `scan` with the pane's status line
+saying how many; so does an answer missing either count or removing more than it found, or no answer at all. A refused
+removal deleted nothing, so the scanned count stands. The grid removal holds the page's busy state like the other
+removals, so no removal button — its own included — can start another while it runs.
 
 **The whitelist's search sits inline, above the list it filters**, which the pane expands under **Configure whitelist**
 — the search kind of text input, not the value kind that opens a modal ([Text input](#text-input)).

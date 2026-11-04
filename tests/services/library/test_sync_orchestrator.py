@@ -5960,8 +5960,9 @@ class TestOnlyAFreshStampRestoresTheSkip:
         await self._apply(library, "run-1")
         assert self._stamp(library).rom_id_checksum == rom_id_checksum([1, 2])
 
-        # Hidden in RomM: gone from the list and the id index, no updated_at moved.
-        fake_romm_api.hidden_rom_ids = {2}
+        # Hidden from this user by an admin: gone from the list and the id index,
+        # no updated_at moved, and answered 404 as a deleted ROM is (#2502 D3).
+        fake_romm_api.admin_hidden_rom_ids = {2}
         fake_romm_api.call_log.clear()
         preview = await library.sync.sync_preview()
 
@@ -7136,9 +7137,11 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
     """The preview counts the same-dump rebind a platform unit makes for a member a skipped collection still lists.
 
     GBA is synced and holds Golf (USA), 20, which the first run binds, beside
-    Golf (Europe), 22, and Golf (Japan), 23. Faves lists 20 and is skipped as
-    unchanged on the second run, so the skip hands the preview 20's stored row
-    while GBA's fetch no longer returns 20. Each case runs the preview, then the
+    Golf (Europe), 22, and Golf (Japan), 23. Faves lists 20, and GBA's fetch on
+    the second run no longer returns it. Where the user hid 20, the hide changes
+    Faves' membership as Tender sees it, so the second run fetches Faves (#2502
+    D4); where 20 is gone from RomM, Faves is skipped as unchanged and the skip
+    hands the preview 20's stored row. Each case runs the preview, then the
     apply it would start, so the two answer over the same library.
     """
 
@@ -7175,12 +7178,12 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
         assert cls._bindings(library) == {20: 6020}
 
     @classmethod
-    async def _preview_then_apply(cls, library, emit, monkeypatch):
+    async def _preview_then_apply(cls, library, emit, monkeypatch, *, faves_skipped: bool = False):
         """The preview's summary and the ids it classified as skipped, then its apply's outcome.
 
         The outcome is ``(sent, removals, bindings)`` and the platform
         collections the apply sends. Asserts that the preview took Faves as
-        skipped.
+        skipped where *faves_skipped*, else as fetched.
         """
         import services.library.sync_preview as preview_module
 
@@ -7204,7 +7207,7 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
             patch.setattr(fetcher, "fetch_collection_unit", recording_fetch_collection_unit)
             patch.setattr(preview_module, "classify_roms", recording_classify_roms)
             summary = (await library.sync.sync_preview())["summary"]
-        assert collection_skips == [True]
+        assert collection_skips == [faves_skipped]
         box = library.sync._box
         box.discard_preview()
         assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
@@ -7261,7 +7264,7 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
         assert fake_romm_api.list_collections()[0]["rom_ids"] == [20]
 
         summary, classified_as_skipped, applied, platform_collections = await self._preview_then_apply(
-            library, emit, monkeypatch
+            library, emit, monkeypatch, faves_skipped=True
         )
 
         assert (self._counted(summary), applied) == ((0, 1, 0), ([20], [], {24: 6020}))
@@ -7273,10 +7276,11 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
     async def test_a_hidden_member_without_a_same_stem_copy_keeps_its_binding(
         self, make_library, fake_romm_api, emit, monkeypatch, platform_groups
     ):
-        """The binding stays, and 20 keeps its place in the preview's union, so both collection diffs are the apply's.
+        """The binding stays, and both collection diffs are the apply's.
 
-        GBA's fetch no longer returns 20, which Faves' skip rebuilds, so GBA's
-        collection files it as a kept row whatever the setting.
+        20's game is on GBA, so 20 keeps its binding and GBA's collection files
+        it as a kept row whatever the setting. Faves lists only the hidden
+        version, so it leaves Steam's collections (#2502 D4).
         """
         library = make_library(romm_api=fake_romm_api)
         await self._bind_20(library, fake_romm_api)
@@ -7290,16 +7294,16 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
         assert (self._counted(summary), applied) == ((0, 0, 0), ([], [], {20: 6020}))
         assert platform_collections == {"GBA"}
         assert summary["platform_collection_diff"] == {"has_changes": False, "added_count": 0, "removed_count": 0}
-        assert summary["collection_diff"] == {"has_changes": True, "added": [], "removed": []}
-        assert classified_as_skipped == [frozenset({20})]
+        assert summary["collection_diff"] == {"has_changes": True, "added": [], "removed": ["Faves"]}
+        assert classified_as_skipped == [frozenset()]
 
 
 class TestAGameASkippedCollectionStillListsConvergesAsThePreviewCounts:
     """A version hidden on its synced platform that a skipped collection still lists converges as unlisted (#2645).
 
     The setup of the class above; then 22 is bound as well, a duplicate from
-    before one shortcut per game, and 20 is hidden on GBA while Faves, skipped
-    as unchanged, still hands the preview 20's stored row.
+    before one shortcut per game, and 20 is hidden on GBA, so Faves, which lists
+    it, is fetched (#2502 D4).
     """
 
     _bind_20 = TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt._bind_20
@@ -7338,9 +7342,10 @@ class TestAHiddenVersionKeepsItsPlatformCollectionWhetherItsCollectionIsSkippedO
 
     GBA is synced and holds Golf (USA), 20, which the first run binds, beside
     Golf (Europe), 22, and Golf (Japan), 23. The user then hides 20 in RomM, so
-    GBA's fetch no longer returns it, while Faves still lists it. Faves is
-    skipped as unchanged, or fetched because its listing changed for another
-    reason. Each case runs the preview, then the apply it would start.
+    GBA's fetch no longer returns it, while Faves still lists it. The hide
+    changes Faves' membership as Tender sees it, so Faves is fetched whether its
+    ``updated_at`` moved or not (#2502 D4). Each case runs the preview, then the
+    apply it would start.
     """
 
     _bind_20 = TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt._bind_20
@@ -7371,7 +7376,7 @@ class TestAHiddenVersionKeepsItsPlatformCollectionWhetherItsCollectionIsSkippedO
         return faves_skips, summary["platform_collection_diff"], platform_app_ids
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("faves_skipped", [True, False], ids=["faves-skipped", "faves-fetched"])
+    @pytest.mark.parametrize("faves_skipped", [True, False], ids=["faves-unchanged", "faves-updated"])
     @pytest.mark.parametrize("platform_groups", [False, True], ids=["platform-groups-off", "platform-groups-on"])
     async def test_the_game_stays_in_its_platform_s_collection(
         self, make_library, fake_romm_api, emit, monkeypatch, faves_skipped, platform_groups
@@ -7387,7 +7392,7 @@ class TestAHiddenVersionKeepsItsPlatformCollectionWhetherItsCollectionIsSkippedO
             library, emit, monkeypatch
         )
 
-        assert faves_skips == [faves_skipped, faves_skipped]
+        assert faves_skips == [False, False]
         assert platform_collection_diff == {"has_changes": False, "added_count": 0, "removed_count": 0}
         assert platform_app_ids == {"GBA": [6020]}
 
@@ -7523,7 +7528,7 @@ class TestThePreviewNamesAPlatformCollectionAsTheApplyDoes:
         return faves_skips, summary["platform_collection_diff"], applied, platform_app_ids
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("faves_skipped", [True, False], ids=["faves-skipped", "faves-fetched"])
+    @pytest.mark.parametrize("faves_skipped", [True, False], ids=["faves-unchanged", "faves-updated"])
     async def test_a_member_a_collection_rebuilt_is_named_as_the_apply_names_it(
         self, make_library, fake_romm_api, emit, monkeypatch, faves_skipped
     ):
@@ -7538,7 +7543,7 @@ class TestThePreviewNamesAPlatformCollectionAsTheApplyDoes:
             library, emit, monkeypatch
         )
 
-        assert faves_skips == [faves_skipped, faves_skipped]
+        assert faves_skips == [False, False]
         assert platform_app_ids == {"Nintendo 64": [6020]}
         assert platform_collection_diff == applied
 
@@ -8639,7 +8644,7 @@ class TestAGameWithSeveralShortcutsConverges:
             "platform_name": "GBA",
             "platform_slug": "gba",
         }
-        fake_romm_api.hidden_rom_ids = {30, 31}
+        fake_romm_api.admin_hidden_rom_ids = {30, 31}
         gone = 31 if kept == 30 else 30
 
         summary = (await library.sync.sync_preview())["summary"]
@@ -10722,6 +10727,27 @@ class TestAGameACollectionBringsInConverges:
         )
 
     @pytest.mark.asyncio
+    async def test_a_version_the_user_hid_ranks_as_one_romm_no_longer_lists(self, make_library, fake_romm_api, emit):
+        """Faves now lists only 30; 31, RomM's default and bound too, is hidden, so 30 keeps the shortcut (#2502 D8)."""
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, faves=[30, 31], main=31, also_bound=(30,))
+        assert self._bound(library) == {30: 6030, 31: 6031}
+        self._list(fake_romm_api, 7, [30])
+        fake_romm_api.hidden_rom_ids = {31}
+        # 30's recorded launch command is stale, so the preview counts its entry
+        # as a change only where 30 is the version that keeps the shortcut.
+        with library.uow as uow:
+            uow.roms.set_applied_launch_options(30, "stale")
+        changed = (await library.sync.sync_preview())["summary"]["changed_count"]
+        library.sync._box.discard_preview()
+
+        counted, removed, _walks = await self._sync(library, fake_romm_api, emit, "run-2")
+
+        assert (changed, counted) == (1, 1)
+        assert removed == [{"rom_id": 31, "app_id": 6031, "kept_rom_id": 30, "kept_app_id": 6030}]
+        assert self._bound(library) == {30: 6030}
+
+    @pytest.mark.asyncio
     async def test_the_steam_collection_keeps_the_game_on_the_shortcut_it_keeps(
         self, make_library, fake_romm_api, emit
     ):
@@ -10734,3 +10760,249 @@ class TestAGameACollectionBringsInConverges:
 
         complete = [c.args[1] for c in emit.call_args_list[start:] if c.args and c.args[0] == "sync_complete"]
         assert complete[-1]["romm_collection_app_ids"] == {"Faves": [6030]}
+
+
+class TestAGameTheUserHidInRomm:
+    """A game whose every version the user hid in RomM leaves Steam; one with a visible version keeps it (#2502).
+
+    GBA holds Golf (USA), 30, RomM's default, and Golf (Europe), 31, one game,
+    and Tetris, 40, a game of one version. The route is how the run reaches
+    them: GBA itself, read whole (``platform``), or, with GBA's sync off, the
+    standard collection Faves (``collection``) or the user's own smart
+    collection Mine (``smart-collection``), each holding all three. Run 1 binds
+    30 and 40. Each later sync runs the preview, then the apply it would start,
+    and the panel reports every removal.
+    """
+
+    _ROUTES = ("platform", "collection", "smart-collection")
+
+    @staticmethod
+    def _golf(rom_id, region):
+        stem = f"Golf ({region})"
+        other = 31 if rom_id == 30 else 30
+        return {
+            "id": rom_id,
+            "name": stem,
+            "fs_name": f"{stem}.zip",
+            "fs_name_no_ext": stem,
+            "regions": [region],
+            "igdb_id": 300,
+            "updated_at": "2025-01-01T00:00:00+00:00",
+            "rom_user": {"is_main_sibling": rom_id == 30},
+            "sibling_roms": [{"id": other, "name": f"Golf ({'Europe' if other == 31 else 'USA'})"}],
+        }
+
+    @classmethod
+    async def _bind(cls, library, fake_romm_api, tmp_path, route):
+        """Run 1 over *route*; then 40 is installed and has a save of its own."""
+        roms = [
+            cls._golf(30, "USA"),
+            cls._golf(31, "Europe"),
+            {"id": 40, "name": "Tetris", "fs_name": "Tetris.zip", "updated_at": "2025-01-01T00:00:00+00:00"},
+        ]
+        _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=roms)
+        library.settings["enabled_platforms"] = {"2": route == "platform"}
+        if route == "collection":
+            _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[30, 31, 40])
+            fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00"
+            library.settings["enabled_collections"] = {"standard": {"7": True}}
+        elif route == "smart-collection":
+            for rom in fake_romm_api.roms.values():
+                rom["smart_collection_ids"] = [5]
+            fake_romm_api.smart_collections = [{"id": 5, "name": "Mine", "updated_at": "2025-01-01T00:00:00"}]
+            library.settings["enabled_collections"] = {"smart": {"5": True}}
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_what_the_unit_emits(_unit, event):
+            event.set()
+            return {str(rid): 6000 + rid for rid in box.pending_sync}
+
+        library.chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
+        assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
+        await library.sync._orchestrator._do_sync_per_unit()
+        assert cls._bound(library) == {30: 6030, 40: 6040}
+        path = tmp_path / "Tetris.zip"
+        path.write_bytes(b"rom")
+        with library.uow as uow:
+            uow.rom_installs.save(
+                RomInstall.mark_installed(
+                    rom_id=40,
+                    file_path=str(path),
+                    rom_dir=None,
+                    platform_slug="gba",
+                    system="gba",
+                    installed_at="2025-01-01T00:00:00",
+                )
+            )
+            uow.rom_save_sync_states.save(
+                40, RomSaveSyncState(system="gba", files={"Tetris.srm": FileSyncState(last_sync_hash="h")})
+            )
+        return path
+
+    @staticmethod
+    def _hide(fake_romm_api, route, *rom_ids):
+        """The user hides *rom_ids*: RomM recomputes the own smart collection's members and moves its ``updated_at``."""
+        fake_romm_api.hidden_rom_ids = set(rom_ids)
+        if route == "smart-collection":
+            for rom_id in rom_ids:
+                fake_romm_api.roms[rom_id]["smart_collection_ids"] = []
+            fake_romm_api.smart_collections[0]["updated_at"] = "2030-01-01T00:00:00"
+
+    @staticmethod
+    async def _sync(library, fake_romm_api, emit, run_id, *, stop_after_the_unit=False):
+        """Preview, then apply, then the panel reports: ``(counted, removed, sent, asked)``.
+
+        With *stop_after_the_unit* the apply is stopped once its one unit is
+        applied, and no preview runs before it.
+        """
+        counted = None
+        if not stop_after_the_unit:
+            counted = (await library.sync.sync_preview())["summary"]["remove_count"]
+        box = library.sync._box
+        box.discard_preview()
+        fake_romm_api.call_log.clear()
+        apply_unit = library.unit_applier.apply_unit
+
+        async def stop_after(unit, **kwargs):
+            processed = await apply_unit(unit, **kwargs)
+            box.request_cancel()
+            return processed
+
+        if stop_after_the_unit:
+            library.unit_applier.apply_unit = stop_after
+        try:
+            assert box.try_begin_run(run_id, kind=SyncRunKind.APPLY) is True
+            start = len(emit.call_args_list)
+            await library.sync._orchestrator._do_sync_per_unit()
+        finally:
+            library.unit_applier.apply_unit = apply_unit
+        removals = _removals_since(emit, start)
+        await _the_panel_reports(library, removals)
+        sent = sorted(
+            shortcut["rom_id"]
+            for call in emit.call_args_list[start:]
+            if call.args and call.args[0] == "sync_apply_unit"
+            for shortcut in call.args[1]["shortcuts"]
+        )
+        asked = sorted(args[0] for name, args, _kwargs in fake_romm_api.call_log if name == "get_rom_once")
+        return counted, sorted(row["rom_id"] for row in removals), sent, asked
+
+    @staticmethod
+    def _bound(library):
+        with library.uow as uow:
+            return {rom.rom_id: rom.shortcut_app_id for rom in uow.roms.iter_all() if rom.shortcut_app_id}
+
+    @staticmethod
+    def _kept_for_40(library, path):
+        """Whether 40's row, its install record, its file and its save state are all still there."""
+        with library.uow as uow:
+            return (
+                uow.roms.get(40) is not None,
+                uow.rom_installs.get(40) is not None,
+                path.exists(),
+                uow.rom_save_sync_states.get(40) is not None,
+            )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("route", _ROUTES)
+    async def test_a_game_whose_every_version_is_hidden_loses_its_shortcut_and_keeps_its_files(
+        self, make_library, fake_romm_api, emit, tmp_path, route
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        path = await self._bind(library, fake_romm_api, tmp_path, route)
+        self._hide(fake_romm_api, route, 40)
+
+        counted, removed, _sent, asked = await self._sync(library, fake_romm_api, emit, "run-2")
+
+        assert (counted, removed, asked) == (1, [40], [])
+        assert self._bound(library) == {30: 6030}
+        assert self._kept_for_40(library, path) == (True, True, True, True)
+        with library.uow as uow:
+            assert uow.roms.get(40).gone_from_romm is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("route", ["platform", "collection"])
+    async def test_a_game_hidden_before_a_stopped_run_goes_on_the_next_run_that_skips_its_unit(
+        self, make_library, fake_romm_api, emit, tmp_path, route
+    ):
+        """A stopped run removes nothing but stamps its unit, so the next run skips the unit and removes 40 then."""
+        library = make_library(romm_api=fake_romm_api)
+        await self._bind(library, fake_romm_api, tmp_path, route)
+        self._hide(fake_romm_api, route, 40)
+        assert (await self._sync(library, fake_romm_api, emit, "run-2", stop_after_the_unit=True))[1] == []
+        assert self._bound(library) == {30: 6030, 40: 6040}
+
+        counted, removed, _sent, _asked = await self._sync(library, fake_romm_api, emit, "run-3")
+
+        walked = [
+            name for name, _args, _kwargs in fake_romm_api.call_log if name.startswith(("list_roms_by", "list_roms"))
+        ]
+        assert (counted, removed, walked) == (1, [40], ["list_roms_newest_first"] if route == "platform" else [])
+        assert self._bound(library) == {30: 6030}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("route", _ROUTES)
+    async def test_a_hidden_version_of_a_game_with_a_visible_one_keeps_the_game_s_one_shortcut(
+        self, make_library, fake_romm_api, emit, tmp_path, route
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        await self._bind(library, fake_romm_api, tmp_path, route)
+        self._hide(fake_romm_api, route, 30)
+
+        counted, removed, _sent, _asked = await self._sync(library, fake_romm_api, emit, "run-2")
+
+        bound = self._bound(library)
+        assert (counted, removed, bound[40]) == (0, [], 6040)
+        assert [rom_id for rom_id in bound if rom_id in (30, 31)] == [30]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("route", _ROUTES)
+    async def test_unhiding_the_game_brings_its_shortcut_back(self, make_library, fake_romm_api, emit, tmp_path, route):
+        library = make_library(romm_api=fake_romm_api)
+        await self._bind(library, fake_romm_api, tmp_path, route)
+        self._hide(fake_romm_api, route, 40)
+        assert (await self._sync(library, fake_romm_api, emit, "run-2"))[1] == [40]
+        fake_romm_api.hidden_rom_ids = set()
+        if route == "smart-collection":
+            fake_romm_api.roms[40]["smart_collection_ids"] = [5]
+            fake_romm_api.smart_collections[0]["updated_at"] = "2031-01-01T00:00:00"
+
+        _counted, removed, sent, _asked = await self._sync(library, fake_romm_api, emit, "run-3")
+
+        assert (removed, 40 in sent) == ([], True)
+        assert self._bound(library) == {30: 6030, 40: 6040}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("unreadable", ["raises", "no-index"])
+    @pytest.mark.parametrize("route", ["platform", "collection"])
+    async def test_a_hidden_list_that_cannot_be_read_removes_nothing(
+        self, make_library, fake_romm_api, emit, tmp_path, route, unreadable
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        await self._bind(library, fake_romm_api, tmp_path, route)
+        self._hide(fake_romm_api, route, 40)
+        if unreadable == "raises":
+            fake_romm_api.list_hidden_roms_side_effect = RommConnectionError("RomM did not answer")
+        else:
+            fake_romm_api.list_hidden_roms_answer = {"items": [{"id": 40}], "total": 1}
+
+        counted, removed, _sent, _asked = await self._sync(library, fake_romm_api, emit, "run-2")
+
+        assert (counted, removed) == (0, [])
+        assert self._bound(library) == {30: 6030, 40: 6040}
+
+    @pytest.mark.asyncio
+    async def test_a_removal_the_sync_makes_for_another_reason_stands_beside_an_unread_hidden_list(
+        self, make_library, fake_romm_api, emit, tmp_path
+    ):
+        """Faves' listing moved, so it is fetched: 40, missing from its walk, is asked about by its id and goes."""
+        library = make_library(romm_api=fake_romm_api)
+        await self._bind(library, fake_romm_api, tmp_path, "collection")
+        self._hide(fake_romm_api, "collection", 40)
+        fake_romm_api.list_hidden_roms_side_effect = RommConnectionError("RomM did not answer")
+        fake_romm_api.collections[0]["updated_at"] = "2031-01-01T00:00:00"
+
+        counted, removed, _sent, asked = await self._sync(library, fake_romm_api, emit, "run-2")
+
+        assert (counted, removed, asked) == (1, [40], [40])
