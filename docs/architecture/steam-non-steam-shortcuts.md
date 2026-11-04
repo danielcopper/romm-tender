@@ -334,9 +334,9 @@ binding onto an already-local target, it checks that exact target id again throu
 `get_rom_once` path. The request runs on the worker executor outside the write UoW and after the save-stranding guard
 permits the attempt. Consequently an initial unsynced-save warning makes no target request, while both `Sync now` and
 `Switch anyway` retries are protected; `allow_stranded` never bypasses liveness. A typed target 404 refuses with
-`version_vanished` without changing the binding or any recorded launch state. Every other optional-probe outcome fails
-open, so a local switch remains fast when RomM is uncertain or offline. The active-target no-op does not probe because
-it moves no binding.
+`version_vanished` without changing the binding or any recorded state. Every other optional-probe outcome fails open, so
+a local switch remains fast when RomM is uncertain or offline. The active-target no-op does not probe because it moves
+no binding.
 
 A server-only target already requires its full RomM detail for membership validation and row construction. That fetch
 keeps its normal retry policy, doubles as the liveness verdict, and receives no second probe. Its typed 404 produces the

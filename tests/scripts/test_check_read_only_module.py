@@ -64,7 +64,7 @@ _EXPECTED_READS = frozenset(
 _EXPECTED_WRITES = frozenset(
     {
         "clear",
-        "clear_all_applied_launch_options",
+        "clear_all_shortcut_applied",
         "delete",
         "delete_for_rom",
         "delete_intersecting",
@@ -73,12 +73,12 @@ _EXPECTED_WRITES = frozenset(
         "revoke_skip",
         "save",
         "set",
-        "set_applied_launch_options",
         "set_artwork_checked_at",
         "set_chosen_sgdb_id",
         "set_emulator_override",
         "set_fs_size_bytes",
         "set_selected_disc",
+        "set_shortcut_applied",
     }
 )
 
@@ -137,8 +137,8 @@ class TestWritesAreFlagged:
     def test_flags_setters_and_clears_and_replace_all(self, scan):
         findings = scan(
             "def go(uow):\n"
-            "    uow.roms.set_applied_launch_options(1, '')\n"
-            "    uow.roms.clear_all_applied_launch_options()\n"
+            "    uow.roms.set_shortcut_applied(1, True)\n"
+            "    uow.roms.clear_all_shortcut_applied()\n"
             "    uow.platform_sync_state.clear()\n"
             "    uow.firmware_cache.replace_all([])\n"
             "    uow.kv_config.set('k', 'v')\n"

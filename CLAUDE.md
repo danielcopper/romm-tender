@@ -947,13 +947,13 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   bare `self`; `tests/` and `scripts/`; a file it cannot read or parse, which it skips without a word. This list is the
   one home of what the check misses; the script's docstring and Database Design point here. Prompt-only: those shapes,
   and the repository's column writers, which assign no field and so are no field assignment to the check.
-  `RomRepository`'s `set_selected_disc`, `set_chosen_sgdb_id`, `set_artwork_checked_at` and `set_applied_launch_options`
-  each persist one column the aggregate's own verb has just set, and `set_emulator_override` the two
-  (`emulator_override` and `emulator_override_source`) `Rom.pin_emulator_override` has just set, so the sync upsert
-  never touches them; `set_fs_size_bytes` persists the size `Rom.record_fs_size_bytes` has just set into a column the
-  sync upsert also writes. Two more change aggregate state with no verb:
-  `RomRepository.clear_all_applied_launch_options` (Force Full Sync, the reset the `applied_launch_options` entry
-  sanctions) and `PlatformSyncStateRepository.revoke_skip` (by design, `domain/platform_sync_state.py`'s docstring)
+  `RomRepository`'s `set_selected_disc`, `set_chosen_sgdb_id`, `set_artwork_checked_at` and `set_shortcut_applied` each
+  persist one column the aggregate's own verb has just set, and `set_emulator_override` the two (`emulator_override` and
+  `emulator_override_source`) `Rom.pin_emulator_override` has just set, so the sync upsert never touches them;
+  `set_fs_size_bytes` persists the size `Rom.record_fs_size_bytes` has just set into a column the sync upsert also
+  writes. Two more change aggregate state with no verb: `RomRepository.clear_all_shortcut_applied` (Force Full Sync, the
+  reset the `shortcut_applied` entry sanctions) and `PlatformSyncStateRepository.revoke_skip` (by design,
+  `domain/platform_sync_state.py`'s docstring)
 - **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, PlatformSystems, uow_factory) is called while a
   UoW is open on the same path** — check — `scripts/check_uow_seam_nesting.py`, first seam family (a seam reached as a
   bound method, through a helper, a local alias or a nested `def`/`lambda`, inside a UoW opened through a factory
@@ -1294,14 +1294,14 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `tests/services/saves/test_status.py::TestTheStatusReadAndAnAdopt`. Prompt-only: a new consumer of an adopting `Skip`
   adopts through `SaveTransfer.adopt_server_head` when it reads `acknowledge`, and records through
   `SaveTransfer.record_server_head` only when it does not
-- **`applied_launch_options` is written only by the six recorded-state writer sites (sync ack-commit, download-complete,
-  adopt-complete, uninstall, home-migration, version-switch), each recording the exact command the frontend wrote;
-  excluded from the sync UPSERT; the only sanctioned reset is Force Full Sync's clear-to-NULL** — test + prompt-only —
-  each writer site carries a value-exact test; new launch-options write paths are prompt-only — mechanize via a
-  `set_applied_launch_options` / `record_applied_launch_options` call-site audit. Download- and adopt-complete share one
-  code site, `RomInstallRecorder.do_record_applied_launch_options`; the uninstall site —
-  `RomRemovalService._drop_install_record` for one ROM, `_uninstall_all_roms_io` for the bulk run — also serves "Forget
-  this download" (`forget_download`), which is therefore not a seventh writer site
+- **`roms.shortcut_applied` is set only by the sync's commit, for a binding target (`SyncReporter`, through
+  `Rom.record_shortcut_applied` and `set_shortcut_applied`); excluded from the sync UPSERT; the only sanctioned reset is
+  Force Full Sync's clear (`clear_all_shortcut_applied`)** — test + prompt-only —
+  `tests/services/library/test_reporter.py`
+  (`TestCommitUnitResults::test_commit_records_the_shortcut_applied_for_binding_target`,
+  `TestClearSyncCache::test_clears_every_applied_shortcut_so_the_next_apply_skips_nothing`) and
+  `tests/adapters/repositories/test_rom.py::TestShortcutApplied`; a new writer is prompt-only — mechanize via a
+  `set_shortcut_applied` call-site audit
 - **An abandoned-chunk stash's whole-unit apply staging (`pending_sync` / `pending_all_roms` / `pending_cover_sources` /
   `pending_followed_keys`) is never mutated while the stash is pending (box IDLE) — every run-entry path passes
   `try_begin_run`, which clears the stash before any staging write** — prompt-only — mechanize via a staging-writer

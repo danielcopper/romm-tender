@@ -126,7 +126,7 @@ class LocalLibraryReader:
                     "platform_name": slug_to_name.get(rom.platform_slug, rom.platform_slug),
                     "platform_slug": rom.platform_slug,
                     "sibling_group_key": rom.sibling_group_key,
-                    "applied_launch_options": rom.applied_launch_options,
+                    "shortcut_applied": rom.shortcut_applied,
                     "cover_source": rom.cover_source,
                     "delivered_through": rom.delivered_through,
                 }
@@ -191,7 +191,7 @@ class LocalLibraryReader:
                     "fs_name": rom.fs_name,
                     "platform_slug": rom.platform_slug,
                     "sibling_group_key": rom.sibling_group_key,
-                    "applied_launch_options": rom.applied_launch_options,
+                    "shortcut_applied": rom.shortcut_applied,
                     "cover_source": rom.cover_source,
                 }
                 for rom in rows

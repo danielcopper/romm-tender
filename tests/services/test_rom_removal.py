@@ -494,7 +494,7 @@ class TestRemoveRom:
         rom_files.files[rom_path] = b"\x00" * 100
         _seed_install(uow, _make_install(42, file_path=rom_path))
         with uow:
-            uow.roms.set_applied_launch_options(42, "")
+            uow.roms.set_shortcut_applied(42, True)
 
         result = await service.remove_rom(42)
 
@@ -502,7 +502,7 @@ class TestRemoveRom:
         with uow:
             rom = uow.roms.get(42)
         assert rom is not None
-        assert rom.applied_launch_options == ""
+        assert rom.shortcut_applied is True
 
     @pytest.mark.asyncio
     async def test_does_not_record_applied_for_unbound_rom(self, service, uow, rom_files):
@@ -519,7 +519,7 @@ class TestRemoveRom:
         with uow:
             rom = uow.roms.get(50)
         assert rom is not None
-        assert rom.applied_launch_options is None
+        assert rom.shortcut_applied is False
 
     @pytest.mark.asyncio
     async def test_refuses_if_not_installed(self, service):
@@ -685,14 +685,14 @@ class TestUninstallAllRoms:
             uow.roms.save(_make_rom(2))
             uow.rom_installs.save(_make_install(1, file_path=file_a))
             uow.rom_installs.save(_make_install(2, file_path=file_b))
-            uow.roms.set_applied_launch_options(1, "")
+            uow.roms.set_shortcut_applied(1, True)
 
         result = await service.uninstall_all_roms()
 
         assert result["success"] is True
         with uow:
-            assert uow.roms.get(1).applied_launch_options == ""
-            assert uow.roms.get(2).applied_launch_options is None
+            assert uow.roms.get(1).shortcut_applied is True
+            assert uow.roms.get(2).shortcut_applied is False
 
     @pytest.mark.asyncio
     async def test_handles_empty_state(self, service, uow):
@@ -1605,7 +1605,7 @@ def _seed_missing_download(uow: FakeUnitOfWork, rom_id: int, *, bound: bool = Tr
     with uow:
         uow.roms.save(_make_rom(rom_id, bound=bound))
         uow.rom_installs.save(_make_install(rom_id, file_path=rom_path))
-        uow.roms.set_applied_launch_options(rom_id, f"flatpak run net.retrodeck.retrodeck {rom_path}")
+        uow.roms.set_shortcut_applied(rom_id, True)
     return rom_path
 
 
@@ -1621,9 +1621,9 @@ class TestForgetDownload:
         assert uow.rom_installs.get(42) is None
         rom = uow.roms.get(42)
         assert rom is not None
-        assert rom.applied_launch_options == f"flatpak run net.retrodeck.retrodeck {_ROMS_BASE}/n64/game_42.z64"
+        assert rom.shortcut_applied is True
 
-    async def test_an_unbound_rom_records_no_launch_command(self, service, uow, rom_files):
+    async def test_an_unbound_rom_keeps_what_the_sync_recorded(self, service, uow, rom_files):
         _seed_missing_download(uow, 50, bound=False)
 
         result = await service.forget_download(50)
@@ -1632,7 +1632,7 @@ class TestForgetDownload:
         assert uow.rom_installs.get(50) is None
         rom = uow.roms.get(50)
         assert rom is not None
-        assert rom.applied_launch_options == f"flatpak run net.retrodeck.retrodeck {_ROMS_BASE}/n64/game_50.z64"
+        assert rom.shortcut_applied is True
 
     async def test_it_deletes_no_file(self, service, uow, rom_files):
         rom_path = _seed_missing_download(uow, 42)

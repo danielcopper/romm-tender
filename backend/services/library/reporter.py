@@ -6,7 +6,7 @@ sends (event signal only) and the chunk-dispatcher-driven
 each acked ROM into the ``roms`` aggregate, stamping its cached
 ``rom_metadata`` in the same write UoW (Rom row first, then metadata —
 FK-safe). Also owns the ``clear_sync_cache`` reset of the completion stamps and
-the recorded launch commands that commit writes. It emits nothing. The end of a
+the applied-shortcut records that commit writes. It emits nothing. The end of a
 run — its closing registry write, the collection maps and the terminal signals —
 belongs in :class:`RunFinalizer`; the façade's reads of the registry and the run
 history in :class:`LibraryViews`; anything that decides "what should this sync
@@ -217,17 +217,15 @@ class SyncReporter:
             rom.record_delivery(route)
         uow.roms.save(rom)
 
-        # Record the applied launch command for a binding TARGET this cycle (the
-        # value the frontend just wrote onto the shortcut), so the next sync skips
-        # this now-correct shortcut (delta-restricted apply, #1383). A skipped or
-        # non-representative row is absent from ``binding`` and keeps its recorded
-        # value — the pin-only ``set_applied_launch_options`` write never wipes it,
-        # unlike ``save()``. This is the first of the six recorded-state writer
-        # sites (the others: download-complete, adopt-complete, uninstall, home
-        # migration, version switch).
+        # Record that the shortcut of a binding TARGET was applied this cycle, so
+        # the next sync skips it while its identity holds (delta-restricted
+        # apply, #1383). A skipped or non-representative row is absent from
+        # ``binding`` and keeps its record — the pin-only
+        # ``set_shortcut_applied`` write never wipes it, unlike ``save()``. The
+        # one writer of the record (#2221 D17).
         if rom_id in binding:
-            rom.record_applied_launch_options(built.get("launch_options", ""))
-            uow.roms.set_applied_launch_options(rom_id, rom.applied_launch_options)
+            rom.record_shortcut_applied()
+            uow.roms.set_shortcut_applied(rom_id, rom.shortcut_applied)
             self._forget_cover_record_on_bind(uow, rom_id, binding[rom_id], existing)
 
         self._stamp_rom_metadata(uow, rom_id, roms_by_id.get(rom_id))
@@ -454,12 +452,12 @@ class SyncReporter:
         (ADR-0023) and the per-collection ``CollectionSyncState`` stamp (#742),
         each of which is its own ``effective_last_sync``. So the full re-fetch is
         armed by clearing every stamp — no platform or collection then holds skip
-        authority and each full-fetches next time. The recorded
-        ``applied_launch_options`` are reset to NULL in the same write UoW, so
-        the delta apply (ADR-0025) skips nothing on that run: "force" also means
-        force past the per-item skip — the one repair path for Steam-side drift
-        the recorded value cannot see (a manually edited or corrupted shortcut).
-        The re-apply re-records every value.
+        authority and each full-fetches next time. Every row's
+        ``shortcut_applied`` is cleared in the same write UoW, so the delta
+        apply (ADR-0025) skips nothing on that run: "force" also means force
+        past the per-item skip — the one repair path for Steam-side drift the
+        record cannot see (a manually edited or corrupted shortcut). The
+        re-apply records every shortcut again.
 
         The ``SyncRun`` history is deliberately **preserved**: it feeds no skip
         gate (the fetcher never reads it), and it is the source of the "Last
@@ -472,7 +470,7 @@ class SyncReporter:
 
         What the preserved history does **not** carry is a resumable run. This
         clear takes away BOTH kinds of skip authority — every completion stamp and
-        every recorded launch command — and the panel's resume offer reads those,
+        every applied shortcut — and the panel's resume offer reads those,
         never the history, so there is nothing left to continue here. That the two
         are cleared together is what makes the offer's rule hold; see
         :meth:`LibraryViews._read_sync_stats_io` (#1789).
@@ -480,6 +478,6 @@ class SyncReporter:
         with self._uow_factory() as uow:
             uow.platform_sync_state.clear()
             uow.collection_sync_state.clear()
-            uow.roms.clear_all_applied_launch_options()
+            uow.roms.clear_all_shortcut_applied()
         self._logger.info("Sync cache cleared — next sync will fully re-fetch and re-apply")
         return {"success": True, "message": "Next sync will fully re-fetch and re-apply"}

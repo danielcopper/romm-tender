@@ -459,7 +459,7 @@ calls (`wire_library`, which answers the service and its parts as `LibraryParts`
 | `chunk_dispatcher.py`     | `ChunkDispatcher` — one unit's apply as durable chunk round-trips: emit `sync_apply_unit`, wait out the heartbeat clock for the ack, commit the chunk through the reporter, and stash or discard a chunk whose ack never came. It opens no transaction, and the run's `try_begin_run` / `finish_run` stay with the orchestrator and, for a preview, with the preview                                                                                                                                                                                     |
 | `cover_preparer.py`       | `CoverPreparer` — one unit's covers, readied before its shortcuts are emitted: the `refresh_changed_covers` invalidation pass, the download for the ROMs getting a shortcut, and each emitted entry's `cover_path`. Delegated to `ArtworkService` through the `ArtworkManager` seam, with the run's progress and cancel signals bound in                                                                                                                                                                                                                 |
 | `sync_run_recorder.py`    | `SyncRunRecorder` — the run's own `SyncRun` row: the `running` row opened with the planned counts, and the single terminal transition (`completed` / `cancelled` / `interrupted` / `paused` / `errored`) that closes it, each in its own short write UoW. It writes the outcome; **which** terminal a stopped run earns stays the orchestrator's, and admitting or releasing the in-flight run stays `_state.py`'s                                                                                                                                       |
-| `reporter.py`             | `SyncReporter` — the apply's ack and each chunk's commit (artwork filenames, the per-unit `roms` upsert with its cached metadata, the completion stamps and the recorded launch commands), and Force Full Sync's reset of those stamps and commands. It emits nothing                                                                                                                                                                                                                                                                                    |
+| `reporter.py`             | `SyncReporter` — the apply's ack and each chunk's commit (artwork filenames, the per-unit `roms` upsert with its cached metadata, the completion stamps and the applied shortcuts), and Force Full Sync's reset of those stamps and commands. It emits nothing                                                                                                                                                                                                                                                                                           |
 | `run_finalizer.py`        | `RunFinalizer` — the end of a run: the closing registry write (the stale removal's skip revocations, the collection-stamp deletions, the gone-from-RomM marks, the platform-names cache) with the Steam-collection maps built in the same write UoW, and the terminal signals (`sync_complete` and the run's last `sync_progress` frame)                                                                                                                                                                                                                 |
 | `views.py`                | `LibraryViews` — the façade's reads: the `roms`-derived platform counts, and the `sync_runs` history and the completion stamps behind the last-sync line, the resume offer and the run list. Declared read-only (`scripts/check_read_only_module.py`)                                                                                                                                                                                                                                                                                                    |
 | `session_budget.py`       | `SessionBudgetMonitor` — Steam's per-session renderer-heap budget: the GC-settled RSS measurement, the chunk-boundary pause verdict, the headroom clip that trims a chunk's additive cover work to what that verdict left, the post-preview prognosis, the run-start baseline, the `get_session_budget_status` payload, and whether a reading stands at or above the ceiling, which the shortcut artwork job asks through `LibraryService.renderer_above_ceiling` before each batch                                                                      |
@@ -505,20 +505,18 @@ Between the sibling-group collapse and chunking, `UnitApplier.apply_unit` runs `
 the unit's collapsed entries against the bound-shortcut registry and emits only the **delta** — new + changed, a rebind
 entry counting as changed because it moves its binding (outside a unit the run skipped, whose apply moves none).
 "Changed" is content, not identity-only: on top of the identity triple (name / `fs_name` / `platform_slug`) the
-classifier compares each item's freshly built target `launch_options` against the `applied_launch_options` recorded on
-its `roms` row (the launch command last written to that shortcut). A match on both is content-unchanged and skipped — it
-never reaches the frontend, so no `Set*` walk and no ~2 s `AppDetails` confirm poll — while an install/uninstall or
-core/disc pin change that leaves identity untouched still flips the item to changed. A `NULL` recorded value (a
-pre-migration-015 row, or a freshly created row not yet recorded) is unknown and never skipped, so the first
-post-upgrade sync re-applies exactly as before, records values, and only later syncs skip. Skipped rows are **still
+classifier reads whether the item's `roms` row records its shortcut applied (`shortcut_applied`). An applied row whose
+identity matches is content-unchanged and skipped — it never reaches the frontend, so no `Set*` walk and no ~2 s
+`AppDetails` confirm poll. Every bound shortcut carries the same launch options, its appId
+([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D7, D10), so an install, an uninstall or a core or
+disc pin changes nothing the apply writes. A row not recorded as applied (a freshly created row, or one Force Full Sync
+cleared) is never skipped, so it is re-applied once, recorded, and only later syncs skip it. Skipped rows are **still
 committed** (chunking routes their groups to chunk 0's leftover), so no DB work is dropped and the per-platform
 completion stamp still rides the final chunk only — a platform is stamped exactly when its whole delta is durable, and
-an empty-delta platform emits one empty chunk that commits every row and writes the stamp. The recorded value is
-refreshed by six writer sites (sync ack-commit, download-complete, adopt-complete, uninstall, RetroDECK-home migration
-re-resolve, version switch), each recording the value the frontend just wrote onto the shortcut; a missed writer only
-ever causes a harmless spurious re-touch, never a wrong skip (the benign-failure asymmetry). The per-unit
-`sync_apply_unit`'s `unit_total` is therefore the delta size, so the progress counter shows net progress and a resume
-converges quickly.
+an empty-delta platform emits one empty chunk that commits every row and writes the stamp. The record is set by the
+sync's commit alone, for each binding target the frontend acknowledged (D17); a row it misses only ever causes a
+harmless spurious re-touch, never a wrong skip (the benign-failure asymmetry). The per-unit `sync_apply_unit`'s
+`unit_total` is therefore the delta size, so the progress counter shows net progress and a resume converges quickly.
 
 **The preview does not count a skipped unit's launch commands.** `sync_preview` classifies its whole union with the same
 `classify_roms`, and passes as `skipped_rom_ids` the ROMs it took from a unit the fetcher reported as skipped — platform
@@ -549,10 +547,10 @@ and a path change). Two compare layers run per unit, both in `ArtworkService`:
 - **The invalidation pass** (`refresh_changed_covers`, reached through `CoverPreparer` from `UnitApplier.apply_unit`
   before the cover download): for every BOUND fetched ROM whose stored fingerprint differs — delta-skipped ROMs included
   — it re-downloads the cache file (atomic tmp+rename), republishes the grid `{app_id}p.png` copy, persists the new
-  fingerprint in a small write UoW (an observed server fact, deliberately NOT ack-coupled like
-  `applied_launch_options`), and collects `{rom_id, app_id}`. An automatic cover that is Tender's SteamGridDB pick
-  counts as changed whenever the fetch carries a RomM cover, whatever its fingerprint; it is downloaded whole, and its
-  record and hand-over go once RomM's cover is published (`services/artwork/_steamgriddb_cover.py`,
+  fingerprint in a small write UoW (an observed server fact, deliberately NOT ack-coupled like `shortcut_applied`), and
+  collects `{rom_id, app_id}`. An automatic cover that is Tender's SteamGridDB pick counts as changed whenever the fetch
+  carries a RomM cover, whatever its fingerprint; it is downloaded whole, and its record and hand-over go once RomM's
+  cover is published (`services/artwork/_steamgriddb_cover.py`,
   [#2381](https://github.com/danielcopper/romm-tender/issues/2381) D24). A changed cover that is set in Steam, or that
   the user chose, is skipped with its cache and its fingerprint as they are (`_covers_left_alone_io`), so RomM's change
   stays pending ([#2381](https://github.com/danielcopper/romm-tender/issues/2381) D9). A later sync does not reliably
@@ -1428,37 +1426,37 @@ standard listing fails it, while a failed smart listing or virtual type is left 
 listing's other readers — the Library page's `get_platforms` and `set_all_platforms_sync`, and the connection test —
 answer a RomM error from it, a non-list answer included, with `classify_error`'s failure shape.
 
-"Force Full Sync" (`clear_sync_cache`) clears every stamp (and resets the recorded `applied_launch_options` to NULL),
-which is the entire full-re-fetch + full-re-apply arm — the stamps are the fetcher's sole skip authority. The
-`sync_runs` history is deliberately **preserved** (#1318): it feeds no skip gate and is the source of the "Last sync"
-display, so deleting it forced nothing and only blanked the panel to "Never" right after a reset.
+"Force Full Sync" (`clear_sync_cache`) clears every stamp (and every row's `shortcut_applied`), which is the entire
+full-re-fetch + full-re-apply arm — the stamps are the fetcher's sole skip authority. The `sync_runs` history is
+deliberately **preserved** (#1318): it feeds no skip gate and is the source of the "Last sync" display, so deleting it
+forced nothing and only blanked the panel to "Never" right after a reset.
 
 That preservation is also why the panel's **resume offer is derived from the surviving skip authority, not from the run
 history** (#1789). The history says only that a run ended without completing, and after a Force Full Sync it says that
 while everything it implied is gone — so a history-derived offer promised to continue progress that had just been
 discarded. The condition it replaced measured the wrong thing in the same way: it paired the incomplete attempt with
-"bound shortcuts exist", but Force Full Sync does not delete shortcuts, it deletes the stamps and the recorded launch
-options.
+"bound shortcuts exist", but Force Full Sync does not delete shortcuts, it deletes the stamps and clears the applied
+records.
 
 A resume rests on **skip authority**, and Tender keeps two kinds, cleared together by that one reset: a **completion
-stamp** (whole platform or collection skipped at fetch time, ADR-0023) or a **recorded `applied_launch_options`** (one
-game skipped at apply time, ADR-0025). Neither subsumes the other, so the offer reads both. A run cancelled inside its
-first platform unit reached no final chunk and holds no stamp, but its committed chunks wrote shortcuts and recorded
-their launch commands — the next run genuinely does less work, so that is a resume. A row predating migration 015
-carries a NULL recorded value while its platform's stamp survives, so an upgraded install can hold stamps and zero
-recorded games and still skip those platforms wholesale.
+stamp** (whole platform or collection skipped at fetch time, ADR-0023) or an **applied shortcut** (`shortcut_applied`,
+one game skipped at apply time, ADR-0025). Neither subsumes the other, so the offer reads both. A run cancelled inside
+its first platform unit reached no final chunk and holds no stamp, but its committed chunks wrote shortcuts and recorded
+them applied — the next run genuinely does less work, so that is a resume. A row the sync has not applied carries no
+record while its platform's stamp may survive, so an install can hold stamps and zero applied games and still skip those
+platforms wholesale.
 
-`get_sync_stats` therefore carries two additive fields alongside the display ones: `resumable_games` (bound rows with a
-non-NULL `applied_launch_options`) and `has_completion_stamp` (`PlatformSyncStateRepository.has_any()` or
+`get_sync_stats` therefore carries two additive fields alongside the display ones: `resumable_games` (bound rows whose
+shortcut is recorded as applied) and `has_completion_stamp` (`PlatformSyncStateRepository.has_any()` or
 `CollectionSyncStateRepository.has_any()`). Both ride in the read UoW that already scans `roms` — the game count is one
 more condition inside that loop, since `iter_all` already selects the column, and each stamp probe is a
 `SELECT 1 … LIMIT 1` over a leaf table — so the panel mount pays nothing measurable.
 
-**The game count is bound-AND-recorded, never recorded alone.** `classify_roms` (`domain/sync_diff.py`) sends an unbound
-row down the NEW branch — `if not reg or not reg.get("app_id")` — before it reads the recorded value, because the next
-run has to mint the shortcut regardless. Requiring the binding is what makes the count fall to zero after "Remove all
-shortcuts", where unbinding deliberately keeps the row and its recorded command (ADR-0007) — a count over every row
-would keep offering to resume shortcuts that no longer exist. The panel keeps `roms > 0` as a conjunct on top, and it is
+**The game count is bound-AND-applied, never applied alone.** `classify_roms` (`domain/sync_diff.py`) sends an unbound
+row down the NEW branch — `if not reg or not reg.get("app_id")` — before it reads the record, because the next run has
+to mint the shortcut regardless. Requiring the binding is what makes the count fall to zero after "Remove all
+shortcuts", where unbinding deliberately keeps the row and its record (ADR-0007) — a count over every row would keep
+offering to resume shortcuts that no longer exist. The panel keeps `roms > 0` as a conjunct on top, and it is
 **load-bearing rather than a restatement**: `has_completion_stamp` asks whether any stamp that may still skip survives
 anywhere, while the removal path is surgical — it revokes the skip of only the platform slugs its removed rows name, and
 deletes only the collection stamps whose member set intersects those rows. A stamp naming nothing the `roms` table still

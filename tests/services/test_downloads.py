@@ -1811,7 +1811,7 @@ class TestDoDownloadSingleFile:
         with downloads.uow as uow:
             rom = uow.roms.get(42)
         assert rom is not None
-        assert rom.applied_launch_options is None
+        assert rom.shortcut_applied is False
 
     @pytest.mark.asyncio
     async def test_download_complete_does_not_record_applied_for_unbound_rom(self, make_downloads, tmp_path, emit):
@@ -1862,7 +1862,7 @@ class TestDoDownloadSingleFile:
         with downloads.uow as uow:
             rom = uow.roms.get(7)
         assert rom is not None
-        assert rom.applied_launch_options is None
+        assert rom.shortcut_applied is False
 
 
 class TestASystemFolderLinkedToAnotherDrive:

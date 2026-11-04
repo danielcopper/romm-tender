@@ -1601,7 +1601,7 @@ class TestTheMigrationsConflictRules:
         with migration.uow as uow:
             rom = uow.roms.get(1)
         assert rom is not None
-        assert rom.applied_launch_options is None
+        assert rom.shortcut_applied is False
 
     @pytest.mark.asyncio
     async def test_a_running_cleanup_refuses_the_migration_and_moves_nothing(self, migration, tmp_path):

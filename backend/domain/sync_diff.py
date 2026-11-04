@@ -55,36 +55,33 @@ def classify_roms(
     Returns the ROMs split into new (not in registry), changed (registry
     entry exists but a *persisted* identity field — name, platform_slug, or
     fs_name — differs, OR, for an entry outside *skipped_rom_ids*, either the
-    target ``launch_options`` differs from the recorded
-    ``applied_launch_options`` or the entry is a rebind — it carries
-    ``bind_rom_id`` — whose shortcut keeps its name while its binding and launch
-    command move to the target, which is work the apply does and the preview has
-    to offer),
+    row's shortcut is not recorded as applied (``shortcut_applied``) or the
+    entry is a rebind — it carries ``bind_rom_id`` — whose shortcut keeps its
+    name while its binding moves to the target, which is work the apply does
+    and the preview has to offer),
     unchanged_ids (otherwise), stale (in registry but not in the current
     fetch), and the count of stale ROMs whose stored platform no longer appears
     in fetched_platform_names.
 
-    ``applied_launch_options`` is the launch command last written to the ROM's
-    Steam shortcut (recorded by the six writer sites, #1383). Comparing the
-    built target ``launch_options`` against it is what lets the delta-restricted
-    apply skip a content-correct shortcut rather than re-touching it: an identity
-    match with a launch-options match is genuinely unchanged, while an
-    install/uninstall (or core/disc pin change) that leaves identity untouched
-    still flips the item to "changed". Outside *skipped_rom_ids*, no skip is
-    ever taken on unknown recorded state — no data is invented: a NULL recorded
-    value (``None`` — a pre-migration-015 row, or a freshly created row not yet
-    recorded) never matches a target string, so such a row is always "changed"
-    and re-applied once; the writer sites then record the value and the next
-    sync skips it.
+    ``shortcut_applied`` records that the sync's commit applied the ROM's
+    Steam shortcut (#1383, #2221 D17). It is what lets the delta-restricted
+    apply skip a content-correct shortcut rather than re-touching it: an
+    identity match on an applied row is genuinely unchanged. Every bound
+    shortcut carries the same launch options, its appId (#2221 D7, D10), so an
+    install, an uninstall or a core or disc pin changes nothing the apply
+    writes. Outside *skipped_rom_ids*, no skip is ever taken on a row that is
+    not recorded as applied — a freshly created row, or one Force Full Sync
+    cleared — so such a row is "changed" and re-applied once; the commit then
+    records it and the next sync skips it.
 
     *skipped_rom_ids* are the ROMs the preview took from a unit the fetcher
     reported as skipped. Apply returns before it classifies such a unit, so it
-    never rewrites their shortcuts and never records their launch command; a
-    launch command that differs from the recorded one there — NULL included —
-    is no change the apply would make, and counting it would show the same
-    phantom "changed" on every preview. Such an entry is "changed" only for an
-    identity difference; Steam's copy of an installed game's command is kept
-    current by the launch-options reconcile instead. A rebind keyed by one is
+    never rewrites their shortcuts and never records them applied; a row there
+    that is not recorded as applied is no change the apply would make, and
+    counting it would show the same phantom "changed" on every preview. Such an
+    entry is "changed" only for an identity difference; Steam's copy of a
+    shortcut's launch options is kept current by the launch-options reconcile
+    instead. A rebind keyed by one is
     no change either, for the same reason: the apply moves no binding for a
     unit it skipped. That also keeps the stem a skipped platform's rows are
     rebuilt with — the file name without its extension, since the stored row
@@ -115,8 +112,7 @@ def classify_roms(
         if not reg or not reg.get("app_id"):
             new.append(sd)
         elif _identity_differs(reg, sd) or (
-            sd["rom_id"] not in skipped_rom_ids
-            and (BIND_ROM_ID_KEY in sd or reg.get("applied_launch_options") != sd.get("launch_options", ""))
+            sd["rom_id"] not in skipped_rom_ids and (BIND_ROM_ID_KEY in sd or not reg.get("shortcut_applied"))
         ):
             changed.append({**sd, "existing_app_id": reg["app_id"]})
         else:
@@ -266,7 +262,7 @@ def collapse_sibling_groups(
       chosen by :func:`resolve_group_representative`, but with its display
       ``name`` replaced by :func:`canonical_group_name` — the region-preferred
       member's name mints the sticky Steam shortcut (ADR-0021 §2/§3), while the
-      representative's ``rom_id`` / launch bake stay the bind target. This is the
+      representative's ``rom_id`` stays the bind target. This is the
       only lane that renames: an already-bound group (bound / rebind)
       carries its persisted name verbatim, so a live shortcut is never renamed.
     * **Grandfathered untouched** (partial view only) — the group holds a binding
@@ -308,7 +304,7 @@ def collapse_sibling_groups(
         if not bound_here:
             # No binding anywhere in the group → mint the single representative,
             # named after the region-preferred (canonical) member. The bind
-            # target stays the representative's rom_id + launch bake; only the
+            # target stays the representative's rom_id; only the
             # sticky Steam name follows the pure region ranking (ADR-0021 §2/§3).
             # Copy so the original member dict (also staged in pending_all_roms
             # for the per-sibling identity upsert) keeps its own real name.
@@ -697,9 +693,8 @@ def _rebind_entry(rep: dict[str, Any], kept_rom_id: int, kept_reg: dict[str, Any
     Keyed by the bound sibling (*kept_rom_id*) so the frontend REUSES that
     sibling's existing Steam shortcut (its appId is already in the rom_id→appId
     map); outside a unit the run skipped, :func:`classify_roms` counts it as
-    changed, because the binding moves even where the name and launch command
-    stay. The entry carries *rep*'s launch bake (its installed path, or the
-    empty placeholder when it is uninstalled) plus a ``bind_rom_id`` marker so
+    changed, because the binding moves even where the name stays. The entry
+    carries *rep*'s fields plus a ``bind_rom_id`` marker so
     the per-unit commit moves the DB binding onto *rep* — the shortcut's appId,
     artwork, collections and playtime all survive; only the active version
     changes. Identity fields stay the bound sibling's (sticky name — never

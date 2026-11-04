@@ -75,15 +75,15 @@ export function formatResumeScope(resumableGames: number): string {
  * An incomplete attempt alone is not enough, and the half that used to stand in
  * for "progress survives" was measuring the wrong thing: it asked whether
  * SHORTCUTS exist, and Force Full Sync does not delete shortcuts — it deletes
- * the completion stamps and the recorded launch commands. So the offer survived
+ * the completion stamps and clears the applied shortcuts. So the offer survived
  * a clear that had just discarded everything it offered to continue (#1789).
  *
  * What a resume actually rests on is skip authority, of which Tender keeps
  * two kinds and clears both together in that one place: a completion stamp
- * (whole platform or collection skipped at fetch time) or a recorded launch
- * command (one game skipped at apply time). Either is a real resume — a run
- * cancelled inside its first platform has written shortcuts and recorded their
- * commands without reaching a stamp, and the next run genuinely does less work.
+ * (whole platform or collection skipped at fetch time) or an applied shortcut
+ * (one game skipped at apply time). Either is a real resume — a run cancelled
+ * inside its first platform has written shortcuts and recorded them applied
+ * without reaching a stamp, and the next run genuinely does less work.
  *
  * ``roms > 0`` is LOAD-BEARING, not a belt-and-braces restatement of the two
  * branches. ``has_completion_stamp`` is a global "any stamp that may still skip,

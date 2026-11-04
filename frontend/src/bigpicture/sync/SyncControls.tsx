@@ -127,8 +127,8 @@ export const SyncControls: FC<{ state: SyncPageState }> = ({ state }) => (
 /**
  * Whether the stats say there is nothing for Force Full Sync to forget.
  *
- * What the press removes is every completion stamp and every recorded launch
- * command, so the two fields that report those are the answer. The run history
+ * What the press removes is every completion stamp and every applied-shortcut
+ * record, so the two fields that report those are the answer. The run history
  * is not: the clear keeps it on purpose, so it is still there after a clear.
  *
  * A read that has not answered says neither thing, and the two ways it can be

@@ -191,7 +191,7 @@ async def test_null_fingerprint_with_cache_adopts_without_download(harness):
                 sibling_group_key="romm:10:1",
             )
         )
-        uow.roms.set_applied_launch_options(10, "")
+        uow.roms.set_shortcut_applied(10, True)
     cache = _cache_file(harness)
     cache.parent.mkdir(parents=True, exist_ok=True)
     cache.write_bytes(b"pre-existing cache bytes")

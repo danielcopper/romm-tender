@@ -720,53 +720,53 @@ class TestResyncPreservesSelectedDisc:
         assert loaded.selected_disc == "FF7 (Disc 3).cue"
 
 
-class TestAppliedLaunchOptions:
-    """The recorded applied launch command (#1383) — read-back, SQL-NULL, and the
-    sync-UPSERT-preserves contract, mirroring the two pin columns above."""
+class TestShortcutApplied:
+    """Whether the sync applied the row's shortcut (#2221 D17) — read-back, the
+    default, Force Full Sync's clear, and the sync-UPSERT-preserves contract,
+    mirroring the two pin columns above."""
 
     def test_round_trips_via_get(self, uow: SqliteUnitOfWork):
         uow.roms.save(_rom(1))
-        uow.roms.set_applied_launch_options(1, "flatpak run net.retrodeck.retrodeck /game.z64")
+        uow.roms.set_shortcut_applied(1, True)
 
         loaded = uow.roms.get(1)
         assert loaded is not None
-        assert loaded.applied_launch_options == "flatpak run net.retrodeck.retrodeck /game.z64"
+        assert loaded.shortcut_applied is True
 
-    def test_defaults_to_none_when_never_recorded(self, uow: SqliteUnitOfWork):
-        # A fresh row reads NULL (unknown) — the "never skip on unknown state" contract.
+    def test_a_fresh_row_is_not_applied(self, uow: SqliteUnitOfWork):
+        # The "never skip on unknown state" contract: a new row is re-applied.
         uow.roms.save(_rom(1))
         loaded = uow.roms.get(1)
         assert loaded is not None
-        assert loaded.applied_launch_options is None
+        assert loaded.shortcut_applied is False
 
-    def test_empty_string_is_distinct_from_null(self, uow: SqliteUnitOfWork):
-        # "" (recorded uninstalled placeholder) is a real value, not NULL.
+    def test_clear_all_marks_every_row_not_applied(self, uow: SqliteUnitOfWork):
         uow.roms.save(_rom(1))
-        uow.roms.set_applied_launch_options(1, "")
+        uow.roms.save(_rom(2, app_id=200))
+        uow.roms.set_shortcut_applied(1, True)
+        uow.roms.set_shortcut_applied(2, True)
 
-        loaded = uow.roms.get(1)
-        assert loaded is not None
-        assert loaded.applied_launch_options == ""
-        assert uow._conn is not None
-        stored = uow._conn.execute("SELECT applied_launch_options FROM roms WHERE rom_id = 1").fetchone()[0]
-        assert stored == ""
+        uow.roms.clear_all_shortcut_applied()
+
+        rows = [uow.roms.get(rom_id) for rom_id in (1, 2)]
+        assert [row.shortcut_applied if row is not None else None for row in rows] == [False, False]
 
     def test_survives_resync_and_identity_still_updates(self, uow: SqliteUnitOfWork):
-        # The sync UPSERT builds a fresh Rom with applied_launch_options=None; save()
-        # must NOT wipe the recorded value, or the delta apply would re-touch a
-        # correct shortcut every sync.
+        # The sync UPSERT builds a fresh Rom with shortcut_applied=False; save()
+        # must NOT wipe the record, or the delta apply would re-touch a correct
+        # shortcut every sync.
         rom_id = 1
         uow.roms.save(_rom(rom_id, app_id=100))
-        uow.roms.set_applied_launch_options(rom_id, "flatpak run … /game.z64")
+        uow.roms.set_shortcut_applied(rom_id, True)
 
         resynced = _rom(rom_id, app_id=200)
         resynced.name = "Renamed Game"
-        assert resynced.applied_launch_options is None
+        assert resynced.shortcut_applied is False
         uow.roms.save(resynced)
 
         loaded = uow.roms.get(rom_id)
         assert loaded is not None
-        assert loaded.applied_launch_options == "flatpak run … /game.z64"
+        assert loaded.shortcut_applied is True
         assert loaded.shortcut_app_id == 200
         assert loaded.name == "Renamed Game"
 

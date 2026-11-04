@@ -589,9 +589,9 @@ class TestAdopt:
         }
         rom = h.uow.roms.get(_ROM_ID)
         assert rom is not None
-        assert rom.applied_launch_options is None
+        assert rom.shortcut_applied is False
 
-    async def test_an_unbound_rom_records_no_applied_launch_options(self, h):
+    async def test_an_unbound_rom_records_no_applied_shortcut(self, h):
         h.seed_rom(app_id=None)
         h.stage_detail(_single_file_detail())
         h.store.files["/roms/snes/Game.sfc"] = b"x"
@@ -601,7 +601,7 @@ class TestAdopt:
         assert result["success"] is True
         rom = h.uow.roms.get(_ROM_ID)
         assert rom is not None
-        assert rom.applied_launch_options is None
+        assert rom.shortcut_applied is False
 
     async def test_a_vanished_path_is_refused_and_writes_no_row(self, h):
         h.seed_rom()

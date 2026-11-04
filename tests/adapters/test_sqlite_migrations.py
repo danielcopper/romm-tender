@@ -90,8 +90,9 @@ def _set_user_version(db_path: str, version: int) -> None:
 # + 033_add_artwork_slot_choices + 034_clear_firmware_cache_filed_by_folder
 # + 035_add_artwork_slot_handovers + 036_add_firmware_store
 # + 037_add_rom_artwork_checked_at + 038_add_last_sync_content_size
-# + 039_add_rom_emulator_override_source + 040_drop_rom_install_launchable).
-_SHIPPED_VERSION = 40
+# + 039_add_rom_emulator_override_source + 040_drop_rom_install_launchable
+# + 041_replace_applied_launch_options_with_shortcut_applied).
+_SHIPPED_VERSION = 41
 
 # Tables after every shipped migration: the v1 set plus 006's play-session outbox,
 # 012's per-platform completion stamp, 019's per-collection completion stamp,
@@ -1072,11 +1073,12 @@ class Test015AppliedLaunchOptions:
 
     def test_adds_applied_launch_options_to_roms_only(self, tmp_path: Path):
         # 015 ALTERs only roms; rom_installs (and every other table) is untouched.
+        # 041 drops the column again, so the rung is read where it stood.
         db_path = str(tmp_path / "romm_sync.db")
 
-        apply_migrations(db_path)
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 15)))
 
-        assert _user_version(db_path) == _SHIPPED_VERSION
+        assert _user_version(db_path) == 15
         assert "applied_launch_options" in _columns(db_path, "roms")
         assert "applied_launch_options" not in _columns(db_path, "rom_installs")
 
@@ -1094,7 +1096,7 @@ class Test015AppliedLaunchOptions:
         finally:
             conn.close()
 
-        assert apply_migrations(db_path) == _SHIPPED_VERSION
+        assert apply_migrations(db_path, str(_only_migrations_through(tmp_path, 15))) == 15
 
         conn = sqlite3.connect(db_path)
         try:
@@ -2687,3 +2689,48 @@ class Test040DropRomInstallLaunchable:
         finally:
             conn.close()
         assert row == (7, "/roms/ps3/Game/game.pkg", "/roms/ps3/Game", "ps3", "ps3", "2026-07-20T10:00:00")
+
+
+class Test041ReplaceAppliedLaunchOptionsWithShortcutApplied:
+    """041 — a row records whether its shortcut was applied, not the command (#2221 D17)."""
+
+    def test_the_recorded_command_is_there_before_it(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 40)))
+
+        assert _user_version(db_path) == 40
+        assert "applied_launch_options" in _columns(db_path, "roms")
+        assert "shortcut_applied" not in _columns(db_path, "roms")
+
+    def test_a_row_with_a_recorded_command_is_applied_and_one_without_is_not(self, tmp_path: Path):
+        """The device's path: a recorded command (an empty one included) becomes applied; NULL does not."""
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 40)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            for rom_id, recorded in ((1, "flatpak run net.retrodeck.retrodeck '/roms/snes/a.sfc'"), (2, ""), (3, None)):
+                _insert_rom(conn, rom_id, 100 + rom_id)
+                conn.execute("UPDATE roms SET applied_launch_options = ? WHERE rom_id = ?", (recorded, rom_id))
+        finally:
+            conn.close()
+
+        assert apply_migrations(db_path) == _SHIPPED_VERSION
+
+        assert "applied_launch_options" not in _columns(db_path, "roms")
+        conn = sqlite3.connect(db_path)
+        try:
+            rows = conn.execute("SELECT rom_id, shortcut_applied, shortcut_app_id FROM roms ORDER BY rom_id").fetchall()
+        finally:
+            conn.close()
+        assert rows == [(1, 1, 101), (2, 1, 102), (3, 0, 103)]
+
+    def test_a_row_inserted_after_it_is_not_applied(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path)
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            _insert_rom(conn, 1, 101)
+            value = conn.execute("SELECT shortcut_applied FROM roms WHERE rom_id = 1").fetchone()[0]
+        finally:
+            conn.close()
+        assert value == 0

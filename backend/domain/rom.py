@@ -60,7 +60,7 @@ class Rom:
     emulator_override: str | None = None
     emulator_override_source: str | None = None
     selected_disc: str | None = None
-    applied_launch_options: str | None = None
+    shortcut_applied: bool = False
     last_fetch_id: str | None = None
     sibling_group_key: str | None = None
     regions: tuple[str, ...] = ()
@@ -298,18 +298,13 @@ class Rom:
         """Drop the disc pin so the ROM follows the default (m3u or disc 1)."""
         self.selected_disc = None
 
-    def record_applied_launch_options(self, launch_options: str) -> None:
-        """Record the ``launch_options`` last written to this ROM's Steam shortcut.
+    def record_shortcut_applied(self) -> None:
+        """Record that the sync applied this ROM's Steam shortcut (#2221 D17).
 
-        The delta-restricted apply (#1383) compares each item's freshly built
-        target ``launch_options`` against this recorded value to decide whether
-        the shortcut is already correct (skip) or must be re-applied (changed).
-        Written by the six recorded-state writer sites — sync ack-commit,
-        download-complete, adopt-complete, uninstall (records ``""``),
-        RetroDECK-home migration re-resolve, and version switch — each recording
-        the value it just had the frontend write onto the shortcut. ``""`` is the uninstalled placeholder,
-        not a missing value; ``None`` (never set here) is "unknown" and always
-        forces a re-apply. Excluded from the sync UPSERT (persisted only via the
-        pin-only ``set_applied_launch_options`` write path) so an unrelated
-        re-save never wipes it, mirroring :meth:`pin_emulator_override`."""
-        self.applied_launch_options = launch_options
+        The delta-restricted apply (#1383) skips a shortcut whose row is applied
+        and whose identity is unchanged; an unapplied row is always re-applied.
+        Only the sync's commit records it, for a binding target, and Force Full
+        Sync clears it on every row. Excluded from the sync UPSERT (persisted
+        only through ``set_shortcut_applied``) so an unrelated re-save never
+        wipes it, mirroring :meth:`pin_emulator_override`."""
+        self.shortcut_applied = True

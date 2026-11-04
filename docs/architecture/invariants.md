@@ -2141,18 +2141,19 @@ Format: **invariant** — tier — enforced by.
   adopts through `SaveTransfer.adopt_server_head` when it reads `acknowledge`, and records through
   `SaveTransfer.record_server_head` only when it does not. Detail: `docs/architecture/save-file-sync-architecture.md`,
   "Outcomes"
-- **`applied_launch_options` is written only by the six recorded-state writer sites (sync ack-commit, download-complete,
-  adopt-complete, uninstall, home-migration, version-switch), each recording the exact command the frontend wrote;
-  excluded from the sync UPSERT; the only sanctioned reset is Force Full Sync's clear-to-NULL (a wrong recorded value is
-  the only path to a wrong delta-skip)** — test + prompt-only — each writer site carries a value-exact test; new
-  launch-options write paths are prompt-only — mechanize via a `set_applied_launch_options` /
-  `record_applied_launch_options` call-site audit. Download-complete and adopt-complete are one site in the code
-  (`RomInstallRecorder.do_record_applied_launch_options`) and two in the flow, because an adopted install is an install
-  in every respect (ADR-0028). The uninstall site — `RomRemovalService._drop_install_record` for one ROM,
-  `_uninstall_all_roms_io` for the bulk run, both recording `""` — serves "Forget this download" as well:
-  `forget_download` is the uninstall without the file deletion, so it records the same `""` through
-  `_drop_install_record` rather than adding a seventh writer site, and
-  `tests/services/test_rom_removal.py::TestForgetDownload` and `tests/contract/test_missing_download.py` pin the value
+- **`roms.shortcut_applied` is set only by the sync's commit, for a binding target (`SyncReporter`, through
+  `Rom.record_shortcut_applied` and `set_shortcut_applied`); excluded from the sync UPSERT; the only sanctioned reset is
+  Force Full Sync's clear (`clear_all_shortcut_applied`) (a wrong record is the only path to a wrong delta-skip)** —
+  test + prompt-only — `tests/services/library/test_reporter.py`
+  (`TestCommitUnitResults::test_commit_records_the_shortcut_applied_for_binding_target`,
+  `TestClearSyncCache::test_clears_every_applied_shortcut_so_the_next_apply_skips_nothing`) and
+  `tests/adapters/repositories/test_rom.py::TestShortcutApplied`; a new writer is prompt-only — mechanize via a
+  `set_shortcut_applied` call-site audit. The record replaced the recorded launch command (`applied_launch_options`,
+  dropped by migration `041`), which six sites wrote: with every bound shortcut carrying its appId
+  ([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D7, D10), a download, an adoption, an uninstall,
+  "Forget this download", the RetroDECK home migration and a version switch write nothing into a shortcut, so they
+  record nothing either, and `tests/services/test_rom_removal.py::TestForgetDownload` and
+  `tests/contract/test_missing_download.py` pin that the record stays as the sync left it (D17)
 - **An abandoned-chunk stash's whole-unit apply staging (`pending_sync` / `pending_all_roms` / `pending_cover_sources` /
   `pending_followed_keys`) is never mutated while the stash is pending (box IDLE) — every run-entry path passes
   `try_begin_run`, which clears the stash before any staging write** — prompt-only — the invariant holds today rather

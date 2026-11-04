@@ -212,7 +212,7 @@ async def test_clear_sync_cache_takes_both_skip_authorities(harness):
     """The counterpart to the history the clear preserves: the skip authority it takes.
 
     The panel's "Resume Sync" offer reads both kinds of durable progress — the
-    per-unit completion stamps and the per-ROM recorded launch commands — so over
+    per-unit completion stamps and the per-ROM applied shortcuts — so over
     the real SQLite stack the clear has to move both from a genuine resume
     situation to nothing, while leaving the shortcuts themselves alone. Otherwise
     the button keeps offering to continue a run whose progress has just been
@@ -222,8 +222,8 @@ async def test_clear_sync_cache_takes_both_skip_authorities(harness):
     seed_platform_stamp(harness, "snes", rom_count=3)
     with harness.uow_factory() as uow:
         rom = uow.roms.get(11)
-        rom.record_applied_launch_options("flatpak run app 'game.zip'")
-        uow.roms.set_applied_launch_options(11, rom.applied_launch_options)
+        rom.record_shortcut_applied()
+        uow.roms.set_shortcut_applied(11, rom.shortcut_applied)
 
     before = harness.endpoints.get_sync_stats()
     assert before["resumable_games"] == 1

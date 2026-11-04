@@ -45,7 +45,7 @@ class FakeRomRepository:
                     other.unbind_shortcut()
         stored = copy.deepcopy(rom)
         # Mirror SqliteRomRepository.save(): the pin-only columns
-        # (emulator_override / selected_disc / applied_launch_options / chosen_sgdb_id /
+        # (emulator_override / selected_disc / shortcut_applied / chosen_sgdb_id /
         # artwork_checked_at) are EXCLUDED
         # from the sync UPSERT, so a re-save preserves the existing row's values
         # rather than overwriting them from the (fresh, default-None) incoming Rom.
@@ -56,7 +56,7 @@ class FakeRomRepository:
         if existing is not None:
             stored.emulator_override = existing.emulator_override
             stored.selected_disc = existing.selected_disc
-            stored.applied_launch_options = existing.applied_launch_options
+            stored.shortcut_applied = existing.shortcut_applied
             stored.chosen_sgdb_id = existing.chosen_sgdb_id
             stored.artwork_checked_at = existing.artwork_checked_at
         self._roms[rom.rom_id] = stored
@@ -121,14 +121,14 @@ class FakeRomRepository:
         if rom is not None:
             rom.artwork_checked_at = checked_at
 
-    def set_applied_launch_options(self, rom_id: int, launch_options: str | None) -> None:
+    def set_shortcut_applied(self, rom_id: int, applied: bool) -> None:
         rom = self._roms.get(rom_id)
         if rom is not None:
-            rom.applied_launch_options = launch_options
+            rom.shortcut_applied = applied
 
-    def clear_all_applied_launch_options(self) -> None:
+    def clear_all_shortcut_applied(self) -> None:
         for rom in self._roms.values():
-            rom.applied_launch_options = None
+            rom.shortcut_applied = False
 
     def set_fs_size_bytes(self, rom_id: int, size: int | None) -> None:
         rom = self._roms.get(rom_id)

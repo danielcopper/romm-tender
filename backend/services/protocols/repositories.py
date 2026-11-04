@@ -140,12 +140,13 @@ class RomRepository(Protocol):
         """
         ...
 
-    def set_applied_launch_options(self, rom_id: int, launch_options: str | None) -> None:
-        """Record the ``launch_options`` last written to *rom_id*'s shortcut (#1383).
+    def set_shortcut_applied(self, rom_id: int, applied: bool) -> None:
+        """Store whether the sync applied *rom_id*'s shortcut (#2221 D17).
 
-        The only write path for ``applied_launch_options``; the sync upsert in
-        :meth:`save` never touches it, so a re-sync of an unchanged (un-re-acked)
-        row preserves the recorded value the delta apply reads back.
+        The only write path for ``shortcut_applied`` but
+        :meth:`clear_all_shortcut_applied`; the sync upsert in :meth:`save`
+        never touches it, so a re-sync of an unchanged (un-re-acked) row keeps
+        what the delta apply reads back.
         """
         ...
 
@@ -165,12 +166,11 @@ class RomRepository(Protocol):
         """
         ...
 
-    def clear_all_applied_launch_options(self) -> None:
-        """Reset every recorded launch command to "unknown" (NULL).
+    def clear_all_shortcut_applied(self) -> None:
+        """Mark every shortcut as not applied.
 
-        NULL never matches a target, so the next apply re-touches everything —
-        Force Full Sync's escape hatch for Steam-side drift the recorded value
-        cannot see.
+        The next apply then re-touches everything — Force Full Sync's escape
+        hatch for Steam-side drift the record cannot see.
         """
         ...
 
@@ -581,7 +581,7 @@ class PlatformSyncStateRepository(Protocol):
         One of the two skip authorities the panel's resume offer reads: a
         surviving stamp means the next run passes over that whole platform at
         fetch time, so there is something to resume even when no individual game
-        carries a recorded launch command (a row predating migration 015). A
+        is recorded as applied (``roms.shortcut_applied``). A
         revoked stamp does not count, since the next run full-fetches that
         platform. The run history cannot answer this — Force Full Sync preserves it
         while clearing every stamp (#1789). (library/views.py)

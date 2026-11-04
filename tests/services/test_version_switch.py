@@ -93,7 +93,7 @@ def _seed_rom(
     revision: str = "",
     tags: tuple[str, ...] = (),
     is_main_sibling: bool = False,
-    applied_launch_options: str | None = None,
+    shortcut_applied: bool = False,
     has_file_on_disk: bool = True,
 ) -> None:
     uow.roms.save(
@@ -110,7 +110,7 @@ def _seed_rom(
             revision=revision,
             tags=tags,
             is_main_sibling=is_main_sibling,
-            applied_launch_options=applied_launch_options,
+            shortcut_applied=shortcut_applied,
             has_file_on_disk=has_file_on_disk,
         )
     )
@@ -1003,8 +1003,8 @@ class TestSwitchVersion:
             assert u.roms.get(1).shortcut_app_id is None
 
     def test_local_target_404_refuses_without_mutation(self, event_loop, service, uow, romm):
-        _seed_rom(uow, rom_id=1, app_id=_APP_ID, applied_launch_options="old-command")
-        _seed_rom(uow, rom_id=2, app_id=None, applied_launch_options="target-command")
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID, shortcut_applied=True)
+        _seed_rom(uow, rom_id=2, app_id=None, shortcut_applied=True)
         _seed_install(uow, 2)
         romm.get_rom_once_side_effect_by_id[2] = RommNotFoundError("HTTP 404: Not Found")
 
@@ -1015,9 +1015,9 @@ class TestSwitchVersion:
         assert _romm_call_ids(romm, "get_rom") == []
         with uow as current:
             assert current.roms.get(1).shortcut_app_id == _APP_ID
-            assert current.roms.get(1).applied_launch_options == "old-command"
+            assert current.roms.get(1).shortcut_applied is True
             assert current.roms.get(2).shortcut_app_id is None
-            assert current.roms.get(2).applied_launch_options == "target-command"
+            assert current.roms.get(2).shortcut_applied is True
             assert current.rom_installs.get(2) is not None
 
     def test_allow_stranded_does_not_bypass_local_target_404(self, event_loop, service, uow, romm, drift_probe):
@@ -1098,7 +1098,7 @@ class TestSwitchVersion:
 
         _assert_success(result, rom_id=2, installed=True)
         with uow as u:
-            assert u.roms.get(2).applied_launch_options is None
+            assert u.roms.get(2).shortcut_applied is False
 
     def test_a_switch_onto_an_uninstalled_target_records_no_launch_command(self, event_loop, service, uow):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
@@ -1108,7 +1108,7 @@ class TestSwitchVersion:
 
         _assert_success(result, rom_id=2, installed=False)
         with uow as u:
-            assert u.roms.get(2).applied_launch_options is None
+            assert u.roms.get(2).shortcut_applied is False
 
     def test_t3_switch_back_to_installed_answers_it_installed(self, event_loop, service, uow):
         # Switching onto a still-downloaded version answers it installed.
