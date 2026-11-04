@@ -636,3 +636,19 @@ def test_a_retrodeck_pin_while_retrodeck_is_switched_off_waits_for_it(caplog: py
     assert on is not None
     assert on.choice.option is not None
     assert (on.choice.option.label, on.choice.layer) == ("mGBA", GAME_PICK)
+
+
+def test_the_resolution_carries_the_source_that_answered() -> None:
+    """The start check reads whether the answering source starts games off the resolution (#2221 D21)."""
+    uow = FakeUnitOfWork()
+    _seed_rom(uow, rom_id=60, platform_slug="gba")
+    core_info = FakeCoreInfoProvider(
+        available_cores=[{"core_so": "mgba_libretro", "label": "mGBA", "is_default": True}],
+        source={"kind": "emudeck", "starts_games": False},
+    )
+    resolver, _ = _make_resolver(uow=uow, core_info=core_info)
+
+    resolved = resolver.resolve_rom(60)
+
+    assert resolved is not None
+    assert resolved.source == {"kind": "emudeck", "starts_games": False}

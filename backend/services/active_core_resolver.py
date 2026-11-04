@@ -122,7 +122,7 @@ class ActiveCoreResolver:
         )
         choice = choose_emulator(options, game=game, platform=platform)
         self._warn_vanished(game, platform, options, rom, system)
-        return ResolvedEmulator(choice=choice, options=options)
+        return ResolvedEmulator(choice=choice, options=options, source=answer["source"])
 
     def _warn_vanished(
         self,

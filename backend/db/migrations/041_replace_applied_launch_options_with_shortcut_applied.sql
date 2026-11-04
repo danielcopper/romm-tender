@@ -5,10 +5,11 @@
 -- =============================================================================
 --
 --   * roms.shortcut_applied — added, 0 or 1, and 1 on every row that had a
---     command recorded, so the first sync after this rung skips exactly the
---     shortcuts the one before it would have skipped. The sync's commit sets
---     it for every shortcut it applied, and Force Full Sync clears it on every
---     row, so the next sync applies every shortcut anew.
+--     command recorded, whose shortcut a sync has applied before. The command
+--     such a shortcut still carries is set to its appId by the reconcile at
+--     panel load, not by the sync. The sync's commit sets it for every
+--     shortcut it applied, and Force Full Sync clears it on every row, so the
+--     next sync applies every shortcut anew.
 --   * roms.applied_launch_options — dropped. Every bound shortcut carries its
 --     appId and a start asks the resolver for its command, so there is no
 --     command left to record.

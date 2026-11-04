@@ -440,6 +440,19 @@ export type StartCommandReason =
   | "folder_unplaced"
   | "entry_unknown";
 
+/**
+ * Why the entry's installation could not be established, where the resolver gives no command for that reason —
+ * the same words an entry's `reason` carries (`utils/emulatorInstallation.ts`), worded as those are.
+ */
+export type StartInstallationReason =
+  "not_established" | "no_find_rule" | "find_rules_unread" | "lookup_unsupported" | "path_unseen";
+
+/**
+ * Why a start is refused: the answering source is one Tender starts no game through yet (#2221 D21); `source` on
+ * the start or the verdict names its kind.
+ */
+export type StartSourceReason = "source_starts_no_games";
+
 /** What is said beside a start that goes ahead: a placeholder ES-DE leaves in the command as written. */
 export interface StartRemark {
   reason: "placeholder_unfilled";
@@ -460,6 +473,8 @@ export interface EmulatorStart {
   reason: string | null;
   entry: string | null;
   remarks?: StartRemark[];
+  /** The kind of the answering source, with `source_starts_no_games` only. */
+  source?: string;
 }
 
 /**
@@ -468,8 +483,10 @@ export interface EmulatorStart {
  */
 export interface StartCommandVerdict {
   starts: boolean;
-  reason: StartCommandReason | "not_installed" | null;
+  reason: StartCommandReason | StartInstallationReason | StartSourceReason | "not_installed" | null;
   remarks: StartRemark[];
+  /** The kind of the answering source, with `source_starts_no_games` only. */
+  source?: string;
 }
 
 /** Why a launch verdict could not be established, in Tender's words. */

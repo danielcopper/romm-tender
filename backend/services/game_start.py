@@ -20,7 +20,7 @@ from domain.emulator_choice import NO_ENTRY, STARTS, start_payload
 from domain.firmware_store import STORE_FOLDER
 from domain.rom_files import asked_path
 from domain.shortcut_data import shortcut_launch_options
-from domain.start_command import StartRefused
+from domain.start_command import StartRefused, source_refusal
 from lib.errors import Refused
 
 if TYPE_CHECKING:
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     )
 
 
-# The folder in Tender's data folder a command that names none starts in (#2221 D6, #2708 Q9).
+# The folder in Tender's data folder a command that names none starts in (#2221 D6).
 START_FOLDER = "start-folder"
 
 
@@ -52,7 +52,7 @@ class GameStartServiceConfig:
     shortcut), the entry the game starts with (``active_core``) and the path it
     starts with (``disc_resolver``), the resolver's command
     (``start_commands``), the hand-over to the launcher — ``None`` where this
-    session has no runtime directory to hand a start over in (#2708 C3) — and
+    session has no runtime directory to hand a start over in (#2708 D4) — and
     Tender's folder, whose firmware store a start may read. ``start_folder`` is
     the folder a command that names none starts in (#2221 D6). ``loop`` runs the
     preparation off the loop thread, ``conflict_rules`` are what it checks and
@@ -115,7 +115,11 @@ class GameStartService:
         if install is None:
             raise Refused("not_installed", f"ROM {rom_id} is not downloaded")
         resolved = self._active_core.resolve_rom(rom_id)
-        start = start_payload(resolved.choice, resolved.options) if resolved is not None else _NO_EMULATOR
+        start = (
+            start_payload(resolved.choice, resolved.options, source_refusal(resolved.source))
+            if resolved is not None
+            else _NO_EMULATOR
+        )
         if start["state"] != STARTS or resolved is None or resolved.choice.option is None:
             raise Refused("cannot_start", f"ROM {rom_id} cannot start: {start}", start=start)
         label = resolved.choice.option.label

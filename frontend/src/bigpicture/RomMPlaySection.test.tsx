@@ -5217,7 +5217,7 @@ describe("RomMPlaySection", () => {
       expect(capturedPlayButton[capturedPlayButton.length - 1]!.emulatorRefusal).toBeNull();
     });
 
-    it("says under the row what ES-DE leaves unfilled in the command of a start that goes ahead (#2708 Q3)", async () => {
+    it("says under the row what ES-DE leaves unfilled in the command of a start that goes ahead (#2708 D1)", async () => {
       const { container } = await mountWith({
         emulatorStart: {
           state: "starts",

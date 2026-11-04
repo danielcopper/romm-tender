@@ -99,7 +99,7 @@ class AppDirectories:
 
     ``None`` where ``XDG_RUNTIME_DIR`` is not set: the runtime directory then
     falls back to the state directory, which is on disk and outlives the
-    session, and a start is refused rather than handed over there (#2708 C3).
+    session, and a start is refused rather than handed over there (#2708 D4).
     ``bin/tender-rom-launcher`` spells the same path from the same variable.
     """
 

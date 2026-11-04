@@ -22,7 +22,7 @@ import type { AnsweringSource, EmulatorDataReason, EmulatorOption, PlatformSyste
 import { emulatorDataReasonSentence } from "./emulatorSourceWording";
 import { entryForLabel } from "./emulatorEntries";
 import { notEstablishedNote } from "./emulatorInstallation";
-import { commandRefusalLine, isChoosable } from "./emulatorStart";
+import { isChoosable, startVerdictLine } from "./emulatorStart";
 import type { EntryLaunches } from "./emulatorLaunches";
 import { entryLaunchLine } from "./gameLaunch";
 
@@ -87,13 +87,8 @@ const EntryLaunchLine: FC<{
     );
   }
   if (launch === null) return null;
-  const verdict = launch.start_verdict ?? null;
-  const refusedBecause =
-    verdict === null || verdict.starts || verdict.reason === "not_installed" ? null : verdict.reason;
-  const line =
-    refusedBecause === null
-      ? entryLaunchLine(launch, source)
-      : entryLaunchLine(launch, source, false, commandRefusalLine(refusedBecause));
+  const command = startVerdictLine(launch.start_verdict ?? null);
+  const line = entryLaunchLine(launch, source, command.tenderStarts, command.line);
   return line === null ? null : <div style={{ fontSize: "12px", opacity: 0.7 }}>{line}</div>;
 };
 

@@ -640,7 +640,7 @@ class TestThePlatformRulesComeBeforeTheOtherDescriptors:
 
 
 class TestThePathAStartIsAskedWith:
-    """One path for the launch verdict, the launch command and the start (#2221 D3, #2708 C7)."""
+    """One path for the launch verdict, the launch command and the start (#2221 D3)."""
 
     def test_a_game_kept_as_a_folder_is_its_folder(self):
         folder = "/roms/ps3/Game.ps3"

@@ -10,17 +10,16 @@ why there is none (#2221 D2). Nothing else in Tender reads the answer.
 
 **Complete** is the resolver's answer with nothing missing: a command, the
 distribution's environment stated (``null`` is ``launch-environment-unpinned``,
-#2708 Q2), every variable in it with a value (#2221 D13 — ``""`` is a value,
+#2708 D2), every variable in it with a value (#2221 D13 — ``""`` is a value,
 passed on as set and empty), and a working folder placed on the host where the
 command names one. Whether a variable is ``provided`` gates nothing: it is
-passed on as stated (#2708 Q10).
+passed on as stated (#2708 D3).
 
 **What Tender adds** to a Flatpak start is its own, not the resolver's: no
 Wayland socket (#2221 D18), the game's folder granted writable and Tender's
 firmware store read-only (D4), each for this start only. The distribution's
 environment is set first and the command's own ``env`` after it, so the
-command wins on a shared name, as ES-DE's ``env`` does inside RetroDECK's
-start.
+command wins on a shared name.
 """
 
 from __future__ import annotations
@@ -78,8 +77,9 @@ if TYPE_CHECKING:
 
 # Why the resolver gives no command, each in Tender's word; a refusal this map
 # does not hold reads as :data:`COMMAND_UNREAD`. An EmuDeck launcher script no
-# reading is pinned for is such a refusal too: Tender starts no game through
-# EmuDeck yet.
+# reading is pinned for is such a refusal too; no start asks EmuDeck for a
+# command, since a source Tender starts no game through yet is refused before
+# the question (:func:`domain.start_command.source_refusal`, #2221 D21).
 _REFUSED_BECAUSE = {
     CAVEAT_LAUNCH_COMMAND_SHELL_SYNTAX: COMMAND_UNREAD,
     CAVEAT_LAUNCH_COMMAND_ENV_OPTION: COMMAND_UNREAD,
@@ -103,7 +103,7 @@ _REFUSED_BECAUSE = {
 _SAID_BY_THE_COMMAND = frozenset({CAVEAT_LAUNCH_ENVIRONMENT_UNPINNED, CAVEAT_LAUNCH_ENVIRONMENT_UNREAD})
 
 # A value ES-DE's own substitution would break, answered as the value it means:
-# Tender passes that value and says nothing (#2708 C4).
+# Tender passes that value and says nothing (#2708 D5).
 _CHANGES_NOTHING = frozenset({CAVEAT_LAUNCH_COMMAND_ARGUMENT_BROKEN})
 
 # The program Flatpak starts a sandboxed command with, and what Tender adds to

@@ -41,9 +41,12 @@ ENVIRONMENT_UNKNOWN = "environment_unknown"
 FOLDER_UNPLACED = "folder_unplaced"
 # The label the start was asked with names no entry of the system.
 ENTRY_UNKNOWN = "entry_unknown"
+# The source that answers the game is one Tender starts no game through yet
+# (#2221 D21), so no command is asked of it.
+SOURCE_STARTS_NO_GAMES = "source_starts_no_games"
 
 # What is said beside a complete command: a placeholder ES-DE leaves in the
-# command as written (#2708 Q3).
+# command as written (#2708 D1).
 PLACEHOLDER_UNFILLED = "placeholder_unfilled"
 
 
@@ -82,9 +85,14 @@ class StartCommand:
 
 @dataclass(frozen=True, slots=True)
 class StartRefused:
-    """No complete command: ``reason`` is why, one of this module's words or an entry's installation word."""
+    """No complete command: ``reason`` is why, one of this module's words or an entry's installation word.
+
+    ``source`` is the kind of the answering source, carried only with
+    :data:`SOURCE_STARTS_NO_GAMES` so the panel can name it.
+    """
 
     reason: str
+    source: str | None = None
 
 
 StartAnswer = StartCommand | StartRefused
@@ -98,5 +106,20 @@ def start_verdict(answer: StartAnswer) -> dict[str, Any]:
     and ``remarks`` is empty.
     """
     if isinstance(answer, StartRefused):
-        return {"starts": False, "reason": answer.reason, "remarks": []}
+        verdict: dict[str, Any] = {"starts": False, "reason": answer.reason, "remarks": []}
+        if answer.source is not None:
+            verdict["source"] = answer.source
+        return verdict
     return {"starts": True, "reason": None, "remarks": [note.payload() for note in answer.notes]}
+
+
+def source_refusal(source: dict[str, Any] | None) -> StartRefused | None:
+    """The refusal of every start where the answering *source* is one Tender starts no game through yet (#2221 D21).
+
+    *source* is an emulator-options answer's ``source`` (``{kind,
+    starts_games}``); ``None`` where it starts games, or where no source
+    answered, whose games have no entry to start with anyway.
+    """
+    if source is None or source.get("starts_games", True):
+        return None
+    return StartRefused(SOURCE_STARTS_NO_GAMES, source=source["kind"])

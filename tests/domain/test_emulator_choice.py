@@ -27,9 +27,11 @@ from domain.emulator_pick import StoredPick
 from domain.start_command import (
     FRONTEND_BUILD_UNREAD,
     PLACEHOLDER_UNFILLED,
+    SOURCE_STARTS_NO_GAMES,
     StartCommand,
     StartNote,
     StartRefused,
+    source_refusal,
 )
 
 
@@ -126,8 +128,20 @@ class TestStartPayload:
         choice = choose_emulator([missing], game=None, platform=None)
         assert start_payload(choice, [missing], StartRefused(FRONTEND_BUILD_UNREAD))["reason"] == NOT_INSTALLED
 
+    def test_a_source_that_starts_no_game_is_said_ahead_of_the_entry_and_named(self):
+        """EmuDeck answers, and Tender starts no game through it yet (#2221 D21)."""
+        missing = _entry("Missing", 0, installation=NOT_INSTALLED)
+        choice = choose_emulator([missing], game=None, platform=None)
+        refusal = source_refusal({"kind": "emudeck", "starts_games": False})
+        assert start_payload(choice, [missing], refusal) == {
+            "state": CANNOT_START_STATE,
+            "reason": SOURCE_STARTS_NO_GAMES,
+            "entry": "Missing",
+            "source": "emudeck",
+        }
+
     def test_a_complete_command_starts_and_says_what_it_says_beside_the_start(self):
-        """A placeholder ES-DE leaves unfilled is said beside a start that goes ahead (#2708 Q3)."""
+        """A placeholder ES-DE leaves unfilled is said beside a start that goes ahead (#2708 D1)."""
         choice = choose_emulator(OPTIONS, game=None, platform=None)
         command = StartCommand(
             argv=("rpcs3", "%RPCS3_GAMEID%"), folder=None, notes=(StartNote(PLACEHOLDER_UNFILLED, "%RPCS3_GAMEID%"),)

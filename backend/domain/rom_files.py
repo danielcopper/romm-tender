@@ -447,7 +447,7 @@ def asked_path(file_path: str, rom_dir: str | None, disc_path: str) -> str:
     *disc_path* is the disc pick folded over the install (``DiscResolver``).
     A game kept as a folder is asked about as ES-DE scans it (#2195 D11). One
     answer for every question about the game's start — the launch verdict, the
-    launch command and the start itself (#2221 D3, #2708 C7).
+    launch command and the start itself (#2221 D3).
     """
     if rom_dir is not None and folder_boot_root(file_path, rom_dir) is not None:
         return rom_dir

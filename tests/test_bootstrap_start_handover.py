@@ -1,4 +1,4 @@
-"""The start hand-over the bootstrap wires: in the session's runtime directory, or none (#2221 D15, #2708 C3)."""
+"""The start hand-over the bootstrap wires: in the session's runtime directory, or none (#2221 D15, #2708 D4)."""
 
 from __future__ import annotations
 

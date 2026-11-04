@@ -27,7 +27,7 @@ from domain.emulator_choice import EmulatorChoice, ResolvedEmulator
 from domain.emulator_commands import NOT_INSTALLED, PROGRAM, EmulatorOption
 from domain.rom import Rom
 from domain.rom_install import RomInstall
-from domain.start_command import ENVIRONMENT_UNREAD, StartCommand, StartRefused
+from domain.start_command import ENVIRONMENT_UNREAD, SOURCE_STARTS_NO_GAMES, StartCommand, StartRefused
 from domain.tender_folder import TenderPlace
 from lib.errors import Refused
 from services.game_start import START_FOLDER, GameStartService, GameStartServiceConfig
@@ -317,6 +317,51 @@ class TestAStartThatDoesNotComeAbout:
         assert refused.reason == "cannot_start"
         assert refused.details == {"start": {"state": "cannot_start", "reason": NOT_INSTALLED, "entry": "PCSX2"}}
         assert commands.asked == []
+
+    async def test_a_game_the_answering_source_starts_no_game_through_is_refused_and_nothing_is_asked(self):
+        """EmuDeck answers where RetroDECK is absent, and Tender starts no game through it yet (#2221 D21)."""
+        uow = FakeUnitOfWork()
+        _seed(uow)
+        option = libretro_option("mupen64plus_next_libretro", "Mupen64Plus-Next")
+        active_core = FakeActiveCoreResolver()
+        active_core.resolved[1] = ResolvedEmulator(
+            choice=EmulatorChoice(option=option, layer="default", vanished=None),
+            options=[option],
+            source={"kind": "emudeck", "starts_games": False},
+        )
+        commands = _Commands()
+        handover = _Handover()
+
+        refused = await _refusal(_service(uow, commands=commands, handover=handover, active_core=active_core))
+
+        assert refused.reason == "cannot_start"
+        assert refused.details == {
+            "start": {
+                "state": "cannot_start",
+                "reason": SOURCE_STARTS_NO_GAMES,
+                "entry": "Mupen64Plus-Next",
+                "source": "emudeck",
+            }
+        }
+        assert commands.asked == []
+        assert handover.handed == []
+
+    async def test_a_game_retrodeck_answers_is_started(self):
+        """The control: the source games start through hands its command over."""
+        uow = FakeUnitOfWork()
+        _seed(uow)
+        option = libretro_option("mupen64plus_next_libretro", "Mupen64Plus-Next")
+        active_core = FakeActiveCoreResolver()
+        active_core.resolved[1] = ResolvedEmulator(
+            choice=EmulatorChoice(option=option, layer="default", vanished=None),
+            options=[option],
+            source={"kind": "retrodeck", "starts_games": True},
+        )
+        handover = _Handover()
+
+        await _service(uow, handover=handover, active_core=active_core).prepare_game_start(1)
+
+        assert [handed[0] for handed in handover.handed] == [_APP_ID]
 
     async def test_no_complete_command_is_refused_with_the_resolvers_reason_and_nothing_is_handed_over(self):
         uow = FakeUnitOfWork()

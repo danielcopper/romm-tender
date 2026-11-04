@@ -266,8 +266,8 @@ _NOT_INSTALLED_BECAUSE = frozenset(
 # Notes beside a verdict, none of which changes anything here.
 # ``run-game-differs`` says RetroDECK's ``run_game.sh`` would run something
 # other than ES-DE does, and no game starts through that script (#2221 D7). The
-# other three state assumptions of a frontend on the host (EmuDeck's), which
-# starts no game through Tender.
+# other three state assumptions of a frontend on the host (EmuDeck's), through
+# which Tender starts no game yet (#2221 D21).
 _LAUNCH_NOTES = frozenset(
     {
         CAVEAT_RUN_GAME_DIFFERS,

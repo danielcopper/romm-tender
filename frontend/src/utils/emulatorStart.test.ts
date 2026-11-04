@@ -19,6 +19,7 @@ import {
   startRefusal,
   startRefused,
   startRemarkSentences,
+  startVerdictLine,
   vanishedPickSentence,
 } from "./emulatorStart";
 import { coreInfo } from "../test-utils/coreFixtures";
@@ -285,13 +286,75 @@ describe("an entry the resolver gives no complete command for (#2221 D2, D20)", 
   });
 });
 
+describe("an entry whose installation could not be established, where the resolver gives no command for it", () => {
+  it("refuses the start in the words a page says under such an emulator, with the cause", () => {
+    expect(startRefusal(start({ state: "cannot_start", reason: "no_find_rule", entry: "PCSX2" }), null, true)).toBe(
+      "Whether PCSX2 is installed could not be established: ES-DE has no rule for finding it. " +
+        "Choose another emulator in the emulator menu.",
+    );
+  });
+
+  it("says no cause where none is known", () => {
+    expect(startRefusal(start({ state: "cannot_start", reason: "not_established", entry: "PCSX2" }), null, false)).toBe(
+      "Whether PCSX2 is installed could not be established.",
+    );
+  });
+
+  it("is said after the file's own refusal, both being said", () => {
+    const file: GameLaunch = {
+      state: "not_this_emulator",
+      entry: "PCSX2",
+      system: "ps2",
+      platform_name: "PlayStation 2",
+      file: "Game.chd",
+      extension: ".chd",
+      starts_from: [],
+      other_entries: [],
+      install_in: null,
+      reason: null,
+      contents_unread: false,
+      format_unestablished: false,
+    };
+    const sentence = startRefusal(start({ state: "cannot_start", reason: "path_unseen", entry: "PCSX2" }), file, false);
+    expect(sentence).toContain(
+      "Whether PCSX2 is installed could not be established: ES-DE looks for it where Tender cannot see.",
+    );
+    expect(sentence!.indexOf("Whether PCSX2")).toBeGreaterThan(0);
+  });
+
+  it("adds nothing to the menu row, whose own note says it", () => {
+    expect(startVerdictLine({ starts: false, reason: "lookup_unsupported", remarks: [] })).toEqual({
+      tenderStarts: false,
+      line: null,
+    });
+  });
+});
+
+describe("a game the answering source starts no game through (#2221 D21)", () => {
+  it("is refused in the sentence the panel says for that source", () => {
+    expect(
+      startRefusal(
+        start({ state: "cannot_start", reason: "source_starts_no_games", entry: "mGBA", source: "emudeck" }),
+        null,
+        true,
+      ),
+    ).toBe("Tender cannot start games through EmuDeck yet.");
+  });
+
+  it("names the source on every menu row", () => {
+    expect(
+      startVerdictLine({ starts: false, reason: "source_starts_no_games", remarks: [], source: "emudeck" }),
+    ).toEqual({ tenderStarts: false, line: "Tender cannot start games through EmuDeck yet." });
+  });
+});
+
 describe("a game no emulator starts (#2221 D20)", () => {
   it("is refused, saying so", () => {
     expect(startRefusal(start({ state: "no_entry", entry: null }), null, true)).toBe("No emulator starts this game.");
   });
 });
 
-describe("what is said beside a start that goes ahead (#2708 Q3)", () => {
+describe("what is said beside a start that goes ahead (#2708 D1)", () => {
   it("names a placeholder ES-DE leaves unfilled", () => {
     expect(startRemarkSentences([{ reason: "placeholder_unfilled", placeholder: "%RPCS3_GAMEID%" }])).toEqual([
       "ES-DE leaves %RPCS3_GAMEID% unfilled in this command.",

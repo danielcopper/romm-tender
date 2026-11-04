@@ -33,7 +33,14 @@ from domain.launchability import NEEDS_INSTALLING, NOT_THIS_EMULATOR, TAKES_NO_F
 from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
 from domain.rom import Rom
 from domain.rom_install import RomInstall
-from domain.start_command import DESKTOP_FILE, PLACEHOLDER_UNFILLED, StartCommand, StartNote, StartRefused
+from domain.start_command import (
+    DESKTOP_FILE,
+    PLACEHOLDER_UNFILLED,
+    SOURCE_STARTS_NO_GAMES,
+    StartCommand,
+    StartNote,
+    StartRefused,
+)
 from lib.errors import Refused
 from services.cores import CoreService, CoreServiceConfig
 
@@ -1069,6 +1076,11 @@ class TestAPickWhileItsSourceIsSwitchedOff:
 # ── get_emulator_launches (whether each entry starts the installed game) ──
 
 
+def _emudeck() -> dict[str, Any]:
+    """The answering source where RetroDECK is absent: one Tender starts no game through yet (#2221 D21)."""
+    return {"kind": "emudeck", "starts_games": False}
+
+
 def _resolved(*options: Any, chosen: Any | None = None) -> ResolvedEmulator:
     return ResolvedEmulator(
         choice=EmulatorChoice(option=chosen, layer=DEFAULT if chosen is not None else None, vanished=None),
@@ -1350,6 +1362,38 @@ class TestWhatTheResolversCommandSaysOfTheStart:
             ("ps3", "/roms/ps3/Game.iso", "RPCS3 Shortcut (Standalone)"),
             ("ps3", "/roms/ps3/Game.iso", "RPCS3 Directory (Standalone)"),
         ]
+
+    def test_a_game_the_answering_source_starts_no_game_through_cannot_start_and_asks_nothing(
+        self, event_loop, service, active_core, start_commands, uow
+    ):
+        """EmuDeck answers where RetroDECK is absent, and Tender starts no game through it yet (#2221 D21)."""
+        self._installed(uow)
+        resolved = _resolved(self._SHORTCUT, chosen=self._SHORTCUT)
+        active_core.resolved[42] = ResolvedEmulator(choice=resolved.choice, options=resolved.options, source=_emudeck())
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert result["start"] == {
+            "state": "cannot_start",
+            "reason": SOURCE_STARTS_NO_GAMES,
+            "entry": "RPCS3 Shortcut (Standalone)",
+            "source": "emudeck",
+        }
+        assert start_commands.asked == []
+
+    def test_the_menu_carries_the_sources_refusal_for_every_entry_and_asks_nothing(
+        self, event_loop, service, active_core, start_commands, uow
+    ):
+        self._installed(uow)
+        active_core.resolved[42] = ResolvedEmulator(
+            choice=_resolved().choice, options=[self._SHORTCUT, self._DIRECTORY, self._MISSING], source=_emudeck()
+        )
+
+        result = event_loop.run_until_complete(service.get_emulator_launches(42))
+
+        refusal = {"starts": False, "reason": SOURCE_STARTS_NO_GAMES, "remarks": [], "source": "emudeck"}
+        assert [entry["start_verdict"] for entry in result] == [refusal, refusal, None]
+        assert start_commands.asked == []
 
     def test_a_platforms_own_read_asks_no_command(self, event_loop, service, start_commands):
         """The platform page says nothing of the command (#2221 D20)."""

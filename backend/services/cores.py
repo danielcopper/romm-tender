@@ -37,7 +37,7 @@ from domain.emulator_commands import (
 from domain.emulator_pick import pick_for, platform_pick, platform_pick_value, source_kind
 from domain.platform_names import PLATFORM_NAMES_KEY, platform_display_name
 from domain.rom_files import asked_path
-from domain.start_command import start_verdict
+from domain.start_command import source_refusal, start_verdict
 from lib.errors import Refused
 
 if TYPE_CHECKING:
@@ -229,6 +229,9 @@ class CoreService:
         """
         if install is None or resolved is None or resolved.choice.option is None:
             return None
+        refusal = source_refusal(resolved.source)
+        if refusal is not None:
+            return refusal
         if resolved.choice.option.not_installed:
             return None
         path = _asked_path(install, rom, self._disc_resolver)
@@ -258,6 +261,7 @@ class CoreService:
             return []
         system, path, resolved, platform_name = question
         reading = self._core_info.sources_reading()
+        refusal = source_refusal(resolved.source)
         return [
             {
                 **self._core_info.launchability(system, path, label=option.label, reading=reading).payload(
@@ -266,7 +270,9 @@ class CoreService:
                 "start_verdict": None
                 if option.not_installed
                 else start_verdict(
-                    self._start_commands.start_command(system, path, label=option.label, reading=reading)
+                    refusal
+                    if refusal is not None
+                    else self._start_commands.start_command(system, path, label=option.label, reading=reading)
                 ),
             }
             for option in resolved.options

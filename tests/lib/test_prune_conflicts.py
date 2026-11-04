@@ -490,7 +490,7 @@ async def test_abandoned_multicall_lease_expires_before_prune_start(monkeypatch)
 async def test_renewed_frontend_lease_cannot_expire_while_heartbeats_continue(monkeypatch) -> None:
     endpoints, conflicts, _logger, _debug = _endpoints()
     clock = _LoopClock(monkeypatch)
-    token = await conflicts.acquire_lease("long_rebake")
+    token = await conflicts.acquire_lease("long_steam_write")
     clock.advance(0.6 * _LEASE_SECONDS)
 
     assert await conflicts.renew_lease(token) is True

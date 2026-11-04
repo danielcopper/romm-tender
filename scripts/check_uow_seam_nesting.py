@@ -183,13 +183,16 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # panel opens it again, and only a run's one reading of the emulator
         # sources keeps a system's answer for the run, and the answer carries the
         # resolver's lookup of each entry's emulator on the machine.
-        # FirmwareStatusReader._enrich_platform calls get_active_core beside
-        # get_emulator_options for one platform.
+        # No service calls get_active_core today; it stays listed while the
+        # protocol offers it.
         "get_active_core",
         "get_emulator_options",
         # StartCommandReader (services/protocols/paths.py) — the resolver's
         # launch command for one game and one entry: the same catalogue read,
         # plus the files the command reads in and the distribution's own start.
+        # StartHandover.hand_over, which writes the start's file, is unlisted:
+        # its name is also ArtworkSlotHandover.hand_over, a domain verb called
+        # inside a UoW, which this name-only match would flag.
         "start_command",
         # SaveLocationReader (services/protocols/paths.py) — asks the vendored
         # resolver where one ROM's save lives and what it consists of. Reads
@@ -512,7 +515,7 @@ def main(argv: list[str]) -> int:
         if any(_DEADLOCK_REMEDY in line for line in findings):
             print()
             print(
-                "ERROR: a UoW-opening seam (ActiveCoreResolver / RelaunchOptionsResolver / "
+                "ERROR: a UoW-opening seam (ActiveCoreResolver / "
                 "PlatformSystems / uow_factory) must not be called while a UoW is open on the same path "
                 "(CLAUDE.md → Invariant register). Snapshot inside the UoW, close it, then "
                 "resolve outside."

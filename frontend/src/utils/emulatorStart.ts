@@ -14,12 +14,13 @@ import type {
   GameLaunch,
   SourceDefault,
   StartCommandReason,
+  StartCommandVerdict,
   StartRemark,
   VanishedPick,
 } from "../types";
-import { notEstablishedCause } from "./emulatorInstallation";
+import { isNotEstablished, notEstablishedCause } from "./emulatorInstallation";
 import { launchRefusal } from "./gameLaunch";
-import { sourceName } from "./emulatorSourceWording";
+import { cannotStartSentence, sourceName } from "./emulatorSourceWording";
 import { LOCAL_CALL_LIMIT_MS } from "./launchGate";
 import { withTimeout } from "./withTimeout";
 
@@ -75,6 +76,36 @@ function isCommandReason(reason: string | null): boolean {
   return reason !== null && (reason in COMMAND_REFUSED_BECAUSE || reason === "entry_unknown");
 }
 
+/** The reason a start is refused where the answering source is one Tender starts no game through yet (#2221 D21). */
+const SOURCE_STARTS_NO_GAMES = "source_starts_no_games";
+
+/** Whether `reason` refuses the start for the entry's command or its installation — what is said beside the file's
+ *  own refusal rather than instead of it (#2221 D20, #2698 D8). */
+function isEntryStartReason(reason: string | null): boolean {
+  return isCommandReason(reason) || isNotEstablished(reason);
+}
+
+/** Why the entry's installation could not be established, as the sentence a page says under that emulator. */
+function installationRefusalSentence(reason: string, entry: string): string {
+  const cause = notEstablishedCause(reason);
+  return `Whether ${entry} is installed could not be established${cause === null ? "" : `: ${cause}`}.`;
+}
+
+/**
+ * What the emulator menu says under an entry about the resolver's command for the game, or `null`, and whether
+ * Tender can start the game with it: a refusal for the answering source names that source (#2221 D21), one for the
+ * entry's installation says nothing beside the row's own note, any other one says why (#2221 D20).
+ */
+export function startVerdictLine(verdict: StartCommandVerdict | null): { tenderStarts: boolean; line: string | null } {
+  if (verdict === null || verdict.starts || verdict.reason === null || verdict.reason === "not_installed") {
+    return { tenderStarts: true, line: null };
+  }
+  if (verdict.reason === SOURCE_STARTS_NO_GAMES)
+    return { tenderStarts: false, line: cannotStartSentence(verdict.source ?? "") };
+  if (isNotEstablished(verdict.reason)) return { tenderStarts: false, line: null };
+  return { tenderStarts: false, line: commandRefusalLine(verdict.reason) };
+}
+
 /** Why the resolver gives no complete command for `entry`, as one sentence (#2221 D2). */
 export function commandRefusalSentence(reason: string, entry: string): string {
   if (reason === "entry_unknown") return `Your choice '${entry}' no longer exists in its emulator source.`;
@@ -87,7 +118,7 @@ export function commandRefusalLine(reason: string): string {
   return `Tender cannot start it yet: ${commandRefusedBecause(reason)}`;
 }
 
-/** What is said beside a start the resolver's command lets go ahead, one sentence each (#2708 Q3). */
+/** What is said beside a start the resolver's command lets go ahead, one sentence each (#2708 D1). */
 export function startRemarkSentences(remarks: readonly StartRemark[] | undefined): string[] {
   return (remarks ?? []).map((remark) =>
     remark.placeholder === null
@@ -109,8 +140,15 @@ export function emulatorStartRefusal(start: EmulatorStart, subject: string, canP
     switch (start.reason) {
       case "not_installed":
         return `${entry} is not installed, so ${subject} cannot start.${pointer}`;
+      case SOURCE_STARTS_NO_GAMES:
+        return cannotStartSentence(start.source ?? "");
       default:
-        if (isCommandReason(start.reason)) return `${commandRefusalSentence(start.reason!, entry)}${pointer}`;
+        if (start.reason !== null && isNotEstablished(start.reason)) {
+          return `${installationRefusalSentence(start.reason, entry)}${pointer}`;
+        }
+        if (start.reason !== null && isCommandReason(start.reason)) {
+          return `${commandRefusalSentence(start.reason, entry)}${pointer}`;
+        }
         return `${entry} cannot start ${subject}.${pointer}`;
     }
   }
@@ -180,7 +218,7 @@ export function startRefusal(start: EmulatorStart, launch: GameLaunch | null, ca
   if (start.state === "no_entry") return NO_EMULATOR_STARTS;
   const emulator = emulatorStartRefusal(start, "this game", canPick);
   const file = launchRefusal(launch, canPick);
-  if (isCommandReason(start.reason) && file !== null && emulator !== null) return `${file} ${emulator}`;
+  if (isEntryStartReason(start.reason) && file !== null && emulator !== null) return `${file} ${emulator}`;
   return emulator ?? file;
 }
 

@@ -61,10 +61,15 @@ class EmulatorChoice:
 
 @dataclass(frozen=True, slots=True)
 class ResolvedEmulator:
-    """One ROM's emulator: the choice and the options it was made among."""
+    """One ROM's emulator: the choice, the options it was made among, and the source that answered them.
+
+    ``source`` is the emulator-options answer's ``{kind, starts_games}``,
+    ``None`` where no source answered.
+    """
 
     choice: EmulatorChoice
     options: list[EmulatorOption]
+    source: dict[str, Any] | None = None
 
 
 def choose_emulator(
@@ -100,9 +105,12 @@ def start_payload(
     reason (:class:`domain.start_command.StartRefused`, #2221 D2); for
     :data:`CHOOSE` the shipped entry's not-established note; ``None`` otherwise.
     ``remarks`` are what is said beside a start the command lets go ahead
-    (:class:`domain.start_command.StartNote`), present only where there is any. Without a
-    *command* nothing is said of the command — a platform's page asks none
-    (#2221 D20). Whether the game's file starts with the entry is the launch
+    (:class:`domain.start_command.StartNote`), present only where there is any. A
+    *command* refused because the answering source starts no game through
+    Tender yet (:func:`domain.start_command.source_refusal`) is said ahead of
+    anything about the entry, and carries that source's kind as ``source``
+    (#2221 D21). Without a *command* nothing is said of the command — a
+    platform's page asks none (#2221 D20). Whether the game's file starts with the entry is the launch
     verdict's (:mod:`domain.launchability`), a folder the entry does not take
     included (#2195 D21).
     """
@@ -112,6 +120,8 @@ def start_payload(
         if shipped is None:
             return _start(NO_ENTRY, None, None)
         return _start(CHOOSE, shipped.not_established, shipped.label)
+    if isinstance(command, StartRefused) and command.source is not None:
+        return {**_start(CANNOT_START_STATE, command.reason, option.label), "source": command.source}
     if option.not_installed:
         return _start(CANNOT_START_STATE, NOT_INSTALLED, option.label)
     if isinstance(command, StartRefused):

@@ -104,11 +104,11 @@ describe("batchConfirmLaunchOptions", () => {
     vi.mocked(steamShortcuts.setLaunchOptionsConfirmed).mockImplementation((appId: number) =>
       appId === 2 ? Promise.reject(new Error("boom")) : Promise.resolve(true),
     );
-    await batchConfirmLaunchOptions(items(3), "migration_relaunch_options");
+    await batchConfirmLaunchOptions(items(3), "startup_reconcile");
     expect(vi.mocked(steamShortcuts.setLaunchOptionsConfirmed)).toHaveBeenCalledTimes(3);
     expect(vi.mocked(backend.logError)).toHaveBeenCalledTimes(1);
     const msg = vi.mocked(backend.logError).mock.calls[0]![0];
-    expect(msg).toContain("migration_relaunch_options: failed to set launch options for appId 2");
+    expect(msg).toContain("startup_reconcile: failed to set launch options for appId 2");
     expect(msg).toContain("boom");
   });
 

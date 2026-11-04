@@ -2267,7 +2267,7 @@ describe("Library › Platforms", () => {
           active_core_label: "mGBA",
         }),
       );
-      let finish: (v: { success: true; rebake_items: never[] }) => void = () => {};
+      let finish: (v: { success: true }) => void = () => {};
       vi.mocked(backend.setSystemCore).mockReturnValue(
         new Promise((resolve) => {
           finish = resolve;
@@ -2281,7 +2281,7 @@ describe("Library › Platforms", () => {
       expect(backend.setSystemCore).toHaveBeenCalledWith("gba", "PCSX2");
       expect(within(container).getByTestId("status-core").textContent).toBe("Switching to PCSX2…");
       await act(async () => {
-        finish({ success: true, rebake_items: [] });
+        finish({ success: true });
         for (let i = 0; i < 10; i++) await Promise.resolve();
       });
     });
@@ -2406,9 +2406,9 @@ describe("Library › Platforms", () => {
     });
 
     it("holds the page busy while the switch runs, and gives it back afterwards", async () => {
-      // The re-bake walks every bound shortcut, so a second pick would start a
-      // second continuation over the same set — the page's own busy state is
-      // what forbids it, and this action used to skip it.
+      // A second pick while the first is still being stored would race it —
+      // the page's own busy state is what forbids it, and this action used to
+      // skip it.
       vi.mocked(backend.getPlatforms).mockResolvedValue({
         success: true,
         platforms: [
@@ -2425,7 +2425,7 @@ describe("Library › Platforms", () => {
           { slug: "n64", name: "N64", count: 4, reachable_count: 4 },
         ],
       });
-      let finish: (v: { success: true; rebake_items: never[] }) => void = () => {};
+      let finish: (v: { success: true }) => void = () => {};
       vi.mocked(backend.setSystemCore).mockReturnValue(
         new Promise((resolve) => {
           finish = resolve;
@@ -2446,7 +2446,7 @@ describe("Library › Platforms", () => {
       expect(container.textContent).toContain("Working on Game Boy Advance");
 
       await act(async () => {
-        finish({ success: true, rebake_items: [] });
+        finish({ success: true });
         for (let i = 0; i < 10; i++) await Promise.resolve();
       });
 
@@ -2566,7 +2566,7 @@ describe("Library › Platforms", () => {
         ],
       });
       mockFirmware([firmwarePlatform(), firmwarePlatform({ platform_slug: "n64" })]);
-      let finish: (v: { success: true; rebake_items: never[] }) => void = () => {};
+      let finish: (v: { success: true }) => void = () => {};
       vi.mocked(backend.setSystemCore).mockReturnValue(
         new Promise((resolve) => {
           finish = resolve;
@@ -2583,7 +2583,7 @@ describe("Library › Platforms", () => {
       expect(container.textContent).toContain("Working on Game Boy Advance");
 
       await act(async () => {
-        finish({ success: true, rebake_items: [] });
+        finish({ success: true });
         for (let i = 0; i < 10; i++) await Promise.resolve();
       });
       await focusRow(container, "Game Boy Advance");

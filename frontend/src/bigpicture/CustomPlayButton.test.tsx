@@ -1179,7 +1179,7 @@ describe("CustomPlayButton — already-running guard (#1148 round 2)", () => {
     );
   });
 
-  it("brings a game that is already running to the front and prepares no start for it (#2708 Q8)", async () => {
+  it("brings a game that is already running to the front and prepares no start for it (#2221 D19)", async () => {
     const { findByText } = render(<CustomPlayButton appId={100} />);
     const playBtn = await findByText("Play");
     vi.mocked(readGameRunning).mockReturnValue(SESSION_RUNNING);

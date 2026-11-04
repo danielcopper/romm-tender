@@ -185,6 +185,48 @@ describe("an entry the resolver gives no complete command for (#2221 D20)", () =
     expect(row(container, serial).textContent).not.toContain("can start it");
   });
 
+  it("says nothing beyond the row's own note where the entry's installation could not be established", async () => {
+    const read = heldRead();
+    const { container } = render(
+      <>
+        {buildEmulatorMenu(
+          config({
+            emulators: [standaloneEmu(SHORTCUT, true, { reason: "no_find_rule" })],
+            launches: askEntryLaunches(42, () => true, read.read),
+          }),
+        )}
+      </>,
+    );
+
+    await read.answer([launch(SHORTCUT, { start_verdict: { starts: false, reason: "no_find_rule", remarks: [] } })]);
+
+    expect(row(container, SHORTCUT).textContent).not.toContain("Tender cannot start it yet");
+    expect(row(container, SHORTCUT).textContent).not.toContain("how ES-DE starts it could not be read");
+    expect(row(container, SHORTCUT).textContent).not.toContain("can start it");
+  });
+
+  it("names the answering source on every row where Tender starts no game through it yet (#2221 D21)", async () => {
+    const read = heldRead();
+    const verdict = { starts: false, reason: "source_starts_no_games" as const, remarks: [], source: "emudeck" };
+    const { container } = render(
+      <>
+        {buildEmulatorMenu(
+          config({
+            emulators: [standaloneEmu(SHORTCUT, true), standaloneEmu(DIRECTORY)],
+            launches: askEntryLaunches(42, () => true, read.read),
+          }),
+        )}
+      </>,
+    );
+
+    await read.answer([launch(SHORTCUT, { start_verdict: verdict }), launch(DIRECTORY, { start_verdict: verdict })]);
+
+    for (const label of [SHORTCUT, DIRECTORY]) {
+      expect(row(container, label).textContent).toContain("Tender cannot start games through EmuDeck yet.");
+      expect(row(container, label).textContent).not.toContain("can start it");
+    }
+  });
+
   it("says nothing of a command for an entry the resolver states not installed", async () => {
     const read = heldRead();
     const { container } = render(

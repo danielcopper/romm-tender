@@ -165,7 +165,7 @@ class TestTheHandoverFolder:
         assert answer.handover_dir == f"/run/user/1000/{APP_DIR_NAME}/start"
 
     def test_without_a_runtime_directory_there_is_none(self):
-        """The fallback is the state directory, on disk; a start is not handed over there (#2708 C3)."""
+        """The fallback is the state directory, on disk; a start is not handed over there (#2708 D4)."""
         assert resolve().handover_dir is None
 
     def test_the_installers_answers_do_not_move_it(self):

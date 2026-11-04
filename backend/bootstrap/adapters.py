@@ -212,7 +212,7 @@ class AdapterBundle:
     downscale_icon: IconDownscaleFn
     tender_logo: TenderLogoFn
     start_commands: StartCommandReader
-    # ``None`` where the session has no runtime directory to hand a start over in (#2708 C3).
+    # ``None`` where the session has no runtime directory to hand a start over in (#2708 D4).
     start_handover: StartHandover | None
 
 

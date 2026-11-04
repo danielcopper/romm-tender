@@ -177,12 +177,10 @@ function coreOffer(core: CoreAnswer): CoreOffer {
     const absent = emulatorDataReasonSentence(core.emulator_data_reason, core.emulator_source, core.platform_system);
     return { kind: "blocked", reason: absent, notice: absent };
   }
-  // An EMPTY menu first, because it is the one case where the fallback fails
-  // too: `get_emulator_options` answers `available: true` with no options for a
-  // system whose catalogue entry lists no command. RetroDECK's own launch then
-  // reads `command[1]` for the system, finds nothing, logs "No valid emulator
-  // found for system" and exits 1 (`libexec/run_game.sh`), so the games really
-  // do not start.
+  // An EMPTY menu first, because it is the one case where no game of the
+  // platform starts at all: `get_emulator_options` answers `available: true`
+  // with no options for a system whose catalogue entry lists no command, so no
+  // entry is in effect and every start is refused (#2221 D20).
   if (core.emulators.length === 0) {
     // Under another source's default, nothing the starting source states stands under the header.
     if (core.default_elsewhere) {
