@@ -255,7 +255,7 @@ export const SgdbGamePickerModalContent: FC<SgdbGamePickerModalProps> = ({
         {results.length > 0 ? (
           <Focusable
             style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}
-            flow-children="right"
+            flow-children="grid"
           >
             {results.map((game) => (
               <Tile

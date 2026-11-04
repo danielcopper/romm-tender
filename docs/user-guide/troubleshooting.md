@@ -471,8 +471,10 @@ invisible. Started on Wayland, RetroArch opens such a window, and so can a stand
 Steam cannot tell that it belongs to the running game, and it applies Steam Input's Desktop Layout to every controller:
 the Deck's built-in controls act as mouse and keyboard, and the game gets no controller input at all. So Tender starts
 RetroDECK with `flatpak run --nosocket=wayland`, which leaves it no Wayland connection and makes every emulator draw
-through XWayland, where Steam sees the window and applies the game's controller configuration. In Gaming Mode games
-already draw through gamescope's XWayland, so nothing changes there.
+through XWayland, where Steam sees the window and applies the game's controller configuration. Under Steam's 64-bit
+client Steam sees the window but cannot tell that it belongs to the game; what Tender does about that is under
+[The controller acts as mouse and keyboard in a game in Desktop Mode](#the-controller-acts-as-mouse-and-keyboard-in-a-game-in-desktop-mode).
+In Gaming Mode games already draw through gamescope's XWayland, so nothing changes there.
 
 This is a workaround for a Steam limitation
 ([ValveSoftware/steam-for-linux#8020](https://github.com/ValveSoftware/steam-for-linux/issues/8020)). It will be removed
@@ -482,16 +484,72 @@ Shortcuts an earlier version of Tender made need nothing from you: Tender writes
 again when Tender's panel loads, after every sync, and just before the game starts, so an existing shortcut normally
 carries the new command by its next launch.
 
-### The Steam button opens no overlay in Desktop Mode
+### The controller acts as mouse and keyboard in a game in Desktop Mode
 
-**Symptom**: In Desktop Mode, pressing the Steam button while a RetroDECK game is running opens no in-game overlay. Big
-Picture's own menu opens instead, behind the game's window, so nothing seems to happen.
+**Symptom**: In Desktop Mode, a game started from Tender is running and its window has focus, but the Deck's controls
+act as mouse and keyboard. The game's buttons do the wrong things, and RetroArch's menu does not open with L3 and R3.
 
-**Why**: Outside Gaming Mode, Steam draws its overlay inside the game's own process, and that does not work for a game
-running in a Flatpak sandbox, which is how RetroDECK runs. This is a known limitation of Steam with Flatpak games
-([flatpak/flatpak#1756](https://github.com/flatpak/flatpak/issues/1756),
-[ValveSoftware/steam-for-linux#8952](https://github.com/ValveSoftware/steam-for-linux/issues/8952)), not something
-Tender can change.
+**Why**: Steam's 64-bit client, which Steam may switch to without being asked, cannot tell that a window a Flatpak draws
+belongs to the running game, and RetroDECK is a Flatpak. Steam then gives the window its Desktop layout, which turns the
+controls into a mouse and a keyboard. Steam's 32-bit client and Gaming Mode are not affected. Valve tracks this in its
+steam-for-linux tracker as issue `13053`.
+
+**What Tender does**: While Steam's 64-bit client runs in Desktop Mode, Tender's backend watches which window has focus.
+When a game's window that Steam cannot place has it, the backend tells Steam to load that game's controller layout. When
+focus moves on to Big Picture, the desktop or a game's window Steam places itself, it tells Steam once which layout that
+window gets and then hands the choice back to Steam, which decides by itself from then on — so a game Steam places
+itself, and its in-game overlay, are left to Steam. When the backend stops while a game's layout is still forced, it
+hands the choice back to Steam. Under the 32-bit client and in Gaming Mode it does nothing. It reaches Steam the same
+way Tender's panel does, so while the panel is not loaded into Steam it does nothing either. How it works is in
+[Controller focus in Desktop Mode](../architecture/controller-focus.md).
+
+If the layout is still wrong, look at the backend's log with
+`journalctl --user -u romm-tender | grep "controller focus"`:
+
+- **"Steam's 64-bit client runs outside gamescope; watching"**: the watcher is at work for the Steam that runs now.
+- **"not watching, the X libraries could not be loaded"**: on Debian, Ubuntu, Linux Mint and openSUSE, one library
+  Tender needs comes in a package of its own. Install it with `sudo apt install libxcb-res0` or
+  `sudo zypper install libxcb-res0`, then restart the backend with `systemctl --user restart romm-tender`.
+- **"not watching, TENDER_FOCUS_WATCHER=off is set"**: you switched it off; see below.
+- **"not watching, the panel is not loaded into Steam"**: the watcher has no way to reach Steam in this run.
+- **"not watching, …"** with any other reason: the backend could not reach the desktop session's display. It tries again
+  every few seconds, and again after Steam restarts.
+- **"Steam could not be handed the input id yet; trying again"**: the backend's connection to Steam is not there at the
+  moment. It tries again every few seconds for as long as that lasts.
+
+If the backend was stopped without the chance to clean up while a game's layout was forced, the backend clears that
+layout as soon as it is running again: its first look at the focused window hands the choice back to Steam.
+
+**Switching it off**: To see how things behave without it, switch the watcher off with an override of the backend's
+unit:
+
+```bash
+systemctl --user edit romm-tender
+```
+
+Add these two lines and save:
+
+```ini
+[Service]
+Environment=TENDER_FOCUS_WATCHER=off
+```
+
+Then restart the backend with `systemctl --user restart romm-tender`. To switch it on again, run
+`systemctl --user edit romm-tender` once more, delete the two lines, save, and restart the backend.
+
+### The Steam button opens only Steam's main menu in Desktop Mode
+
+**Symptom**: In Desktop Mode, pressing the Steam button while a RetroDECK game is running opens only Steam's main menu,
+and it opens behind the game's window, so nothing seems to happen. There is no in-game overlay and no menu for the game,
+so there is no **Exit Game** and no controller layout page for it. Steam+X opens no on-screen keyboard over the game
+either.
+
+**Why**: Steam's menu for a game follows its in-game overlay, and the overlay cannot work inside a Flatpak sandbox,
+which is how RetroDECK runs: from there it reports the sandbox's own process number, which Steam then looks for among
+the computer's processes and does not find. This holds under both of Steam's clients, and Tender cannot change it. It is
+a known limitation of Steam with Flatpak games ([flatpak/flatpak#1756](https://github.com/flatpak/flatpak/issues/1756),
+[ValveSoftware/steam-for-linux#8952](https://github.com/ValveSoftware/steam-for-linux/issues/8952)). The missing
+on-screen keyboard is a limitation Tender cannot change either.
 
 **Fix**: Leave the game through the emulator itself. In RetroArch, press Start and Select together: RetroDECK sets that
 as RetroArch's quit combination, and it quits RetroArch at once. It does not ask first, so pressing both by accident
@@ -822,15 +880,15 @@ it, and whatever can be done with it. Most rows offer one action, Other non-Stea
 whitelist, and Recovery bundles offers none at all. The six rows are **Tender's shortcuts**, **Installed ROMs**, **Grid
 images**, **Other non-Steam games**, **Gone from RomM** and **Recovery bundles**.
 
-A count shows a small spinner while it is being read, and a dash if it could not be read. Two counts cost a backend
-scan, which sends no request to RomM, so they read **scan** until you press for them: Grid images and Gone from RomM;
-while that scan runs, its row shows the spinner and the button says it is scanning. When a count could not be read, its
-pane says so and how to try again: open the page again for most rows, or press the scan button again for a scan that
-failed. Grid images keeps what its scan found until a removal changes it (see [Grid images](#grid-images)); Gone from
-RomM keeps it until a cleanup run finishes — which is what changes the number — and then asks to be scanned again. Every
-destructive action asks first — press once to see the prompt, press again to confirm. The per-platform actions —
-removing one platform's shortcuts, deleting its save files, deleting its BIOS files — live in
-**[Library › Platforms](bios-management.md#library-platforms)**, on the platform's own pane.
+A count shows a small spinner while it is being read, and a dash if it could not be read. Two counts cost a scan, so
+they read **scan** until you press for them: Grid images, which looks only at this device, and Gone from RomM, which
+also asks RomM once which games you hid; while that scan runs, its row shows the spinner and the button says it is
+scanning. When a count could not be read, its pane says so and how to try again: open the page again for most rows, or
+press the scan button again for a scan that failed. Grid images keeps what its scan found until a removal changes it
+(see [Grid images](#grid-images)); Gone from RomM keeps it until a cleanup run finishes — which is what changes the
+number — and then asks to be scanned again. Every destructive action asks first — press once to see the prompt, press
+again to confirm. The per-platform actions — removing one platform's shortcuts, deleting its save files, deleting its
+BIOS files — live in **[Library › Platforms](bios-management.md#library-platforms)**, on the platform's own pane.
 
 While a library sync is running (or cancelling), the shortcut and ROM removals and the grid-image cleanup are
 unavailable — the buttons are disabled with a short hint, and the backend refuses the request too. Wait for the sync to

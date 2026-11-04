@@ -155,7 +155,7 @@ export const AnotherFolderModal: FC<AnotherFolderModalProps> = ({
       {shown?.kind === "tender_named" && shown.asks.tender_parent !== null && (
         <div data-testid="another-folder-question">
           <div style={questionStyle}>{tenderNamedQuestion(shown.asks.place, shown.asks.tender_parent)}</div>
-          <Focusable flow-children="horizontal" style={buttonRowStyle}>
+          <Focusable flow-children="row" style={buttonRowStyle}>
             <DialogButton
               style={buttonStyle}
               disabled={busy}
@@ -183,7 +183,7 @@ export const AnotherFolderModal: FC<AnotherFolderModalProps> = ({
           <div style={questionStyle}>
             {createMissingQuestion(shown.asks.place, shown.asks.existing, shown.asks.missing)}
           </div>
-          <Focusable flow-children="horizontal" style={buttonRowStyle}>
+          <Focusable flow-children="row" style={buttonRowStyle}>
             <DialogButton
               style={buttonStyle}
               disabled={busy}

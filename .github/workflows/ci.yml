@@ -30,9 +30,12 @@ jobs:
         run: pip install -r requirements-dev.lock
 
       # The generator tests draw the mark, which means librsvg — the same
-      # reason the lint job installs it for the drift check.
-      - name: Install librsvg for the mark's renderer
-        run: sudo apt-get update && sudo apt-get install -y librsvg2-bin
+      # reason the lint job installs it for the drift check. Xvfb and
+      # libxcb-res0 are for the focus watcher's X tier
+      # (tests/adapters/test_x11_focus.py), which fails rather than skips in
+      # CI when Xvfb is missing.
+      - name: Install librsvg for the mark's renderer, and Xvfb for the X tier
+        run: sudo apt-get update && sudo apt-get install -y librsvg2-bin xvfb libxcb-res0
 
       - name: Run tests with coverage
         run: python -m pytest tests/ -q -n auto --cov=backend --cov-report=xml --cov-branch
@@ -59,8 +62,8 @@ jobs:
       - name: Install Python test dependencies
         run: pip install -r requirements-dev.lock
 
-      - name: Install librsvg for the mark's renderer
-        run: sudo apt-get update && sudo apt-get install -y librsvg2-bin
+      - name: Install librsvg for the mark's renderer, and Xvfb for the X tier
+        run: sudo apt-get update && sudo apt-get install -y librsvg2-bin xvfb libxcb-res0
 
       - name: Run tests
         run: python -m pytest tests/ -q -n auto
@@ -81,8 +84,8 @@ jobs:
       - name: Install Python test dependencies
         run: pip install -r requirements-dev.lock
 
-      - name: Install librsvg for the mark's renderer
-        run: sudo apt-get update && sudo apt-get install -y librsvg2-bin
+      - name: Install librsvg for the mark's renderer, and Xvfb for the X tier
+        run: sudo apt-get update && sudo apt-get install -y librsvg2-bin xvfb libxcb-res0
 
       - name: Run tests
         run: python -m pytest tests/ -q -n auto

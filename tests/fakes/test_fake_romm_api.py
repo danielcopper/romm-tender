@@ -190,6 +190,43 @@ class TestSeededReads:
         assert api.list_play_sessions(1) == [{"id": 100, "rom_id": 1, "duration_ms": 900}]
 
 
+class TestTheTwoKindsOfHide:
+    """A user's own hide and an admin's hide, as RomM 5.3.0 answers each (#2502)."""
+
+    @staticmethod
+    def _api() -> FakeRommApi:
+        api = FakeRommApi()
+        api.roms = {
+            rid: {"id": rid, "platform_id": 1, "collection_ids": [7], "sibling_roms": [{"id": 1}, {"id": 2}, {"id": 3}]}
+            for rid in (1, 2, 3)
+        }
+        api.collections = [{"id": 7, "name": "Faves"}]
+        api.hidden_rom_ids = {2}
+        api.admin_hidden_rom_ids = {3}
+        return api
+
+    def test_every_walk_leaves_both_out(self) -> None:
+        api = self._api()
+        assert [r["id"] for r in api.list_roms(1)["items"]] == [1]
+        assert api.list_roms_newest_first(1)["rom_id_index"] == [1]
+        assert [r["id"] for r in api.list_roms_by_collection(7)["items"]] == [1]
+
+    def test_the_listing_keeps_the_user_s_hide_only(self) -> None:
+        assert self._api().list_collections()[0]["rom_ids"] == [1, 2]
+
+    def test_the_exact_id_read_answers_the_user_s_hide_and_404s_the_admin_s(self) -> None:
+        from lib.errors import RommNotFoundError
+
+        api = self._api()
+        answer = api.get_rom_simple(2)
+        assert (answer["rom_user"], [stub["id"] for stub in answer["sibling_roms"]]) == ({"hidden": True}, [1, 2])
+        with pytest.raises(RommNotFoundError):
+            api.get_rom_once(3)
+
+    def test_the_hidden_list_names_the_user_s_hide_only(self) -> None:
+        assert self._api().list_hidden_roms()["rom_id_index"] == [2]
+
+
 class TestPlaySessionIngest:
     """The native play-session ingest stores, dedupes, and reads back."""
 

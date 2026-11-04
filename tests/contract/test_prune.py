@@ -123,7 +123,7 @@ async def test_preview_is_local_paged_and_frontend_shaped(harness):
     assert result["items"][0]["rom_id"] == 41
     assert result["items"][0]["installed"] is False
     assert result["recovery_root"] == str(harness.tmp_path / "home" / "Tender" / "recovery")
-    assert harness.romm.call_log == []
+    assert harness.romm.call_log == [("list_hidden_roms", (), {})]
 
 
 async def test_preview_discovers_on_a_platform_whose_skip_was_revoked(harness):

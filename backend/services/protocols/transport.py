@@ -187,6 +187,14 @@ class RommRomReader(Protocol):
         """
         ...
 
+    def read_hidden_rom_ids(self) -> frozenset[int] | None:
+        """The id of every ROM the user hid in RomM, asked in one request; ``None`` where that answer cannot be read.
+
+        A ROM an admin hid for this user is not among them. ``None`` takes
+        nothing for hidden, and the reader has already logged why.
+        """
+        ...
+
     def list_collection_roms_updated_after(
         self,
         collection_id: int | str,

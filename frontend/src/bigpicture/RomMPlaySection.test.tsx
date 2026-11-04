@@ -5359,6 +5359,41 @@ describe("RomMPlaySection", () => {
       expect(capturedPlayButton[capturedPlayButton.length - 1]!.startChecking).toBe(false);
     });
 
+    it.each<{ line: string; gameLaunch: GameLaunch }>([
+      {
+        line: "emulator-refusal",
+        gameLaunch: { ...LAUNCH, state: "needs_installing", install_in: ["RPCS3 Game Serial (Standalone)"] },
+      },
+      {
+        line: "start-note",
+        gameLaunch: { ...LAUNCH, state: "not_established", reason: "catalogue_unread" },
+      },
+    ])(
+      "steps through the play row's controls left and right, with the $line line under them no focus stop (#2709 D1)",
+      async ({ line, gameLaunch }) => {
+        const { container } = await mountWith({ gameLaunch });
+        const row = container.querySelector<HTMLElement>(".romm-play-section-row")!;
+        const controls = row.querySelector<HTMLElement>('[data-testid="play-row-controls"]')!;
+        const warning = row.querySelector<HTMLElement>(`[data-testid="${line}"]`)!;
+
+        expect(row.getAttribute("flow-children")).toBe("column");
+        expect(controls.getAttribute("flow-children")).toBe("row");
+        for (const stop of [
+          '[data-testid="play-button"]',
+          'button[title="RomM Actions"]',
+          'button[title="Emulator Core"]',
+          'button[title="Steam Properties"]',
+        ]) {
+          expect(controls.querySelector(stop)).not.toBeNull();
+        }
+
+        expect(controls.contains(warning)).toBe(false);
+        expect(warning.closest("[flow-children]")).toBe(row);
+        expect(warning.hasAttribute("tabindex")).toBe(false);
+        expect(warning.querySelector("button, [tabindex], [flow-children]")).toBeNull();
+      },
+    );
+
     it("the emulator menu of an installed game asks, as it opens, whether each entry can start it", async () => {
       vi.mocked(backend.getEmulatorLaunches).mockResolvedValue([]);
       const { container } = await mountWith({});

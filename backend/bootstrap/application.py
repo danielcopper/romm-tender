@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 from domain.identity import MIN_ROMM_VERSION
 from lib.background_tasks import BackgroundTasks
+from services.controller_focus import ControllerFocusSeams
 
 from .adapters import RuntimeBundle, bootstrap
 from .services import WiringConfig, wire_services
@@ -30,8 +31,9 @@ if TYPE_CHECKING:
 
     from domain.app_directories import AppDirectories
     from domain.update_release import UpdateSource
-    from services.protocols import EventEmitter, PanelConnectedFn, SteamInterfaceReader
+    from services.protocols import EventEmitter, PanelConnectedFn, SteamInterfaceReader, SteamUrlControl
 
+    from .adapters import FocusWatchAdapters
     from .services import ServicesBundle
 
 
@@ -77,6 +79,7 @@ class Application:
         steps.run("record_save_directories", self._start_save_directory_backfill)
         steps.run("run_due_update_checks", self._start_due_update_checks)
         steps.run("shortcut_artwork", self._start_shortcut_artwork)
+        steps.run("controller_focus", self._start_controller_focus)
 
     async def shutdown(self) -> None:
         """Stop the background tasks that are still running, then shut the services down."""
@@ -107,6 +110,10 @@ class Application:
         """Run the shortcut artwork job once a panel is connected to hear what it hands over."""
         self._tasks.spawn(self.services.shortcut_artwork_service.run_when_a_panel_connects(), "shortcut_artwork")
 
+    def _start_controller_focus(self) -> None:
+        """Start the focus watcher, for as long as the backend runs; switched off, it ends at once."""
+        self._tasks.spawn(self.services.controller_focus_service.run(), "controller_focus")
+
 
 def build_application(
     *,
@@ -119,13 +126,17 @@ def build_application(
     emit: EventEmitter,
     steam: SteamInterfaceReader,
     panel_connected: PanelConnectedFn,
+    focus_watcher: bool = False,
+    steam_urls: SteamUrlControl | None = None,
 ) -> Application:
     """Build every adapter and wire every service into an :class:`Application`.
 
     Runs none of the start-up repairs; the caller does, once it has somewhere
     to record a failure. Settings are loaded and migrated inside
     :func:`bootstrap`, so every adapter that binds the live settings dict binds
-    the migrated one.
+    the migrated one. *focus_watcher* is the focus watcher's switch and
+    *steam_urls* the host's way of handing Steam a URL; the watcher runs only
+    with both, and left out it is off.
     """
     result = bootstrap(
         directories=directories,
@@ -155,6 +166,21 @@ def build_application(
             launcher=result.launcher,
             update_source=update_source,
             installer_environment=installer_environment,
+            focus_watcher=_focus_watcher(result.focus_watch, focus_watcher, steam_urls),
         )
     )
     return Application(services, logger=logger, user_agent=result.user_agent)
+
+
+def _focus_watcher(
+    readers: FocusWatchAdapters, watch: bool, steam_urls: SteamUrlControl | None
+) -> ControllerFocusSeams | None:
+    """The focus watcher's seams where it is switched on and has a way to Steam, else ``None``."""
+    if not watch or steam_urls is None:
+        return None
+    return ControllerFocusSeams(
+        running_steam=readers.running_steam,
+        focused_window=readers.focused_window,
+        steam_launch=readers.steam_launch,
+        steam_urls=steam_urls,
+    )

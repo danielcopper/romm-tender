@@ -11,10 +11,12 @@ about the protocol would show as nothing at all — the messages are dropped and
 the connection is deliberately kept. Neither is worth an event: an event is a
 statement about a moment, and both of these are states.
 
-:class:`SteamReadings` is the one part of it the application reads rather than
-the panel: what only the injector can see of Steam. It is created before the
-services, which are handed it, and filled in once the injector exists — the
-services are built before it, and may not import this package to reach it.
+:class:`SteamReadings` and :class:`SteamUrls` are the parts of it the
+application uses rather than the panel: what only the injector can see of
+Steam, and the one thing the application asks it to do there. Each is created
+before the services, which are handed it, and filled in once the injector
+exists — the services are built before it, and may not import this package to
+reach it.
 """
 
 from __future__ import annotations
@@ -67,6 +69,23 @@ class SteamReadings:
         return await self._reload_frees_at()
 
 
+class SteamUrls:
+    """Hands Steam a ``steam://`` URL through the injector, for the application. Sends nothing until it is attached."""
+
+    def __init__(self) -> None:
+        self._execute: Callable[[str], Awaitable[bool]] | None = None
+
+    def attach(self, *, execute_steam_url: Callable[[str], Awaitable[bool]]) -> None:
+        """Send from now on through the injector's attachment to Steam."""
+        self._execute = execute_steam_url
+
+    async def execute_steam_url(self, url: str) -> bool:
+        """Whether *url* went out; ``False`` before anything is attached, as when the panel is not loaded at all."""
+        if self._execute is None:
+            return False
+        return await self._execute(url)
+
+
 @dataclass
 class HostStatus:
     """The host's own answer about this run. Filled in as start-up proceeds."""
@@ -81,6 +100,7 @@ class HostStatus:
     count_dropped_messages: Callable[[], int] = _no_messages_dropped
 
     steam: SteamReadings = field(default_factory=SteamReadings)
+    steam_urls: SteamUrls = field(default_factory=SteamUrls)
 
     def record_failed_step(self, name: str) -> None:
         """Note that the start-up step *name* did not finish."""

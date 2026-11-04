@@ -40,15 +40,19 @@ def _explicit_candidates(rows: list[Rom], gone_ids: set[int], explicit_rom_id: i
     return set()
 
 
-def _gone_from_romm_ids(uow: UnitOfWork, rows: list[Rom]) -> set[int]:
-    """Every row absent from its own platform's last completed fetch, and every row carrying a gone-from-RomM mark."""
+def _gone_from_romm_ids(uow: UnitOfWork, rows: list[Rom], hidden_rom_ids: frozenset[int]) -> set[int]:
+    """Every row absent from its own platform's last completed fetch, and every row carrying a gone-from-RomM mark.
+
+    A row the user hid in RomM (*hidden_rom_ids*) is absent from every fetch
+    and still on RomM, so it is not gone (#2502 D5).
+    """
     platform_rows: dict[str, list[Rom]] = {}
     for row in rows:
         platform_rows.setdefault(row.platform_slug, []).append(row)
     gone_ids: set[int] = set()
     for slug, platform in platform_rows.items():
         gone_ids.update(gone_from_romm_ids(platform, uow.platform_sync_state.get(slug)))
-    return gone_ids
+    return gone_ids - hidden_rom_ids
 
 
 def _preview_entry(
@@ -113,11 +117,18 @@ class PreviewBuilder:
         except (OSError, ValueError) as exc:
             return None, str(exc)
 
-    def build(self, preview_id: str, scope: Literal["bulk", "rom"], explicit_rom_id: int | None) -> PrunePreview:
+    def build(
+        self,
+        preview_id: str,
+        scope: Literal["bulk", "rom"],
+        explicit_rom_id: int | None,
+        hidden_rom_ids: frozenset[int] = frozenset(),
+    ) -> PrunePreview:
+        """The snapshot of every candidate; *hidden_rom_ids* are the ROMs the user hid in RomM, which RomM still has."""
         with self._uow_factory() as uow:
             rows = list(uow.roms.iter_all())
             installs = {install.rom_id: install for install in uow.rom_installs.iter_all()}
-            gone_ids = _gone_from_romm_ids(uow, rows)
+            gone_ids = _gone_from_romm_ids(uow, rows, hidden_rom_ids)
             if scope == "rom" and explicit_rom_id is not None:
                 # The version picker offers this cleanup only after RomM answered
                 # the row with a 404, which no stamp or mark has to record yet.
@@ -170,6 +181,7 @@ class PreviewBuilder:
             entries=tuple(entries),
             free_bytes=self._recovery_store.free_bytes(),
             server_namespace=romm_namespace(self._settings),
+            hidden_rom_ids=hidden_rom_ids,
         )
 
     def page(self, preview: PrunePreview, offset: int, limit: int) -> dict[str, Any]:

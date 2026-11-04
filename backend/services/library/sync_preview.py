@@ -246,6 +246,7 @@ class SyncPreview:
                     preferred_region=preferred_region,
                     running_rom_ids=self._running_rom_ids,
                     logger=self._logger,
+                    hidden_rom_ids=box.run_hidden_rom_ids,
                 )
             }
             collection_units = [u for u in work_queue if u.type == "collection"]
@@ -263,6 +264,7 @@ class SyncPreview:
                         preferred_region=preferred_region,
                         running_rom_ids=self._running_rom_ids,
                         logger=self._logger,
+                        hidden_rom_ids=box.run_hidden_rom_ids,
                     )
                 }
             emitted, classify_skipped = collapse_counting_platform_rebinds(
@@ -298,6 +300,7 @@ class SyncPreview:
                 listed_platform_slugs=box.run_listed_platform_slugs,
                 collection_listed_rom_ids=collection_listed,
                 synced_group_keys=preview_group_keys(synced_rom_ids, resident_keys, all_roms),
+                hidden_rom_ids=box.run_hidden_rom_ids,
             )
             removed_ids = {row.rom_id for row in removals} | converged_ids
             kept_ids = {row.rom_id for row in kept}

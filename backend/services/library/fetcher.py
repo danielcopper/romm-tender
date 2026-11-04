@@ -19,7 +19,12 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 
 from domain.collection_listing import collection_entry
 from domain.collection_owner import listing_is_own
-from domain.fetch_generation import backfill_needed, convergence_pending, count_rows_for_skip
+from domain.fetch_generation import (
+    backfill_needed,
+    convergence_pending,
+    count_rows_for_skip,
+    hidden_without_a_listed_version,
+)
 from domain.platform_names import listed_platform_names
 from domain.platform_prefs import materialize_enabled_platforms, resolve_sync_enabled
 from domain.platform_skip import probe_verdict, stamp_can_match
@@ -100,10 +105,13 @@ class _SkipBaseline(NamedTuple):
     dropped is never fetched again, so no fetch can fill in its group key, and
     it may never hold the platform's skip off forever (#1504). ``needs_convergence``
     reads every row (``domain/fetch_generation.convergence_pending``).
+    ``bound_count`` counts every bound row, the ones ``reconstructed_roms``
+    leaves out as hidden in RomM included.
     """
 
     stamp: PlatformSyncState | None
     reconstructed_roms: list[dict[str, Any]]
+    bound_count: int
     fetched_count: int
     persisted_count: int
     needs_backfill: bool
@@ -376,6 +384,9 @@ class LibraryFetcher:
         units: list[WorkUnit] = []
 
         platforms, unwalked_platform_ids = await self._fetch_enabled_platforms()
+        # Asked once per run, and the run's only source of what is hidden (#2502 D2).
+        hidden = await self._loop.run_in_executor(None, self._romm_api.read_hidden_rom_ids)
+        self._sync_state.run_hidden_rom_ids = hidden
         platform_units = [
             WorkUnit(
                 type="platform",
@@ -420,7 +431,14 @@ class LibraryFetcher:
             sorted((self._sync_state.run_listed_platform_slugs or frozenset()) - {unit.slug for unit in platform_units})
         )
         collection_queue = [
-            replace(unit, unwalked_platform_ids=unwalked_platform_ids, unwalked_platform_slugs=unwalked_platform_slugs)
+            replace(
+                unit,
+                unwalked_platform_ids=unwalked_platform_ids,
+                unwalked_platform_slugs=unwalked_platform_slugs,
+                member_rom_ids=unit.member_rom_ids
+                if hidden is None
+                else tuple(rom_id for rom_id in unit.member_rom_ids if rom_id not in hidden),
+            )
             for unit in collection_queue
         ]
         # One short read UoW for every collection at once — after the listing
@@ -673,7 +691,11 @@ class LibraryFetcher:
         * ``reconstructed_roms`` — the platform's **bound** ``roms`` rows shaped
           like a RomM list response (thin — no ``metadatum``, so the skip-guard
           keeps them out of the metadata stamp). This is the shortcut set the
-          skip reconstructs as the unit's ROMs.
+          skip reconstructs as the unit's ROMs, less every row the user hid in
+          RomM whose game no version of the stamp's fetch holds
+          (``domain/fetch_generation.hidden_without_a_listed_version``): such
+          a row is left stale, so the stale removal takes its shortcut
+          (#2502 D2). ``bound_count`` counts every bound row.
         * ``fetched_count`` — the rows the stamp's fetch returned
           (``count_rows_for_skip``, #1504): those carrying the stamp's
           ``fetch_id`` generation, so a row for a rom_id the server dropped stays
@@ -700,6 +722,8 @@ class LibraryFetcher:
         with self._uow_factory() as uow:
             stamp = stamp_for_skip(uow.platform_sync_state.get(platform_slug))
             all_rows = list(uow.roms.iter_by_platform(platform_slug))
+        fetch_id = stamp.fetch_id if stamp is not None else None
+        left_out = hidden_without_a_listed_version(all_rows, self._sync_state.run_hidden_rom_ids or (), fetch_id)
         reconstructed = [
             {
                 "id": rom.rom_id,
@@ -713,12 +737,12 @@ class LibraryFetcher:
                 "has_file_on_disk": rom.has_file_on_disk,
             }
             for rom in all_rows
-            if rom.shortcut_app_id is not None
+            if rom.shortcut_app_id is not None and rom.rom_id not in left_out
         ]
-        fetch_id = stamp.fetch_id if stamp is not None else None
         return _SkipBaseline(
             stamp=stamp,
             reconstructed_roms=reconstructed,
+            bound_count=sum(1 for rom in all_rows if rom.shortcut_app_id is not None),
             fetched_count=count_rows_for_skip(all_rows, fetch_id),
             persisted_count=len(all_rows),
             needs_backfill=backfill_needed(all_rows, fetch_id),
@@ -781,7 +805,7 @@ class LibraryFetcher:
         reconstructed = baseline.reconstructed_roms
         fetched_count = baseline.fetched_count
         persisted_count = baseline.persisted_count
-        registry_count = len(reconstructed)
+        registry_count = baseline.bound_count
 
         if stamp is None:
             self._logger.info(f"Per-unit fetch {platform_name}: no completion stamp — full fetch")

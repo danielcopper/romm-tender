@@ -860,6 +860,104 @@ def _assert_success(result: dict[str, Any], *, rom_id: int, installed: bool, lau
     }
 
 
+class TestAVersionTheUserHidInRomm:
+    """The picker marks a version the user hid in RomM, asking RomM once per open (#2502 D1, D5)."""
+
+    @staticmethod
+    def _seed(uow, romm):
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID)
+        _seed_rom(uow, rom_id=2, app_id=None)
+        romm.roms[1] = {"id": 1, "sibling_roms": [{"id": 2}, {"id": 5, "fs_name_no_ext": "Game (Japan)"}]}
+        romm.roms[2] = {"id": 2}
+        romm.roms[5] = {"id": 5, "platform_id": 57, "fs_name_no_ext": "Game (Japan)"}
+
+    def test_a_hidden_member_and_a_hidden_server_only_version_are_marked_and_stay_switchable(
+        self, event_loop, service, uow, romm
+    ):
+        self._seed(uow, romm)
+        romm.hidden_rom_ids = {2, 5}
+
+        by_id = {v["rom_id"]: v for v in _run(event_loop, service.get_version_list(_APP_ID))["versions"]}
+
+        assert {rom_id: row["hidden"] for rom_id, row in by_id.items()} == {1: False, 2: True, 5: True}
+        assert (by_id[2]["switchable"], by_id[5]["switchable"]) == (True, True)
+        assert [name for name, _args, _kwargs in romm.call_log].count("list_hidden_roms") == 1
+
+    def test_the_hidden_bound_version_is_marked(self, event_loop, service, uow, romm):
+        self._seed(uow, romm)
+        romm.hidden_rom_ids = {1}
+
+        by_id = {v["rom_id"]: v for v in _run(event_loop, service.get_version_list(_APP_ID))["versions"]}
+
+        assert {rom_id: row["hidden"] for rom_id, row in by_id.items()} == {1: True, 2: False, 5: False}
+
+    def test_a_bound_version_romm_no_longer_has_still_marks_a_hidden_sibling(self, event_loop, service, uow, romm):
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID)
+        _seed_rom(uow, rom_id=2, app_id=None)
+        romm.get_rom_simple_side_effect = RommNotFoundError("HTTP 404: Not Found")
+        romm.hidden_rom_ids = {2}
+        romm.roms[2] = {"id": 2}
+
+        by_id = {v["rom_id"]: v for v in _run(event_loop, service.get_version_list(_APP_ID))["versions"]}
+
+        assert {rom_id: row["hidden"] for rom_id, row in by_id.items()} == {1: False, 2: True}
+
+    @pytest.mark.parametrize("unreadable", ["raises", "no-index"])
+    def test_an_answer_that_cannot_be_read_marks_nothing(self, event_loop, service, uow, romm, caplog, unreadable):
+        self._seed(uow, romm)
+        romm.hidden_rom_ids = {2, 5}
+        if unreadable == "raises":
+            romm.list_hidden_roms_side_effect = RommConnectionError("down")
+        else:
+            romm.list_hidden_roms_answer = {"items": [{"id": 2}], "total": 2}
+
+        with caplog.at_level(logging.WARNING):
+            result = _run(event_loop, service.get_version_list(_APP_ID))
+
+        assert [v["hidden"] for v in result["versions"]] == [False, False, False]
+        assert result["server_query_failed"] is False
+        assert "hidden in RomM" in caplog.text
+
+
+class TestUnderABoundRowWithoutAGroupKey:
+    """A version with a local row is marked from that row, not offered as a not-synced one (#2502 D6)."""
+
+    @staticmethod
+    def _seed(uow, romm, *, app_id_of_2):
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID, group_key=None)
+        _seed_rom(uow, rom_id=2, app_id=app_id_of_2, group_key=_GROUP)
+        romm.roms[1] = {"id": 1, "sibling_roms": [{"id": 2}, {"id": 5}]}
+        romm.roms[2] = {"id": 2, "platform_id": 57}
+        romm.roms[5] = {"id": 5, "platform_id": 57}
+
+    def test_a_version_on_its_own_shortcut_is_marked_synced_and_bound_elsewhere(self, event_loop, service, uow, romm):
+        self._seed(uow, romm, app_id_of_2=777)
+
+        by_id = {v["rom_id"]: v for v in _run(event_loop, service.get_version_list(_APP_ID))["versions"]}
+
+        assert (by_id[2]["synced"], by_id[2]["bound_elsewhere"]) == (True, True)
+        assert (by_id[5]["synced"], by_id[5]["bound_elsewhere"]) == (False, False)
+        refused = _refusal(event_loop, service.switch_version(_APP_ID, 2, False))
+        assert refused.reason == "bound_elsewhere"
+
+    def test_a_version_with_a_local_row_and_no_shortcut_is_marked_synced_only(self, event_loop, service, uow, romm):
+        self._seed(uow, romm, app_id_of_2=None)
+
+        by_id = {v["rom_id"]: v for v in _run(event_loop, service.get_version_list(_APP_ID))["versions"]}
+
+        assert (by_id[2]["synced"], by_id[2]["bound_elsewhere"], by_id[2]["switchable"]) == (True, False, True)
+
+    def test_under_a_keyed_bound_row_a_version_of_another_group_stays_unmarked(self, event_loop, service, uow, romm):
+        """Such a version is refused ``not_in_group`` first, so the picker shows it as not switchable alone."""
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID, group_key=_GROUP)
+        _seed_rom(uow, rom_id=2, app_id=777, group_key="ss:19274:57")
+        romm.roms[1] = {"id": 1, "sibling_roms": [{"id": 2}]}
+
+        by_id = {v["rom_id"]: v for v in _run(event_loop, service.get_version_list(_APP_ID))["versions"]}
+
+        assert (by_id[2]["synced"], by_id[2]["bound_elsewhere"], by_id[2]["switchable"]) == (False, False, False)
+
+
 class TestSwitchVersion:
     def test_unknown_app_id_not_found(self, event_loop, service, romm):
         refused = _refusal(event_loop, service.switch_version(999, 2, False))

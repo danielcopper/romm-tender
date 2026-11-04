@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 from domain.sync_diff import groups_to_converge
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Collection, Sequence
 
     from domain.platform_sync_state import PlatformSyncState
     from domain.rom import Rom
@@ -73,6 +73,33 @@ def convergence_pending(rows: Sequence[Rom]) -> bool:
     keeps an older one, and converges with its group all the same.
     """
     return bool(groups_to_converge(row.sibling_group_key for row in rows if row.shortcut_app_id is not None))
+
+
+def hidden_without_a_listed_version(
+    rows: Sequence[Rom], hidden_rom_ids: Collection[int], fetch_id: str | None
+) -> set[int]:
+    """The bound rows of *rows* the user hid in RomM whose game no version of the stamp's fetch holds.
+
+    *hidden_rom_ids* is the run's hidden set (``domain/hidden_roms.py``). A
+    hidden row is never listed, so it never carries the generation of a fetch
+    after its hide; a game keeps a visible version where another row of its
+    group outside *hidden_rom_ids* carries *fetch_id*. A NULL key relates its
+    row to nothing, so such a hidden row stands alone. These are the rows a
+    platform skip leaves out of its reconstruction, so the stale removal takes
+    their shortcuts as it does after a full fetch (#2502 D1, D2).
+    """
+    listed_keys = {
+        row.sibling_group_key
+        for row in rows
+        if row.sibling_group_key is not None and row.last_fetch_id == fetch_id and row.rom_id not in hidden_rom_ids
+    }
+    return {
+        row.rom_id
+        for row in rows
+        if row.shortcut_app_id is not None
+        and row.rom_id in hidden_rom_ids
+        and (row.sibling_group_key is None or row.sibling_group_key not in listed_keys)
+    }
 
 
 def prune_candidate_ids(rows: Sequence[Rom], stamp: PlatformSyncState | None) -> set[int]:

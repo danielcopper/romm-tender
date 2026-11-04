@@ -193,7 +193,7 @@ export const PlatformsTab: FC<{ state: PlatformsPageState }> = ({ state }) => {
           that much of the rows' width the buttons do not have. Measured on the
           device through CEF: rows 79.6 → 335.9, buttons 79.9 → 335.9. */}
       <Focusable
-        flow-children="horizontal"
+        flow-children="row"
         style={{ display: "flex", gap: "8px", padding: `4px 0 8px ${ROW_CONTENT_INSET}px` }}
       >
         <DialogButton style={{ flex: 1, minWidth: 0, padding: "8px 0" }} onClick={() => state.setAllSync(true)}>

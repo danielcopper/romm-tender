@@ -114,6 +114,7 @@ async def test_get_version_list_happy_shape(harness):
         "installed",
         "switchable",
         "vanished",
+        "hidden",
         "no_file",
         "bound_elsewhere",
         "active",

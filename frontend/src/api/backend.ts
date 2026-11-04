@@ -1027,7 +1027,10 @@ export const selectDisc = endpoint<[number, string | null], SelectDiscResult>("s
  * backend always sends it; absent reads as having a file. `bound_elsewhere`
  * marks a version another shortcut of this game is on — switch_version refuses
  * it by the same rule — so the row is never selectable; the backend always
- * sends it, and absent reads as on no other shortcut.
+ * sends it, and absent reads as on no other shortcut. `hidden` marks a version
+ * the user hid in RomM: the row stays selectable, since a hidden version of a
+ * game with a visible one keeps the game's shortcut; the backend always sends
+ * it, and absent reads as not hidden.
  */
 export interface VersionInfo {
   rom_id: number;
@@ -1045,6 +1048,7 @@ export interface VersionInfo {
   vanished: boolean;
   no_file?: boolean;
   bound_elsewhere?: boolean;
+  hidden?: boolean;
 }
 
 /**

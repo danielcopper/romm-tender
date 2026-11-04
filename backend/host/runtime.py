@@ -9,6 +9,10 @@ order below is the whole point of this module::
       -> write the port file
       -> start loading the panel into Steam
 
+and at stop: the build's one step that needs Steam's debugger, then the
+injector let go, then the build's shutdown, the server, the port file and the
+lock.
+
 Because the port is bound only after the schema and the start-up routines are
 through, **"the port file is there" simply means "the backend is ready"**. A
 process that dies at the schema migration has never announced a port, so nothing
@@ -47,6 +51,10 @@ if TYPE_CHECKING:
     from host.status import HostStatus
 
 
+async def _nothing_before_detach() -> None:
+    """A build with nothing to send to Steam at stop."""
+
+
 @dataclass(frozen=True)
 class BackendBuild:
     """What building the backend produced that the host itself needs.
@@ -61,11 +69,18 @@ class BackendBuild:
     would leave the very state the start-up routines exist to repair. It comes
     with the build because it acts on what the build made: a build that never
     finished has nothing to shut down.
+
+    *before_detach* is the one step of the application's that runs while the
+    host is still attached to Steam's debugger at stop, before the injector is
+    let go and before *shutdown*: what it sends to Steam needs that attachment.
+    Nothing else moves into it; everything else stops after the detach, as it
+    always has.
     """
 
     dispatcher: CallDispatcher
     server_identity: str
     shutdown: Callable[[], Awaitable[None]]
+    before_detach: Callable[[], Awaitable[None]] = _nothing_before_detach
 
 
 class AlreadyRunningError(RuntimeError):
@@ -164,6 +179,7 @@ async def run_backend(
             status.steam.attach(
                 running_apps=panel_injector.running_apps, reload_frees_at=panel_injector.reload_frees_at
             )
+            status.steam_urls.attach(execute_steam_url=panel_injector.execute_steam_url)
             server.answer_stranded_panels_from(panel_injector.reload_outlook)
             injector = asyncio.create_task(panel_injector.run())
 
@@ -172,6 +188,10 @@ async def run_backend(
     finally:
         _stop_listening_for_termination()
         logger.info("host: shutting down")
+        # Before the injector is cancelled, which lets go of Steam's debugger.
+        if built is not None:
+            with contextlib.suppress(Exception):
+                await built.before_detach()
         if injector is not None:
             injector.cancel()
             with contextlib.suppress(asyncio.CancelledError):

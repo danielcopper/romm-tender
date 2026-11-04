@@ -54,6 +54,7 @@ from adapters.retrodeck_folders import RetroDeckFoldersAdapter
 from adapters.rom_files import RomFileAdapter
 from adapters.romm.http import RommHttpAdapter
 from adapters.romm.romm_api import RommApiAdapter
+from adapters.running_steam import RunningSteamAdapter
 from adapters.save_file import SaveFileAdapter
 from adapters.sgdb_artwork_cache import SgdbArtworkCacheAdapter
 from adapters.sqlite_migrations import MIGRATIONS_DIR, apply_migrations
@@ -68,6 +69,7 @@ from adapters.transient_unit import SystemdRunAdapter
 from adapters.update_attempt import UpdateAttemptFileAdapter
 from adapters.update_failure import UpdateFailureFileAdapter
 from adapters.update_staging import UpdateStagingAdapter
+from adapters.x11_focus import X11FocusAdapter
 from domain.identity import PACKAGE_NAME, VERSION
 from domain.state_migrations import migrate_settings
 from domain.update_install import UPDATE_DIR_NAME
@@ -96,6 +98,7 @@ if TYPE_CHECKING:
         FirmwareIdentityProvider,
         FirmwarePlatformResolver,
         FirmwareResolver,
+        FocusedWindowReader,
         GameProcessControl,
         HostnameReader,
         IconDownscaleFn,
@@ -117,6 +120,7 @@ if TYPE_CHECKING:
         RetroDeckFolders,
         RomFileStore,
         RommApi,
+        RunningSteamReader,
         SaveFileStore,
         SaveLocationReader,
         SettingsPersister,
@@ -125,6 +129,7 @@ if TYPE_CHECKING:
         SourcePlatformSystems,
         SteamConfigStore,
         SteamInterfaceReader,
+        SteamLaunchReader,
         SteamRecoveryStore,
         SystemKnownFn,
         SystemM3uSupportFn,
@@ -270,16 +275,30 @@ class RuntimeAdaptersBundle:
 
 
 @dataclass(frozen=True)
+class FocusWatchAdapters:
+    """The readers only the focus watcher uses: the running Steam, the X display, and a process's Steam launch.
+
+    ``steam_launch`` is the same object as ``AdapterBundle.game_process``,
+    offered under the question the watcher asks of it.
+    """
+
+    running_steam: RunningSteamReader
+    focused_window: FocusedWindowReader
+    steam_launch: SteamLaunchReader
+
+
+@dataclass(frozen=True)
 class BootstrapResult:
     """Typed return shape for :func:`bootstrap`.
 
     The four bundles carry every Protocol-typed seam and live state dict that
-    services need; :attr:`directories` is the set this run was handed, passed
-    back so every consumer reads the same seven fields rather than composing any
-    of them again; :attr:`launcher` is this start's :class:`ShortcutLauncher`;
-    and :attr:`user_agent` is ``<package name>/<version>``, composed once and
-    used both as the outgoing User-Agent and as the identity the host answers
-    under.
+    services need, and :attr:`focus_watch` the focus watcher's readers, which
+    reach it only where the entry point switches it on; :attr:`directories` is
+    the set this run was handed, passed back so every consumer reads the same
+    seven fields rather than composing any of them again; :attr:`launcher` is
+    this start's :class:`ShortcutLauncher`; and :attr:`user_agent` is
+    ``<package name>/<version>``, composed once and used both as the outgoing
+    User-Agent and as the identity the host answers under.
     """
 
     adapters: AdapterBundle
@@ -289,6 +308,7 @@ class BootstrapResult:
     directories: AppDirectories
     launcher: ShortcutLauncher
     user_agent: str
+    focus_watch: FocusWatchAdapters
 
 
 def bootstrap(
@@ -552,4 +572,9 @@ def bootstrap(
         directories=directories,
         launcher=launcher,
         user_agent=user_agent,
+        focus_watch=FocusWatchAdapters(
+            running_steam=RunningSteamAdapter(user_home=user_home),
+            focused_window=X11FocusAdapter(),
+            steam_launch=game_process,
+        ),
     )

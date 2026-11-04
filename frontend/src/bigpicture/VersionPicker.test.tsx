@@ -668,6 +668,54 @@ describe("VersionPicker — versions on another shortcut of this game", () => {
   });
 });
 
+describe("VersionPicker — versions the user hid in RomM (#2502)", () => {
+  beforeEach(() => {
+    captured.menu = null;
+    vi.mocked(backend.getVersionList).mockReset();
+    vi.mocked(backend.switchVersion)
+      .mockReset()
+      .mockResolvedValue({ success: false, reason: "not_in_group", message: "refused" });
+    vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: null });
+    vi.mocked(toaster.toast).mockReset();
+    vi.mocked(openRemovedGamesCleanupModal).mockReset().mockResolvedValue(true);
+  });
+
+  function listWithJapanHidden(overrides: Partial<VersionInfo>): VersionList {
+    const versions = (multiVersionList().versions ?? []).map((v) =>
+      v.rom_id === 2 ? { ...v, hidden: true, ...overrides } : { ...v },
+    );
+    return multiVersionList({ versions });
+  }
+
+  function japanRow(container: HTMLElement): HTMLElement {
+    return within(container)
+      .getAllByRole("menuitem")
+      .find((i) => i.textContent.includes("Game (Japan)"))!;
+  }
+
+  it("labels it and still offers the switch", async () => {
+    vi.mocked(backend.getVersionList).mockResolvedValue(listWithJapanHidden({}));
+
+    const { menu } = await renderAndOpen();
+
+    const row = japanRow(menu.container);
+    expect(row.textContent).toContain("Hidden in RomM");
+    expect(row.getAttribute("aria-disabled")).toBeNull();
+    await clickRow(menu.container, "Game (Japan)");
+    expect(backend.switchVersion).toHaveBeenCalledWith(APP_ID, 2, false);
+  });
+
+  it("names a reason it cannot be selected before its hide", async () => {
+    vi.mocked(backend.getVersionList).mockResolvedValue(listWithJapanHidden({ bound_elsewhere: true }));
+
+    const { menu } = await renderAndOpen();
+
+    const row = japanRow(menu.container);
+    expect(row.textContent).toContain("On another shortcut of this game");
+    expect(row.textContent).not.toContain("Hidden in RomM");
+  });
+});
+
 describe("VersionPicker — liveness connection signals (#1570)", () => {
   beforeEach(() => {
     captured.menu = null;

@@ -28,7 +28,7 @@ export const SteamGridDBSection: FC<SteamGridDBSectionProps> = ({
     <PanelSection title="SteamGridDB">
       <PanelSectionRow>
         <Field label="API Key" description={sgdbApiKey ? "••••" : "Not configured"}>
-          <Focusable flow-children="horizontal" style={{ display: "flex", gap: "8px" }}>
+          <Focusable flow-children="row" style={{ display: "flex", gap: "8px" }}>
             <DialogButton
               style={{ minWidth: "auto", width: "auto" }}
               onClick={() => showModal(<SgdbApiKeyModal onVerify={onVerifyKey} onSave={onSaveKey} />)}

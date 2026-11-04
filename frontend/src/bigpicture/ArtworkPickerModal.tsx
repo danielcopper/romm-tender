@@ -212,7 +212,7 @@ export const ArtworkPickerModal: FC<ArtworkPickerModalProps> = ({
           <Focusable flow-children="column" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <div ref={grid} style={{ maxHeight: "60vh", overflowY: "auto", padding: "4px" }}>
               <Focusable
-                flow-children="right"
+                flow-children="grid"
                 style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}
               >
                 <DialogButton
@@ -278,7 +278,7 @@ export const ArtworkPickerModal: FC<ArtworkPickerModalProps> = ({
               )}
               {failure && <div style={{ fontSize: "12px", color: "#ff8800" }}>{failure}</div>}
             </div>
-            <Focusable flow-children="right" style={{ display: "flex", gap: "8px" }}>
+            <Focusable flow-children="row" style={{ display: "flex", gap: "8px" }}>
               <DialogButton onClick={() => closeModal?.()} style={{ opacity: 0.5 }}>
                 Cancel
               </DialogButton>

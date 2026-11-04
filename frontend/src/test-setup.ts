@@ -256,7 +256,7 @@ vi.mock("@decky/ui", () => {
     // which is the device defect the attribute lets a test see.
     // onFocus is forwarded because a Focusable is how the list-and-detail layout
     // learns that focus moved to a row — dropping it would make focus-selects
-    // vacuously untestable. Other FooterLegend-only props (flow-children,
+    // vacuously untestable. Other props only Steam's navigation and footer legend read (flow-children,
     // actionDescriptionMap, the on…ActionDescription labels Steam draws in its
     // footer legend, …) are dropped — they have no DOM effect under happy-dom.
     // className is forwarded for the same reason DialogButton's is: the real

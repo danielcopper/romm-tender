@@ -151,6 +151,7 @@ class PruneService:
         self._artwork_job = config.artwork_job
         self._recovery_store = config.recovery_store
         self._retrodeck_folders = config.retrodeck_folders
+        self._romm_api = config.romm_api
         self._preview_builder = PreviewBuilder(
             config=PreviewBuilderConfig(
                 uow_factory=config.uow_factory,
@@ -214,7 +215,7 @@ class PruneService:
         return self._starting or self._run_id is not None
 
     async def get_prune_preview(self, request: object) -> dict[str, Any]:
-        """Create or page an ephemeral local-only candidate preview.
+        """Create or page an ephemeral candidate preview; creating one asks RomM only which ROMs the user hid.
 
         Checks its endpoint's conflict rules at its entry and raises the
         rule's refusal when one holds (GLOSSARY.md → Conflict rules).
@@ -229,7 +230,11 @@ class PruneService:
         preview = self._preview
         if preview_id is None:
             token = self._uuid_gen.uuid4()
-            preview = await self._loop.run_in_executor(None, self._preview_builder.build, token, scope, explicit_rom_id)
+            # Asked once per scan; the start rebuilds over the same set (#2502 D5).
+            hidden = await self._loop.run_in_executor(None, self._romm_api.read_hidden_rom_ids) or frozenset()
+            preview = await self._loop.run_in_executor(
+                None, self._preview_builder.build, token, scope, explicit_rom_id, hidden
+            )
             self._preview = preview
             self._selection = None
         elif (
@@ -331,6 +336,7 @@ class PruneService:
                 preview.preview_id,
                 preview.scope,
                 preview.explicit_rom_id,
+                preview.hidden_rom_ids,
             )
             async with self._admission_lock:
                 if self._closed:

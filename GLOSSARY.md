@@ -415,9 +415,9 @@ solo groups). Key derivation: `domain/sibling_group.py`, persisted as `roms.sibl
   of bindings is what it states about shortcuts (a platform states both, and they need not agree); a group with no
   binding raises neither (`reachable_count` vs. `count`, `services/library/views.py`). The platform count
   (`reachable_count`) is the reachable versions less those the fetch the platform's completion stamp records did not
-  return and those carrying a gone-from-RomM mark, which it leaves out because RomM no longer serves them (the exact
-  rule: [qam-panel.md § Library](docs/architecture/qam-panel.md#library)); the collection count (`in_steam_count`) is
-  the reachable versions as the sync's collection filing resolves them, with no such exclusion. Both start from one
+  return and those carrying a gone-from-RomM mark (the exact rule, and why:
+  [qam-panel.md § Library](docs/architecture/qam-panel.md#library)); the collection count (`in_steam_count`) is the
+  reachable versions as the sync's collection filing resolves them, with no such exclusion. Both start from one
   computation, `domain/sibling_resolution.py`'s `reachable_rom_ids`.
 - **Stranded version** — an installed version whose local saves the stranding verdict answers `unsynced`, or `unchecked`
   where the check could not tell, so leaving it strands them: the active version a switch would leave, or an inactive
@@ -1134,12 +1134,13 @@ Three deliberately-distinct ROM-removal notions (see [ADR-0007](docs/adr/0007-ro
 - **Unbind** — drop a ROM's Steam-shortcut binding (`shortcut_app_id` → NULL, via `Rom.unbind_shortcut()`) while keeping
   its `roms` row and all per-ROM state (install, metadata, playtime, saves). What removing a shortcut does.
 - **Stale** — a **bound** ROM that no unit of a sync returned, judged only when the sync was not stopped (→ SyncRun); a
-  unit the sync skipped as unchanged counts as returning every ROM it held. Triggers the removal of its shortcut — the
-  row is **unbound** once the panel reports the shortcut gone — only for a ROM outside what the sync syncs — its
-  platform turned off, or RomM still serving it outside every synced collection — and never a delete: a ROM RomM no
-  longer serves keeps its binding until the user switches versions or runs a **Prune**, until the same dump comes back
-  under a new id, which the binding then moves onto, or until its group holds another bound shortcut and converges (→
-  Convergence). Local playtime/saves must survive either way.
+  unit the sync skipped as unchanged counts as returning every ROM it held, except a platform's ROM the user hid in RomM
+  whose game the platform's last fetch holds no version of. Triggers the removal of its shortcut — the row is
+  **unbound** once the panel reports the shortcut gone — only for a ROM outside what the sync syncs — its platform
+  turned off, or RomM still serving it outside every synced collection — or a ROM the user hid in RomM whose game the
+  sync did not sync, and never a delete: a ROM RomM no longer serves keeps its binding until the user switches versions
+  or runs a **Prune**, until the same dump comes back under a new id, which the binding then moves onto, or until its
+  group holds another bound shortcut and converges (→ Convergence). Local playtime/saves must survive either way.
 - **Prune** — an explicit, opt-in purge that `DELETE`s the `roms` row, cascading every per-ROM child away atomically.
   The **only** thing that deletes rows. **Clean Up Removed RomM Games** performs it only after fresh exact-ID 404s,
   explicit options, and any enabled recovery bundle have passed their final guards.
@@ -1346,6 +1347,28 @@ store. _Avoid_: platform, target; _frontend_ (the whole of `frontend/src/` — b
 Steam's own window outside Big Picture: the library window a keyboard and mouse drive, which Steam's popup manager lists
 under a name starting with `SP Desktop`. It is Steam's, not Tender's; what Tender draws into it is the **desktop
 surface** (see **Surface**). _Avoid_: _Desktop Mode_, which on a Steam Deck is the KDE session, not Steam's client.
+
+### Desktop Mode / Gaming Mode
+
+The two kinds of session Steam runs in. **Desktop Mode** is a desktop session — on a Steam Deck the KDE Plasma one — in
+which Steam is an ordinary program. **Gaming Mode**, Valve's word, is the gamescope session, where Steam is the whole
+interface; _Game Mode_ means the same. The words name the session, never Steam's window: Steam's own window outside Big
+Picture is the **desktop client**, and it can be open in either session.
+
+### 64-bit client / 32-bit client
+
+Steam's two builds of its own program: the **64-bit client** runs from `<Steam>/steamrt64/` inside a pressure-vessel
+container, the **32-bit client** from `ubuntu12_32/` on the host. _Avoid_: _SteamRT3 client_ and _new client_ in
+Tender's own text.
+
+### Focus watcher / pin (forced input id)
+
+The **focus watcher** (`services/controller_focus.py`) tells Steam which controller layout to load for a focused window
+Steam cannot attribute itself, because Steam's **64-bit client** cannot attribute a Flatpak's window to its game in
+**Desktop Mode**, and hands the choice back once focus leaves it. A **pin** is what `steam://forceinputappid/<id>`
+leaves: Steam forces the layout of `<id>` onto every window until another id replaces it. A **release** is `0`, which
+hands the choice back to Steam. Detail: [Controller focus in Desktop Mode](docs/architecture/controller-focus.md).
+_Avoid_: _input lock_, _controller override_.
 
 ### Navigation watcher / restoration ledger
 

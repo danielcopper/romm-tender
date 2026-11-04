@@ -752,7 +752,7 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
           )}
         </div>
 
-        <Focusable flow-children="vertical">
+        <Focusable flow-children="column">
           {/* Focusing the first control has to bring the intro above it back into
               view — Steam's focus engine only scrolls far enough to reveal the
               control itself, which strands the text off the top on a controller. */}

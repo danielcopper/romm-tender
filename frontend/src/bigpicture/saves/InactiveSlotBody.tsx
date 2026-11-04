@@ -72,7 +72,7 @@ export const InactiveSlotBody: FC<InactiveSlotBodyProps> = ({
     children.push(
       <Focusable
         key="activate-row"
-        flow-children="right"
+        flow-children="row"
         style={{ marginTop: "10px", display: "flex", gap: "8px", alignItems: "center" }}
       >
         <DialogButton

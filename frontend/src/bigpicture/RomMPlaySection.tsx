@@ -984,7 +984,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       // hideNativePlaySection's rule from hiding it with Steam's own section.
       data-romm="true"
       className={`romm-play-section-row ${basicAppDetailsSectionStylerClasses?.PlaySection || ""}`.trim()}
-      flow-children="right"
+      flow-children="column"
       onButtonDown={(evt: GamepadEvent) => {
         onTrigger(evt);
         onBumper(evt);
@@ -1001,8 +1001,15 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       }}
     >
       {/* The controls on one line; why the game cannot start goes on its own
-          line under them, inside the same band. */}
-      <div data-testid="play-row-controls" style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+          line under them, inside the same band. The controls are a focus group
+          of their own so left and right step through them while the band is a
+          column; the values a group takes: docs/architecture/qam-panel.md,
+          "Focus groups". */}
+      <Focusable
+        data-testid="play-row-controls"
+        flow-children="row"
+        style={{ display: "flex", alignItems: "center", gap: "20px" }}
+      >
         {/* Play button on the left */}
         <CustomPlayButton
           appId={appId}
@@ -1063,7 +1070,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
             </DialogButton>
           </div>
         )}
-      </div>
+      </Focusable>
       {emulatorRefusal === null ? null : warningLine("emulator-refusal", emulatorRefusal)}
       {startNotes.map((note, index) => (
         <Fragment key={`${index}:${note}`}>{warningLine("start-note", note)}</Fragment>

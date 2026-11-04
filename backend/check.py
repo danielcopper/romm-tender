@@ -147,6 +147,8 @@ async def _build_on_copies(directories: AppDirectories, user_home: str, logger: 
         emit=events.emit,
         steam=HostStatus().steam,
         panel_connected=lambda: events.connected,
+        focus_watcher=False,
+        steam_urls=HostStatus().steam_urls,
     )
 
 

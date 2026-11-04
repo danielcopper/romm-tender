@@ -106,15 +106,20 @@ namespace — a namespace change is uncertainty, not a 404.
 
 ### Discovery
 
-Bulk discovery from Data Management's Gone from RomM row sends no request, and reads two kinds of local evidence. The
-first is generation-gated: a platform with no known completed fetch produces no candidates from its stamp, because
-absence from an incomplete fetch is not evidence of removal. The second is the library sync's own mark on a row, below,
-which reaches the rows no stamp can name. Inline removal from the version picker's trash icon needs neither: the picker
-offers the icon only after RomM answered that version with a 404, so the preview counts the version it was opened on as
-gone even where it is still in its platform's last fetch and carries no mark, and the run still takes the same fresh
-exact-id proof. It offers that one row, unless the two kinds of evidence find every other version of its game gone: then
-it offers all of them, so the whole game, as the bulk scan would. Either way each preview row says whether it counts as
-gone (`gone_from_romm`): by that evidence, or as the version the trash icon was opened on.
+Bulk discovery from Data Management's Gone from RomM row reads two kinds of local evidence. The first is
+generation-gated: a platform with no known completed fetch produces no candidates from its stamp, because absence from
+an incomplete fetch is not evidence of removal. The second is the library sync's own mark on a row, below, which reaches
+the rows no stamp can name. Its one request asks RomM for the ROMs the user hid
+([#2502](https://github.com/danielcopper/romm-tender/issues/2502) D5; `RommApiAdapter.read_hidden_rom_ids`): such a ROM
+is absent from every fetch and still on RomM, so the scan leaves it out of what it takes for gone. The set is kept on
+the `PrunePreview`, and the start rebuilds the snapshot over that same set rather than asking again. An answer that
+cannot be read takes nothing for hidden: the scan then offers such a ROM as gone, and the run's exact-id proof, which
+RomM answers with the ROM, leaves it as it is. Inline removal from the version picker's trash icon needs neither: the
+picker offers the icon only after RomM answered that version with a 404, so the preview counts the version it was opened
+on as gone even where it is still in its platform's last fetch and carries no mark, and the run still takes the same
+fresh exact-id proof. It offers that one row, unless the two kinds of evidence find every other version of its game
+gone: then it offers all of them, so the whole game, as the bulk scan would. Either way each preview row says whether it
+counts as gone (`gone_from_romm`): by that evidence, or as the version the trash icon was opened on.
 
 Discovery reads the platform's completion stamp whether or not its skip was revoked. The end-of-run stale removal
 removes the shortcuts of the rows of a platform whose sync is turned off, unbinding each row once the panel reports its
@@ -141,10 +146,12 @@ returned. So the apply's end-of-run stale removal records on a bound row it keep
 ([Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "The stale removal keeps
 a game gone from RomM"): `roms.gone_from_romm` is `not_found` where RomM answered the exact id of a version reached
 through a collection with a proven 404, and `delisted` where the version was kept on a platform RomM no longer lists. A
-preview asks the same questions and writes none of the answers. Discovery adds every marked row to the candidates the
-stamps give (`domain/fetch_generation.py::gone_from_romm_ids`), and the Library page's `reachable_count` leaves out the
-same rows. The mark is discovery only, never deletion authority: the run proves every exact id again, with its liveness
-tiers, before anything is removed.
+row it removes because the user hid it in RomM has its mark cleared, since RomM still serves it. A preview asks the same
+questions and writes none of the answers. Discovery adds every marked row to the candidates the stamps give
+(`domain/fetch_generation.py::gone_from_romm_ids`), and the Library page's `reachable_count` leaves out the same rows,
+and also, from the first apply of its platform after the hide, a version the user hid, which the scan subtracts. The
+mark is discovery only, never deletion authority: the run proves every exact id again, with its liveness tiers, before
+anything is removed.
 
 **The cleanup's own run marks too.** It probes every version of each group it plans, candidates or not, so it can prove
 a version gone that no stamp and no sync named — an unbound sibling on a platform with no stamp, say, or the version the

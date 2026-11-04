@@ -23,6 +23,7 @@ from services.achievements import AchievementsService, AchievementsServiceConfig
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
 from services.artwork import ArtworkService, ArtworkServiceConfig
 from services.connection import ConnectionService, ConnectionServiceConfig
+from services.controller_focus import ControllerFocusSeams, ControllerFocusService, ControllerFocusServiceConfig
 from services.cores import CoreService, CoreServiceConfig
 from services.data_inventory import DataInventoryService, DataInventoryServiceConfig
 from services.disc import DiscService, DiscServiceConfig
@@ -114,7 +115,10 @@ class WiringConfig:
     installed program — handed to ``bootstrap()`` too. ``installer_environment``
     is the third: the variables an installer started from the panel runs with,
     resolved by the entry point from this process's environment and
-    directories.
+    directories. ``focus_watcher`` is the focus watcher's seams where the
+    entry point switched it on, the host's way of handing Steam a URL among
+    them; ``None`` — and left out — it is off: a build with no host attached to
+    Steam, as the pre-install check's, has nothing to send through.
     """
 
     adapters: AdapterBundle
@@ -126,6 +130,7 @@ class WiringConfig:
     launcher: ShortcutLauncher
     update_source: UpdateSource
     installer_environment: tuple[tuple[str, str], ...]
+    focus_watcher: ControllerFocusSeams | None = None
 
 
 @dataclass(frozen=True)
@@ -170,6 +175,7 @@ class ServicesBundle:
     game_process_service: GameProcessService
     relaunch_options_resolver: RelaunchOptionsResolver
     leftover_tmp_cleanup_service: LeftoverTmpCleanupService
+    controller_focus_service: ControllerFocusService
 
 
 def wire_services(cfg: WiringConfig) -> ServicesBundle:
@@ -939,6 +945,16 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         ),
     )
 
+    controller_focus_service = ControllerFocusService(
+        config=ControllerFocusServiceConfig(
+            seams=cfg.focus_watcher,
+            loop=cfg.runtime.loop,
+            sleeper=cfg.runtime.sleeper,
+            logger=cfg.runtime.logger,
+            log_debug=cfg.callbacks.log_debug,
+        ),
+    )
+
     return ServicesBundle(
         prune_conflicts=prune_conflicts,
         save_sync_service=save_sync_service,
@@ -978,4 +994,5 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         game_process_service=game_process_service,
         relaunch_options_resolver=relaunch_options_resolver,
         leftover_tmp_cleanup_service=leftover_tmp_cleanup_service,
+        controller_focus_service=controller_focus_service,
     )
