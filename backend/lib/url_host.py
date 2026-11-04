@@ -120,6 +120,9 @@ def with_https_added(url: str) -> str | None:
     return None if _LEADING_SCHEME.match(url) else f"https://{url}"
 
 
+INVALID_SERVER_URL_MESSAGE = "Enter a valid http(s):// server URL"
+
+
 # urllib takes no credentials from an address, so none reaches RomM. With a
 # password and no port, ``http.client`` reads the password as a non-numeric port
 # and raises ``InvalidURL``; with a port, or a user name alone, it looks the whole
