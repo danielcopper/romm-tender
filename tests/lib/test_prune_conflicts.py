@@ -315,7 +315,7 @@ async def test_refusal_message_names_a_labelled_holder_in_plain_language() -> No
 
     result = await endpoints.start_prune()
 
-    assert "checking a game's launch settings" in result["message"]
+    assert "preparing a game's start" in result["message"]
     assert "wait for it to finish" in result["message"]
 
 

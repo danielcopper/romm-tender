@@ -425,7 +425,7 @@ async def test_a_held_operation_refuses_the_start_naming_its_holder():
     assert _said(refusal) == (
         "operation_active",
         (
-            "Another local-data operation is in progress (checking a game's launch settings); wait for it to "
+            "Another local-data operation is in progress (preparing a game's start); wait for it to "
             "finish before starting cleanup."
         ),
         {},

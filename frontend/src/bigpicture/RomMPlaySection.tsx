@@ -32,7 +32,7 @@ import { DiscSelector } from "./DiscSelector";
 import { VersionPicker } from "./VersionPicker";
 import { VanishedVersionBanner } from "./VanishedVersionBanner";
 import { Muted, SELECTION_ACCENT } from "./layout/pane";
-import { activeEmulatorNote } from "../utils/emulatorInstallation";
+import { activeEmulatorNote, isNotEstablished } from "../utils/emulatorInstallation";
 import { useTriggerHandler } from "./emulatorStepping";
 import { useBumperHandler, usePlayRowRef } from "./tabStepping";
 import { applyAutomaticArtwork, applyTabSlotImage, cancelArtworkApply } from "../utils/artwork";
@@ -1090,7 +1090,13 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   // and React would unmount the whole row — the play button drops back to
   // "loading" and re-runs its init (#1682). A Fragment adds no DOM node, so the
   // row stays a direct child of the injected panel either way.
-  const emulatorNote = activeEmulatorNote(detail.emulators, detail.activeCoreLabel);
+  // A refused start that already says the installation could not be
+  // established is the same sentence; it is said once, as the refusal.
+  const refusedForInstallation =
+    emulatorRefusal !== null &&
+    detail.emulatorStart?.state === "cannot_start" &&
+    isNotEstablished(detail.emulatorStart.reason);
+  const emulatorNote = refusedForInstallation ? null : activeEmulatorNote(detail.emulators, detail.activeCoreLabel);
   // The pick that no longer exists and the user's own choice in ES-DE — each
   // said once, under the row.
   const emulatorLines =

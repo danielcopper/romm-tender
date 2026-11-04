@@ -36,12 +36,16 @@ export function notEstablishedNote(reason: string | null): string | null {
   return cause === null ? "installation not established" : `installation not established: ${cause}`;
 }
 
+/** The one sentence for an emulator whose installation could not be established, with its cause where known. */
+export function installationSentence(label: string, reason: string | null): string {
+  const cause = notEstablishedCause(reason);
+  return `Whether ${label} is installed could not be established${cause === null ? "" : `: ${cause}`}.`;
+}
+
 /** The sentence a page shows under the emulator its games launch with, where that emulator's installation could not
  *  be established; `null` otherwise. */
 export function activeEmulatorNote(emulators: readonly EmulatorOption[], activeLabel: string | null): string | null {
   const entry = entryForLabel(emulators, activeLabel);
   if (entry === undefined || !isNotEstablished(entry.reason)) return null;
-  const cause = notEstablishedCause(entry.reason);
-  const why = cause === null ? "" : `: ${cause}`;
-  return `Whether ${entry.label} is installed could not be established${why}.`;
+  return installationSentence(entry.label, entry.reason);
 }

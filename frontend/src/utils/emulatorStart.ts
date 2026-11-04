@@ -18,7 +18,7 @@ import type {
   StartRemark,
   VanishedPick,
 } from "../types";
-import { isNotEstablished, notEstablishedCause } from "./emulatorInstallation";
+import { installationSentence, isNotEstablished, notEstablishedCause } from "./emulatorInstallation";
 import { launchRefusal } from "./gameLaunch";
 import { cannotStartSentence, sourceName } from "./emulatorSourceWording";
 import { LOCAL_CALL_LIMIT_MS } from "./launchGate";
@@ -85,12 +85,6 @@ function isEntryStartReason(reason: string | null): boolean {
   return isCommandReason(reason) || isNotEstablished(reason);
 }
 
-/** Why the entry's installation could not be established, as the sentence a page says under that emulator. */
-function installationRefusalSentence(reason: string, entry: string): string {
-  const cause = notEstablishedCause(reason);
-  return `Whether ${entry} is installed could not be established${cause === null ? "" : `: ${cause}`}.`;
-}
-
 /**
  * What the emulator menu says under an entry about the resolver's command for the game, or `null`, and whether
  * Tender can start the game with it: a refusal for the answering source names that source (#2221 D21), one for the
@@ -144,7 +138,7 @@ export function emulatorStartRefusal(start: EmulatorStart, subject: string, canP
         return cannotStartSentence(start.source ?? "");
       default:
         if (start.reason !== null && isNotEstablished(start.reason)) {
-          return `${installationRefusalSentence(start.reason, entry)}${pointer}`;
+          return `${installationSentence(entry, start.reason)}${pointer}`;
         }
         if (start.reason !== null && isCommandReason(start.reason)) {
           return `${commandRefusalSentence(start.reason, entry)}${pointer}`;

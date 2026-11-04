@@ -34,6 +34,7 @@ import type {
   AnsweringSource,
   DownloadCompleteEvent,
   EmulatorDataReason,
+  EmulatorStart,
   GameLaunch,
   SaveStatus,
   SyncProgress,
@@ -5066,7 +5067,7 @@ describe("RomMPlaySection", () => {
       });
     }
 
-    async function mountWith(reason: string | null) {
+    async function mountWith(reason: string | null, emulatorStart: EmulatorStart | null = null) {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 60,
@@ -5085,13 +5086,25 @@ describe("RomMPlaySection", () => {
         emulators: core.emulators,
         platformCoreLabel: null,
         hasGameOverride: true,
-        emulatorStart: null,
+        emulatorStart,
         vanishedPick: null,
       });
       const view = render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
       return view;
     }
+
+    it("says it once where the start is refused for the same reason", async () => {
+      const { container } = await mountWith("path_unseen", {
+        state: "cannot_start",
+        reason: "path_unseen",
+        entry: "Paprium",
+      });
+      const sentence =
+        "Whether Paprium is installed could not be established: ES-DE looks for it where Tender cannot see.";
+      expect(container.textContent).toContain(sentence);
+      expect(container.textContent!.split(sentence).length - 1).toBe(1);
+    });
 
     it("says so under the play row, with the cause, when the game launches with it", async () => {
       const { container } = await mountWith("path_unseen");

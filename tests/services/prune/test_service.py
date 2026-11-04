@@ -953,7 +953,7 @@ async def test_a_held_lease_refuses_the_start_before_it_consumes_the_preview(har
         await _start(harness, preview["preview_id"])
 
     assert refused.value.reason == "operation_active"
-    assert "checking a game's launch settings" in refused.value.message
+    assert "preparing a game's start" in refused.value.message
     assert harness.conflicts.cleanup_running is False
     await harness.conflicts.release_lease(token)
     assert (await _start(harness, preview["preview_id"]))["success"] is True

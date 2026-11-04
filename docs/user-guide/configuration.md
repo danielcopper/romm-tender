@@ -318,9 +318,9 @@ while the source is switched on, an empty grey ring and a grey name while it is 
 - where it could not, **_Source_'s emulator list is not established.**, with a warning sign, unless a line already says
   why — a problem with ES-DE's systems file, a source not set up yet, or one of the two lines below;
 - **EmuDeck's emulator list cannot be read yet.**, with a warning sign, for EmuDeck, whose list Tender cannot read yet;
-- **Tender cannot start games through _source_ yet.**, with an information sign, for every source but RetroDECK — every
-  game still starts through RetroDECK. A RetroArch without a frontend has no emulator list at all, so for it this line
-  stands in place of the "not established" one;
+- **Tender cannot start games through _source_ yet.**, with an information sign, for every source but RetroDECK — Tender
+  starts games through RetroDECK only, and a game such a source answers for does not start. A RetroArch without a
+  frontend has no emulator list at all, so for it this line stands in place of the "not established" one;
 - **Use this source**, under a thin line at the bottom of the card: a source switched off offers no emulators and is
   never asked about a game. It stays listed, so you can switch it on again.
 
