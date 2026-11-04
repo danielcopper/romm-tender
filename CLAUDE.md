@@ -1035,13 +1035,17 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   through a window cast, or through a cast of something not typed as a window; a Steam global declared anywhere but
   `steam.d.ts`, `@decky/ui`'s `dist/globals/` and `webpack.d.ts`; a member `steam.d.ts` declares in another form than a
   property or method signature; a second unreadable cast or a second route literal in a file an untyped entry already
-  names; a route built from pieces that spell none of those three whole, or handed to anything but `Navigate` as a
-  literal; and the route each site reaches a member by, since a member is named after its type's shortest route. Unseen
-  on the backend's: a Steam global the sweep's spellings do not name, a name built at run time, a string inside a call
-  to a method named like a logging one whatever its receiver, a global a listed expression reads with no member after
-  it, a read compared by its name rather than its path, and a constant that spells each part of an entry but not its
-  path. Prompt-only: a reach no type describes is listed with its files; a `NOT_STEAM_INTERNALS` prefix names nothing of
-  Steam's; whether an entry's `feature` is the feature that needs it; and what an internal does stays a device test
+  names; a route that spells none of those three whole and is not a string literal handed as the first argument to a
+  method named `Navigate` — one built from pieces, held in a variable, handed to `Navigate` called bare or by element
+  access, or handed to anything else; an untyped entry whose every part its file spells but not its path, since the
+  parts are matched one by one; and the route each site reaches a member by, since a member is named after its type's
+  first route. Unseen on the backend's: a Steam global the sweep's spellings do not name, a name built at run time, a
+  string inside a call to a method named like a logging one whatever its receiver, a global a listed expression reads
+  with no member after it, a read compared by its name rather than its path, a read the check's two patterns (`.name`, a
+  double-quoted `["…"]`) miss — a single-quoted, computed or escaped key — and a constant that spells each part of an
+  entry but not its path. Prompt-only: a reach no type describes is listed with its files; a `NOT_STEAM_INTERNALS`
+  prefix names nothing of Steam's; whether an entry's `feature` is the feature that needs it; and what an internal does
+  stays a device test
 - **Whether every search answered and whether the panel may MOUNT are two questions, and a miss that costs less than the
   panel never takes the interface off the air** — check + test + prompt-only — the type (`SteamLookup.absenceCost` is
   required), `frontend/src/index.test.tsx`, and `frontend/src/boot/steamModules.test.ts`, which requires a non-blocking

@@ -8,9 +8,6 @@ Steam's interface sends from. The panel's half is
 spelled and what belongs on neither half is
 ``docs/architecture/frontend-bundles.md``, "Every Steam internal Tender
 reaches".
-
-``tests/domain/test_steam_internals.py`` holds every entry to the constants it
-names, and every string under ``backend/`` that names Steam to an entry.
 """
 
 from __future__ import annotations

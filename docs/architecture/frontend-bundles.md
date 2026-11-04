@@ -328,14 +328,14 @@ Decky's copy carries a name whose value this check never reads.
 
 ## Every Steam internal Tender reaches
 
-The start-up check asks after the searches into Steam's module registry. A **Steam internal** is a name of Steam's
-client Tender reaches as a global or through one — `SteamClient`'s calls, the stores and their members (those behind a
-cast of the window included), the overview objects' fields — or spells as an address: routes of Steam's router and
-`steam://` URLs, the `SharedJSContext` target title and the `steamloopback.host` origin. Valve promises none of them,
-and a Steam update that drops one breaks the feature built on it without a word. They are named in one list, each with
-the feature that needs it, in two halves: the panel's in `frontend/src/boot/steamInternals.ts`, what the backend spells
-in Steam in `backend/domain/steam_internals.py`. Nothing reads the list while the panel runs; only the two tests below
-read it.
+The start-up check asks after the searches into Steam's module registry, all but the two named below. A **Steam
+internal** is a name of Steam's client Tender reaches as a global or through one — `SteamClient`'s calls, the stores and
+their members (those behind a cast of the window included), the overview objects' fields — or spells as an address:
+routes of Steam's router and `steam://` URLs, the `SharedJSContext` target title and the `steamloopback.host` origin.
+Valve promises none of them, and a Steam update that drops one breaks the feature built on it without a word. They are
+named in one list, each with the feature that needs it, in two halves: the panel's in
+`frontend/src/boot/steamInternals.ts`, what the backend spells in Steam in `backend/domain/steam_internals.py`. Nothing
+reads the list while the panel runs; only the two tests below read it.
 
 Three things are not on it, because each has a home of its own:
 
@@ -352,13 +352,14 @@ Three things are not on it, because each has a home of its own:
 named after where the value comes from: `.name` is a property, `()` the value a call answers (a promise unwrapped), `[]`
 an element of an array, an iterable or a set, and `(param)` the value at a call's parameter, the argument Steam hands a
 callback included — `appStore.GetAppOverviewByAppID().display_name`,
-`SteamClient.Apps.RegisterForAppDetails(callback)(details).strShortcutExe`. The panel's paths are derived from the type
-graph rather than written by hand: from Steam's roots — `steam.d.ts`'s globals, the properties of a window cast's
+`SteamClient.Apps.RegisterForAppDetails(callback)(details).strShortcutExe`. The panel's typed paths are derived from the
+type graph rather than written by hand: from Steam's roots — `steam.d.ts`'s globals, the properties of a window cast's
 target, the window properties `@decky/ui` declares that `steam.d.ts` does not — each type is named after the first route
-that reaches it, the shortest, ties broken by root order. So a path names the TYPE's route, not every site's: a value
-several routes hand out appears once, under the shortest. `unregister` is
-`SteamClient.Apps.RegisterForAppDetails().unregister`, although `bigpicture/StrandedPanelCard.tsx` reaches it through
-`RegisterForAppLifetimeNotifications()`.
+that reaches it: the shortest; among routes of one length, the one from the earlier root; from one root, the one through
+the member declared first. So a path names the TYPE's route, not every site's: a value several routes hand out appears
+once, under that first route. `unregister` is `SteamClient.Apps.RegisterForAppDetails().unregister`, although
+`bigpicture/StrandedPanelCard.tsx` reaches it through `SteamClient.GameSessions.RegisterForAppLifetimeNotifications()`,
+a route of the same length through a member `steam.d.ts` declares later.
 
 **The panel's half is held to what the type checker resolves**, by `frontend/src/boot/steamInternals.test.ts` over
 `frontend/src/test-utils/steamReach.ts`, in both directions. The scan builds one program over the shipped code and
@@ -382,9 +383,12 @@ what the code uses.
 
 **`steam.d.ts`'s declarations are the ones in effect, and no error says so.** `@decky/ui` declares four of the same
 globals (`SteamClient`, `appStore`, `collectionStore`, `SteamUIStore`) with types of its own, the two conflict, and
-`skipLibCheck` (`frontend/tsconfig.json`) hides the conflict; the program takes the local one. The scan pins that order
-without being asked to: were Decky's to win, every reach would resolve into Decky's types, the members `steam.d.ts`
-declares would go unreached, and the test that requires each of them to be reached would fail.
+`skipLibCheck` (`frontend/tsconfig.json`) hides the conflict; the program takes the local one, wherever `@decky/ui`
+comes in the program, because a script file's globals are merged before any `declare global` block. Decky's would win
+once `steam.d.ts` stopped being a script — an `import` or `export` in it makes its globals local to it. The scan pins
+that without being asked to: the code's reaches would then resolve into Decky's types, and three of its tests would fail
+— a reach the list does not name, a listed entry nothing reaches, and a member `steam.d.ts` declares that nothing
+reaches.
 
 **A reach no type describes is listed by hand**, with `untypedIn` naming the files that make it: the readiness reads
 `utils/steamReadyForToasts.ts` makes by string key and through `unknown`, `utils/runningApps.ts`'s coercion of the

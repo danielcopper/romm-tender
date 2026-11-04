@@ -1427,19 +1427,23 @@ Format: **invariant** — tier — enforced by.
   `steam.d.ts`'s globals, in `@decky/ui`'s `dist/globals/` or `webpack.d.ts` — which declare Steam's other globals
   (`webpackChunksteamui`, `App`, …) with types of their own, so a reach typed by them compiles without `steam.d.ts`
   naming it — or in a shape the code casts the window to, followed within that cast's file. Its path is derived rather
-  than written: Steam's own spelling, rooted at the global, along the shortest route from Steam's roots to the member's
-  type, so the two checks the list is for can look each one up as Steam spells it. Both directions are required, and
-  `steam.d.ts` is held the same way, so a declaration nothing reaches fails as surely as a reach nothing lists. The
-  order of the two declarations of Steam's globals is pinned with it: `steam.d.ts` is the one in effect, which no
-  compiler error shows, because `skipLibCheck` hides the conflict; were Decky's to win, the members `steam.d.ts`
-  declares would go unreached and fail. A reach no type describes — a string key, a `Record`, an `unknown`, a route — is
-  listed by hand with the files that make it, and held only to its words appearing in code there; a window cast the scan
-  cannot read, and a route literal, must sit in such a file, so one in a file no entry names is reported. The backend's
-  half, `backend/domain/steam_internals.py`, is held by `tests/domain/test_steam_internals.py` over the syntax tree:
-  every string naming Steam is held in a module-level constant the list names, each such constant spells its entries,
-  and each property it reads is an entry's, or JavaScript's own as the test names them (`_JAVASCRIPTS_OWN`). What
-  neither side sees is listed in the register entry, and none of it is a check of what an internal DOES — Steam keeping
-  a name while changing what it answers stays a device test
+  than written: Steam's own spelling, rooted at the global, along the first route from Steam's roots to the member's
+  type — the shortest, ties broken as the docs page states — so the two checks the list is for can look each one up as
+  Steam spells it. Both directions are required, and `steam.d.ts` is held the same way, so a declaration nothing reaches
+  fails as surely as a reach nothing lists. The order of the two declarations of Steam's globals is pinned with it:
+  `steam.d.ts` is the one in effect, which no compiler error shows, because `skipLibCheck` hides the conflict; were
+  Decky's to win, which takes `steam.d.ts` ceasing to be a script, the list's typed entries and the members `steam.d.ts`
+  declares would go unreached, and a reach the list does not name would appear. A reach no type describes — a string
+  key, a `Record`, an `unknown`, a route — is listed by hand with the files that make it, and held only to its words
+  appearing in code there; a window cast the scan cannot read, and a route literal, must sit in such a file, so one in a
+  file no entry names is reported. The backend's half, `backend/domain/steam_internals.py`, is held by
+  `tests/domain/test_steam_internals.py` over the syntax tree: every string naming Steam is held in a module-level
+  constant the list names, each such constant spells its entries, and each property it reads is an entry's, or
+  JavaScript's own as the test names them (`_JAVASCRIPTS_OWN`). What neither side sees is listed in the register entry —
+  among it a route literal that is neither spelled whole nor handed as a string literal to a method named `Navigate`, an
+  untyped entry spelled part by part but not as its path, and a backend read the read check's two patterns (`.name`, a
+  double-quoted `["…"]`) do not match — and none of it is a check of what an internal DOES — Steam keeping a name while
+  changing what it answers stays a device test
 - **Whether every search answered and whether the panel may MOUNT are two questions, and a miss that costs less than the
   panel never takes the interface off the air** — check + test + prompt-only — the type carries the first half:
   `SteamLookup.absenceCost` is required, so a new entry does not compile until it states which of the four its absence
