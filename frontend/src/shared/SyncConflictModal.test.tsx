@@ -290,7 +290,7 @@ describe("SyncConflictModal", () => {
 
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith({
         title: "Tender",
-        body: "Conflict resolved — kept your local save (uploaded to server).",
+        body: "Conflict resolved — kept your local save.",
       });
     });
 

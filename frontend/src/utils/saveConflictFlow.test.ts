@@ -96,7 +96,7 @@ describe("resolveOneConflict", () => {
     const outcome = await resolveOneConflict(conflict, "keep_local");
 
     expect(vi.mocked(backend.resolveSyncConflict)).toHaveBeenCalledWith(42, "savefile.srm", 9, "keep_local", false);
-    expect(outcome).toEqual({ ok: true, toast: "Conflict resolved — kept your local save (uploaded to server)." });
+    expect(outcome).toEqual({ ok: true, toast: "Conflict resolved — kept your local save." });
   });
 
   it("confirms using the server save, and that the local one was backed up", async () => {

@@ -55,7 +55,7 @@ describe("DesktopSaveConflictDialog", () => {
 
     await waitFor(() => expect(onDone).toHaveBeenCalledWith("keep_local"));
     expect(resolveSyncConflict).toHaveBeenCalledWith(42, "Game.srm", 9, "keep_local", false);
-    expect(showToast).toHaveBeenCalledWith("Conflict resolved — kept your local save (uploaded to server).");
+    expect(showToast).toHaveBeenCalledWith("Conflict resolved — kept your local save.");
   });
 
   it("resolves a conflict the launch check found as one before the start", async () => {

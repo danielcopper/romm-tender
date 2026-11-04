@@ -1332,8 +1332,8 @@ row side by side, each with size and timestamp. Three actions:
   conflict.
 
 On a successful resolution the modal closes and surfaces a branch-specific confirmation toast — **Keep Local** confirms
-the local save was uploaded to the server, **Use Server** confirms the server save is now in use and the prior local
-save was backed up to `.romm-backup`. Failure and stale branches stay inline in the modal instead (no toast).
+the local save was kept, **Use Server** confirms the server save is now in use and the prior local save was backed up to
+`.romm-backup`. Failure and stale branches stay inline in the modal instead (no toast).
 
 The dialog draws and asks; what it says and what a resolution does live in `frontend/src/utils/saveConflictFlow.ts`, for
 any surface that shows a conflict:
