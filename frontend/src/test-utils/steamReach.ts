@@ -9,7 +9,7 @@
  * - `types/steam.d.ts`'s global declarations (its `declare module` blocks are
  *   React's, not Steam's);
  * - `@decky/ui`'s `dist/globals/` and the `Window` augmentation in its
- *   `dist/webpack.d.ts`, which declare a further twenty of Steam's globals with
+ *   `dist/webpack.d.ts`, which declare fifteen more of Steam's globals with
  *   types of their own — so a reach typed by them compiles without
  *   `steam.d.ts` naming it;
  * - a type declared in shipped source and reached from a cast of a window

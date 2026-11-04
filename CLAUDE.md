@@ -1013,6 +1013,27 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   global, never what Steam has mounted or focused. Unchecked: whether any other classification is true — a real search
   is never parked in `UNVERIFIABLE` to quieten the check — and a runtime-state reader reached through an arrow export, a
   re-export, another module's helper or a nested function can sit in `STEAM_LOOKUPS` unflagged
+- **Every Steam internal the code reaches is named in one list with the feature that needs it — the panel's in
+  `frontend/src/boot/steamInternals.ts`, what the backend spells in Steam in `backend/domain/steam_internals.py` — and
+  `frontend/src/types/steam.d.ts` declares nothing the code does not reach** — test + prompt-only —
+  `frontend/src/boot/steamInternals.test.ts`, which holds the panel's list EQUAL to what
+  `frontend/src/test-utils/steamReach.ts` reaches through the type checker over the shipped code (members of
+  `steam.d.ts`'s globals, of `@decky/ui`'s `dist/globals/` and `webpack.d.ts`, and of the shapes a cast of the window
+  names in its own file), less `NOT_STEAM_INTERNALS` and the globals `STEAM_LOOKUPS` reads off the window; requires
+  every `steam.d.ts` member to be reached, every window cast it cannot read and every `steamloopback.host` or `steam://`
+  literal to sit in a file an untyped entry names, and every part of an untyped entry's path to be spelled in code in
+  each file it names; and `tests/domain/test_steam_internals.py`, which holds every string under `backend/` naming Steam
+  (outside docstrings and logging calls) to a constant the backend's list names, every such constant to spell its
+  entries, and every property it reads to be an entry's or one of its own JavaScript names. Unseen on the panel's side:
+  a read beneath a value typed `unknown`, `any` or `Record` (the coercions in `utils/runningApps.ts` and
+  `utils/steamReadyForToasts.ts`, the values of `deckDesktopApps.apps`, `webpackChunksteamui.push`'s factories), so a
+  new member read under an untyped entry's head; an element access whose key is no string literal; a Steam shape
+  declared in another file than the window cast that reaches it; a Steam object reached neither through a declared
+  global nor through a window cast, or through a cast of something not typed as a window; and a route or URL built from
+  pieces that spell neither `steamloopback.host` nor `steam://` whole. Unseen on the backend's: a Steam global the
+  sweep's spellings do not name, a name built at run time, a string inside a logging call, and a global a listed
+  expression reads with no member after it. Prompt-only: a reach no type describes is listed with its files; a
+  `NOT_STEAM_INTERNALS` prefix names nothing of Steam's; and what an internal does stays a device test
 - **Whether every search answered and whether the panel may MOUNT are two questions, and a miss that costs less than the
   panel never takes the interface off the air** — check + test + prompt-only — the type (`SteamLookup.absenceCost` is
   required), `frontend/src/index.test.tsx`, and `frontend/src/boot/steamModules.test.ts`, which requires a non-blocking
