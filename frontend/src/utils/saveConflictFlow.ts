@@ -100,7 +100,7 @@ export async function resolveOneConflict(
       ok: true,
       toast:
         action === "keep_local"
-          ? "Conflict resolved — kept your local save (uploaded to server)."
+          ? "Conflict resolved — kept your local save."
           : "Conflict resolved — used the server save · your local was backed up.",
     };
   } catch (e) {
