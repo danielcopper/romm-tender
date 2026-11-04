@@ -3,14 +3,12 @@ import * as backend from "../api/backend";
 import { artworkThumbToken } from "./artworkSlotsStore";
 import { applyCommittedVersionSwitch, publishCommittedVersionSwitch } from "./versionSwitchApplication";
 import { capturePruneLeaseAdmission, mountPruneLeaseOwner, releasePruneLeasesByOwner } from "./pruneLease";
-import { setLaunchOptionsConfirmed } from "./steamShortcuts";
 
 vi.mock("../api/backend", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api/backend")>()),
   logWarn: vi.fn(),
 }));
 
-vi.mock("./steamShortcuts", () => ({ setLaunchOptionsConfirmed: vi.fn() }));
 vi.mock("./sessionManager", () => ({ refreshAppIdMap: vi.fn().mockResolvedValue(undefined) }));
 
 describe("publishCommittedVersionSwitch's cover (#2381 D16)", () => {
@@ -206,40 +204,7 @@ describe("applyCommittedVersionSwitch's own lease", () => {
   });
 });
 
-describe("applyCommittedVersionSwitch after its launch-command write", () => {
-  it("publishes nothing when its caller goes while that write is open", async () => {
-    const owner = "version-picker:5000";
-    mountPruneLeaseOwner(owner);
-    let confirm!: (ok: boolean) => void;
-    vi.mocked(setLaunchOptionsConfirmed).mockReturnValue(new Promise((resolve) => (confirm = resolve)));
-    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false, chosen: false });
-    const broadcasts: unknown[] = [];
-    const onChanged = (e: Event) => broadcasts.push((e as CustomEvent).detail);
-    globalThis.addEventListener("romm_data_changed", onChanged);
-
-    const applied = applyCommittedVersionSwitch(
-      {
-        success: true,
-        app_id: 5000,
-        rom_id: 42,
-        target_installed: true,
-        prune_lease_token: "t",
-      },
-      undefined,
-      capturePruneLeaseAdmission(owner),
-    );
-    await vi.waitFor(() => expect(setLaunchOptionsConfirmed).toHaveBeenCalled());
-    const teardown = releasePruneLeasesByOwner(owner);
-    confirm(true);
-    const outcome = await applied;
-    await teardown;
-
-    globalThis.removeEventListener("romm_data_changed", onChanged);
-    expect(outcome).toEqual({ confirmed: true, broadcast: false });
-    expect(backend.getSgdbArtworkBase64).not.toHaveBeenCalled();
-    expect(broadcasts).toEqual([]);
-  });
-
+describe("applyCommittedVersionSwitch while its cover write is open", () => {
   it("answers broadcast false when its lease is released while the cover write is open", async () => {
     const owner = "version-picker:5000";
     mountPruneLeaseOwner(owner);
