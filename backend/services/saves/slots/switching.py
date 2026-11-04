@@ -179,8 +179,11 @@ class SlotSwitcher:
         with the new slot: every local file the new slot does not provide is
         backed up into ``.romm-backup`` (never destroyed) and untracked, the
         newest server save per canonical target is downloaded, and nothing is
-        uploaded — saves are not carried between slots. A partial
-        download failure still persists the flipped slot and answers a
+        uploaded — saves are not carried between slots. The flipped slot is
+        written before the first download, and the state again after each
+        download that succeeds, so a switch that stops partway leaves the new
+        slot active in the database and nothing for the next sync to upload
+        into the old one. A partial download failure answers a
         :class:`SlotSwitchIncomplete` so the caller can retry.
 
         The slot changes only once every one of those backups went through. A
@@ -280,13 +283,16 @@ class SlotSwitcher:
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return stopped
 
-            # 8. Flip the active slot and download the new slot's saves.
+            # 8. Flip the active slot and write it before the first download, so a
+            #    switch that stops from here on leaves the next sync facing the
+            #    new slot rather than uploading its files into the old one.
             save_state.switch_active_slot(resolved_slot)
+            await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
             switch_errors = await self._loop.run_in_executor(
-                None, self._download_targets, saves_dir, system, save_state, device_id, targets, default_slot
+                None, self._download_targets, rom_id, saves_dir, system, save_state, device_id, targets, default_slot
             )
 
-            # 9. Persist the coherent state regardless of partial download failures.
+            # 9. Record the evaluation, whatever the downloads answered.
             save_state.mark_sync_evaluated(self._clock.now().isoformat())
             await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
 
@@ -384,6 +390,7 @@ class SlotSwitcher:
 
     def _download_targets(
         self,
+        rom_id: int,
         saves_dir: str,
         system: str,
         save_state: RomSaveSyncState,
@@ -393,9 +400,12 @@ class SlotSwitcher:
     ) -> list[str]:
         """Download the newest server save per target of the new slot.
 
-        Mutates *save_state* in memory; the caller owns the write Unit of Work.
-        Runs synchronously — call via ``run_in_executor``. Returns the filenames
-        whose download failed (empty when all succeeded).
+        Writes *save_state* after each download that succeeds, so every file
+        placed is recorded with its new baseline before the next download
+        starts; a failed download writes nothing new for its file, and a
+        failed write raises. Runs synchronously — call via
+        ``run_in_executor``. Returns the filenames whose download failed
+        (empty when all succeeded).
         """
         errors: list[str] = []
         for target_name, server_save in targets.items():
@@ -410,4 +420,6 @@ class SlotSwitcher:
             except Exception as e:
                 self._log_debug(f"switch_slot: failed to download {target_name}: {e}")
                 errors.append(target_name)
+            else:
+                write_save_state(self._uow_factory, rom_id, save_state)
         return errors

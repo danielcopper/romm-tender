@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+import sqlite3
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -2589,6 +2590,199 @@ class TestASwitchMarksThisDeviceOnlyOnceItPlaced:
         assert not any(c[0] in ("download_save_content", "upload_save") for c in fake.call_log)
         assert [c[1] for c in fake.call_log if c[0] == "confirm_download"] == [(200, "device-1")]
         assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == 200
+
+
+class _TheBackendStopped(BaseException):
+    """The backend going away mid-switch: no ``except Exception`` on the way out catches it, and nothing after runs."""
+
+
+class TestASwitchThatStopsLeavesTheNewSlotRecorded:
+    """A switch records the new slot before its first download, and each file it placed right after placing it.
+
+    However it stops, the next sync faces the new slot alone and uploads nothing into the old one.
+    """
+
+    def _seed_two_slots(self, svc, fake, tmp_path):
+        """Two saves synced to ``default``, RomM holding both slots' heads: this device is current on ``default``'s."""
+        _enable_sync_with_device(svc)
+        srm, rtc = _seed_two_synced_saves(svc, tmp_path)
+        heads = (
+            (100, "default", "pokemon.srm", b"srm bytes", "device-1"),
+            (101, "default", "pokemon.rtc", b"rtc bytes", "device-1"),
+            (200, "desktop", "pokemon.srm", b"desktop srm", "device-B"),
+            (201, "desktop", "pokemon.rtc", b"desktop rtc", "device-B"),
+        )
+        for save_id, slot, filename, content, device in heads:
+            fake.seed_foreign_save(
+                42, save_id=save_id, uploaded_by=device, slot=slot, filename=filename, content=content
+            )
+            fake.saves[save_id]["file_extension"] = filename.rsplit(".", 1)[1]
+            fake.saves[save_id]["content_hash"] = hashlib.md5(content).hexdigest()
+        return srm, rtc
+
+    @staticmethod
+    def _fail_the_write_marking_the_evaluation(svc, monkeypatch) -> None:
+        """Make the switch's last state write fail: the one that records the evaluation, which only it carries."""
+        repo = _uow(svc).rom_save_sync_states
+        original = repo.save
+
+        def save(rom_id: int, state: RomSaveSyncState) -> None:
+            if state.last_sync_check_at is not None:
+                raise sqlite3.OperationalError("database is locked")
+            original(rom_id, state)
+
+        monkeypatch.setattr(repo, "save", save)
+
+    @staticmethod
+    def _uploads(fake) -> list[tuple[Any, ...]]:
+        return [c for c in fake.call_log if c[0] == "upload_save"]
+
+    @staticmethod
+    def _downloaded_ids(fake) -> list[int]:
+        return [c[1][0] for c in fake.call_log if c[0] == "download_save_content"]
+
+    @pytest.mark.asyncio
+    async def test_a_switch_whose_last_write_fails_leaves_the_new_slot_active_and_the_next_sync_uploads_nothing(
+        self, tmp_path, monkeypatch
+    ):
+        svc, fake = make_service(tmp_path)
+        srm, rtc = self._seed_two_slots(svc, fake, tmp_path)
+        self._fail_the_write_marking_the_evaluation(svc, monkeypatch)
+
+        with pytest.raises(sqlite3.OperationalError):
+            await svc.switch_slot(42, "desktop")
+
+        state = _require_save_state(svc, 42)
+        assert state.active_slot == "desktop"
+        assert {name: f.tracked_save_id for name, f in state.files.items()} == {"pokemon.srm": 200, "pokemon.rtc": 201}
+
+        monkeypatch.undo()
+        fake.call_log.clear()
+        synced = await svc.sync_rom_saves(42)
+
+        assert synced["success"] is True
+        assert synced["conflicts"] == []
+        assert self._uploads(fake) == []
+        assert self._downloaded_ids(fake) == []
+        assert (srm.read_bytes(), rtc.read_bytes()) == (b"desktop srm", b"desktop rtc")
+
+    @pytest.mark.asyncio
+    async def test_a_switch_stopped_between_two_downloads_leaves_the_placed_file_in_sync_and_the_other_to_download(
+        self, tmp_path, monkeypatch
+    ):
+        svc, fake = make_service(tmp_path)
+        srm, rtc = self._seed_two_slots(svc, fake, tmp_path)
+        original = fake.download_save_content
+
+        def stops_at_the_second_download(save_id: int, dest_path: str, **kwargs: Any) -> None:
+            if len(self._downloaded_ids(fake)) == 1:
+                fake.call_log.append(("download_save_content", (save_id, dest_path), kwargs))
+                raise _TheBackendStopped
+            original(save_id, dest_path, **kwargs)
+
+        monkeypatch.setattr(fake, "download_save_content", stops_at_the_second_download)
+
+        with pytest.raises(_TheBackendStopped):
+            await svc.switch_slot(42, "desktop")
+
+        assert self._downloaded_ids(fake) == [200, 201]
+        state = _require_save_state(svc, 42)
+        assert state.active_slot == "desktop"
+        assert srm.read_bytes() == b"desktop srm"
+        assert state.files["pokemon.srm"].tracked_save_id == 200
+        assert rtc.read_bytes() == b"rtc bytes"
+        assert state.files["pokemon.rtc"].tracked_save_id == 101
+
+        monkeypatch.undo()
+        fake.call_log.clear()
+        synced = await svc.sync_rom_saves(42)
+
+        assert synced["success"] is True
+        assert synced["conflicts"] == []
+        assert self._uploads(fake) == []
+        assert self._downloaded_ids(fake) == [201]
+        assert (srm.read_bytes(), rtc.read_bytes()) == (b"desktop srm", b"desktop rtc")
+        assert {name: f.tracked_save_id for name, f in _require_save_state(svc, 42).files.items()} == {
+            "pokemon.srm": 200,
+            "pokemon.rtc": 201,
+        }
+
+    @pytest.mark.asyncio
+    async def test_a_switch_stopped_between_placing_a_file_and_its_write_uploads_it_into_the_new_slot_once_more(
+        self, tmp_path, monkeypatch
+    ):
+        svc, fake = make_service(tmp_path)
+        srm, rtc = self._seed_two_slots(svc, fake, tmp_path)
+        repo = _uow(svc).rom_save_sync_states
+        original = repo.save
+
+        def fails_to_record_the_first_placed_file(rom_id: int, state: RomSaveSyncState) -> None:
+            srm_state = state.files.get("pokemon.srm")
+            if srm_state is not None and srm_state.tracked_save_id == 200:
+                raise sqlite3.OperationalError("database is locked")
+            original(rom_id, state)
+
+        monkeypatch.setattr(repo, "save", fails_to_record_the_first_placed_file)
+
+        with pytest.raises(sqlite3.OperationalError):
+            await svc.switch_slot(42, "desktop")
+
+        assert self._downloaded_ids(fake) == [200]
+        assert srm.read_bytes() == b"desktop srm"
+
+        monkeypatch.undo()
+        fake.call_log.clear()
+        synced = await svc.sync_rom_saves(42)
+
+        assert synced["success"] is True
+        assert synced["conflicts"] == []
+        uploads = self._uploads(fake)
+        assert [(c[1][1], c[2]["slot"]) for c in uploads] == [(str(srm), "desktop")]
+        assert self._downloaded_ids(fake) == [201]
+        uploaded_id = _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id
+        assert uploaded_id is not None
+        assert fake.saves[uploaded_id]["slot"] == "desktop"
+        assert fake._save_content[uploaded_id] == b"desktop srm"
+        assert (srm.read_bytes(), rtc.read_bytes()) == (b"desktop srm", b"desktop rtc")
+
+    @pytest.mark.asyncio
+    async def test_a_switch_stopped_at_its_first_download_takes_back_nothing_it_set_aside(self, tmp_path, monkeypatch):
+        svc, fake = make_service(tmp_path)
+        srm, rtc = self._seed_two_slots(svc, fake, tmp_path)
+        sav = _create_save(tmp_path, ext=".sav", content=b"sav bytes")
+        seeded = _require_save_state(svc, 42)
+        sav_baseline = FileSyncState(last_sync_hash=_file_md5(str(sav)), tracked_save_id=102)
+        _seed_save_state(svc, 42, replace(seeded, files={**seeded.files, "pokemon.sav": sav_baseline}))
+        fake.seed_foreign_save(
+            42, save_id=102, uploaded_by="device-1", slot="default", filename="pokemon.sav", content=b"sav bytes"
+        )
+        fake.saves[102]["file_extension"] = "sav"
+        fake.saves[102]["content_hash"] = hashlib.md5(b"sav bytes").hexdigest()
+
+        def stops_at_the_first_download(save_id: int, dest_path: str, **kwargs: Any) -> None:
+            fake.call_log.append(("download_save_content", (save_id, dest_path), kwargs))
+            raise _TheBackendStopped
+
+        monkeypatch.setattr(fake, "download_save_content", stops_at_the_first_download)
+
+        with pytest.raises(_TheBackendStopped):
+            await svc.switch_slot(42, "desktop")
+
+        state = _require_save_state(svc, 42)
+        assert state.active_slot == "desktop"
+        assert "pokemon.sav" not in state.files
+        assert not sav.exists()
+
+        monkeypatch.undo()
+        fake.call_log.clear()
+        synced = await svc.sync_rom_saves(42)
+
+        assert synced["success"] is True
+        assert synced["conflicts"] == []
+        assert self._uploads(fake) == []
+        assert sorted(self._downloaded_ids(fake)) == [200, 201]
+        assert not sav.exists()
+        assert (srm.read_bytes(), rtc.read_bytes()) == (b"desktop srm", b"desktop rtc")
 
 
 class TestASwitchWhoseBackupFails:
