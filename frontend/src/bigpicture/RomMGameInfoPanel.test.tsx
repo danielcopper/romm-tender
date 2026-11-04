@@ -29,6 +29,7 @@ import * as slotState from "../utils/slotState";
 import { isStopObserved } from "../utils/sessionManager";
 import { setSettingsResetState } from "../utils/settingsResetStore";
 import { lineWithText, throbberIn } from "../test-utils/throbber";
+import { findOutermostScrollParent } from "../utils/scrollHelpers";
 import { resetUpdateInstallStoreForTests, setUpdateInstallAttempt } from "../utils/updateInstallStore";
 import {
   installDomEventListenerSpy,
@@ -121,7 +122,11 @@ vi.mock("../utils/slotState", () => ({
   applyRefreshSlotResult: vi.fn(),
 }));
 
-vi.mock("../utils/scrollHelpers", () => ({ scrollFocusedToCenter: vi.fn() }));
+vi.mock("../utils/scrollHelpers", () => ({
+  scrollFocusedToCenter: vi.fn(),
+  findOutermostScrollParent: vi.fn(() => null),
+  offsetWithinScroller: vi.fn(() => 0),
+}));
 
 // The game page's tabs reach Steam's tabbed page through this module, a webpack
 // probe with no answer under happy-dom.
@@ -6530,6 +6535,24 @@ describe("RomMGameInfoPanel", () => {
         pull(playRow(container), R1);
       });
       expect(shownTab(container)).toBe("tab-saves");
+    });
+
+    it("lets the scroll that follows focus coming into the tabs from outside run to its end", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detail());
+      const { container } = section();
+      await flushAsync();
+      vi.useFakeTimers();
+      try {
+        fireEvent.focusIn(container.querySelector('[data-testid="tab-info"]') as HTMLElement, {
+          relatedTarget: playRow(container).querySelector("button"),
+        });
+        act(() => {
+          vi.advanceTimersByTime(60);
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(findOutermostScrollParent).toHaveBeenCalledWith(container.querySelector(".romm-game-page-tabs"));
     });
 
     it("shows no achievements of the version switched away from while the new one's cannot load", async () => {
