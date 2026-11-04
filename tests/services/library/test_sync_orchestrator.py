@@ -10511,10 +10511,10 @@ class TestAGameACollectionBringsInConverges:
         assert self._bound(library) == {30: 6030, 31: 6031}
         self._list(fake_romm_api, 7, [30])
         fake_romm_api.hidden_rom_ids = {31}
-        # 30's recorded launch command is stale, so the preview counts its entry
-        # as a change only where 30 is the version that keeps the shortcut.
+        # 30's shortcut is not recorded as applied, so the preview counts its
+        # entry as a change only where 30 is the version that keeps the shortcut.
         with library.uow as uow:
-            uow.roms.set_applied_launch_options(30, "stale")
+            uow.roms.set_shortcut_applied(30, False)
         changed = (await library.sync.sync_preview())["summary"]["changed_count"]
         library.sync._box.discard_preview()
 
