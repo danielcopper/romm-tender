@@ -93,7 +93,7 @@ export const ListDetail: FC<ListDetailProps> = ({
           id: "list",
           width: LIST_WIDTH,
           content: (
-            <Focusable flow-children="vertical">
+            <Focusable flow-children="column">
               {listHeader}
               {items.map((item) => (
                 // The declaration sits on a wrapper rather than on the row itself
@@ -140,7 +140,7 @@ export const ListDetail: FC<ListDetailProps> = ({
           // Focus is in the list when this changes — that is what changed the
           // selection — so nothing focused is unmounted.
           regionKey: selectedId ?? "",
-          content: <Focusable flow-children="vertical">{renderDetail(selectedId)}</Focusable>,
+          content: <Focusable flow-children="column">{renderDetail(selectedId)}</Focusable>,
         },
       ]}
     />

@@ -477,7 +477,7 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
           because sharing it with the facts squeezed a two-word name onto two
           lines over the counts at the Deck's width. */}
       <Focusable
-        flow-children="horizontal"
+        flow-children="row"
         style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 16px 0" }}
       >
         <span style={{ flex: "1 1 auto", minWidth: 0, fontSize: "16px", fontWeight: 600, color: "#dcdedf" }}>

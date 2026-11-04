@@ -80,13 +80,7 @@ export const ValidatingModalShell: FC<ValidatingModalShellProps> = ({
           {error}
         </div>
       )}
-      {/* The two buttons sit side by side, so the stick/d-pad has to step
-          between them left/right. A plain div defaults to VERTICAL traversal,
-          which is what this footer had: the buttons read as a row and answered
-          to up/down. `flow-children` is what tells Steam's nav otherwise, and
-          nothing in the frontend suite can see the difference — happy-dom has
-          no nav tree, so both spellings render identically. */}
-      <Focusable flow-children="horizontal" style={footerStyle}>
+      <Focusable flow-children="row" style={footerStyle}>
         <DialogButton style={footerButtonStyle} disabled={submitDisabled} onClick={onSubmit}>
           <ThrobberLabel busy={submitting}>{submitLabel}</ThrobberLabel>
         </DialogButton>

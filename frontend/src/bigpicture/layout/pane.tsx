@@ -377,7 +377,7 @@ export const Muted: FC<{ children: ReactNode; fontSize?: string }> = ({ children
  * what it sits between.
  */
 export const ButtonRow: FC<{ padding: string; children: ReactNode }> = ({ padding, children }) => (
-  <Focusable flow-children="horizontal" style={{ display: "flex", gap: "8px", padding }}>
+  <Focusable flow-children="row" style={{ display: "flex", gap: "8px", padding }}>
     {children}
   </Focusable>
 );

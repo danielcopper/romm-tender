@@ -47,7 +47,7 @@ export const UpdateCard: FC<CardText & { onOpenUpdates: () => void; onDismiss: (
     <UpdateCardBody {...text} />
     <PanelSectionRow>
       <Field bottomSeparator="none" childrenLayout="below" childrenContainerWidth="max">
-        <Focusable flow-children="horizontal" style={{ display: "flex", gap: "8px" }}>
+        <Focusable flow-children="row" style={{ display: "flex", gap: "8px" }}>
           <DialogButton style={{ flex: 1, minWidth: 0, padding: "8px 0" }} onClick={onOpenUpdates}>
             Open Updates
           </DialogButton>

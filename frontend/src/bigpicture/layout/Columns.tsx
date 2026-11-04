@@ -5,9 +5,9 @@
  *
  * List and detail is one shape of it and `ListDetail` is that shape; the Sync
  * page's table beside its controls column is another. What is shared is the row
- * itself — a horizontal `Focusable` so the stick crosses between columns, the
- * gap between them, and a `ScrollRegion` per column so a long column does not
- * carry its neighbours up with it.
+ * itself — a `Focusable` laid out as a row so the stick crosses between
+ * columns, the gap between them, and a `ScrollRegion` per column so a long
+ * column does not carry its neighbours up with it.
  *
  * Structure and vocabulary: `docs/architecture/qam-panel.md`.
  */
@@ -43,7 +43,7 @@ export interface ColumnsProps {
 
 export const Columns: FC<ColumnsProps> = ({ columns, onButtonDown }) => (
   <Focusable
-    flow-children="horizontal"
+    flow-children="row"
     style={{ display: "flex", gap: "12px", height: "100%", minHeight: 0 }}
     {...(onButtonDown ? { onButtonDown } : {})}
   >

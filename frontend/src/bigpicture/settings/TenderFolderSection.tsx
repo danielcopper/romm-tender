@@ -238,14 +238,14 @@ const TileStop: FC<{ tile: Tile; busy: boolean }> = ({ tile, busy }) => {
   );
 };
 
-/** Two tiles to a row: one horizontal focus group per row, so the pad moves across a row and down to the next. */
+/** Two tiles to a row, each row a focus group of its own, so the pad moves across a row and down to the next. */
 function tileRows(tiles: Tile[], busy: boolean): ReactNode[] {
   const rows: ReactNode[] = [];
   for (let index = 0; index < tiles.length; index += 2) {
     const pair = tiles.slice(index, index + 2);
     rows.push(
       <PanelSectionRow key={pair.map((tile) => tile.key).join("|")}>
-        <Focusable flow-children="horizontal" style={{ display: "flex", gap: "12px", marginBottom: "12px" }}>
+        <Focusable flow-children="row" style={{ display: "flex", gap: "12px", marginBottom: "12px" }}>
           {pair.map((tile) => (
             <TileStop key={tile.key} tile={tile} busy={busy} />
           ))}

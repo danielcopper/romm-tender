@@ -186,7 +186,7 @@ export const ArtworkTab: FC<ArtworkTabProps> = ({ appId, romId, romName }) => {
   return (
     <Focusable flow-children="column" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
       <Focusable
-        flow-children="right"
+        flow-children="row"
         className={`romm-artwork-game${line.notice ? " romm-artwork-game-notice" : ""}`}
         style={{ display: "flex", alignItems: "center", gap: "12px" }}
       >

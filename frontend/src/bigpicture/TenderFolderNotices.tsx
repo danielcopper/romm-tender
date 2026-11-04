@@ -32,7 +32,7 @@ const Buttons: FC<{ first: string; onFirst: () => void; onForget: () => void; bu
 }) => (
   <PanelSectionRow>
     <Field bottomSeparator="none" childrenLayout="below" childrenContainerWidth="max">
-      <Focusable flow-children="horizontal" style={{ display: "flex", gap: "8px" }}>
+      <Focusable flow-children="row" style={{ display: "flex", gap: "8px" }}>
         <DialogButton style={BUTTON} disabled={busy} onClick={onFirst}>
           {first}
         </DialogButton>
