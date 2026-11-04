@@ -111,9 +111,7 @@ vi.stubGlobal("SteamClient", {
     StartRestart: vi.fn(),
   },
 });
-vi.stubGlobal("appStore", { GetAppOverviewByAppID: vi.fn(), allApps: [] });
-vi.stubGlobal("appDetailsStore", { GetAppDetails: vi.fn() });
-vi.stubGlobal("appDetailsCache", { GetAppData: vi.fn() });
+vi.stubGlobal("appStore", { GetAppOverviewByAppID: vi.fn() });
 vi.stubGlobal("collectionStore", { userCollections: [] });
 
 // api/host — the panel's end of the backend's WebSocket. `endpoint` returns a
