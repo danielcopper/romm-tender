@@ -48,13 +48,20 @@ export interface VersionSwitchOptions {
   /** Called after a refusal because the target version vanished, to reload the list. */
   onVanishedRefusal?: (() => void) | undefined;
   /**
+   * Called, unless the caller was torn down, when `applyCommittedVersionSwitch`
+   * answers that a committed switch was stopped short of its broadcast (a
+   * refused lease renewal), to read the list again as the broadcast would have
+   * had it do; that read releases the guard.
+   */
+  onUnbroadcastSwitch?: (() => void) | undefined;
+  /**
    * The caller's in-flight guard. It is set on entry and released on every
-   * non-success terminal path but a teardown, which touches no state (the
-   * picker is gone). On success it is deliberately LEFT set: a switch that is
-   * not torn down broadcasts version_switched, and the caller's list reload on
-   * that broadcast must clear it once the fresh list lands — so the trigger
-   * never re-enables against a stale list. A caller without that reload stays
-   * "switching" after its first successful switch.
+   * non-success terminal path whose admission is current. On success it is
+   * deliberately LEFT set on every path: only who releases it differs (the
+   * caller's list reload on the version_switched broadcast, or on
+   * `onUnbroadcastSwitch` when the switch was stopped short of broadcasting) —
+   * so the trigger never re-enables against a stale list. A caller without
+   * that reload stays "switching" after its first successful switch.
    */
   setSwitching?: ((switching: boolean) => void) | undefined;
   logTag?: string | undefined;
@@ -128,6 +135,19 @@ export function fetchVersionCovers(
 export const isSelectable = (v: VersionInfo): boolean =>
   !v.vanished && v.switchable && !v.bound_elsewhere && !(v.no_file && !v.installed);
 
+type SyncRomSavesResponse = Awaited<ReturnType<typeof syncRomSaves>>;
+
+/** What to toast when syncing saves failed or surfaced conflicts. */
+const syncFailureMessage = (sync: SyncRomSavesResponse): string | null => {
+  if (!sync.success) {
+    return sync.reason === "game_running" ? sync.message : "Couldn't sync saves — try again";
+  }
+  if (sync.conflicts && sync.conflicts.length > 0) {
+    return "Resolve save conflicts first";
+  }
+  return null;
+};
+
 /** Switch the app to *target*, asking about any saves the switch would strand. */
 export async function executeVersionSwitch(options: VersionSwitchOptions): Promise<void> {
   const {
@@ -137,6 +157,7 @@ export async function executeVersionSwitch(options: VersionSwitchOptions): Promi
     askUnsyncedSaves,
     onCoverResolved,
     onVanishedRefusal,
+    onUnbroadcastSwitch,
     setSwitching,
     logTag = "VersionPicker",
   } = options;
@@ -156,36 +177,41 @@ export async function executeVersionSwitch(options: VersionSwitchOptions): Promi
   // broadcast the switch so sibling surfaces re-read the new binding.
   //
   // The backend rebind is ALREADY committed by the time we get here, so the
-  // cache-invalidate + broadcast must always run — even if the launch-command
-  // write fails or throws. A missed confirm only leaves the shortcut on a stale
-  // command; it self-heals at the next startup/sync reconcile, so we warn and
-  // nudge the user rather than reporting the whole switch as failed.
+  // cache-invalidate + broadcast run even if the launch-command write fails or
+  // throws. A missed confirm only leaves the shortcut on a stale command; it
+  // self-heals at the next startup/sync reconcile, so we warn and nudge the
+  // user rather than reporting the whole switch as failed.
   const applySwitchSuccess = async (result: SwitchVersionSuccess): Promise<void> => {
-    const confirmed = await applyCommittedVersionSwitch(result, onCoverResolved, admission);
-    if (!confirmed) {
+    const { confirmed, broadcast } = await applyCommittedVersionSwitch(result, onCoverResolved, admission);
+    if (!confirmed && isPruneLeaseAdmissionCurrent(admission)) {
       showToast("Switched — re-switch if launch fails");
     }
+    if (!broadcast && isPruneLeaseAdmissionCurrent(admission)) onUnbroadcastSwitch?.();
   };
 
   // Keep the toast body short (Steam truncates it to one line) and put the
   // backend detail in the subtext so the reason is readable (#1359).
   const handleSwitchFailure = (result: SwitchVersionFailure | SwitchVersionUnsyncedSaves): void => {
     if (result.reason === "server_unreachable") reportServerReachable(false);
+    if (!isPruneLeaseAdmissionCurrent(admission)) return;
     setSwitching?.(false);
     showToast("Could not switch version", { subtext: result.message });
     if (result.reason === "version_vanished") onVanishedRefusal?.();
   };
 
-  // Sync the stranded version's saves, then retry the switch. Every failure —
-  // sync failed, sync surfaced conflicts, the retry blocked again, or the retry
-  // was refused outright — ends the attempt with a toast and re-runs the
-  // save-status refresh, so the conflict UI (or the just-completed upload)
-  // surfaces through the normal save_status_updated loop.
+  // Sync the stranded version's saves, then retry the switch. While the
+  // admission is current, every failure — sync failed, sync surfaced conflicts,
+  // the retry blocked again, or the retry was refused outright — ends the
+  // attempt with a toast and re-runs the save-status refresh, so the conflict
+  // UI (or the just-completed upload) surfaces through the normal
+  // save_status_updated loop.
   const syncThenSwitch = async (unsyncedRomId: number): Promise<void> => {
     // The SavesTab has no other refresh trigger — `refresh_save_status` is what
-    // drives the `save_status_updated` chain — so EVERY terminal failure here
-    // must run it, or the tab keeps showing pre-sync status until it is re-entered.
+    // drives the `save_status_updated` chain — so every terminal failure here
+    // while the admission is current runs it, or the tab keeps showing pre-sync
+    // status until it is re-entered.
     const refreshStrandedSaveStatus = (): void => {
+      if (!isPruneLeaseAdmissionCurrent(admission)) return;
       detach(
         refreshSaveStatus(unsyncedRomId).catch((e) =>
           logWarn(`${logTag}: post-abort save-status refresh failed for rom ${unsyncedRomId}: ${e}`),
@@ -193,6 +219,7 @@ export async function executeVersionSwitch(options: VersionSwitchOptions): Promi
       );
     };
     const abort = (body: string): void => {
+      if (!isPruneLeaseAdmissionCurrent(admission)) return;
       // Every sync-then-switch failure is terminal for this attempt — release the
       // in-flight guard so the trigger re-enables (it never reaches a reload).
       setSwitching?.(false);
@@ -203,12 +230,9 @@ export async function executeVersionSwitch(options: VersionSwitchOptions): Promi
     try {
       const sync = await syncRomSaves(unsyncedRomId);
       if (!isPruneLeaseAdmissionCurrent(admission)) return;
-      if (!sync.success) {
-        abort(sync.reason === "game_running" ? sync.message : "Couldn't sync saves — try again");
-        return;
-      }
-      if (sync.conflicts && sync.conflicts.length > 0) {
-        abort("Resolve save conflicts first");
+      const syncFailure = syncFailureMessage(sync);
+      if (syncFailure) {
+        abort(syncFailure);
         return;
       }
       if (!isPruneLeaseAdmissionCurrent(admission)) return;
@@ -237,6 +261,7 @@ export async function executeVersionSwitch(options: VersionSwitchOptions): Promi
   const resolveUnsyncedSaves = async (result: SwitchVersionUnsyncedSaves): Promise<void> => {
     // The soft-block response carries a definitive reachability verdict (#1345).
     reportServerReachable(result.server_reachable);
+    if (!isPruneLeaseAdmissionCurrent(admission)) return;
     const choice = await askUnsyncedSaves({
       versionName: result.unsynced_version_name,
       stranding: result.stranding,

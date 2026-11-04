@@ -122,11 +122,11 @@ const Badge: FC<{ text: string; tone: "accent" | "muted" | "good" }> = ({ text, 
 export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
   const leaseOwner = `version-picker:${appId}`;
   const [versionList, setVersionList] = useState<VersionList | null>(null);
-  // In-flight switch guard (#1345 round-2 / E): a switch rebinds the shortcut and
-  // then relies on the version_switched re-fetch to refresh the (now stale) list.
-  // While a switch is running the trigger is disabled + shows a throbber and the
-  // menu can't open, so a rapid second click can't act against the stale list
-  // (the swallowed switch-back bug) or interleave two switches' confirm polls.
+  // In-flight switch guard: a switch rebinds the shortcut and relies on the
+  // subsequent version list reload to refresh the stale list before re-enabling
+  // the trigger. While a switch is running the trigger is disabled and shows a
+  // throbber, so a rapid second click cannot act against the stale list or
+  // interleave two switches' confirm writes.
   const [switching, setSwitching] = useState(false);
   // rom_id -> cover base64 for every version, filled lazily once the list loads.
   const [covers, setCovers] = useState<Record<number, string>>({});
@@ -135,6 +135,11 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
   // listeners below ignore events for other games without a fetch.
   const memberIdsRef = useRef<Set<number>>(new Set());
   const listRequestIdRef = useRef(0);
+  // Gates which read of the version list may release `switching`. Set once a
+  // version_switched broadcast arrives for this game or by
+  // refreshAfterUnbroadcastSwitch, and cleared when a switch starts or the game
+  // changes.
+  const switchBroadcastSeenRef = useRef(false);
   const loadVersionListRef = useRef<{
     appId: number;
     load: (source?: "normal" | "vanished_refusal") => Promise<void>;
@@ -147,6 +152,7 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
   useEffect(() => {
     mountPruneLeaseOwner(leaseOwner);
     let cancelled = false;
+    switchBroadcastSeenRef.current = false;
     const load = async (source: "normal" | "vanished_refusal" = "normal"): Promise<void> => {
       const requestId = ++listRequestIdRef.current;
       const isCurrent = (): boolean => !cancelled && requestId === listRequestIdRef.current;
@@ -163,12 +169,13 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
           logError(`VersionPicker: getVersionList failed: ${e}`);
         }
       } finally {
-        // The post-switch version_switched reload landing is the "switch fully
-        // settled" signal — clear the in-flight guard here so the trigger
-        // re-enables against a FRESH list, never a stale one (#1345 round-2 / E).
-        // In the finally (not just on success) so a failed reload can't leave the
-        // guard stuck; on the initial mount load switching is already false (no-op).
-        if (source === "normal" && isCurrent()) setSwitching(false);
+        // A current read issued after this game's version_switched broadcast, or
+        // after a committed switch that answered it did not broadcast
+        // (refreshAfterUnbroadcastSwitch), is the "switch fully settled" signal —
+        // clear the in-flight guard only then, so the trigger waits for a read
+        // after the switch. In the finally (not just on success) so a failed
+        // reload can't leave the guard stuck.
+        if (switchBroadcastSeenRef.current && isCurrent()) setSwitching(false);
       }
     };
     loadVersionListRef.current = { appId, load };
@@ -180,6 +187,7 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
       const pruned =
         detail.type === "rom_pruned" &&
         (detail.app_ids.includes(appId) || detail.rom_ids.some((romId) => memberIdsRef.current.has(romId)));
+      if (switched) switchBroadcastSeenRef.current = true;
       if (switched || pruned) detach(load());
     };
     globalThis.addEventListener("romm_data_changed", onDataChanged);
@@ -207,6 +215,9 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
 
     return () => {
       cancelled = true;
+      // Release the guard on unmount or game change: the next game's reads will
+      // not carry this switch's broadcast gate, so a held guard would stick.
+      setSwitching(false);
       detach(releasePruneLeasesByOwner(leaseOwner));
       if (loadVersionListRef.current?.load === load) loadVersionListRef.current = null;
       globalThis.removeEventListener("romm_data_changed", onDataChanged);
@@ -231,6 +242,13 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
     });
   }, [versionList]);
 
+  const refreshAfterUnbroadcastSwitch = (): void => {
+    const loader = loadVersionListRef.current;
+    if (loader?.appId !== appId) return;
+    switchBroadcastSeenRef.current = true;
+    detach(loader.load());
+  };
+
   const refreshAfterVanishedRefusal = (): Promise<void> => {
     const loader = loadVersionListRef.current;
     if (loader?.appId !== appId) return Promise.resolve();
@@ -238,6 +256,7 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
   };
 
   const handleSwitch = async (target: VersionInfo): Promise<void> => {
+    switchBroadcastSeenRef.current = false;
     await executeVersionSwitch({
       appId,
       target,
@@ -245,6 +264,7 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
       askUnsyncedSaves: showUnsyncedSavesModal,
       onCoverResolved: (romId, cover) => setCovers((prev) => ({ ...prev, [romId]: cover })),
       onVanishedRefusal: () => detach(refreshAfterVanishedRefusal()),
+      onUnbroadcastSwitch: refreshAfterUnbroadcastSwitch,
       setSwitching,
       logTag: "VersionPicker",
     });
