@@ -1424,19 +1424,22 @@ Format: **invariant** — tier — enforced by.
   is only worth that while it is complete, so both halves are held to the code rather than kept by hand. The panel's
   half, `frontend/src/boot/steamInternals.ts`, is held by `frontend/src/boot/steamInternals.test.ts` to what the type
   checker resolves in the shipped code (`frontend/src/test-utils/steamReach.ts`): a member counts when it is declared in
-  `steam.d.ts`'s globals, in `@decky/ui`'s `dist/globals/` or `webpack.d.ts` — which declare fifteen more of Steam's
-  globals with types of their own, so a reach typed by them compiles without `steam.d.ts` naming it — or in a shape the
-  code casts the window to, followed within that cast's file. Both directions are required, and `steam.d.ts` is held the
-  same way, so a declaration nothing reaches fails as surely as a reach nothing lists. The order of the two declarations
-  of Steam's globals is pinned with it: `steam.d.ts` is the one in effect, which nothing documents and `skipLibCheck`
-  hides the conflict of; were Decky's to win, every reach would resolve under another path and fail as unlisted. A reach
-  no type describes — a string key, a `Record`, an `unknown` — is listed by hand with the files that make it, and held
-  only to its words appearing in code there; a window cast the scan cannot read, and a `steamloopback.host` or
-  `steam://` literal, must sit in such a file, so a new one of either is reported. The backend's half,
-  `backend/domain/steam_internals.py`, is held by `tests/domain/test_steam_internals.py` over the syntax tree: every
-  string naming Steam is a constant the list names, each such constant spells its entries, and each property it reads is
-  an entry's. What neither side sees is listed in the register entry, and none of it is a check of what an internal DOES
-  — Steam keeping a name while changing what it answers stays a device test
+  `steam.d.ts`'s globals, in `@decky/ui`'s `dist/globals/` or `webpack.d.ts` — which declare Steam's other globals
+  (`webpackChunksteamui`, `App`, …) with types of their own, so a reach typed by them compiles without `steam.d.ts`
+  naming it — or in a shape the code casts the window to, followed within that cast's file. Its path is derived rather
+  than written: Steam's own spelling, rooted at the global, along the shortest route from Steam's roots to the member's
+  type, so the two checks the list is for can look each one up as Steam spells it. Both directions are required, and
+  `steam.d.ts` is held the same way, so a declaration nothing reaches fails as surely as a reach nothing lists. The
+  order of the two declarations of Steam's globals is pinned with it: `steam.d.ts` is the one in effect, which no
+  compiler error shows, because `skipLibCheck` hides the conflict; were Decky's to win, the members `steam.d.ts`
+  declares would go unreached and fail. A reach no type describes — a string key, a `Record`, an `unknown`, a route — is
+  listed by hand with the files that make it, and held only to its words appearing in code there; a window cast the scan
+  cannot read, and a route literal, must sit in such a file, so one in a file no entry names is reported. The backend's
+  half, `backend/domain/steam_internals.py`, is held by `tests/domain/test_steam_internals.py` over the syntax tree:
+  every string naming Steam is held in a module-level constant the list names, each such constant spells its entries,
+  and each property it reads is an entry's, or JavaScript's own as the test names them (`_JAVASCRIPTS_OWN`). What
+  neither side sees is listed in the register entry, and none of it is a check of what an internal DOES — Steam keeping
+  a name while changing what it answers stays a device test
 - **Whether every search answered and whether the panel may MOUNT are two questions, and a miss that costs less than the
   panel never takes the interface off the air** — check + test + prompt-only — the type carries the first half:
   `SteamLookup.absenceCost` is required, so a new entry does not compile until it states which of the four its absence

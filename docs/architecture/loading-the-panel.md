@@ -391,11 +391,12 @@ handheld. Those stay device tests: whether the panel appears, whether a forced c
 the card draws where a broken bundle is served, and whether a backend restart with Steam open brings the panel back — in
 Game Mode above all, where none of it has been measured.
 
-Neither can it see whether Steam still has what those expressions name. Every name of Steam's client the backend spells
-— in the expressions it evaluates, the `steam://` URL, the debugger target's title and the origin of Steam's interface —
-is listed in `backend/domain/steam_internals.py`, the backend's half of the list
-[Every Steam internal the panel reaches](frontend-bundles.md#every-steam-internal-the-panel-reaches) describes, and
-`tests/domain/test_steam_internals.py` holds every string under `backend/` that names Steam to it.
+Neither can it see whether Steam still has what the injector's expressions name. Every name of Steam's client the
+backend spells — in the expressions it evaluates, the `steam://` URL, the debugger target's title and the origin of
+Steam's interface — is listed in `backend/domain/steam_internals.py`, the backend's half of the list
+[Every Steam internal Tender reaches](frontend-bundles.md#every-steam-internal-tender-reaches) describes, and
+`tests/domain/test_steam_internals.py` holds every string under `backend/` but `_vendor/` and `native/` that names Steam
+to it.
 
 ## Related
 
