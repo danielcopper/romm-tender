@@ -1,3 +1,10 @@
+---
+status: superseded
+decided: 2026-06-04
+updated: 2026-11-04
+superseded-by: [0044]
+---
+
 # Launcher is a pure exec wrapper; the launch command is baked into the shortcut's `launch_options`
 
 ## Status

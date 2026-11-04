@@ -24,7 +24,10 @@ is the vendored emu-atlas resolver, through `adapters/atlas_catalogue.py` — Te
 (live `es_systems.xml` as the only source; the default is the first entry in declared order, as amended), and
 [ADR-0030](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0030-the-emulator-catalogue-is-read-by-the-vendored-resolver.md)
 (the resolver is what reads it; its overlays are honoured, a choice made in ES-DE never becomes Tender's default, and,
-as amended, the rows keep the resolver's order with that choice shown) for the decision records.
+as amended, the rows keep the resolver's order with that choice shown), and
+[ADR-0044](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0044-every-start-asks-the-resolver.md) (every
+start asks the resolver for the command of the entry in effect; a shortcut carries only its appId) for the decision
+records.
 
 ### What an entry launches: a core, a program, or a core this machine cannot load
 
@@ -435,10 +438,11 @@ start, is [Launch-target validation](backend-architecture.md#launch-target-valid
 ## Starting a game: the resolver's command
 
 A game starts with the command the resolver gives for it
-([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D1):
-`launch_command(system, path, label=<entry in effect>)`, asked of the answering source with the game's own path, the
-path the launch verdict is asked with (D3). `adapters/atlas_launch.py` is the one module that reads that answer, into
-`domain/start_command.py`'s view: a complete command as Tender runs it, or why the resolver gives none (D2).
+([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D1,
+[ADR-0044](../adr/0044-every-start-asks-the-resolver.md)): `launch_command(system, path, label=<entry in effect>)`,
+asked of the answering source with the game's own path, the path the launch verdict is asked with (D3).
+`adapters/atlas_launch.py` is the one module that reads that answer, into `domain/start_command.py`'s view: a complete
+command as Tender runs it, or why the resolver gives none (D2).
 
 A command is complete where nothing in it is missing: the resolver answers one, states what the program reads from its
 distribution's own start (`distribution_environment`; not stated is `launch-environment-unpinned`), gives every variable
