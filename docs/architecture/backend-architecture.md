@@ -1970,9 +1970,10 @@ follows the same shape: for a game RomM holds as a folder it offers only a folde
 cannot use (#2732 D2).
 
 **`has_nested_single_file` quirk**: `fs_name` is the parent folder name, not the filename. The actual filename with
-extension is the first file a download fetches (`resolve_local_file_name`); Tender names the download's own file after
-it (the content URL and the queue entry), and the folder after the ROM's identity. A defensive helper falls back to
-`fs_name` and warns if `files` is empty or missing.
+extension is the fetched file lying directly in that folder, else the first fetched file — RomM sorts `files` by name,
+so a dump's inner asset can come first (`resolve_local_file_name`); Tender names the download's own file after it (the
+content URL and the queue entry), and the folder after the ROM's identity. A defensive helper falls back to `fs_name`
+and warns if `files` is empty or missing.
 
 **Extract-vs-file gate counts the files fetched, not `has_multiple_files`**: Tender decides ZIP-extract vs a single
 served file with the `is_multi_file_download` helper (`domain/rom_files.py`), which returns whether more than one of the
@@ -2037,17 +2038,17 @@ the unpack removes the folder it created and the archive is removed with the oth
 **ES-DE directory-collapse rename**: a multi-file ROM is extracted into a staging folder named after the **ROM's
 identity** — `fs_name_no_ext`, falling back to `splitext(fs_name)` (`resolve_extract_dir_name` in `domain/rom_files.py`)
 — **never** after `files[0]`. That distinction matters for a `has_nested_single_file` folder game served as a ZIP (a PS3
-title whose first listed file is an arbitrary inner asset like a music file): `resolve_local_file_name` returns that
-asset's name for the local _filename_, but the extract _directory_ must carry the game's identity or the whole install —
-launch `file_path`, `rom_dir`, and the folder a folder-boot start is asked with — inherits the wrong name. The staging
-folder is then renamed after the **detected launch file including its extension** (e.g.
-`Example Quest - Second Journey (USA).m3u/` containing `Example Quest - Second Journey (USA).m3u`). ES-DE only collapses
-a directory into a single game entry when the folder name matches the launch file's full name with extension; without
-the rename a multi-disc game shows in ES-DE as a folder plus loose disc files. The launch file is only known after
-extraction (an `.m3u` may be auto-generated — see below), so the rename happens last, after launch-file detection, via
-`es_de_collapse_rename` (`domain/rom_files.py`) + the `DownloadFileStore.move_dir` whole-directory move. On a name
-collision (target already exists) the rename is skipped and the staging folder is kept — never clobbered or merged.
-Existing installs from before this feature keep their old folder layout until re-downloaded.
+title whose `files` RomM lists by name, an inner asset first): the local _filename_ is a file's name, but the extract
+_directory_ must carry the game's identity or the whole install — launch `file_path`, `rom_dir`, and the folder a
+folder-boot start is asked with — inherits the wrong name. The staging folder is then renamed after the **detected
+launch file including its extension** (e.g. `Example Quest - Second Journey (USA).m3u/` containing
+`Example Quest - Second Journey (USA).m3u`). ES-DE only collapses a directory into a single game entry when the folder
+name matches the launch file's full name with extension; without the rename a multi-disc game shows in ES-DE as a folder
+plus loose disc files. The launch file is only known after extraction (an `.m3u` may be auto-generated — see below), so
+the rename happens last, after launch-file detection, via `es_de_collapse_rename` (`domain/rom_files.py`) + the
+`DownloadFileStore.move_dir` whole-directory move. On a name collision (target already exists) the rename is skipped and
+the staging folder is kept — never clobbered or merged. Existing installs from before this feature keep their old folder
+layout until re-downloaded.
 
 **Folder-boot launch target (PS3)**: for a PS3 folder game `detect_launch_file` picks the nested
 `…/PS3_GAME/USRDIR/EBOOT.BIN` as the install's `file_path` — the correct launch _file_ identity (save path, core, and

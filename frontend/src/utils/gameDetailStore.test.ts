@@ -1384,7 +1384,7 @@ describe("gameDetailStore", () => {
         await Promise.resolve();
       });
 
-      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: true }));
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: true, rom_name: "Re-read" }));
       await act(async () => {
         emitHostEvent<DownloadCompleteEvent>("download_complete", downloadComplete(42));
         await Promise.resolve();
@@ -1392,12 +1392,12 @@ describe("gameDetailStore", () => {
       await flush();
       // The newest load is never the stale one — a deliberate re-read of the same
       // rom lands rather than being refused by its own fence.
-      expect(getGameDetail(nextAppId)).toMatchObject({ romId: 42, installed: true });
+      expect(getGameDetail(nextAppId)).toMatchObject({ romId: 42, installed: true, romName: "Re-read" });
 
       afterUninstall.resolve(found({ installed: false }));
       await flush();
 
-      expect(getGameDetail(nextAppId)).toMatchObject({ romId: 42, installed: true });
+      expect(getGameDetail(nextAppId)).toMatchObject({ romId: 42, installed: true, romName: "Re-read" });
     });
 
     // Same rom throughout, so the rom binding admits the earlier answer — the

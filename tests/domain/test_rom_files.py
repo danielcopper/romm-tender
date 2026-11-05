@@ -712,7 +712,8 @@ class TestLandsAsFolder:
         assert lands_as_folder({**self._flags(False, False, True), "files": [{}, {}]}) is True
 
     def test_a_folder_with_no_file_directly_in_it_is_a_folder(self):
-        # A Wii U dump, or a PS3 dump with no file at its root: RomM sets none of the three flags.
+        # A Wii U dump, or a PS3 dump with no file at its root: RomM sets none
+        # of the three flags.
         assert lands_as_folder({**self._flags(False, False, False), "files": [{"file_name": "EBOOT.BIN"}]}) is True
 
     def test_a_folder_game_fetching_one_file_is_still_a_folder(self):
@@ -764,3 +765,18 @@ class TestTheNameOfANestedSingleFile:
         }
 
         assert resolve_local_file_name(rom_detail) == ("Game.nsp", False)
+
+    def test_it_is_the_fetched_file_at_the_folder_s_root(self):
+        # RomM sorts ``files`` by name, so a PS3 dump's inner asset comes before
+        # the PS3_DISC.SFB lying directly in the game's folder.
+        rom_detail = {
+            "fs_name": "Game",
+            "full_path": "ps3/Game",
+            "has_nested_single_file": True,
+            "files": [
+                {"id": 1, "file_name": "EBOOT.BIN", "file_path": "ps3/Game/PS3_GAME/USRDIR", "category": None},
+                {"id": 2, "file_name": "PS3_DISC.SFB", "file_path": "ps3/Game", "category": "game"},
+            ],
+        }
+
+        assert resolve_local_file_name(rom_detail) == ("PS3_DISC.SFB", False)

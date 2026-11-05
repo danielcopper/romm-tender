@@ -47,9 +47,9 @@ def lands_as_folder(rom_detail: dict[str, Any]) -> bool:
     (#2223 D31): only a game RomM states is one file (``has_simple_single_file``)
     lies flat. RomM sets none of its three shape flags for a folder with no
     file directly in it, such as a Wii U dump (``code/``, ``content/``,
-    ``meta/``) or a PS3 dump with no file at its root, and that is a folder too. A payload
-    that does not state all three flags is a folder where it lists more than one
-    file.
+    ``meta/``) or a PS3 dump with no file at its root, and that is a folder
+    too. A payload that does not state all three flags is a folder where it
+    lists more than one file.
     """
     if rom_detail.get("has_simple_single_file"):
         return False
@@ -407,9 +407,11 @@ def resolve_local_file_name(rom_detail: dict[str, Any]) -> tuple[str, bool]:
     """Resolve the on-disk filename for a ROM.
 
     For nested-single-file ROMs RomM reports ``fs_name`` as the parent
-    folder, so the actual filename (with extension) is the first file a
-    download fetches (``game_files``), never a manual or update listed before
-    it. For all other layouts ``fs_name`` is already the correct filename. When ``fs_name`` is missing the synthetic
+    folder, so the actual filename (with extension) is the fetched file
+    (``game_files``) lying directly in that folder — RomM sorts ``files`` by
+    name, so a dump's inner asset can come first — else the first fetched file
+    where the payload places none there. For all other layouts ``fs_name`` is
+    already the correct filename. When ``fs_name`` is missing the synthetic
     ``rom_<id>`` (or ``rom_unknown`` if ``id`` is also missing) is used.
 
     Returns
@@ -427,7 +429,8 @@ def resolve_local_file_name(rom_detail: dict[str, Any]) -> tuple[str, bool]:
     fetched = game_files(rom_detail).fetched
     if not fetched:
         return (fs_name, True)
-    return (fetched[0].file_name or fs_name, False)
+    at_root = [entry for entry in fetched if entry.rel_path and "/" not in entry.rel_path]
+    return ((at_root or fetched)[0].file_name or fs_name, False)
 
 
 def resolve_extract_dir_name(rom_detail: dict[str, Any]) -> str:

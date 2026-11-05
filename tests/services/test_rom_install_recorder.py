@@ -104,7 +104,7 @@ class TestEveryInstallIsRecordedAndBaked:
 
 
 class TestTheSizeAnInstallRecords:
-    """An install records the size of the files it fetched; the ROM keeps RomM's size of the whole game (#2732 D1)."""
+    """An install records the size of the files it fetched (#2732 D1)."""
 
     @staticmethod
     def _record(harness, rom_detail):

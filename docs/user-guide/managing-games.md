@@ -628,7 +628,7 @@ concept collapse to their real game file instead — the folder is named after t
 Tender ignores it on these systems rather than launching from a file the emulator can't read.
 
 A game your server keeps as one file that is not a zip (most `.chd`/`.iso` games on disc-image systems) downloads as a
-bare file with no folder, so they need no playlist either way.
+bare file with no folder, so it needs no playlist either way.
 
 **Space for unpacking.** An unpacked game needs room for the zip and for what comes out of it at the same time. Where
 your server lists what is inside a single zip — libraries rescanned since RomM 4.9.0 — the check before the download

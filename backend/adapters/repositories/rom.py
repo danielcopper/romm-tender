@@ -42,12 +42,10 @@ _SYNC_COLUMNS = (
     "revision",
     "tags",
     "is_main_sibling",
-    # The server-reported ROM size in bytes (#1395). Like the version dimensions
+    # RomM's size of the whole game in bytes (#1395). Like the version dimensions
     # above (and unlike the user pins), it is a server-derived fact that rides
     # the UPSERT and refreshes every sync — set directly from the fetched dict,
-    # no confirmed-else-preserved merge: RomM's listing states the size for
-    # every ROM, so the sync never writes an unknown size over one an install
-    # recorded (Database Design, the ``roms`` table row). NULL = unknown.
+    # no confirmed-else-preserved merge. NULL = unknown.
     "fs_size_bytes",
     # Whether RomM holds a file for the ROM: server-derived like the size, set
     # directly from the fetched dict. A STRICT 0/1 INTEGER.

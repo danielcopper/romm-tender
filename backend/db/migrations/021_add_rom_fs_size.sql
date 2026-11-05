@@ -4,9 +4,8 @@
 -- =============================================================================
 --
 -- RomM returns ``fs_size_bytes`` — the total on-server size of a ROM's file(s)
--- — on both its list and detail responses, the same value in each. Tender
--- needs it at the frontend before a download so the game-detail UI can show how
--- much space the download will take. This column carries that fact locally.
+-- — on both its list and detail responses, the same value in each. This column
+-- carries that figure locally.
 --
 --   * roms.fs_size_bytes — the server-reported ROM size in bytes.
 --
@@ -16,16 +15,13 @@
 --   * A platform the current session wholesale-skipped is not re-applied, so a
 --     row it never touched keeps whatever it had (NULL for a fresh row).
 --
--- ``NULL`` = unknown; the frontend treats it as "size unknown, hide it".
+-- ``NULL`` = unknown.
 --
 -- Backfill needs no data-migration pass. The size is a server-derived fact, so
 -- it rides the sync UPSERT exactly like the version-metadata columns (regions /
 -- sibling_group_key / …, migration 008) — set directly from the fetched dict,
 -- no confirmed-else-preserved merge — and every applying sync re-writes the
--- authoritative server value onto each row it touches. Between syncs a completed
--- download also tops the value up (the download write-back reads the ROM detail
--- it already fetched). Why the two writes agree, and what reads the install's
--- write: Database Design, the ``roms`` table row.
+-- authoritative server value onto each row it touches.
 --
 -- Transaction-safe DDL only — the runner (adapters/sqlite_migrations.py) wraps
 -- BEGIN/COMMIT and stamps PRAGMA user_version = 21.
