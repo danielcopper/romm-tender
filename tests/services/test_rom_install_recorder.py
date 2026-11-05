@@ -1,4 +1,4 @@
-"""RomInstallRecorder — the row, the path a start is asked with, and the size write-back.
+"""RomInstallRecorder — the row, the path a start is asked with, and the size it records.
 
 The recorder is the one path both a completed download and an adoption reach an
 install through, so these cases hold for both.
@@ -103,119 +103,6 @@ class TestEveryInstallIsRecordedAndBaked:
         assert resolver.resolve_for_install(install, None) == rom_dir
 
 
-class TestRecordInstallFsSizeWriteBack:
-    """A completed install tops up ``roms.fs_size_bytes`` from the ROM detail (#1395).
-
-    The between-syncs freshness write-back: guarded on truthiness so a
-    missing/zero server size never clobbers a good persisted value.
-    """
-
-    def test_successful_install_stamps_server_size(self, harness):
-        uow = harness._uow
-        _seed_rom(uow, 42)
-
-        file_path, error = harness._install_recorder.do_record_install(
-            rom_id=42,
-            rom_detail={"platform_slug": "n64", "fs_size_bytes": 3_145_728},
-            file_path="/roms/n64/game_42.z64",
-            rom_dir=None,
-            system="n64",
-            cleanup=lambda: None,
-        )
-
-        assert error is None
-        assert file_path == "/roms/n64/game_42.z64"
-        rom = uow.roms.get(42)
-        assert rom is not None
-        assert rom.fs_size_bytes == 3_145_728
-        # The install itself still persisted in the same UoW.
-        assert uow.rom_installs.get(42) is not None
-
-    def test_missing_fs_size_bytes_does_not_overwrite(self, harness):
-        # The guard protects a good persisted value when the detail omits the size.
-        uow = harness._uow
-        seeded = Rom.synced(
-            rom_id=42,
-            platform_slug="n64",
-            name="Game 42",
-            fs_name="game_42.z64",
-            shortcut_app_id=1042,
-            synced_at="2026-01-01T00:00:00+00:00",
-            fs_size_bytes=999_000,
-        )
-        uow.roms.save(seeded)
-
-        _, error = harness._install_recorder.do_record_install(
-            rom_id=42,
-            rom_detail={"platform_slug": "n64"},  # no fs_size_bytes key
-            file_path="/roms/n64/game_42.z64",
-            rom_dir=None,
-            system="n64",
-            cleanup=lambda: None,
-        )
-
-        assert error is None
-        rom = uow.roms.get(42)
-        assert rom is not None
-        assert rom.fs_size_bytes == 999_000
-
-    def test_zero_fs_size_bytes_does_not_overwrite(self, harness):
-        # A zero size is falsy — the guard skips the write, preserving the value.
-        uow = harness._uow
-        seeded = Rom.synced(
-            rom_id=42,
-            platform_slug="n64",
-            name="Game 42",
-            fs_name="game_42.z64",
-            shortcut_app_id=1042,
-            synced_at="2026-01-01T00:00:00+00:00",
-            fs_size_bytes=999_000,
-        )
-        uow.roms.save(seeded)
-
-        _, error = harness._install_recorder.do_record_install(
-            rom_id=42,
-            rom_detail={"platform_slug": "n64", "fs_size_bytes": 0},
-            file_path="/roms/n64/game_42.z64",
-            rom_dir=None,
-            system="n64",
-            cleanup=lambda: None,
-        )
-
-        assert error is None
-        rom = uow.roms.get(42)
-        assert rom is not None
-        assert rom.fs_size_bytes == 999_000
-
-    def test_negative_fs_size_bytes_does_not_overwrite(self, harness):
-        # Rom.record_fs_size_bytes refuses it, so the guard keeps it out of the install.
-        uow = harness._uow
-        seeded = Rom.synced(
-            rom_id=42,
-            platform_slug="n64",
-            name="Game 42",
-            fs_name="game_42.z64",
-            shortcut_app_id=1042,
-            synced_at="2026-01-01T00:00:00+00:00",
-            fs_size_bytes=999_000,
-        )
-        uow.roms.save(seeded)
-
-        _, error = harness._install_recorder.do_record_install(
-            rom_id=42,
-            rom_detail={"platform_slug": "n64", "fs_size_bytes": -1},
-            file_path="/roms/n64/game_42.z64",
-            rom_dir=None,
-            system="n64",
-            cleanup=lambda: None,
-        )
-
-        assert error is None
-        rom = uow.roms.get(42)
-        assert rom is not None
-        assert rom.fs_size_bytes == 999_000
-
-
 class TestTheSizeAnInstallRecords:
     """An install records the size of the files it fetched; the ROM keeps RomM's size of the whole game (#2732 D1)."""
 
@@ -233,7 +120,7 @@ class TestTheSizeAnInstallRecords:
         return harness._uow.rom_installs.get(42), harness._uow.roms.get(42)
 
     def test_a_download_that_left_a_soundtrack_out_records_the_game_s_files(self, harness):
-        install, rom = self._record(
+        install, _rom = self._record(
             harness,
             {
                 "fs_size_bytes": 1080,
@@ -245,7 +132,6 @@ class TestTheSizeAnInstallRecords:
         )
 
         assert install.fetched_size_bytes == 1000
-        assert rom.fs_size_bytes == 1080
 
     def test_a_download_of_the_whole_game_records_romm_s_size(self, harness):
         install, _rom = self._record(harness, {"fs_size_bytes": 4096, "files": [{"id": 1, "file_name": "Game.iso"}]})

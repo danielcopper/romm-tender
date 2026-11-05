@@ -64,8 +64,7 @@ class RomInstallRecorder:
         is persisted, *cleanup* removes the just-placed artifact, and a failure
         message is returned. The row records the size of the files a download of
         the game fetches (``download_size_bytes``; an adoption records the same
-        figure); ``Rom.fs_size_bytes`` is written with RomM's size of the whole
-        game.
+        figure).
 
         Returns ``(file_path, None)`` on success or ``(None, error)`` when the
         invariant rejects the data.
@@ -86,13 +85,6 @@ class RomInstallRecorder:
 
         with self._uow_factory() as uow:
             uow.rom_installs.save(install)
-            # A size RomM did not state never replaces one already recorded.
-            size = rom_detail.get("fs_size_bytes")
-            if size and size > 0:
-                rom = uow.roms.get(int(rom_id))
-                if rom is not None:
-                    rom.record_fs_size_bytes(size)
-                    uow.roms.set_fs_size_bytes(rom.rom_id, rom.fs_size_bytes)
         return file_path, None
 
 

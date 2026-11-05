@@ -281,22 +281,6 @@ class SqliteRomRepository(BaseRepository):
         """
         self._conn.execute("UPDATE roms SET shortcut_applied = 0")
 
-    def set_fs_size_bytes(self, rom_id: int, size: int | None) -> None:
-        """Write the ROM size ``Rom.record_fs_size_bytes`` has just recorded for ``rom_id``.
-
-        An install records the size from the ROM detail it already fetched.
-        Unlike the pin columns (``emulator_override`` /
-        ``selected_disc`` / ``shortcut_applied``),
-        ``fs_size_bytes`` ALSO rides the sync UPSERT in :meth:`save`, and the
-        next sync writes RomM's listing value over this one; Database Design's
-        ``roms`` table row says why the two writes agree. ``size`` is the byte
-        count, or ``None`` for SQL NULL.
-        """
-        self._conn.execute(
-            "UPDATE roms SET fs_size_bytes = ? WHERE rom_id = ?",
-            (size, rom_id),
-        )
-
     def delete(self, rom_id: int) -> None:
         self._conn.execute("DELETE FROM roms WHERE rom_id = ?", (rom_id,))
 

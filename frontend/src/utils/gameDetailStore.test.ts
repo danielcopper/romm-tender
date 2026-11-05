@@ -244,7 +244,6 @@ describe("gameDetailStore", () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(
         found({
           installed: true,
-          fs_size_bytes: 4096,
           ra_id: 7,
           achievement_summary: { earned: 3, total: 50, earned_hardcore: 0 },
         }),
@@ -260,7 +259,6 @@ describe("gameDetailStore", () => {
         romName: "Test ROM",
         platformSlug: "snes",
         installed: true,
-        fsSizeBytes: 4096,
         raId: 7,
         achievementEarned: 3,
         achievementTotal: 50,
@@ -1321,7 +1319,6 @@ describe("gameDetailStore", () => {
       rom_name: "Mount ROM",
       platform_slug: "snes",
       installed: true,
-      fs_size_bytes: 4096,
       save_sync_enabled: true,
       save_sync_display: { status: "conflict", label: "Conflict", last_sync_check_at: null },
       ra_id: 7,
@@ -1333,7 +1330,6 @@ describe("gameDetailStore", () => {
       rom_name: "Other version",
       platform_slug: "genesis",
       installed: false,
-      fs_size_bytes: 2048,
       ra_id: 9,
       achievement_summary: achievementSummary(3, 30),
     });
@@ -1361,7 +1357,6 @@ describe("gameDetailStore", () => {
         romName: "Other version",
         platformSlug: "genesis",
         installed: false,
-        fsSizeBytes: 2048,
         saveSyncEnabled: false,
         saveSyncStatus: null,
         saveSyncLabel: "",
@@ -1378,7 +1373,7 @@ describe("gameDetailStore", () => {
     // ordering fence the page would end up describing a ROM as gone that the
     // download has since put back.
     it("lets a later re-read of the same rom win over an earlier one that lands after it", async () => {
-      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: true, fs_size_bytes: 4096 }));
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: true }));
       subscribe(nextAppId);
       await flush();
 
@@ -1389,7 +1384,7 @@ describe("gameDetailStore", () => {
         await Promise.resolve();
       });
 
-      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: true, fs_size_bytes: 8192 }));
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: true }));
       await act(async () => {
         emitHostEvent<DownloadCompleteEvent>("download_complete", downloadComplete(42));
         await Promise.resolve();
@@ -1397,12 +1392,12 @@ describe("gameDetailStore", () => {
       await flush();
       // The newest load is never the stale one — a deliberate re-read of the same
       // rom lands rather than being refused by its own fence.
-      expect(getGameDetail(nextAppId)).toMatchObject({ romId: 42, installed: true, fsSizeBytes: 8192 });
+      expect(getGameDetail(nextAppId)).toMatchObject({ romId: 42, installed: true });
 
-      afterUninstall.resolve(found({ installed: false, fs_size_bytes: null }));
+      afterUninstall.resolve(found({ installed: false }));
       await flush();
 
-      expect(getGameDetail(nextAppId)).toMatchObject({ romId: 42, installed: true, fsSizeBytes: 8192 });
+      expect(getGameDetail(nextAppId)).toMatchObject({ romId: 42, installed: true });
     });
 
     // Same rom throughout, so the rom binding admits the earlier answer — the
@@ -1628,7 +1623,7 @@ describe("gameDetailStore", () => {
       await flush();
       expect(getGameDetail(nextAppId).romId).toBeNull();
 
-      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: true, fs_size_bytes: 4096 }));
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: true }));
       await act(async () => {
         // Another game's download: with no identity the entry cannot tell whose
         // event this is, and the read it needs is about its own appId either way.
@@ -1637,7 +1632,7 @@ describe("gameDetailStore", () => {
       });
       await flush();
 
-      expect(getGameDetail(nextAppId)).toMatchObject({ romId: 42, installed: true, fsSizeBytes: 4096 });
+      expect(getGameDetail(nextAppId)).toMatchObject({ romId: 42, installed: true });
     });
 
     it("retries the read once after a delay, on a page where nothing else happens", async () => {
@@ -1650,13 +1645,13 @@ describe("gameDetailStore", () => {
 
         // No download, no uninstall, no adoption — the user is looking at the
         // game page, which is exactly the situation that produces this failure.
-        vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: true, fs_size_bytes: 4096 }));
+        vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: true }));
         await act(async () => {
           vi.advanceTimersByTime(PAST_RETRY_DELAY_MS);
         });
         await flush();
 
-        expect(getGameDetail(nextAppId)).toMatchObject({ romId: 42, installed: true, fsSizeBytes: 4096 });
+        expect(getGameDetail(nextAppId)).toMatchObject({ romId: 42, installed: true });
         // The entry's one attempt goes to the backend rather than to whatever
         // the shared TTL cache is holding by then.
         expect(vi.mocked(cachedStore.invalidateCachedGameDetail)).toHaveBeenCalledExactlyOnceWith(nextAppId);
@@ -2488,12 +2483,12 @@ describe("gameDetailStore — the page's check of whether the game can start (#2
   describe("the size a download would fetch (#2732 D1)", () => {
     it("reads it live for a ROM not installed and holds RomM's answer", async () => {
       vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: 1000 });
-      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: false, fs_size_bytes: 9000 }));
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: false }));
       subscribe(nextAppId);
       await flush();
 
       expect(vi.mocked(backend.getDownloadSize)).toHaveBeenCalledExactlyOnceWith(42);
-      expect(getGameDetail(nextAppId)).toMatchObject({ downloadSizeBytes: 1000, fsSizeBytes: 9000 });
+      expect(getGameDetail(nextAppId)).toMatchObject({ downloadSizeBytes: 1000 });
     });
 
     it("does not ask for an installed ROM", async () => {
@@ -2512,7 +2507,7 @@ describe("gameDetailStore — the page's check of whether the game can start (#2
         reason: "server_unreachable",
         message: "RomM did not answer",
       } as never);
-      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: false, fs_size_bytes: 9000 }));
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: false }));
       subscribe(nextAppId);
       await flush();
 

@@ -74,8 +74,6 @@ export interface GameDetailState extends BiosInfoFields, CoreInfoFields {
   installed: boolean;
   /** The path an install record names whose file and folder are both gone, else `null`. */
   fileMissingAt: string | null;
-  /** Server-reported ROM size in bytes, or `null` when unknown. */
-  fsSizeBytes: number | null;
   /** What a download would fetch, in bytes, read live for a ROM not installed; `null` until it lands or when unknown. */
   downloadSizeBytes: number | null;
   saveSyncEnabled: boolean;
@@ -97,7 +95,6 @@ const DEFAULT_STATE: GameDetailState = {
   platformName: "",
   installed: false,
   fileMissingAt: null,
-  fsSizeBytes: null,
   downloadSizeBytes: null,
   saveSyncEnabled: false,
   saveStatus: null,
@@ -326,7 +323,6 @@ async function loadDetail(appId: number, entry: Entry): Promise<void> {
       platformName: cached.platform_name || "",
       installed: cached.installed ?? false,
       fileMissingAt: cached.file_missing_at ?? null,
-      fsSizeBytes: cached.fs_size_bytes ?? null,
       // Read live below; an answer about the ROM shown before must not stand.
       downloadSizeBytes: null,
       saveSyncEnabled: cached.save_sync_enabled ?? false,

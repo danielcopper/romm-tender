@@ -229,31 +229,6 @@ class TestSupersedeChosenSgdbGame:
         assert (rom.sgdb_id, rom.chosen_sgdb_id) == (7, None)
 
 
-class TestRecordFsSizeBytes:
-    def test_records_the_size(self):
-        rom = _make_rom()
-
-        rom.record_fs_size_bytes(3_145_728)
-
-        assert rom.fs_size_bytes == 3_145_728
-
-    @pytest.mark.parametrize("size", [0, -1])
-    def test_a_size_of_zero_or_less_is_refused(self, size):
-        rom = Rom.synced(
-            rom_id=1,
-            platform_slug="n64",
-            name="Game",
-            fs_name="game.z64",
-            shortcut_app_id=None,
-            synced_at="2026-01-01T00:00:00+00:00",
-            fs_size_bytes=999_000,
-        )
-
-        with pytest.raises(ValueError, match="fs_size_bytes must be positive"):
-            rom.record_fs_size_bytes(size)
-        assert rom.fs_size_bytes == 999_000
-
-
 class TestFollowGroup:
     def test_takes_the_key_of_the_group_it_follows(self):
         rom = _make_rom()

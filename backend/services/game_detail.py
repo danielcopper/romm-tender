@@ -328,10 +328,6 @@ class GameDetailService:
             "revision": rom.revision,
             "tags": list(rom.tags),
             "is_main_sibling": rom.is_main_sibling,
-            # RomM's size of the whole game in bytes, NULL = unknown. Not the space
-            # a download needs: a download leaves the game's extras on the server
-            # (``DownloadService.get_download_size``).
-            "fs_size_bytes": rom.fs_size_bytes,
             # Whether RomM held a file for the ROM at the last sync; the play
             # button says "No file on RomM" for one that is not installed.
             "has_file_on_disk": rom.has_file_on_disk,

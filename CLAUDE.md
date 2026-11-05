@@ -951,10 +951,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   and the repository's column writers, which assign no field and so are no field assignment to the check.
   `RomRepository`'s `set_selected_disc`, `set_chosen_sgdb_id`, `set_artwork_checked_at` and `set_shortcut_applied` each
   persist one column the aggregate's own verb has just set, and `set_emulator_override` the two (`emulator_override` and
-  `emulator_override_source`) `Rom.pin_emulator_override` has just set, so the sync upsert never touches them;
-  `set_fs_size_bytes` persists the size `Rom.record_fs_size_bytes` has just set into a column the sync upsert also
-  writes. Two more change aggregate state with no verb: `RomRepository.clear_all_shortcut_applied` (Force Full Sync, the
-  reset the `shortcut_applied` entry sanctions) and `PlatformSyncStateRepository.revoke_skip` (by design,
+  `emulator_override_source`) `Rom.pin_emulator_override` has just set, so the sync upsert never touches them. Two more
+  change aggregate state with no verb: `RomRepository.clear_all_shortcut_applied` (Force Full Sync, the reset the
+  `shortcut_applied` entry sanctions) and `PlatformSyncStateRepository.revoke_skip` (by design,
   `domain/platform_sync_state.py`'s docstring)
 - **No UoW-opening seam (ActiveCoreResolver, PlatformSystems, uow_factory) is called while a UoW is open on the same
   path** — check — `scripts/check_uow_seam_nesting.py`, first seam family (a seam reached as a bound method, through a

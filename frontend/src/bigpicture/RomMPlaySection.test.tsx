@@ -4347,7 +4347,6 @@ describe("RomMPlaySection", () => {
         found: true,
         rom_id: 42,
         installed: false,
-        fs_size_bytes: 123456,
         ra_id: 12345,
         achievement_summary: { earned: 3, total: 50, earned_hardcore: 0 },
         bios_status: { platform_slug: "snes", server_count: 1, local_count: 0, all_downloaded: false },
@@ -5557,12 +5556,10 @@ describe("RomMPlaySection", () => {
     });
 
     it("happy: an uninstalled ROM with a known size renders the SPACE REQUIRED cell with the formatted value", async () => {
-      // RomM's size of the whole game; the cell shows what a download fetches.
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 1395,
         installed: false,
-        fs_size_bytes: 999999,
       });
       vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: 123456 });
       const { container } = render(<RomMPlaySection appId={testAppId} />);
@@ -5580,7 +5577,6 @@ describe("RomMPlaySection", () => {
         found: true,
         rom_id: 1395,
         installed: true,
-        fs_size_bytes: 123456,
       });
       vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: 123456 });
       const { container } = render(<RomMPlaySection appId={testAppId} />);
@@ -5594,7 +5590,6 @@ describe("RomMPlaySection", () => {
         found: true,
         rom_id: 1395,
         installed: false,
-        fs_size_bytes: null,
       });
       vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: null });
       const { container } = render(<RomMPlaySection appId={testAppId} />);
@@ -5608,7 +5603,6 @@ describe("RomMPlaySection", () => {
         found: true,
         rom_id: 1395,
         installed: false,
-        fs_size_bytes: 0,
       });
       vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: 0 });
       const { container } = render(<RomMPlaySection appId={testAppId} />);
@@ -5623,7 +5617,6 @@ describe("RomMPlaySection", () => {
         found: true,
         rom_id: 1395,
         installed: false,
-        fs_size_bytes: 1,
       });
       vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: 1 });
       const { container } = render(<RomMPlaySection appId={testAppId} />);
@@ -5633,7 +5626,7 @@ describe("RomMPlaySection", () => {
       expect(container.textContent).toContain("1bytes");
     });
 
-    it("hidden when size absent: an uninstalled ROM with no fs_size_bytes field does NOT render the cell", async () => {
+    it("hidden when size absent: an uninstalled ROM whose size RomM does not state does NOT render the cell", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 1395,
@@ -5652,7 +5645,6 @@ describe("RomMPlaySection", () => {
         found: true,
         rom_id: 1395,
         installed: false,
-        fs_size_bytes: 123456,
       });
       vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: 123456 });
       const { container } = render(<RomMPlaySection appId={testAppId} />);
@@ -5666,7 +5658,6 @@ describe("RomMPlaySection", () => {
         found: true,
         rom_id: 1395,
         installed: true,
-        fs_size_bytes: 123456,
       });
       vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: 123456 });
       await act(async () => {
@@ -5682,7 +5673,6 @@ describe("RomMPlaySection", () => {
         found: true,
         rom_id: 1395,
         installed: false,
-        fs_size_bytes: 123456,
       });
       vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: 123456 });
       await act(async () => {
@@ -5698,7 +5688,6 @@ describe("RomMPlaySection", () => {
         found: true,
         rom_id: 1395,
         installed: false,
-        fs_size_bytes: 123456,
       });
       vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: 123456 });
       const { container } = render(<RomMPlaySection appId={testAppId} />);
