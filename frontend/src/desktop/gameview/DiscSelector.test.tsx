@@ -1574,6 +1574,41 @@ describe("Desktop DiscSelector — what clears the guard", () => {
     expect(r.getByTestId("disc-btn")).toBeDisabled();
   });
 
+  it("reads the list again, and only then enables the trigger, when a committed switch was stopped short of its broadcast", async () => {
+    mockCachedDetail();
+    vi.mocked(backend.switchVersion).mockResolvedValue(success);
+    vi.mocked(applyCommittedVersionSwitch).mockResolvedValue(false);
+    const reread = deferred<VersionList>();
+    vi.mocked(backend.getVersionList).mockResolvedValueOnce(multiVersionList()).mockReturnValueOnce(reread.promise);
+    const r = render(<Selector appId={100} />);
+    await r.findByTestId("disc-btn");
+
+    await pressJapan(r);
+    await waitFor(() => expect(backend.getVersionList).toHaveBeenCalledTimes(2));
+    await flushAsync();
+    expect(r.getByTestId("disc-btn")).toBeDisabled();
+
+    await act(async () => {
+      reread.resolve(multiVersionList());
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(r.getByTestId("disc-btn")).toBeEnabled());
+  });
+
+  it("does not read the list again for a committed switch that broadcast", async () => {
+    mockCachedDetail();
+    vi.mocked(backend.switchVersion).mockResolvedValue(success);
+    const r = render(<Selector appId={100} />);
+    await r.findByTestId("disc-btn");
+
+    await pressJapan(r);
+    await waitFor(() => expect(applyCommittedVersionSwitch).toHaveBeenCalled());
+    await flushAsync();
+
+    expect(backend.getVersionList).toHaveBeenCalledTimes(1);
+    expect(r.getByTestId("disc-btn")).toBeDisabled();
+  });
+
   it("does not let an earlier switch's broadcast clear a later switch", async () => {
     mockCachedDetail();
     vi.mocked(backend.switchVersion)
@@ -1769,6 +1804,34 @@ describe("Desktop DiscSelector — a change of game and a late read", () => {
     await flushAsync();
 
     expect(r.getByTestId("disc-btn")).toBeEnabled();
+    expect(onSwitchingChange.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it("says nothing on the next game's page about a refusal that lands after the game changed", async () => {
+    mockCachedDetail();
+    vi.mocked(toaster.toast).mockReset();
+    const answer = deferred<Awaited<ReturnType<typeof backend.switchVersion>>>();
+    vi.mocked(backend.switchVersion).mockReturnValue(answer.promise);
+    const onSwitchingChange = vi.fn();
+    const r = render(<Selector appId={100} onSwitchingChange={onSwitchingChange} />);
+    await r.findByTestId("disc-btn");
+    fireEvent.click(r.getByTestId("disc-btn"));
+    await act(async () => {
+      fireEvent.click(within(r.getByTestId("disc-menu")).getByText("Japan"));
+      await Promise.resolve();
+    });
+    r.rerender(<Selector appId={101} onSwitchingChange={onSwitchingChange} />);
+    await flushAsync();
+    const readsBefore = vi.mocked(backend.getVersionList).mock.calls.length;
+
+    await act(async () => {
+      answer.resolve({ success: false, reason: "version_vanished", message: "gone" });
+      await Promise.resolve();
+    });
+    await flushAsync();
+
+    expect(toaster.toast).not.toHaveBeenCalled();
+    expect(backend.getVersionList).toHaveBeenCalledTimes(readsBefore);
     expect(onSwitchingChange.mock.calls).toEqual([[true], [false]]);
   });
 

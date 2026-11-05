@@ -99,8 +99,9 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing, p
   const [versionList, setVersionList] = useState<VersionList | null>(null);
   // Set while a switch is under way. One refused, failed or declined at its
   // question clears it itself (`executeVersionSwitch`); a committed one is
-  // cleared by the list read after its broadcast, and a change of game by the
-  // list effect's cleanup.
+  // cleared by the list read after its broadcast, or by the one a switch stopped
+  // short of its broadcast asks for, and a change of game by the list effect's
+  // cleanup.
   const [switching, setSwitching] = useState(false);
   const updateSwitching = useCallback(
     (next: boolean) => {
@@ -113,8 +114,9 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing, p
   const coversRequested = useRef<Set<number>>(new Set());
   const memberIdsRef = useRef<Set<number>>(new Set());
   const listRequestIdRef = useRef(0);
-  // Reset when a switch starts here, so only a broadcast that arrives during it
-  // counts.
+  // Whether the next current list read may clear `switching`. Set by this game's
+  // broadcast and by refreshAfterUnbroadcastSwitch; reset when a switch starts
+  // here or the game changes, so neither counts from an earlier switch.
   const switchBroadcastSeenRef = useRef(false);
   const loadVersionListRef = useRef<{
     appId: number;
@@ -211,8 +213,10 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing, p
         }
       } finally {
         // Only a current read issued after this game's version_switched
-        // broadcast clears the in-flight guard: only such a read is known to
-        // hold the list the switch left behind.
+        // broadcast, or after a committed switch that answered it did not
+        // broadcast, clears the in-flight guard: only such a read is known to hold
+        // the list the switch left behind. In the finally so that a failed read
+        // cannot leave the guard stuck.
         if (switchBroadcastSeenRef.current && isCurrent()) updateSwitching(false);
       }
     };
@@ -264,6 +268,13 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing, p
     });
   }, [versionList]);
 
+  const refreshAfterUnbroadcastSwitch = (): void => {
+    const loader = loadVersionListRef.current;
+    if (loader?.appId !== appId) return;
+    switchBroadcastSeenRef.current = true;
+    detach(loader.load());
+  };
+
   const refreshAfterVanishedRefusal = (): Promise<void> => {
     const loader = loadVersionListRef.current;
     if (loader?.appId !== appId) return Promise.resolve();
@@ -293,6 +304,7 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing, p
       askUnsyncedSaves: desktopUnsyncedSavesDialog(ask),
       onCoverResolved: (romId, cover) => setCovers((prev) => ({ ...prev, [romId]: cover })),
       onVanishedRefusal: () => detach(refreshAfterVanishedRefusal()),
+      onUnbroadcastSwitch: refreshAfterUnbroadcastSwitch,
       setSwitching: updateSwitching,
       logTag: LOG_TAG,
     });
