@@ -22,8 +22,8 @@ nothing.
 
 ## RomM Save API
 
-Requires RomM >= 5.3.0 (release or higher core). Pre-releases at the exact floor (`5.3.0-beta.1`, `5.3.0-alpha.1`) rank
-below `5.3.0` and are rejected; a higher core with a suffix (`5.3.1-beta`) passes. Tender rejects servers below the
+Requires RomM >= 5.4.1 (release or higher core). Pre-releases at the exact floor (`5.4.1-beta.1`, `5.4.1-alpha.1`) rank
+below `5.4.1` and are rejected; a higher core with a suffix (`5.4.2-beta`) passes. Tender rejects servers below the
 floor with `reason: "version_error"`.
 
 | Endpoint                                                 | Method | Notes                                                                                                                                                                                                                                                                                                  |

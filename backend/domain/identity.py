@@ -98,4 +98,4 @@ VERSION = "0.33.0"  # x-release-please-version
 # A plain assignment, never an annotated one: ``scripts/check_romm_min_version.py``
 # reads it off this module's syntax tree, and an annotated assignment is a
 # different node it does not look for.
-MIN_ROMM_VERSION = (5, 3, 0)
+MIN_ROMM_VERSION = (5, 4, 1)

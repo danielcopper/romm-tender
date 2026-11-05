@@ -225,7 +225,7 @@ locally with `mise run docs`.
   `&with_char_index=false&with_filter_values=false` to skip aggregations the server otherwise computes on every request.
   Every `/api/roms` walk that pages with `offset` also sends `order_by=id`; a walk without it is not stable under a
   concurrent scan (why: `_WALK_ORDER` in `adapters/romm/romm_api.py`).
-- **RomM minimum version**: Requires RomM >= 5.3.0, hard-rejected in `test_connection()` (`MIN_ROMM_VERSION` in
+- **RomM minimum version**: Requires RomM >= 5.4.1, hard-rejected in `test_connection()` (`MIN_ROMM_VERSION` in
   `domain/identity.py`) — Tender is inert until the server is updated.
 - **User-Agent on outgoing HTTP**: SteamGridDB **and** RomM behind Cloudflare Tunnel reject the default `Python-urllib`
   UA with 403, and GitHub's API refuses a request with no UA at all. The three adapters that talk to a server off this
@@ -1046,7 +1046,7 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `scripts/check_markdown_links.py`
 - **Every RomM minimum stated for a reader matches the enforced `MIN_ROMM_VERSION`** — check —
   `scripts/check_romm_min_version.py`, over the statements its `CLAIMS` list names; unchecked: a restatement not yet
-  added there, and the examples above the floor (`5.3.1-beta`, `5.4.0-alpha.1`) beside those statements. ADRs are out of
+  added there, and the examples above the floor (`5.4.2-beta`, `5.5.0-alpha.1`) beside those statements. ADRs are out of
   scope: frozen history
 - **Every tree under `backend/_vendor/`, and the resolver's recorded machines under `tests/adapters/atlas_vectors/`, is
   pinned by the `<pkg>.SHA256SUMS` beside it: every manifest entry under `<pkg>/` matches the vendored file's digest,

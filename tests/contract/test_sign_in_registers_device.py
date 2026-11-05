@@ -19,7 +19,7 @@ _URL = "http://romm.local"
 
 def _sign_in_ready(harness) -> None:
     harness.settings["save_sync_enabled"] = False
-    harness.romm.heartbeat_response = {"SYSTEM": {"VERSION": "5.3.0"}}
+    harness.romm.heartbeat_response = {"SYSTEM": {"VERSION": "5.4.1"}}
     harness.romm.exchange_pairing_code_response = {"id": 3, "raw_token": "rmm_paired"}
 
 
@@ -79,7 +79,7 @@ async def test_a_registration_that_fails_leaves_the_sign_in_a_success(harness):
 async def test_a_failed_sign_in_registers_nothing(harness):
     _sign_in_ready(harness)
     harness.romm.get_current_user_side_effect = RommConnectionError("connection refused")
-    harness.romm.heartbeat_response = {"SYSTEM": {"VERSION": "5.3.0"}}
+    harness.romm.heartbeat_response = {"SYSTEM": {"VERSION": "5.4.1"}}
 
     result = await _sign_in(harness, "token")
 

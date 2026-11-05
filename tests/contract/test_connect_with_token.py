@@ -17,12 +17,12 @@ from lib.errors import RommAuthError
 
 
 async def test_connect_with_token_happy_path_persists_user_provenance(harness):
-    harness.romm.heartbeat_response = {"SYSTEM": {"VERSION": "5.3.0"}}
+    harness.romm.heartbeat_response = {"SYSTEM": {"VERSION": "5.4.1"}}
 
     result = await harness.endpoints.connect_with_token("http://romm.local", "rmm_pasted", False)
 
     assert result["success"] is True
-    assert result["romm_version"] == "5.3.0"
+    assert result["romm_version"] == "5.4.1"
     assert "Connected" in result["message"]
     # Persisted with user provenance and no server-side id; no mint, no DELETE.
     assert harness.settings["romm_api_token"] == "rmm_pasted"
@@ -34,7 +34,7 @@ async def test_connect_with_token_happy_path_persists_user_provenance(harness):
 
 
 async def test_connect_with_token_invalid_token_returns_canonical_failure(harness):
-    harness.romm.heartbeat_response = {"SYSTEM": {"VERSION": "5.3.0"}}
+    harness.romm.heartbeat_response = {"SYSTEM": {"VERSION": "5.4.1"}}
     harness.romm.get_current_user_side_effect = RommAuthError("401")
 
     result = await harness.endpoints.connect_with_token("http://romm.local", "rmm_bad", False)

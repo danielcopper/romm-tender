@@ -20,7 +20,7 @@
 <a href="https://github.com/danielcopper/romm-tender/releases/latest"><img alt="Release" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fdanielcopper%2Fromm-tender%2Fmain%2F.release-please-manifest.json&query=%24%5B%27.%27%5D&style=for-the-badge&label=release&color=4795c9&labelColor=16202c"></a>
 <a href="https://github.com/danielcopper/romm-tender/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/danielcopper/romm-tender?style=for-the-badge&color=4795c9&labelColor=16202c"></a>
 <a href="https://github.com/danielcopper/romm-tender/releases/latest"><img alt="Downloads of the latest release" src="https://img.shields.io/github/downloads/danielcopper/romm-tender/latest/total?style=for-the-badge&label=downloads%20latest&color=4795c9&labelColor=16202c"></a>
-<a href="https://github.com/rommapp/romm/releases"><img alt="Requires RomM 5.3.0 or newer" src="https://img.shields.io/badge/RomM-%E2%89%A5%205.3.0-4795c9?style=for-the-badge&labelColor=16202c"></a>
+<a href="https://github.com/rommapp/romm/releases"><img alt="Requires RomM 5.4.1 or newer" src="https://img.shields.io/badge/RomM-%E2%89%A5%205.4.1-4795c9?style=for-the-badge&labelColor=16202c"></a>
 
 </div>
 
@@ -75,7 +75,7 @@ into Steam as non-steam shortcuts. Games appear directly in your Steam library, 
 
 - [Decky Loader](https://decky.xyz/) on your Steam Deck or Linux HTPC — the plugin lives in Steam's gamepad UI, so it
   works in the Deck's Game Mode **or** in Big Picture Mode on any Linux PC
-- A running [RomM](https://github.com/rommapp/romm) server, **version 5.3.0 or newer** (the plugin stays inert against
+- A running [RomM](https://github.com/rommapp/romm) server, **version 5.4.1 or newer** (the plugin stays inert against
   older servers)
 - [RetroDECK](https://retrodeck.net/) for launching games
 
