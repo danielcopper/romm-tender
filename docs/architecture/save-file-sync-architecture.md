@@ -295,10 +295,10 @@ while the downloads run — leaves the new slot active in the database, and the 
 new slot alone: a file whose download succeeded and whose state write went through is in sync (row 7); one not yet
 downloaded is missing and is downloaded from the new slot (rows 4 and 5); and one placed whose state write did not go
 through, acknowledged or not, has no baseline and holds the head's bytes, so it is adopted — acknowledged where this
-device is not current on that head (row 11a), as is where it already is (row 8a). Nothing is uploaded into either slot.
-Where step 2's write itself fails, or the write that ends a backup that stopped, the database still holds the previous
-slot with the baselines it had before the switch, and that slot's next sync downloads again from it every file step 1
-moved that RomM holds there (rows 4 and 5); the rest stay in `.romm-backup` only.
+device is not current on that head (row 11a), and with nothing acknowledged where it already is (row 8a). Nothing is
+uploaded into either slot. Where step 2's write itself fails, or the write that ends a backup that stopped, the database
+still holds the previous slot with the baselines it had before the switch, and that slot's next sync downloads again
+from it every file step 1 moved that RomM holds there (rows 4 and 5); the rest stay in `.romm-backup` only.
 
 A **named** target slot with no server saves is just the case where step 3 is a no-op: every local file is backed up,
 tracking is cleared, and the slot starts fresh — with every prior save recoverable under `.romm-backup`. (An empty /

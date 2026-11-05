@@ -765,8 +765,8 @@ If you need to recover a save by hand, look in the `.romm-backup` folder inside 
 whenever it is about to be overwritten or removed — not just when resolving a conflict with **Use Server**, but also
 when the setup wizard copies an archived save (one uploaded without a slot) into a slot. When you switch save slots,
 every save file of the game is moved aside, the ones the new slot replaces included, before the new slot's saves are
-downloaded. If one of the new slot's saves fails to download, the game has no save under that name until its next sync,
-and the sync before the game starts is one where **Sync before launch** is on and RomM can be reached. If a save can't
+downloaded. If one of the new slot's saves fails to download, the game may find no save under that name until its next
+sync; before the game starts, that sync runs while **Sync before launch** is on and RomM can be reached. If a save can't
 be moved aside when you switch slots, the switch stops and the slot you were on stays active; you're told which saves,
 if any, were already moved into `.romm-backup`. If the `.romm-backup` folder itself can't take backups, the switch is
 refused before anything moves, and you're told the folder is the problem.
