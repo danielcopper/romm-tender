@@ -13,6 +13,7 @@ from domain.rom_files import (
     folder_boot_layout_root,
     folder_boot_root,
     is_multi_file_download,
+    lands_as_folder,
     needs_m3u,
     ps3_folder_lift,
     ps3_folder_rename,
@@ -659,3 +660,74 @@ class TestThePathAStartIsAskedWith:
 
     def test_a_single_file_is_its_file(self):
         assert asked_path("/roms/n64/Game.z64", None, "/roms/n64/Game.z64") == "/roms/n64/Game.z64"
+
+
+class TestTheZipCountsTheFilesFetched:
+    """RomM zips only what a download asks for (#2223 D27)."""
+
+    def test_a_switch_game_whose_update_stays_on_the_server_is_one_file(self):
+        rom_detail = {
+            "has_nested_single_file": True,
+            "has_multiple_files": False,
+            "files": [
+                {"id": 1, "file_name": "game.nsp", "category": "game"},
+                {"id": 2, "file_name": "patch.nsp", "category": "update"},
+            ],
+        }
+
+        assert is_multi_file_download(rom_detail) is False
+
+    def test_two_game_files_beside_a_manual_are_a_zip(self):
+        rom_detail = {
+            "has_multiple_files": True,
+            "files": [
+                {"id": 1, "file_name": "Game.cue", "category": "game"},
+                {"id": 2, "file_name": "Game.bin", "category": "game"},
+                {"id": 3, "file_name": "manual.pdf", "category": "manual"},
+            ],
+        }
+
+        assert is_multi_file_download(rom_detail) is True
+
+
+class TestLandsAsFolder:
+    """The shape RomM holds a game in decides where it lies (#2223 D31)."""
+
+    @staticmethod
+    def _flags(simple: bool, nested: bool, multiple: bool) -> dict[str, bool]:
+        return {
+            "has_simple_single_file": simple,
+            "has_nested_single_file": nested,
+            "has_multiple_files": multiple,
+        }
+
+    def test_a_game_held_as_one_file_lies_flat(self):
+        assert lands_as_folder({**self._flags(True, False, False), "files": [{"file_name": "Game.gba"}]}) is False
+
+    def test_a_folder_with_one_file_is_a_folder(self):
+        assert lands_as_folder({**self._flags(False, True, False), "files": [{"file_name": "Game.chd"}]}) is True
+
+    def test_a_folder_with_several_files_is_a_folder(self):
+        assert lands_as_folder({**self._flags(False, False, True), "files": [{}, {}]}) is True
+
+    def test_a_folder_with_no_file_directly_in_it_is_a_folder(self):
+        # A PS3 dump: RomM sets none of the three flags.
+        assert lands_as_folder({**self._flags(False, False, False), "files": [{"file_name": "EBOOT.BIN"}]}) is True
+
+    def test_a_folder_game_fetching_one_file_is_still_a_folder(self):
+        rom_detail = {
+            **self._flags(False, True, False),
+            "files": [
+                {"id": 1, "file_name": "Game.rvz", "category": "game"},
+                {"id": 2, "file_name": "01.flac", "category": "soundtrack"},
+            ],
+        }
+
+        assert lands_as_folder(rom_detail) is True
+
+    def test_without_the_flags_more_than_one_file_is_a_folder(self):
+        assert lands_as_folder({"files": [{"file_name": "a"}, {"file_name": "b"}]}) is True
+        assert lands_as_folder({"files": [{"file_name": "a"}]}) is False
+
+    def test_a_folder_flag_decides_where_the_others_are_not_stated(self):
+        assert lands_as_folder({"has_nested_single_file": True, "files": [{"file_name": "Game.chd"}]}) is True

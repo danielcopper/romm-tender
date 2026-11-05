@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from domain.disc_formats import TRACK_DESCRIPTORS
+from domain.game_files import game_files
 
 # The suffix a single-file download — a ROM's or a firmware file's — is written
 # under until it is whole, and the one a download RomM serves as a ZIP is written
@@ -19,33 +20,39 @@ from domain.disc_formats import TRACK_DESCRIPTORS
 TMP_EXT = ".tmp"
 ZIP_TMP_EXT = ".zip.tmp"
 
+_SHAPE_FLAGS = ("has_simple_single_file", "has_nested_single_file", "has_multiple_files")
+
 
 def is_multi_file_download(rom_detail: dict[str, Any]) -> bool:
-    """Decide whether RomM will serve this ROM as a ZIP that must be extracted.
+    """Whether RomM serves this ROM's download as a ZIP that must be extracted.
 
-    This is the single multi-vs-single gate for the download path. It must
-    mirror RomM's own download gate rather than RomM's ``has_multiple_files``
-    flag, because the two are computed from different file counts:
-
-    - RomM sets ``has_multiple_files = len(top_level_files) > 1`` — it counts
-      only files at the ROM root.
-    - RomM's download/content endpoint zips whenever ``len(rom.files) != 1`` —
-      it counts *all* files, including ones in subfolders.
-
-    A canonical Switch game is a folder with the base file at the root plus
-    ``update/`` and ``dlc/`` in subfolders: exactly one top-level file, so
-    ``has_multiple_files`` is ``False`` and ``has_nested_single_file`` is
-    ``True``, yet ``len(files) > 1`` so RomM streams a ZIP. Keying on the flag
-    alone takes the single-file path and writes the ZIP bytes verbatim into one
-    file the emulator cannot read.
-
-    Returning ``len(files) > 1 OR has_multiple_files`` keys on the total file
-    count (matching the zip decision) while keeping the flag as a defensive
-    fallback for payloads that omit ``files``. Genuine nested-single ROMs have
-    ``len(files) == 1`` and correctly stay on the single-file path.
+    RomM's content endpoint zips whenever it serves more than one file, counting
+    every file it serves, nested ones included, and serves a single file as
+    itself (``get_rom_content``, RomM 5.4.1). A download asks for the files
+    ``game_files`` fetches, so those are the ones counted. ``has_multiple_files``
+    — more than one file directly in the game's folder, each of them a ``game``
+    file and so fetched — stands in for a payload that lists no files.
     """
-    files = rom_detail.get("files") or []
-    return len(files) > 1 or bool(rom_detail.get("has_multiple_files", False))
+    return len(game_files(rom_detail).fetched) > 1 or bool(rom_detail.get("has_multiple_files", False))
+
+
+def lands_as_folder(rom_detail: dict[str, Any]) -> bool:
+    """Whether a download of this ROM lies in a folder of its own rather than directly in its system's folder.
+
+    The shape RomM holds the game in decides, never the number of files fetched
+    (#2223 D31): only a game RomM states is one file (``has_simple_single_file``)
+    lies flat. RomM sets none of its three shape flags for a folder with no
+    file directly in it, such as a PS3 dump, and that is a folder too. A payload
+    that does not state all three flags is a folder where it lists more than one
+    file.
+    """
+    if rom_detail.get("has_simple_single_file"):
+        return False
+    if rom_detail.get("has_multiple_files") or rom_detail.get("has_nested_single_file"):
+        return True
+    if all(flag in rom_detail for flag in _SHAPE_FLAGS):
+        return True
+    return len(rom_detail.get("files") or []) > 1
 
 
 def needs_m3u(disc_files: list[str], m3u_supported: bool) -> bool:

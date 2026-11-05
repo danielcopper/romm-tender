@@ -179,16 +179,16 @@ class TestServedShapes:
     def test_a_single_zip_listed_as_a_cartridge_is_a_file(self):
         assert served_shapes(_single_zip(files=_listed(("Game.gba", 9000)))) == frozenset({FILE})
 
-    def test_a_nested_single_zip_is_read_by_its_file_name(self):
-        # RomM names the folder in fs_name for a nested single file; the file's own
-        # name is what arrives on disk.
+    def test_a_nested_single_zip_lands_in_its_folder(self):
+        # A game RomM holds as a folder with one file lies in its folder, whatever
+        # that file is (#2223 D31).
         detail = {
             "fs_name": "Game",
             "has_nested_single_file": True,
             "files": [{"file_name": "Game.zip", "archive_members": [{"name": "Game.rvz", "size": 1}]}],
         }
 
-        assert served_shapes(detail) == frozenset({FILE, DIR})
+        assert served_shapes(detail) == frozenset({DIR})
 
     def test_a_wrapped_listing_with_an_empty_folder_entry_is_both(self):
         detail = _single_zip(files=_listed(("Game/Game.cue", 80), ("Game/Game.bin", 9000), ("Extras/", 0)))

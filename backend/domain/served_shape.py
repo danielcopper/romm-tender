@@ -1,7 +1,8 @@
 """What a download of a ROM becomes on disk — a file, a folder, or both.
 
-RomM serves a ROM stored as several files as one ZIP that Tender unpacks into a
-folder, and a ROM stored as one file as that file. A single ``.zip`` holding a
+A game RomM holds as a folder lands in a folder, whether RomM serves it as one
+ZIP that Tender unpacks there or as the one file a download fetches of it, and
+a game RomM holds as one file lands as that file. A single ``.zip`` holding a
 disc image is the case between the two: it arrives as a file and is unpacked
 into a folder once the download has read its own central directory. Which sites
 ask :func:`served_shapes` and :func:`replace_covers`, and why they must all ask
@@ -17,9 +18,10 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from domain.disc_formats import DISC_IMAGE_EXTENSIONS
+from domain.game_files import game_files
 from domain.rom_adoption import ServerFile, server_manifest
 from domain.rom_candidates import DIR, FILE, Kind
-from domain.rom_files import is_multi_file_download, resolve_local_file_name
+from domain.rom_files import is_multi_file_download, lands_as_folder, resolve_local_file_name
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -161,14 +163,19 @@ def unpacked_manifest(manifest: tuple[ServerFile, ...]) -> tuple[ServerFile, ...
 
 
 def _listed_members(rom_detail: dict[str, Any]) -> tuple[ServerMember, ...] | None:
-    """The members RomM lists inside a single zip, or ``None`` where it lists none.
+    """The members RomM lists inside the one zip a download fetches, or ``None`` where it lists none.
 
     ``None`` both for a payload without ``archive_members`` (a library not
-    rescanned since RomM 4.9.0) and for a ROM that is no single zip at all.
+    rescanned since RomM 4.9.0) and for a download that is no single zip at
+    all. The zip may be a folder game's one fetched file (``game_files``).
     """
-    if is_multi_file_download(rom_detail) or not is_zip_name(resolve_local_file_name(rom_detail)[0]):
+    if is_multi_file_download(rom_detail):
         return None
-    manifest = server_manifest(rom_detail)
+    fetched = game_files(rom_detail).fetched
+    name = fetched[0].file_name if len(fetched) == 1 else resolve_local_file_name(rom_detail)[0]
+    if not is_zip_name(name):
+        return None
+    manifest = [entry for entry in server_manifest(rom_detail) if len(fetched) != 1 or entry.name == name]
     if len(manifest) != 1 or not manifest[0].members:
         return None
     return manifest[0].members
@@ -177,13 +184,14 @@ def _listed_members(rom_detail: dict[str, Any]) -> tuple[ServerMember, ...] | No
 def served_shapes(rom_detail: dict[str, Any]) -> frozenset[Kind]:
     """The shapes this ROM's download may take on disk: ``{FILE}``, ``{DIR}`` or both.
 
-    A multi-file ROM is a folder and any other single file a file. A single
-    ``.zip`` is both — the file it arrives as and the folder it is unpacked into
-    — unless RomM lists its members and none of them is a disc image
-    (:func:`holds_disc_image`); then it is kept as the file it is. Where RomM
-    lists nothing the zip may still unpack, so both shapes stand.
+    A game RomM holds as a folder is a folder (``lands_as_folder``), whatever it
+    fetches, and any other single file a file. A single ``.zip`` is both — the
+    file it arrives as and the folder it is unpacked into — unless RomM lists
+    its members and none of them is a disc image (:func:`holds_disc_image`);
+    then it is kept as the file it is. Where RomM lists nothing the zip may
+    still unpack, so both shapes stand.
     """
-    if is_multi_file_download(rom_detail):
+    if lands_as_folder(rom_detail):
         return frozenset({DIR})
     if not is_zip_name(resolve_local_file_name(rom_detail)[0]):
         return frozenset({FILE})
