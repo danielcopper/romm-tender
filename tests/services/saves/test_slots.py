@@ -2974,7 +2974,7 @@ class TestASwitchWhoseBackupFails:
         assert _require_save_state(svc, 42) == before
 
     @pytest.mark.asyncio
-    async def test_a_backup_folder_that_cannot_take_the_backup_of_an_overwritten_save_refuses_before_any_download(
+    async def test_a_backup_folder_that_cannot_back_up_a_save_the_new_slot_provides_refuses_before_any_download(
         self, tmp_path
     ):
         svc, fake = make_service(tmp_path)
