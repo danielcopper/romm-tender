@@ -8,11 +8,28 @@ import * as downloadStore from "../../utils/downloadStore";
 import * as sessionManager from "../../utils/sessionManager";
 import * as backend from "../../api/backend";
 import * as toast from "../../utils/toast";
+import * as steamShortcuts from "../../utils/steamShortcuts";
+import { setRommConnectionState } from "../../utils/connectionState";
+import { resetBoundAvailability, setBoundAvailability } from "../../utils/vanishedBinding";
+import { RESUME_TARGET_OCCUPIED_TOAST } from "../../utils/adoptWording";
 import { setStrandedAnswer } from "../../test-utils/stranded-panel";
 import { emitHostEvent } from "../../test-utils/host-event-bus";
 import { stubAppStore } from "../../test-utils/steamStubs";
 import type { GameDetailState } from "../../utils/gameDetailStore";
-import type { DownloadItem, GameLaunch, PreLaunchSyncStartedEvent, SaveStatus, SyncConflict } from "../../types";
+import type {
+  AdoptionCandidate,
+  AdoptResult,
+  DownloadCompleteEvent,
+  DownloadFailedEvent,
+  DownloadItem,
+  DownloadProgressEvent,
+  GameLaunch,
+  PreLaunchSyncStartedEvent,
+  SaveStatus,
+  SyncConflict,
+  TargetOccupiedResult,
+  UninstallProgressEvent,
+} from "../../types";
 import { launchRefusal } from "../../utils/gameLaunch";
 
 vi.mock("../../utils/gameDetailStore", () => ({
@@ -59,6 +76,12 @@ vi.mock("../../api/backend", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../api/backend")>();
   return {
     isEndpointFailure: actual.isEndpointFailure,
+    // The adoption flow and the resume press read these off the backend's answers.
+    isTargetOccupied: actual.isTargetOccupied,
+    isCandidatesFound: actual.isCandidatesFound,
+    isRenameCollisions: actual.isRenameCollisions,
+    isUnusableNamesake: actual.isUnusableNamesake,
+    isCandidateVanished: actual.isCandidateVanished,
     checkStartSource: vi.fn(),
     getSaveStatus: vi.fn(),
     resolveSyncConflict: vi.fn(),
@@ -75,6 +98,14 @@ vi.mock("../../api/backend", async (importOriginal) => {
     checkLocalDrift: vi.fn(),
     prepareGameStart: vi.fn(),
     releasePruneConflictLease: vi.fn(),
+    getCachedGameDetail: vi.fn(),
+    startDownload: vi.fn(),
+    adoptExistingRom: vi.fn(),
+    cancelDownload: vi.fn(),
+    pauseDownload: vi.fn(),
+    resumeDownload: vi.fn(),
+    removeRom: vi.fn(),
+    verifyExistingContent: vi.fn(),
   };
 });
 
@@ -200,6 +231,14 @@ describe("PlayButton", () => {
     });
     vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
     vi.mocked(backend.stopRunningGame).mockResolvedValue({ success: true, stopped: 1, force_killed: 0 } as never);
+    vi.mocked(backend.getCachedGameDetail).mockResolvedValue({ found: false });
+    vi.mocked(backend.startDownload).mockResolvedValue({ success: true } as never);
+    vi.mocked(backend.cancelDownload).mockResolvedValue({ success: true } as never);
+    vi.mocked(backend.pauseDownload).mockResolvedValue({ success: true } as never);
+    vi.mocked(backend.resumeDownload).mockResolvedValue({ success: true } as never);
+    vi.mocked(backend.removeRom).mockResolvedValue({ success: true, message: "", prune_lease_token: null } as never);
+    setRommConnectionState("connected");
+    resetBoundAvailability();
   });
 
   it("draws nothing until the page's detail names the game's ROM", () => {
@@ -444,12 +483,12 @@ describe("PlayButton", () => {
       expect(screen.queryByRole("button", { name: /^PLAY/ })).not.toBeInTheDocument();
     });
 
-    it("gives way to NOT INSTALLED and to RESOLVE CONFLICT while the page checks", () => {
+    it("gives way to DOWNLOAD and to RESOLVE CONFLICT while the page checks", () => {
       vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(
         detailState({ installed: false, startCheck: { state: "checking" } }),
       );
       const { unmount } = render(<PlayButton appId={APP_ID} />);
-      expect(screen.getByRole("button", { name: "NOT INSTALLED" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
       expect(screen.queryByRole("button", { name: "CHECKING..." })).not.toBeInTheDocument();
       unmount();
 
@@ -866,44 +905,807 @@ describe("PlayButton", () => {
     });
   });
 
-  describe("a game that cannot be played from here yet", () => {
-    const placeholder = (name: RegExp) => {
-      const button = screen.getByRole("button", { name });
-      expect(button).toBeDisabled();
-      expect(screen.getAllByRole("button")).toHaveLength(1);
-      return button;
-    };
+  describe("a game not on this device", () => {
+    const notInstalled = (overrides: Partial<GameDetailState> = {}) =>
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ installed: false, ...overrides }));
 
-    it("says NOT INSTALLED for a game that is not downloaded", () => {
-      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ installed: false }));
+    it("offers DOWNLOAD, which starts the download and draws its bar until the transfer is under way", async () => {
+      notInstalled();
       render(<PlayButton appId={APP_ID} />);
-      placeholder(/^NOT INSTALLED$/);
+
+      const download = screen.getByRole("button", { name: "DOWNLOAD" });
+      expect(download).toHaveStyle({ background: "linear-gradient(90deg, #1a9fff 0%, #0078d4 100%)" });
+      expect(download.style.opacity).toBe("");
+
+      fireEvent.click(download);
+
+      await waitFor(() => expect(backend.startDownload).toHaveBeenCalledWith(100, false, null, null, false));
+      expect(await screen.findByRole("progressbar")).toHaveTextContent("0%");
+      expect(screen.queryByRole("button", { name: "DOWNLOAD" })).not.toBeInTheDocument();
     });
 
-    it.each(["queued", "downloading", "paused", "extracting"] as const)(
-      "says DOWNLOADING... while its download is %s",
-      (status) => {
-        vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ installed: false }));
-        vi.mocked(downloadStore.useDownloads).mockReturnValue([{ rom_id: 100, status } as DownloadItem]);
-        render(<PlayButton appId={APP_ID} />);
-        placeholder(/^DOWNLOADING\.\.\.$/);
-      },
-    );
+    it("reads STARTING... and takes no second press while the press's request is in flight", async () => {
+      let answer!: (value: unknown) => void;
+      vi.mocked(backend.startDownload).mockReturnValueOnce(
+        new Promise((resolve) => {
+          answer = resolve;
+        }) as never,
+      );
+      notInstalled();
+      render(<PlayButton appId={APP_ID} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+      const starting = await screen.findByRole("button", { name: "STARTING..." });
+      expect(starting).toBeDisabled();
+      fireEvent.click(starting);
+      expect(backend.startDownload).toHaveBeenCalledTimes(1);
+
+      await act(async () => answer({ success: true }));
+      expect(await screen.findByRole("progressbar")).toBeInTheDocument();
+    });
+
+    it("reads OFFLINE and takes no press while RomM cannot be reached", () => {
+      setRommConnectionState("offline");
+      notInstalled();
+      render(<PlayButton appId={APP_ID} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "OFFLINE" }));
+
+      expect(screen.getByRole("button", { name: "OFFLINE" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "OFFLINE" })).toHaveStyle({
+        background: "linear-gradient(90deg, #4a5968 0%, #3a4754 100%)",
+      });
+      expect(backend.startDownload).not.toHaveBeenCalled();
+    });
+
+    it("reads No file on RomM and takes no press where RomM holds no file for the game", async () => {
+      vi.mocked(backend.getCachedGameDetail).mockResolvedValue({
+        found: true,
+        rom_id: 100,
+        installed: false,
+        has_file_on_disk: false,
+      });
+      notInstalled();
+      render(<PlayButton appId={APP_ID} />);
+
+      const button = await screen.findByRole("button", { name: "NO FILE ON ROMM" });
+      expect(button).toBeDisabled();
+      fireEvent.click(button);
+      expect(backend.startDownload).not.toHaveBeenCalled();
+    });
+
+    it("takes no press while the bound version is gone from RomM, and takes one again once it is back", () => {
+      setBoundAvailability(APP_ID, "version_gone");
+      notInstalled();
+      render(<PlayButton appId={APP_ID} />);
+
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toHaveStyle({ opacity: "0.7" });
+      act(() => setBoundAvailability(APP_ID, "live"));
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
+    });
+
+    it("asks the cached detail nothing for an installed game, and logs a read that fails", async () => {
+      const { unmount } = render(<PlayButton appId={APP_ID} />);
+      await act(async () => {});
+      expect(backend.getCachedGameDetail).not.toHaveBeenCalled();
+      unmount();
+
+      vi.mocked(backend.getCachedGameDetail).mockRejectedValueOnce(new Error("socket closed"));
+      notInstalled();
+      render(<PlayButton appId={APP_ID} />);
+      await waitFor(() =>
+        expect(backend.debugLog).toHaveBeenCalledWith("DesktopPlayButton: on-disk read failed: Error: socket closed"),
+      );
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
+    });
 
     it("is not held by another ROM's download, or by one that has ended", () => {
-      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ installed: false }));
+      notInstalled();
       vi.mocked(downloadStore.useDownloads).mockReturnValue([
         { rom_id: 999, status: "downloading" } as DownloadItem,
         { rom_id: 100, status: "failed" } as DownloadItem,
       ]);
       render(<PlayButton appId={APP_ID} />);
-      placeholder(/^NOT INSTALLED$/);
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
+      expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     });
 
     it("says FILE MISSING, with the path as its title, for a download whose file is gone", () => {
       vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ fileMissingAt: "/roms/snes/smw.sfc" }));
       render(<PlayButton appId={APP_ID} />);
-      expect(placeholder(/^FILE MISSING$/)).toHaveAttribute("title", "/roms/snes/smw.sfc");
+      const button = screen.getByRole("button", { name: /^FILE MISSING$/ });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute("title", "/roms/snes/smw.sfc");
+      expect(screen.getAllByRole("button")).toHaveLength(1);
+    });
+  });
+
+  describe("a download in flight", () => {
+    const transfer = (overrides: Partial<DownloadItem> = {}): DownloadItem => ({
+      rom_id: 100,
+      rom_name: "Super Mario World",
+      platform_name: "snes",
+      file_name: "smw.sfc",
+      status: "downloading",
+      progress: 0.5,
+      bytes_downloaded: 1024,
+      total_bytes: 2048,
+      resumable: true,
+      ...overrides,
+    });
+
+    beforeEach(() => {
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ installed: false }));
+    });
+
+    it.each(["queued", "downloading", "paused", "extracting"] as const)(
+      "draws the transfer's bar while its download is %s",
+      (status) => {
+        vi.mocked(downloadStore.useDownloads).mockReturnValue([transfer({ status })]);
+        render(<PlayButton appId={APP_ID} />);
+        expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "50");
+        expect(screen.queryByRole("button", { name: "DOWNLOAD" })).not.toBeInTheDocument();
+      },
+    );
+
+    it("cancels the download and offers DOWNLOAD again", async () => {
+      render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Cancel download" }));
+
+      expect(backend.cancelDownload).toHaveBeenCalledWith(100);
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
+    });
+
+    it.each([
+      ["Cancel download", "cancel", "cancelDownload"],
+      ["Pause download", "pause", "pauseDownload"],
+    ] as const)("logs a %s press the backend fails", async (label, what, call) => {
+      vi.mocked(downloadStore.useDownloads).mockReturnValue([transfer()]);
+      vi.mocked(backend[call]).mockRejectedValueOnce(new Error("socket closed"));
+      render(<PlayButton appId={APP_ID} />);
+
+      fireEvent.click(screen.getByRole("button", { name: label }));
+
+      await waitFor(() =>
+        expect(backend.debugLog).toHaveBeenCalledWith(`DesktopPlayButton: ${what} failed: Error: socket closed`),
+      );
+    });
+
+    it("pauses a running download, and resumes a paused one", () => {
+      vi.mocked(downloadStore.useDownloads).mockReturnValue([transfer()]);
+      const { rerender } = render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "Pause download" }));
+      expect(backend.pauseDownload).toHaveBeenCalledWith(100);
+
+      vi.mocked(downloadStore.useDownloads).mockReturnValue([transfer({ status: "paused" })]);
+      rerender(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "Resume download" }));
+      expect(backend.resumeDownload).toHaveBeenCalledWith(100);
+    });
+
+    it("says why a resume was refused when something now sits at the game's location", async () => {
+      vi.mocked(downloadStore.useDownloads).mockReturnValue([transfer({ status: "paused" })]);
+      vi.mocked(backend.resumeDownload).mockResolvedValueOnce({ success: false, reason: "target_occupied" } as never);
+      render(<PlayButton appId={APP_ID} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Resume download" }));
+
+      await waitFor(() => expect(toast.showToast).toHaveBeenCalledWith(RESUME_TARGET_OCCUPIED_TOAST));
+    });
+
+    it.each(["cancelled", "failed"] as const)(
+      "offers DOWNLOAD again when a download the button started is %s elsewhere",
+      async (status) => {
+        render(<PlayButton appId={APP_ID} />);
+        fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+        await screen.findByRole("progressbar");
+
+        act(() => emitHostEvent<Partial<DownloadProgressEvent>>("download_progress", { rom_id: 100, status }));
+
+        expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
+      },
+    );
+
+    it("offers DOWNLOAD again when the download fails, leaving the toast to the panel's own listener", async () => {
+      render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+      await screen.findByRole("progressbar");
+
+      act(() =>
+        emitHostEvent<Partial<DownloadFailedEvent>>("download_failed", { rom_id: 100, error_message: "disk full" }),
+      );
+
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
+      expect(toast.showToast).not.toHaveBeenCalled();
+    });
+
+    it("hands the bar over to the download store once the transfer's frames arrive", async () => {
+      const { rerender } = render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+      await screen.findByRole("progressbar");
+
+      act(() =>
+        emitHostEvent<Partial<DownloadProgressEvent>>("download_progress", { rom_id: 100, status: "downloading" }),
+      );
+      vi.mocked(downloadStore.useDownloads).mockReturnValue([]);
+      rerender(<PlayButton appId={APP_ID} />);
+
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
+    });
+
+    it("changes nothing for another ROM's frames", async () => {
+      render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+      await screen.findByRole("progressbar");
+
+      act(() => {
+        emitHostEvent<Partial<DownloadProgressEvent>>("download_progress", { rom_id: 999, status: "cancelled" });
+        emitHostEvent<Partial<DownloadFailedEvent>>("download_failed", { rom_id: 999 });
+        emitHostEvent<Partial<DownloadCompleteEvent>>("download_complete", { rom_id: 999 });
+      });
+
+      expect(screen.getByRole("progressbar")).toBeInTheDocument();
+    });
+
+    it("reads READY! once the download completes, then holds PLAY, writing no launch command and toasting nothing", () => {
+      vi.useFakeTimers();
+      try {
+        vi.mocked(downloadStore.useDownloads).mockReturnValue([transfer()]);
+        const { rerender } = render(<PlayButton appId={APP_ID} />);
+
+        act(() => emitHostEvent<Partial<DownloadCompleteEvent>>("download_complete", { rom_id: 100 }));
+        vi.mocked(downloadStore.useDownloads).mockReturnValue([]);
+        rerender(<PlayButton appId={APP_ID} />);
+        expect(screen.getByRole("button", { name: "READY!" })).toBeDisabled();
+
+        act(() => {
+          vi.advanceTimersByTime(1099);
+        });
+        expect(screen.getByRole("button", { name: "READY!" })).toBeInTheDocument();
+        act(() => {
+          vi.advanceTimersByTime(1);
+        });
+        expect(screen.getByRole("button", { name: /^PLAY/ })).toBeEnabled();
+        expect(steamShortcuts.setLaunchOptionsConfirmed).not.toHaveBeenCalled();
+        expect(toast.showToast).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("stands READY! from the latest completion when a second one lands", () => {
+      vi.useFakeTimers();
+      try {
+        render(<PlayButton appId={APP_ID} />);
+        act(() => emitHostEvent<Partial<DownloadCompleteEvent>>("download_complete", { rom_id: 100 }));
+        act(() => {
+          vi.advanceTimersByTime(600);
+        });
+        act(() => emitHostEvent<Partial<DownloadCompleteEvent>>("download_complete", { rom_id: 100 }));
+        act(() => {
+          vi.advanceTimersByTime(600);
+        });
+        expect(screen.getByRole("button", { name: "READY!" })).toBeInTheDocument();
+        act(() => {
+          vi.advanceTimersByTime(500);
+        });
+        expect(screen.queryByRole("button", { name: "READY!" })).not.toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("leaves no READY! timer behind once unmounted", () => {
+      vi.useFakeTimers();
+      try {
+        const { unmount } = render(<PlayButton appId={APP_ID} />);
+        act(() => emitHostEvent<Partial<DownloadCompleteEvent>>("download_complete", { rom_id: 100 }));
+        expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+        unmount();
+
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  describe("Uninstall", () => {
+    const openMenu = () => fireEvent.click(screen.getByRole("button", { name: "Game Options" }));
+
+    it("removes the game from the chevron's menu, reading UNINSTALLING... until it is gone", async () => {
+      let removed!: (value: unknown) => void;
+      vi.mocked(backend.removeRom).mockReturnValueOnce(
+        new Promise((resolve) => {
+          removed = resolve;
+        }) as never,
+      );
+      render(<PlayButton appId={APP_ID} />);
+
+      openMenu();
+      fireEvent.click(screen.getByRole("menuitem", { name: "Uninstall" }));
+
+      expect(await screen.findByRole("button", { name: "UNINSTALLING..." })).toBeDisabled();
+      expect(backend.removeRom).toHaveBeenCalledWith(100);
+      await act(async () => removed({ success: true, message: "", prune_lease_token: null }));
+      expect(await screen.findByRole("button", { name: "DOWNLOAD" })).toBeInTheDocument();
+    });
+
+    it("counts the files a multi-file removal has taken, as Big Picture's does", async () => {
+      vi.mocked(backend.removeRom).mockReturnValueOnce(new Promise(() => {}) as never);
+      render(<PlayButton appId={APP_ID} />);
+      openMenu();
+      fireEvent.click(screen.getByRole("menuitem", { name: "Uninstall" }));
+      await screen.findByRole("button", { name: "UNINSTALLING..." });
+
+      act(() => {
+        emitHostEvent<UninstallProgressEvent>("uninstall_progress", { rom_id: 100, files_removed: 3, files_total: 10 });
+        emitHostEvent<UninstallProgressEvent>("uninstall_progress", { rom_id: 999, files_removed: 9, files_total: 9 });
+      });
+
+      expect(screen.getByRole("button", { name: "UNINSTALLING 3/10" })).toBeDisabled();
+    });
+
+    it("holds DOWNLOAD only until the page's detail moves on", async () => {
+      const { rerender } = render(<PlayButton appId={APP_ID} />);
+      openMenu();
+      fireEvent.click(screen.getByRole("menuitem", { name: "Uninstall" }));
+      await screen.findByRole("button", { name: "DOWNLOAD" });
+
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ installed: false }));
+      rerender(<PlayButton appId={APP_ID} />);
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeInTheDocument();
+
+      // Downloaded again from elsewhere: the page's detail now says installed.
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState());
+      rerender(<PlayButton appId={APP_ID} />);
+      expect(screen.getByRole("button", { name: /^PLAY/ })).toBeInTheDocument();
+    });
+
+    it("starts a later removal's count afresh", async () => {
+      let refuse!: (value: unknown) => void;
+      vi.mocked(backend.removeRom)
+        .mockReturnValueOnce(
+          new Promise((resolve) => {
+            refuse = resolve;
+          }) as never,
+        )
+        .mockReturnValueOnce(new Promise(() => {}) as never);
+      render(<PlayButton appId={APP_ID} />);
+      openMenu();
+      fireEvent.click(screen.getByRole("menuitem", { name: "Uninstall" }));
+      act(() =>
+        emitHostEvent<UninstallProgressEvent>("uninstall_progress", { rom_id: 100, files_removed: 3, files_total: 10 }),
+      );
+      await act(async () => refuse({ success: false, message: "In use" }));
+
+      openMenu();
+      fireEvent.click(screen.getByRole("menuitem", { name: "Uninstall" }));
+
+      expect(await screen.findByRole("button", { name: "UNINSTALLING..." })).toBeInTheDocument();
+    });
+
+    it("comes back to PLAY when the removal is refused", async () => {
+      vi.mocked(backend.removeRom).mockResolvedValueOnce({ success: false, message: "In use" } as never);
+      render(<PlayButton appId={APP_ID} />);
+
+      openMenu();
+      fireEvent.click(screen.getByRole("menuitem", { name: "Uninstall" }));
+
+      expect(await screen.findByRole("button", { name: /^PLAY/ })).toBeInTheDocument();
+      expect(toast.showToast).toHaveBeenCalledWith("In use");
+    });
+  });
+
+  describe("a version switch while a press is under way", () => {
+    const otherVersion = () => {
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ romId: 101 }));
+    };
+
+    it("leaves an uninstall's state with the version it was pressed for", async () => {
+      let removed!: (value: unknown) => void;
+      vi.mocked(backend.removeRom).mockReturnValueOnce(
+        new Promise((resolve) => {
+          removed = resolve;
+        }) as never,
+      );
+      const { rerender } = render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "Game Options" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "Uninstall" }));
+      act(() =>
+        emitHostEvent<UninstallProgressEvent>("uninstall_progress", { rom_id: 100, files_removed: 3, files_total: 10 }),
+      );
+      await screen.findByRole("button", { name: "UNINSTALLING 3/10" });
+
+      otherVersion();
+      rerender(<PlayButton appId={APP_ID} />);
+      expect(screen.getByRole("button", { name: /^PLAY/ })).toBeEnabled();
+
+      await act(async () => removed({ success: true, message: "", prune_lease_token: null }));
+      expect(screen.getByRole("button", { name: /^PLAY/ })).toBeEnabled();
+      expect(screen.queryByRole("button", { name: "DOWNLOAD" })).not.toBeInTheDocument();
+    });
+
+    it("leaves a download press's state with the version it was pressed for", async () => {
+      let started!: (value: unknown) => void;
+      vi.mocked(backend.startDownload).mockReturnValueOnce(
+        new Promise((resolve) => {
+          started = resolve;
+        }) as never,
+      );
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ installed: false }));
+      const { rerender } = render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+      await screen.findByRole("button", { name: "STARTING..." });
+
+      // Another version that is not downloaded either: its own DOWNLOAD, not the press's STARTING....
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ romId: 101, installed: false }));
+      rerender(<PlayButton appId={APP_ID} />);
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
+
+      await act(async () => started({ success: true }));
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
+      expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+
+      // Back on the version it was pressed for, a transfer that ended meanwhile leaves no bar behind.
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ installed: false }));
+      rerender(<PlayButton appId={APP_ID} />);
+      expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
+
+      // One the download store still carries is drawn from the store.
+      vi.mocked(downloadStore.useDownloads).mockReturnValue([{ rom_id: 100, status: "downloading" } as DownloadItem]);
+      rerender(<PlayButton appId={APP_ID} />);
+      expect(screen.getByRole("progressbar")).toBeInTheDocument();
+    });
+
+    it("holds no PLAY for an adoption the page has switched away from", async () => {
+      const occupied = {
+        success: false,
+        reason: "target_occupied",
+        message: "",
+        existing: { name: "smw.sfc", path: "/roms/snes/smw.sfc", kind: "file", size_bytes: 2048, modified_at: 0 },
+        incoming: { name: "smw.sfc", size_bytes: 2048 },
+        sizes_match: true,
+        adoptable: true,
+      };
+      let adopted!: (value: unknown) => void;
+      vi.mocked(backend.startDownload).mockResolvedValueOnce(occupied as never);
+      vi.mocked(backend.adoptExistingRom).mockReturnValueOnce(
+        new Promise((resolve) => {
+          adopted = resolve;
+        }) as never,
+      );
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ installed: false }));
+      const { rerender } = render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Use These Files" }));
+
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ romId: 101, installed: false }));
+      rerender(<PlayButton appId={APP_ID} />);
+      await act(async () => adopted({ success: true, message: "" }));
+
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
+    });
+  });
+
+  describe("content already on the device", () => {
+    const OCCUPIED: TargetOccupiedResult = {
+      success: false,
+      reason: "target_occupied",
+      message: "'smw.sfc' is already on this device",
+      existing: { name: "smw.sfc", path: "/roms/snes/smw.sfc", kind: "file", size_bytes: 2048, modified_at: 0 },
+      incoming: { name: "smw.sfc", size_bytes: 2048 },
+      sizes_match: true,
+      adoptable: true,
+    };
+
+    const CANDIDATE_A: AdoptionCandidate = {
+      name: "Super Mario World (USA).sfc",
+      path: "/roms/snes/Super Mario World (USA).sfc",
+      is_dir: false,
+      size_bytes: 2048,
+      modified_at: 0,
+      evidence: "crc32",
+      detail: "Same checksum as the server's copy",
+    };
+    const CANDIDATE_B: AdoptionCandidate = {
+      ...CANDIDATE_A,
+      name: "smw-hack.sfc",
+      path: "/roms/snes/smw-hack.sfc",
+      evidence: "name",
+      detail: "Carries this game's name",
+    };
+
+    const ADOPTED: AdoptResult = { success: true, message: "" };
+
+    beforeEach(() => {
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ installed: false }));
+    });
+
+    it("opens the comparison on target_occupied, and adopting writes no launch command and holds PLAY", async () => {
+      vi.mocked(backend.startDownload).mockResolvedValueOnce(OCCUPIED as never);
+      vi.mocked(backend.adoptExistingRom).mockResolvedValueOnce(ADOPTED);
+
+      render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+
+      const dialog = await screen.findByRole("dialog", { name: "This Game Is Already on Your Device" });
+      expect(dialog).toHaveTextContent("Both are the same size.");
+      fireEvent.click(screen.getByRole("button", { name: "Use These Files" }));
+
+      expect(await screen.findByRole("button", { name: /^PLAY/ })).toBeInTheDocument();
+      expect(backend.adoptExistingRom).toHaveBeenCalledWith(100, "/roms/snes/smw.sfc", null);
+      expect(steamShortcuts.setLaunchOptionsConfirmed).not.toHaveBeenCalled();
+      expect(toast.showToast).toHaveBeenCalledWith("Super Mario World is ready to play");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("Download Instead asks a second time, and Delete and Download re-sends with replace", async () => {
+      vi.mocked(backend.startDownload).mockResolvedValueOnce(OCCUPIED as never);
+
+      render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Download Instead" }));
+
+      expect(screen.getByText(/Downloading deletes the file that is here now — smw\.sfc/)).toBeInTheDocument();
+      expect(backend.startDownload).toHaveBeenCalledTimes(1);
+      fireEvent.click(screen.getByRole("button", { name: "Delete and Download" }));
+
+      await waitFor(() =>
+        expect(backend.startDownload).toHaveBeenLastCalledWith(100, true, null, null, false, ["/roms/snes/smw.sfc"]),
+      );
+      expect(await screen.findByRole("progressbar")).toBeInTheDocument();
+    });
+
+    it("dismissing the comparison with Escape leaves the button offering the files it found", async () => {
+      vi.mocked(backend.startDownload).mockResolvedValueOnce(OCCUPIED as never);
+
+      render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+      await screen.findByRole("dialog");
+      fireEvent.keyDown(window, { key: "Escape" });
+
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(screen.getByRole("button", { name: "USE EXISTING FILES" })).toBeEnabled();
+      expect(backend.adoptExistingRom).not.toHaveBeenCalled();
+      expect(backend.startDownload).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the files it found through a frame that is neither a cancel nor a failure", async () => {
+      vi.mocked(backend.startDownload).mockResolvedValueOnce(OCCUPIED as never);
+      render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+      await screen.findByRole("dialog");
+      fireEvent.keyDown(window, { key: "Escape" });
+      const existing = await screen.findByRole("button", { name: "USE EXISTING FILES" });
+      expect(existing).toHaveStyle({ fontSize: "13px" });
+
+      act(() => emitHostEvent<Partial<DownloadProgressEvent>>("download_progress", { rom_id: 100, status: "queued" }));
+
+      expect(screen.getByRole("button", { name: "USE EXISTING FILES" })).toBeInTheDocument();
+    });
+
+    it("forgets the files it found once a download fails", async () => {
+      vi.mocked(backend.startDownload).mockResolvedValueOnce(OCCUPIED as never);
+      render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+      await screen.findByRole("dialog");
+      fireEvent.keyDown(window, { key: "Escape" });
+      await screen.findByRole("button", { name: "USE EXISTING FILES" });
+
+      act(() => emitHostEvent<Partial<DownloadFailedEvent>>("download_failed", { rom_id: 100 }));
+
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toHaveStyle({ fontSize: "15px" });
+    });
+
+    it("takes a second press once the comparison was dismissed", async () => {
+      vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED as never);
+      render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+      await screen.findByRole("dialog");
+      fireEvent.keyDown(window, { key: "Escape" });
+
+      fireEvent.click(await screen.findByRole("button", { name: "USE EXISTING FILES" }));
+
+      expect(await screen.findByRole("dialog")).toBeInTheDocument();
+      expect(backend.startDownload).toHaveBeenCalledTimes(2);
+    });
+
+    it("forgets the files it found when the replacing download is cancelled from its bar", async () => {
+      vi.mocked(backend.startDownload).mockResolvedValueOnce(OCCUPIED as never);
+      render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Download Instead" }));
+      fireEvent.click(screen.getByRole("button", { name: "Delete and Download" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Cancel download" }));
+
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeInTheDocument();
+    });
+
+    it("forgets the files it found once a cancelled download may have removed them", async () => {
+      vi.mocked(backend.startDownload).mockResolvedValueOnce(OCCUPIED as never);
+      render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+      await screen.findByRole("dialog");
+      fireEvent.keyDown(window, { key: "Escape" });
+      await screen.findByRole("button", { name: "USE EXISTING FILES" });
+
+      act(() =>
+        emitHostEvent<Partial<DownloadProgressEvent>>("download_progress", { rom_id: 100, status: "cancelled" }),
+      );
+
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeInTheDocument();
+    });
+
+    it("lists two candidates, compares the one picked, and adopts it by its path", async () => {
+      vi.mocked(backend.startDownload).mockResolvedValueOnce({
+        success: false,
+        reason: "adoption_candidates",
+        message: "",
+        incoming: { name: "smw.sfc", size_bytes: 2048 },
+        candidates: [CANDIDATE_A, CANDIDATE_B],
+        truncated: false,
+      } as never);
+      vi.mocked(backend.adoptExistingRom).mockResolvedValueOnce(ADOPTED);
+
+      render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+
+      await screen.findByRole("dialog", { name: "This Game May Already Be on Your Device" });
+      fireEvent.click(screen.getByRole("button", { name: /smw-hack\.sfc/ }));
+
+      await screen.findByRole("dialog", { name: "This Game Is Already on Your Device" });
+      expect(screen.getByText(/Using it renames it to smw\.sfc/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Use These Files" }));
+
+      await waitFor(() => expect(backend.adoptExistingRom).toHaveBeenCalledWith(100, "/roms/snes/smw-hack.sfc", null));
+    });
+
+    it("asks once about taken names and re-sends the adopt with the answer", async () => {
+      vi.mocked(backend.startDownload).mockResolvedValueOnce(OCCUPIED as never);
+      vi.mocked(backend.adoptExistingRom)
+        .mockResolvedValueOnce({
+          success: false,
+          reason: "rename_collisions",
+          message: "",
+          collisions: [{ name: "smw.srm", path: "/saves/smw.srm", kind: "save" }],
+        } as never)
+        .mockResolvedValueOnce(ADOPTED);
+
+      render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Use These Files" }));
+
+      const collisions = await screen.findByRole("dialog", { name: "Some of These Names Are Taken" });
+      expect(collisions).toHaveTextContent("smw.srm (save)");
+      fireEvent.click(screen.getByRole("button", { name: "Replace Them" }));
+
+      await waitFor(() =>
+        expect(backend.adoptExistingRom).toHaveBeenLastCalledWith(100, "/roms/snes/smw.sfc", "overwrite"),
+      );
+      expect(await screen.findByRole("button", { name: /^PLAY/ })).toBeInTheDocument();
+    });
+
+    it("labels the button USE EXISTING FILES from the cached detail, and reports a seen candidate on the press", async () => {
+      vi.mocked(backend.getCachedGameDetail).mockResolvedValue({
+        found: true,
+        rom_id: 100,
+        installed: false,
+        adoption_candidate_present: true,
+      });
+
+      render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(await screen.findByRole("button", { name: "USE EXISTING FILES" }));
+
+      await waitFor(() => expect(backend.startDownload).toHaveBeenCalledWith(100, false, null, null, true));
+    });
+
+    it("keeps DOWNLOAD when the cached detail found nothing", async () => {
+      vi.mocked(backend.getCachedGameDetail).mockResolvedValueOnce({
+        found: true,
+        rom_id: 100,
+        installed: false,
+        target_path_occupied: false,
+        adoption_candidate_present: false,
+        has_file_on_disk: true,
+      });
+
+      render(<PlayButton appId={APP_ID} />);
+      await waitFor(() => expect(backend.getCachedGameDetail).toHaveBeenCalledWith(APP_ID));
+      await act(async () => {});
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toHaveTextContent(/^DOWNLOAD$/);
+    });
+
+    it("ignores a cached answer read before the game was installed that lands after a newer one", async () => {
+      const answers: ((value: unknown) => void)[] = [];
+      vi.mocked(backend.getCachedGameDetail).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            answers.push(resolve);
+          }) as never,
+      );
+      const { rerender } = render(<PlayButton appId={APP_ID} />);
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState());
+      rerender(<PlayButton appId={APP_ID} />);
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ installed: false }));
+      rerender(<PlayButton appId={APP_ID} />);
+      expect(answers).toHaveLength(2);
+
+      await act(async () => answers[1]?.({ found: true, rom_id: 100, installed: false }));
+      await act(async () => answers[0]?.({ found: true, rom_id: 100, installed: false, target_path_occupied: true }));
+
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeInTheDocument();
+    });
+
+    it("reads no other ROM's cached answer", async () => {
+      vi.mocked(backend.getCachedGameDetail).mockResolvedValueOnce({
+        found: true,
+        rom_id: 999,
+        installed: false,
+        target_path_occupied: true,
+      });
+
+      render(<PlayButton appId={APP_ID} />);
+      await waitFor(() => expect(backend.getCachedGameDetail).toHaveBeenCalledWith(APP_ID));
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toHaveTextContent(/^DOWNLOAD$/);
+    });
+
+    it("retires what it found once the page switches to another version", async () => {
+      vi.mocked(backend.getCachedGameDetail).mockResolvedValueOnce({
+        found: true,
+        rom_id: 100,
+        installed: false,
+        target_path_occupied: true,
+      });
+      const { rerender } = render(<PlayButton appId={APP_ID} />);
+      await screen.findByRole("button", { name: "USE EXISTING FILES" });
+
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ romId: 101, installed: false }));
+      rerender(<PlayButton appId={APP_ID} />);
+
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeInTheDocument();
+    });
+
+    it("tells the selector a press is under way through the request and the question, until the flow ends", async () => {
+      const pressUnderWay = () => vi.mocked(DiscSelector).mock.lastCall?.[0].pressUnderWay;
+      let answer!: (value: never) => void;
+      vi.mocked(backend.startDownload).mockReturnValueOnce(
+        new Promise<never>((resolve) => {
+          answer = resolve;
+        }),
+      );
+      render(<PlayButton appId={APP_ID} />);
+      expect(pressUnderWay()).toBe(false);
+
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+      await screen.findByRole("button", { name: "STARTING..." });
+      expect(pressUnderWay()).toBe(true);
+
+      await act(async () => answer(OCCUPIED as never));
+      await screen.findByRole("dialog");
+      expect(pressUnderWay()).toBe(true);
+
+      fireEvent.keyDown(window, { key: "Escape" });
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(pressUnderWay()).toBe(false);
+    });
+
+    it("unmounting with the comparison open ends the flow at its cancel exit", async () => {
+      vi.mocked(backend.startDownload).mockResolvedValueOnce(OCCUPIED as never);
+
+      const { unmount } = render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+      await screen.findByRole("dialog");
+      unmount();
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      await act(async () => {});
+      expect(backend.startDownload).toHaveBeenCalledTimes(1);
+      expect(backend.adoptExistingRom).not.toHaveBeenCalled();
     });
   });
 
@@ -991,6 +1793,28 @@ describe("PlayButton", () => {
 
       act(() => selectorProps()!.onSwitchingChange(false));
       expect(screen.getByRole("button", { name: /RESOLVE CONFLICT/ })).toBeEnabled();
+    });
+
+    it("disables DOWNLOAD while the selector is switching, its label unchanged", () => {
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ installed: false }));
+      render(<PlayButton appId={APP_ID} />);
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
+
+      act(() => selectorProps()!.onSwitchingChange(true));
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeDisabled();
+
+      act(() => selectorProps()!.onSwitchingChange(false));
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
+    });
+
+    it("is told the press is over once the download has started", async () => {
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ installed: false }));
+      render(<PlayButton appId={APP_ID} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+
+      await waitFor(() => expect(backend.startDownload).toHaveBeenCalled());
+      await waitFor(() => expect(selectorProps()?.pressUnderWay).toBe(false));
     });
 
     it("is told the file is missing", () => {

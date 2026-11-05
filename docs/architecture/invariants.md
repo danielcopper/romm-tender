@@ -1186,8 +1186,8 @@ Format: **invariant** — tier — enforced by.
   the fallback page's actions (`frontend/src/boot/FallbackActions.tsx`) give way to the answer — every button but
   Restart Steam, which asks Steam rather than the backend — with the line that an update's result shows after the reload
   or restart that answer names. In the desktop dev build the desktop client's Play button
-  (`frontend/src/desktop/gameview/PlayButton.tsx`) renders nothing, since it has no Resume and PLAY, STOP and RESOLVE
-  CONFLICT each need the backend, pinned by the stranded-panel `describe` block of
+  (`frontend/src/desktop/gameview/PlayButton.tsx`) renders nothing, since it has no Resume and every press it offers
+  needs the backend, pinned by the stranded-panel `describe` block of
   `frontend/src/desktop/gameview/PlayButton.test.tsx`. **Why**: a stranded panel is never admitted again — it holds the
   token of a backend process that is gone — so every press that reaches the backend could only fail. Before #2275 each
   such press failed in a way of its own: some with the answer, some with a bare failure, some with a wrong reason, some

@@ -25,8 +25,8 @@ sentence names Big Picture as where the Tender menu is, because the desktop clie
 backend for the migration state again for each game page it is drawn for (`useMigrationRefresh`,
 `frontend/src/utils/migrationRefresh.ts`).
 
-`PlayButton` (`frontend/src/desktop/gameview/PlayButton.tsx`) is Tender's Play button in the desktop client. Its presses
-(`frontend/src/desktop/gameview/usePlayLaunch.ts`) are those of Big Picture's `CustomPlayButton`
+`PlayButton` (`frontend/src/desktop/gameview/PlayButton.tsx`) is Tender's Play button in the desktop client. Its launch
+presses and Uninstall (`frontend/src/desktop/gameview/usePlayLaunch.ts`) are those of Big Picture's `CustomPlayButton`
 (`frontend/src/bigpicture/CustomPlayButton.tsx`): PLAY starts the game through the launch gate
 ([Pre-launch sync](save-file-sync-architecture.md#pre-launch-sync)), STOP does what Big Picture's Stop Game menu entry
 does, and RESOLVE CONFLICT what its Resolve Conflict button does. It has no RESUME: while the game runs, whatever
@@ -34,11 +34,21 @@ started it, the button is STOP, as Steam's own Play button in the desktop client
 client build 1792618285), and bringing the game's window to the front is the window manager's. It asks its questions in
 the desktop dialogs, which `useDialogHost` (`frontend/src/desktop/gameview/dialogs/useDialogHost.tsx`) draws into the
 body of the document the button is drawn in. Its save-tracking step is the one the
-[Pre-launch sync](save-file-sync-architecture.md#pre-launch-sync) table names for it. Where the game cannot be played
-from the page — not downloaded, downloading, or its downloaded file gone — it draws a disabled button that says which,
-and where the game cannot start — its emulator cannot, or its file does not start with it — PLAY is disabled with the
-sentence `startRefusal` (`frontend/src/utils/emulatorStart.ts`) answers. While the page checks whether the game can
-start, and where that check went wrong, PLAY does what Big Picture's does
+[Pre-launch sync](save-file-sync-architecture.md#pre-launch-sync) table names for it. A game not on this device gets
+DOWNLOAD in PLAY's place, which downloads through the adoption flow (`runDownloadWithAdoption`,
+`frontend/src/utils/adoptFlow.ts`) and asks its already-on-your-device questions in the desktop dialogs; it takes no
+press where Big Picture's Download takes none — offline, while the bound version is gone from RomM, or where RomM holds
+no file for the game. A download in flight draws its progress with pause, resume and cancel
+(`frontend/src/desktop/gameview/DownloadingButton.tsx`), its fill ending on PLAY's own green, and a downloaded file that
+is gone draws a disabled FILE MISSING with the path as its title; DOWNLOAD's press and the bar's own are the button's.
+The chevron beside PLAY opens the game's menu, whose one entry is Uninstall (`executeRomUninstall`,
+`frontend/src/utils/romUninstall.ts`), which, like Big Picture's, asks nothing first. What a download, an adoption or an
+uninstall puts on the button — STARTING..., the bar before the download store carries the transfer, READY!,
+UNINSTALLING..., the verdict it holds after — stays with the version it was pressed for, so a version switch while it
+runs leaves it behind and the button draws the new version's own state. Where the game cannot start — its emulator
+cannot, or its file does not start with it — PLAY is disabled with the sentence `startRefusal`
+(`frontend/src/utils/emulatorStart.ts`) answers. While the page checks whether the game can start, and where that check
+went wrong, PLAY does what Big Picture's does
 ([Launch-target validation](backend-architecture.md#launch-target-validation)), and reads CHECKING... where Big
 Picture's shows its throbber. On a stranded panel it gates as the [invariant register](invariants.md)'s stranded-panel
 entry says. Steam's Play button and the badges beside it are hidden as soon as the button's root has rendered, also
@@ -55,11 +65,13 @@ RomM is listed and offers nothing: Big Picture's way to its removed-game cleanup
 counterpart. A switch that would leave unsynced saves behind asks in a desktop dialog. The selector draws nothing where
 the button draws nothing, and leaves the discs out while the bound version's file is missing. While a switch is under
 way its trigger is disabled and dimmed, with no throbber ([qam-panel.md](qam-panel.md#waiting) lists the waits that show
-none, and why), and PLAY and RESOLVE CONFLICT are disabled; while the Play button's check is under way its trigger is
-disabled and dimmed and an open menu closes, since the two ask through one dialog host, where a newer question answers
-the open one dismissed.
+none, and why), and PLAY, RESOLVE CONFLICT and DOWNLOAD are disabled; while the Play button's check or a press of
+DOWNLOAD is under way, the latter until the download has started or the adoption flow has ended, its trigger is disabled
+and dimmed and an open menu closes, since the two ask through one dialog host, where a newer question answers the open
+one dismissed.
 
-Neither the Play button nor the selector adds a stylesheet to Steam's document, so nothing changes on hover on either.
+Neither the Play button nor the selector adds a stylesheet to Steam's document, so nothing changes on hover on either,
+and a download's glow, which pulses on Big Picture, stands still.
 
 ## Two windows, two realms
 
