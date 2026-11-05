@@ -400,6 +400,9 @@ class FakeDownloadFileStore:
                 out.append((stored, len(data)))
         return out
 
+    def read_lines(self, path: str) -> list[str]:
+        return self.files[path].decode("utf-8", errors="replace").splitlines()
+
     def write_text_atomic(self, path: str, content: str) -> None:
         tmp_path = path + ".tmp"
         self.tmp_files.add(tmp_path)

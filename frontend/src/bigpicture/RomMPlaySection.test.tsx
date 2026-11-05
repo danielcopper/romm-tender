@@ -4354,6 +4354,7 @@ describe("RomMPlaySection", () => {
         bios_level: "missing",
         bios_label: "0/3",
       });
+      vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: 123456 });
       vi.mocked(playSectionUtils.extractBiosInfo).mockReturnValue({
         biosNeeded: true,
         biosLabel: "0/3",
@@ -5556,18 +5557,20 @@ describe("RomMPlaySection", () => {
     });
 
     it("happy: an uninstalled ROM with a known size renders the SPACE REQUIRED cell with the formatted value", async () => {
+      // RomM's size of the whole game; the cell shows what a download fetches.
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 1395,
         installed: false,
-        fs_size_bytes: 123456,
+        fs_size_bytes: 999999,
       });
+      vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: 123456 });
       const { container } = render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
 
       expect(container.textContent).toContain("SPACE REQUIRED");
       // Non-vacuous: the cell carries the formatBytes-formatted value, and
-      // formatBytes was handed the raw byte count from the cached detail.
+      // formatBytes was handed the raw byte count from the live read.
       expect(container.textContent).toContain("123456bytes");
       expect(vi.mocked(formatters.formatBytes)).toHaveBeenCalledWith(123456);
     });
@@ -5579,6 +5582,7 @@ describe("RomMPlaySection", () => {
         installed: true,
         fs_size_bytes: 123456,
       });
+      vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: 123456 });
       const { container } = render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
 
@@ -5592,6 +5596,7 @@ describe("RomMPlaySection", () => {
         installed: false,
         fs_size_bytes: null,
       });
+      vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: null });
       const { container } = render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
 
@@ -5605,6 +5610,7 @@ describe("RomMPlaySection", () => {
         installed: false,
         fs_size_bytes: 0,
       });
+      vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: 0 });
       const { container } = render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
 
@@ -5619,6 +5625,7 @@ describe("RomMPlaySection", () => {
         installed: false,
         fs_size_bytes: 1,
       });
+      vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: 1 });
       const { container } = render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
 
@@ -5632,6 +5639,7 @@ describe("RomMPlaySection", () => {
         rom_id: 1395,
         installed: false,
       });
+      vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: null });
       const { container } = render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
 
@@ -5646,6 +5654,7 @@ describe("RomMPlaySection", () => {
         installed: false,
         fs_size_bytes: 123456,
       });
+      vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: 123456 });
       const { container } = render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
       expect(container.textContent).toContain("SPACE REQUIRED");
@@ -5659,6 +5668,7 @@ describe("RomMPlaySection", () => {
         installed: true,
         fs_size_bytes: 123456,
       });
+      vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: 123456 });
       await act(async () => {
         emitHostEvent<DownloadCompleteEvent>("download_complete", downloadComplete(1395));
         await Promise.resolve();
@@ -5674,6 +5684,7 @@ describe("RomMPlaySection", () => {
         installed: false,
         fs_size_bytes: 123456,
       });
+      vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: 123456 });
       await act(async () => {
         globalThis.dispatchEvent(new CustomEvent("romm_rom_uninstalled", { detail: { rom_id: 1395 } }));
         await Promise.resolve();
@@ -5689,6 +5700,7 @@ describe("RomMPlaySection", () => {
         installed: false,
         fs_size_bytes: 123456,
       });
+      vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: 123456 });
       const { container } = render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
       expect(container.textContent).toContain("SPACE REQUIRED");

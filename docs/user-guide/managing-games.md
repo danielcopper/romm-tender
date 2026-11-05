@@ -19,9 +19,11 @@ When you open a RomM game in the Steam Library, you'll see the Tender panel belo
 - **Playtime** — **Last Played** and **Playtime** cells next to the Play button. Last Played reads Today, Yesterday or
   so many days ago within a week, and otherwise the date in your Steam client's language
 - **Space required** — for a game that isn't downloaded yet, a "Space Required" cell next to the Play button shows how
-  much disk space the download needs. It disappears once the game is installed (mirroring how Steam hides it for
-  installed games); it's also omitted when RomM doesn't report the size or reports 0 bytes, as it does for a game it
-  holds no file for.
+  much disk space the download needs. Tender asks RomM for it once the page is open, so the cell appears a moment later,
+  and it counts the files a download brings: the game's own files, not the manuals, soundtracks, updates, DLC or other
+  extras in the game's RomM folder, which stay on the server. It disappears once the game is installed (mirroring how
+  Steam hides it for installed games); it's also omitted when RomM can't be asked, doesn't report the size, or reports 0
+  bytes, as it does for a game it holds no file for.
 - **Action buttons** — Download, Pause/Resume, Uninstall, Cancel, or Refresh Metadata depending on state
 
 Below the play row stand the panel's tabs — **GAME INFO**, **ACHIEVEMENTS**, **SAVES**, **BIOS** and **ARTWORK** — on
@@ -332,7 +334,10 @@ versions, and a version with no region/language detail simply omits the rows. Th
 ## Downloading ROMs
 
 Games appear as shortcuts in your library even before the ROM file is downloaded. Before downloading, the panel shows a
-**Space Required** cell next to the Play button so you know how much disk space the ROM needs. To download:
+**Space Required** cell next to the Play button so you know how much disk space the ROM needs. A download brings the
+files RomM files as the game's own — the files directly in the game's folder on RomM, and those in no category folder,
+such as a PS3 dump's — and leaves everything RomM files under another category on the server: manuals, walkthroughs,
+soundtracks, screenshots, cheats, patches, translations, hacks, mods, demos, prototypes, updates and DLC. To download:
 
 1. Open the game's detail page in the Steam Library
 2. In the Tender panel, tap **Download**

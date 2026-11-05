@@ -77,3 +77,29 @@ class TestRelocate:
         install.relocate(None, "/new/roms/n64/zelda.z64")
         assert install.rom_dir is None
         assert install.file_path == "/new/roms/n64/zelda.z64"
+
+
+class TestTheFetchedSize:
+    def test_an_install_records_the_size_it_fetched(self):
+        install = RomInstall.mark_installed(
+            rom_id=1,
+            file_path="/r/g",
+            rom_dir=None,
+            platform_slug="gc",
+            system="gc",
+            installed_at="t",
+            fetched_size_bytes=7,
+        )
+        assert install.fetched_size_bytes == 7
+
+    def test_a_size_that_states_nothing_is_refused(self):
+        with pytest.raises(ValueError, match="fetched_size_bytes"):
+            RomInstall.mark_installed(
+                rom_id=1,
+                file_path="/r/g",
+                rom_dir=None,
+                platform_slug="gc",
+                system="gc",
+                installed_at="t",
+                fetched_size_bytes=0,
+            )

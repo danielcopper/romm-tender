@@ -82,21 +82,17 @@ class DataInventoryService:
         }
 
     def _read_installed_io(self) -> tuple[int, int]:
-        """Count the installs and sum the size RomM reported for their games.
+        """Count the installs and sum the size each recorded of the files it fetched.
 
-        The size is the SERVER's figure (``Rom.fs_size_bytes``) and never a
-        walk of the disk, so the page opens with a number instead of measuring
-        for one. That makes it an approximation in two ways the caller has to
-        keep: a game whose size RomM never reported contributes nothing, and
+        The size is RomM's figure for those files (``RomInstall.fetched_size_bytes``)
+        and never a walk of the disk, so the page opens with a number instead of
+        measuring for one. That makes it an approximation in two ways the caller
+        has to keep: an install that recorded no size contributes nothing, and
         what a game takes locally differs from what the server named whenever
         an archive was unpacked, a patch was written beside the original, or
         extras share the folder.
         """
         with self._uow_factory() as uow:
-            installed_ids = {install.rom_id for install in uow.rom_installs.iter_all()}
-            total = sum(
-                rom.fs_size_bytes
-                for rom in uow.roms.iter_all()
-                if rom.rom_id in installed_ids and rom.fs_size_bytes is not None
-            )
-        return len(installed_ids), total
+            installs = list(uow.rom_installs.iter_all())
+        total = sum(install.fetched_size_bytes for install in installs if install.fetched_size_bytes is not None)
+        return len(installs), total

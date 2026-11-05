@@ -6,6 +6,7 @@ from typing import Any
 
 from domain.game_files import (
     MAX_REQUEST_LINE_BYTES,
+    download_size_bytes,
     file_ids_query,
     game_files,
     request_line_fits,
@@ -142,3 +143,24 @@ class TestTheRequestLine:
         overhead = len("GET  HTTP/1.1")
 
         assert not request_line_fits("é" * (MAX_REQUEST_LINE_BYTES - overhead))
+
+
+class TestTheSizeOfADownload:
+    def test_it_is_the_files_fetched_where_something_is_left_out(self):
+        detail = {
+            **_detail(_file(1, "Game.rvz", "game", 900), _file(2, "soundtrack/a.flac", "soundtrack", 50)),
+            "fs_size_bytes": 950,
+        }
+
+        assert download_size_bytes(detail) == 900
+
+    def test_it_is_romms_size_of_the_whole_game_where_nothing_is_left_out(self):
+        # RomM's own figure stands where the files it lists state no sizes.
+        detail = {"fs_size_bytes": 4096, "files": [{"id": 1, "file_name": "Game.gba"}]}
+
+        assert download_size_bytes(detail) == 4096
+
+    def test_a_payload_stating_no_size_is_summed(self):
+        assert (
+            download_size_bytes(_detail(_file(1, "Game.cue", "game", 100), _file(2, "Game.bin", "game", 900))) == 1000
+        )

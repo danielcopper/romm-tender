@@ -1918,34 +1918,68 @@ so the façade builds none of them:
 The progress frame, the queue's answer and the reservation arithmetic are pure functions in `domain/download_frames.py`
 and `domain/disk_space.py`.
 
-RomM exposes three mutually exclusive file-layout flags on every ROM detail. They control how the server stores files
-and how the API serves them. Tender maps each layout to a local on-disk path:
+**A download fetches a game's own files, not its extras**
+([#2223](https://github.com/danielcopper/romm-tender/issues/2223) D27, D30). RomM files each of a ROM's files under a
+category (`RomFileSchema.category`, RomM 5.4.1): a file directly in the game's folder is `game`, a file in a folder
+directly below it named after a category takes that category, and any other nested file takes none. A download fetches
+the `game` files and the files in no category — a PS3, Wii U or DOS game's own content lies in no category folder — and
+leaves every other category on the server: manuals, walkthroughs, soundtracks, screenshots, cheats, patches,
+translations, hacks, mods, demos, prototypes, updates and DLC. Where that leaves nothing, every file is fetched. That
+split is `game_files` (`domain/game_files.py`), and the fetch one download makes is `plan_fetch`
+(`services/downloads/_fetch.py`), which the admission and the transfer both call so they read one answer from the same
+ROM detail. Only where something is left out does the content request name the files, `?file_ids=…` on
+`GET /api/roms/{id}/content/{name}`; RomM serves one remaining file as itself and several as a zip with a `.m3u` it
+builds from exactly those files. Where the list would make the request line longer than 8 KiB (`MAX_REQUEST_LINE_BYTES`,
+the whole URL counted; RomM's own nginx takes 16 KiB, a proxy in front of it may take less), or a fetched file has no
+id, the whole game is fetched instead, and the unpack takes the left-out files back out of the folder, with every folder
+that held nothing else, and drops their lines from the playlist RomM generated into the zip — removing it where no line
+is left; a `.m3u` that is one of the ROM's own files is kept as it is
+([#2732](https://github.com/danielcopper/romm-tender/issues/2732) D4).
+
+**Every size Tender shows or checks is the sum of the files fetched** (`download_size_bytes`): the free-space check and
+the progress of a start, the unpack's size check (the zip's own central directory, which holds only what was asked for),
+the size on the game page before a download — read from RomM's ROM detail once the page opens, through the same
+`plan_fetch` (`DownloadService.get_download_size`) — and the size an install records (`RomInstall.fetched_size_bytes`),
+which the Data Management page sums. Where nothing is left out it is RomM's own size of the whole game
+(`fs_size_bytes`); in the 8 KiB case the free-space check, the progress and the game page count the whole game, which is
+what comes down. `Rom.fs_size_bytes` stays RomM's size of the whole game, written by every sync. The adopt dialog shows
+the download's side as the size of the files fetched, while the ranking of found copies and the content check still
+compare with the whole game (#2732 D5).
+
+**A game keeps the shape RomM gives it** (#2223 D31; `lands_as_folder`, `domain/rom_files.py`). RomM exposes three
+file-layout flags on every ROM detail:
 
 | RomM flag                | RomM server layout                                                | What `fs_name` is   | Local layout                                                                                            |
 | ------------------------ | ----------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------- |
 | `has_simple_single_file` | `roms/<platform>/<file>` — one file, flat                         | the filename        | flat in platform folder: `roms/<platform>/<file>`                                                       |
-| `has_nested_single_file` | `roms/<platform>/<folder>/<file>` — one file in a per-game folder | the **folder** name | flat in platform folder: `roms/<platform>/<file>`                                                       |
+| `has_nested_single_file` | `roms/<platform>/<folder>/<file>` — one file in a per-game folder | the **folder** name | in a per-game folder named after the launch file: `roms/<platform>/<launch-file-name>/<file>`           |
 | `has_multiple_files`     | per-game folder with multiple files (multi-disc, BIN+CUE, etc.)   | the ZIP/folder name | extracted into per-game subfolder named after the launch file: `roms/<platform>/<launch-file-name>/...` |
 
+A game lies flat only where RomM states it is one file (`has_simple_single_file`). Every other game lies in its folder,
+also where the download fetches one file of it, and also where RomM sets none of the three flags — a folder with no file
+directly in it, such as a PS3 dump; a payload that does not state all three falls back to more than one file being a
+folder. So the shape follows RomM rather than what was downloaded. A folder game whose fetch leaves one file is served
+as that file, and the transfer places it at its path inside the game's folder (`DownloadUnpacker.finish_single`'s
+`rel_path`), where it takes the same steps as an unpacked folder — the SFB heal, the M3U and launch-file rules, the
+ES-DE collapse rename and the PS3 folder name — except that a `.zip` among them is unpacked or kept by the single-zip
+rule below, as today ([#2732](https://github.com/danielcopper/romm-tender/issues/2732) D3). The search for a copy
+already on the device follows the same shape: for a game RomM holds as a folder it offers only a folder, and a flat copy
+is a namesake it cannot use (#2732 D2).
+
 **`has_nested_single_file` quirk**: `fs_name` is the parent folder name, not the filename. The actual filename with
-extension lives in `files[0].file_name`. Tender reads from `files[0].file_name` so the downloaded ROM lands with the
-correct extension (e.g. `Game.chd`, not the extension-less folder name `Game`). A defensive helper falls back to
-`fs_name` and warns if `files` is empty or missing.
+extension lives in `files[0].file_name`; Tender names the download's own file after it (the content URL and the queue
+entry), and the folder after the ROM's identity. A defensive helper falls back to `fs_name` and warns if `files` is
+empty or missing.
 
-**Why nested-single is flattened locally**: a nested-single-file ROM has no sidecars by definition — RomM would mark it
-`has_multiple_files` if any companion files existed. The parent folder adds no value at the local layer, so Tender drops
-it and stores the ROM directly in the platform folder, matching the simple-single-file layout. Multi-file ROMs keep
-their per-game subfolder because they contain multiple related files that belong together.
-
-**Extract-vs-flat gate keys on `len(files) > 1`, not on `has_multiple_files`**: Tender decides ZIP-extract vs
-single-file download with the `is_multi_file_download` helper (`domain/rom_files.py`), which returns
-`len(files) > 1 OR has_multiple_files`. This mirrors RomM's own download gate, which zips whenever the **total** file
-count is not exactly 1. RomM computes `has_multiple_files` from **top-level** files only, so the two counts disagree for
-a nested layout: a canonical Switch game (base file at the root plus `update/` and `dlc/` in subfolders) has exactly one
-top-level file (`has_multiple_files=False`, `has_nested_single_file=True`) yet more than one total file, so RomM serves
-a ZIP. Keying on `has_multiple_files` alone would take the single-file path and write the ZIP bytes verbatim into one
-unreadable `.nsp`. The boolean is kept as a defensive fallback for payloads that omit `files`; a genuine nested-single
-ROM has `len(files) == 1` and correctly stays on the flat single-file path.
+**Extract-vs-file gate counts the files fetched, not `has_multiple_files`**: Tender decides ZIP-extract vs a single
+served file with the `is_multi_file_download` helper (`domain/rom_files.py`), which returns whether more than one of the
+files `game_files` fetches remains, or `has_multiple_files`. This mirrors RomM's own download gate, which zips whenever
+it serves more than one file, counting every file it serves, nested ones included. RomM computes `has_multiple_files`
+from **top-level** files only, so the two counts disagree for a nested layout: a Switch game with its base file at the
+root plus `update/` and `dlc/` has one top-level file yet more than one file, and RomM zips it where all of them are
+asked for. Since its updates and DLC stay on the server, it is now served as its one base file. The flag stands in for a
+payload that lists no files; every file directly in the game's folder is `game`, so where it is set more than one file
+is fetched anyway.
 
 **A single zip holding a disc is unpacked like a multi-file ROM.** Many emulators cannot mount a multi-track disc from
 inside a zip — RetroArch hands a core only the member it claims, so a Saturn `.cue` inside a zip finds none of its
@@ -1989,10 +2023,10 @@ headroom (`unpack_space_verdict`, `domain/disk_space.py`; what another download 
 admitted plus what it has unpacked so far, `written_since_admitted` in the same module). Too little raises
 `NotEnoughSpaceToUnpack`: the download fails with "Not enough space to unpack", nothing is recorded, and the downloaded
 `.tmp` / `.zip.tmp` is **kept**. Before every transfer `DownloadTransfer` asks whether that file is already whole
-(`kept_download_complete`, off the event loop) — it opens as a zip, and a single `.tmp` is exactly RomM's stated size —
-and a whole one skips the transfer and goes straight to the unpack, its pre-flight discounting the kept bytes. Skipping
-is what spares a resume of a whole file the range past its end that a server answers with 416; the size check keeps a
-whole zip of something else under this name from being unpacked as this game. The start-up sweep
+(`kept_download_complete`, off the event loop) — it opens as a zip, and a single `.tmp` is exactly RomM's stated size of
+the file it fetches — and a whole one skips the transfer and goes straight to the unpack, its pre-flight discounting the
+kept bytes. Skipping is what spares a resume of a whole file the range past its end that a server answers with 416; the
+size check keeps a whole zip of something else under this name from being unpacked as this game. The start-up sweep
 (`LeftoverTmpCleanupService`) still removes every `.tmp` and `.zip.tmp`, so a kept file does not survive a backend
 restart. A member whose CRC-32 does not match fails the unpack (`zipfile` raises when the member is read to its end);
 the unpack removes the folder it created and the archive is removed with the other partial files.
@@ -2200,8 +2234,10 @@ else is a bug.
 **The minimum-version gate is SemVer-aware on `SYSTEM.VERSION`.** `domain.version.meets_min_version` compares the
 numeric core against `MIN_ROMM_VERSION` (`domain/identity.py`); when the core equals the floor, a `-alpha` / `-beta`
 suffix (case-insensitive, optional `.N` build number) ranks **below** the release and is rejected — so `5.3.0-beta.1`
-fails at floor `5.3.0` while `5.3.1-beta` passes. `development` and a missing version bypass the gate. Why the floor
-sits where it does is recorded in [ADR-0040](../adr/0040-1-0-raises-the-romm-floor-to-5-3.md).
+fails at floor `5.3.0` while `5.3.1-beta` passes. `development` and a missing version bypass the gate. The floor was
+raised to 5.3 by [ADR-0040](../adr/0040-1-0-raises-the-romm-floor-to-5-3.md), and to 5.4.1 by
+[#2223](https://github.com/danielcopper/romm-tender/issues/2223) D29, when a download began to read the category RomM
+files each of a game's files under.
 
 **A Client API Token is bound to the server it was minted against.** When the token is minted, the canonical origin of
 `romm_url` (full `scheme://host[:port]`, default ports folded out, path/query dropped — `lib/url_host.normalize_origin`)

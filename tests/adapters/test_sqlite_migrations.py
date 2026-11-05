@@ -91,8 +91,9 @@ def _set_user_version(db_path: str, version: int) -> None:
 # + 035_add_artwork_slot_handovers + 036_add_firmware_store
 # + 037_add_rom_artwork_checked_at + 038_add_last_sync_content_size
 # + 039_add_rom_emulator_override_source + 040_drop_rom_install_launchable
-# + 041_replace_applied_launch_options_with_shortcut_applied).
-_SHIPPED_VERSION = 41
+# + 041_replace_applied_launch_options_with_shortcut_applied
+# + 042_add_rom_install_fetched_size).
+_SHIPPED_VERSION = 42
 
 # Tables after every shipped migration: the v1 set plus 006's play-session outbox,
 # 012's per-platform completion stamp, 019's per-collection completion stamp,
@@ -2734,3 +2735,49 @@ class Test041ReplaceAppliedLaunchOptionsWithShortcutApplied:
         finally:
             conn.close()
         assert value == 0
+
+
+class Test042AddRomInstallFetchedSize:
+    """042 — an install records the size of the files it fetched (#2732 D1)."""
+
+    @staticmethod
+    def _insert_install(conn: sqlite3.Connection, rom_id: int) -> None:
+        conn.execute(
+            "INSERT INTO rom_installs (rom_id, file_path, rom_dir, platform_slug, system, installed_at) "
+            "VALUES (?, ?, NULL, 'snes', 'snes', '2026-01-01T00:00:00')",
+            (rom_id, f"/roms/snes/{rom_id}.sfc"),
+        )
+
+    def test_an_install_from_before_it_takes_the_size_of_the_whole_game(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 41)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            for rom_id, size in ((1, 4096), (2, None)):
+                _insert_rom(conn, rom_id, 100 + rom_id)
+                conn.execute("UPDATE roms SET fs_size_bytes = ? WHERE rom_id = ?", (size, rom_id))
+                self._insert_install(conn, rom_id)
+        finally:
+            conn.close()
+        assert "fetched_size_bytes" not in _columns(db_path, "rom_installs")
+
+        assert apply_migrations(db_path) == _SHIPPED_VERSION
+
+        conn = sqlite3.connect(db_path)
+        try:
+            rows = conn.execute("SELECT rom_id, fetched_size_bytes FROM rom_installs ORDER BY rom_id").fetchall()
+        finally:
+            conn.close()
+        assert rows == [(1, 4096), (2, None)]
+
+    def test_an_install_recorded_after_it_has_no_size_until_one_is_written(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path)
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            _insert_rom(conn, 1, 101)
+            self._insert_install(conn, 1)
+            value = conn.execute("SELECT fetched_size_bytes FROM rom_installs WHERE rom_id = 1").fetchone()[0]
+        finally:
+            conn.close()
+        assert value is None

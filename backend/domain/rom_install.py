@@ -26,6 +26,7 @@ class RomInstall:
     platform_slug: str
     system: str
     installed_at: str
+    fetched_size_bytes: int | None = None
 
     @classmethod
     def mark_installed(
@@ -37,14 +38,20 @@ class RomInstall:
         platform_slug: str,
         system: str,
         installed_at: str,
+        fetched_size_bytes: int | None = None,
     ) -> RomInstall:
         """Record a freshly downloaded ROM installed at ISO timestamp ``installed_at``.
 
         ``rom_dir`` is the dedicated per-ROM directory for a folder-backed
         (multi-file) ROM, or ``None`` for a single-file ROM that owns no folder.
+        ``fetched_size_bytes`` is RomM's size of the files the install fetched,
+        ``None`` where it states none; a size of zero or less states nothing and
+        raises ``ValueError``.
         """
         if rom_id <= 0:
             raise ValueError("rom_id must be positive")
+        if fetched_size_bytes is not None and fetched_size_bytes <= 0:
+            raise ValueError("fetched_size_bytes must be positive")
         return cls(
             rom_id=rom_id,
             file_path=file_path,
@@ -52,6 +59,7 @@ class RomInstall:
             platform_slug=platform_slug,
             system=system,
             installed_at=installed_at,
+            fetched_size_bytes=fetched_size_bytes,
         )
 
     def relocate(self, new_rom_dir: str | None, new_file_path: str) -> None:

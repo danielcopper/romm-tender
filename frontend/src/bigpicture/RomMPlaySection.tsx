@@ -838,8 +838,8 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   // of Last Played / Playtime, and the cell disappears once the ROM is on disk.
   // Being first also keeps it clear of the romm-info-items nowrap +
   // overflow:hidden clip, which drops cells from the right edge.
-  if (!detail.installed && detail.fsSizeBytes != null && detail.fsSizeBytes > 0) {
-    infoItems.push(infoItem("space-required", "SPACE REQUIRED", formatBytes(detail.fsSizeBytes)));
+  if (!detail.installed && detail.downloadSizeBytes != null && detail.downloadSizeBytes > 0) {
+    infoItems.push(infoItem("space-required", "SPACE REQUIRED", formatBytes(detail.downloadSizeBytes)));
   }
 
   // Last Played

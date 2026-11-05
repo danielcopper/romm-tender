@@ -2484,4 +2484,61 @@ describe("gameDetailStore — the page's check of whether the game can start (#2
     expect(refusal).toBeNull();
     expect(getGameDetail(nextAppId).startCheck).toMatchObject({ state: "failed" });
   });
+
+  describe("the size a download would fetch (#2732 D1)", () => {
+    it("reads it live for a ROM not installed and holds RomM's answer", async () => {
+      vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: 1000 });
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: false, fs_size_bytes: 9000 }));
+      subscribe(nextAppId);
+      await flush();
+
+      expect(vi.mocked(backend.getDownloadSize)).toHaveBeenCalledExactlyOnceWith(42);
+      expect(getGameDetail(nextAppId)).toMatchObject({ downloadSizeBytes: 1000, fsSizeBytes: 9000 });
+    });
+
+    it("does not ask for an installed ROM", async () => {
+      vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: 1000 });
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: true }));
+      subscribe(nextAppId);
+      await flush();
+
+      expect(vi.mocked(backend.getDownloadSize)).not.toHaveBeenCalled();
+      expect(getGameDetail(nextAppId)).toMatchObject({ downloadSizeBytes: null });
+    });
+
+    it("leaves it unknown where the read fails", async () => {
+      vi.mocked(backend.getDownloadSize).mockResolvedValue({
+        success: false,
+        reason: "server_unreachable",
+        message: "RomM did not answer",
+      } as never);
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: false, fs_size_bytes: 9000 }));
+      subscribe(nextAppId);
+      await flush();
+
+      expect(getGameDetail(nextAppId)).toMatchObject({ romId: 42, downloadSizeBytes: null });
+    });
+
+    it("does not fold an answer read for the rom the entry has since left", async () => {
+      const previousRomSize = deferred<{ size_bytes: number | null }>();
+      vi.mocked(backend.getDownloadSize).mockResolvedValue({ size_bytes: 300 });
+      vi.mocked(backend.getDownloadSize).mockReturnValueOnce(previousRomSize.promise);
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: false }));
+      subscribe(nextAppId);
+      await flush();
+
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ ...switchedDetail, installed: false }));
+      await act(async () => {
+        dispatchVersionSwitch(nextAppId);
+        await Promise.resolve();
+      });
+      await flush();
+      expect(getGameDetail(nextAppId)).toMatchObject({ romId: 43, downloadSizeBytes: 300 });
+
+      previousRomSize.resolve({ size_bytes: 7 });
+      await flush();
+
+      expect(getGameDetail(nextAppId)).toMatchObject({ romId: 43, downloadSizeBytes: 300 });
+    });
+  });
 });

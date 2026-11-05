@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.emulator_sources import RETRODECK
+from domain.game_files import download_size_bytes
 from domain.retrodeck_folders import FolderRefused
 from domain.rom_adoption import is_archive_name, server_manifest
 from domain.rom_candidates import (
@@ -145,7 +146,7 @@ class CandidateSearch:
         if system is None:
             return
         incoming_name = os.path.basename(checked_path)
-        incoming_size = rom_detail.get("fs_size_bytes", 0)
+        incoming_size = download_size_bytes(rom_detail)
         wanted = self._wanted_names(rom_detail, incoming_name)
         served = served_shapes(rom_detail)
         claimed = {checked_path} if folder_path is None else {checked_path, folder_path}

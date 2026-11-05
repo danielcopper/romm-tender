@@ -17,8 +17,9 @@ from typing import TYPE_CHECKING, Any
 from domain.disc_formats import DISC_IMAGE_EXTENSIONS
 from domain.disc_selection import one_descriptor_per_disc
 from domain.disk_space import NotEnoughSpaceToUnpack, unpack_space_verdict
+from domain.game_files import game_files
 from domain.retrodeck_folders import EveryFolderRefused, FolderRefused, folder_of
-from domain.rom_candidates import DIR
+from domain.rom_candidates import DIR, FILE
 from domain.rom_files import (
     TMP_EXT,
     ZIP_TMP_EXT,
@@ -26,18 +27,20 @@ from domain.rom_files import (
     detect_launch_file,
     es_de_collapse_rename,
     folder_boot_layout_root,
-    is_multi_file_download,
     needs_m3u,
     ps3_folder_lift,
     ps3_folder_rename,
 )
 from domain.served_shape import holds_disc_image, is_zip_name, served_shapes, wrapper_prefix
+from lib.path_safety import is_inside_folder, safe_join
 
 if TYPE_CHECKING:
     import logging
     from collections.abc import Callable
 
+    from domain.game_files import GameFile
     from models.adoption import ArchiveMemberInfo
+    from services.downloads._fetch import DownloadFetch
     from services.protocols import (
         DownloadFileStore,
         RetroDeckFolders,
@@ -77,8 +80,8 @@ class DownloadUnpacker:
         self._system_extensions = config.system_extensions
         self._logger = config.logger
 
-    def kept_download_complete(self, target_path: str, rom_detail: dict[str, Any]) -> bool:
-        """Whether a zip this ROM downloads already sits whole in its partial file.
+    def kept_download_complete(self, target_path: str, fetch: DownloadFetch) -> bool:
+        """Whether a zip this download fetches already sits whole in its partial file.
 
         The admission weighs a whole one without what is already on disk, and the
         transfer unpacks it without fetching it: a failed unpack keeps the downloaded zip for a
@@ -86,15 +89,16 @@ class DownloadUnpacker:
         fetch — a resume would ask for a range past its end, which a server
         refuses. Whole means it opens as a zip: the central directory sits at its
         end, so a transfer cut short has none. A single zip must also be exactly
-        the size RomM states, so that a whole zip of something else under this
-        name is fetched again rather than unpacked as this game. Only a zip
-        qualifies — any other single file is no archive to open.
+        the size RomM states for the file it fetches, so that a whole zip of
+        something else under this name is fetched again rather than unpacked as
+        this game. Only a zip qualifies — any other single file is no archive to
+        open.
         """
-        if is_multi_file_download(rom_detail):
+        if fetch.zipped:
             path = target_path + ZIP_TMP_EXT
-        elif is_zip_name(target_path):
+        elif is_zip_name(fetch.single_file.file_name if fetch.single_file else target_path):
             path = target_path + TMP_EXT
-            stated = rom_detail.get("fs_size_bytes", 0)
+            stated = fetch.size_bytes
             if not stated or self._download_file_store.file_size(path) != stated:
                 return False
         else:
@@ -112,7 +116,13 @@ class DownloadUnpacker:
         progress_callback: ProgressCallback,
         reserved_bytes: int,
     ) -> tuple[str | None, str | None]:
-        """Unpack a multi-file ROM's ``.zip.tmp`` and record it; see :meth:`unpack_and_record`."""
+        """Unpack a multi-file ROM's ``.zip.tmp`` and record it; see :meth:`unpack_and_record`.
+
+        Of the files a download leaves out (``game_files``), those the zip holds
+        all the same — a download that could not leave them out by its request
+        fetched the whole game (``DownloadFetch.whole``) — are taken out of the
+        folder once it is unpacked.
+        """
         archive = target_path + ZIP_TMP_EXT
         return self.unpack_and_record(
             rom_id,
@@ -126,6 +136,7 @@ class DownloadUnpacker:
             decode_names=True,
             strip_prefix="",
             single_zip=False,
+            removed=game_files(rom_detail).left_out,
         )
 
     def finish_single(
@@ -138,6 +149,7 @@ class DownloadUnpacker:
         *,
         progress_callback: ProgressCallback,
         reserved_bytes: int,
+        rel_path: str | None = None,
     ) -> tuple[str | None, str | None]:
         """Move a single file's ``.tmp`` into place and record it, or unpack it.
 
@@ -150,6 +162,11 @@ class DownloadUnpacker:
         file. What sat at *target_path* — the file a replace was answered for,
         or this ROM's own earlier copy — goes only once that install is recorded,
         the moment ``os.replace`` would have swapped it out.
+
+        *rel_path* is given for a game RomM holds as a folder (``lands_as_folder``):
+        the file is the one a download fetches of it, and it is placed at
+        *rel_path* inside *extract_dir*, the game's folder, rather than at
+        *target_path*, which such a download never claimed.
         """
         tmp_path = target_path + TMP_EXT
         members = None if extract_dir is None else self._members_to_unpack(rom_detail, tmp_path, extract_dir)
@@ -167,9 +184,11 @@ class DownloadUnpacker:
                 strip_prefix=wrapper_prefix(member["name"] for member in members),
                 single_zip=True,
             )
-            if error is None:
+            if error is None and rel_path is None:
                 self._remove_replaced_file(target_path)
             return (launch_file, error)
+        if rel_path is not None and extract_dir is not None:
+            return self._place_in_folder(rom_id, rom_detail, tmp_path, extract_dir, rel_path, system)
         self._download_file_store.rename(tmp_path, target_path)
         return self._install_recorder.do_record_install(
             rom_id=rom_id,
@@ -179,6 +198,30 @@ class DownloadUnpacker:
             system=system,
             cleanup=lambda: self._download_file_store.remove_file(target_path),
         )
+
+    def _place_in_folder(
+        self, rom_id: int, rom_detail: dict[str, Any], tmp_path: str, extract_dir: str, rel_path: str, system: str
+    ) -> tuple[str | None, str | None]:
+        """Move the one file a folder game's download fetched into the game's folder and record the folder.
+
+        The folder then takes the steps an unpacked one takes
+        (:meth:`_finish_folder`). *rel_path* is RomM's, so it is joined under
+        the folder only where it stays inside it (``safe_join``), and the folder
+        only inside the system's own ROM folder. Any failure from the folder's
+        creation onward removes the folder again.
+        """
+        folder = self._system_folder(system, extract_dir)
+        destination = safe_join(extract_dir, rel_path)
+        if not is_inside_folder(extract_dir, folder):
+            raise ValueError(f"{extract_dir} is not inside the ROM folder {folder}")
+        self._download_file_store.make_dirs(os.path.dirname(destination))
+        try:
+            self._download_file_store.rename(tmp_path, destination)
+            extract_dir, launch_file = self._finish_folder(extract_dir, rom_detail, system)
+        except BaseException:
+            self._remove_extract_dir(extract_dir)
+            raise
+        return self._record_folder(rom_id, rom_detail, extract_dir, launch_file, system)
 
     def _members_to_unpack(
         self, rom_detail: dict[str, Any], archive: str, extract_dir: str
@@ -226,6 +269,7 @@ class DownloadUnpacker:
         decode_names: bool,
         strip_prefix: str,
         single_zip: bool,
+        removed: tuple[GameFile, ...] = (),
     ) -> tuple[str | None, str | None]:
         """Unpack the downloaded *archive* into *extract_dir* and record the folder as the install.
 
@@ -252,16 +296,10 @@ class DownloadUnpacker:
         failure from the first directory it creates onward removes that
         directory again, under whichever name it has by then; a member whose
         CRC-32 does not match is one, raised by ``zipfile`` when the member is
-        read to its end.
+        read to its end. *removed* are files the download leaves out, taken
+        back out of the folder where the zip holds them.
         """
-        # The removal's bound, the system's own folder, which no switch changes:
-        # a download that started still extracts after RetroDECK is switched off.
-        folders = self._retrodeck_folders.rom_folders([system])
-        if isinstance(folders, EveryFolderRefused):
-            raise folders
-        folder = folder_of(folders, system)
-        if isinstance(folder, FolderRefused):
-            raise ValueError(f"No ROM folder to extract {extract_dir} inside: {folder.message}")
+        folder = self._system_folder(system, extract_dir)
         if members is not None:
             verdict = unpack_space_verdict(
                 unpacked_size=sum(member["size_bytes"] for member in members),
@@ -285,26 +323,55 @@ class DownloadUnpacker:
             self._download_file_store.remove_file(archive)
             if decode_names:
                 self._download_file_store.decode_url_encoded_names(extract_dir)
-            # Heal a folder-boot disc dump whose PS3_DISC.SFB ships .txt-suffixed,
-            # before launch detection reads the layout (ADR-0019 / #1212).
-            self.heal_ps3_sfb(extract_dir)
-            # Whether ES-DE lists .m3u for this system (gates both M3U generation and
-            # launch-file selection so a RomM-bundled .m3u is ignored on Switch/Xbox).
-            m3u_supported = self._m3u_support(system)
-            self.generate_m3u(extract_dir, rom_detail, m3u_supported)
-            launch_file = self.detect_launch_file(extract_dir, m3u_supported)
-            # ES-DE collapses a multi-file dir into one game entry only when the
-            # dir is named after the launch file *including* the extension. The
-            # launch file is only known after extraction (the M3U may be
-            # auto-generated above), so the rename happens here, last of all the
-            # filesystem work, so a later failure cleans up the renamed dir.
-            extract_dir, launch_file = self._es_de_collapse(extract_dir, launch_file)
-            launch_file = self._ps3_folder_lift(extract_dir, launch_file)
-            extract_dir, launch_file = self._ps3_folder_name(extract_dir, launch_file, system)
+            if removed:
+                self._remove_left_out(extract_dir, rom_detail, removed)
+            extract_dir, launch_file = self._finish_folder(extract_dir, rom_detail, system)
         except BaseException:
             self._remove_extract_dir(extract_dir)
             raise
+        return self._record_folder(rom_id, rom_detail, extract_dir, launch_file, system)
 
+    def _system_folder(self, system: str, extract_dir: str) -> str:
+        """The system's own ROM folder, which bounds every folder a download creates.
+
+        The bound no switch changes: a download that started still finishes
+        after RetroDECK is switched off.
+        """
+        folders = self._retrodeck_folders.rom_folders([system])
+        if isinstance(folders, EveryFolderRefused):
+            raise folders
+        folder = folder_of(folders, system)
+        if isinstance(folder, FolderRefused):
+            raise ValueError(f"No ROM folder to place {extract_dir} inside: {folder.message}")
+        return folder
+
+    def _finish_folder(self, extract_dir: str, rom_detail: dict[str, Any], system: str) -> tuple[str, str]:
+        """Give a game's folder its playlist, launch file and ES-DE name; answer ``(folder, launch file)``.
+
+        The steps every folder a download fills takes, unpacked or placed. The
+        caller removes the folder, under whichever name this answers, when one
+        of them raises.
+        """
+        # Heal a folder-boot disc dump whose PS3_DISC.SFB ships .txt-suffixed,
+        # before launch detection reads the layout (ADR-0019 / #1212).
+        self.heal_ps3_sfb(extract_dir)
+        # Whether ES-DE lists .m3u for this system (gates both M3U generation and
+        # launch-file selection so a RomM-bundled .m3u is ignored on Switch/Xbox).
+        m3u_supported = self._m3u_support(system)
+        self.generate_m3u(extract_dir, rom_detail, m3u_supported)
+        launch_file = self.detect_launch_file(extract_dir, m3u_supported)
+        # ES-DE collapses a multi-file dir into one game entry only when the
+        # dir is named after the launch file *including* the extension. The
+        # launch file is only known after extraction (the M3U may be
+        # auto-generated above), so the rename happens here, last of all the
+        # filesystem work, so a later failure cleans up the renamed dir.
+        extract_dir, launch_file = self._es_de_collapse(extract_dir, launch_file)
+        launch_file = self._ps3_folder_lift(extract_dir, launch_file)
+        return self._ps3_folder_name(extract_dir, launch_file, system)
+
+    def _record_folder(
+        self, rom_id: int, rom_detail: dict[str, Any], extract_dir: str, launch_file: str, system: str
+    ) -> tuple[str | None, str | None]:
         return self._install_recorder.do_record_install(
             rom_id=rom_id,
             rom_detail=rom_detail,
@@ -313,6 +380,61 @@ class DownloadUnpacker:
             system=system,
             cleanup=lambda: self._download_file_store.remove_tree(extract_dir),
         )
+
+    def _remove_left_out(self, extract_dir: str, rom_detail: dict[str, Any], removed: tuple[GameFile, ...]) -> None:
+        """Take the files a download leaves out back out of the folder the zip brought them into.
+
+        Each goes from where RomM's zip placed it — its path inside the game's
+        folder — and so does every folder that held nothing else; one the zip
+        did not hold is nothing to remove. A file whose
+        place the payload does not state is not looked for: a guess by its name
+        could remove a game file of the same name. The lines naming them go from the playlist
+        RomM generated into the download, and that playlist goes where none is
+        left (#2732 D4).
+        """
+        gone: set[str] = set()
+        for entry in removed:
+            if not entry.rel_path:
+                continue
+            path = safe_join(extract_dir, entry.rel_path)
+            if not self._download_file_store.exists(path):
+                continue
+            self._download_file_store.remove_file(path)
+            gone.add(entry.rel_path)
+            self._remove_emptied_folders(extract_dir, os.path.dirname(path))
+        self._drop_from_generated_playlist(extract_dir, rom_detail, gone)
+
+    def _remove_emptied_folders(self, extract_dir: str, directory: str) -> None:
+        """Remove *directory* and each folder above it inside *extract_dir* while it is empty."""
+        root = os.path.normpath(extract_dir)
+        current = os.path.normpath(directory)
+        while current != root and is_inside_folder(current, root):
+            if self._download_file_store.list_top_level_names(current):
+                return
+            self._download_file_store.remove_empty_dir(current)
+            current = os.path.dirname(current)
+
+    def _drop_from_generated_playlist(self, extract_dir: str, rom_detail: dict[str, Any], gone: set[str]) -> None:
+        """Drop the lines naming *gone* from the ``.m3u`` RomM generated into the download.
+
+        RomM adds a playlist at the top of a zip it builds, unless the ROM holds
+        a ``.m3u`` of its own (``has_m3u_file``, RomM 5.4.1); so the generated one
+        is a top-level ``.m3u`` none of the ROM's files is.
+        """
+        if not gone or any(name.casefold().endswith(".m3u") for name in _file_names(rom_detail)):
+            return
+        for entry in self._download_file_store.list_top_level_names(extract_dir):
+            if entry["kind"] != FILE or not entry["name"].casefold().endswith(".m3u"):
+                continue
+            playlist = os.path.join(extract_dir, entry["name"])
+            lines = self._download_file_store.read_lines(playlist)
+            kept = [line for line in lines if line.strip() and line.strip() not in gone]
+            if kept == [line for line in lines if line.strip()]:
+                continue
+            if kept:
+                self._download_file_store.write_text_atomic(playlist, "\n".join(kept) + "\n")
+            else:
+                self._download_file_store.remove_file(playlist)
 
     def remove_partial_download(self, target_path, has_multiple, extract_dir_name, final_path=None):
         """Clean up partial download files. Each step is independent so one failure doesn't block others.
@@ -517,3 +639,7 @@ class DownloadUnpacker:
         all_files = self._download_file_store.scan_files_with_sizes(extract_dir)
         result = detect_launch_file(all_files, m3u_supported)
         return result if result is not None else extract_dir
+
+
+def _file_names(rom_detail: dict[str, Any]) -> list[str]:
+    return [entry.get("file_name") or "" for entry in rom_detail.get("files") or []]

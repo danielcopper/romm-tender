@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from domain.game_files import download_size_bytes
 from domain.rom_install import RomInstall
 
 if TYPE_CHECKING:
@@ -60,7 +61,9 @@ class RomInstallRecorder:
         or ``None`` for a single-file ROM (which owns no folder). If the RomM
         data fails the aggregate's invariant (non-positive ``rom_id``), nothing
         is persisted, *cleanup* removes the just-placed artifact, and a failure
-        message is returned.
+        message is returned. The row records the size of the files the install
+        fetched (``download_size_bytes``); ``Rom.fs_size_bytes`` is written with
+        RomM's size of the whole game.
 
         Returns ``(file_path, None)`` on success or ``(None, error)`` when the
         invariant rejects the data.
@@ -73,6 +76,7 @@ class RomInstallRecorder:
                 platform_slug=rom_detail.get("platform_slug", ""),
                 system=system,
                 installed_at=self._clock.now().isoformat(),
+                fetched_size_bytes=_stated(download_size_bytes(rom_detail)),
             )
         except ValueError as e:
             cleanup()
@@ -88,3 +92,8 @@ class RomInstallRecorder:
                     rom.record_fs_size_bytes(size)
                     uow.roms.set_fs_size_bytes(rom.rom_id, rom.fs_size_bytes)
         return file_path, None
+
+
+def _stated(size: int) -> int | None:
+    """*size*, or ``None`` where it states nothing (zero or less)."""
+    return size if size > 0 else None

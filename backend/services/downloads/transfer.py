@@ -17,7 +17,8 @@ from typing import TYPE_CHECKING
 
 from domain.disk_space import NotEnoughSpaceToUnpack
 from domain.download_frames import failed_frame
-from domain.rom_files import TMP_EXT, ZIP_TMP_EXT, is_multi_file_download
+from domain.rom_files import TMP_EXT, ZIP_TMP_EXT, lands_as_folder
+from services.downloads._fetch import DownloadFetch, plan_fetch
 from services.downloads._names import extract_dir_name_for
 
 if TYPE_CHECKING:
@@ -80,13 +81,22 @@ class DownloadTransfer:
         )
 
     def _post_download_single_io(
-        self, rom_id, rom_detail, target_path, extract_progress, system, extract_dir_name="", reserved_bytes=0
+        self,
+        rom_id,
+        rom_detail,
+        target_path,
+        extract_progress,
+        system,
+        extract_dir_name="",
+        reserved_bytes=0,
+        rel_path=None,
     ):
         """Sync helper for :meth:`run` single-file — rename or unpack, then DB persist, in executor.
 
         Returns ``(path, error)`` as ``DownloadUnpacker.finish_single`` does; a
         zip holding a disc image is unpacked into *extract_dir_name* beside
-        *target_path*.
+        *target_path*, and a folder game's one file is placed at *rel_path*
+        inside it.
         """
         return self._unpacker.finish_single(
             rom_id,
@@ -96,6 +106,7 @@ class DownloadTransfer:
             system,
             progress_callback=extract_progress,
             reserved_bytes=reserved_bytes,
+            rel_path=rel_path,
         )
 
     async def _finalize_download_complete(self, rom_id, final_path, rom_name, platform_name):
@@ -156,7 +167,11 @@ class DownloadTransfer:
         restarting it.
         """
         rom_name = rom_detail.get("name", file_name)
-        has_multiple = is_multi_file_download(rom_detail)
+        fetch = plan_fetch(rom_detail, file_name, self._romm_api)
+        has_multiple = fetch.zipped
+        # What a failure tears down: the folder this download creates for the
+        # game, whether it unpacks a zip into it or places one file there.
+        creates_folder = has_multiple or lands_as_folder(rom_detail)
         # Name the extract dir from the ROM's identity, not files[0] (which may be
         # an arbitrary inner asset for a nested-single folder game). Computed once
         # here and threaded to both the extraction and the cleanup so the dir a
@@ -184,16 +199,16 @@ class DownloadTransfer:
             # UI shows the wait instead of a stalled "downloading" bar.
             if self._state.semaphore.locked():
                 await self._queue.report_queued(
-                    rom_id, rom_name, platform_name, file_name, total_bytes=rom_detail.get("fs_size_bytes", 0)
+                    rom_id, rom_name, platform_name, file_name, total_bytes=fetch.size_bytes
                 )
 
             async with self._state.semaphore:
                 self._queue.mark_downloading(rom_id)
-                fetch = partial(self._fetch_unless_whole, rom_id, rom_detail, file_name, target_path, progress_callback)
+                transfer = partial(self._fetch_unless_whole, rom_id, fetch, file_name, target_path, progress_callback)
 
                 if has_multiple:
                     # Multi-file ROM: API returns ZIP, download to temp then extract
-                    await fetch(target_path + ZIP_TMP_EXT, resume=resume, on_meta=on_meta)
+                    await transfer(target_path + ZIP_TMP_EXT, resume=resume, on_meta=on_meta)
                     post_io_future = self._loop.run_in_executor(
                         None,
                         self._post_download_multi_io,
@@ -214,7 +229,7 @@ class DownloadTransfer:
                     # → torn down (#1049).
                     final_path, post_io_error = await asyncio.shield(post_io_future)
                 else:
-                    await fetch(target_path + TMP_EXT, resume=resume, on_meta=on_meta)
+                    await transfer(target_path + TMP_EXT, resume=resume, on_meta=on_meta)
                     post_io_future = self._loop.run_in_executor(
                         None,
                         self._post_download_single_io,
@@ -225,6 +240,7 @@ class DownloadTransfer:
                         system,
                         extract_dir_name,
                         self._state.bytes_reserved_by_others(rom_id, self._queue.entries),
+                        _place_in_folder_at(fetch, file_name) if lands_as_folder(rom_detail) else None,
                     )
                     # Shielded so a racing cancel leaves the future intact for
                     # ``_reconcile_post_io`` to re-await (see the multi-file branch).
@@ -255,7 +271,7 @@ class DownloadTransfer:
                 self._logger.info(f"Download paused: {rom_name}")
             else:
                 self._queue.mark_cancelled(rom_id)
-                self._unpacker.remove_partial_download(target_path, has_multiple, extract_dir_name, final_path)
+                self._unpacker.remove_partial_download(target_path, creates_folder, extract_dir_name, final_path)
                 # #1017: emit a terminal frame so the frontend resets the button
                 # out of its downloading state (the global cancel path was silent).
                 await self._queue.report_cancelled(rom_id, rom_name, platform_name, file_name)
@@ -264,7 +280,7 @@ class DownloadTransfer:
 
         except Exception as e:
             self._queue.mark_failed(rom_id, str(e))
-            self._cleanup_failed_download(e, target_path, has_multiple, extract_dir_name, final_path)
+            self._cleanup_failed_download(e, target_path, creates_folder, extract_dir_name, final_path)
             self._logger.error(f"Download failed for {rom_name}: {e}")
             await self._emit("download_failed", failed_frame(rom_id, rom_name, platform_name, str(e)))
 
@@ -280,16 +296,18 @@ class DownloadTransfer:
             self._unpacker.remove_partial_download(target_path, has_multiple, extract_dir_name, final_path)
 
     async def _fetch_unless_whole(
-        self, rom_id, rom_detail, file_name, target_path, progress_callback, partial_path, *, resume, on_meta
+        self, rom_id, fetch: DownloadFetch, file_name, target_path, progress_callback, partial_path, *, resume, on_meta
     ) -> None:
         """Transfer this download into *partial_path*, unless it already sits whole there.
 
         A zip already whole on disk — kept after a failed unpack, or paused after
         its last byte — is unpacked without a transfer (``kept_download_complete``).
+        The request names the files *fetch* asks for, where it names any.
         """
-        if await self._loop.run_in_executor(None, self._unpacker.kept_download_complete, target_path, rom_detail):
-            self._logger.info(f"Unpacking the download already on disk for {rom_detail.get('name', file_name)}")
+        if await self._loop.run_in_executor(None, self._unpacker.kept_download_complete, target_path, fetch):
+            self._logger.info(f"Unpacking the download already on disk for {file_name}")
             return
+        named = {"file_ids": fetch.file_ids} if fetch.file_ids is not None else {}
         await self._loop.run_in_executor(
             None,
             partial(
@@ -300,5 +318,18 @@ class DownloadTransfer:
                 progress_callback,
                 resume=resume,
                 on_meta=on_meta,
+                **named,
             ),
         )
+
+
+def _place_in_folder_at(fetch: DownloadFetch, file_name: str) -> str:
+    """Where inside a folder game's folder the one file its download fetched goes.
+
+    Its place inside the game's folder on RomM, else its name; a payload that
+    names no file leaves the download's own file name.
+    """
+    single = fetch.single_file
+    if single is None:
+        return file_name
+    return single.rel_path or single.file_name or file_name

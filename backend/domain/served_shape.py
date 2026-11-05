@@ -162,20 +162,34 @@ def unpacked_manifest(manifest: tuple[ServerFile, ...]) -> tuple[ServerFile, ...
     return tuple(unpacked)
 
 
+def fetches_one_zip(rom_detail: dict[str, Any]) -> bool:
+    """Whether a download of this ROM fetches one file, a ``.zip``, which RomM serves as itself.
+
+    A game RomM holds as a folder can fetch one zip as much as a single-file
+    game does (``game_files``); both are unpacked or kept by the same rule.
+    """
+    if is_multi_file_download(rom_detail):
+        return False
+    return is_zip_name(_one_fetched_name(rom_detail))
+
+
+def _one_fetched_name(rom_detail: dict[str, Any]) -> str:
+    fetched = game_files(rom_detail).fetched
+    return fetched[0].file_name if len(fetched) == 1 else resolve_local_file_name(rom_detail)[0]
+
+
 def _listed_members(rom_detail: dict[str, Any]) -> tuple[ServerMember, ...] | None:
     """The members RomM lists inside the one zip a download fetches, or ``None`` where it lists none.
 
     ``None`` both for a payload without ``archive_members`` (a library not
     rescanned since RomM 4.9.0) and for a download that is no single zip at
-    all. The zip may be a folder game's one fetched file (``game_files``).
+    all (:func:`fetches_one_zip`).
     """
-    if is_multi_file_download(rom_detail):
+    if not fetches_one_zip(rom_detail):
         return None
-    fetched = game_files(rom_detail).fetched
-    name = fetched[0].file_name if len(fetched) == 1 else resolve_local_file_name(rom_detail)[0]
-    if not is_zip_name(name):
-        return None
-    manifest = [entry for entry in server_manifest(rom_detail) if len(fetched) != 1 or entry.name == name]
+    name = _one_fetched_name(rom_detail)
+    one_fetched = len(game_files(rom_detail).fetched) == 1
+    manifest = [entry for entry in server_manifest(rom_detail) if not one_fetched or entry.name == name]
     if len(manifest) != 1 or not manifest[0].members:
         return None
     return manifest[0].members

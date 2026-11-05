@@ -285,6 +285,8 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "get_pending_preview",
     "get_download_queue",
     "get_installed_rom",
+    # Reads RomM's ROM detail and answers the size a download would fetch.
+    "get_download_size",
     # Probes that change no RetroDECK state: a local-only drift hash check, a
     # version-free reachability heartbeat and a fire-and-forget save-status
     # refresh. None mutate RetroDECK state, so they are never refused during a

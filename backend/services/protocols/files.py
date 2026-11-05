@@ -396,6 +396,10 @@ class DownloadFileStore(Protocol):
         """
         ...
 
+    def read_lines(self, path: str) -> list[str]:
+        """Read *path* as UTF-8 text, a byte that is no UTF-8 replaced, split into its lines."""
+        ...
+
     def write_text_atomic(self, path: str, content: str) -> None:
         """Atomically write *content* to *path* as UTF-8 text.
 

@@ -29,6 +29,7 @@ import {
   debugLog,
   getBiosStatus,
   getCachedGameDetail,
+  getDownloadSize,
   getPlatformCoreInfo,
   getSaveStatus,
   invalidateCachedGameDetail,
@@ -75,6 +76,8 @@ export interface GameDetailState extends BiosInfoFields, CoreInfoFields {
   fileMissingAt: string | null;
   /** Server-reported ROM size in bytes, or `null` when unknown. */
   fsSizeBytes: number | null;
+  /** What a download would fetch, in bytes, read live for a ROM not installed; `null` until it lands or when unknown. */
+  downloadSizeBytes: number | null;
   saveSyncEnabled: boolean;
   /** The last save status read for this ROM, `null` until one lands. Carries the
    *  conflicts and slot detail the saves surfaces need; the resolved display
@@ -95,6 +98,7 @@ const DEFAULT_STATE: GameDetailState = {
   installed: false,
   fileMissingAt: null,
   fsSizeBytes: null,
+  downloadSizeBytes: null,
   saveSyncEnabled: false,
   saveStatus: null,
   saveSyncStatus: null,
@@ -323,6 +327,8 @@ async function loadDetail(appId: number, entry: Entry): Promise<void> {
       installed: cached.installed ?? false,
       fileMissingAt: cached.file_missing_at ?? null,
       fsSizeBytes: cached.fs_size_bytes ?? null,
+      // Read live below; an answer about the ROM shown before must not stand.
+      downloadSizeBytes: null,
       saveSyncEnabled: cached.save_sync_enabled ?? false,
       saveSyncStatus,
       saveSyncLabel,
@@ -375,6 +381,10 @@ async function loadDetail(appId: number, entry: Entry): Promise<void> {
       refreshBiosInBackground(romId, cancelled, writeForRom);
     }
 
+    // The space a download needs is what it fetches, which only RomM's ROM
+    // detail states (#2732 D1); a failed read leaves it unknown.
+    if (!cached.installed) detach(refreshDownloadSize(romId, cancelled, writeForRom));
+
     // Core info is sourced from its OWN path (#923), independent of BIOS status,
     // and keyed on rom_id so the active core reflects a per-game DB override
     // (epic #945).
@@ -396,6 +406,20 @@ async function loadDetail(appId: number, entry: Entry): Promise<void> {
       entry.loadFailed = true;
       scheduleFailedLoadRetry(appId, entry);
     }
+  }
+}
+
+async function refreshDownloadSize(
+  romId: number,
+  cancelled: () => boolean,
+  write: Dispatch<SetStateAction<GameDetailState>>,
+): Promise<void> {
+  try {
+    const answer = await getDownloadSize(romId);
+    if (cancelled() || isEndpointFailure(answer)) return;
+    write((prev) => ({ ...prev, downloadSizeBytes: answer.size_bytes }));
+  } catch (e) {
+    detach(debugLog(`Background download size read error: ${e}`));
   }
 }
 

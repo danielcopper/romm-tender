@@ -84,6 +84,27 @@ def game_files(rom_detail: dict[str, Any]) -> GameFiles:
     return GameFiles(fetched=fetched, left_out=tuple(entry for entry in entries if entry not in fetched))
 
 
+def download_size_bytes(rom_detail: dict[str, Any]) -> int:
+    """What a download of *rom_detail* fetches, in bytes: the sum of the files it fetches.
+
+    Where it leaves nothing out it fetches the whole game, whose size RomM
+    states itself (``fs_size_bytes``); a payload that states none is summed.
+    """
+    files = game_files(rom_detail)
+    if files.left_out:
+        return files.fetched_bytes
+    return whole_game_bytes(rom_detail)
+
+
+def whole_game_bytes(rom_detail: dict[str, Any]) -> int:
+    """RomM's size of the whole game, or the sum of every file it lists where it states none."""
+    stated = int(rom_detail.get("fs_size_bytes") or 0)
+    if stated:
+        return stated
+    files = game_files(rom_detail)
+    return files.fetched_bytes + sum(entry.size_bytes for entry in files.left_out)
+
+
 def _game_file(entry: dict[str, Any], rom_root: str) -> GameFile:
     file_id = entry.get("id")
     name = entry.get("file_name") or ""

@@ -2187,10 +2187,9 @@ class TestSearchUnderBothNames:
         """The payload where the derived name and ``fs_name`` genuinely differ.
 
         ``has_nested_single_file`` is what makes ``resolve_local_file_name`` take
-        the inner file's name; with exactly one file the download still takes the
-        single-file path, so it writes ``Inner Disc.cue`` while ``fs_name`` — and
-        the user's own copy — is named after the game. Without that flag all
-        three wanted names collapse to one string and this class proves nothing.
+        the inner file's name, while ``fs_name`` — and the user's own copy — is
+        named after the game. Without that flag all three wanted names collapse
+        to one string and this class proves nothing.
         """
         h.system_extensions = {"psx": frozenset({".cue"})}
         detail = _single_file_detail(name="Game (USA)", size=10)
@@ -2199,19 +2198,19 @@ class TestSearchUnderBothNames:
         detail["files"] = [{"file_name": "Inner Disc.cue"}]
         return detail
 
-    async def test_the_user_s_copy_is_found_under_the_fs_name(self, h):
+    async def test_the_user_s_flat_copy_is_found_under_the_fs_name_and_cannot_be_used(self, h):
         # The search under the derived name alone finds nothing here: the copy is
-        # named after the game, and no user names a file after the inner disc.
+        # named after the game, and no user names a file after the inner disc. A
+        # game RomM holds as a folder is offered only as a folder (#2732 D2).
         detail = self._nested_single(h)
         h.store.files["/roms/psx/Game (U).cue"] = b"mine"
 
         checking = h.service.check_download_target(detail, "/roms/psx/Inner Disc.cue", replace=False)
 
-        with pytest.raises(AdoptionCandidates) as refused:
+        with pytest.raises(UnusableNamesake) as refused:
             await checking
 
-        assert refused.value.reason == "adoption_candidates"
-        assert [candidate["name"] for candidate in refused.value.details["candidates"]] == ["Game (U).cue"]
+        assert refused.value.reason == "unusable_namesake"
 
     async def test_the_derived_name_still_matches_where_it_is_the_one_on_disk(self, h):
         # The other half: a copy named after the inner file is found too, so
@@ -2221,11 +2220,22 @@ class TestSearchUnderBothNames:
 
         checking = h.service.check_download_target(detail, "/roms/psx/Inner Disc.cue", replace=False)
 
+        with pytest.raises(UnusableNamesake) as refused:
+            await checking
+
+        assert refused.value.reason == "unusable_namesake"
+
+    async def test_the_user_s_folder_copy_is_offered(self, h):
+        detail = self._nested_single(h)
+        h.store.dirs.add("/roms/psx/Game (U)")
+        h.store.files["/roms/psx/Game (U)/Inner Disc.cue"] = b"mine"
+
+        checking = h.service.check_download_target(detail, "/roms/psx/Game (USA)", replace=False)
+
         with pytest.raises(AdoptionCandidates) as refused:
             await checking
 
-        assert refused.value.reason == "adoption_candidates"
-        assert [candidate["name"] for candidate in refused.value.details["candidates"]] == ["Inner Disc (U).cue"]
+        assert [candidate["name"] for candidate in refused.value.details["candidates"]] == ["Game (U)"]
 
     async def test_an_unrelated_file_is_still_not_a_candidate(self, h):
         detail = self._nested_single(h)
@@ -3609,3 +3619,37 @@ class TestASingleZipsUnpackedFolder:
         assert result["message"] == (
             "The server does not list what is inside this game's zip, so a folder cannot be confirmed against it"
         )
+
+
+class TestTheDownloadSizeTheDialogShows:
+    """The dialog shows the download's size as what it would fetch (#2732 D5)."""
+
+    @staticmethod
+    def _with_soundtrack() -> dict[str, Any]:
+        return _multi_file_detail(
+            size=1080,
+            files=[
+                {"id": 1, "file_name": "Game.cue", "file_size_bytes": 100, "category": "game"},
+                {"id": 2, "file_name": "Game.bin", "file_size_bytes": 900, "category": "game"},
+                {"id": 3, "file_name": "01.flac", "file_size_bytes": 80, "category": "soundtrack"},
+            ],
+        )
+
+    async def test_an_occupied_path_names_the_size_of_the_files_fetched(self, h):
+        h.store.files["/roms/psx/Game/a.bin"] = b"x"
+        checking = h.service.check_download_target(self._with_soundtrack(), "/roms/psx/Game", replace=False)
+
+        with pytest.raises(TargetOccupied) as refused:
+            await checking
+
+        assert refused.value.details["incoming"]["size_bytes"] == 1000
+
+    async def test_a_found_copy_is_offered_beside_the_size_of_the_files_fetched(self, h):
+        h.store.dirs.add("/roms/psx/Game (U)")
+        h.store.files["/roms/psx/Game (U)/Game.cue"] = b"x"
+        checking = h.service.check_download_target(self._with_soundtrack(), "/roms/psx/Game", replace=False)
+
+        with pytest.raises(AdoptionCandidates) as refused:
+            await checking
+
+        assert refused.value.details["incoming"]["size_bytes"] == 1000

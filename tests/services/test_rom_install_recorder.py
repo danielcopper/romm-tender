@@ -214,3 +214,45 @@ class TestRecordInstallFsSizeWriteBack:
         rom = uow.roms.get(42)
         assert rom is not None
         assert rom.fs_size_bytes == 999_000
+
+
+class TestTheSizeAnInstallRecords:
+    """An install records the size of the files it fetched; the ROM keeps RomM's size of the whole game (#2732 D1)."""
+
+    @staticmethod
+    def _record(harness, rom_detail):
+        _seed_rom(harness._uow, 42)
+        harness._install_recorder.do_record_install(
+            rom_id=42,
+            rom_detail={"platform_slug": "gc", **rom_detail},
+            file_path="/roms/gc/Game.rvz/Game.rvz",
+            rom_dir="/roms/gc/Game.rvz",
+            system="gc",
+            cleanup=lambda: None,
+        )
+        return harness._uow.rom_installs.get(42), harness._uow.roms.get(42)
+
+    def test_a_download_that_left_a_soundtrack_out_records_the_game_s_files(self, harness):
+        install, rom = self._record(
+            harness,
+            {
+                "fs_size_bytes": 1080,
+                "files": [
+                    {"id": 1, "file_name": "Game.rvz", "file_size_bytes": 1000, "category": "game"},
+                    {"id": 2, "file_name": "01.flac", "file_size_bytes": 80, "category": "soundtrack"},
+                ],
+            },
+        )
+
+        assert install.fetched_size_bytes == 1000
+        assert rom.fs_size_bytes == 1080
+
+    def test_a_download_of_the_whole_game_records_romm_s_size(self, harness):
+        install, _rom = self._record(harness, {"fs_size_bytes": 4096, "files": [{"id": 1, "file_name": "Game.iso"}]})
+
+        assert install.fetched_size_bytes == 4096
+
+    def test_a_size_romm_does_not_state_records_none(self, harness):
+        install, _rom = self._record(harness, {"fs_size_bytes": 0})
+
+        assert install.fetched_size_bytes is None

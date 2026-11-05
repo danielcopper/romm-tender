@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 from domain.rom_files import (
     TMP_EXT,
     ZIP_TMP_EXT,
-    is_multi_file_download,
+    lands_as_folder,
     resolve_extract_dir_name,
     resolve_local_file_name,
     synthetic_rom_name,
@@ -64,17 +64,22 @@ def safe_extract_dir_name(rom_detail: dict[str, Any], logger: logging.Logger) ->
 
 
 def extract_dir_name_for(rom_detail: dict[str, Any], target_path: str, logger: logging.Logger) -> str:
-    """The extract dir's name where a download may be unpacked — a multi-file ROM or a single zip — else ``""``."""
-    may_unpack = is_multi_file_download(rom_detail) or is_zip_name(target_path)
+    """The game's folder's name where a download lands in one or may be unpacked into one, else ``""``.
+
+    A game RomM holds as a folder lands in one (``lands_as_folder``); a single
+    zip may be unpacked into one.
+    """
+    may_unpack = lands_as_folder(rom_detail) or is_zip_name(target_path)
     return safe_extract_dir_name(rom_detail, logger) if may_unpack else ""
 
 
-def partial_tmp_size(download_file_store: DownloadFileStore, target_path: str, rom_detail: dict[str, Any]) -> int:
+def partial_tmp_size(download_file_store: DownloadFileStore, target_path: str, *, zipped: bool) -> int:
     """Bytes already on disk in the partial ``.tmp`` for *target_path*.
 
-    Single-file ROMs stream to ``target_path + .tmp``; multi-file ROMs to
+    A download RomM serves as a single file streams to ``target_path + .tmp``,
+    one it serves as a zip (*zipped*, ``DownloadFetch.zipped``) to
     ``target_path + .zip.tmp``. Returns 0 when no partial exists (the file
     store reports a missing path as size 0).
     """
-    tmp_ext = ZIP_TMP_EXT if is_multi_file_download(rom_detail) else TMP_EXT
+    tmp_ext = ZIP_TMP_EXT if zipped else TMP_EXT
     return download_file_store.file_size(target_path + tmp_ext)

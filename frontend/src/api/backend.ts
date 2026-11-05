@@ -380,6 +380,12 @@ export const adoptExistingRom = endpoint<[number, string | null, CollisionChoice
  * location.
  */
 export const verifyExistingContent = endpoint<[number, string | null], VerifyContentResult>("verify_existing_content");
+/**
+ * What a download of this ROM would fetch, in bytes, read from RomM now: the
+ * game's own files, which leave its manuals, soundtracks and other extras on the
+ * server. `size_bytes` is `null` where RomM states none.
+ */
+export const getDownloadSize = endpoint<[number], { size_bytes: number | null } | EndpointFailure>("get_download_size");
 export const cancelDownload = endpoint<[number], BackendResult>("cancel_download");
 export const pauseDownload = endpoint<[number], BackendResult>("pause_download");
 /**

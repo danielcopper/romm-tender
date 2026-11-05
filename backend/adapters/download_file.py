@@ -453,6 +453,11 @@ class DownloadFileAdapter:
             out.extend(os.path.join(root, f) for f in files)
         return out
 
+    def read_lines(self, path: str) -> list[str]:
+        """Read *path* as UTF-8 text, a byte that is no UTF-8 replaced, split into its lines."""
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return f.read().splitlines()
+
     def write_text_atomic(self, path: str, content: str) -> None:
         """Atomically write *content* to *path* as UTF-8 text.
 
