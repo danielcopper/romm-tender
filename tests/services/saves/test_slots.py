@@ -2289,7 +2289,7 @@ class TestSwitchSlot:
         assert len(list(backup_dir.glob("pokemon_*.rtc"))) == 1
         # Its baseline is dropped from tracking (no residual upload candidate).
         assert "pokemon.rtc" not in state.files
-        # The .srm target was downloaded and is still tracked.
+        # The .srm target was downloaded and is tracked again.
         assert "pokemon.srm" in state.files
         download_calls = [c for c in fake.call_log if c[0] == "download_save_content"]
         assert any(c[1][0] == 500 for c in download_calls)
@@ -2600,11 +2600,11 @@ class TestASwitchMarksThisDeviceOnlyOnceItPlaced:
 
 
 class _TheBackendStopped(BaseException):
-    """The backend going away mid-switch: no ``except Exception`` on the way out catches it, and nothing after runs."""
+    """The backend going away mid-switch: no ``except Exception`` catches it; nothing after it in the switch runs."""
 
 
 class TestASwitchThatStopsLeavesTheNewSlotRecorded:
-    """A switch sets every local save aside and writes the new slot before its first download, then each placed file.
+    """A switch sets every local save aside, then writes the state before its first download and after each success.
 
     A switch that stops once the new slot is written leaves the next sync facing the new slot alone, and that sync
     uploads nothing into either slot.
@@ -2835,7 +2835,7 @@ class TestASwitchThatStopsLeavesTheNewSlotRecorded:
 
 
 class TestASwitchWhoseBackupFails:
-    """A slot switch changes the slot only once every local save the new slot does not provide is backed up."""
+    """A slot switch changes the slot only once every local save is backed up."""
 
     def _later_readings_establish_nothing(self, svc, monkeypatch) -> None:
         """Every save reading after the first answers that nothing is established, which names no saves folder."""
@@ -2991,8 +2991,8 @@ class TestASwitchWhoseBackupFails:
             ),
         )
         before = _require_save_state(svc, 42)
-        # The new slot provides pokemon.srm, so nothing is set aside; its
-        # download would back the local file up before overwriting it.
+        # The new slot provides pokemon.srm, which the switch sets aside
+        # before its download all the same.
         fake.saves[700] = _server_save(save_id=700, slot="target")
         fake.set_server_save_content(700, b"server bytes")
         outside = tmp_path / "outside"

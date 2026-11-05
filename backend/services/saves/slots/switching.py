@@ -180,10 +180,9 @@ class SlotSwitcher:
         provides included, is backed up into ``.romm-backup`` (never
         destroyed) and untracked, the newest server save per canonical target
         is downloaded, and nothing is uploaded — saves are not carried between
-        slots. The flipped slot is written before the first download, and the
-        state again after each download that succeeds; what a switch that
-        stops leaves behind is ``docs/architecture/save-file-sync-architecture.md``,
-        "Switching slots". A partial download failure answers a
+        slots. What a switch that stops leaves behind is
+        ``docs/architecture/save-file-sync-architecture.md``, "Switching
+        slots". A partial download failure answers a
         :class:`SlotSwitchIncomplete` so the caller can retry.
 
         The slot changes only once every one of those backups went through. A
@@ -284,9 +283,8 @@ class SlotSwitcher:
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return stopped
 
-            # 8. Flip the active slot. It is written before the first download and
-            #    after each one that succeeds (why: save-file-sync-architecture.md,
-            #    "Switching slots").
+            # 8. Flip the active slot and write the state before the first download
+            #    (why: save-file-sync-architecture.md, "Switching slots").
             save_state.switch_active_slot(resolved_slot)
             await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
             switch_errors = await self._loop.run_in_executor(
