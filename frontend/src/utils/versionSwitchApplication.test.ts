@@ -282,6 +282,7 @@ describe("applyCommittedVersionSwitch's lease", () => {
 
   it("is not cancelled by another owner's teardown for the same game", async () => {
     expect(await switchWhileTearingDown("desktop-version-picker:5000", "version-picker:5000")).toBe(true);
+    expect(backend.logWarn).not.toHaveBeenCalledWith(expect.stringContaining("was cancelled"));
   });
 
   it("logs what a teardown before the writes began left undone, and writes nothing", async () => {
@@ -291,6 +292,20 @@ describe("applyCommittedVersionSwitch's lease", () => {
     const teardown = releasePruneLeasesByOwner(owner);
     await applied.catch(() => undefined);
     await teardown;
+
+    expect(backend.getSgdbArtworkBase64).not.toHaveBeenCalled();
+    expect(vi.mocked(backend.logWarn)).toHaveBeenCalledWith(
+      "Version switch: the lease for rom 42 (appId 5000) was cancelled; the cover and the broadcast were skipped",
+    );
+  });
+
+  it("logs what a teardown before the lease is registered left undone, and writes nothing", async () => {
+    const owner = "desktop-version-picker:5000";
+    mountPruneLeaseOwner(owner);
+    const admission = capturePruneLeaseAdmission(owner);
+    await releasePruneLeasesByOwner(owner);
+
+    await expect(applyCommittedVersionSwitch(result, undefined, admission)).rejects.toThrow();
 
     expect(backend.getSgdbArtworkBase64).not.toHaveBeenCalled();
     expect(vi.mocked(backend.logWarn)).toHaveBeenCalledWith(
@@ -332,6 +347,24 @@ describe("publishCommittedVersionSwitch stopped by its signal", () => {
     expect(SteamClient.Apps.SetCustomArtworkForApp).not.toHaveBeenCalled();
     expect(vi.mocked(backend.logWarn)).toHaveBeenCalledWith(
       "Version switch: the lease for rom 42 (appId 5000) was cancelled; the cover and the broadcast were skipped",
+    );
+  });
+
+  it("logs that only the broadcast was skipped when RomM has no cover to write", async () => {
+    vi.stubGlobal("SteamClient", { Apps: { SetCustomArtworkForApp: vi.fn().mockResolvedValue(undefined) } });
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false, chosen: false });
+    vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: null });
+    const controller = new AbortController();
+    controller.abort();
+
+    const broadcasts = await broadcastsDuring(() =>
+      publishCommittedVersionSwitch(5000, 42, undefined, controller.signal),
+    );
+
+    expect(broadcasts).toEqual([]);
+    expect(SteamClient.Apps.SetCustomArtworkForApp).not.toHaveBeenCalled();
+    expect(vi.mocked(backend.logWarn)).toHaveBeenCalledWith(
+      "Version switch: the lease for rom 42 (appId 5000) was cancelled; the broadcast was skipped",
     );
   });
 

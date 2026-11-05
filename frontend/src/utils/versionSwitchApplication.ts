@@ -1,7 +1,12 @@
 import { fetchCoverBase64, invalidateCachedGameDetail, logWarn, type SwitchVersionSuccess } from "../api/backend";
 import { setChosenCover, setSteamGridDbSwitchCover } from "./artwork";
 import { writeSlotArtwork } from "./artworkSlotsStore";
-import { isPruneLeaseCancelled, withPruneLease, type PruneLeaseAdmission } from "./pruneLease";
+import {
+  isPruneLeaseAdmissionCurrent,
+  isPruneLeaseCancelled,
+  withPruneLease,
+  type PruneLeaseAdmission,
+} from "./pruneLease";
 import { refreshAppIdMap } from "./sessionManager";
 import { detach } from "./detach";
 
@@ -18,6 +23,9 @@ export async function applyCommittedVersionSwitch(
   // The binding moved when the backend answered; Steam's Play must not wait on
   // the Steam writes below to be judged by it.
   detach(refreshAppIdMap());
+  if (!isPruneLeaseAdmissionCurrent(admission)) {
+    logCancelled(result.app_id, result.rom_id, "the cover and the broadcast were");
+  }
   return withPruneLease(
     result.prune_lease_token,
     "Version switch",
@@ -53,7 +61,7 @@ export async function publishCommittedVersionSwitch(
     }
     const cover = chosen.kind === "none" ? await fetchCoverBase64(romId) : null;
     if (signal?.aborted) {
-      logCancelled(appId, romId, cover ? "the cover and the broadcast were" : "the broadcast was");
+      logCancelled(appId, romId, cover?.base64 ? "the cover and the broadcast were" : "the broadcast was");
       return false;
     }
     if (cover?.base64) {
