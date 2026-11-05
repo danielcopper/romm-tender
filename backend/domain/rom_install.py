@@ -2,10 +2,11 @@
 
 Exists only while a ROM is downloaded: created on download-complete, removed on
 uninstall. References its Rom by ``rom_id``. Always carries the specific launch
-``file_path``; ``rom_dir`` names the dedicated per-ROM directory and is set only
-for folder-backed ROMs (a multi-file ROM, or a single zip unpacked into a
-folder) — it is ``None`` for a single file kept as it arrived, which lives as a
-bare file in the shared system directory and owns no folder. The
+``file_path``; ``rom_dir`` names the dedicated per-ROM directory and is set for
+every game that lands in a folder of its own (a game RomM holds as a folder,
+whatever a download fetches of it, or a single zip unpacked into a folder) — it
+is ``None`` only for a game RomM holds as one file, kept as it arrived, which
+lives as a bare file in the shared system directory and owns no folder. The
 denormalized ``platform_slug``/``system`` let the home migration and the save
 answer read this record without joining the registry. Whether that launch file
 starts is not recorded: it is the resolver's answer, asked when it is read.
@@ -42,9 +43,10 @@ class RomInstall:
     ) -> RomInstall:
         """Record a freshly downloaded ROM installed at ISO timestamp ``installed_at``.
 
-        ``rom_dir`` is the dedicated per-ROM directory for a folder-backed
-        (multi-file) ROM, or ``None`` for a single-file ROM that owns no folder.
-        ``fetched_size_bytes`` is RomM's size of the files the install fetched,
+        ``rom_dir`` is the dedicated per-ROM directory of a game that lands in a
+        folder of its own, or ``None`` for a game RomM holds as one file, kept
+        as it arrived. ``fetched_size_bytes`` is RomM's size of the files a
+        download of the game fetches (an adoption records the same figure),
         ``None`` where it states none; a size of zero or less states nothing and
         raises ``ValueError``.
         """

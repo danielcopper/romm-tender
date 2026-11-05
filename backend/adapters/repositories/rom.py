@@ -284,9 +284,8 @@ class SqliteRomRepository(BaseRepository):
     def set_fs_size_bytes(self, rom_id: int, size: int | None) -> None:
         """Write the ROM size ``Rom.record_fs_size_bytes`` has just recorded for ``rom_id``.
 
-        An install records the size from the ROM detail it already fetched,
-        which keeps the Data Management page's installed size current until the
-        next sync. Unlike the pin columns (``emulator_override`` /
+        An install records the size from the ROM detail it already fetched.
+        Unlike the pin columns (``emulator_override`` /
         ``selected_disc`` / ``shortcut_applied``),
         ``fs_size_bytes`` ALSO rides the sync UPSERT in :meth:`save`, and the
         next sync writes RomM's listing value over this one; Database Design's

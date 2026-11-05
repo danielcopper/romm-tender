@@ -4,7 +4,8 @@
 -- =============================================================================
 --
 --   * rom_installs.fetched_size_bytes — added, nullable: the sum of RomM's
---     sizes of the files the install fetched. A download fetches a game's own
+--     sizes of the files a download of the game fetches (an adoption records
+--     the same figure). A download fetches a game's own
 --     files and leaves its manuals, soundtracks and other extras on the
 --     server, so this differs from roms.fs_size_bytes, RomM's size of the
 --     whole game, which the sync keeps writing. The data overview sums it.

@@ -57,13 +57,15 @@ class RomInstallRecorder:
 
         The filesystem work (rename, extraction, launch-file detection) has
         already run outside any transaction; only the upsert is wrapped here
-        (ADR-0006). ``rom_dir`` is the ROM's own directory for a multi-file ROM,
-        or ``None`` for a single-file ROM (which owns no folder). If the RomM
+        (ADR-0006). ``rom_dir`` is the game's own directory where it lands in a
+        folder of its own, or ``None`` for a game RomM holds as one file, kept
+        as it arrived (which owns no folder). If the RomM
         data fails the aggregate's invariant (non-positive ``rom_id``), nothing
         is persisted, *cleanup* removes the just-placed artifact, and a failure
-        message is returned. The row records the size of the files the install
-        fetched (``download_size_bytes``); ``Rom.fs_size_bytes`` is written with
-        RomM's size of the whole game.
+        message is returned. The row records the size of the files a download of
+        the game fetches (``download_size_bytes``; an adoption records the same
+        figure); ``Rom.fs_size_bytes`` is written with RomM's size of the whole
+        game.
 
         Returns ``(file_path, None)`` on success or ``(None, error)`` when the
         invariant rejects the data.

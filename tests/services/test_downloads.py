@@ -8097,6 +8097,25 @@ class TestADownloadFetchesTheGamesOwnFiles:
         assert Path(installed.file_path).read_bytes() == b"rvz-bytes"
         assert not list((roms / "gc").rglob("*.flac"))
 
+    async def test_a_switch_update_beside_the_base_game_stays_on_the_server(self, downloads, roms):
+        # RomM's own read files a top-level update .nsp under ``update``; with two
+        # files at the folder's root ``has_multiple_files`` is set, yet RomM
+        # serves the one file asked for as itself.
+        detail = _folder_game(
+            _rom_file(11, "Game [base].nsp", "game", 1000),
+            _rom_file(12, "Game [update].nsp", "update", 300),
+            multiple=True,
+        )
+
+        asked = await self._run(downloads, detail, roms, b"base-nsp")
+
+        assert asked == [(11,)]
+        installed = downloads.uow.rom_installs.get(1)
+        assert installed is not None
+        assert Path(installed.file_path).name == "Game [base].nsp"
+        assert Path(installed.file_path).read_bytes() == b"base-nsp"
+        assert not list((roms / "gc").rglob("*[[]update[]].nsp"))
+
     async def test_two_game_files_beside_a_soundtrack_are_asked_for_by_id(self, downloads, roms):
         detail = _folder_game(
             _rom_file(11, "Game.cue", "game", 100),
@@ -8118,8 +8137,8 @@ class TestADownloadFetchesTheGamesOwnFiles:
         ]
 
     async def test_a_folder_game_with_no_category_folder_downloads_complete(self, downloads, roms):
-        # A PS3 dump: nothing lies directly in the game's folder, so RomM sets
-        # none of its shape flags and files everything under no category.
+        # A PS3 dump with no file at its root: RomM sets none of its shape
+        # flags and files everything under no category.
         detail = _folder_game(
             _rom_file(11, "PS3_GAME/USRDIR/EBOOT.BIN", None, 500),
             _rom_file(12, "PS3_GAME/PARAM.SFO", None, 20),

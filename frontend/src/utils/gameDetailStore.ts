@@ -878,8 +878,8 @@ function attachListeners(appId: number, entry: Entry): () => void {
               break;
             case "rom_adopted":
               // Adoption writes an install record without a download, so no
-              // `download_complete` fires — but `installed` and `fs_size_bytes`
-              // changed just the same and the cached detail must be dropped.
+              // `download_complete` fires — but `installed` changed just the
+              // same and the cached detail must be dropped.
               if (reloadTriggeredBy(entry, detail.rom_id)) await reloadDetail(appId, entry);
               break;
           }
@@ -892,7 +892,7 @@ function attachListeners(appId: number, entry: Entry): () => void {
   globalThis.addEventListener("romm_data_changed", onDataChanged);
 
   // Install-state reactivity (#1395): a download or an uninstall changes
-  // `installed` + `fs_size_bytes`, so the cached detail is dropped first and the
+  // `installed`, so the cached detail is dropped first and the
   // whole entry re-derived — reading it back inside the 3s TTL would return the
   // pre-change state.
   const onDownloadComplete = addEventListener<DownloadCompleteEvent>("download_complete", (evt) => {

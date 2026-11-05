@@ -68,8 +68,8 @@ class TestWhatIsFetched:
         assert sorted(entry.category or "" for entry in files.left_out) == sorted(others)
 
     def test_a_file_in_no_category_is_the_games_own(self):
-        # A PS3 dump: nothing lies directly in the game's folder, so RomM files
-        # every file under no category.
+        # A PS3 dump with no file at its root: RomM files every file under no
+        # category.
         files = game_files(
             _detail(
                 _file(1, "PS3_GAME/USRDIR/EBOOT.BIN", None),

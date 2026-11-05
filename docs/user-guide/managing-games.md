@@ -21,9 +21,11 @@ When you open a RomM game in the Steam Library, you'll see the Tender panel belo
 - **Space required** — for a game that isn't downloaded yet, a "Space Required" cell next to the Play button shows how
   much disk space the download needs. Tender asks RomM for it once the page is open, so the cell appears a moment later,
   and it counts the files a download brings: the game's own files, not the manuals, soundtracks, updates, DLC or other
-  extras in the game's RomM folder, which stay on the server. It disappears once the game is installed (mirroring how
-  Steam hides it for installed games); it's also omitted when RomM can't be asked, doesn't report the size, or reports 0
-  bytes, as it does for a game it holds no file for.
+  extras in the game's RomM folder, which stay on the server. For a game whose files are so many that Tender cannot name
+  them in one request to RomM, the download brings the whole game and removes the extras afterwards, and the cell counts
+  the whole game. It disappears once the game is installed (mirroring how Steam hides it for installed games); it's also
+  omitted when RomM can't be asked, doesn't report the size, or reports 0 bytes, as it does for a game it holds no file
+  for.
 - **Action buttons** — Download, Pause/Resume, Uninstall, Cancel, or Refresh Metadata depending on state
 
 Below the play row stand the panel's tabs — **GAME INFO**, **ACHIEVEMENTS**, **SAVES**, **BIOS** and **ARTWORK** — on
@@ -335,9 +337,10 @@ versions, and a version with no region/language detail simply omits the rows. Th
 
 Games appear as shortcuts in your library even before the ROM file is downloaded. Before downloading, the panel shows a
 **Space Required** cell next to the Play button so you know how much disk space the ROM needs. A download brings the
-files RomM files as the game's own — the files directly in the game's folder on RomM, and those in no category folder,
-such as a PS3 dump's — and leaves everything RomM files under another category on the server: manuals, walkthroughs,
-soundtracks, screenshots, cheats, patches, translations, hacks, mods, demos, prototypes, updates and DLC. To download:
+files RomM files as the game's own — the files directly in the game's folder on RomM unless RomM recognises one as an
+update or DLC (it does for Switch games), and those in no category folder, such as a Wii U dump's — and leaves
+everything RomM files under another category on the server: manuals, walkthroughs, soundtracks, screenshots, cheats,
+patches, translations, hacks, mods, demos, prototypes, updates and DLC. To download:
 
 1. Open the game's detail page in the Steam Library
 2. In the Tender panel, tap **Download**
@@ -420,7 +423,10 @@ yourself, or because another version of the same game was downloaded to that pla
 Instead, the Play button reads **Use Existing Files**, and pressing it opens a dialog rather than starting a download.
 
 The dialog shows both sides — what is on your device (name, size, when it last changed) and what the server would send —
-and says plainly whether the two are the same size. From there you have three choices:
+and says plainly whether the two are the same size. The server's side is the size of the files a download brings,
+without the manuals, soundtracks and other extras that stay on the server, while **Check Against Server** below compares
+with every file the server lists; so a copy Tender downloaded and then forgot shows as missing its extras. From there
+you have three choices:
 
 - **Use These Files** — Tender records what is already there as the installed copy. Nothing is downloaded, nothing is
   renamed, and no playlist is generated: your files are taken exactly as they are. The game becomes playable
@@ -497,9 +503,9 @@ list shows, it says so.
 **When what is there cannot be used.** Two things carry this game's name and still cannot become it, and both get the
 same answer.
 
-The first is the **wrong shape**: your server sends each game either as a single file or as a folder of several files,
-and Tender can only take over what matches. A _folder_ with this game's name where the server sends a single file — or a
-loose file where it sends a folder — is not something it can use.
+The first is the **wrong shape**: your server keeps each game either as a single file or as a folder, and Tender can
+only take over what matches. A _folder_ with this game's name where the server keeps a single file — or a loose file
+where it keeps a folder, even a folder holding one file — is not something it can use.
 
 The second is a **shortcut** (a symlink). Tender never adopts one, even when it points at exactly the right game file.
 Once a game counts as installed, Uninstall has to be able to remove it, and it will not remove a shortcut — so adopting
@@ -579,9 +585,8 @@ download and start again to see the dialog for what is there now.
 
 ### Multi-Disc and Multi-File Games
 
-Some games ship as more than one file — multi-disc PS1 titles, a base game plus updates and DLC, a BIN+CUE pair. RomM
-downloads these as a single ZIP, which Tender extracts automatically. You just download and play; the layout is handled
-for you.
+Some games ship as more than one file — multi-disc PS1 titles, a BIN+CUE pair. RomM downloads these as a single ZIP,
+which Tender extracts automatically. You just download and play; the layout is handled for you.
 
 A disc game your server keeps as **one `.zip`** is unpacked the same way, because many emulators cannot mount a disc
 from inside a zip: RetroArch hands its core only one file out of the zip, so a Saturn `.cue` finds none of its `.bin`
@@ -622,8 +627,8 @@ concept collapse to their real game file instead — the folder is named after t
 `<Game>.iso/`) and the game launches straight from it. RomM bundles a generic `.m3u` into every multi-file ZIP, but
 Tender ignores it on these systems rather than launching from a file the emulator can't read.
 
-Single-file titles that are not a zip (most `.chd`/`.iso` games on disc-image systems) download as a bare file with no
-folder, so they need no playlist either way.
+A game your server keeps as one file that is not a zip (most `.chd`/`.iso` games on disc-image systems) downloads as a
+bare file with no folder, so they need no playlist either way.
 
 **Space for unpacking.** An unpacked game needs room for the zip and for what comes out of it at the same time. Where
 your server lists what is inside a single zip — libraries rescanned since RomM 4.9.0 — the check before the download

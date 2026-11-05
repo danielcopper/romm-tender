@@ -29,11 +29,15 @@ def is_multi_file_download(rom_detail: dict[str, Any]) -> bool:
     RomM's content endpoint zips whenever it serves more than one file, counting
     every file it serves, nested ones included, and serves a single file as
     itself (``get_rom_content``, RomM 5.4.1). A download asks for the files
-    ``game_files`` fetches, so those are the ones counted. ``has_multiple_files``
-    — more than one file directly in the game's folder, each of them a ``game``
-    file and so fetched — stands in for a payload that lists no files.
+    ``game_files`` fetches, so those are the ones counted wherever the payload
+    lists its files. ``has_multiple_files`` stands in only for a payload that
+    lists none: two files directly in the game's folder are not both fetched
+    where RomM's own read of a file files it under another category, as it does
+    a Switch update or DLC lying beside the base game.
     """
-    return len(game_files(rom_detail).fetched) > 1 or bool(rom_detail.get("has_multiple_files", False))
+    if rom_detail.get("files"):
+        return len(game_files(rom_detail).fetched) > 1
+    return bool(rom_detail.get("has_multiple_files", False))
 
 
 def lands_as_folder(rom_detail: dict[str, Any]) -> bool:
@@ -42,7 +46,8 @@ def lands_as_folder(rom_detail: dict[str, Any]) -> bool:
     The shape RomM holds the game in decides, never the number of files fetched
     (#2223 D31): only a game RomM states is one file (``has_simple_single_file``)
     lies flat. RomM sets none of its three shape flags for a folder with no
-    file directly in it, such as a PS3 dump, and that is a folder too. A payload
+    file directly in it, such as a Wii U dump (``code/``, ``content/``,
+    ``meta/``) or a PS3 dump with no file at its root, and that is a folder too. A payload
     that does not state all three flags is a folder where it lists more than one
     file.
     """
@@ -402,9 +407,9 @@ def resolve_local_file_name(rom_detail: dict[str, Any]) -> tuple[str, bool]:
     """Resolve the on-disk filename for a ROM.
 
     For nested-single-file ROMs RomM reports ``fs_name`` as the parent
-    folder, so the actual filename (with extension) lives in
-    ``files[0].file_name``. For all other layouts ``fs_name`` is already
-    the correct filename. When ``fs_name`` is missing the synthetic
+    folder, so the actual filename (with extension) is the first file a
+    download fetches (``game_files``), never a manual or update listed before
+    it. For all other layouts ``fs_name`` is already the correct filename. When ``fs_name`` is missing the synthetic
     ``rom_<id>`` (or ``rom_unknown`` if ``id`` is also missing) is used.
 
     Returns
@@ -419,10 +424,10 @@ def resolve_local_file_name(rom_detail: dict[str, Any]) -> tuple[str, bool]:
     fs_name = rom_detail.get("fs_name", synthetic_rom_name(rom_detail))
     if not rom_detail.get("has_nested_single_file"):
         return (fs_name, False)
-    files = rom_detail.get("files") or []
-    if not files:
+    fetched = game_files(rom_detail).fetched
+    if not fetched:
         return (fs_name, True)
-    return (files[0].get("file_name") or fs_name, False)
+    return (fetched[0].file_name or fs_name, False)
 
 
 def resolve_extract_dir_name(rom_detail: dict[str, Any]) -> str:

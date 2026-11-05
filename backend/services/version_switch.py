@@ -877,10 +877,9 @@ class VersionSwitchService:
                 synced_at=self._clock.now().isoformat(),
                 igdb_id=target_dict.get("igdb_id"),
                 version=VersionMetadata.from_mapping(meta, sibling_group_key=bound_group_key),
-                # Carry the server-reported size like the other available
-                # server-derived facts above (#1395) so a switch to a server-only
-                # sibling shows its download size immediately, not only after the
-                # next sync backfills it.
+                # Carry RomM's size of the whole game like the other server-derived
+                # facts above (#1395), so a switch to a server-only sibling has it
+                # before the next sync backfills it.
                 fs_size_bytes=target_dict.get("fs_size_bytes"),
                 has_file_on_disk=has_file_on_romm(target_dict),
             )

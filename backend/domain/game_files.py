@@ -1,9 +1,11 @@
 """Which of a ROM's files a download fetches from RomM, and how it asks for them.
 
 RomM files each of a ROM's files under a category (RomM 5.4.1
-``RomFileCategory``): a file directly in the game's folder is ``game``, a file
-in a folder named after a category directly below it takes that category, and
-any other nested file takes none. A download fetches the ``game`` files and the
+``RomFileCategory``): a file directly in the game's folder is ``game`` unless
+RomM's own read of the file says otherwise (a Switch update or DLC lying there
+is ``update`` or ``dlc``), a file in a folder directly below the game's folder
+named after a category, singular or plural, takes that category, and any other
+nested file takes none. A download fetches the ``game`` files and the
 files in no category; every other category — manuals, soundtracks, updates,
 DLC and the rest — stays on the server. Where that would leave nothing, every
 file is fetched. Which files those are, and the sizes Tender shows and checks,
@@ -14,7 +16,6 @@ Pure: RomM's payload arrives as a value.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -125,12 +126,8 @@ def file_ids_query(file_ids: tuple[int, ...]) -> str:
 def request_line_fits(url: str) -> bool:
     """Whether a GET of *url* stays within ``MAX_REQUEST_LINE_BYTES``.
 
-    The whole URL is counted, scheme and host included: a request through a
-    proxy carries it so, and one sent directly carries less.
+    The whole URL is counted, scheme and host included, which errs long: only a
+    forward proxy is sent the whole URL, while RomM or a proxy in front of it is
+    sent the path alone.
     """
     return len(f"GET {url} HTTP/1.1".encode()) <= MAX_REQUEST_LINE_BYTES
-
-
-def is_top_level(entry: GameFile) -> bool:
-    """Whether *entry* lies directly in the game's folder."""
-    return bool(entry.rel_path) and os.path.dirname(entry.rel_path) == ""

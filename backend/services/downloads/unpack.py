@@ -386,11 +386,11 @@ class DownloadUnpacker:
 
         Each goes from where RomM's zip placed it — its path inside the game's
         folder — and so does every folder that held nothing else; one the zip
-        did not hold is nothing to remove. A file whose
-        place the payload does not state is not looked for: a guess by its name
-        could remove a game file of the same name. The lines naming them go from the playlist
-        RomM generated into the download, and that playlist goes where none is
-        left (#2732 D4).
+        did not hold is nothing to remove. A file whose place the payload does
+        not state is not looked for: a guess by its name could remove a game
+        file of the same name. The lines naming them go from the playlist RomM
+        generated into the download, and that playlist goes where none is left
+        (#2732 D4).
         """
         gone: set[str] = set()
         for entry in removed:
