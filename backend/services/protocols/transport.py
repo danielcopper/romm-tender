@@ -291,6 +291,7 @@ class RommRomReader(Protocol):
         *,
         resume: bool = False,
         on_meta: Any = None,
+        file_ids: tuple[int, ...] | None = None,
     ) -> None:
         """Download a ROM file to a local destination.
 
@@ -299,6 +300,15 @@ class RommRomReader(Protocol):
         ``resume=True`` appends onto an existing partial transfer when the
         server honours the ``Range`` request; ``on_meta`` is invoked once with
         ``range_supported: bool`` when the response headers arrive.
+        *file_ids* asks for exactly those of the ROM's files, and ``None`` for
+        all of them.
+        """
+        ...
+
+    def rom_content_url(self, rom_id: int, filename: str, file_ids: tuple[int, ...] | None = None) -> str:
+        """The URL :meth:`download_rom_content` requests for the same arguments.
+
+        Pure: it builds the URL and sends nothing.
         """
         ...
 

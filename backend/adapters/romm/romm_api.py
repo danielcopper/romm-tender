@@ -10,6 +10,7 @@ import logging
 import urllib.parse
 from typing import TYPE_CHECKING, Any
 
+from domain.game_files import file_ids_query
 from domain.hidden_roms import hidden_rom_ids
 from lib.errors import (
     PairingCodeInvalidError,
@@ -128,6 +129,12 @@ _TOKEN_SCOPES = [
 ]
 
 
+def _rom_content_path(rom_id: int, filename: str, file_ids: tuple[int, ...] | None) -> str:
+    """The content endpoint's path for *filename*, asking for exactly *file_ids* where given."""
+    query = file_ids_query(file_ids) if file_ids is not None else ""
+    return f"/api/roms/{rom_id}/content/{urllib.parse.quote(filename, safe='')}{query}"
+
+
 def _platform_filter(platform_ids: Sequence[int] | None) -> str:
     """The ``platform_ids`` query fragment, one repetition per id; empty for ``None`` or no ids.
 
@@ -222,15 +229,18 @@ class RommApiAdapter:
         *,
         resume: bool = False,
         on_meta: Any = None,
+        file_ids: tuple[int, ...] | None = None,
     ) -> None:
-        quoted_filename = urllib.parse.quote(filename, safe="")
         self._client.download(
-            f"/api/roms/{rom_id}/content/{quoted_filename}",
+            _rom_content_path(rom_id, filename, file_ids),
             dest,
             progress_callback,
             resume=resume,
             on_meta=on_meta,
         )
+
+    def rom_content_url(self, rom_id: int, filename: str, file_ids: tuple[int, ...] | None = None) -> str:
+        return self._client.url_for(_rom_content_path(rom_id, filename, file_ids))
 
     def download_cover(
         self, cover_url: str, dest: str, *, etag: str | None = None, last_modified: str | None = None

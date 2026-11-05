@@ -1945,6 +1945,24 @@ class TestDownloadTimeout:
         req = mock_open.call_args[0][0]
         assert req.get_header("User-agent") == _USER_AGENT
 
+    def test_url_for_is_the_url_a_download_requests(self, tmp_path):
+        from io import BytesIO
+
+        adapter = RommHttpAdapter(
+            {"romm_url": "http://romm.local/romm/"}, logging.getLogger("test"), _USER_AGENT, log_debug=lambda _m: None
+        )
+        mock_resp = MagicMock()
+        mock_resp.headers = {"Content-Length": "1"}
+        mock_resp.read = BytesIO(b"x").read
+        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_resp) as mock_open:
+            adapter.download("/api/roms/1/content/Game?file_ids=2", str(tmp_path / "out"))
+
+        assert adapter.url_for("/api/roms/1/content/Game?file_ids=2") == mock_open.call_args[0][0].full_url
+        assert adapter.url_for("/x") == "http://romm.local/romm/x"
+
     def test_download_omits_authorization_when_no_token(self, tmp_path):
         """A token-less download omits the Authorization header (no empty Bearer)."""
         from io import BytesIO
@@ -2566,7 +2584,7 @@ _ANSWERED_FAILURES = {
 
 # The public methods of ``RommHttpAdapter`` that send no request.
 _NOT_REQUEST_METHODS = frozenset(
-    {"auth_header", "is_retryable", "on_retry", "ssl_context", "translate_http_error", "with_retry"}
+    {"auth_header", "is_retryable", "on_retry", "ssl_context", "translate_http_error", "url_for", "with_retry"}
 )
 
 
