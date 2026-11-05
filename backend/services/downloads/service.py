@@ -19,11 +19,11 @@ from domain.emulator_sources import RETRODECK
 from domain.retrodeck_folders import GAME_DOWNLOAD, FolderRefused
 from domain.rom_candidates import DIR, FILE
 from domain.rom_file import NO_FILE_ON_ROMM_MESSAGE, NoFileOnRomm, has_file_on_romm
-from domain.rom_files import is_multi_file_download
 from domain.served_shape import listed_unpacked_bytes, served_shapes
 from domain.sibling_supersede import supersede_siblings
 from lib.background_tasks import BackgroundTasks
 from lib.errors import NotInstalled, Refused
+from services.downloads._fetch import plan_fetch
 from services.downloads._names import partial_tmp_size, safe_extract_dir_name, safe_local_file_name
 from services.downloads._state import DownloadControl
 
@@ -275,7 +275,8 @@ class DownloadService:
         roms_dir = folder
         try:
             file_name = safe_local_file_name(rom_detail, self._logger)
-            file_size = rom_detail.get("fs_size_bytes", 0)
+            fetch = plan_fetch(rom_detail, file_name, self._romm_api)
+            file_size = fetch.size_bytes
             target_path = os.path.join(roms_dir, file_name)
 
             # Refuse before a single byte moves when this game is already on disk
@@ -326,14 +327,16 @@ class DownloadService:
             # ``kept_download_complete``), so only what the unpack still needs is
             # weighed — as for a resume.
             kept = resume or await self._loop.run_in_executor(
-                None, self._unpacker.kept_download_complete, target_path, rom_detail
+                None, self._unpacker.kept_download_complete, target_path, fetch
             )
-            already_on_disk = partial_tmp_size(self._download_file_store, target_path, rom_detail) if kept else 0
+            already_on_disk = (
+                partial_tmp_size(self._download_file_store, target_path, zipped=fetch.zipped) if kept else 0
+            )
             verdict = disk_space_verdict(
                 file_size=file_size,
                 free_space=self._download_file_store.disk_free(roms_dir),
                 reserved_bytes=self._state.bytes_reserved_by_others(rom_id, self._queue.entries),
-                multi_file=is_multi_file_download(rom_detail),
+                multi_file=fetch.zipped,
                 already_on_disk=already_on_disk,
                 unpacked_size=listed_unpacked_bytes(rom_detail),
             )
@@ -403,6 +406,18 @@ class DownloadService:
         self._queue.enqueue(rom_id, entry)
         self._state.admit(rom_id, task=task, reserved=verdict.needed_bytes, control=control)
         return {"success": True, "message": "Download started"}
+
+    async def get_download_size(self, rom_id) -> dict[str, Any]:
+        """What a download of this ROM would fetch, in bytes, read from RomM's ROM detail now (#2732 D1).
+
+        The size the free-space check of a start would weigh (``plan_fetch``):
+        the files the download fetches, or the whole game where its request
+        could not leave the others out. ``size_bytes`` is ``None`` where RomM
+        states no size. A RomM error is raised, as a ROM read's is.
+        """
+        rom_detail = await self._loop.run_in_executor(None, self._romm_api.get_rom, int(rom_id))
+        fetch = plan_fetch(rom_detail, safe_local_file_name(rom_detail, self._logger), self._romm_api)
+        return {"size_bytes": fetch.size_bytes if fetch.size_bytes > 0 else None}
 
     def task_for_rom(self, rom_id: int) -> asyncio.Task[None] | None:
         """Return the detached task whose lifetime owns this ROM's install write."""

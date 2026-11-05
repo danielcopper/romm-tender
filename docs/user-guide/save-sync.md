@@ -483,13 +483,14 @@ back to what it was before.
 
 ## RomM Version Compatibility
 
-Tender requires **RomM >= 5.3.0**. Pre-release builds whose numeric core is **above** that floor pass — for example
-`5.3.1-beta` or `5.4.0-alpha.1`. Tags at the exact floor (`5.3.0-beta.1`, `5.3.0-alpha.1`) are rejected because they
-rank below the `5.3.0` release. Servers below 5.3.0 are rejected at connection time with a full error page in both the
+Tender requires **RomM >= 5.4.1**. Pre-release builds whose numeric core is **above** that floor pass — for example
+`5.4.2-beta` or `5.5.0-alpha.1`. Tags at the exact floor (`5.4.1-beta.1`, `5.4.1-alpha.1`) are rejected because they
+rank below the `5.4.1` release. Servers below 5.4.1 are rejected at connection time with a full error page in both the
 QAM panel and the game detail view. Tender uses server-side device tracking, content hashing, save slots, and
-`device_syncs` for conflict detection. Save sync is built on RomM's Device Sync, which arrived in RomM 4.9.0. Nothing
-Tender does needs a newer server than that yet; the minimum is 5.3.0 so that coming updates can use what that release
-added without having to raise it first.
+`device_syncs` for conflict detection. Save sync is built on RomM's Device Sync, which arrived in RomM 4.9.0; the
+minimum is 5.4.1 so that a download can leave a game's manuals, soundtracks and other extras on the server. It reads the
+category RomM files each file under, which from RomM 5.4.0 on comes only from the folder directly below the game's own
+folder.
 
 For technical details on how save sync works internally (three-way conflict detection, state schema, session detection),
 see the [Save File Sync Architecture](../architecture/save-file-sync-architecture.md) technical reference.

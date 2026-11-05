@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from domain.game_files import download_size_bytes
 from domain.rom_install import RomInstall
 
 if TYPE_CHECKING:
@@ -56,11 +57,14 @@ class RomInstallRecorder:
 
         The filesystem work (rename, extraction, launch-file detection) has
         already run outside any transaction; only the upsert is wrapped here
-        (ADR-0006). ``rom_dir`` is the ROM's own directory for a multi-file ROM,
-        or ``None`` for a single-file ROM (which owns no folder). If the RomM
+        (ADR-0006). ``rom_dir`` is the game's own directory where it lands in a
+        folder of its own, or ``None`` for a game RomM holds as one file, kept
+        as it arrived (which owns no folder). If the RomM
         data fails the aggregate's invariant (non-positive ``rom_id``), nothing
         is persisted, *cleanup* removes the just-placed artifact, and a failure
-        message is returned.
+        message is returned. The row records the size of the files a download of
+        the game fetches (``download_size_bytes``; an adoption records the same
+        figure).
 
         Returns ``(file_path, None)`` on success or ``(None, error)`` when the
         invariant rejects the data.
@@ -73,6 +77,7 @@ class RomInstallRecorder:
                 platform_slug=rom_detail.get("platform_slug", ""),
                 system=system,
                 installed_at=self._clock.now().isoformat(),
+                fetched_size_bytes=_stated(download_size_bytes(rom_detail)),
             )
         except ValueError as e:
             cleanup()
@@ -80,11 +85,9 @@ class RomInstallRecorder:
 
         with self._uow_factory() as uow:
             uow.rom_installs.save(install)
-            # A size RomM did not state never replaces one already recorded.
-            size = rom_detail.get("fs_size_bytes")
-            if size and size > 0:
-                rom = uow.roms.get(int(rom_id))
-                if rom is not None:
-                    rom.record_fs_size_bytes(size)
-                    uow.roms.set_fs_size_bytes(rom.rom_id, rom.fs_size_bytes)
         return file_path, None
+
+
+def _stated(size: int) -> int | None:
+    """*size*, or ``None`` where it states nothing (zero or less)."""
+    return size if size > 0 else None

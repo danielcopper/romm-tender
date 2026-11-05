@@ -13,6 +13,7 @@ from domain.rom_files import (
     folder_boot_layout_root,
     folder_boot_root,
     is_multi_file_download,
+    lands_as_folder,
     needs_m3u,
     ps3_folder_lift,
     ps3_folder_rename,
@@ -57,10 +58,11 @@ class TestIsMultiFileDownload:
         }
         assert is_multi_file_download(rom_detail) is True
 
-    def test_flag_true_with_one_file_falls_back_to_multi(self):
-        # Defensive fallback: trust the boolean even when files implies single.
+    def test_a_listed_single_file_is_no_zip_whatever_the_flag(self):
+        # RomM serves a single listed file as itself; the flag stands in only
+        # where no files are listed.
         rom_detail = {"has_multiple_files": True, "files": [{"file_name": "game.zip"}]}
-        assert is_multi_file_download(rom_detail) is True
+        assert is_multi_file_download(rom_detail) is False
 
     def test_nested_switch_single_top_level_but_many_files_is_multi(self):
         # #855: Switch base/update/DLC folder — exactly one top-level file so
@@ -659,3 +661,122 @@ class TestThePathAStartIsAskedWith:
 
     def test_a_single_file_is_its_file(self):
         assert asked_path("/roms/n64/Game.z64", None, "/roms/n64/Game.z64") == "/roms/n64/Game.z64"
+
+
+class TestTheZipCountsTheFilesFetched:
+    """RomM zips only what a download asks for (#2223 D27)."""
+
+    def test_a_switch_game_whose_update_stays_on_the_server_is_one_file(self):
+        rom_detail = {
+            "has_nested_single_file": True,
+            "has_multiple_files": False,
+            "files": [
+                {"id": 1, "file_name": "game.nsp", "category": "game"},
+                {"id": 2, "file_name": "patch.nsp", "category": "update"},
+            ],
+        }
+
+        assert is_multi_file_download(rom_detail) is False
+
+    def test_two_game_files_beside_a_manual_are_a_zip(self):
+        rom_detail = {
+            "has_multiple_files": True,
+            "files": [
+                {"id": 1, "file_name": "Game.cue", "category": "game"},
+                {"id": 2, "file_name": "Game.bin", "category": "game"},
+                {"id": 3, "file_name": "manual.pdf", "category": "manual"},
+            ],
+        }
+
+        assert is_multi_file_download(rom_detail) is True
+
+
+class TestLandsAsFolder:
+    """The shape RomM holds a game in decides where it lies (#2223 D31)."""
+
+    @staticmethod
+    def _flags(simple: bool, nested: bool, multiple: bool) -> dict[str, bool]:
+        return {
+            "has_simple_single_file": simple,
+            "has_nested_single_file": nested,
+            "has_multiple_files": multiple,
+        }
+
+    def test_a_game_held_as_one_file_lies_flat(self):
+        assert lands_as_folder({**self._flags(True, False, False), "files": [{"file_name": "Game.gba"}]}) is False
+
+    def test_a_folder_with_one_file_is_a_folder(self):
+        assert lands_as_folder({**self._flags(False, True, False), "files": [{"file_name": "Game.chd"}]}) is True
+
+    def test_a_folder_with_several_files_is_a_folder(self):
+        assert lands_as_folder({**self._flags(False, False, True), "files": [{}, {}]}) is True
+
+    def test_a_folder_with_no_file_directly_in_it_is_a_folder(self):
+        # A Wii U dump, or a PS3 dump with no file at its root: RomM sets none
+        # of the three flags.
+        assert lands_as_folder({**self._flags(False, False, False), "files": [{"file_name": "EBOOT.BIN"}]}) is True
+
+    def test_a_folder_game_fetching_one_file_is_still_a_folder(self):
+        rom_detail = {
+            **self._flags(False, True, False),
+            "files": [
+                {"id": 1, "file_name": "Game.rvz", "category": "game"},
+                {"id": 2, "file_name": "01.flac", "category": "soundtrack"},
+            ],
+        }
+
+        assert lands_as_folder(rom_detail) is True
+
+    def test_without_the_flags_more_than_one_file_is_a_folder(self):
+        assert lands_as_folder({"files": [{"file_name": "a"}, {"file_name": "b"}]}) is True
+        assert lands_as_folder({"files": [{"file_name": "a"}]}) is False
+
+    def test_a_folder_flag_decides_where_the_others_are_not_stated(self):
+        assert lands_as_folder({"has_nested_single_file": True, "files": [{"file_name": "Game.chd"}]}) is True
+
+
+class TestASwitchUpdateBesideTheBaseGame:
+    """RomM's own read files a top-level Switch update under ``update`` (RomM 5.4.1 ``utils/switch.py``)."""
+
+    def test_the_base_game_alone_is_served_as_itself(self):
+        rom_detail = {
+            "has_simple_single_file": False,
+            "has_nested_single_file": False,
+            "has_multiple_files": True,
+            "files": [
+                {"id": 1, "file_name": "Game [base].nsp", "category": "game"},
+                {"id": 2, "file_name": "Game [update].nsp", "category": "update"},
+            ],
+        }
+
+        assert is_multi_file_download(rom_detail) is False
+        assert lands_as_folder(rom_detail) is True
+
+
+class TestTheNameOfANestedSingleFile:
+    def test_it_is_the_first_file_a_download_fetches(self):
+        rom_detail = {
+            "fs_name": "Game",
+            "has_nested_single_file": True,
+            "files": [
+                {"id": 1, "file_name": "Game.pdf", "category": "manual"},
+                {"id": 2, "file_name": "Game.nsp", "category": "game"},
+            ],
+        }
+
+        assert resolve_local_file_name(rom_detail) == ("Game.nsp", False)
+
+    def test_it_is_the_fetched_file_at_the_folder_s_root(self):
+        # RomM sorts ``files`` by name, so a PS3 dump's inner asset comes before
+        # the PS3_DISC.SFB lying directly in the game's folder.
+        rom_detail = {
+            "fs_name": "Game",
+            "full_path": "ps3/Game",
+            "has_nested_single_file": True,
+            "files": [
+                {"id": 1, "file_name": "EBOOT.BIN", "file_path": "ps3/Game/PS3_GAME/USRDIR", "category": None},
+                {"id": 2, "file_name": "PS3_DISC.SFB", "file_path": "ps3/Game", "category": "game"},
+            ],
+        }
+
+        assert resolve_local_file_name(rom_detail) == ("PS3_DISC.SFB", False)

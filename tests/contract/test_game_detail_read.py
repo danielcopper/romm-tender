@@ -79,27 +79,6 @@ async def test_cached_game_detail_empty_version_metadata_is_empty_shapes(harness
     assert result["is_main_sibling"] is False
 
 
-async def test_cached_game_detail_carries_fs_size_bytes(harness):
-    """The payload pins the server-reported ROM size as an int (#1395)."""
-    app_id = _seed_versioned_rom(harness, fs_size_bytes=3_145_728)
-
-    result = await harness.endpoints.get_cached_game_detail(app_id)
-
-    assert result["found"] is True
-    assert result["fs_size_bytes"] == 3_145_728
-
-
-async def test_cached_game_detail_null_fs_size_bytes_rides_as_none(harness):
-    """A ROM whose size is unknown (NULL) ships the key as ``None`` so the
-    frontend hides it without probing for undefined."""
-    app_id = _seed_versioned_rom(harness, fs_size_bytes=None)
-
-    result = await harness.endpoints.get_cached_game_detail(app_id)
-
-    assert result["found"] is True
-    assert result["fs_size_bytes"] is None
-
-
 @pytest.mark.parametrize("has_file", [True, False])
 async def test_cached_game_detail_carries_whether_romm_had_a_file(harness, has_file):
     """The payload carries the stored answer, which the play button reads without a request (#2196)."""

@@ -409,7 +409,11 @@ class FakeSaveApi:
         *,
         resume: bool = False,
         on_meta: Any = None,
+        file_ids: tuple[int, ...] | None = None,
     ) -> None:
+        raise NotImplementedError
+
+    def rom_content_url(self, rom_id: int, filename: str, file_ids: tuple[int, ...] | None = None) -> str:
         raise NotImplementedError
 
     def download_cover(

@@ -94,7 +94,7 @@ function detailState(overrides: Partial<GameDetailState> = {}): GameDetailState 
     platformName: "",
     installed: true,
     fileMissingAt: null,
-    fsSizeBytes: 2048,
+    downloadSizeBytes: null,
     saveSyncEnabled: false,
     saveStatus: null,
     saveSyncStatus: null,

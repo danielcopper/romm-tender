@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Iterator
 
-_COLUMNS = "rom_id, file_path, rom_dir, platform_slug, system, installed_at"
+_COLUMNS = "rom_id, file_path, rom_dir, platform_slug, system, installed_at, fetched_size_bytes"
 
 
 def _row_to_install(row: sqlite3.Row) -> RomInstall:
@@ -22,6 +22,7 @@ def _row_to_install(row: sqlite3.Row) -> RomInstall:
         platform_slug=row["platform_slug"],
         system=row["system"],
         installed_at=row["installed_at"],
+        fetched_size_bytes=row["fetched_size_bytes"],
     )
 
 
@@ -37,7 +38,7 @@ class SqliteRomInstallRepository(BaseRepository):
 
     def save(self, install: RomInstall) -> None:
         self._conn.execute(
-            f"INSERT OR REPLACE INTO rom_installs ({_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?)",
+            f"INSERT OR REPLACE INTO rom_installs ({_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
                 install.rom_id,
                 install.file_path,
@@ -45,6 +46,7 @@ class SqliteRomInstallRepository(BaseRepository):
                 install.platform_slug,
                 install.system,
                 install.installed_at,
+                install.fetched_size_bytes,
             ),
         )
 

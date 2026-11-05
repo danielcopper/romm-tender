@@ -777,6 +777,29 @@ class TestDownloadRomContent:
             on_meta=meta,
         )
 
+    def test_file_ids_ask_for_exactly_those_files(self):
+        api, client = _make_api()
+        api.download_rom_content(42, "Game", "/tmp/game.zip.tmp", file_ids=(7, 9))
+        assert client.download.call_args[0][0] == "/api/roms/42/content/Game?file_ids=7,9"
+
+
+class TestRomContentUrl:
+    def test_it_is_the_url_the_download_requests(self):
+        api, client = _make_api()
+        client.url_for = lambda path: "https://romm.example" + path
+
+        url = api.rom_content_url(42, "My Game", (3, 4))
+
+        assert url == "https://romm.example/api/roms/42/content/My%20Game?file_ids=3,4"
+        api.download_rom_content(42, "My Game", "/tmp/x", file_ids=(3, 4))
+        assert "https://romm.example" + client.download.call_args[0][0] == url
+
+    def test_without_file_ids_it_asks_for_the_whole_game(self):
+        api, client = _make_api()
+        client.url_for = lambda path: "https://romm.example" + path
+
+        assert api.rom_content_url(42, "Game") == "https://romm.example/api/roms/42/content/Game"
+
 
 class TestDownloadCover:
     def test_delegates_to_client_download_conditional(self):

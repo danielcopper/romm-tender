@@ -59,6 +59,23 @@ class TestRoundTrip:
         assert loaded.rom_dir is None
         assert loaded == install
 
+    def test_the_fetched_size_round_trips(self, uow: SqliteUnitOfWork):
+        _seed_rom(uow, 7)
+        install = RomInstall.mark_installed(
+            rom_id=7,
+            file_path="/roms/gc/Game.rvz/Game.rvz",
+            rom_dir="/roms/gc/Game.rvz",
+            platform_slug="gc",
+            system="gc",
+            installed_at="2026-02-02T00:00:00Z",
+            fetched_size_bytes=1000,
+        )
+        uow.rom_installs.save(install)
+
+        loaded = uow.rom_installs.get(7)
+        assert loaded is not None
+        assert loaded.fetched_size_bytes == 1000
+
 
 class TestMiss:
     def test_get_absent_returns_none(self, uow: SqliteUnitOfWork):

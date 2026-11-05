@@ -618,6 +618,10 @@ class Endpoints:
         return await self._services.rom_adoption_service.verify_existing_content(rom_id, candidate_path)
 
     @route
+    async def get_download_size(self, rom_id):
+        return await self._services.download_service.get_download_size(rom_id)
+
+    @route
     def cancel_download(self, rom_id):
         return self._services.download_service.cancel_download(rom_id)
 

@@ -235,11 +235,6 @@ export interface CachedGameDetail extends BiosAnswer {
   revision?: string;
   tags?: string[];
   is_main_sibling?: boolean;
-  // Server-reported ROM size in bytes (#1395), surfaced so the game-detail UI
-  // can show the space a download needs. Optional/null when the size is unknown
-  // (a pre-migration row or a not-yet-re-applied platform); the frontend hides
-  // the size in that case.
-  fs_size_bytes?: number | null;
   // Whether RomM held a file for the ROM at the last sync. False for one whose
   // file left RomM's disk and for a physical game; absent reads as having one.
   has_file_on_disk?: boolean;
@@ -380,6 +375,13 @@ export const adoptExistingRom = endpoint<[number, string | null, CollisionChoice
  * location.
  */
 export const verifyExistingContent = endpoint<[number, string | null], VerifyContentResult>("verify_existing_content");
+/**
+ * What a download of this ROM would fetch, in bytes, read from RomM now: the
+ * game's own files, leaving its manuals, soundtracks and other extras on the
+ * server — or the whole game where the request could not name the files.
+ * `size_bytes` is `null` where RomM states none.
+ */
+export const getDownloadSize = endpoint<[number], { size_bytes: number | null } | EndpointFailure>("get_download_size");
 export const cancelDownload = endpoint<[number], BackendResult>("cancel_download");
 export const pauseDownload = endpoint<[number], BackendResult>("pause_download");
 /**

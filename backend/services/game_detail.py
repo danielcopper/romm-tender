@@ -328,9 +328,6 @@ class GameDetailService:
             "revision": rom.revision,
             "tags": list(rom.tags),
             "is_main_sibling": rom.is_main_sibling,
-            # Server-reported ROM size in bytes (#1395), surfaced read-only so the
-            # frontend can show the space a download needs. NULL = size unknown.
-            "fs_size_bytes": rom.fs_size_bytes,
             # Whether RomM held a file for the ROM at the last sync; the play
             # button says "No file on RomM" for one that is not installed.
             "has_file_on_disk": rom.has_file_on_disk,

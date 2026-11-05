@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING, Any
 
 from adapters.romm.romm_api import hidden_rom_ids_answered_by
 from domain.cover_refresh import _strip_cover_ts
+from domain.game_files import file_ids_query
 from fakes._romm_save_semantics import (
     check_add_save_conflict,
     compute_is_current,
@@ -117,6 +118,9 @@ class FakeRommApi:
         self.devices: list[dict[str, Any]] = []
         self.current_user: dict[str, Any] = {"id": 1, "username": "tester"}
         self.heartbeat_response: dict[str, Any] = {"status": "ok"}
+        # The address ``rom_content_url`` builds under; a test lengthens it to
+        # push a content request past the request-line limit.
+        self.romm_url = "https://romm.example"
         self._version: str | None = None
         self._save_content: dict[int, bytes] = {}
         # DeviceSaveSync rows: (device_id, save_id) -> last_synced_at (ISO). The
@@ -540,21 +544,28 @@ class FakeRommApi:
         *,
         resume: bool = False,
         on_meta: Any = None,
+        file_ids: tuple[int, ...] | None = None,
     ) -> None:
         self._log(
             "download_rom_content",
             (rom_id, filename, dest),
-            {"progress_callback": progress_callback, "resume": resume, "on_meta": on_meta},
+            {"progress_callback": progress_callback, "resume": resume, "on_meta": on_meta, "file_ids": file_ids},
         )
         self._check_fail(self.download_rom_content_side_effect)
         if on_meta is not None:
             on_meta(self.download_range_supported)
-        key = f"rom:{rom_id}:{filename}"
+        # A download that names files is served under its own key, as RomM serves
+        # exactly those files.
+        key = f"rom:{rom_id}:{filename}" + (file_ids_query(file_ids) if file_ids is not None else "")
         payload = self.download_payloads.get(key, b"")
         self._materialize_download(dest, payload)
         if progress_callback is not None:
             total = len(payload)
             progress_callback(total, total)
+
+    def rom_content_url(self, rom_id: int, filename: str, file_ids: tuple[int, ...] | None = None) -> str:
+        query = file_ids_query(file_ids) if file_ids is not None else ""
+        return f"{self.romm_url}/api/roms/{rom_id}/content/{filename}{query}"
 
     def download_cover(
         self, cover_url: str, dest: str, *, etag: str | None = None, last_modified: str | None = None

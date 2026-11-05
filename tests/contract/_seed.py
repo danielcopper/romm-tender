@@ -135,6 +135,7 @@ def seed_install(
     system: str = "gba",
     platform_slug: str = "gba",
     file_name: str = "game.gba",
+    fetched_size_bytes: int | None = None,
 ) -> str:
     """Seed a ``RomInstall`` (seeds the ``Rom`` FK first). Returns the file path."""
     seed_rom(harness, rom_id, platform_slug=platform_slug)
@@ -148,6 +149,7 @@ def seed_install(
                 platform_slug=platform_slug,
                 system=system,
                 installed_at="2026-01-01T00:00:00",
+                fetched_size_bytes=fetched_size_bytes,
             )
         )
     return file_path

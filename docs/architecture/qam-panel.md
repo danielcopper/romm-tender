@@ -2563,13 +2563,15 @@ the row shows a spinner until it lands, and **what it cannot establish it never 
 read at all, nor an entry whose own reading did not arrive. The pane says which of the two happened. An unproven entry
 left alone is a row that under-reports; an unproven entry offered is a library deleted.
 
-**The size is the server's figure and never a walk of the disk.** `Rom.fs_size_bytes` is what RomM reported for a ROM
-(#1395), summed over the installed rows, so the page opens with a number instead of measuring for one — and it is
-written with a `≈` for two reasons: an unpacked archive, a patch beside the original or extras in the same folder are
-not the size the server named — a multi-file game is, which is why it is not on that list — and the field is NULL for a
-row that predates its migration or belongs to a wholesale-skipped platform nobody has re-applied, so the sum understates
-rather than fails. The cleanup goes on measuring the disk for itself, because its free-space line has to hold for a
-bundle it is about to write rather than for a figure a server once reported.
+**The size is the server's figure and never a walk of the disk.** Each install records what RomM states for the files a
+download of the game fetches (`RomInstall.fetched_size_bytes`; an adoption records the same figure,
+[#2732](https://github.com/danielcopper/romm-tender/issues/2732) D1) — a download leaves a game's manuals, soundtracks
+and other extras on the server, so this is not RomM's size of the whole game — and the page sums it over the installs,
+so it opens with a number instead of measuring for one. It is written with a `≈` for two reasons: an unpacked archive, a
+patch beside the original or extras in the same folder are not the size the server named — a multi-file game is, which
+is why it is not on that list — and an install that recorded no size adds nothing, so the sum understates rather than
+fails. The cleanup goes on measuring the disk for itself, because its free-space line has to hold for a bundle it is
+about to write rather than for a figure a server once reported.
 
 **The removed-games review stays a dialog, and the reason is geometry rather than inertia.** A dialog may take up to 720
 × 406 on the Deck — `maxWidth: 720` against `maxHeight: 76vh` of the 534 px viewport, which is the right denominator

@@ -712,6 +712,10 @@ class RommHttpAdapter:
         except (ValueError, AttributeError):
             return None
 
+    def url_for(self, path: str) -> str:
+        """The URL a request for the percent-encoded *path* goes to, under the configured RomM address."""
+        return self._settings["romm_url"].rstrip("/") + path
+
     def download(self, path: str, dest: str, progress_callback=None, *, resume=False, on_meta=None):
         """Download a file from the RomM API to a local path.
 
@@ -729,7 +733,7 @@ class RommHttpAdapter:
         knows which characters are data. Quoting it again here would turn every
         ``%20`` into ``%2520``.
         """
-        url = self._settings["romm_url"].rstrip("/") + path
+        url = self.url_for(path)
         dest_path = Path(dest)
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         # One-shot guard: ``on_meta`` fires once even across a ``with_retry`` retry.

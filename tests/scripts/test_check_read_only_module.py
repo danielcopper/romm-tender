@@ -76,7 +76,6 @@ _EXPECTED_WRITES = frozenset(
         "set_artwork_checked_at",
         "set_chosen_sgdb_id",
         "set_emulator_override",
-        "set_fs_size_bytes",
         "set_selected_disc",
         "set_shortcut_applied",
     }

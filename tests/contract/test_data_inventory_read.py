@@ -13,7 +13,14 @@ and the bytes a sealed bundle takes are read the way the page reads them.
 
 from __future__ import annotations
 
+import dataclasses
+
 from ._seed import seed_install, seed_rom
+
+
+def _record_whole_game_size(uow, rom_id: int, size: int) -> None:
+    """Store RomM's size of the whole game on the ROM row, as a sync does."""
+    uow.roms.save(dataclasses.replace(uow.roms.get(rom_id), fs_size_bytes=size))
 
 
 async def test_an_untouched_install_reports_every_population_as_empty(harness):
@@ -32,15 +39,16 @@ async def test_an_untouched_install_reports_every_population_as_empty(harness):
     assert result["recovery_root"] == str(harness.tmp_path / "home" / "Tender" / "recovery")
 
 
-async def test_it_counts_the_installed_rows_and_sums_the_size_romm_reported(harness):
-    seed_install(harness, 1, file_name="one.gba")
-    seed_install(harness, 2, file_name="two.gba")
+async def test_it_counts_the_installed_rows_and_sums_the_size_each_recorded(harness):
+    seed_install(harness, 1, file_name="one.gba", fetched_size_bytes=4_000_000)
+    seed_install(harness, 2, file_name="two.gba", fetched_size_bytes=2_500_000)
     # A synced ROM nobody downloaded belongs to neither figure.
     seed_rom(harness, 3)
     with harness.uow_factory() as uow:
-        uow.roms.set_fs_size_bytes(1, 4_000_000)
-        uow.roms.set_fs_size_bytes(2, 2_500_000)
-        uow.roms.set_fs_size_bytes(3, 900_000_000)
+        # RomM's size of the whole game, which a download that left extras on
+        # the server did not fetch.
+        _record_whole_game_size(uow, 1, 5_000_000)
+        _record_whole_game_size(uow, 3, 900_000_000)
 
     result = await harness.endpoints.get_data_inventory()
 
@@ -48,11 +56,11 @@ async def test_it_counts_the_installed_rows_and_sums_the_size_romm_reported(harn
     assert result["installed_bytes"] == 6_500_000
 
 
-async def test_an_installed_row_whose_size_romm_never_reported_counts_and_adds_nothing(harness):
-    seed_install(harness, 1, file_name="sized.gba")
+async def test_an_installed_row_that_recorded_no_size_counts_and_adds_nothing(harness):
+    seed_install(harness, 1, file_name="sized.gba", fetched_size_bytes=1_024)
     seed_install(harness, 2, file_name="unsized.gba")
     with harness.uow_factory() as uow:
-        uow.roms.set_fs_size_bytes(1, 1_024)
+        _record_whole_game_size(uow, 2, 2_048)
 
     result = await harness.endpoints.get_data_inventory()
 

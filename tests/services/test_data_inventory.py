@@ -31,8 +31,12 @@ class FakeRecoveryInventory:
         }
 
 
-def _seed_rom(uow, rom_id, *, fs_size_bytes, installed):
-    """Put one ROM in the registry, optionally with an install record beside it."""
+def _seed_rom(uow, rom_id, *, fetched_size_bytes, installed):
+    """Put one ROM in the registry, optionally with an install record beside it.
+
+    The install records *fetched_size_bytes*; the ROM carries RomM's size of the
+    whole game, ten times that, which the overview does not read.
+    """
     with uow:
         uow.roms.save(
             Rom.synced(
@@ -42,7 +46,7 @@ def _seed_rom(uow, rom_id, *, fs_size_bytes, installed):
                 fs_name=f"game{rom_id}.z64",
                 shortcut_app_id=1000 + rom_id,
                 synced_at="2025-01-01T00:00:00",
-                fs_size_bytes=fs_size_bytes,
+                fs_size_bytes=None if fetched_size_bytes is None else fetched_size_bytes * 10,
             )
         )
         if installed:
@@ -54,6 +58,7 @@ def _seed_rom(uow, rom_id, *, fs_size_bytes, installed):
                     platform_slug="n64",
                     system="n64",
                     installed_at="2025-01-01T00:00:00",
+                    fetched_size_bytes=fetched_size_bytes,
                 )
             )
 
@@ -80,12 +85,12 @@ def service(uow: FakeUnitOfWork, recovery: FakeRecoveryInventory) -> DataInvento
 
 
 class TestTheInstalledPopulation:
-    """The installed-ROM count and the size RomM reported for those rows."""
+    """The installed-ROM count and the size each install recorded of the files it fetched."""
 
     @pytest.mark.asyncio
-    async def test_it_counts_the_installed_rows_and_sums_their_server_size(self, service, uow):
-        _seed_rom(uow, 1, fs_size_bytes=1000, installed=True)
-        _seed_rom(uow, 2, fs_size_bytes=2500, installed=True)
+    async def test_it_counts_the_installed_rows_and_sums_their_recorded_size(self, service, uow):
+        _seed_rom(uow, 1, fetched_size_bytes=1000, installed=True)
+        _seed_rom(uow, 2, fetched_size_bytes=2500, installed=True)
 
         answer = await service.get_data_inventory()
 
@@ -94,8 +99,8 @@ class TestTheInstalledPopulation:
 
     @pytest.mark.asyncio
     async def test_it_leaves_a_synced_but_uninstalled_rom_out_of_both_figures(self, service, uow):
-        _seed_rom(uow, 1, fs_size_bytes=1000, installed=True)
-        _seed_rom(uow, 2, fs_size_bytes=9_000_000, installed=False)
+        _seed_rom(uow, 1, fetched_size_bytes=1000, installed=True)
+        _seed_rom(uow, 2, fetched_size_bytes=9_000_000, installed=False)
 
         answer = await service.get_data_inventory()
 
@@ -103,9 +108,9 @@ class TestTheInstalledPopulation:
         assert answer["installed_bytes"] == 1000
 
     @pytest.mark.asyncio
-    async def test_an_installed_rom_whose_size_romm_never_reported_counts_and_adds_nothing(self, service, uow):
-        _seed_rom(uow, 1, fs_size_bytes=None, installed=True)
-        _seed_rom(uow, 2, fs_size_bytes=4096, installed=True)
+    async def test_an_installed_rom_that_recorded_no_size_counts_and_adds_nothing(self, service, uow):
+        _seed_rom(uow, 1, fetched_size_bytes=None, installed=True)
+        _seed_rom(uow, 2, fetched_size_bytes=4096, installed=True)
 
         answer = await service.get_data_inventory()
 

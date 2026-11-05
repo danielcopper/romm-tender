@@ -31,17 +31,16 @@ class Rom:
     """One ROM as Tender tracks it locally (identity + shortcut binding).
 
     ``sibling_group_key`` and the version dimensions (``regions`` / ``languages``
-    / ``revision`` / ``tags`` / ``is_main_sibling``), plus ``fs_size_bytes`` (the
-    server-reported ROM size, #1395) and ``has_file_on_disk`` (whether RomM holds
+    / ``revision`` / ``tags`` / ``is_main_sibling``), plus ``fs_size_bytes``
+    (RomM's size of the whole game, #1395) and ``has_file_on_disk`` (whether RomM holds
     a file it can serve), are server-derived facts RomM supplies per ROM — the
     sibling group this dump belongs to, how it differs from its siblings
     (region/language/revision variants), how large it is, and whether there is
     anything to download. They are set at construction from the fetch and
     refreshed on every sync (they ride the sync UPSERT, unlike the user-pin
-    ``emulator_override`` / ``selected_disc``). Two have a verb. An install
-    records the size RomM stated between syncs through
-    :meth:`record_fs_size_bytes`, and a sync that does not fetch the ROM gives it
-    the key of the group it follows through :meth:`follow_group`.
+    ``emulator_override`` / ``selected_disc``). One has a verb: a sync that does
+    not fetch the ROM gives it the key of the group it follows through
+    :meth:`follow_group`.
     """
 
     rom_id: int
@@ -156,16 +155,6 @@ class Rom:
     def clear_gone_from_romm(self) -> None:
         """Drop the mark once RomM answered this ROM's exact id with the ROM itself."""
         self.gone_from_romm = None
-
-    def record_fs_size_bytes(self, size: int) -> None:
-        """Record the ROM size RomM stated, in bytes.
-
-        A size of zero or less states nothing and raises ``ValueError``.
-        Persisted through ``set_fs_size_bytes``.
-        """
-        if size <= 0:
-            raise ValueError("fs_size_bytes must be positive")
-        self.fs_size_bytes = size
 
     def follow_group(self, sibling_group_key: str) -> None:
         """Take *sibling_group_key*, the key of the group this ROM follows while a sync does not fetch it.

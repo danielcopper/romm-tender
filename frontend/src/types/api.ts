@@ -105,11 +105,12 @@ export interface RomMetadata {
  * rendering it says neither files nor games, both of which it would
  * miscount: the number's own unit is the install.
  *
- * `installed_bytes` is the size RomM reported for those games
- * (`Rom.fs_size_bytes`), summed — never a walk of the disk — so it is written
- * with a `≈`: an unpacked archive, a patch beside the original or extras in the
- * same folder are not the size the server named, and a game whose size the
- * server never reported adds nothing to it.
+ * `installed_bytes` is the size RomM states for the files a download of each
+ * installed game fetches (`RomInstall.fetched_size_bytes`; an adoption records
+ * the same figure), summed — never a walk of the disk —
+ * so it is written with a `≈`: an unpacked archive, a patch beside the original
+ * or extras in the same folder are not the size the server named, and an
+ * install that recorded no size adds nothing to it.
  *
  * `recovery_bytes` is measured on disk, because nothing else knows what a
  * sealed bundle takes.

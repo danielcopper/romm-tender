@@ -3264,8 +3264,8 @@ class TestDoDownloadNestedSingleFile:
         assert installed.file_path == target_path
 
     @pytest.mark.asyncio
-    async def test_nested_single_file_uses_files_entry(self, make_downloads, tmp_path):
-        """Happy path: has_nested_single_file derives the local filename from files[0].file_name."""
+    async def test_nested_single_file_lands_in_its_folder(self, make_downloads, tmp_path):
+        """A game RomM holds as a folder with one file lies in its folder, named as a folder download is (#2223 D31)."""
         from unittest.mock import patch
 
         downloads = make_downloads(
@@ -3305,17 +3305,14 @@ class TestDoDownloadNestedSingleFile:
                 7, rom_detail, target_path, "dc", "My Game.chd", _admitted(downloads, 7), platform_name="Dreamcast"
             )
 
-        assert os.path.exists(target_path)
         installed = downloads.uow.rom_installs.get(7)
         assert installed is not None
-        assert os.path.basename(installed.file_path) == "My Game.chd"
-        assert installed.file_path == target_path
-        # Must NOT keep the parent-folder name from fs_name as a real on-disk file
-        assert not os.path.exists(str(roms_dir / "My Game"))
-        # #855 regression: a genuine nested-single ROM (len(files) == 1) must
-        # stay on the single-file path — it flattens to a flat file and never
-        # registers an extract directory.
-        assert installed.rom_dir is None
+        # The folder takes the ES-DE name every folder download takes: the
+        # launch file's, extension included.
+        assert installed.rom_dir == str(roms_dir / "My Game.chd")
+        assert installed.file_path == str(roms_dir / "My Game.chd" / "My Game.chd")
+        assert os.path.isfile(installed.file_path)
+        assert not os.path.exists(target_path + ".tmp")
 
     @pytest.mark.asyncio
     async def test_nested_single_file_start_download_uses_files_entry(self, make_downloads, tmp_path):
@@ -8002,3 +7999,381 @@ class TestTheM3uOverTheNewDiscFormats:
         downloads.unpacker.generate_m3u(str(tmp_path), {"fs_name_no_ext": "Game"}, False)
 
         assert not (tmp_path / "Game.m3u").exists()
+
+
+def _rom_file(file_id: int, rel_path: str, category: str | None, size: int) -> dict[str, Any]:
+    """One of a GameCube game's files as RomM 5.4.1 lists it, under the game's folder ``gc/Game``."""
+    folder, _, name = rel_path.rpartition("/")
+    return {
+        "id": file_id,
+        "file_name": name,
+        "file_path": f"gc/Game/{folder}".rstrip("/"),
+        "file_size_bytes": size,
+        "category": category,
+    }
+
+
+def _folder_game(*files: dict[str, Any], simple=False, nested=False, multiple=False) -> dict[str, Any]:
+    return {
+        "id": 1,
+        "name": "Game",
+        "fs_name": "Game",
+        "fs_name_no_ext": "Game",
+        "full_path": "gc/Game",
+        "platform_slug": "gc",
+        "fs_size_bytes": sum(entry["file_size_bytes"] for entry in files),
+        "has_simple_single_file": simple,
+        "has_nested_single_file": nested,
+        "has_multiple_files": multiple,
+        "files": list(files),
+    }
+
+
+def _zip_of(members: dict[str, bytes]) -> bytes:
+    import io
+    import zipfile
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        for name, data in members.items():
+            archive.writestr(name, data)
+    return buffer.getvalue()
+
+
+class TestADownloadFetchesTheGamesOwnFiles:
+    """A download fetches RomM's ``game`` files and its files in no category (#2223 D27, D30, D31)."""
+
+    @pytest.fixture
+    def roms(self, tmp_path):
+        roms = tmp_path / "retrodeck" / "roms"
+        (roms / "gc").mkdir(parents=True)
+        return roms
+
+    @pytest.fixture
+    def downloads(self, make_downloads, roms, tmp_path):
+        return make_downloads(
+            retrodeck_folders=FakeRetroDeckFolders(roms=str(roms), bios=str(tmp_path / "bios")),
+            removal_folders=FakeRetroDeckFolders(roms=str(roms)),
+        )
+
+    @staticmethod
+    async def _run(downloads, detail, roms, payload: bytes) -> list[Any]:
+        from unittest.mock import patch
+
+        asked: list[Any] = []
+
+        def fake_download(
+            _rom_id, _filename, dest, _progress_callback=None, *, resume=False, on_meta=None, file_ids=None
+        ):
+            asked.append(file_ids)
+            with open(dest, "wb") as f:
+                f.write(payload)
+
+        _seed_rom(downloads.uow, 1, platform_slug="gc")
+        downloads.queue.enqueue(1, {"rom_id": 1, "status": "downloading", "progress": 0})
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.transfer.run(
+                1, detail, str(roms / "gc" / "Game"), "gc", "Game", _admitted(downloads, 1), platform_name="GameCube"
+            )
+        return asked
+
+    async def test_a_soundtrack_stays_on_the_server(self, downloads, roms):
+        detail = _folder_game(
+            _rom_file(11, "Game.rvz", "game", 1000),
+            _rom_file(12, "soundtrack/01.flac", "soundtrack", 40),
+            _rom_file(13, "soundtrack/02.flac", "soundtrack", 40),
+            nested=True,
+        )
+
+        asked = await self._run(downloads, detail, roms, b"rvz-bytes")
+
+        assert asked == [(11,)]
+        installed = downloads.uow.rom_installs.get(1)
+        assert installed is not None
+        # RomM serves the one remaining file as itself; it lies in the game's
+        # folder all the same (D31), which takes the ES-DE name.
+        assert installed.rom_dir == str(roms / "gc" / "Game.rvz")
+        assert installed.file_path == str(roms / "gc" / "Game.rvz" / "Game.rvz")
+        assert Path(installed.file_path).read_bytes() == b"rvz-bytes"
+        assert not list((roms / "gc").rglob("*.flac"))
+
+    async def test_a_switch_update_beside_the_base_game_stays_on_the_server(self, downloads, roms):
+        # RomM's own read files a top-level update .nsp under ``update``; with two
+        # files at the folder's root ``has_multiple_files`` is set, yet RomM
+        # serves the one file asked for as itself.
+        detail = _folder_game(
+            _rom_file(11, "Game [base].nsp", "game", 1000),
+            _rom_file(12, "Game [update].nsp", "update", 300),
+            multiple=True,
+        )
+
+        asked = await self._run(downloads, detail, roms, b"base-nsp")
+
+        assert asked == [(11,)]
+        installed = downloads.uow.rom_installs.get(1)
+        assert installed is not None
+        assert Path(installed.file_path).name == "Game [base].nsp"
+        assert Path(installed.file_path).read_bytes() == b"base-nsp"
+        assert not list((roms / "gc").rglob("*[[]update[]].nsp"))
+
+    async def test_two_game_files_beside_a_soundtrack_are_asked_for_by_id(self, downloads, roms):
+        detail = _folder_game(
+            _rom_file(11, "Game.cue", "game", 100),
+            _rom_file(12, "Game.bin", "game", 900),
+            _rom_file(13, "soundtrack/01.flac", "soundtrack", 40),
+            multiple=True,
+        )
+        payload = _zip_of({"Game.cue": b'FILE "Game.bin" BINARY\n', "Game.bin": b"\x00" * 16})
+
+        asked = await self._run(downloads, detail, roms, payload)
+
+        assert asked == [(11, 12)]
+        installed = downloads.uow.rom_installs.get(1)
+        assert installed is not None
+        assert installed.rom_dir is not None
+        assert sorted(path.name for path in Path(installed.rom_dir).iterdir() if path.suffix != ".m3u") == [
+            "Game.bin",
+            "Game.cue",
+        ]
+
+    async def test_a_folder_game_with_no_category_folder_downloads_complete(self, downloads, roms):
+        # A PS3 dump with no file at its root: RomM sets none of its shape
+        # flags and files everything under no category.
+        detail = _folder_game(
+            _rom_file(11, "PS3_GAME/USRDIR/EBOOT.BIN", None, 500),
+            _rom_file(12, "PS3_GAME/PARAM.SFO", None, 20),
+            _rom_file(13, "PS3_GAME/USRDIR/data.pak", None, 5000),
+        )
+        payload = _zip_of(
+            {
+                "PS3_GAME/USRDIR/EBOOT.BIN": b"eboot",
+                "PS3_GAME/PARAM.SFO": b"sfo",
+                "PS3_GAME/USRDIR/data.pak": b"data",
+            }
+        )
+
+        asked = await self._run(downloads, detail, roms, payload)
+
+        # Nothing is left out, so the request names no file.
+        assert asked == [None]
+        installed = downloads.uow.rom_installs.get(1)
+        assert installed is not None
+        assert installed.rom_dir is not None
+        found = sorted(str(path.relative_to(installed.rom_dir)) for path in Path(installed.rom_dir).rglob("*.*"))
+        assert found == ["PS3_GAME/PARAM.SFO", "PS3_GAME/USRDIR/EBOOT.BIN", "PS3_GAME/USRDIR/data.pak"]
+
+    async def test_a_dump_s_files_in_no_category_come_down_and_its_manual_stays(self, downloads, roms):
+        detail = _folder_game(
+            _rom_file(11, "PS3_GAME/USRDIR/EBOOT.BIN", None, 500),
+            _rom_file(12, "PS3_GAME/PARAM.SFO", None, 20),
+            _rom_file(13, "manual/Game.pdf", "manual", 70),
+        )
+        payload = _zip_of({"PS3_GAME/USRDIR/EBOOT.BIN": b"eboot", "PS3_GAME/PARAM.SFO": b"sfo"})
+
+        asked = await self._run(downloads, detail, roms, payload)
+
+        assert asked == [(11, 12)]
+        installed = downloads.uow.rom_installs.get(1)
+        assert installed is not None
+        assert installed.rom_dir is not None
+        assert not list(Path(installed.rom_dir).rglob("*.pdf"))
+
+
+class TestTheRequestThatWouldBeTooLong:
+    """Where ``file_ids`` would pass 8 KiB, the whole game is fetched and the left-out files removed (#2223 D30)."""
+
+    @pytest.fixture
+    def roms(self, tmp_path):
+        roms = tmp_path / "retrodeck" / "roms"
+        (roms / "gc").mkdir(parents=True)
+        return roms
+
+    @pytest.fixture
+    def downloads(self, make_downloads, roms, tmp_path):
+        harness = make_downloads(
+            retrodeck_folders=FakeRetroDeckFolders(roms=str(roms), bios=str(tmp_path / "bios")),
+            removal_folders=FakeRetroDeckFolders(roms=str(roms)),
+        )
+        harness.romm_api.rom_content_url = lambda rom_id, name, file_ids=None: "https://romm.example/" + "x" * 9000
+        return harness
+
+    @staticmethod
+    def _detail() -> dict[str, Any]:
+        return _folder_game(
+            _rom_file(11, "Game.cue", "game", 100),
+            _rom_file(12, "Game.bin", "game", 900),
+            _rom_file(13, "soundtrack/01.flac", "soundtrack", 40),
+            _rom_file(14, "soundtrack/02.flac", "soundtrack", 40),
+            multiple=True,
+        )
+
+    async def test_the_whole_game_is_fetched_and_the_left_out_files_removed(self, downloads, roms):
+        payload = _zip_of(
+            {
+                "Game.cue": b'FILE "Game.bin" BINARY\n',
+                "Game.bin": b"\x00" * 16,
+                "soundtrack/01.flac": b"a",
+                "soundtrack/02.flac": b"b",
+                # The playlist RomM generates into a zip of a ROM with none of its own.
+                "Game.m3u": b"Game.cue\nsoundtrack/01.flac\nsoundtrack/02.flac",
+            }
+        )
+
+        asked = await TestADownloadFetchesTheGamesOwnFiles._run(downloads, self._detail(), roms, payload)
+
+        assert asked == [None]
+        installed = downloads.uow.rom_installs.get(1)
+        assert installed is not None
+        assert installed.rom_dir is not None
+        rom_dir = Path(installed.rom_dir)
+        assert not (rom_dir / "soundtrack").exists()
+        assert sorted(path.name for path in rom_dir.iterdir()) == ["Game.bin", "Game.cue", "Game.m3u"]
+        assert (rom_dir / "Game.m3u").read_text() == "Game.cue\n"
+
+    async def test_a_generated_playlist_left_with_no_line_is_removed(self, downloads, roms):
+        payload = _zip_of(
+            {
+                "Game.cue": b'FILE "Game.bin" BINARY\n',
+                "Game.bin": b"\x00" * 16,
+                "soundtrack/01.flac": b"a",
+                "soundtrack/02.flac": b"b",
+                "Game.m3u": b"soundtrack/01.flac\nsoundtrack/02.flac\n",
+            }
+        )
+
+        # No playlist of Tender's own takes its place.
+        downloads.m3u_supported = False
+
+        await TestADownloadFetchesTheGamesOwnFiles._run(downloads, self._detail(), roms, payload)
+
+        installed = downloads.uow.rom_installs.get(1)
+        assert installed is not None
+        assert installed.rom_dir is not None
+        assert sorted(path.name for path in Path(installed.rom_dir).iterdir()) == ["Game.bin", "Game.cue"]
+
+    async def test_a_playlist_that_is_one_of_the_roms_own_files_is_kept(self, downloads, roms):
+        detail = self._detail()
+        detail["files"].append(_rom_file(15, "Game.m3u", "game", 30))
+        payload = _zip_of(
+            {
+                "Game.cue": b'FILE "Game.bin" BINARY\n',
+                "Game.bin": b"\x00" * 16,
+                "soundtrack/01.flac": b"a",
+                "soundtrack/02.flac": b"b",
+                "Game.m3u": b"Game.cue\nsoundtrack/01.flac\n",
+            }
+        )
+
+        await TestADownloadFetchesTheGamesOwnFiles._run(downloads, detail, roms, payload)
+
+        installed = downloads.uow.rom_installs.get(1)
+        assert installed is not None
+        assert installed.rom_dir is not None
+        assert (Path(installed.rom_dir) / "Game.m3u").read_text() == "Game.cue\nsoundtrack/01.flac\n"
+
+
+class TestTheSizesADownloadCounts:
+    """The free-space check and the progress count the files fetched (#2223 D27), the whole game in D30's case."""
+
+    @staticmethod
+    def _detail() -> dict[str, Any]:
+        mb = 1024 * 1024
+        return _folder_game(
+            _rom_file(11, "Game.cue", "game", 10 * mb),
+            _rom_file(12, "Game.bin", "game", 90 * mb),
+            _rom_file(13, "soundtrack/01.flac", "soundtrack", 900 * mb),
+            multiple=True,
+        )
+
+    @staticmethod
+    def _downloads(make_downloads, tmp_path, *, free_mb: int):
+        downloads = make_downloads(
+            retrodeck_folders=FakeRetroDeckFolders(
+                roms=str(tmp_path / "retrodeck" / "roms"), bios=str(tmp_path / "retrodeck" / "bios")
+            ),
+            removal_folders=FakeRetroDeckFolders(roms=str(tmp_path / "retrodeck" / "roms")),
+            loop=MagicMock(),
+        )
+        downloads.download_file_store.disk_free = lambda _path: free_mb * 1024 * 1024
+
+        def _close_coro_task(coro, _name):
+            coro.close()
+            return MagicMock()
+
+        downloads.service._tasks.spawn = _close_coro_task
+        return downloads
+
+    async def test_the_space_check_and_the_progress_count_the_files_fetched(self, make_downloads, tmp_path):
+        # 100 MiB fetched, as a zip counted twice; the whole game is 1000 MiB.
+        downloads = self._downloads(make_downloads, tmp_path, free_mb=400)
+        detail = self._detail()
+        downloads.loop.run_in_executor = _hops_answering(detail)
+
+        result = await downloads.service.start_download(1)
+
+        assert result["success"] is True
+        assert downloads.queue.entries[1]["total_bytes"] == 100 * 1024 * 1024
+
+    async def test_a_download_too_big_for_the_disk_is_refused_by_what_it_fetches(self, make_downloads, tmp_path):
+        downloads = self._downloads(make_downloads, tmp_path, free_mb=150)
+        downloads.loop.run_in_executor = _hops_answering(self._detail())
+
+        with pytest.raises(Refused) as refused:
+            await downloads.service.start_download(1)
+
+        assert refused.value.reason == "insufficient_space"
+
+    async def test_a_request_too_long_for_file_ids_counts_the_whole_game(self, make_downloads, tmp_path):
+        downloads = self._downloads(make_downloads, tmp_path, free_mb=400)
+        downloads.romm_api.rom_content_url = lambda rom_id, name, file_ids=None: "https://romm.example/" + "x" * 9000
+        downloads.loop.run_in_executor = _hops_answering(self._detail())
+
+        with pytest.raises(Refused) as refused:
+            await downloads.service.start_download(1)
+
+        assert refused.value.reason == "insufficient_space"
+
+
+class TestTheSizeTheGamePageShows:
+    """``get_download_size`` answers what a start's free-space check would weigh (#2732 D1)."""
+
+    @staticmethod
+    def _downloads(make_downloads, tmp_path, detail):
+        from unittest.mock import patch
+
+        downloads = make_downloads(
+            retrodeck_folders=FakeRetroDeckFolders(roms=str(tmp_path / "roms"), bios=str(tmp_path / "bios")),
+            removal_folders=FakeRetroDeckFolders(roms=str(tmp_path / "roms")),
+        )
+        patcher = patch.object(downloads.romm_api, "get_rom", return_value=detail)
+        patcher.start()
+        return downloads, patcher
+
+    async def test_it_is_the_size_of_the_files_fetched(self, make_downloads, tmp_path):
+        downloads, patcher = self._downloads(make_downloads, tmp_path, TestTheSizesADownloadCounts._detail())
+        try:
+            answer = await downloads.service.get_download_size(1)
+        finally:
+            patcher.stop()
+
+        assert answer == {"size_bytes": 100 * 1024 * 1024}
+
+    async def test_it_is_the_whole_game_where_the_request_could_not_leave_files_out(self, make_downloads, tmp_path):
+        downloads, patcher = self._downloads(make_downloads, tmp_path, TestTheSizesADownloadCounts._detail())
+        downloads.romm_api.rom_content_url = lambda rom_id, name, file_ids=None: "https://romm.example/" + "x" * 9000
+        try:
+            answer = await downloads.service.get_download_size(1)
+        finally:
+            patcher.stop()
+
+        assert answer == {"size_bytes": 1000 * 1024 * 1024}
+
+    async def test_a_size_romm_does_not_state_is_none(self, make_downloads, tmp_path):
+        detail = {"id": 1, "fs_name": "Game.gba", "platform_slug": "gba", "fs_size_bytes": 0}
+        downloads, patcher = self._downloads(make_downloads, tmp_path, detail)
+        try:
+            answer = await downloads.service.get_download_size(1)
+        finally:
+            patcher.stop()
+
+        assert answer == {"size_bytes": None}

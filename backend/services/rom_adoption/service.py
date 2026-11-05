@@ -27,6 +27,7 @@ from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from domain.emulator_sources import RETRODECK
+from domain.game_files import download_size_bytes
 from domain.refusal import DomainRefused
 from domain.retrodeck_folders import GAME_DOWNLOAD, FolderRefused, folder_of
 from domain.rom_adoption import (
@@ -48,12 +49,11 @@ from domain.rom_adoption import (
 from domain.rom_candidates import DIR, FILE
 from domain.rom_files import (
     detect_launch_file,
-    is_multi_file_download,
     resolve_extract_dir_name,
     resolve_local_file_name,
     synthetic_rom_name,
 )
-from domain.served_shape import replace_covers, served_shapes, unpacked_manifest
+from domain.served_shape import fetches_one_zip, replace_covers, served_shapes, unpacked_manifest
 from lib.background_tasks import BackgroundTasks
 from lib.errors import Refused, RommApiError, classify_error, romm_error_log_level
 from lib.path_safety import PathTraversalError, coerce_safe_component, is_inside_folder, safe_join
@@ -312,7 +312,7 @@ class RomAdoptionService:
                     size_bytes=existing["size_bytes"],
                     modified_at=existing["modified_at"],
                     incoming_name=os.path.basename(path),
-                    incoming_size=rom_detail.get("fs_size_bytes", 0),
+                    incoming_size=download_size_bytes(rom_detail),
                     served_dir=path == folder_path or FILE not in served_shapes(rom_detail),
                 )
         for path, existing in occupied:
@@ -757,7 +757,7 @@ class RomAdoptionService:
         if self._download_file_store.describe_path(target.path) is None:
             return {"status": "missing", "message": "There is nothing at this game's location", "differences": []}
         manifest = server_manifest(rom_detail)
-        if target.is_multi and not is_multi_file_download(rom_detail):
+        if target.is_multi and fetches_one_zip(rom_detail):
             manifest = unpacked_manifest(manifest)
             if not manifest:
                 return {"status": "unverifiable", "message": _NO_MEMBERS_MESSAGE, "differences": []}

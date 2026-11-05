@@ -446,9 +446,10 @@ The two path fields on `RomInstall` (`domain/rom_install.py`) answer different q
   ([ADR-0014](docs/adr/0014-per-game-disc-selection-in-db-applied-as-bake-time-launch-path-override.md)), and a game
   kept as a folder (PS3/RPCS3) asks with the game **directory** rather than the nested launch file
   ([ADR-0019](docs/adr/0019-folder-as-launch-target.md)). `file_path` stays the launch **file** anchor in every case.
-- **`rom_dir`** — the **dedicated per-ROM directory**, present only for folder-backed ROMs: a multi-file ROM, or a
-  single `.zip` unpacked into a folder (**served shape**). **NULL for single-file ROMs** kept as they arrived, which
-  live as a bare file directly in the shared `<roms>/<system>/` directory and own no dedicated folder.
+- **`rom_dir`** — the **dedicated per-ROM directory**, set for every game that lands in a folder of its own: a game RomM
+  holds as a folder, whatever a download fetches of it, or a single `.zip` unpacked into a folder (**served shape**).
+  **NULL only for a game RomM holds as one file, kept as it arrived**, which lives as a bare file directly in the shared
+  `<roms>/<system>/` directory and owns no dedicated folder.
 
 Folder-backed vs bare file is **read from `rom_dir` presence** — never re-derived from the file's parent directory,
 never stored as a separate boolean ([ADR-0008](docs/adr/0008-rom-install-launch-file-and-rom-dir.md)). Migration moves
@@ -548,26 +549,27 @@ single-file-vs-folder question the server answers, and the two are different jud
 
 ### Served shape
 
-What a download of a ROM becomes on disk: a **file**, a **folder**, or both. A ROM RomM stores as several files is a
-folder (it arrives as a zip and is unpacked), and one stored as a single file is a file — except a single `.zip` that
-may hold a disc image at its top level (or, for a zip that holds nothing but one folder, at that folder's top level;
-macOS Finder's `__MACOSX/` folder is ignored), which is both: the file it arrives as and the folder it is unpacked into
-once the zip's own directory has been read. It is a file only when RomM lists its members (`archive_members`) and none
-at that top level is a disc image. Decided by `served_shapes` (`domain/served_shape.py`); which sites ask it is
+What a download of a ROM becomes on disk: a **file**, a **folder**, or both. It follows how RomM holds the game, not
+what a download fetches of it: a game RomM holds as a folder is a folder, one with a single file in it included, and a
+game RomM holds as one file is a file — except, for such a game only, a single `.zip` that may hold a disc image at its
+top level (or, for a zip that holds nothing but one folder, at that folder's top level; macOS Finder's `__MACOSX/`
+folder is ignored), which is both: the file it arrives as and the folder it is unpacked into once the zip's own
+directory has been read. It is a file only when RomM lists its members (`archive_members`) and none at that top level is
+a disc image. Decided by `served_shapes` (`domain/served_shape.py`); which sites ask it is
 [backend-architecture.md](docs/architecture/backend-architecture.md#downloadservice-notes)'s.
 
 ### Unusable namesake
 
 An entry whose **normalized name** equals the ROM's but which cannot become its install: the other **shape** — a
-directory where RomM serves a single file, or a loose file where it serves a folder — or any `link`. A single `.zip`
-that may be unpacked has both shapes (**served shape**), so for it only a `link` is unusable. It is deliberately **not**
-an adoption candidate: nothing about it can be taken over, so it is never offered, ranked or renamed. It is still
-reported, because the alternative is a download that silently produces a second copy of the game beside it. The dialog's
-two exits are download-anyway (the server's copy lands beside it, under the server's name) and cancel; neither touches
-the entry. The two reasons are not one reason: a wrong shape is wrong only against what the server sends, so that
-refusal names the served shape, while a `link` is unusable on its own terms and naming a shape beside it would suggest
-the other shape would have taken it. _Avoid_: mismatched candidate, unusable candidate — the whole point is that it is
-not one.
+directory where RomM holds the game as one file, or a loose file where it holds the game as a folder (one with a single
+file in it included) — or any `link`. A game RomM holds as one `.zip` that may be unpacked has both shapes (**served
+shape**), so for it only a `link` is unusable. It is deliberately **not** an adoption candidate: nothing about it can be
+taken over, so it is never offered, ranked or renamed. It is still reported, because the alternative is a download that
+silently produces a second copy of the game beside it. The dialog's two exits are download-anyway (the server's copy
+lands beside it, under the server's name) and cancel; neither touches the entry. The two reasons are not one reason: a
+wrong shape is wrong only against what the server sends, so that refusal names the served shape, while a `link` is
+unusable on its own terms and naming a shape beside it would suggest the other shape would have taken it. _Avoid_:
+mismatched candidate, unusable candidate — the whole point is that it is not one.
 
 ### Library
 

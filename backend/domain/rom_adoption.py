@@ -202,7 +202,7 @@ def server_manifest(rom_detail: dict[str, Any]) -> tuple[ServerFile, ...]:
     An absent or empty ``files`` list yields an empty manifest, which
     :func:`verification_status` reads as "the server cannot confirm this".
     """
-    rom_root = _normalize_server_path(rom_detail.get("full_path"))
+    rom_root = normalize_server_path(rom_detail.get("full_path"))
     manifest: list[ServerFile] = []
     for entry in rom_detail.get("files") or []:
         name = entry.get("file_name") or ""
@@ -215,7 +215,7 @@ def server_manifest(rom_detail: dict[str, Any]) -> tuple[ServerFile, ...]:
                 size_bytes=int(entry.get("file_size_bytes") or 0),
                 algorithm=algorithm,
                 digest=digest,
-                rel_path=_relative_path(rom_root, entry.get("file_path"), name),
+                rel_path=relative_server_path(rom_root, entry.get("file_path"), name),
                 members=_archive_members(entry),
                 crc32=(entry.get("crc_hash") or "").strip().lower(),
             )
@@ -250,7 +250,7 @@ def _archive_members(entry: dict[str, Any]) -> tuple[ServerMember, ...]:
     return tuple(members)
 
 
-def _normalize_server_path(raw: object) -> str:
+def normalize_server_path(raw: object) -> str:
     """Reduce a server-supplied path to ``a/b/c`` — no leading, trailing or empty segments.
 
     RomM is not guaranteed to hand back a tidy string, and both sides of the
@@ -262,7 +262,7 @@ def _normalize_server_path(raw: object) -> str:
     return "/".join(segment for segment in raw.replace("\\", "/").split("/") if segment)
 
 
-def _relative_path(rom_root: str, raw_file_path: object, name: str) -> str:
+def relative_server_path(rom_root: str, raw_file_path: object, name: str) -> str:
     """Where this file belongs inside the ROM's own directory, or ``""``.
 
     ``RomFile.is_top_level`` in RomM's own model reads
@@ -276,7 +276,7 @@ def _relative_path(rom_root: str, raw_file_path: object, name: str) -> str:
     nest. Guessing a prefix from partial data would produce a confident wrong
     location, which is worse than the weaker match it replaces.
     """
-    file_dir = _normalize_server_path(raw_file_path)
+    file_dir = normalize_server_path(raw_file_path)
     if not rom_root or not file_dir:
         return ""
     if file_dir == rom_root:
