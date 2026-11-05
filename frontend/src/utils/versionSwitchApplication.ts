@@ -8,8 +8,8 @@ import { detach } from "./detach";
 /** Answers whether it broadcast `version_switched`; a lease cut before the broadcast stops it short of that. */
 export async function applyCommittedVersionSwitch(
   result: SwitchVersionSuccess,
-  onCover?: (romId: number, cover: string) => void,
-  admission?: PruneLeaseAdmission,
+  onCover: ((romId: number, cover: string) => void) | undefined,
+  admission: PruneLeaseAdmission,
 ): Promise<boolean> {
   // The binding moved when the backend answered; Steam's Play must not wait on
   // the Steam writes below to be judged by it.
@@ -20,7 +20,7 @@ export async function applyCommittedVersionSwitch(
     async (signal) =>
       !isPruneLeaseCancelled(signal) &&
       (await publishCommittedVersionSwitch(result.app_id, result.rom_id, onCover, signal)),
-    `version-picker:${result.app_id}`,
+    admission.owner,
     admission,
   );
 }

@@ -242,3 +242,45 @@ describe("applyCommittedVersionSwitch while its cover write is open", () => {
     expect(broadcasts).toEqual([]);
   });
 });
+
+describe("applyCommittedVersionSwitch's lease", () => {
+  const result = {
+    success: true as const,
+    app_id: 5000,
+    rom_id: 42,
+    target_installed: true,
+    prune_lease_token: "switch-lease",
+  };
+
+  /** Run the switch's publish under *owner*, tearing *tornDown* down while RomM's cover is being read. */
+  const switchWhileTearingDown = async (owner: string, tornDown: string): Promise<boolean> => {
+    let answerCover!: (cover: { base64: null }) => void;
+    vi.mocked(backend.fetchCoverBase64).mockReturnValue(new Promise((resolve) => (answerCover = resolve)));
+    const broadcasts: unknown[] = [];
+    const onChanged = (e: Event) => broadcasts.push((e as CustomEvent).detail);
+    globalThis.addEventListener("romm_data_changed", onChanged);
+    mountPruneLeaseOwner(owner);
+    const applied = applyCommittedVersionSwitch(result, undefined, capturePruneLeaseAdmission(owner));
+    await vi.waitFor(() => expect(backend.fetchCoverBase64).toHaveBeenCalled());
+    const teardown = releasePruneLeasesByOwner(tornDown);
+    answerCover({ base64: null });
+    await applied.catch(() => undefined);
+    await teardown;
+    globalThis.removeEventListener("romm_data_changed", onChanged);
+    await releasePruneLeasesByOwner(owner);
+    return broadcasts.length > 0;
+  };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false, chosen: false });
+  });
+
+  it("is held under the caller's owner, so that owner's teardown cancels the writes", async () => {
+    expect(await switchWhileTearingDown("desktop-version-picker:5000", "desktop-version-picker:5000")).toBe(false);
+  });
+
+  it("is not cancelled by another owner's teardown for the same game", async () => {
+    expect(await switchWhileTearingDown("desktop-version-picker:5000", "version-picker:5000")).toBe(true);
+  });
+});
