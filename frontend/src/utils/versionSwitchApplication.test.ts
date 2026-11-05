@@ -283,4 +283,102 @@ describe("applyCommittedVersionSwitch's lease", () => {
   it("is not cancelled by another owner's teardown for the same game", async () => {
     expect(await switchWhileTearingDown("desktop-version-picker:5000", "version-picker:5000")).toBe(true);
   });
+
+  it("logs what a teardown before the writes began left undone, and writes nothing", async () => {
+    const owner = "desktop-version-picker:5000";
+    mountPruneLeaseOwner(owner);
+    const applied = applyCommittedVersionSwitch(result, undefined, capturePruneLeaseAdmission(owner));
+    const teardown = releasePruneLeasesByOwner(owner);
+    await applied.catch(() => undefined);
+    await teardown;
+
+    expect(backend.getSgdbArtworkBase64).not.toHaveBeenCalled();
+    expect(vi.mocked(backend.logWarn)).toHaveBeenCalledWith(
+      "Version switch: the lease for rom 42 (appId 5000) was cancelled; the cover and the broadcast were skipped",
+    );
+  });
+});
+
+describe("publishCommittedVersionSwitch stopped by its signal", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(backend.reportSgdbSlotArtwork).mockResolvedValue({ success: true });
+  });
+
+  const broadcastsDuring = async (run: () => Promise<boolean>): Promise<unknown[]> => {
+    const broadcasts: unknown[] = [];
+    const onChanged = (e: Event) => broadcasts.push((e as CustomEvent).detail);
+    globalThis.addEventListener("romm_data_changed", onChanged);
+    try {
+      await run();
+    } finally {
+      globalThis.removeEventListener("romm_data_changed", onChanged);
+    }
+    return broadcasts;
+  };
+
+  it("logs that the cover and the broadcast were skipped when stopped before RomM's cover is written", async () => {
+    vi.stubGlobal("SteamClient", { Apps: { SetCustomArtworkForApp: vi.fn().mockResolvedValue(undefined) } });
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false, chosen: false });
+    vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: "ROMM=" });
+    const controller = new AbortController();
+    controller.abort();
+
+    const broadcasts = await broadcastsDuring(() =>
+      publishCommittedVersionSwitch(5000, 42, undefined, controller.signal),
+    );
+
+    expect(broadcasts).toEqual([]);
+    expect(SteamClient.Apps.SetCustomArtworkForApp).not.toHaveBeenCalled();
+    expect(vi.mocked(backend.logWarn)).toHaveBeenCalledWith(
+      "Version switch: the lease for rom 42 (appId 5000) was cancelled; the cover and the broadcast were skipped",
+    );
+  });
+
+  it("logs that only the broadcast was skipped when the chosen cover was already written", async () => {
+    vi.stubGlobal("SteamClient", { Apps: { SetCustomArtworkForApp: vi.fn().mockResolvedValue(undefined) } });
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({
+      base64: "CHOSEN=",
+      no_api_key: false,
+      image_id: 6,
+      sha256: "sha6",
+      sgdb_id: 9999,
+      prune_lease_token: "lease",
+    });
+    const controller = new AbortController();
+    controller.abort();
+
+    const broadcasts = await broadcastsDuring(() =>
+      publishCommittedVersionSwitch(5000, 42, undefined, controller.signal),
+    );
+
+    expect(broadcasts).toEqual([]);
+    expect(vi.mocked(backend.logWarn)).toHaveBeenCalledWith(
+      "Version switch: the lease for rom 42 (appId 5000) was cancelled; the broadcast was skipped",
+    );
+  });
+
+  it("logs that the broadcast was skipped when stopped while RomM's cover was written", async () => {
+    const controller = new AbortController();
+    vi.stubGlobal("SteamClient", {
+      Apps: {
+        SetCustomArtworkForApp: vi.fn().mockImplementation(() => {
+          controller.abort();
+          return Promise.resolve(undefined);
+        }),
+      },
+    });
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false, chosen: false });
+    vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: "ROMM=" });
+
+    const broadcasts = await broadcastsDuring(() =>
+      publishCommittedVersionSwitch(5000, 42, undefined, controller.signal),
+    );
+
+    expect(SteamClient.Apps.SetCustomArtworkForApp).toHaveBeenCalled();
+    expect(broadcasts).toEqual([]);
+    expect(vi.mocked(backend.logWarn)).toHaveBeenCalledWith(
+      "Version switch: the lease for rom 42 (appId 5000) was cancelled; the broadcast was skipped",
+    );
+  });
 });

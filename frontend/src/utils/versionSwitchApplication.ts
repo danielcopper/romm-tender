@@ -5,6 +5,10 @@ import { isPruneLeaseCancelled, withPruneLease, type PruneLeaseAdmission } from 
 import { refreshAppIdMap } from "./sessionManager";
 import { detach } from "./detach";
 
+function logCancelled(appId: number, romId: number, skipped: string): void {
+  logWarn(`Version switch: the lease for rom ${romId} (appId ${appId}) was cancelled; ${skipped} skipped`);
+}
+
 /** Answers whether it broadcast `version_switched`; a lease cut before the broadcast stops it short of that. */
 export async function applyCommittedVersionSwitch(
   result: SwitchVersionSuccess,
@@ -17,9 +21,13 @@ export async function applyCommittedVersionSwitch(
   return withPruneLease(
     result.prune_lease_token,
     "Version switch",
-    async (signal) =>
-      !isPruneLeaseCancelled(signal) &&
-      (await publishCommittedVersionSwitch(result.app_id, result.rom_id, onCover, signal)),
+    async (signal) => {
+      if (isPruneLeaseCancelled(signal)) {
+        logCancelled(result.app_id, result.rom_id, "the cover and the broadcast were");
+        return false;
+      }
+      return publishCommittedVersionSwitch(result.app_id, result.rom_id, onCover, signal);
+    },
     admission.owner,
     admission,
   );
@@ -44,7 +52,10 @@ export async function publishCommittedVersionSwitch(
       );
     }
     const cover = chosen.kind === "none" ? await fetchCoverBase64(romId) : null;
-    if (signal?.aborted) return false;
+    if (signal?.aborted) {
+      logCancelled(appId, romId, cover ? "the cover and the broadcast were" : "the broadcast was");
+      return false;
+    }
     if (cover?.base64) {
       onCover?.(romId, cover.base64);
       const base64 = cover.base64;
@@ -56,7 +67,10 @@ export async function publishCommittedVersionSwitch(
   } catch (e) {
     logWarn(`Version switch: cover apply after switch failed for rom ${romId}: ${e}`);
   }
-  if (signal?.aborted) return false;
+  if (signal?.aborted) {
+    logCancelled(appId, romId, "the broadcast was");
+    return false;
+  }
   invalidateCachedGameDetail(appId);
   globalThis.dispatchEvent(
     new CustomEvent("romm_data_changed", {
