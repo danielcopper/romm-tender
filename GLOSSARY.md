@@ -184,12 +184,13 @@ instead and registers nothing. The page distinguishes SOME searches missing from
 ran, or Steam's registry was read before it was complete, neither of them `@decky/ui`'s doing), which is the first fact
 that leads to a repair.
 
-A **miss the panel survives** costs neither the panel nor anything the panel acts on: it mounts as usual and the log is
-the only place the miss is reported. That line answers the same question the page does — whose copy of `@decky/ui` ran
-the search — rather than naming a repair of its own, because the two costs below the panel do not all belong to the same
-program: `ControllerGlyph` is a search Tender runs itself, and `playSectionClasses` is a `@decky/ui` export whose search
-is Decky's in the coexistence bundle. _Avoid_ **cosmetic miss** for the pair: it is true of the glyph and false of
-`playSectionClasses`, whose absence nothing draws in the first place.
+A **miss the panel survives** costs neither the panel nor anything the panel acts on: it mounts as usual, the backend
+log carries the missing names, and Main's notice ("Steam has changed") names what does not work. Every miss writes that
+warning, the fallback page's included. The log line answers the same question the page does — whose copy of `@decky/ui`
+ran the search — rather than naming a repair of its own, because the two costs below the panel do not all belong to the
+same program: `ControllerGlyph` is a search Tender runs itself, and `playSectionClasses` is a `@decky/ui` export whose
+search is Decky's in the coexistence bundle. _Avoid_ **cosmetic miss** for the pair: it is true of the glyph and false
+of `playSectionClasses`, whose absence nothing draws in the first place.
 
 The second is the **searching copy**: which installed copy of `@decky/ui` ran the predicate that went stale, since the
 coexistence bundle runs Decky Loader's rather than ours. It is read ONCE per start and worded by both surfaces, which is
@@ -219,9 +220,10 @@ renders without, or a name only a debug line reads — never something a page ac
 
 A name of Steam's client Tender depends on: a global or what it reaches through one (a `SteamClient` call, a store and
 its members, an overview object's field), a route of Steam's router or `steam://` URL, the `SharedJSContext` target
-title, the `steamloopback.host` origin. Valve promises none of them. Each is named, with the feature that needs it, in
-one list with two halves — the panel's in `frontend/src/boot/steamInternals.ts`, the backend's in
-`backend/domain/steam_internals.py`.
+title, the `steamloopback.host` origin. Valve promises none of them. Each is named in one list with two halves — the
+panel's in `frontend/src/boot/steamInternals.ts`, the backend's in `backend/domain/steam_internals.py` — and each of the
+panel's carries what its absence costs, on the **start-up check**'s scale but never the `panel`, since a second check
+asks after them once Steam has started and the panel mounts whatever it finds missing.
 
 Not a Steam internal in this sense: what a search into Steam's module registry finds, whether `@decky/ui` runs it or
 Tender does (the **start-up check**'s term), Steam's React tree and DOM, and Decky Loader's globals.

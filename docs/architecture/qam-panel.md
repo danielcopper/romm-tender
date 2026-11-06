@@ -924,7 +924,8 @@ them; neither notice can be dismissed.
 | An emulator source reports a health finding                            | a warning card per finding, worded per code, no action                                                                            | none — the fix is outside Tender; Settings › Emulator sources states the same sentence on the source's card                       |
 | No emulator source is detected                                         | warning card, no action                                                                                                           | none — the fix is outside Tender; Settings › Emulator sources says the same                                                       |
 | A switched-on source is one Tender cannot start games through          | a smaller card per such source, without the warning sign, no action                                                               | none — Settings › Emulator sources states it on the source's card                                                                 |
-| Steam answers for no notifications                                     | warning card, no action                                                                                                           | none — the fix is outside Tender                                                                                                  |
+| Steam lacks parts Tender uses                                          | **Steam has changed**, what does not work, a request to report; no action                                                         | none — the fix is outside Tender; the missing names are in the backend log                                                        |
+| Tender's Quick Access entry could not be added                         | none — Main cannot be reached; a toast at start-up, once                                                                          | none — the fix is outside Tender                                                                                                  |
 | Sync paused on the session budget                                      | text, **Open Sync**                                                                                                               | Sync, which holds Restart Steam now and Resume                                                                                    |
 | An update was rolled back, or refused by its pre-install check         | both versions, where the reason is, **Open Updates**, Dismiss — and a toast, once                                                 | Settings › Updates, which states the same fact whether or not the card was dismissed, and shows what the installer said           |
 | An update's installer stopped without updating                         | both versions, the installer's journal, **Open Updates**, Dismiss — and a toast, once                                             | Settings › Updates, where the attempt stands as failed with Try again for the rest of that run, and shows what the installer said |
@@ -959,18 +960,25 @@ Every row of that table is what the panel does today. The two full-page states �
 migration — are not notices; they replace the page, and neither carries a condition inside it any more: the one that did
 was the pre-rename plugin folder, which went with the plugin loader.
 
-The notifications row is the one condition read from the **start-up check's report** rather than from a backend answer
-or an event. What a toast is raised through is two searches into Steam's bundle and a global Steam installs at module
-scope ([how the panel is built and loaded](frontend-bundles.md)), so a miss is settled before anything mounts and cannot
-change afterwards: there is nothing to subscribe to and nothing to poll. It is a notice rather than a refusal to mount
-because the panel is entirely intact without it: syncs and downloads run, and most results a toast would have announced
-are on the page they belong to as well. Not all of them, and the cases known to be said only by a toast, or by a line on
-a page that has to be open at the time, are these — known cases, not a complete list: a sync that fails before its work
-queue is built, which writes no run, so only the Sync page's status line and Main's transient line say it, each only if
-it is open when the sync fails (§ Sync); a removed-game cleanup that the game page's version picker cannot prepare for
-one version, which it answers with a toast alone; and a play-button download that is refused or fails before it is
-queued, which never reaches the download queue. The notice gives the gist rather than the list: its one example, a sync
-that cannot start, is the first case here, and it leaves out the lines an open page shows.
+The start-up row is the one condition read from the **start-up checks' reports** rather than from a backend answer or an
+event, and it is the one home of everything both checks missed that the panel survives (#2455 D3): the searches into
+Steam's module registry, settled before anything mounts, and the Steam internals, asked once Steam reports its services
+initialised — so it can appear after Main has mounted, and Main subscribes to it (`utils/startupMissNotice.ts`). It
+names what does not work, by the short labels both lists share (`STEAM_FEATURES`, `boot/steamInternals.ts`), each once —
+"Not working: setting artwork, starting a game." — and asks for a report; a miss whose absence nothing the reader sees
+depends on (a `diagnostic` one) still raises it, without a list: "Everything still works; please report this." (#2455
+D4). The names themselves go to the backend log only. Lookups whose absence costs the panel never reach it: the fallback
+page stands in the panel's place instead. Tender's own notifications are one of the losses it can name, and a miss of
+what they are raised through has no other home: syncs and downloads run, and most results a toast would have announced
+are on their page as well, but not all of them — a sync that fails before its work queue is built, which writes no run,
+so only the Sync page's status line and Main's transient line say it, each only if it is open when the sync fails (§
+Sync); a removed-game cleanup that the game page's version picker cannot prepare for one version, which it answers with
+a toast alone; and a play-button download that is refused or fails before it is queued, which never reaches the download
+queue.
+
+The one start-up miss this notice cannot carry is Tender's Quick Access entry's own search: without it neither the panel
+nor Main can be reached, so the panel factory raises one toast at start-up through Tender's own toaster (#2509 D10),
+once Steam can show it, and none where what a toast is raised through missed too.
 
 The playtime notice is the one that carries **two** buttons, and they sit side by side on one row rather than on two
 full-width ones: Main is the narrow page, and a notice costing three rows pushes the status block it sits above off the

@@ -90,6 +90,32 @@ controller were among those not found: tap the buttons instead. Under the other 
 update: where it names Decky Loader alone, the update is Decky Loader's; where Tender started before Steam was ready,
 restart Steam; and where it asks for a report, send one with the names.
 
+## Main Says "Steam has changed"
+
+**Symptom**: Tender's panel works, and Main shows a notice titled "Steam has changed": "This Steam version is missing
+parts Tender uses. Not working: …. Please report this." — or, where nothing you can see is affected, "Everything still
+works; please report this."
+
+**Explanation**: When it starts, Tender looks up the parts of Steam it uses. Some were not found in the Steam version
+you are running, and the notice names what does not work without them — for example setting artwork, starting a game or
+Tender's notifications. Everything else works as usual. The notice can appear a moment after the panel opens: some of
+Steam's parts are looked up only once Steam has finished starting.
+
+**What to do**: Report it, and include Tender's log, which names every part that was missing. An update of Tender, or of
+Steam, is what fixes it; the notice has no button because there is nothing to do inside Tender.
+
+## Tender's Quick Access Entry Is Missing
+
+**Symptom**: A notification says "Tender couldn't add its Quick Access entry with this Steam version. Please report
+this.", and Tender's entry is not in the Quick Access menu.
+
+**Explanation**: The part of Steam that Tender's entry is put into was not found in this Steam version, so the panel
+cannot be opened. Tender keeps running without it: its section on a game's page, the check before a game starts and its
+syncs still work.
+
+**What to do**: Report it, with Tender's log. Where Steam's notifications are affected as well, no notification appears,
+and the log alone says so.
+
 ## Tender Says It Was Restarted
 
 **Symptom**: A notification says "Tender was restarted", and Tender's panel shows only one of two notes, on every page:

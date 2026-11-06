@@ -1416,32 +1416,41 @@ Format: **invariant** — tier — enforced by.
   is put a registry search onto the live list in silence — a name the sweep did not derive fails the equality there. The
   walk is `frontend/src/test-utils/jsFunctionScanner.ts`, a string-, comment- and regex-aware scan; why a regex could
   not do it is on the docs page
-- **Every Steam internal the code reaches is named in one list with the feature that needs it, and
-  `frontend/src/types/steam.d.ts` declares nothing the code does not reach** — test + prompt-only — Valve promises none
-  of `SteamClient`'s calls, the stores, their members or the routes, and a Steam update that drops one breaks the
-  feature built on it without a word: a press that does nothing, an error in the log, a placeholder where an image
-  should be. The list is what a check at start-up and a check against Steam's published client can be built on, and it
-  is only worth that while it is complete, so both halves are held to the code rather than kept by hand. The panel's
-  half, `frontend/src/boot/steamInternals.ts`, is held by `frontend/src/boot/steamInternals.test.ts` to what the type
-  checker resolves in the shipped code (`frontend/src/test-utils/steamReach.ts`): a member counts when it is declared in
-  `steam.d.ts`'s globals, in `@decky/ui`'s `dist/globals/` or `webpack.d.ts` — which declare Steam's other globals
-  (`webpackChunksteamui`, `App`, …) with types of their own, so a reach typed by them compiles without `steam.d.ts`
-  naming it — or in a shape the code casts the window to, followed within that cast's file. Its path is derived rather
-  than written: Steam's own spelling, rooted at the global, along the first route from Steam's roots to the member's
-  type — the shortest, ties broken as the docs page states — so the two checks the list is for can look each one up as
-  Steam spells it. Both directions are required, and `steam.d.ts` is held the same way, so a declaration nothing reaches
-  fails as surely as a reach nothing lists. The order of the two declarations of Steam's globals is pinned with it:
-  `steam.d.ts` is the one in effect, which no compiler error shows, because `skipLibCheck` hides the conflict; were
-  Decky's to win, which takes `steam.d.ts` ceasing to be a script, the list's typed entries and the members `steam.d.ts`
-  declares would go unreached, and a reach the list does not name would appear. A reach no type describes — a string
-  key, a `Record`, an `unknown`, a route — is listed by hand with the files that make it, and held only to its words
-  appearing in code there; a window cast the scan cannot read, and a route literal, must sit in such a file, so one in a
-  file no entry names is reported. The backend's half, `backend/domain/steam_internals.py`, is held by
+- **Every Steam internal the code reaches is named in one list, and `frontend/src/types/steam.d.ts` declares nothing the
+  code does not reach; every panel entry states what its absence costs, never the panel, and how the start-up check asks
+  it** — check + test + prompt-only — Valve promises none of `SteamClient`'s calls, the stores, their members or the
+  routes, and a Steam update that drops one breaks the feature built on it without a word: a press that does nothing, an
+  error in the log, a placeholder where an image should be. The list is what a check at start-up and a check against
+  Steam's published client can be built on, and it is only worth that while it is complete, so both halves are held to
+  the code rather than kept by hand. The panel's half, `frontend/src/boot/steamInternals.ts`, is held by
+  `frontend/src/boot/steamInternals.test.ts` to what the type checker resolves in the shipped code
+  (`frontend/src/test-utils/steamReach.ts`): a member counts when it is declared in `steam.d.ts`'s globals, in
+  `@decky/ui`'s `dist/globals/` or `webpack.d.ts` — which declare Steam's other globals (`webpackChunksteamui`, `App`,
+  …) with types of their own, so a reach typed by them compiles without `steam.d.ts` naming it — or in a shape the code
+  casts the window to, followed within that cast's file. Its path is derived rather than written: Steam's own spelling,
+  rooted at the global, along the first route from Steam's roots to the member's type — the shortest, ties broken as the
+  docs page states — so the two checks the list is for can look each one up as Steam spells it. Both directions are
+  required, and `steam.d.ts` is held the same way, so a declaration nothing reaches fails as surely as a reach nothing
+  lists. The order of the two declarations of Steam's globals is pinned with it: `steam.d.ts` is the one in effect,
+  which no compiler error shows, because `skipLibCheck` hides the conflict; were Decky's to win, which takes
+  `steam.d.ts` ceasing to be a script, the list's typed entries and the members `steam.d.ts` declares would go
+  unreached, and a reach the list does not name would appear. A reach no type describes — a string key, a `Record`, an
+  `unknown`, a route — is listed by hand with the files that make it, and held only to its words appearing in code
+  there; a window cast the scan cannot read, and a route literal, must sit in such a file, so one in a file no entry
+  names is reported. The backend's half, `backend/domain/steam_internals.py`, is held by
   `tests/domain/test_steam_internals.py` over the syntax tree: every string naming Steam is held in a module-level
   constant the list names, each such constant spells its entries, and each property it reads is an entry's, or
   JavaScript's own as the test names them (`_JAVASCRIPTS_OWN`). What neither side sees is listed in the register entry,
   and none of it is a check of what an internal DOES — Steam keeping a name while changing what it answers stays a
-  device test
+  device test. **The panel's half is what the start-up check asks after, so each entry carries what that check needs**
+  (#2509 D3): its absence cost on the start-up check's scale, which the type keeps off `panel` — a core internal that
+  brought up the fallback page would take away every feature that still works — and the losses the notice on Main names
+  (`STEAM_FEATURES`), none for a `diagnostic` entry and at least one for every other; and how it is asked, `call`,
+  `read` or `notAtStartUp` with the reason. A wrong `call` is a false notice on every machine (a value reported as "not
+  a function") and a wrong `read` a miss nobody sees, so the leaves the type checker can judge are held to it: `call`
+  exactly where `steamReach.ts` finds the member declared as something to call, and a path naming what a call answers or
+  an element is held to its own shape. An entry only the desktop surface reaches is marked `devBuildOnly`, held to
+  exactly the entries reached from `desktop/` alone, because a release build has no such surface to tell a user about
 - **Whether every search answered and whether the panel may MOUNT are two questions, and a miss that costs less than the
   panel never takes the interface off the air** — check + test + prompt-only — the type carries the first half:
   `SteamLookup.absenceCost` is required, so a new entry does not compile until it states which of the four its absence
@@ -1464,17 +1473,43 @@ Format: **invariant** — tier — enforced by.
   call, a direct cast of `window` whose exported name equals the property read, and a `searchSteamFactories` scan over
   Steam's module factories) — so the three `SP_*` globals, which the frontend cannot attribute to a program from inside
   the page, fail there the moment one is made non-blocking, instead of shipping a repair aimed at whichever program did
-  not install them. **`!== "panel"` is the only reading of `absenceCost` there is**, so `feature`, `appearance` and
-  `diagnostic` record why a name is off blocking and decide nothing. The two things that DO answer for the toasts are
-  prompt-only and read NAMES: `notificationsMissing` over `NOTIFICATION_LOOKUPS` puts the notice on Main, and
-  `describeSurvivedMiss` puts the same fact in the log as a sentence stating the loss and naming NO repair of its own —
-  the verdict sentence beside it names one that is right under every answer, which it has to be, since `ErrorBoundary`
-  is a `@decky/ui` export and a miss of it alone in the coexistence bundle is `decky`. So a `feature` entry added for
-  something else cannot make either claim the notifications are what went missing, and a second spelling of any of the
-  three cannot leave them answering for a lookup nobody asked about. Both directions fail quietly: call a real
-  dependency cosmetic and the panel mounts and renders a hole, which is the fault the whole check exists to tell apart
-  from a backend that is not running; call a decoration blocking and one missing glyph costs the user their entire
-  interface, which is what this entry removed
+  not install them. **`!== "panel"` is the only reading of `absenceCost` that decides anything**, so `feature`,
+  `appearance` and `diagnostic` record why a name is off blocking; the log line prints each missing name's cost and
+  losses and the notice on Main names the losses of a survived miss, which is why every lookup at `feature` or
+  `appearance`, and no other, must name a loss (`steamModules.test.ts`) — a loss the reader sees cannot then go unnamed.
+  The two things that answer for the toasts are prompt-only and read NAMES: `notificationsMissing` over
+  `NOTIFICATION_LOOKUPS` records what the toaster can do (`utils/notificationsHealth.ts`), and `describeSurvivedMiss`
+  puts the fact in the log as a sentence stating the loss and naming NO repair of its own — the verdict sentence beside
+  it names one that is right under every answer, which it has to be, since `ErrorBoundary` is a `@decky/ui` export and a
+  miss of it alone in the coexistence bundle is `decky`. So a `feature` entry added for something else cannot make
+  either claim the notifications are what went missing, and a second spelling of any of the three cannot leave them
+  answering for a lookup nobody asked about. Both directions fail quietly: call a real dependency cosmetic and the panel
+  mounts and renders a hole, which is the fault the whole check exists to tell apart from a backend that is not running;
+  call a decoration blocking and one missing glyph costs the user their entire interface, which is what this entry
+  removed
+- **Every start-up check that misses something writes ONE warning to the backend log, every miss the panel survives
+  reaches the one notice on Main, a missed Quick Access search also raises one toast, the Steam-internals check asks
+  once Steam reports its services initialised, and what only the desktop surface reaches is asked only in its build** —
+  check + test + prompt-only — a miss that reached only Steam's JS console was a miss no bug report carried, and the
+  lost glyph of #2454 was found only because the fallback page happened to list every name (#2455). So both checks, the
+  searches into Steam's module registry and the Steam internals, word a miss in one shape (`boot/startupMiss.ts`) —
+  which check, how many of how many missed, then each missing name with its cost and losses — and the panel factory
+  writes it through `frontend_log` at `warn`, the fallback page's miss included (#2455 D1, D2). A miss the panel
+  survives is also the one notice on Main (`utils/startupMissNotice.ts`, #2455 D3, D4), which replaced the notice about
+  Steam answering for no notifications: the losses both checks named, each once, or, where only a `diagnostic` name
+  missed, the notice without a list; the names stay in the log. Its one blind spot is the Quick Access entry's own
+  search, without which neither the panel nor Main can be reached, so that miss also raises one toast at start-up — none
+  where what a toast is raised through missed as well, when the log line alone carries it (#2509 D10). The
+  Steam-internals check asks once Steam reports its services initialised (#2509 D11), since the panel is loaded the
+  moment `webpackChunksteamui` exists and whether Steam's stores are assigned by then is not established; asked earlier
+  it could raise a false notice on every cold start, and past the 30-second deadline it asks anyway and says Steam was
+  not ready. The notice can therefore appear after Main has mounted, which is why Main subscribes. What only the desktop
+  surface reaches — `ReactClient`'s search and the desktop internals — is asked only where the build stamp
+  `virtual:tender-desktop-surface` says the surface is in the build (#2509 D12); every other build answers `false`,
+  declares the desktop modules free of side effects so the search is left out with the folded entry, and
+  `frontend/scripts/check-bundle-shape.mjs` holds the release bundles to both. Each half fails quietly: a miss logged
+  nowhere is the fault this entry removes, and a release bundle asking after the desktop surface tells every user about
+  a surface their build does not have
 - **The fallback page names the copy of `@decky/ui` that actually ran the search that missed, and the repair that
   follows from it** — check + test + prompt-only — the artefact's stamp is checked
   (`frontend/scripts/check-bundle-shape.mjs`, per bundle and on `globals.js`, which must carry none), and the sentence
