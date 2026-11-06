@@ -56,7 +56,7 @@ export const DownloadingButton: FC<DownloadingButtonProps> = ({
       className="tender-desktop-play-btn-group"
       style={{ ...BUTTON_GROUP_STYLE, boxShadow: `0 0 10px ${glow}, 0 1px 4px rgba(0, 0, 0, 0.4)` }}
     >
-      <div
+      <div // NOSONAR(typescript:S6819) — a <progress> draws no children, and styling its fill needs a stylesheet
         role="progressbar"
         aria-valuenow={percent}
         aria-valuemin={0}

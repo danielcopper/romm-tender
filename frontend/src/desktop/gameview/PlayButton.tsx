@@ -33,6 +33,7 @@ import { detach } from "../../utils/detach";
 import type {
   DownloadCompleteEvent,
   DownloadFailedEvent,
+  DownloadItem,
   DownloadProgressEvent,
   SaveStatus,
   UninstallProgressEvent,
@@ -82,6 +83,13 @@ const NO_ANSWERS: CachedAnswers = { romId: null, targetOccupied: false, candidat
 interface PressedAction {
   state: ActionState;
   romId: number;
+}
+
+/** How far a multi-file removal has got, as Big Picture's Uninstalling count reads it. */
+interface UninstallCount {
+  romId: number;
+  removed: number;
+  total: number;
 }
 
 /** How long READY! stands once a download completes; Big Picture's Ready! stands as long. */
@@ -150,6 +158,57 @@ function saveStatusOf(d: GameDetailState): SaveStatus | null {
   return d.saveStatus?.rom_id === d.romId ? d.saveStatus : null;
 }
 
+function actionStateFor(action: PressedAction | null, romId: number | null): ActionState | null {
+  return action !== null && action.romId === romId ? action.state : null;
+}
+
+// The answers belong to the ROM they were read for and mean nothing once it
+// is installed, so a version switch or an install retires them without a
+// write. The two on-disk ones stay two flags because they are two states: an
+// occupied target is compared where it lies, a candidate is renamed into place.
+function answersFor(answers: CachedAnswers, romId: number | null, installed: boolean): CachedAnswers {
+  return answers.romId !== null && answers.romId === romId && !installed ? answers : NO_ANSWERS;
+}
+
+function isTransferActive(download: DownloadItem | undefined): boolean {
+  return (
+    download !== undefined &&
+    (download.status === "downloading" ||
+      download.status === "extracting" ||
+      download.status === "queued" ||
+      download.status === "paused")
+  );
+}
+
+function downloadRatio(download: DownloadItem | undefined): number {
+  const downloaded = download?.bytes_downloaded ?? 0;
+  const total = download?.total_bytes ?? 0;
+  return total > 0 ? Math.min(1, Math.max(0, downloaded / total)) : 0;
+}
+
+function uninstallingLabel(progress: UninstallCount | null, romId: number | null): string {
+  return progress !== null && progress.romId === romId
+    ? `UNINSTALLING ${progress.removed}/${progress.total}`
+    : "UNINSTALLING...";
+}
+
+const StopButton: FC<{ pending: boolean; onStop: () => void }> = ({ pending, onStop }) => (
+  <div className="tender-desktop-play-btn-group" style={BUTTON_GROUP_STYLE}>
+    <button
+      type="button"
+      className="tender-desktop-btn-stop"
+      disabled={pending}
+      style={pending ? { ...STOP_BUTTON_STYLE, cursor: "default" } : STOP_BUTTON_STYLE}
+      onClick={onStop}
+    >
+      <svg width="12" height="12" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true">
+        <rect width="10" height="10" rx="1" />
+      </svg>
+      {pending ? "STOPPING..." : "STOP"}
+    </button>
+  </div>
+);
+
 // The dialog host sits above the button so that the button's branches, which
 // render different trees, cannot unmount an open dialog when the state moves.
 export const PlayButton: FC<PlayButtonProps> = ({ appId }) => {
@@ -174,7 +233,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
   // A download's, an adoption's and an uninstall's state is kept with the ROM it
   // was pressed for: docs/architecture/desktop-dom-architecture.md says what that covers.
   const [action, setAction] = useState<PressedAction | null>(null);
-  const actionState = action !== null && action.romId === romId ? action.state : null;
+  const actionState = actionStateFor(action, romId);
   // Another version's press bar is dropped: a transfer that ends while that version
   // is not shown leaves no frame to end it, and on the way back the bar is drawn from
   // what the download store still holds.
@@ -192,10 +251,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
   // which is when a question from the selector would dismiss the open one.
   const [downloadFlowUnderWay, setDownloadFlowUnderWay] = useState(false);
   const [cachedAnswers, setCachedAnswers] = useState<CachedAnswers>(NO_ANSWERS);
-  // How far a multi-file removal has got, as Big Picture's Uninstalling count reads it.
-  const [uninstallProgress, setUninstallProgress] = useState<{ romId: number; removed: number; total: number } | null>(
-    null,
-  );
+  const [uninstallProgress, setUninstallProgress] = useState<UninstallCount | null>(null);
   const boundVanished = useSyncExternalStore(onBoundAvailabilityChange, () => isBoundVanished(appId));
   const detailRef = useRef(detail);
   useEffect(() => {
@@ -211,14 +267,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
     [],
   );
 
-  // The answers belong to the ROM they were read for and mean nothing once it
-  // is installed, so a version switch or an install retires them without a
-  // write. The two on-disk ones stay two flags because they are two states: an
-  // occupied target is compared where it lies, a candidate is renamed into place.
-  const answersApply = cachedAnswers.romId !== null && cachedAnswers.romId === romId && !detail.installed;
-  const targetOccupied = answersApply && cachedAnswers.targetOccupied;
-  const candidatePresent = answersApply && cachedAnswers.candidatePresent;
-  const noFileOnRomm = answersApply && cachedAnswers.noFileOnRomm;
+  const { targetOccupied, candidatePresent, noFileOnRomm } = answersFor(cachedAnswers, romId, detail.installed);
   const noteAnswers = (rid: number, update: Partial<Omit<CachedAnswers, "romId">>) => {
     setCachedAnswers((prev) => {
       const base = prev.romId === rid ? prev : { ...NO_ANSWERS, romId: rid };
@@ -361,13 +410,9 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
   };
 
   const activeDownload = romId === null ? undefined : downloads.find((d) => d.rom_id === romId);
-  const transferActive =
-    activeDownload !== undefined &&
-    (activeDownload.status === "downloading" ||
-      activeDownload.status === "extracting" ||
-      activeDownload.status === "queued" ||
-      activeDownload.status === "paused");
-  const downloading = actionState === "downloading" || transferActive;
+  const downloading = actionState === "downloading" || isTransferActive(activeDownload);
+
+  const clearPendingFor = (rid: number) => setPendingRomId((prev) => (prev === rid ? null : prev));
 
   const handleDownloadClick = async () => {
     if (romId === null) return;
@@ -381,7 +426,10 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
         logContext: "DesktopPlayButton",
         dialogs: desktopAdoptionDialogs(ask),
         hooks: {
-          setBusy: (busy) => setPendingRomId((prev) => (busy ? rid : prev === rid ? null : prev)),
+          setBusy: (busy) => {
+            if (busy) setPendingRomId(rid);
+            else clearPendingFor(rid);
+          },
           setTargetOccupied: (occupied) => noteAnswers(rid, { targetOccupied: occupied }),
           setCandidatePresent: (present) => noteAnswers(rid, { candidatePresent: present }),
           onAdopted: () => holdVerdict("play", rid),
@@ -389,7 +437,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
       });
       if (outcome === "download_started") {
         startAction("downloading", rid);
-        setPendingRomId((prev) => (prev === rid ? null : prev));
+        clearPendingFor(rid);
       }
     } finally {
       setDownloadFlowUnderWay(false);
@@ -465,24 +513,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
 
   const renderButtonGroup = () => {
     // No RESUME: docs/architecture/desktop-dom-architecture.md says why.
-    if (sessionRunning) {
-      return (
-        <div className="tender-desktop-play-btn-group" style={BUTTON_GROUP_STYLE}>
-          <button
-            type="button"
-            className="tender-desktop-btn-stop"
-            disabled={stopPending}
-            style={stopPending ? { ...STOP_BUTTON_STYLE, cursor: "default" } : STOP_BUTTON_STYLE}
-            onClick={() => detach(handleStopClick())}
-          >
-            <svg width="12" height="12" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true">
-              <rect width="10" height="10" rx="1" />
-            </svg>
-            {stopPending ? "STOPPING..." : "STOP"}
-          </button>
-        </div>
-      );
-    }
+    if (sessionRunning) return <StopButton pending={stopPending} onStop={() => detach(handleStopClick())} />;
 
     if (pressState !== null) {
       return (
@@ -497,19 +528,13 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
     }
 
     if (actionState === "uninstalling") {
-      const label =
-        uninstallProgress !== null && uninstallProgress.romId === romId
-          ? `UNINSTALLING ${uninstallProgress.removed}/${uninstallProgress.total}`
-          : "UNINSTALLING...";
-      return placeholder(label, undefined, UNINSTALLING_BUTTON_STYLE);
+      return placeholder(uninstallingLabel(uninstallProgress, romId), undefined, UNINSTALLING_BUTTON_STYLE);
     }
     if (actionState === "dl_complete") return placeholder("READY!", undefined, READY_BUTTON_STYLE);
     if (downloading) {
-      const downloaded = activeDownload?.bytes_downloaded ?? 0;
-      const total = activeDownload?.total_bytes ?? 0;
       return (
         <DownloadingButton
-          progressRatio={total > 0 ? Math.min(1, Math.max(0, downloaded / total)) : 0}
+          progressRatio={downloadRatio(activeDownload)}
           isExtracting={activeDownload?.status === "extracting"}
           isPaused={activeDownload?.status === "paused"}
           isResumable={activeDownload?.resumable ?? false}
