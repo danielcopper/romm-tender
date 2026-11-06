@@ -290,7 +290,6 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
     actions: state,
     launching: "pick",
     stop: "focusable",
-    platformNameOf: (slug) => state.rows.get(slug)?.name ?? slug,
   });
   const { attachRoot } = part.focus;
   const files = firmware.files;

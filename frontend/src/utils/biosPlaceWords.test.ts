@@ -62,14 +62,6 @@ describe("biosPlaceLines", () => {
     ]);
   });
 
-  it("names the platform whose copy a link of Tender's points at", () => {
-    const lines = biosPlaceLines(row({ link: "linked_elsewhere", linked_for: "gb" }), null, {}, (slug) =>
-      slug === "gb" ? "Game Boy" : slug,
-    );
-
-    expect(lines).toEqual(["Linked to Tender's copy for Game Boy"]);
-  });
-
   it("names that platform by the name the row carries, where no page names it", () => {
     const lines = biosPlaceLines(
       row({ link: "linked_elsewhere", linked_for: "gb", linked_for_name: "Game Boy" }),
