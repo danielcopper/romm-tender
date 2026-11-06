@@ -347,9 +347,7 @@ class SlotSwitcher:
                 save_state.delete_file_tracking(filename)
                 moved.append(filename)
 
-        # Snapshot the keys first — delete_file_tracking mutates save_state.files.
-        for fn in list(save_state.files):
-            save_state.delete_file_tracking(fn)
+        save_state.clear_baselines()
         return _SetAside(moved=moved)
 
     def _backup_stopped(self, set_aside: _SetAside) -> SlotSwitchStopped:
