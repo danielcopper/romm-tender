@@ -1,7 +1,7 @@
 -- =============================================================================
 -- 043_key_firmware_store_by_platform_folder.sql — the firmware store is kept
 -- per RomM platform folder, and a game knows its platform's folder
--- #2734, #2223 (D25, D45, D46), #2219 (D11)
+-- #2734, #2223 (D25, D45, D46, D47), #2219 (D11)
 -- =============================================================================
 --
 --   * firmware_store.platform_slug → platform_folder: a store file is keyed by
@@ -9,9 +9,9 @@
 --     platform, where two platforms may share a slug. Each value is kept: a
 --     record filed under a slug stays under that name (D46), and nothing on
 --     disk moves (#2219 D11).
---   * firmware_store.platform_slug — added, the console the file was
---     downloaded for, which the resolver is asked about. Filled from the old
---     key, which was that slug.
+--   * firmware_store.platform_slug — added, the slug of the platform the file
+--     was downloaded for, by which Tender finds its system. Filled from the
+--     old key, which was that slug.
 --   * firmware_links.platform_slug → platform_folder: the store file's
 --     platform folder, by the same rule.
 --   * firmware_cache — rebuilt keyed (platform_folder, name), carrying the
@@ -21,12 +21,12 @@
 --   * roms.platform_fs_slug — added, nullable: the folder RomM keeps the
 --     game's platform in, written by the sync from the ROM's own payload. NULL
 --     until the next sync writes it.
---   * platform_sync_state.skip_revoked — set on every stamp, as 025 did. A
+--   * platform_sync_state.skip_revoked — set on every stamp, as 025 did (D47). A
 --     skipped platform's rows are rebuilt from the database, which holds no
 --     folder yet, so the first sync after the upgrade fetches each enabled
 --     platform in full and writes it; that apply stamps the platform again.
 --   * collection_sync_state — every stamp is dropped, as Force Full Sync's
---     clear does. A collection's skip rebuilds the members its run did not
+--     clear does (D47). A collection's skip rebuilds the members its run did not
 --     fetch through a platform from stored rows too, so a game only a
 --     collection delivers would keep no folder; without a stamp each
 --     collection is fetched in full once, and that apply stamps it again.

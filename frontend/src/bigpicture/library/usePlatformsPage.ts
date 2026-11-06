@@ -276,9 +276,9 @@ export function usePlatformsPage(): PlatformsPageState {
   // see. It answers ordering only; the slug itself is what binds an answer to
   // its platform.
   const readSeq = useRef<Map<string, number>>(new Map());
-  // The folder RomM keeps each listed platform in, by slug: every firmware call
-  // is addressed by it beside the slug, because Tender's firmware store is kept
-  // per folder. A ref, filled with the list, so the reads issued from it see it.
+  // The folder RomM keeps each listed platform in, by slug, for every firmware
+  // call (`api/backend.ts`). A ref, filled with the list, so the reads issued
+  // from it see it.
   const folders = useRef<Map<string, string>>(new Map());
   const folderOf = useCallback((slug: string) => folders.current.get(slug) ?? "", []);
   // Which platforms the walk has issued a read for. A ref, not state: the walk

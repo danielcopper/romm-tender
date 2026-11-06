@@ -5,7 +5,7 @@ resolves for a ROM. Created/updated atomically when a ROM is synced from RomM.
 ``platform_slug`` is a denormalized RomM slug, not a reference to a local
 Platform aggregate (none exists — see ADR-0003); the platform's display name is
 resolved live from RomM, not carried here. ``platform_fs_slug`` is the folder
-RomM keeps the platform in, which names one platform where two share a slug.
+RomM keeps the platform in.
 """
 
 from __future__ import annotations

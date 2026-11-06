@@ -822,8 +822,9 @@ export const applySteamInputSetting = endpoint<[], { success: boolean; message: 
 // platform at a time below, for every platform the page's own list shows.
 //
 // Every platform-scoped firmware call below takes the platform twice: its slug,
-// which the resolver is asked about, and the folder RomM keeps it in (its
-// `fs_slug`), which Tender's firmware store is kept by.
+// by which the backend finds its system and emulator pick, and the folder RomM
+// keeps it in (its `fs_slug`), which Tender's firmware store is kept by; an
+// empty folder is refused, never replaced by the slug.
 export const getFirmwareStatus = endpoint<[], FirmwareStatus>("get_firmware_status");
 export const getPlatformFirmwareStatus = endpoint<[string, string], PlatformFirmwareStatus>(
   "get_platform_firmware_status",

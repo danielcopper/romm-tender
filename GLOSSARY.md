@@ -621,12 +621,22 @@ and no edit distance or token scoring is involved.
 
 ### platform_slug (denormalized)
 
-The RomM platform identifier (e.g. `gba`, `psx`) carried as a plain string on the rows that need it (`roms`,
-`rom_installs`, `downloaded_bios`, `firmware_cache`). There is **no local `Platform` aggregate** — that was proposed in
-ADR-0001 and **dropped by [ADR-0003](docs/adr/0003-json-sqlite-persistence-boundary.md)** on YAGNI grounds. Platform
-display names resolve live from RomM; sync exclusion is the user-intent `enabled_platforms` config in `settings.json`,
-not per-platform local state. A `Platform` aggregate is reintroduced only when a concrete need lands (the
-standalone-emulator roadmap), not speculatively.
+RomM's slug for a platform's console (e.g. `gba`, `psx`), carried as a plain string on the rows that need it (`roms`,
+`rom_installs`, `downloaded_bios`, `firmware_store`, `firmware_cache`). Two RomM platforms can share one — RomM's
+built-in `gc` and `gamecube` are both `ngc` — so a slug does not name one platform; the **platform folder** does. There
+is **no local `Platform` aggregate** — that was proposed in ADR-0001 and **dropped by
+[ADR-0003](docs/adr/0003-json-sqlite-persistence-boundary.md)** on YAGNI grounds. Platform display names resolve live
+from RomM; sync exclusion is the user-intent `enabled_platforms` config in `settings.json`, not per-platform local
+state. A `Platform` aggregate is reintroduced only when a concrete need lands (the standalone-emulator roadmap), not
+speculatively.
+
+### Platform folder (fs_slug)
+
+The folder RomM keeps a platform's games in, its `fs_slug` (e.g. `gc`, `gamecube`). Unlike the **platform_slug** it
+names one platform, so what Tender keeps per platform rather than per console is keyed by it: the **firmware store**'s
+folders and records (`platform_folder`), and the folder a game's platform is in (`roms.platform_fs_slug`). It is never
+replaced by the slug where it is not known (#2223 D45). _Avoid_: calling a system's ROM folder on this machine the
+platform folder; that folder is the resolver's answer.
 
 ### Platform system
 

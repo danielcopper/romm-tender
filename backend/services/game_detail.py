@@ -402,8 +402,7 @@ class GameDetailService:
         check that raised. A ROM that is gone or has no platform
         ships neither a status nor the flag; nothing has been asked about it. A
         ROM whose platform's folder in RomM is not recorded yet — the sync
-        writes it — ships the flag with no status, as a check that raised: the
-        store is kept per folder, and the slug is never asked in its place.
+        writes it — ships the flag with no status, as a check that raised.
         The frontend reads this contract as ``BiosAnswer`` in
         ``frontend/src/api/backend.ts``.
         """

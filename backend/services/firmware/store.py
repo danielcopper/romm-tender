@@ -371,9 +371,11 @@ class FirmwareStore:
     ) -> frozenset[tuple[str, str]]:
         """Which *unwanted* links, by source and place, another platform still wants — or might.
 
-        Every platform whose ids are kept is asked — each one RomM listed at
-        the last sync, and any kept since — and every one Tender holds store
-        files for, each system read once. An emulator its source states is not
+        The platforms asked, each by its slug, are every one whose ids are
+        kept — each one RomM listed at the last sync, and any kept since — and
+        every one Tender holds store files for, less this platform's own slug,
+        so a platform that shares it is not asked; a platform whose system is
+        this platform's own adds nothing, and every other system is read once. An emulator its source states is not
         installed wants nothing, and so does one whose wants the resolver could
         not read, since it states no place for it; a sealed list's places are
         wanted. Where a platform or a source could not be read — no listing

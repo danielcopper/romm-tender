@@ -539,9 +539,9 @@ class FirmwareStatusReader:
     ) -> dict[str, Any]:
         """Check if RomM has firmware for this platform and whether it's downloaded.
 
-        *platform_slug* is the console the resolver is asked about, and
-        *platform_folder* the folder RomM keeps the platform in, whose store the
-        rows read.
+        *platform_slug* is the slug by which the system and the emulator pick
+        are found, and *platform_folder* the folder RomM keeps the platform in,
+        whose store the rows read.
 
         Returns BIOS status only. ``launching_emulator`` is the pre-resolved
         per-game PICK — the whole resolution rather than its identity, because

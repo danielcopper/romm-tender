@@ -1,12 +1,11 @@
 """Tender's firmware store: the BIOS files it downloads from RomM, and the links that reach them.
 
 A file lies in the store under the platform it was downloaded for and under the
-name RomM gives it, inside Tender's folder
-(``<folder>/bios/<the platform's folder in RomM>/<name>``): every file is kept as
-it comes, a file two platforms need lies in each of their folders, and two files
-with the same bytes both lie there. The platform's folder in RomM (``fs_slug``)
-names one platform where two may share a slug. An emulator reaches a
-store file through an absolute symlink at the place the resolver names for it.
+name RomM gives it, inside Tender's folder (``<folder>/bios/<the platform's
+folder in RomM>/<name>``): every file is kept as it comes, a file two platforms
+need lies in each of their folders, and two files with the same bytes both lie
+there. An emulator reaches a store file through an absolute symlink at the place
+the resolver names for it.
 
 Two records, two aggregates. :class:`StoredFirmware` is one store file, and it
 is what Tender's folder counts as recorded under it. :class:`FirmwareLink` is
@@ -44,8 +43,8 @@ class StoredFirmware:
     """One file in the firmware store, keyed by the platform folder it was downloaded for and its name in RomM.
 
     ``platform_folder`` is the folder RomM keeps the platform in (``fs_slug``),
-    and ``platform_slug`` that platform's slug, which the resolver is asked
-    about. ``folder`` is Tender's folder the file was written under, as the
+    and ``platform_slug`` that platform's slug, by which Tender finds its
+    system and its emulator pick. ``folder`` is Tender's folder the file was written under, as the
     folder service gave it; the store path is that folder joined with
     :data:`STORE_FOLDER`, the platform folder and the name. ``md5`` is the
     checksum RomM states and the file was checked against, ``size`` its size in

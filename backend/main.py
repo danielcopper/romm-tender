@@ -378,8 +378,7 @@ class Endpoints:
 
     @route
     async def check_platform_bios(self, platform_slug, platform_folder):
-        # Platform-level BIOS check (the frontend sends the slug and the
-        # platform's folder in RomM); no per-game core to thread, so the system
+        # Platform-level BIOS check: no per-game core to thread, so the system
         # default drives the filter.
         return await self._services.firmware_service.check_platform_bios(platform_slug, platform_folder)
 

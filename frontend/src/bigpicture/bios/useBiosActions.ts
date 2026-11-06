@@ -56,9 +56,8 @@ export interface BiosActionsConfig {
    *  one its rows were read for and its links placed for — or `null` for the
    *  platform's own system. */
   romId: number | null;
-  /** The folder RomM keeps *slug*'s platform in, which every press is addressed
-   *  by beside the slug: Tender's firmware store is kept per folder. `""` where
-   *  it is not known, which the backend refuses rather than taking the slug. */
+  /** The folder RomM keeps *slug*'s platform in, which every press passes beside
+   *  the slug (`api/backend.ts`); `""` where it is not known. */
   folderOf: (slug: string) => string;
 }
 

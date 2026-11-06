@@ -78,8 +78,8 @@ export interface BiosTabStateInput {
   platformName?: string;
   /** The game's platform, which every press acts on. */
   platformSlug?: string;
-  /** The folder RomM keeps that platform in, which every press is addressed by
-   *  beside the slug; `""` while it is not known, which the backend refuses. */
+  /** The folder RomM keeps that platform in, which every press passes beside the
+   *  slug; `""` while it is not known. */
   platformFolder?: string | undefined;
   /** The game every press is for. */
   romId?: number | null;

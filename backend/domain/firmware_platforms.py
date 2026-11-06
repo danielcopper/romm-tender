@@ -28,13 +28,12 @@ if TYPE_CHECKING:
 def library_firmware(platforms: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Every firmware file the platform list carries, each with its platform's folder and slug.
 
-    The platform is the one whose ``id`` the file's ``platform_id`` names; its
+    The platform is the one whose ``id`` the file's ``platform_id`` names: its
     folder (``platform_folder``) is the one RomM keeps it in (``fs_slug``), and
-    its slug is ``platform_slug``. The folder names one platform where two
-    share a slug. A file RomM marks ``missing_from_fs`` is left out: the server
-    lists it while its bytes are gone. So is a file whose ``platform_id`` names
-    no platform of the list, or one with no slug or no folder, which has no
-    platform to belong to.
+    its slug is ``platform_slug``. A file RomM marks ``missing_from_fs`` is left
+    out: the server lists it while its bytes are gone. So is a file whose
+    ``platform_id`` names no platform of the list, or one with no slug or no
+    folder, which has no platform to belong to.
     """
     listed = list(platforms)
     slugs = _slugs_by_id(listed)

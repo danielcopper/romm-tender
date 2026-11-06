@@ -2787,9 +2787,10 @@ class Test042AddRomInstallFetchedSize:
 class Test043KeyFirmwareStoreByPlatformFolder:
     """043 — the firmware store is keyed by the platform's folder in RomM, and a game records its platform's folder.
 
-    #2734, #2223 D25, D45, D46: the key column is renamed and keeps its values,
-    the record gains the slug, the cache is rebuilt by folder and starts
-    empty, and roms gain a nullable ``platform_fs_slug``.
+    #2734, #2223 D25, D45, D46, D47: the key column is renamed and keeps its
+    values, the record gains the slug, the cache is rebuilt by folder and
+    starts empty, roms gain a nullable ``platform_fs_slug``, every platform
+    stamp is revoked and every collection stamp dropped.
     """
 
     @staticmethod
