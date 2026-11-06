@@ -11,6 +11,11 @@ export default defineConfig({
       // test gets; both answers are reached by passing the kind explicitly,
       // never by re-aliasing this.
       "virtual:tender-bundle-kind": fileURLToPath(new URL("./src/test-utils/bundleKindUnderTest.ts", import.meta.url)),
+      // The same for the desktop surface's stamp; why its value is `true` is
+      // the module's own.
+      "virtual:tender-desktop-surface": fileURLToPath(
+        new URL("./src/test-utils/desktopSurfaceUnderTest.ts", import.meta.url),
+      ),
     },
   },
   test: {

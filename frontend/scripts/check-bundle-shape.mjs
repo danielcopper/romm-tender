@@ -80,6 +80,47 @@ const count = (text, needle) => text.split(needle).length - 1;
  */
 const stampedKind = (text) => /const BUNDLE_KIND\w* = "(standalone|coexistence)";/.exec(text)?.[1] ?? null;
 
+/**
+ * Whether a panel bundle says the desktop surface is in it, read off the
+ * artefact: `true`, `false`, or `null` for a bundle that carries no such stamp.
+ *
+ * `rollup.config.js` serves `virtual:tender-desktop-surface` per panel build,
+ * and the start-up check asks after the Steam internals only the desktop
+ * surface reaches where it says `true` (#2509 D12). A release bundle stamped
+ * `true` would tell every user about a surface their build does not have.
+ */
+const stampedDesktopSurface = (text) => {
+  const found = /const DESKTOP_SURFACE\w* = (true|false);/.exec(text)?.[1];
+  return found === undefined ? null : found === "true";
+};
+
+/**
+ * What only the desktop surface's own search over Steam's modules spells
+ * (`src/desktop/desktopWindow.ts`, the module for `createRoot`): a release
+ * bundle carrying it ships the search the stamp is there to leave out.
+ */
+const DESKTOP_SEARCH = "createRoot";
+
+/** The desktop surface's stamp and search in one release panel bundle, as findings. */
+function desktopSurfaceFindings(name, source) {
+  const stamp = stampedDesktopSurface(source);
+  const found = [];
+  if (stamp !== false) {
+    found.push(
+      `${name} ${stamp === null ? "carries no desktop-surface stamp" : "says the desktop surface is in it"}. ` +
+        "A release build carries no desktop surface, so the start-up check would ask after what only that " +
+        "surface reaches and tell the user about a surface their build does not have.",
+    );
+  }
+  if (source.includes(DESKTOP_SEARCH)) {
+    found.push(
+      `${name} carries the desktop surface's search for \`${DESKTOP_SEARCH}\`, which only \`pnpm build:desktop\` ` +
+        "may ship.",
+    );
+  }
+  return { stamp, found };
+}
+
 /** How a wrong stamp reads in a finding — a stamp naming the other bundle, or none at all. */
 const stampSays = (kind) => (kind === null ? "carries no bundle stamp at all" : `says it is the ${kind} bundle`);
 
@@ -176,8 +217,10 @@ const report = [];
   const hits = implementationHits(source);
   const dfl = count(source, "DFL.");
   const kind = stampedKind(source);
+  const desktop = desktopSurfaceFindings("index.js", source);
+  findings.push(...desktop.found);
   report.push(
-    `index.js (standalone): ${Buffer.byteLength(source)} B, ${hits.length}/${DECKY_UI_IMPLEMENTATION.length} @decky/ui implementation strings, ${dfl} DFL., stamped ${kind ?? "NOTHING"}`,
+    `index.js (standalone): ${Buffer.byteLength(source)} B, ${hits.length}/${DECKY_UI_IMPLEMENTATION.length} @decky/ui implementation strings, ${dfl} DFL., stamped ${kind ?? "NOTHING"}, desktop surface ${desktop.stamp ?? "UNSTAMPED"}`,
   );
   if (kind !== "standalone") {
     findings.push(
@@ -207,8 +250,10 @@ const report = [];
   const hits = implementationHits(source);
   const dfl = count(source, "DFL.");
   const kind = stampedKind(source);
+  const desktop = desktopSurfaceFindings("index-coexistence.js", source);
+  findings.push(...desktop.found);
   report.push(
-    `index-coexistence.js: ${Buffer.byteLength(source)} B, ${hits.length}/${DECKY_UI_IMPLEMENTATION.length} @decky/ui implementation strings, ${dfl} DFL., stamped ${kind ?? "NOTHING"}`,
+    `index-coexistence.js: ${Buffer.byteLength(source)} B, ${hits.length}/${DECKY_UI_IMPLEMENTATION.length} @decky/ui implementation strings, ${dfl} DFL., stamped ${kind ?? "NOTHING"}, desktop surface ${desktop.stamp ?? "UNSTAMPED"}`,
   );
   if (kind !== "coexistence") {
     findings.push(
