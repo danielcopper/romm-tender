@@ -65,8 +65,9 @@ The ``**extras`` beside a refusal are its details — the keyword arguments it
 was raised with, such as the ``path`` of ``file_present``. A payload's empty
 defaults are not sent beside a failure, because the panel reads a payload only
 on success — with one exception: every save-sync refusal carries
-``synced=0``, and the sweep's also ``conflicts=0`` (#2205 D2). A partial
-failure's extras are what was done.
+``synced`` — ``0``, or what a stopped sync had moved by then — and the
+sweep's also ``conflicts=0`` (#2205 D2). A partial failure's extras are what
+was done.
 
 Two carve-outs, which carry no ``success`` key, so the gate passes them:
 

@@ -3011,8 +3011,8 @@ class TestSyncPathsAbortWhenDeviceUnregisterable:
 
         assert (refused.value.reason, refused.value.message) == ("device_not_registered", DEVICE_NOT_REGISTERED)
         assert refused.value.details == {"synced": 0}
-        # Registration was attempted and yielded no id — the abort is the device
-        # gate's, not an upstream guard's.
+        # Registration was attempted and yielded no id — the abort is the
+        # device-id entry's, not an upstream guard's.
         assert any(c[0] == "register_device" for c in fake.call_log)
         assert _get_device_id(svc) is None
         # The server save the registered twin downloads was never even queried.
