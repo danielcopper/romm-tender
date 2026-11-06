@@ -154,7 +154,7 @@ async def _compose(harness) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     overview = await harness.endpoints.get_firmware_status()
     entries: list[dict[str, Any]] = []
     for platform in listed["platforms"]:
-        answer = await harness.endpoints.get_platform_firmware_status(platform["slug"])
+        answer = await harness.endpoints.get_platform_firmware_status(platform["slug"], platform["fs_slug"])
         assert answer["success"] is True
         entry = answer["platform"]
         assert entry["platform_slug"] == platform["slug"]
@@ -165,7 +165,8 @@ async def _compose(harness) -> tuple[dict[str, Any], list[dict[str, Any]]]:
 def _list_platforms(harness, *slugs: str) -> None:
     """RomM's platforms, each holding a ROM so the page lists it."""
     harness.romm.platforms = [
-        {"id": index, "name": slug, "slug": slug, "rom_count": 1} for index, slug in enumerate(slugs, start=1)
+        {"id": index, "name": slug, "slug": slug, "fs_slug": slug, "rom_count": 1}
+        for index, slug in enumerate(slugs, start=1)
     ]
 
 

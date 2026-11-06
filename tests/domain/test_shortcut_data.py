@@ -73,6 +73,12 @@ class TestBuildShortcutsData:
         result = build_shortcuts_data(roms, _LAUNCHER)
         assert result[0]["fs_size_bytes"] == 3_145_728
 
+    def test_carries_the_folder_romm_keeps_the_platform_in(self):
+        """The commit records it on the Rom; the game page's BIOS tab reads the store by it (#2223 D45)."""
+        roms = [{"id": 1, "name": "Game A", "platform_slug": "ngc", "platform_fs_slug": "gc"}]
+        result = build_shortcuts_data(roms, _LAUNCHER)
+        assert result[0]["platform_fs_slug"] == "gc"
+
     def test_missing_fs_size_bytes_is_none(self):
         # A raw ROM without the key builds None — "size unknown".
         roms = [{"id": 1, "name": "Game A"}]

@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
 def _stored(platform: str, file_name: str, *, folder: str = "/home/deck/Tender") -> StoredFirmware:
     return StoredFirmware.mark_downloaded(
+        platform_folder=platform,
         platform_slug=platform,
         file_name=file_name,
         folder=folder,
@@ -29,7 +30,7 @@ def _link(place: str, platform: str = "saturn", file_name: str = "sega_101.bin")
     return FirmwareLink.mark_placed(
         place=place,
         target=f"/home/deck/Tender/bios/{platform}/{file_name}",
-        platform_slug=platform,
+        platform_folder=platform,
         file_name=file_name,
         source="retrodeck",
         placed_at="2026-10-21T20:00:00",
@@ -47,7 +48,7 @@ class TestTheStore:
         uow.firmware_store.save(_stored("gb", "gb_bios.bin"))
         uow.firmware_store.save(_stored("gbc", "gb_bios.bin"))
 
-        assert sorted(f.platform_slug for f in uow.firmware_store.iter_all()) == ["gb", "gbc"]
+        assert sorted(f.platform_folder for f in uow.firmware_store.iter_all()) == ["gb", "gbc"]
 
     def test_delete_removes_one_and_is_idempotent(self, uow: SqliteUnitOfWork):
         uow.firmware_store.save(_stored("saturn", "sega_101.bin"))
@@ -67,6 +68,7 @@ class TestTheStore:
     def test_refuses_a_file_without_a_checksum(self, uow: SqliteUnitOfWork):
         stored = _stored("saturn", "sega_101.bin")
         stored_without = StoredFirmware(
+            platform_folder=stored.platform_folder,
             platform_slug=stored.platform_slug,
             file_name=stored.file_name,
             folder=stored.folder,

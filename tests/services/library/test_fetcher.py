@@ -2412,7 +2412,7 @@ class TestGetPlatformsCarriesNoDerivedCount:
         assert result["success"] is True
         entry = result["platforms"][0]
         assert entry["rom_count"] == 4
-        assert set(entry) == {"id", "name", "slug", "rom_count", "sync_enabled"}
+        assert set(entry) == {"id", "name", "slug", "fs_slug", "rom_count", "sync_enabled"}
 
     @pytest.mark.asyncio
     async def test_the_platform_list_needs_no_database_at_all(self, make_library, fake_romm_api):

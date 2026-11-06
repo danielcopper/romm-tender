@@ -39,8 +39,9 @@ def _rewind_to_v4(db_path: str) -> None:
     scalar table under its pre-rename name ``rom_save_states``, 019's
     collection_sync_state table absent, 020's fetch-generation columns
     absent, 021's ``fs_size_bytes`` column absent, 023's ``launchable``
-    column absent, 024's answered_save_directories table absent, and 042's
-    ``fetched_size_bytes`` column absent) so the
+    column absent, 024's answered_save_directories table absent, 042's
+    ``fetched_size_bytes`` column absent, and 043's ``platform_fs_slug`` column
+    absent) so the
     sequential 005→…→024 re-run applies cleanly.
     """
     conn = sqlite3.connect(db_path, isolation_level=None)
@@ -100,6 +101,8 @@ def _rewind_to_v4(db_path: str) -> None:
         conn.execute("ALTER TABLE rom_save_files DROP COLUMN last_sync_server_hash")
         # Reverse 042 so its ADD COLUMN re-applies instead of duplicating.
         conn.execute("ALTER TABLE rom_installs DROP COLUMN fetched_size_bytes")
+        # Reverse 043's roms column so its ADD COLUMN re-applies instead of duplicating.
+        conn.execute("ALTER TABLE roms DROP COLUMN platform_fs_slug")
         # Reverse 018 so 005's `UPDATE rom_save_states` finds the table under its
         # pre-rename name and 018 re-applies the rename cleanly.
         conn.execute("ALTER TABLE rom_save_sync_states RENAME TO rom_save_states")

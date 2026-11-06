@@ -212,6 +212,9 @@ export interface CachedGameDetail extends BiosAnswer {
   rom_id?: number;
   rom_name?: string;
   platform_slug?: string;
+  /** The folder RomM keeps the game's platform in, as the last sync recorded it;
+   *  `null` until a sync has. The BIOS tab's presses are addressed by it. */
+  platform_fs_slug?: string | null;
   platform_name?: string;
   installed?: boolean;
   save_sync_enabled?: boolean;
@@ -817,11 +820,17 @@ export const applySteamInputSetting = endpoint<[], { success: boolean; message: 
 // Whether RomM's firmware listing could be read — nothing about any platform.
 // A platform's state costs a live per-system reading, so it is asked for one
 // platform at a time below, for every platform the page's own list shows.
+//
+// Every platform-scoped firmware call below takes the platform twice: its slug,
+// which the resolver is asked about, and the folder RomM keeps it in (its
+// `fs_slug`), which Tender's firmware store is kept by.
 export const getFirmwareStatus = endpoint<[], FirmwareStatus>("get_firmware_status");
-export const getPlatformFirmwareStatus = endpoint<[string], PlatformFirmwareStatus>("get_platform_firmware_status");
+export const getPlatformFirmwareStatus = endpoint<[string, string], PlatformFirmwareStatus>(
+  "get_platform_firmware_status",
+);
 // The ROM is the game whose page started the download, whose install record names
 // the system its files are linked for; `null` from the platform page.
-export const downloadAllFirmware = endpoint<[string, number | null], FirmwareDownloadResult | EndpointFailure>(
+export const downloadAllFirmware = endpoint<[string, string, number | null], FirmwareDownloadResult | EndpointFailure>(
   "download_all_firmware",
 );
 // The emulator is the identity the page shows — the files fetched are what IT
@@ -830,7 +839,7 @@ export const downloadAllFirmware = endpoint<[string, number | null], FirmwareDow
 // game whose page asked, whose install record names the system the requirement is
 // read and linked for; `null` from the platform page.
 export const downloadRequiredFirmware = endpoint<
-  [string, string | null, number | null],
+  [string, string, string | null, number | null],
   FirmwareDownloadResult | EndpointFailure
 >("download_required_firmware");
 // One row's Download button. Addressed by the file's name in RomM and by the id of
@@ -841,19 +850,21 @@ export const downloadRequiredFirmware = endpoint<
 // system the game's install record names where a game's page asked (the ROM),
 // `null` from the platform page.
 export const downloadPlatformFirmwareFile = endpoint<
-  [string, string, number | null, number | null],
+  [string, string, string, number | null, number | null],
   FirmwareDownloadResult | EndpointFailure
 >("download_platform_firmware_file");
 // Brings a platform's links up to date in every enabled source and downloads
 // nothing; the ROM is the game whose page asked, whose install record names the
 // system, `null` from the platform page. Asked after the page is shown, and after
 // an emulator switch.
-export const updateBiosLinks = endpoint<[string, number | null], BiosLinkResult | EndpointFailure>("update_bios_links");
+export const updateBiosLinks = endpoint<[string, string, number | null], BiosLinkResult | EndpointFailure>(
+  "update_bios_links",
+);
 // "Replace…" on a row: the file at the place goes to the backup folder and
 // Tender's copy is linked there. Addressed by the place the row named, read for
 // the system the game's install record names where a game's page asked (the
 // ROM), `null` from the platform page.
-export const replaceBiosFile = endpoint<[string, string, number | null], BiosReplaceResult | EndpointFailure>(
+export const replaceBiosFile = endpoint<[string, string, string, number | null], BiosReplaceResult | EndpointFailure>(
   "replace_bios_file",
 );
 // What the resolver knows a library file's content as, by its MD5 — slow for
@@ -861,7 +872,7 @@ export const replaceBiosFile = endpoint<[string, string, number | null], BiosRep
 export const identifyLibraryFirmware = endpoint<[string], FirmwareIdentification | EndpointFailure>(
   "identify_library_firmware",
 );
-export const checkPlatformBios = endpoint<[string], BiosStatus>("check_platform_bios");
+export const checkPlatformBios = endpoint<[string, string], BiosStatus>("check_platform_bios");
 export const getBiosStatus = endpoint<[number], BiosAnswer>("get_bios_status");
 // A per-platform core change touches no shortcut: the next start of each game
 // that follows the platform asks with it.
@@ -1869,13 +1880,13 @@ export const countPlatformSaves = endpoint<[string], { count: number }>("count_p
 export type BiosDeleteResult =
   | { success: true; deleted_count: number; message: string; kept?: BiosKeptLink[] }
   | (EndpointFailure & { deleted_count?: number });
-export const deletePlatformBios = endpoint<[string], BiosDeleteResult>("delete_platform_bios");
+export const deletePlatformBios = endpoint<[string, string], BiosDeleteResult>("delete_platform_bios");
 /** One row's Delete button — the per-file twin of `deletePlatformBios`, sharing
  *  its authorisation rather than restating it. Addressed by the file's name in
  *  RomM (`delete_name`): the store file and every link of Tender's to it go, or
  *  an older download at the path its record holds. A name Tender holds nothing
  *  under removes nothing. Offer it only where the row says `deletable`. */
-export const deleteBiosFile = endpoint<[string, string], BiosDeleteResult>("delete_bios_file");
+export const deleteBiosFile = endpoint<[string, string, string], BiosDeleteResult>("delete_bios_file");
 
 // Save version history endpoints
 export const savesListFileVersions = endpoint<[number, string, string], ListFileVersionsResult>(

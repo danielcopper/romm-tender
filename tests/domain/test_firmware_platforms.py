@@ -81,6 +81,7 @@ class TestLibraryFirmware:
                 "platform_id": 1,
                 "md5_hash": "abc",
                 "file_size_bytes": 3,
+                "platform_folder": "psx",
                 "platform_slug": "psx",
             }
         ]

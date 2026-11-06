@@ -28,7 +28,7 @@ def _seed_duckstation(harness, *images: str) -> None:
 async def test_the_platform_reads_not_met_with_no_file_to_show(harness):
     _seed_duckstation(harness)
 
-    answer = await harness.endpoints.get_platform_firmware_status("psx")
+    answer = await harness.endpoints.get_platform_firmware_status("psx", "psx")
 
     entry = answer["platform"]
     assert entry is not None

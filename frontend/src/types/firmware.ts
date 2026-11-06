@@ -215,10 +215,10 @@ interface FirmwareVerdict {
   /** What lies at the row's place — see {@link PlaceLink}. `null` for a library
    *  row, which has no place. */
   link?: PlaceLink | null;
-  /** The platform whose store copy a link of Tender's at the place points at,
-   *  where that is another platform's (`link: "linked_elsewhere"`). */
+  /** The folder in RomM of the platform whose store copy a link of Tender's at
+   *  the place points at, where that is another platform's (`link: "linked_elsewhere"`). */
   linked_for?: string | null;
-  /** The name the platform `linked_for` slugs is shown under, as the library sync last recorded it. */
+  /** The name the platform `linked_for` names is shown under, as the library sync last recorded it. */
   linked_for_name?: string | null;
   /** Why no link may go to the row's place, `null` where one may — see
    *  {@link PlaceRefusal}. */

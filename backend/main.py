@@ -340,55 +340,60 @@ class Endpoints:
         return await self._services.firmware_service.get_firmware_status()
 
     @route
-    async def get_platform_firmware_status(self, platform_slug):
+    async def get_platform_firmware_status(self, platform_slug, platform_folder):
         # One platform's BIOS state, which is a live per-system reading the
         # overview above deliberately does not pay. The page walks its own list
         # calling this; the order, and when to stop, are the caller's.
-        return await self._services.firmware_service.get_platform_firmware_status(platform_slug)
+        return await self._services.firmware_service.get_platform_firmware_status(platform_slug, platform_folder)
 
     @route
-    async def download_all_firmware(self, platform_slug, rom_id):
-        return await self._services.firmware_service.download_all_firmware(platform_slug, rom_id)
+    async def download_all_firmware(self, platform_slug, platform_folder, rom_id):
+        return await self._services.firmware_service.download_all_firmware(platform_slug, platform_folder, rom_id)
 
     @route
-    async def download_required_firmware(self, platform_slug, emulator, rom_id=None):
-        return await self._services.firmware_service.download_required_firmware(platform_slug, emulator, rom_id)
-
-    @route
-    async def download_platform_firmware_file(self, platform_slug, file_name, firmware_id=None, rom_id=None):
-        return await self._services.firmware_service.download_platform_firmware_file(
-            platform_slug, file_name, firmware_id, rom_id
+    async def download_required_firmware(self, platform_slug, platform_folder, emulator, rom_id=None):
+        return await self._services.firmware_service.download_required_firmware(
+            platform_slug, platform_folder, emulator, rom_id
         )
 
     @route
-    async def update_bios_links(self, platform_slug, rom_id):
-        return await self._services.firmware_service.update_bios_links(platform_slug, rom_id)
+    async def download_platform_firmware_file(
+        self, platform_slug, platform_folder, file_name, firmware_id=None, rom_id=None
+    ):
+        return await self._services.firmware_service.download_platform_firmware_file(
+            platform_slug, platform_folder, file_name, firmware_id, rom_id
+        )
 
     @route
-    async def replace_bios_file(self, platform_slug, place, rom_id=None):
-        return await self._services.firmware_service.replace_bios_file(platform_slug, place, rom_id)
+    async def update_bios_links(self, platform_slug, platform_folder, rom_id):
+        return await self._services.firmware_service.update_bios_links(platform_slug, platform_folder, rom_id)
+
+    @route
+    async def replace_bios_file(self, platform_slug, platform_folder, place, rom_id=None):
+        return await self._services.firmware_service.replace_bios_file(platform_slug, platform_folder, place, rom_id)
 
     @route
     async def identify_library_firmware(self, md5):
         return await self._services.firmware_service.identify_library_firmware(md5)
 
     @route
-    async def check_platform_bios(self, platform_slug):
-        # Platform-level BIOS check (the frontend sends only the slug);
-        # no per-game core to thread, so the system default drives the filter.
-        return await self._services.firmware_service.check_platform_bios(platform_slug)
+    async def check_platform_bios(self, platform_slug, platform_folder):
+        # Platform-level BIOS check (the frontend sends the slug and the
+        # platform's folder in RomM); no per-game core to thread, so the system
+        # default drives the filter.
+        return await self._services.firmware_service.check_platform_bios(platform_slug, platform_folder)
 
     @route
     async def get_bios_status(self, rom_id):
         return await self._services.game_detail_service.get_bios_status(rom_id)
 
     @route
-    async def delete_platform_bios(self, platform_slug):
-        return await self._services.firmware_service.delete_platform_bios(platform_slug)
+    async def delete_platform_bios(self, platform_slug, platform_folder):
+        return await self._services.firmware_service.delete_platform_bios(platform_slug, platform_folder)
 
     @route
-    async def delete_bios_file(self, platform_slug, file_name):
-        return await self._services.firmware_service.delete_bios_file(platform_slug, file_name)
+    async def delete_bios_file(self, platform_slug, platform_folder, file_name):
+        return await self._services.firmware_service.delete_bios_file(platform_slug, platform_folder, file_name)
 
     # ── Sync delegation to LibraryService ─────────────────────
 

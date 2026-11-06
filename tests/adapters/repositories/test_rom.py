@@ -73,6 +73,32 @@ class TestDeliveredThrough:
         assert loaded.delivered_through == route
 
 
+class TestPlatformFolder:
+    def test_the_folder_romm_keeps_the_platform_in_round_trips(self, uow: SqliteUnitOfWork):
+        uow.roms.save(Rom.synced(**_SYNCED, platform_fs_slug="gc"))
+
+        loaded = uow.roms.get(42)
+        assert loaded is not None
+        assert loaded.platform_fs_slug == "gc"
+
+    def test_a_row_the_sync_has_not_written_one_for_holds_none(self, uow: SqliteUnitOfWork):
+        uow.roms.save(Rom.synced(**_SYNCED, platform_fs_slug=""))
+
+        loaded = uow.roms.get(42)
+        assert loaded is not None
+        assert loaded.platform_fs_slug is None
+
+
+_SYNCED = {
+    "rom_id": 42,
+    "platform_slug": "ngc",
+    "name": "Game",
+    "fs_name": "game.iso",
+    "shortcut_app_id": 1000,
+    "synced_at": "2026-01-01T00:00:00Z",
+}
+
+
 class TestGoneFromRomm:
     @pytest.mark.parametrize("evidence", ["not_found", "delisted", None])
     def test_round_trips(self, uow: SqliteUnitOfWork, evidence):

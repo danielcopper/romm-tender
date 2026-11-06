@@ -276,6 +276,11 @@ export function usePlatformsPage(): PlatformsPageState {
   // see. It answers ordering only; the slug itself is what binds an answer to
   // its platform.
   const readSeq = useRef<Map<string, number>>(new Map());
+  // The folder RomM keeps each listed platform in, by slug: every firmware call
+  // is addressed by it beside the slug, because Tender's firmware store is kept
+  // per folder. A ref, filled with the list, so the reads issued from it see it.
+  const folders = useRef<Map<string, string>>(new Map());
+  const folderOf = useCallback((slug: string) => folders.current.get(slug) ?? "", []);
   // Which platforms the walk has issued a read for. A ref, not state: the walk
   // picks the next platform between awaits and must see its own progress
   // immediately, before any answer has landed.
@@ -291,7 +296,7 @@ export function usePlatformsPage(): PlatformsPageState {
       const seq = (readSeq.current.get(slug) ?? 0) + 1;
       readSeq.current.set(slug, seq);
       try {
-        const result = await getPlatformFirmwareStatus(slug);
+        const result = await getPlatformFirmwareStatus(slug, folderOf(slug));
         if (!accept(slug, seq)) return;
         if (!result.success) {
           // Unreachable today — the endpoint always answers success — but a
@@ -317,9 +322,9 @@ export function usePlatformsPage(): PlatformsPageState {
         setReadFailed((prev) => ({ ...prev, [slug]: true }));
       }
     },
-    [accept],
+    [accept, folderOf],
   );
-  const bios = useBiosActions({ setBusy: setBusySlug, setStatus, reread: readPlatform, romId: null });
+  const bios = useBiosActions({ setBusy: setBusySlug, setStatus, reread: readPlatform, romId: null, folderOf });
   const { noteLinkFailures } = bios;
 
   // What a failure here leaves offered: `docs/architecture/qam-panel.md`,
@@ -462,6 +467,7 @@ export function usePlatformsPage(): PlatformsPageState {
           return;
         }
         syncWrites.seed(result.platforms.map((p) => [p.slug, p.sync_enabled]));
+        folders.current = new Map(result.platforms.map((p) => [p.slug, p.fs_slug]));
         setPlatforms(result.platforms);
         const frozen = freezeGroups(result.platforms);
         setGroups(frozen);
@@ -610,7 +616,7 @@ export function usePlatformsPage(): PlatformsPageState {
   const updateLinks = useCallback(
     async (slug: string) => {
       try {
-        const result = await updateBiosLinks(slug, null);
+        const result = await updateBiosLinks(slug, folderOf(slug), null);
         if (!alive.current || !result.success) return;
         noteLinkFailures(slug, result.link_failures);
         const said = placedSentence(result);
@@ -623,7 +629,7 @@ export function usePlatformsPage(): PlatformsPageState {
         logWarn(`Failed to bring the BIOS links for ${slug} up to date: ${e}`);
       }
     },
-    [noteLinkFailures, readPlatform],
+    [folderOf, noteLinkFailures, readPlatform],
   );
 
   // A platform's links are brought up to date the first time its pane is shown

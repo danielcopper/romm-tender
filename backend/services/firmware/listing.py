@@ -92,6 +92,7 @@ class FirmwareListing:
         return {
             "id": entry.id,
             "file_name": entry.name,
+            "platform_folder": entry.platform_folder,
             "platform_slug": entry.platform_slug,
             "file_size_bytes": entry.file_size_bytes,
             "md5_hash": entry.md5_hash,
@@ -109,6 +110,7 @@ class FirmwareListing:
             FirmwareCacheEntry.cached(
                 id=fw.get("id"),
                 name=fw.get("file_name", ""),
+                platform_folder=fw["platform_folder"],
                 platform_slug=fw["platform_slug"],
                 file_size_bytes=fw.get("file_size_bytes", 0),
                 cached_at=self._firmware_cache_epoch,
@@ -123,7 +125,7 @@ class FirmwareListing:
             self._logger.warning(f"Failed to persist firmware cache: {e}")
 
     def get_firmware_list(self) -> list[dict[str, Any]]:
-        """Return the library's firmware, each row with its ``platform_slug``, using the cache while its TTL lasts.
+        """Return the library's firmware, each row with its ``platform_folder`` and ``platform_slug``, cached for a TTL.
 
         TTL is checked against the wall-clock cache epoch so a cache
         restored from disk after a backend restart still expires.

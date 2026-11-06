@@ -10,6 +10,8 @@ export interface PlatformSyncSetting {
   id: number;
   name: string;
   slug: string;
+  /** The folder RomM keeps the platform in, which Tender's firmware store is kept by. */
+  fs_slug: string;
   rom_count: number;
   sync_enabled: boolean;
 }

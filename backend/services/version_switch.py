@@ -882,6 +882,7 @@ class VersionSwitchService:
                 # before the next sync backfills it.
                 fs_size_bytes=target_dict.get("fs_size_bytes"),
                 has_file_on_disk=has_file_on_romm(target_dict),
+                platform_fs_slug=target_dict.get("platform_fs_slug"),
             )
         except (ValueError, KeyError) as e:
             self._logger.warning(f"Version switch: could not build target row: {e}")

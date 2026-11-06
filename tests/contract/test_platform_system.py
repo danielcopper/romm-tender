@@ -54,7 +54,7 @@ async def test_the_download_the_emulator_choice_and_the_bios_answer_ask_one_syst
 
     core = await harness.endpoints.get_system_core_info(_SLUG)
     game_core = await harness.endpoints.get_platform_core_info(5)
-    bios = await harness.endpoints.get_platform_firmware_status(_SLUG)
+    bios = await harness.endpoints.get_platform_firmware_status(_SLUG, _SLUG)
     started = await harness.endpoints.start_download(5)
     await _drain_background_tasks()
 

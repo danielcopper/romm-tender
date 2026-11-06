@@ -206,6 +206,10 @@ class SyncReporter:
                 version=VersionMetadata.from_mapping(built),
                 fs_size_bytes=built.get("fs_size_bytes"),
                 has_file_on_disk=has_file_on_romm(built),
+                # A dict the skip rebuilt from stored rows carries no folder,
+                # so the stored one stands.
+                platform_fs_slug=built.get("platform_fs_slug")
+                or (existing.platform_fs_slug if existing is not None else None),
             )
         except ValueError as e:
             self._logger.warning(f"Skipping invalid ROM {rom_id} during commit: {e}")

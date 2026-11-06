@@ -189,6 +189,7 @@ class LibraryFetcher:
                 "id": p["id"],
                 "name": p.get("name", ""),
                 "slug": p.get("slug", ""),
+                "fs_slug": p.get("fs_slug", ""),
                 "rom_count": rom_count,
                 "sync_enabled": resolve_sync_enabled(enabled, pid),
             }

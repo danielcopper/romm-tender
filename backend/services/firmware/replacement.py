@@ -65,8 +65,10 @@ class FirmwareReplacer:
         self._loop = config.loop
         self._logger = config.logger
 
-    async def replace_bios_file(self, platform_slug: str, place: str, system: str | None) -> dict[str, Any]:
-        """Replace the file at *place* with Tender's copy for *platform_slug*; answer where the old file went.
+    async def replace_bios_file(
+        self, platform_slug: str, platform_folder: str, place: str, system: str | None
+    ) -> dict[str, Any]:
+        """Replace the file at *place* with Tender's copy in *platform_folder*'s store; answer where the old file went.
 
         *system* is the one the page's rows were read for, whose reading names the
         place, and the one the links are brought up to date for.
@@ -83,8 +85,12 @@ class FirmwareReplacer:
         """
         firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
         firmware, source = await self._loop.run_in_executor(None, self._replaceable, system, place, firmware_list)
-        backup = await self._loop.run_in_executor(None, self._replace_io, platform_slug, place, firmware, source)
-        links = await self._loop.run_in_executor(None, self._store.do_update_links, platform_slug, system)
+        backup = await self._loop.run_in_executor(
+            None, self._replace_io, platform_slug, platform_folder, place, firmware, source
+        )
+        links = await self._loop.run_in_executor(
+            None, self._store.do_update_links, platform_slug, platform_folder, system
+        )
         self._listing.invalidate()
         self._logger.info(f"Replaced {place} with Tender's copy; the old file is at {backup}")
         return {"success": True, "backup_path": backup, **links.payload(), "placed": links.placed + 1}
@@ -117,19 +123,21 @@ class FirmwareReplacer:
             raise _not_replaceable(place)
         return next(fw for fw in firmware_list if fw.get("id") == file.firmware_id), catalogue.source or ""
 
-    def _replace_io(self, platform_slug: str, place: str, firmware: dict[str, Any], source: str) -> str:
+    def _replace_io(
+        self, platform_slug: str, platform_folder: str, place: str, firmware: dict[str, Any], source: str
+    ) -> str:
         """Fetch and check the copy, move the file in the way aside, and link in its place. Blocking."""
-        self._store.do_fetch(platform_slug, firmware)
+        self._store.do_fetch(platform_slug, platform_folder, firmware)
         records = self._store.do_read_records()
         copy = next(
-            (c for c in self._store.do_copies(records, platform_slug) if c.file_name == firmware.get("file_name")),
+            (c for c in self._store.do_copies(records, platform_folder) if c.file_name == firmware.get("file_name")),
             None,
         )
         if copy is None or not copy.present:
             raise _not_replaceable(place)
         backup = self._store.do_back_up(place)
         try:
-            self._store.do_place_link(place, copy.path, platform_slug, source)
+            self._store.do_place_link(place, copy.path, platform_folder, source)
         except OSError as exc:
             failed = f"Could not place a link at {place}: {exc.strerror or exc}."
             try:

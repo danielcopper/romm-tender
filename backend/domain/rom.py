@@ -4,7 +4,8 @@ Identity, the Steam-shortcut binding, and the external-service ids Tender
 resolves for a ROM. Created/updated atomically when a ROM is synced from RomM.
 ``platform_slug`` is a denormalized RomM slug, not a reference to a local
 Platform aggregate (none exists — see ADR-0003); the platform's display name is
-resolved live from RomM, not carried here.
+resolved live from RomM, not carried here. ``platform_fs_slug`` is the folder
+RomM keeps the platform in, which names one platform where two share a slug.
 """
 
 from __future__ import annotations
@@ -71,6 +72,7 @@ class Rom:
     has_file_on_disk: bool = True
     delivered_through: DeliveryRoute | None = None
     gone_from_romm: GoneEvidence | None = None
+    platform_fs_slug: str | None = None
 
     @classmethod
     def synced(
@@ -86,8 +88,12 @@ class Rom:
         version: VersionMetadata = _EMPTY_VERSION_METADATA,
         fs_size_bytes: int | None = None,
         has_file_on_disk: bool = True,
+        platform_fs_slug: str | None = None,
     ) -> Rom:
         """Build a Rom synced from RomM at ISO timestamp ``synced_at``.
+
+        ``platform_fs_slug`` is the folder RomM keeps the ROM's platform in, as
+        the ROM's payload states it; empty counts as unknown (``None``).
 
         ``shortcut_app_id`` is ``None`` for a non-representative sibling — every
         fetched ROM is persisted for identity + version metadata (ADR-0021), but
@@ -118,6 +124,7 @@ class Rom:
             is_main_sibling=version.is_main_sibling,
             fs_size_bytes=fs_size_bytes,
             has_file_on_disk=has_file_on_disk,
+            platform_fs_slug=platform_fs_slug or None,
         )
 
     def record_fetch_generation(self, fetch_id: str) -> None:

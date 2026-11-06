@@ -9,6 +9,7 @@ from domain.firmware_store import FirmwareLink, StoredFirmware, backup_folder, b
 
 def _stored(**overrides) -> StoredFirmware:
     fields = {
+        "platform_folder": "saturn",
         "platform_slug": "saturn",
         "file_name": "sega_101.bin",
         "folder": "/home/deck/Tender",
@@ -24,7 +25,7 @@ class TestAStoreFile:
     def test_keeps_the_checksum_in_lower_case(self):
         assert _stored().md5 == "85ec9ca47d8f6807718151cbcca8b964"
 
-    @pytest.mark.parametrize("missing", ["platform_slug", "file_name", "folder"])
+    @pytest.mark.parametrize("missing", ["platform_folder", "platform_slug", "file_name", "folder"])
     def test_needs_its_platform_name_and_folder(self, missing):
         with pytest.raises(ValueError, match="required"):
             _stored(**{missing: ""})
@@ -39,7 +40,7 @@ class TestALink:
         fields = {
             "place": "/home/deck/retrodeck/bios/kronos/saturn_bios.bin",
             "target": "/home/deck/Tender/bios/saturn/sega_101.bin",
-            "platform_slug": "saturn",
+            "platform_folder": "saturn",
             "file_name": "sega_101.bin",
             "source": "retrodeck",
             "placed_at": "2026-10-21T20:00:00",

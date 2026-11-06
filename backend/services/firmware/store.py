@@ -163,14 +163,14 @@ class FirmwareStore:
         return StoreRecords(stored=stored, links=links)
 
     def store_path(self, stored: StoredFirmware) -> str:
-        """Where *stored* lies: below its Tender folder, its platform and its name in RomM."""
-        return _in_platform_folder(stored.folder, stored.platform_slug, stored.file_name)
+        """Where *stored* lies: below its Tender folder, its platform folder and its name in RomM."""
+        return _in_platform_folder(stored.folder, stored.platform_folder, stored.file_name)
 
-    def do_copies(self, records: StoreRecords, platform_slug: str) -> list[StoreCopy]:
-        """*platform_slug*'s store files, each with whether it is on disk."""
+    def do_copies(self, records: StoreRecords, platform_folder: str) -> list[StoreCopy]:
+        """The store files of the platform RomM keeps in *platform_folder*, each with whether it is on disk."""
         copies = []
         for stored in records.stored:
-            if stored.platform_slug != platform_slug:
+            if stored.platform_folder != platform_folder:
                 continue
             path = self._path_or_none(stored)
             if path is not None:
@@ -178,7 +178,7 @@ class FirmwareStore:
                     StoreCopy(
                         file_name=stored.file_name,
                         md5=stored.md5,
-                        platform_slug=stored.platform_slug,
+                        platform_folder=stored.platform_folder,
                         path=path,
                         present=self._files.exists(path),
                     )
@@ -193,7 +193,7 @@ class FirmwareStore:
             path = self._path_or_none(stored)
             if path is None:
                 continue
-            targets[path] = stored.platform_slug
+            targets[path] = stored.platform_folder
             if self._files.exists(path):
                 present.add(path)
         return OwnedLinks(store_targets=targets, present=frozenset(present), records=records.links)
@@ -207,8 +207,10 @@ class FirmwareStore:
 
     # ── Fetching into the store ──────────────────────────────
 
-    def do_fetch(self, platform_slug: str, firmware: dict[str, Any]) -> FetchOutcome:
-        """Fetch the library file *firmware* into *platform_slug*'s store folder, kept only on RomM's checksum.
+    def do_fetch(self, platform_slug: str, platform_folder: str, firmware: dict[str, Any]) -> FetchOutcome:
+        """Fetch the library file *firmware* into *platform_folder*'s store folder, kept only on RomM's checksum.
+
+        *platform_slug* is that platform's slug, recorded beside the folder.
 
         A file already recorded there with the same checksum is not fetched
         again. A file lying there with no record is taken over where its bytes
@@ -225,15 +227,15 @@ class FirmwareStore:
         if not md5:
             raise Refused("no_checksum", f"RomM states no checksum for {name}, so Tender cannot check a download.")
         folder = self._prepare_folder()
-        stored = self._stored(platform_slug, name, folder, md5, firmware)
+        stored = self._stored(platform_slug, platform_folder, name, folder, md5, firmware)
         try:
-            path = _in_platform_folder(folder, platform_slug, name)
+            path = _in_platform_folder(folder, platform_folder, name)
         except PathTraversalError as exc:
-            self._logger.error(f"Rejected firmware {name!r} for platform {platform_slug!r}: {exc}")
+            self._logger.error(f"Rejected firmware {name!r} for platform folder {platform_folder!r}: {exc}")
             raise Refused(
                 "path_traversal", "Server sent an unsafe firmware file name or platform — download aborted"
             ) from exc
-        record = self._record_of(platform_slug, name)
+        record = self._record_of(platform_folder, name)
         backup = None
         if self._files.exists(path):
             if record is not None and record.md5 == md5:
@@ -269,14 +271,17 @@ class FirmwareStore:
             raise Refused(DOWNLOAD_DAMAGED, "The download was damaged. Try again.")
         self._files.rename(tmp, path)
 
-    def _record_of(self, platform_slug: str, name: str) -> StoredFirmware | None:
+    def _record_of(self, platform_folder: str, name: str) -> StoredFirmware | None:
         with self._uow_factory() as uow:
-            return uow.firmware_store.get(platform_slug, name)
+            return uow.firmware_store.get(platform_folder, name)
 
-    def _stored(self, platform_slug: str, name: str, folder: str, md5: str, firmware: dict[str, Any]) -> StoredFirmware:
+    def _stored(
+        self, platform_slug: str, platform_folder: str, name: str, folder: str, md5: str, firmware: dict[str, Any]
+    ) -> StoredFirmware:
         """The record a fetch of *firmware* writes, built before anything is written so bad metadata writes nothing."""
         try:
             return StoredFirmware.mark_downloaded(
+                platform_folder=platform_folder,
                 platform_slug=platform_slug,
                 file_name=name,
                 folder=folder,
@@ -301,8 +306,10 @@ class FirmwareStore:
 
     # ── The links ────────────────────────────────────────────
 
-    def do_update_links(self, platform_slug: str, system: str | None) -> LinkOutcome:
-        """Bring *platform_slug*'s links up to date in every enabled source; download nothing.
+    def do_update_links(self, platform_slug: str, platform_folder: str, system: str | None) -> LinkOutcome:
+        """Bring the links of the platform RomM keeps in *platform_folder* up to date in every enabled source.
+
+        Downloads nothing. *platform_slug* is that platform's slug.
 
         A platform with no system to ask about has no emulator to link for,
         and only its records are looked at. Before a link nobody on this
@@ -312,19 +319,19 @@ class FirmwareStore:
         reading = self._resolver.every_source(system) if system is not None else SourceCatalogues()
         catalogues = reading.read
         records = self.do_read_records()
-        copies = self.do_copies(records, platform_slug)
+        copies = self.do_copies(records, platform_folder)
         owned = self.do_owned(records)
         wanted: list[WantedLink] = []
         looks: dict[str, PlaceLook] = {}
         for catalogue in catalogues:
-            for want, placement in wanted_links(catalogue.linkable(), platform_slug, catalogue.source or "", copies):
+            for want, placement in wanted_links(catalogue.linkable(), platform_folder, catalogue.source or "", copies):
                 look = looks.setdefault(want.place, self._files.look(want.place))
                 refusal = place_refusal(want.place, look, catalogue.roots, unreadable=placement.place_unreadable)
                 wanted.append(replace(want, refusal=refusal))
         roots = self._resolver.source_roots()
         blocked: set[str] = set()
         for place, link in records.links.items():
-            if link.platform_slug != platform_slug:
+            if link.platform_folder != platform_folder:
                 continue
             looks.setdefault(place, self._files.look(place))
             if _blocked(place, roots.get(link.source)):
@@ -336,13 +343,13 @@ class FirmwareStore:
         unwanted = {
             (link.source, place): link
             for place, link in records.links.items()
-            if link.platform_slug == platform_slug
+            if link.platform_folder == platform_folder
             and link.source in judged
             and place not in blocked
             and place not in wanted_here
         }
         plan = plan_link_update(
-            platform_slug,
+            platform_folder,
             wanted,
             looks,
             store_targets=owned.store_targets,
@@ -350,13 +357,14 @@ class FirmwareStore:
             records=records.links,
             blocked=frozenset(blocked),
             judged=judged,
-            wanted_elsewhere=self._kept_for_others(platform_slug, system, records, unwanted),
+            wanted_elsewhere=self._kept_for_others(platform_slug, platform_folder, system, records, unwanted),
         )
         return self._carry_out(plan)
 
     def _kept_for_others(
         self,
         platform_slug: str,
+        platform_folder: str,
         system: str | None,
         records: StoreRecords,
         unwanted: Mapping[tuple[str, str], FirmwareLink],
@@ -386,7 +394,7 @@ class FirmwareStore:
                 return frozenset(unwanted)
             if answer.system is not None and answer.system != system and answer.system not in systems:
                 systems.append(answer.system)
-        copies = {copy.file_name: copy for copy in self.do_copies(records, platform_slug)}
+        copies = {copy.file_name: copy for copy in self.do_copies(records, platform_folder)}
         kept: set[tuple[str, str]] = set()
         for other_system in systems:
             reading = self._resolver.every_source(other_system)
@@ -440,7 +448,7 @@ class FirmwareStore:
         return FirmwareLink.mark_placed(
             place=want.place,
             target=want.target or "",
-            platform_slug=want.platform_slug,
+            platform_folder=want.platform_folder,
             file_name=want.file_name or os.path.basename(want.target or ""),
             source=want.source,
             placed_at=self._clock.now().isoformat(),
@@ -453,7 +461,7 @@ class FirmwareStore:
             for link in saved:
                 uow.firmware_links.save(link)
 
-    def do_place_link(self, place: str, target: str, platform_slug: str, source: str) -> None:
+    def do_place_link(self, place: str, target: str, platform_folder: str, source: str) -> None:
         """Place one link at the free *place* naming *target*, and record it; an ``OSError`` propagates."""
         self._files.symlink(target, place)
         self._write_links(
@@ -461,7 +469,7 @@ class FirmwareStore:
                 FirmwareLink.mark_placed(
                     place=place,
                     target=target,
-                    platform_slug=platform_slug,
+                    platform_folder=platform_folder,
                     file_name=os.path.basename(target),
                     source=source,
                     placed_at=self._clock.now().isoformat(),
@@ -476,8 +484,8 @@ class FirmwareStore:
 
     # ── Removing ─────────────────────────────────────────────
 
-    def do_remove(self, platform_slug: str, names: frozenset[str] | None) -> RemovalOutcome:
-        """Remove *platform_slug*'s store files named in *names* — all of them for ``None`` — and every link to each.
+    def do_remove(self, platform_folder: str, names: frozenset[str] | None) -> RemovalOutcome:
+        """Remove *platform_folder*'s store files named in *names* — all of them for ``None`` — and every link to each.
 
         A link is removed only while it still points at the store file, and
         only where its place may be touched: one under a root the resolver
@@ -491,19 +499,19 @@ class FirmwareStore:
         removed_links: list[str] = []
         removed_files: list[tuple[str, str]] = []
         for stored in records.stored:
-            if stored.platform_slug != platform_slug or (names is not None and stored.file_name not in names):
+            if stored.platform_folder != platform_folder or (names is not None and stored.file_name not in names):
                 continue
             path = self._path_or_none(stored)
             if path is None:
                 continue
             removed_links += self._remove_links_to(path, records.links.values(), roots, outcome)
             if self._remove_stored_file(stored, path, outcome):
-                removed_files.append((stored.platform_slug, stored.file_name))
+                removed_files.append((stored.platform_folder, stored.file_name))
         with self._uow_factory() as uow:
             for place in removed_links:
                 uow.firmware_links.delete(place)
-            for slug, name in removed_files:
-                uow.firmware_store.delete(slug, name)
+            for platform, name in removed_files:
+                uow.firmware_store.delete(platform, name)
         return outcome
 
     def _remove_links_to(
@@ -595,16 +603,16 @@ class FirmwareStore:
             for place in dropped:
                 uow.firmware_links.delete(place)
             for stored in forgotten:
-                uow.firmware_store.delete(stored.platform_slug, stored.file_name)
+                uow.firmware_store.delete(stored.platform_folder, stored.file_name)
 
 
-def _in_platform_folder(folder: str, platform_slug: str, name: str) -> str:
-    """*name* in *platform_slug*'s store folder, refused where either leaves the folder it is joined onto.
+def _in_platform_folder(folder: str, platform_folder: str, name: str) -> str:
+    """*name* in *platform_folder*'s store folder, refused where either leaves the folder it is joined onto.
 
     Joined one segment at a time, so a platform cannot leave the store and a
     server-supplied name cannot reach another platform's folder.
     """
-    return safe_join(safe_join(safe_join(folder, STORE_FOLDER), platform_slug), name)
+    return safe_join(safe_join(safe_join(folder, STORE_FOLDER), platform_folder), name)
 
 
 def _blocked(place: str, roots: SourceRoots | None) -> bool:

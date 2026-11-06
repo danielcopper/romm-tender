@@ -70,6 +70,9 @@ export interface GameDetailState extends BiosInfoFields, CoreInfoFields {
   romId: number | null;
   romName: string;
   platformSlug: string;
+  /** The folder RomM keeps the game's platform in, which the firmware calls are
+   *  addressed by beside the slug; absent or `""` until a sync has recorded it. */
+  platformFolder?: string;
   platformName: string;
   installed: boolean;
   /** The path an install record names whose file and folder are both gone, else `null`. */
@@ -92,6 +95,7 @@ const DEFAULT_STATE: GameDetailState = {
   romId: null,
   romName: "",
   platformSlug: "",
+  platformFolder: "",
   platformName: "",
   installed: false,
   fileMissingAt: null,
@@ -320,6 +324,7 @@ async function loadDetail(appId: number, entry: Entry): Promise<void> {
       startCheck: { state: "checking" },
       romName: cached.rom_name || "",
       platformSlug: cached.platform_slug || "",
+      platformFolder: cached.platform_fs_slug || "",
       platformName: cached.platform_name || "",
       installed: cached.installed ?? false,
       fileMissingAt: cached.file_missing_at ?? null,
@@ -549,10 +554,10 @@ export function noteSaveSyncDisplay(appId: number, romId: number, display: SaveS
  * resolver's reading of the machine.
  */
 async function updateLinksOnOpen(appId: number, entry: Entry): Promise<void> {
-  const { romId, platformSlug } = entry.state;
-  if (!romId || !platformSlug || _entries.get(appId) !== entry) return;
+  const { romId, platformSlug, platformFolder } = entry.state;
+  if (!romId || !platformSlug || !platformFolder || _entries.get(appId) !== entry) return;
   try {
-    const result = await updateBiosLinks(platformSlug, romId);
+    const result = await updateBiosLinks(platformSlug, platformFolder, romId);
     if (result.success && result.placed + result.removed > 0) await refreshBiosStatus(appId);
   } catch (e) {
     detach(debugLog(`gameDetailStore: BIOS link update error: ${e}`));
@@ -631,9 +636,9 @@ export async function refreshCoreAndBios(appId: number): Promise<void> {
   // The new emulator wants its files at its own places: its links are placed
   // from the store before the requirement is read again, and nothing is
   // downloaded.
-  if (entry.state.platformSlug) {
+  if (entry.state.platformSlug && entry.state.platformFolder) {
     try {
-      await updateBiosLinks(entry.state.platformSlug, romId);
+      await updateBiosLinks(entry.state.platformSlug, entry.state.platformFolder, romId);
     } catch (e) {
       detach(debugLog(`gameDetailStore: BIOS link update error: ${e}`));
     }

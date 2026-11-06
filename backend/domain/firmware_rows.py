@@ -39,25 +39,26 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class LibraryFirmware(FirmwareFile):
-    """One firmware file the RomM library lists: its RomM id and the platform RomM files it under."""
+    """One firmware file the RomM library lists: its RomM id, and the folder and slug of the platform it is under."""
 
     firmware_id: int | None = None
+    platform_folder: str = ""
     platform_slug: str = ""
     size: int = 0
 
 
 @dataclass(frozen=True, slots=True)
 class StoreCopy(FirmwareFile):
-    """One file in Tender's firmware store: the platform it lies under, its path, and whether it is on disk."""
+    """One file in Tender's firmware store: the platform folder it lies under, its path, and whether it is on disk."""
 
-    platform_slug: str = ""
+    platform_folder: str = ""
     path: str = ""
     present: bool = True
 
 
 @dataclass(frozen=True, slots=True)
 class OwnedLinks:
-    """What decides whose a link is: every recorded store path with its platform, the ones on disk, the records."""
+    """What decides whose a link is: each recorded store path with its platform folder, those on disk, the records."""
 
     store_targets: Mapping[str, str]
     present: frozenset[str]
@@ -70,6 +71,7 @@ def library_file(firmware: Mapping[str, Any]) -> LibraryFirmware:
         file_name=str(firmware.get("file_name") or ""),
         md5=str(firmware.get("md5_hash") or ""),
         firmware_id=firmware.get("id"),
+        platform_folder=str(firmware.get("platform_folder") or ""),
         platform_slug=str(firmware.get("platform_slug") or ""),
         size=int(firmware.get("file_size_bytes") or 0),
     )
@@ -129,7 +131,7 @@ def place_facts(
     refusal: PlaceRefusal | None,
     library: dict[str, Any] | None,
     copy: StoreCopy | None,
-    platform_slug: str,
+    platform_folder: str,
     source: str,
     owned: OwnedLinks,
     satisfied: bool | None,
@@ -147,7 +149,7 @@ def place_facts(
         want = WantedLink(
             place=place,
             target=copy.path if copy is not None else None,
-            platform_slug=platform_slug,
+            platform_folder=platform_folder,
             file_name=copy.file_name if copy is not None else None,
             source=source,
         )
@@ -168,7 +170,7 @@ def place_facts(
         "library": library,
         "store_file": copy.file_name if copy is not None else None,
         "link": link,
-        "linked_for": linked_for if linked_for != platform_slug else None,
+        "linked_for": linked_for if linked_for != platform_folder else None,
         "place_refusal": (
             {"reason": refusal.reason, "folder": refusal.folder, "source": source} if refusal is not None else None
         ),
@@ -208,9 +210,9 @@ def library_payload(file: LibraryFirmware, matched: str | None) -> dict[str, Any
 
 
 def wanted_links(
-    placements: Iterable[FirmwarePlacement], platform_slug: str, source: str, copies: Sequence[StoreCopy]
+    placements: Iterable[FirmwarePlacement], platform_folder: str, source: str, copies: Sequence[StoreCopy]
 ) -> list[tuple[WantedLink, FirmwarePlacement]]:
-    """Every place *placements* want a store file of *platform_slug* at, with the copy that fills it, if any.
+    """Every place *placements* want a store file of *platform_folder* at, with the copy that fills it, if any.
 
     A file requirement's place is wanted with the alphabetically first copy on
     disk that fills it, or with none; a folder declaration's with each copy it
@@ -223,9 +225,9 @@ def wanted_links(
             for name, _file, copy in folder_entries(placement, (), copies):
                 place = folder_place(placement, name)
                 if place is not None and copy is not None:
-                    wanted.append((_want(place, copy, platform_slug, source), placement))
+                    wanted.append((_want(place, copy, platform_folder, source), placement))
         elif placement.place is not None:
-            wanted.append((_want(placement.place, store_copy(placement, copies), platform_slug, source), placement))
+            wanted.append((_want(placement.place, store_copy(placement, copies), platform_folder, source), placement))
     return wanted
 
 
@@ -244,11 +246,11 @@ def wants_place(placements: Iterable[FirmwarePlacement], place: str, copy: Store
     return False
 
 
-def _want(place: str, copy: StoreCopy | None, platform_slug: str, source: str) -> WantedLink:
+def _want(place: str, copy: StoreCopy | None, platform_folder: str, source: str) -> WantedLink:
     return WantedLink(
         place=place,
         target=copy.path if copy is not None else None,
-        platform_slug=platform_slug,
+        platform_folder=platform_folder,
         file_name=copy.file_name if copy is not None else None,
         source=source,
     )

@@ -193,6 +193,8 @@ def _seed_rom(
         last_synced_at="2025-01-01T00:00:00",
         ra_id=ra_id,
         regions=regions,
+        # The sync records RomM's folder for the platform; it is the slug here.
+        platform_fs_slug=platform_slug or None,
     )
     with game_detail.uow:
         game_detail.uow.roms.save(rom)
@@ -936,7 +938,7 @@ class TestGetBiosStatusFound:
 
         captured = {}
 
-        async def capture_check(slug, launching_emulator=None, rom_regions=(), install=None):
+        async def capture_check(slug, folder, launching_emulator=None, rom_regions=(), install=None):
             captured["slug"] = slug
             captured["launching_emulator"] = launching_emulator
             return {"needs_bios": False}
@@ -955,7 +957,7 @@ class TestGetBiosStatusFound:
         _seed_rom(game_detail, 42, app_id=50000, name="Game", platform_slug="psx", regions=("Japan", "Asia"))
         captured = {}
 
-        async def capture_check(slug, launching_emulator=None, rom_regions=(), install=None):
+        async def capture_check(slug, folder, launching_emulator=None, rom_regions=(), install=None):
             captured["rom_regions"] = rom_regions
             return {"needs_bios": False}
 
@@ -982,7 +984,7 @@ class TestGetBiosStatusFound:
             game_detail.uow.rom_installs.save(install)
         captured = {}
 
-        async def capture_check(slug, launching_emulator=None, rom_regions=(), install=None):
+        async def capture_check(slug, folder, launching_emulator=None, rom_regions=(), install=None):
             captured["install"] = install
             return {"needs_bios": False}
 
@@ -1022,7 +1024,7 @@ class TestGetBiosStatusFound:
         active_core_resolver.per_rom[42] = ("gpsp_libretro", "gpSP")
         # rom 43 falls through to the default (None, None) → system default.
 
-        async def fake_check(slug, launching_emulator=None, rom_regions=(), install=None):
+        async def fake_check(slug, folder, launching_emulator=None, rom_regions=(), install=None):
             if launching_emulator is not None and launching_emulator.emulator == "gpsp_libretro.so":
                 return {
                     "needs_bios": True,
@@ -1330,3 +1332,51 @@ class TestStaleFields:
         """When ROM not found, response has no stale_fields."""
         result = await game_detail.service.get_cached_game_detail(99999)
         assert "stale_fields" not in result
+
+
+class TestTheBiosCheckIsAskedByThePlatformsFolder:
+    """The game page's BIOS check reads the store of the folder RomM keeps the game's platform in (#2223 D45)."""
+
+    @staticmethod
+    def _seed(game_detail, platform_fs_slug: str | None) -> None:
+        from domain.rom import Rom
+
+        with game_detail.uow:
+            game_detail.uow.roms.save(
+                Rom(
+                    rom_id=42,
+                    platform_slug="ngc",
+                    name="Game",
+                    fs_name="game.iso",
+                    shortcut_app_id=50000,
+                    last_synced_at="2025-01-01T00:00:00",
+                    platform_fs_slug=platform_fs_slug,
+                )
+            )
+
+    @pytest.mark.asyncio
+    async def test_the_check_is_asked_by_the_slug_and_the_platforms_folder(self, game_detail):
+        self._seed(game_detail, "gc")
+        check = AsyncMock(return_value={"needs_bios": True, "bios_level": "ok", "bios_label": "OK", "files": []})
+        game_detail.service._bios_checker.check_platform_bios = check
+
+        await game_detail.service.get_bios_status(42)
+
+        assert check.await_args is not None
+        assert check.await_args.args[:2] == ("ngc", "gc")
+
+    @pytest.mark.asyncio
+    async def test_a_rom_whose_folder_is_not_recorded_yet_answers_as_a_check_that_could_not_run(self, game_detail):
+        self._seed(game_detail, None)
+        check = AsyncMock()
+        game_detail.service._bios_checker.check_platform_bios = check
+
+        result = await game_detail.service.get_bios_status(42)
+
+        check.assert_not_awaited()
+        assert result == {
+            "bios_status": None,
+            "bios_level": None,
+            "bios_label": None,
+            "bios_status_unknown": True,
+        }

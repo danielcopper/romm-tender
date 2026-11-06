@@ -1,6 +1,6 @@
 """SQLite adapter for the ``FirmwareCacheEntry`` aggregate over the ``firmware_cache`` table.
 
-Composite identity ``(platform_slug, name)``. The cache is refreshed wholesale
+Composite identity ``(platform_folder, name)``. The cache is refreshed wholesale
 (``replace_all``), not mutated per row; ``get_cache_epoch`` reads any row's
 ``cached_at`` for the whole-cache TTL check.
 """
@@ -16,13 +16,14 @@ if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Iterator
 
-_COLUMNS = "platform_slug, name, id, file_size_bytes, cached_at, md5_hash"
+_COLUMNS = "platform_folder, platform_slug, name, id, file_size_bytes, cached_at, md5_hash"
 
 
 def _row_to_entry(row: sqlite3.Row) -> FirmwareCacheEntry:
     return FirmwareCacheEntry(
         id=row["id"],
         name=row["name"],
+        platform_folder=row["platform_folder"],
         platform_slug=row["platform_slug"],
         file_size_bytes=row["file_size_bytes"],
         cached_at=row["cached_at"],
@@ -33,10 +34,10 @@ def _row_to_entry(row: sqlite3.Row) -> FirmwareCacheEntry:
 class SqliteFirmwareCacheRepository(BaseRepository):
     """TTL-cached RomM firmware inventory, replaced wholesale on refresh."""
 
-    def get(self, platform_slug: str, name: str) -> FirmwareCacheEntry | None:
+    def get(self, platform_folder: str, name: str) -> FirmwareCacheEntry | None:
         row = self._conn.execute(
-            f"SELECT {_COLUMNS} FROM firmware_cache WHERE platform_slug = ? AND name = ?",
-            (platform_slug, name),
+            f"SELECT {_COLUMNS} FROM firmware_cache WHERE platform_folder = ? AND name = ?",
+            (platform_folder, name),
         ).fetchone()
         return _row_to_entry(row) if row is not None else None
 
@@ -47,9 +48,10 @@ class SqliteFirmwareCacheRepository(BaseRepository):
     def replace_all(self, entries: list[FirmwareCacheEntry]) -> None:
         self._conn.execute("DELETE FROM firmware_cache")
         self._conn.executemany(
-            f"INSERT OR REPLACE INTO firmware_cache ({_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?)",
+            f"INSERT OR REPLACE INTO firmware_cache ({_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?)",
             [
                 (
+                    entry.platform_folder,
                     entry.platform_slug,
                     entry.name,
                     entry.id,

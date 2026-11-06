@@ -269,7 +269,7 @@ async def test_the_firmware_overview_reads_no_platform(harness):
 
 async def _platform_answer(harness, slug: str) -> dict[str, Any]:
     """The BIOS answer for one listed platform, asked for the way the page asks."""
-    answer = await harness.endpoints.get_platform_firmware_status(slug)
+    answer = await harness.endpoints.get_platform_firmware_status(slug, slug)
     assert answer["success"] is True
     assert answer["platform"]["platform_slug"] == slug
     return answer["platform"]

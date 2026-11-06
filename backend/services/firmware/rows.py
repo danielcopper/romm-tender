@@ -56,7 +56,7 @@ class RowInputs:
     """
 
     catalogue: FirmwareCatalogue
-    platform_slug: str
+    platform_folder: str
     library: tuple[LibraryFirmware, ...]
     copies: tuple[StoreCopy, ...]
     owned: OwnedLinks
@@ -91,7 +91,7 @@ def library_rows(inputs: RowInputs, emulator: str | None) -> list[BiosFileEntry]
     """
     placements = inputs.catalogue.placements
     complete = inputs.catalogue.reading_complete_for(emulator)
-    mine = [file for file in inputs.library if file.platform_slug == inputs.platform_slug]
+    mine = [file for file in inputs.library if file.platform_folder == inputs.platform_folder]
     spare = {copy.file_name: copy for copy in unused(inputs.copies, placements)}
     rows = []
     for file in unclaimed(mine, placements):
@@ -142,7 +142,7 @@ def _file_row(inputs: RowInputs, placement: FirmwarePlacement, emulator: str | N
         refusal=_refusal(catalogue, placement, place, look),
         library=library,
         copy=store_copy(placement, inputs.copies),
-        platform_slug=inputs.platform_slug,
+        platform_folder=inputs.platform_folder,
         source=catalogue.source or "",
         owned=inputs.owned,
         satisfied=placement.satisfied,
@@ -217,7 +217,7 @@ def _recognised_folder_rows(
             refusal=_refusal(catalogue, placement, place, look),
             library=library,
             copy=copy,
-            platform_slug=inputs.platform_slug,
+            platform_folder=inputs.platform_folder,
             source=catalogue.source or "",
             owned=inputs.owned,
             satisfied=satisfied,
@@ -274,7 +274,7 @@ def _stated_folder_rows(
             refusal=None,
             library=None,
             copy=None,
-            platform_slug=inputs.platform_slug,
+            platform_folder=inputs.platform_folder,
             source=inputs.catalogue.source or "",
             owned=inputs.owned,
             satisfied=statement.satisfied,

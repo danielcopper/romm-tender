@@ -10,6 +10,7 @@ class TestCached:
         entry = FirmwareCacheEntry.cached(
             id=5,
             name="scph5501.bin",
+            platform_folder="ps",
             platform_slug="ps",
             file_size_bytes=524288,
             cached_at=1000.0,
@@ -24,6 +25,7 @@ class TestCached:
         entry = FirmwareCacheEntry.cached(
             id=None,
             name="scph5501.bin",
+            platform_folder="ps",
             platform_slug="ps",
             file_size_bytes=524288,
             cached_at=1000.0,

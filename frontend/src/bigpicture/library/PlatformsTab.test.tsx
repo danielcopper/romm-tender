@@ -121,7 +121,9 @@ function coreInfo(overrides: Partial<SystemCoreInfo> = {}): SystemCoreInfo {
 }
 
 function platform(overrides: Partial<PlatformSyncSetting> = {}): PlatformSyncSetting {
-  return { id: 1, name: "Game Boy Advance", slug: "gba", rom_count: 12, sync_enabled: true, ...overrides };
+  // RomM's folder is the slug unless a test names another.
+  const slug = overrides.slug ?? "gba";
+  return { id: 1, name: "Game Boy Advance", slug, fs_slug: slug, rom_count: 12, sync_enabled: true, ...overrides };
 }
 
 function firmwareFile(overrides: Record<string, unknown> = {}) {
@@ -3903,7 +3905,7 @@ describe("Library › Platforms", () => {
           fireEvent.click(buttonByText(container, "Download required for YabaSanshiro (1)")!);
         });
 
-        expect(vi.mocked(backend.downloadRequiredFirmware)).toHaveBeenCalledWith("gba", null, null);
+        expect(vi.mocked(backend.downloadRequiredFirmware)).toHaveBeenCalledWith("gba", "gba", null, null);
       });
 
       it("takes the selector's dot and the header from the same fresh answer after a download", async () => {
@@ -3964,6 +3966,7 @@ describe("Library › Platforms", () => {
         });
         expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith(
           "gba",
+          "gba",
           "saturn_bios.bin",
           null,
           null,
@@ -3972,7 +3975,12 @@ describe("Library › Platforms", () => {
         await act(async () => {
           fireEvent.click(buttonByText(container, "Download required for Kronos (1)")!);
         });
-        expect(vi.mocked(backend.downloadRequiredFirmware)).toHaveBeenCalledWith("gba", "kronos_libretro.so", null);
+        expect(vi.mocked(backend.downloadRequiredFirmware)).toHaveBeenCalledWith(
+          "gba",
+          "gba",
+          "kronos_libretro.so",
+          null,
+        );
         // The header stays the launching emulator's.
         expect(summary).toContain("The one file YabaSanshiro opens by name is not in place");
         expect(container.textContent).toContain("The one file YabaSanshiro opens by name is not in place");
@@ -4117,7 +4125,13 @@ describe("Library › Platforms", () => {
         for (let i = 0; i < 8; i++) await Promise.resolve();
       });
 
-      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin", null, null);
+      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith(
+        "gba",
+        "gba",
+        "gba_bios.bin",
+        null,
+        null,
+      );
       // No notice on success: the spinner ending and the re-read rows are the
       // message, which is what the device pass asked for.
       expect(within(container).queryByTestId("status-bios")).toBeNull();
@@ -4154,7 +4168,56 @@ describe("Library › Platforms", () => {
         for (let i = 0; i < 8; i++) await Promise.resolve();
       });
 
-      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin", 42, null);
+      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith(
+        "gba",
+        "gba",
+        "gba_bios.bin",
+        42,
+        null,
+      );
+    });
+
+    it("asks and downloads by the folder RomM keeps the platform in, beside its slug", async () => {
+      // RomM's built-in `gc` folder holds GameCube games under the slug `ngc`;
+      // Tender's firmware store is kept by the folder (#2734).
+      vi.mocked(backend.getPlatforms).mockResolvedValue({
+        success: true,
+        platforms: [platform({ name: "Nintendo GameCube", slug: "ngc", fs_slug: "gc" })],
+      });
+      mockFirmware([
+        firmwarePlatform({
+          platform_slug: "ngc",
+          files: [
+            firmwareFile({
+              file_name: "IPL.bin",
+              library: {
+                firmware_id: 7,
+                file_name: "IPL.bin",
+                platform_slug: "ngc",
+                matched: "content",
+                md5: "a860e8c0b6d573d191e4ec7db1b1e4f6",
+                size: 2097152,
+                no_checksum: false,
+              },
+            }),
+          ],
+        }),
+      ]);
+      vi.mocked(backend.downloadPlatformFirmwareFile).mockResolvedValue({
+        success: true,
+        message: "Downloaded IPL.bin",
+        downloaded: 1,
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      await act(async () => {
+        fireEvent.click(buttonByText(container, "Download")!);
+        for (let i = 0; i < 8; i++) await Promise.resolve();
+      });
+
+      expect(vi.mocked(backend.getPlatformFirmwareStatus)).toHaveBeenCalledWith("ngc", "gc");
+      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("ngc", "gc", "IPL.bin", 7, null);
     });
 
     it("offers no Download for a file already here, nor for one the library does not hold", async () => {
@@ -4671,7 +4734,7 @@ describe("Library › Platforms", () => {
         });
         await confirmLastModal();
 
-        expect(vi.mocked(backend.deleteBiosFile)).toHaveBeenCalledWith("gba", "gc-pal-12.bin");
+        expect(vi.mocked(backend.deleteBiosFile)).toHaveBeenCalledWith("gba", "gba", "gc-pal-12.bin");
         expect(within(container).getByTestId("status-bios").textContent).toBe(
           "Could not delete gc-pal-12.bin: permission denied",
         );
@@ -4899,7 +4962,7 @@ describe("Library › Platforms", () => {
           for (let i = 0; i < 8; i++) await Promise.resolve();
         });
 
-        expect(vi.mocked(backend.downloadRequiredFirmware)).toHaveBeenCalledWith("gba", null, null);
+        expect(vi.mocked(backend.downloadRequiredFirmware)).toHaveBeenCalledWith("gba", "gba", null, null);
         expect(events.map((e) => e.detail.type)).toContain("bios");
       } finally {
         globalThis.removeEventListener("romm_data_changed", listener);
@@ -4952,7 +5015,7 @@ describe("Library › Platforms", () => {
         for (let i = 0; i < 8; i++) await Promise.resolve();
       });
 
-      expect(vi.mocked(backend.downloadAllFirmware)).toHaveBeenCalledWith("gba", null);
+      expect(vi.mocked(backend.downloadAllFirmware)).toHaveBeenCalledWith("gba", "gba", null);
     });
 
     it("stays silent towards the game page when a run moved no file", async () => {
@@ -5073,7 +5136,7 @@ describe("Library › Platforms", () => {
       );
 
       await confirmLastModal();
-      expect(vi.mocked(backend.deletePlatformBios)).toHaveBeenCalledWith("gba");
+      expect(vi.mocked(backend.deletePlatformBios)).toHaveBeenCalledWith("gba", "gba");
       expect(within(container).getByTestId("status-bios").textContent).toBe("Deleted 2 BIOS files");
     });
 
@@ -5251,7 +5314,13 @@ describe("Library › Platforms", () => {
         for (let i = 0; i < 8; i++) await Promise.resolve();
       });
 
-      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin", null, null);
+      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith(
+        "gba",
+        "gba",
+        "gba_bios.bin",
+        null,
+        null,
+      );
     });
 
     it("says the console does not start without an image where the counts would say nothing is required", async () => {
@@ -5423,7 +5492,7 @@ describe("Library › Platforms", () => {
       await flushAsync();
       await flushAsync();
 
-      expect(vi.mocked(backend.updateBiosLinks)).toHaveBeenCalledExactlyOnceWith("gba", null);
+      expect(vi.mocked(backend.updateBiosLinks)).toHaveBeenCalledExactlyOnceWith("gba", "gba", null);
       expect(reads("gba")).toBe(2);
     });
 
@@ -5466,8 +5535,8 @@ describe("Library › Platforms", () => {
       await flushAsync();
 
       expect(vi.mocked(backend.updateBiosLinks).mock.calls).toEqual([
-        ["gba", null],
-        ["gba", null],
+        ["gba", "gba", null],
+        ["gba", "gba", null],
       ]);
       const [switched] = vi.mocked(backend.setSystemCore).mock.invocationCallOrder;
       const [, afterSwitch] = vi.mocked(backend.updateBiosLinks).mock.invocationCallOrder;
@@ -5714,7 +5783,7 @@ describe("Library › Platforms", () => {
       await confirmLastModal();
       await flushAsync();
 
-      expect(vi.mocked(backend.replaceBiosFile)).toHaveBeenCalledWith("gba", PLACE, null);
+      expect(vi.mocked(backend.replaceBiosFile)).toHaveBeenCalledWith("gba", "gba", PLACE, null);
       expect(container.textContent).toContain(`Replaced. The old file is in ${BACKUP}.`);
     });
 

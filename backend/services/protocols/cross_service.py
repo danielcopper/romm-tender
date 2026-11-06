@@ -245,11 +245,16 @@ class BiosChecker(Protocol):
     ``install`` is the game's install record, whose system an installed game
     is asked about; ``None`` asks the platform's system in the answering
     source.
+
+    ``platform_folder`` is the folder RomM keeps the game's platform in, whose
+    firmware store the answer reads; ``platform_slug`` is the console the
+    resolver is asked about.
     """
 
     async def check_platform_bios(
         self,
         platform_slug: str,
+        platform_folder: str,
         launching_emulator: LaunchingEmulator | None = None,
         rom_regions: tuple[str, ...] = (),
         install: RomInstall | None = None,

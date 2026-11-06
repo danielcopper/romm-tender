@@ -195,13 +195,15 @@ class FirmwareService:
         """Return whether the RomM firmware listing could be read, without reading any platform's state."""
         return await self._status.get_firmware_status()
 
-    async def get_platform_firmware_status(self, platform_slug) -> dict[str, Any]:
+    async def get_platform_firmware_status(self, platform_slug, platform_folder) -> dict[str, Any]:
         """Return one platform's whole BIOS entry."""
-        return await self._status.get_platform_firmware_status(platform_slug)
+        _require_folder(platform_folder)
+        return await self._status.get_platform_firmware_status(platform_slug, platform_folder)
 
     async def check_platform_bios(
         self,
         platform_slug,
+        platform_folder,
         launching_emulator: LaunchingEmulator | None = None,
         rom_regions: tuple[str, ...] = (),
         install: RomInstall | None = None,
@@ -211,7 +213,10 @@ class FirmwareService:
         *rom_regions* narrows a one-of group to the game's own regions; an
         *install* is asked about the system it records.
         """
-        return await self._status.check_platform_bios(platform_slug, launching_emulator, rom_regions, install)
+        _require_folder(platform_folder)
+        return await self._status.check_platform_bios(
+            platform_slug, platform_folder, launching_emulator, rom_regions, install
+        )
 
     async def identify_library_firmware(self, md5: object) -> dict[str, Any]:
         """Every name the resolver knows the content *md5* under; ``known_as`` ``None`` where nothing could be asked.
@@ -225,65 +230,92 @@ class FirmwareService:
         known_as = await self._config.loop.run_in_executor(None, self._identifier, md5.lower())
         return {"success": True, "known_as": list(known_as) if known_as is not None else None}
 
-    async def download_all_firmware(self, platform_slug, rom_id: int | None = None) -> dict[str, Any]:
+    async def download_all_firmware(self, platform_slug, platform_folder, rom_id: int | None = None) -> dict[str, Any]:
         """Download every firmware file RomM lists for a platform into the store, and link it."""
+        _require_folder(platform_folder)
         async with self._rules.hold("download_all_firmware", update=True, folder=True, migration=True):
             with self._downloads.downloading():
-                return await self._downloads.download_all_firmware(platform_slug, rom_id)
+                return await self._downloads.download_all_firmware(platform_slug, platform_folder, rom_id)
 
     async def download_platform_firmware_file(
-        self, platform_slug, file_name, firmware_id: int | None = None, rom_id: int | None = None
+        self, platform_slug, platform_folder, file_name, firmware_id: int | None = None, rom_id: int | None = None
     ) -> dict[str, Any]:
         """Download one library file into a platform's store folder — by its id where given — and link it.
 
         With *rom_id*, the links follow the system the game's install record holds.
         """
+        _require_folder(platform_folder)
         async with self._rules.hold("download_platform_firmware_file", update=True, folder=True, migration=True):
             with self._downloads.downloading():
                 return await self._downloads.download_platform_firmware_file(
-                    platform_slug, file_name, firmware_id, rom_id
+                    platform_slug, platform_folder, file_name, firmware_id, rom_id
                 )
 
     async def download_required_firmware(
-        self, platform_slug, emulator: str | None = None, rom_id: int | None = None
+        self, platform_slug, platform_folder, emulator: str | None = None, rom_id: int | None = None
     ) -> dict[str, Any]:
         """Download only the firmware *emulator* — the platform's pick without one — will not run without.
 
         With *rom_id*, the requirement is read, and the links placed, for the system the game's install record holds.
         """
+        _require_folder(platform_folder)
         async with self._rules.hold("download_required_firmware", update=True, folder=True, migration=True):
             with self._downloads.downloading():
-                return await self._downloads.download_required_firmware(platform_slug, emulator, rom_id)
+                return await self._downloads.download_required_firmware(
+                    platform_slug, platform_folder, emulator, rom_id
+                )
 
-    async def update_bios_links(self, platform_slug, rom_id: int | None = None) -> dict[str, Any]:
+    async def update_bios_links(self, platform_slug, platform_folder, rom_id: int | None = None) -> dict[str, Any]:
         """Bring a platform's links up to date in every enabled source, for *rom_id*'s recorded system where given.
 
-        Places every link an emulator of the platform wants from the store
-        where the name is free, puts back a link of Tender's that points at
-        nothing where a store copy exists, removes it where none does, and
-        downloads nothing.
+        *platform_folder* is the folder RomM keeps the platform in, whose store
+        copies are linked. Places every link an emulator of the platform wants
+        from the store where the name is free, puts back a link of Tender's that
+        points at nothing where a store copy exists, removes it where none does,
+        and downloads nothing.
         """
+        _require_folder(platform_folder)
         async with self._rules.hold("update_bios_links", update=True, folder=True, migration=True):
             system = await self._downloads.platform_system(platform_slug, rom_id)
-            outcome = await self._config.loop.run_in_executor(None, self._store.do_update_links, platform_slug, system)
+            outcome = await self._config.loop.run_in_executor(
+                None, self._store.do_update_links, platform_slug, platform_folder, system
+            )
             return {"success": True, **outcome.payload()}
 
-    async def replace_bios_file(self, platform_slug, place, rom_id: int | None = None) -> dict[str, Any]:
+    async def replace_bios_file(
+        self, platform_slug, platform_folder, place, rom_id: int | None = None
+    ) -> dict[str, Any]:
         """Replace the wrong file at *place* with Tender's proven-right copy; the old file goes to the backup folder.
 
         With *rom_id*, the place is read, and the links placed, for the system the game's install record holds.
         """
+        _require_folder(platform_folder)
         async with self._rules.hold("replace_bios_file", update=True, folder=True, migration=True):
             with self._downloads.downloading():
                 system = await self._downloads.platform_system(platform_slug, rom_id)
-                return await self._replacer.replace_bios_file(platform_slug, place, system)
+                return await self._replacer.replace_bios_file(platform_slug, platform_folder, place, system)
 
-    async def delete_platform_bios(self, platform_slug) -> dict[str, Any] | FirmwareDeletionIncomplete:
+    async def delete_platform_bios(self, platform_slug, platform_folder) -> dict[str, Any] | FirmwareDeletionIncomplete:
         """Delete every BIOS file Tender put on the machine for a platform, and its links."""
+        _require_folder(platform_folder)
         async with self._rules.hold("delete_platform_bios", update=True, folder=True, migration=True):
-            return await self._deletion.delete_platform_bios(platform_slug)
+            return await self._deletion.delete_platform_bios(platform_slug, platform_folder)
 
-    async def delete_bios_file(self, platform_slug, file_name) -> dict[str, Any] | FirmwareDeletionIncomplete:
+    async def delete_bios_file(
+        self, platform_slug, platform_folder, file_name
+    ) -> dict[str, Any] | FirmwareDeletionIncomplete:
         """Delete one BIOS file Tender put on the machine for a platform, by its name in RomM, and its links."""
+        _require_folder(platform_folder)
         async with self._rules.hold("delete_bios_file", update=True, folder=True, migration=True):
-            return await self._deletion.delete_bios_file(platform_slug, file_name)
+            return await self._deletion.delete_bios_file(platform_slug, platform_folder, file_name)
+
+
+def _require_folder(platform_folder: object) -> None:
+    """Refuse ``invalid_value`` for a platform folder that is not a non-empty name.
+
+    Every platform use case here is keyed by the folder RomM keeps the
+    platform in; without one there is no store folder to read or write, and
+    the slug is never taken in its place.
+    """
+    if not isinstance(platform_folder, str) or not platform_folder:
+        raise Refused("invalid_value", f"{platform_folder!r} is not a RomM platform folder")

@@ -1730,7 +1730,15 @@ describe("BiosTab", () => {
         return (calls[calls.length - 1]?.[0] as ReactElement<ConfirmProps> | undefined)?.props;
       };
       const renderReplaceable = (status = replaceable()) =>
-        render(<BiosTabWithState biosStatus={status} biosLevel="missing" coreInfo={coreInfo} platformSlug="saturn" />);
+        render(
+          <BiosTabWithState
+            biosStatus={status}
+            biosLevel="missing"
+            coreInfo={coreInfo}
+            platformSlug="saturn"
+            platformFolder="saturn"
+          />,
+        );
 
       it("makes every row a focus stop, the one offering it reached as its own Replace… button", () => {
         const { container } = renderReplaceable();
@@ -1765,7 +1773,7 @@ describe("BiosTab", () => {
         await act(async () => {
           confirmation()?.onOK();
         });
-        expect(backend.replaceBiosFile).toHaveBeenCalledWith("saturn", "/bios/saturn_bios.bin", null);
+        expect(backend.replaceBiosFile).toHaveBeenCalledWith("saturn", "saturn", "/bios/saturn_bios.bin", null);
         expect(rowNamed(container, "saturn_bios.bin").textContent).toContain(
           "Replaced. The old file is in /data/backups/bios/x/saturn_bios.bin.",
         );
@@ -1978,6 +1986,7 @@ describe("BiosTab", () => {
           coreInfo={coreInfo}
           platformName="PlayStation"
           platformSlug="psx"
+          platformFolder="psx"
           romId={42}
         />,
       );
@@ -2041,7 +2050,26 @@ describe("BiosTab", () => {
       await act(async () => {
         fireEvent.click(required as HTMLElement);
       });
-      expect(backend.downloadRequiredFirmware).toHaveBeenCalledWith("psx", "duckstation", 42);
+      expect(backend.downloadRequiredFirmware).toHaveBeenCalledWith("psx", "psx", "duckstation", 42);
+    });
+
+    it("addresses a press by the folder RomM keeps the game's platform in, beside its slug", async () => {
+      vi.mocked(backend.downloadPlatformFirmwareFile).mockResolvedValue({ success: true, message: "", downloaded: 1 });
+      const { container } = render(
+        <BiosTabWithState
+          biosStatus={psx()}
+          biosLevel="missing"
+          coreInfo={coreInfo}
+          platformName="PlayStation"
+          platformSlug="psx"
+          platformFolder="ps"
+          romId={42}
+        />,
+      );
+      await act(async () => {
+        fireEvent.click(button(container, "Download") as HTMLElement);
+      });
+      expect(backend.downloadPlatformFirmwareFile).toHaveBeenCalledWith("psx", "ps", "scph5501.bin", null, 42);
     });
 
     it("sends the game's ROM id with a row's Download and with Replace…", async () => {
@@ -2059,11 +2087,11 @@ describe("BiosTab", () => {
       await act(async () => {
         fireEvent.click(button(container, "Download") as HTMLElement);
       });
-      expect(backend.downloadPlatformFirmwareFile).toHaveBeenCalledWith("psx", "scph5501.bin", null, 42);
+      expect(backend.downloadPlatformFirmwareFile).toHaveBeenCalledWith("psx", "psx", "scph5501.bin", null, 42);
 
       fireEvent.click(button(container, "Replace…") as HTMLElement);
       await confirm();
-      expect(backend.replaceBiosFile).toHaveBeenCalledWith("psx", "/bios/scph5500.bin", 42);
+      expect(backend.replaceBiosFile).toHaveBeenCalledWith("psx", "psx", "/bios/scph5500.bin", 42);
     });
 
     it("downloads every library file of the platform for this game with Download all", async () => {
@@ -2076,6 +2104,7 @@ describe("BiosTab", () => {
           coreInfo={coreInfo}
           platformName="PlayStation"
           platformSlug="psx"
+          platformFolder="psx"
           romId={42}
           onReread={onReread}
         />,
@@ -2084,7 +2113,7 @@ describe("BiosTab", () => {
       await act(async () => {
         fireEvent.click(button(container, "Download all") as HTMLElement);
       });
-      expect(backend.downloadAllFirmware).toHaveBeenCalledWith("psx", 42);
+      expect(backend.downloadAllFirmware).toHaveBeenCalledWith("psx", "psx", 42);
       expect(onReread).toHaveBeenCalled();
     });
 
@@ -2102,7 +2131,7 @@ describe("BiosTab", () => {
       expect(props?.strTitle).toBe("Delete Tender's BIOS downloads for PlayStation?");
       expect(backend.deletePlatformBios).not.toHaveBeenCalled();
       await confirm();
-      expect(backend.deletePlatformBios).toHaveBeenCalledWith("psx");
+      expect(backend.deletePlatformBios).toHaveBeenCalledWith("psx", "psx");
       expect(getByTestId("status-bios").textContent).toBe("Deleted 2 BIOS files");
     });
 

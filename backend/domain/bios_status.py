@@ -192,8 +192,9 @@ class BiosFileEntry:
     # library file that fills it, this platform's store copy that does, what
     # lies at its place, why no link may go there, and whether "Replace…" is
     # offered. ``in_folder`` is the folder declaration a row stands in, for one
-    # file inside the folder an emulator lists. ``linked_for_name`` is the name
-    # the platform ``linked_for`` slugs is shown under.
+    # file inside the folder an emulator lists. ``linked_for`` is the folder in
+    # RomM of the platform whose store copy a link of Tender's there points at,
+    # and ``linked_for_name`` the name that platform is shown under.
     library: dict[str, Any] | None = None
     store_file: str | None = None
     link: str | None = None
