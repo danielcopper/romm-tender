@@ -19,31 +19,24 @@
  * imports from.
  */
 
-import { afterPatch, createReactTreePatcher, findInReactTree, findModuleByExport, getReactRoot } from "@decky/ui";
+import { afterPatch, createReactTreePatcher, findInReactTree, getReactRoot } from "@decky/ui";
 import type { PanelDefinition } from "../api/host";
+import { QuickAccessMenuBrowserView, rendersNamed } from "../utils/deckyUiInternals";
 import { getQamEntryPositionState } from "../utils/qamEntryPositionStore";
 import { DISPLAY_NAME } from "../utils/toast";
 import { buildEntry, syncEntry } from "./quickAccessEntry";
 
 /**
  * The renderers Steam draws the Quick Access menu with: the browser view Gaming
- * Mode uses, and the embedded one.
- *
- * Both come from one module, found by the source text of its exports' render
- * functions — the same predicate Decky uses, and the only handle there is: the
- * module's exports are minified single letters and the component names survive
- * only inside the function bodies.
+ * Mode uses, and the embedded one, both exports of the module the start-up
+ * check asks after (`utils/deckyUiInternals.ts`).
  */
 function findQuickAccessRenderers(): { browserView: unknown; embedded: unknown } {
-  const named = (name: string) => (value: unknown) =>
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Steam's minified module exports; runtime shape is dynamic, no upstream types ship
-    Boolean((value as any)?.type?.toString?.()?.includes(name));
-  const module: unknown = findModuleByExport(named("QuickAccessMenuBrowserView"));
-  if (typeof module !== "object" || module === null) return { browserView: undefined, embedded: undefined };
-  const exports = Object.values(module);
+  if (QuickAccessMenuBrowserView === undefined) return { browserView: undefined, embedded: undefined };
+  const exports = Object.values(QuickAccessMenuBrowserView);
   return {
-    browserView: exports.find(named("QuickAccessMenuBrowserView")),
-    embedded: exports.find(named("QuickAccessMenuEmbedded")),
+    browserView: exports.find(rendersNamed("QuickAccessMenuBrowserView")),
+    embedded: exports.find(rendersNamed("QuickAccessMenuEmbedded")),
   };
 }
 

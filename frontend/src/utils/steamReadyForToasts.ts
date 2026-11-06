@@ -138,6 +138,22 @@ function unmetConditions(servicesInitialized: () => boolean): ToastCondition[] {
 }
 
 /**
+ * Wait until Steam reports its services initialised — the first of the three
+ * conditions alone — or until {@link TOAST_READINESS_DEADLINE_MS} has passed.
+ * Never rejects; answers whether it was in time. The start-up check over the
+ * Steam internals waits on this before it asks (#2509 D11).
+ */
+export async function waitUntilSteamServicesInitialized(): Promise<boolean> {
+  const deadline = Date.now() + TOAST_READINESS_DEADLINE_MS;
+  const servicesInitialized = watchServicesInitialized();
+  for (;;) {
+    if (servicesInitialized()) return true;
+    if (Date.now() >= deadline) return false;
+    await delay(TOAST_READINESS_POLL_MS);
+  }
+}
+
+/**
  * Wait until Steam can show a toast, or until {@link TOAST_READINESS_DEADLINE_MS}
  * has passed. Never rejects; the answer says which of the two ended it.
  */

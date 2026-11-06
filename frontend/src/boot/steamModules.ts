@@ -29,9 +29,9 @@
  * missing `ControllerGlyph` was enough to take the panel off the air, in a
  * codebase where `WidePage.tsx` already draws `‹ Back` in its place. So each
  * entry states what its absence costs ({@link SteamLookup.absenceCost}), the
- * panel mounts when nothing that missed was needed to render it, and
- * {@link describeSurvivedMiss} puts the miss in the log, which is then the only
- * thing that says so.
+ * panel mounts when nothing that missed was needed to render it, and the miss
+ * is written to the backend log and named by the notice on Main
+ * (`startupMiss.ts`, `docs/architecture/qam-panel.md`, "Notices and homes").
  *
  * ## What this file can and cannot see
  *
@@ -73,11 +73,15 @@ import {
   showContextMenu,
 } from "@decky/ui";
 
+import { DESKTOP_SURFACE } from "virtual:tender-desktop-surface";
+
 import { AppDetailsRoute } from "../bigpicture/patches/installGamePagePatch";
+import { ReactClient } from "../desktop/desktopWindow";
 import {
   ControllerGlyph,
   ErrorBoundary,
   NotificationStore,
+  QuickAccessMenuBrowserView,
   ToastRenderer,
   appActionButtonClasses,
   appDetailsClasses,
@@ -87,6 +91,8 @@ import {
   toastClasses,
 } from "../utils/deckyUiInternals";
 import type { SearchingCopy } from "./searchingCopy";
+import type { MissedName } from "./startupMiss";
+import type { SteamFeature } from "./steamInternals";
 
 /**
  * What one name's absence costs.
@@ -97,7 +103,9 @@ import type { SearchingCopy } from "./searchingCopy";
  * - `feature` — the panel renders whole and something OUTSIDE it is lost: a
  *   function the reader would otherwise have, with every page still intact.
  *   Which results are then readable on a page and which are not is answered
- *   in `docs/architecture/qam-panel.md`, "Notices and homes".
+ *   in `docs/architecture/qam-panel.md`, "Notices and homes". Tender's Quick
+ *   Access entry is one such function: without it the panel is whole and
+ *   cannot be reached, and everything outside it still runs.
  * - `appearance` — the panel renders and only looks poorer, because the one
  *   place that reads the name already draws something else when it is missing.
  * - `diagnostic` — nothing a user can see changes at all. Every read of the
@@ -107,14 +115,14 @@ import type { SearchingCopy } from "./searchingCopy";
  * Moving a name off `panel` is what needs evidence, one name at a time: its
  * every consumer, read, and found either to cope with the absence or to be a
  * diagnostic. **`checkSteamModules`'s `!== "panel"` is the only reading of this
- * field there is**, so the other three are told apart by nothing in the
- * program: what they record is WHY a name is off blocking, never an answer
- * anything consults — the notice on Main and the log's own extra sentence both
- * read NAMES instead ({@link notificationsMissing}). They are kept apart because
- * they are different questions, and a name that answered the wrong one would be
- * hard to catch later: a decoration whose absence a reader can see is not a
- * name whose absence nothing renders at all. None of the three keeps the panel
- * off the air, which is what the check asks separately
+ * field that decides anything**: the other three are read only to word a miss —
+ * the backend log prints each missing name's cost, and the notice on Main names
+ * the losses of the `feature` and `appearance` ones and lists none for a
+ * `diagnostic` one (`startupMiss.ts`). They are kept apart because they are
+ * different questions, and a name that answered the wrong one would be hard to
+ * catch later: a decoration whose absence a reader can see is not a name whose
+ * absence nothing renders at all. None of the three keeps the panel off the
+ * air, which is what the check asks separately
  * ({@link StartupReport.panelMayMount}).
  *
  * Nothing derives this. The type is the mechanism: the field is required, so a
@@ -153,27 +161,47 @@ export interface SteamLookup {
    * every flag here against it.
    */
   readonly deckyUiExport: boolean;
+  /**
+   * What the reader loses while it is missing, in the notice's words — named
+   * for every entry whose cost is `feature` or `appearance`, which
+   * `steamModules.test.ts` holds; the other two costs name none.
+   */
+  readonly features?: readonly SteamFeature[];
 }
 
-const truthy = (name: string, absenceCost: AbsenceCost, read: () => unknown): SteamLookup => ({
+const truthy = (
+  name: string,
+  absenceCost: AbsenceCost,
+  read: () => unknown,
+  ...features: SteamFeature[]
+): SteamLookup => ({
   name,
   found: () => Boolean(read()),
   deckyUiExport: true,
   absenceCost,
+  ...(features.length > 0 ? { features } : {}),
 });
 
 /** The same question about a name `@decky/ui` does not export — see {@link SteamLookup.deckyUiExport}. */
-const truthyUnexported = (name: string, absenceCost: AbsenceCost, read: () => unknown): SteamLookup => ({
-  ...truthy(name, absenceCost, read),
+const truthyUnexported = (
+  name: string,
+  absenceCost: AbsenceCost,
+  read: () => unknown,
+  ...features: SteamFeature[]
+): SteamLookup => ({
+  ...truthy(name, absenceCost, read, ...features),
   deckyUiExport: false,
 });
+
+/** The search Tender's Quick Access entry rests on, named once for the check and for the toast its miss raises. */
+export const QUICK_ACCESS_LOOKUP = "QuickAccessMenuBrowserView";
 
 /**
  * The searches a toast is raised through, named once.
  *
  * Both {@link STEAM_LOOKUPS} and {@link notificationsMissing} spell them from
- * here: a second copy of any of them would leave the notice on Main answering
- * for a lookup the check never asked about.
+ * here: a second copy of any of them would leave the toaster's capability
+ * answering for a lookup the check never asked about.
  */
 export const NOTIFICATION_LOOKUPS = {
   renderer: "ToastRenderer",
@@ -273,7 +301,7 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // Every read of it is on the game page, so its absence costs that page's
   // Tender section and leaves every panel page whole — the same loss, and for
   // the same surface, as the route below.
-  truthy("appDetailsClasses", "feature", () => appDetailsClasses),
+  truthy("appDetailsClasses", "feature", () => appDetailsClasses, "gamePage"),
   truthy("basicAppDetailsSectionStylerClasses", "panel", () => basicAppDetailsSectionStylerClasses),
   // The only one of the five maps that styles nothing at all — the table above
   // has its reads and what they cost. What is not in the table: it is a
@@ -289,7 +317,7 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // The one name whose absence is cosmetic. `layout/WidePage.tsx` is its only
   // consumer and already renders `‹ Back` where the glyph would be, so a miss
   // costs one chip its button picture and nothing else.
-  truthyUnexported("ControllerGlyph", "appearance", () => ControllerGlyph),
+  truthyUnexported("ControllerGlyph", "appearance", () => ControllerGlyph, "buttonPictures"),
 
   // What a toast is drawn and pushed through (`utils/steamToaster.tsx`). All
   // three cost a `feature` and none costs the panel: with any one absent no
@@ -301,14 +329,14 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   //
   // The renderer is a module probe of ours and the store is a global Steam
   // installs, so neither is a `@decky/ui` export. The error boundary is one.
-  truthyUnexported(NOTIFICATION_LOOKUPS.renderer, "feature", () => ToastRenderer),
-  truthyUnexported(NOTIFICATION_LOOKUPS.store, "feature", () => NotificationStore),
-  truthy(NOTIFICATION_LOOKUPS.errorBoundary, "feature", () => ErrorBoundary),
+  truthyUnexported(NOTIFICATION_LOOKUPS.renderer, "feature", () => ToastRenderer, "notifications"),
+  truthyUnexported(NOTIFICATION_LOOKUPS.store, "feature", () => NotificationStore, "notifications"),
+  truthy(NOTIFICATION_LOOKUPS.errorBoundary, "feature", () => ErrorBoundary, "notifications"),
   // The class names Steam draws its own notifications with. Without them the
   // toast still appears and still says what it says, in an unstyled box —
   // `utils/steamToast.tsx` reads every one of them optionally, so a miss costs
   // the layout and nothing else.
-  truthyUnexported("toastClasses", "appearance", () => toastClasses),
+  truthyUnexported("toastClasses", "appearance", () => toastClasses, "notificationLook"),
 
   // The module Steam draws its game page's route from, which is where Tender's
   // own section is installed (`bigpicture/patches/installGamePagePatch.ts`). A
@@ -319,7 +347,22 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // It costs a feature and never the panel: with it missing every page of the
   // panel renders and works, and what is lost is Steam's game page carrying no
   // Tender section — no play button of ours, no game info panel.
-  truthyUnexported("AppDetailsRoute", "feature", () => AppDetailsRoute().length > 0),
+  truthyUnexported("AppDetailsRoute", "feature", () => AppDetailsRoute().length > 0, "gamePage"),
+
+  // The module Steam draws its Quick Access menu with, which Tender's own entry
+  // is installed into (`qam/installEntry.tsx`). A search of ours in both
+  // bundles. It costs a feature rather than the panel: without it the panel is
+  // built and cannot be reached, and the game page's section, the launch check
+  // and every sync still run — the fallback page would take those away and be
+  // just as unreachable. So the notice on Main, which only the panel shows,
+  // cannot carry it either: the factory raises a toast instead (#2509 D10).
+  truthyUnexported(QUICK_ACCESS_LOOKUP, "feature", () => QuickAccessMenuBrowserView, "quickAccess"),
+
+  // React's client module in Steam's registry, which the desktop surface
+  // mounts its own trees with (`desktop/desktopWindow.ts`). Asked only in the
+  // build that carries that surface; in every other build the stamp folds the
+  // entry, and with it the search, away (`frontend/rollup.config.js`).
+  ...(DESKTOP_SURFACE ? [truthyUnexported("ReactClient", "feature", () => ReactClient, "desktop")] : []),
 ];
 
 /**
@@ -459,13 +502,34 @@ export function checkSteamModules(lookups: readonly SteamLookup[] = STEAM_LOOKUP
 }
 
 /**
+ * Every name *report* missed, with its absence cost and its losses, and how
+ * many searches were asked, as `startupMiss.ts` words a miss. The costs are read
+ * off *lookups* rather than carried on the report, which answers names.
+ */
+export function describeMissedLookups(
+  report: StartupReport,
+  lookups: readonly SteamLookup[] = STEAM_LOOKUPS,
+): { readonly missed: MissedName[]; readonly asked: number } {
+  const missed = report.missing.map((name) => {
+    const lookup = lookups.find((candidate) => candidate.name === name);
+    return { name, absenceCost: lookup?.absenceCost ?? "panel", features: lookup?.features ?? [] };
+  });
+  return { missed, asked: report.checked };
+}
+
+/** Did the search Tender's Quick Access entry rests on come back empty? */
+export function quickAccessMissing(report: StartupReport): boolean {
+  return report.missing.includes(QUICK_ACCESS_LOOKUP);
+}
+
+/**
  * Did any lookup a toast is raised through come back empty?
  *
- * Asked of the report rather than of the machine, so the notice on Main and the
- * log line say exactly what the start-up check found — one reading, taken once.
- * Both read these NAMES rather than the `feature` cost, so an entry added at
- * that cost for something else cannot claim the notifications are what went
- * missing.
+ * Asked of the report rather than of the machine, so what the toaster is
+ * recorded as able to do (`utils/notificationsHealth.ts`) and the log line say
+ * exactly what the start-up check found — one reading, taken once. Both read
+ * these NAMES rather than the `feature` cost, so an entry added at that cost for
+ * something else cannot claim the notifications are what went missing.
  */
 export function notificationsMissing(report: StartupReport): boolean {
   const names: readonly string[] = Object.values(NOTIFICATION_LOOKUPS);
@@ -670,10 +734,11 @@ export function sentenceNamesATenderUpdate(report: StartupReport, copy: Searchin
 /**
  * The sentence for a miss the panel survives — the log's, not the page's.
  *
- * The panel mounts, so nothing on screen says anything happened: this line is
- * the only record that a search went stale, and the next reader of it is
- * whoever is asked why a button lost its glyph, or why a debug dump prints
- * `UNDEFINED` where a class name belongs.
+ * The panel mounts, so the notice on Main says only that something is missing
+ * and which losses follow: this line, after the names `startupMiss.ts` lists,
+ * is the record of which search went stale and whose it was, and the next
+ * reader of it is whoever is asked why a button lost its glyph, or why a debug
+ * dump prints `UNDEFINED` where a class name belongs.
  *
  * A miss of something a toast is raised through ({@link notificationsMissing})
  * adds a sentence of its own ahead of the verdict, because what is gone there

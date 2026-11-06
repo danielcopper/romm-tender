@@ -5,6 +5,7 @@ import {
   TOAST_READINESS_DEADLINE_MS,
   TOAST_READINESS_POLL_MS,
   waitUntilSteamCanShowToasts,
+  waitUntilSteamServicesInitialized,
   type ToastReadiness,
 } from "./steamReadyForToasts";
 
@@ -174,5 +175,49 @@ describe("waitUntilSteamCanShowToasts", () => {
 
       expect(wait.answer()).toEqual({ inTime: false, unmet: [unmet] });
     });
+  });
+});
+
+describe("waitUntilSteamServicesInitialized", () => {
+  let state: SteamState;
+
+  /** Start the wait and report whether it has ended, without awaiting it. */
+  function startWaitingForServices(): { answer: () => boolean | null } {
+    let answer: boolean | null = null;
+    detach(
+      waitUntilSteamServicesInitialized().then((inTime) => {
+        answer = inTime;
+      }),
+    );
+    return { answer: () => answer };
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // The lock screen up and Big Picture hidden: neither is this wait's to ask.
+    state = { services: false, locked: true, bigPicture: "hidden" };
+    stubSteam(state);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("answers once Steam's services are up, whatever the other two conditions say", async () => {
+    const wait = startWaitingForServices();
+    await vi.advanceTimersByTimeAsync(TOAST_READINESS_POLL_MS);
+    expect(wait.answer()).toBeNull();
+
+    state.services = true;
+    await vi.advanceTimersByTimeAsync(TOAST_READINESS_POLL_MS);
+    expect(wait.answer()).toBe(true);
+  });
+
+  it("gives up at the deadline, not before, answering that it was not in time", async () => {
+    const wait = startWaitingForServices();
+    await vi.advanceTimersByTimeAsync(TOAST_READINESS_DEADLINE_MS - 1);
+    expect(wait.answer()).toBeNull();
+    await vi.advanceTimersByTimeAsync(TOAST_READINESS_POLL_MS);
+    expect(wait.answer()).toBe(false);
   });
 });
