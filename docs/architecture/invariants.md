@@ -1451,8 +1451,8 @@ Format: **invariant** — tier — enforced by.
   exactly where `steamReach.ts` finds the member declared as something to call, and a path naming what a call answers or
   an element is held to its own shape. An entry only the desktop surface reaches is marked `devBuildOnly`, held to
   exactly the entries reached from `desktop/` alone, because a release build has no such surface to tell a user about.
-  Entries the code falls back between are one group of alternatives (`oneOf`), which misses only where none of them is
-  there; which entries those are is read off the code by hand
+  Entries the code falls back between are one group of alternatives (`oneOf`); which entries those are is read off the
+  code by hand
 - **Whether every search answered and whether the panel may MOUNT are two questions, and a miss that costs less than the
   panel never takes the interface off the air** — check + test + prompt-only — the type carries the first half:
   `SteamLookup.absenceCost` is required, so a new entry does not compile until it states which of the four its absence
@@ -1509,14 +1509,18 @@ Format: **invariant** — tier — enforced by.
   it could raise a false notice on every cold start, and past the 30-second deadline it asks anyway and says Steam was
   not ready. The notice can therefore appear after Main has mounted, which is why Main subscribes. Under the fallback
   page the check is asked as well and only logged, since the log is to be complete whatever the user saw. Where the code
-  falls back from one internal to another, the two are one group of alternatives (`oneOf`) and miss only together, so a
-  Steam that drops one half raises no false notice. A log level set to `error` drops the warning like any other, and
-  nothing sees that. What only the desktop surface reaches — `ReactClient`'s search and the desktop internals — is asked
-  only where the build stamp `virtual:tender-desktop-surface` says the surface is in the build (#2509 D12); every other
-  build answers `false`, declares the desktop modules free of side effects so the search is left out with the folded
-  entry, and `frontend/scripts/check-bundle-shape.mjs` holds the release bundles to both. Each half fails quietly: a
-  miss logged nowhere is the fault this entry removes, and a release bundle asking after the desktop surface tells every
-  user about a surface their build does not have
+  falls back from one internal to another, the two are one group of alternatives (`oneOf`, #2509 D13): a group none of
+  whose members is there is a miss like any other, logged and on Main, and a member missing while an alternative is
+  there, or while the alternative cannot be asked at start-up, is logged under its own name and raises no notice — the
+  log stays whole, and a Steam that drops one half raises no false notice. Asked alone, each member would raise one;
+  counting an alternative that cannot be asked as present would drop a miss the check sees from the log too. A log level
+  set to `error` drops the warning like any other, and nothing sees that. What only the desktop surface reaches —
+  `ReactClient`'s search and the desktop internals — is asked only where the build stamp
+  `virtual:tender-desktop-surface` says the surface is in the build (#2509 D12); every other build answers `false`,
+  declares the desktop modules free of side effects so the search is left out with the folded entry, and
+  `frontend/scripts/check-bundle-shape.mjs` holds the release bundles to both. Each half fails quietly: a miss logged
+  nowhere is the fault this entry removes, and a release bundle asking after the desktop surface tells every user about
+  a surface their build does not have
 - **The fallback page names the copy of `@decky/ui` that actually ran the search that missed, and the repair that
   follows from it** — check + test + prompt-only — the artefact's stamp is checked
   (`frontend/scripts/check-bundle-shape.mjs`, per bundle and on `globals.js`, which must carry none), and the sentence

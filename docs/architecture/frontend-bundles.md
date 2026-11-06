@@ -186,14 +186,14 @@ for something else cannot claim the notifications are what went missing.
 
 **Every miss writes one warning to the backend log** (`frontend_log`, at `warn`, so at the log level Error it is dropped
 like any other warning), whether the panel mounts over it or the fallback page stands in its place (#2455 D1, D2):
-`start-up check "Steam's module registry": 2 of 33 missed —`, then every missing name with its cost and its losses
+`start-up check "Steam's module registry": missed —`, then every missing name with its cost and its losses
 (`ControllerGlyph (appearance: controller button icons)`), worded by `boot/startupMiss.ts`, the one wording the
-[Steam-internals check](#what-the-start-up-check-asks-of-them) shares. After the names comes the page's sentence where
-the fallback page shows, and otherwise `describeSurvivedMiss`'s: how many searches missed — which is why the line ahead
-of it leaves its own count out there — that none of them is needed to render the panel, and then the same question the
-fallback page answers — whose copy of `@decky/ui` ran them. It used to name "a newer Tender" unconditionally, which was
-sound only while nothing that could reach it was a name the package exports; `playSectionClasses` is one, and in the
-coexistence bundle the search behind it is Decky's.
+[Steam-internals check](#what-the-start-up-check-asks-of-them) shares. Under the fallback page the line states how many
+of how many were asked (`N of M missed —`) and the page's sentence follows the names; where the panel mounts, the line
+states no count, because `describeSurvivedMiss`'s sentence after the names does: how many searches missed, that none of
+them is needed to render the panel, and then the same question the fallback page answers — whose copy of `@decky/ui` ran
+them. It used to name "a newer Tender" unconditionally, which was sound only while nothing that could reach it was a
+name the package exports; `playSectionClasses` is one, and in the coexistence bundle the search behind it is Decky's.
 
 **A miss the panel survives also stands on Main**, as the one notice for everything the start-up checks missed
 ([notices and homes](qam-panel.md#notices-and-homes)): the losses of both checks, each once, and a request to report;
@@ -201,16 +201,20 @@ the names stay in the log. Where the miss is `QuickAccessMenuBrowserView`, the p
 — and that notice cannot be reached, so the factory also raises one toast through Tender's own toaster once Steam can
 show it (#2509 D10), on either branch — unless one of the three searches a toast is raised through
 (`NOTIFICATION_LOOKUPS`) missed as well, when the log line alone carries it. The toast is drawn as a popup, which needs
-no `@decky/ui` component; only the notifications-tab layout uses `Focusable`, and a toast without subtext is not kept
-there. A missing `NotificationStore.ProcessNotification` is not one of the three: it is asked by the Steam-internals
-check, which answers only after the toast has been decided, so the toast is raised into a store that refuses it, and the
-toaster's own warning reaches Steam's console alone.
+no `@decky/ui` component but `ErrorBoundary`, which is one of the three; only the notifications-tab layout uses
+`Focusable`, and a toast without subtext, as this one is, is not kept there — so the toast is raised under a fallback
+page that a missing `Focusable` brought up as well. A missing `NotificationStore.ProcessNotification` is not one of the
+three: the three are the global and the two searches the toaster is built from, and a member of the store is a Steam
+internal, asked by the Steam-internals check — which answers only after the toast has been decided, so the toast is
+raised into a store that refuses it, and the toaster's own warning reaches Steam's console alone. Where the module is
+found but holds no renderer Tender's entry can be installed into, `index.tsx` writes a warning of its own to the backend
+log; no toast is raised for it.
 
-A miss of something a toast is raised through adds one more sentence ahead of that verdict, because what is gone there
-is a whole function rather than a decoration. It states the loss and names **no repair of its own** — the verdict
-sentence right after it does, and that one is right under every answer. It has to be: `ErrorBoundary` is a `@decky/ui`
-export, so a miss of it alone in the coexistence bundle is Decky's copy's search and the repair named beside it is a
-newer Decky Loader.
+A miss of one of those three adds one more sentence ahead of that verdict, because what is gone there is a whole
+function rather than a decoration. It states the loss and names **no repair of its own** — the verdict sentence right
+after it does, and that one is right under every answer. It has to be: `ErrorBoundary` is a `@decky/ui` export, so a
+miss of it alone in the coexistence bundle is Decky's copy's search and the repair named beside it is a newer Decky
+Loader.
 
 Both surfaces answer every verdict below; where they come apart is the **repair**. On `none` the log line names one and
 the page names no update at all: nothing that missed is a `@decky/ui` export, so every one of them is a lookup Tender
@@ -463,13 +467,16 @@ it, `undefined`, under a value that can hold nothing, or behind a getter that th
 function. A static part that missed is reported once, with the highest cost and every loss of the entries resting on it,
 so the fifteen entries resting on `NotificationStore.ProcessNotification` make one name.
 
-**Some internals are alternatives**: the code falls back from one to another, so one alone missing loses nothing.
-`App.WaitForServicesInitialized` and `App.GetServicesInitialized` (the services wait), `App.BFinishedInitBeforeLogin`
-and `App.BFinishedInitStageOne` (`boot/steamGlobals.ts`'s readiness), and `SteamUIStore.NavigateToRunningApp` with the
-`/apprunning` route Resume falls back to (`utils/runningGame.ts`) each name one group (`oneOf`). A group counts as there
-while any one of its alternatives is — and an alternative nothing can ask at start-up, the route, counts as there — and
-is reported once, naming every alternative, only where none is. `steamInternals.test.ts` holds that no group has a
-single member; which entries are alternatives is read off the code by hand.
+**Some internals are alternatives** (#2509 D13): the code falls back from one to another, so one alone missing loses
+nothing. `App.WaitForServicesInitialized` and `App.GetServicesInitialized` (the services wait),
+`App.BFinishedInitBeforeLogin` and `App.BFinishedInitStageOne` (`boot/steamGlobals.ts`'s readiness), and
+`SteamUIStore.NavigateToRunningApp` with the `/apprunning` route Resume falls back to (`utils/runningGame.ts`) each name
+one group (`oneOf`). A group none of whose members is there is a miss like any other, reported once, naming every
+alternative, in the log and on Main. A member missing while an alternative is there, or while the alternative cannot be
+asked at start-up — the route — is still logged under its own name, with the alternative standing in for it, and raises
+no notice: the log stays whole, and the feature still works through the alternative. An entry outside a group is never
+pulled into one, even on a static part a group's entry shares. `steamInternals.test.ts` holds that no group has a single
+member; which entries are alternatives is read off the code by hand.
 
 **It asks once Steam reports its services initialised** (#2509 D11) — `App.WaitForServicesInitialized()`, else
 `App.GetServicesInitialized()`, the condition toasts wait on (`utils/steamReadyForToasts.ts`) — and not in the factory:

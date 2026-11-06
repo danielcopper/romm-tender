@@ -113,9 +113,10 @@ repair, it names which. The notice has no button because there is nothing to do 
 this.", and Tender's entry is not in the Quick Access menu.
 
 **Explanation**: The part of Steam that Tender's entry is put into was not found in this Steam version, so the panel
-cannot be opened. Tender keeps running without it: its section on a game's page, the check before a game starts and the
-save sync around a game still run. A library sync and Sync All Saves start from the panel, so they cannot be started
-until the entry is back.
+cannot be opened. Where nothing else is missing, Tender keeps running without it: its section on a game's page, the
+check before a game starts and the save sync around a game still run. A library sync and Sync All Saves start from the
+panel, so they cannot be started until the entry is back. Where something Tender needs to draw its panel is missing as
+well, none of these run, and the log names what was missing.
 
 **What to do**: Report it, with Tender's log. Where Steam's notifications are affected as well, no notification appears,
 and the log alone says so.

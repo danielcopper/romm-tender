@@ -1067,14 +1067,15 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   panel survives reaches the one notice on Main; a missed Quick Access search also raises one toast, under the panel and
   under the fallback page alike, unless one of `NOTIFICATION_LOOKUPS` missed too; the Steam-internals check asks once
   Steam reports its services initialised, or once the 30-second deadline has passed, under the fallback page too, for
-  the log alone; a group of alternatives misses only where none of them is there; and what only the desktop surface
-  reaches is asked only where the build stamp `virtual:tender-desktop-surface` says the surface is in the build** —
-  check + test + prompt-only — `frontend/scripts/check-bundle-shape.mjs` (both release panel bundles stamped
+  the log alone; a group of alternatives none of whose members is there is a miss like any other, while a member missing
+  beside an alternative that is there or cannot be asked is logged and raises no notice; and what only the desktop
+  surface reaches is asked only where the build stamp `virtual:tender-desktop-surface` says the surface is in the
+  build** — check + test + prompt-only — `frontend/scripts/check-bundle-shape.mjs` (both release panel bundles stamped
   `DESKTOP_SURFACE = false` and carrying no `createRoot` search); `frontend/src/index.test.tsx` (one warning for a
   survived and for a fallback miss, the internals line once Steam is ready, past the deadline and under the fallback
-  page, a failed check logged, the panel mounting over an internals miss, the toast on both branches and its two
-  absences, the installation's own warning for a module the check found);
-  `frontend/src/boot/steamInternalsCheck.test.ts` (with the groups of alternatives),
+  page, a failed check logged, a miss an alternative stands in for logged with no notice, the panel mounting over an
+  internals miss, the toast on both branches and its two absences, the installation's own warning for a module the check
+  found); `frontend/src/boot/steamInternalsCheck.test.ts` (with the groups of alternatives),
   `frontend/src/boot/startupMiss.test.ts`, `frontend/src/bigpicture/MainPage.test.tsx` (the card with and without a
   list, an answer landing after Main mounted, no card) and `frontend/src/utils/steamReadyForToasts.test.ts`. Unseen by
   the bundle check: a desktop search that spells no `createRoot`. Unseen: a log level set to `error`, which drops the
