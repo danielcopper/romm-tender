@@ -6,6 +6,7 @@
 import type { CSSProperties, FC } from "react";
 import type { PressState } from "./usePlayLaunch";
 import { BUTTON_GROUP_STYLE, BUTTON_BASE_STYLE } from "./styles";
+import { SvgThrobber } from "./SvgThrobber";
 
 const PLAY_BUTTON_STYLE: CSSProperties = {
   ...BUTTON_BASE_STYLE,
@@ -41,28 +42,40 @@ interface PlayStateButtonProps {
   refusal: string | null;
   /** Whether the page's check of whether the game can start went wrong. */
   checkFailed: boolean;
-  disabled?: boolean;
+  /** Whether a version switch is under way. */
+  switching?: boolean;
   onPlay: () => void;
 }
 
-function playStyle(refusal: string | null, checkFailed: boolean): CSSProperties {
+function playStyle(refusal: string | null, checkFailed: boolean, switching: boolean): CSSProperties {
   if (refusal !== null) return REFUSED_PLAY_BUTTON_STYLE;
-  return checkFailed ? CHECK_FAILED_PLAY_BUTTON_STYLE : PLAY_BUTTON_STYLE;
+  const style = checkFailed ? CHECK_FAILED_PLAY_BUTTON_STYLE : PLAY_BUTTON_STYLE;
+  return switching ? { ...style, cursor: "default" } : style;
 }
 
-export const PlayStateButton: FC<PlayStateButtonProps> = ({ pressState, refusal, checkFailed, disabled, onPlay }) => (
+export const PlayStateButton: FC<PlayStateButtonProps> = ({
+  pressState,
+  refusal,
+  checkFailed,
+  switching = false,
+  onPlay,
+}) => (
   <div className="tender-desktop-play-btn-group" style={BUTTON_GROUP_STYLE}>
     <button
       type="button"
       className="tender-desktop-btn-play"
-      disabled={pressState !== null || refusal !== null || disabled}
-      style={playStyle(refusal, checkFailed)}
+      disabled={pressState !== null || refusal !== null || switching}
+      style={playStyle(refusal, checkFailed, switching)}
       {...(refusal === null ? {} : { title: refusal })}
       onClick={onPlay}
     >
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
-        <path d="M3 2L12 7L3 12V2Z" />
-      </svg>
+      {switching ? (
+        <SvgThrobber />
+      ) : (
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
+          <path d="M3 2L12 7L3 12V2Z" />
+        </svg>
+      )}
       {pressState === null ? "PLAY" : PRESS_LABEL[pressState]}
     </button>
   </div>

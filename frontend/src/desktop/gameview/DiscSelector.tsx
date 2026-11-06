@@ -27,6 +27,7 @@ import type { DownloadCompleteEvent, DownloadFailedEvent, SyncProgress } from ".
 import type { RommDataChangedDetail, RommRomUninstalledDetail } from "../../types/events";
 import type { AskDialog } from "./dialogs/askDialog";
 import { desktopUnsyncedSavesDialog } from "./dialogs/desktopDialogs";
+import { SvgThrobber } from "./SvgThrobber";
 
 interface DiscSelectorProps {
   appId: number;
@@ -53,7 +54,12 @@ const MENU_ITEM_STYLE = {
   whiteSpace: "nowrap",
 } as const;
 
-function selectorTriggerFace(discDisplayState: DiscDisplayState | null, offDefault: boolean): ReactNode {
+function selectorTriggerFace(
+  discDisplayState: DiscDisplayState | null,
+  offDefault: boolean,
+  switching: boolean,
+): ReactNode {
+  if (switching) return <SvgThrobber style={{ margin: "1px" }} />;
   if (!discDisplayState) {
     return <FaLayerGroup size={20} color={offDefault ? DISC_ACCENT : DISC_GREY} />;
   }
@@ -320,7 +326,7 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing, p
   // As Big Picture's VersionPicker: "not the default" only where RomM holds one.
   const offDefault = versions.some((v) => v.is_default) && !(active?.is_default ?? false);
 
-  const face = selectorTriggerFace(discDisplayState, offDefault);
+  const face = selectorTriggerFace(discDisplayState, offDefault, switching);
   const disabled = switching || pressUnderWay;
   const buttonTitle = selectorButtonTitle(discDisplayState, hasVersions);
 

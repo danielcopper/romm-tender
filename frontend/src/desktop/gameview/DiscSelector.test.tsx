@@ -9,6 +9,7 @@ import { toaster } from "../../api/host";
 import * as backend from "../../api/backend";
 import type { CachedGameDetail, DiscSelection, VersionInfo, VersionList } from "../../api/backend";
 import { emitHostEvent, hostEventListenerCount } from "../../test-utils/host-event-bus";
+import { throbberIn } from "../../test-utils/throbber";
 import {
   domListenerCount,
   installDomEventListenerSpy,
@@ -657,11 +658,10 @@ function versionsWith(over: Partial<VersionInfo>[]): VersionList {
   return multiVersionList({ versions: base.map((v, i) => ({ ...v, ...over[i] })) });
 }
 
-/** A list that turns the version face to the accent, so a test can see it land. */
-const landedMark = versionsWith([{ is_default: false }, { is_default: true }]);
+const LANDED_ROM_ID = 99;
 
-const faceColour = (r: ReturnType<typeof render>): string | undefined =>
-  r.getByTestId("disc-btn").querySelector("svg")?.style.color;
+/** A list with a version no earlier list held, so a test can see it land by its cover being asked for. */
+const landedMark = versionsWith([{}, { rom_id: LANDED_ROM_ID }]);
 
 describe("Desktop DiscSelector — what a version row offers", () => {
   beforeEach(() => {
@@ -782,7 +782,7 @@ describe("Desktop DiscSelector — while a switch is under way", () => {
     vi.mocked(backend.fetchCoverBase64).mockReset().mockResolvedValue({ base64: "" });
   });
 
-  it("disables and dims the trigger until the switch is answered, adding no stylesheet", async () => {
+  it("disables and dims the trigger, with the throbber in place of its face, until the switch is answered, adding no stylesheet", async () => {
     mockCachedDetail();
     let answer: (v: Awaited<ReturnType<typeof backend.switchVersion>>) => void = () => {};
     vi.mocked(backend.switchVersion).mockReturnValue(new Promise((resolve) => (answer = resolve)));
@@ -792,6 +792,8 @@ describe("Desktop DiscSelector — while a switch is under way", () => {
     const r = await renderAndOpen();
     expect(r.getByTestId("disc-btn").ownerDocument).toBe(document);
     expect(sheets()).toBe(before);
+    expect(throbberIn(r.getByTestId("disc-btn"))).toBeNull();
+    const glyphs = r.getByTestId("disc-btn").querySelectorAll("svg").length;
     await act(async () => {
       fireEvent.click(within(r.getByTestId("disc-menu")).getByText("Japan"));
       await Promise.resolve();
@@ -799,6 +801,8 @@ describe("Desktop DiscSelector — while a switch is under way", () => {
 
     expect(r.getByTestId("disc-btn")).toBeDisabled();
     expect(r.getByTestId("disc-btn").style.opacity).toBe("0.55");
+    expect(throbberIn(r.getByTestId("disc-btn"))).not.toBeNull();
+    expect(r.getByTestId("disc-btn").querySelectorAll("svg")).toHaveLength(glyphs);
     expect(sheets()).toBe(before);
 
     await act(async () => {
@@ -808,6 +812,22 @@ describe("Desktop DiscSelector — while a switch is under way", () => {
 
     expect(r.getByTestId("disc-btn")).toBeEnabled();
     expect(r.getByTestId("disc-btn").style.opacity).toBe("1");
+    expect(throbberIn(r.getByTestId("disc-btn"))).toBeNull();
+  });
+
+  it("keeps the trigger's width, its ring standing in the 20 px its face takes", async () => {
+    mockCachedDetail();
+    vi.mocked(backend.switchVersion).mockReturnValue(new Promise(() => undefined));
+
+    const r = await renderAndOpen();
+    await act(async () => {
+      fireEvent.click(within(r.getByTestId("disc-menu")).getByText("Japan"));
+      await Promise.resolve();
+    });
+
+    const ring = throbberIn(r.getByTestId("disc-btn")) as SVGElement;
+    expect(ring.getAttribute("width")).toBe("18");
+    expect(ring.style.margin).toBe("1px");
   });
 
   it("tells the Play button when a switch starts and when it is over", async () => {
@@ -872,6 +892,7 @@ describe("Desktop DiscSelector — while the Play button's press is under way", 
 
     expect(r.getByTestId("disc-btn")).toBeDisabled();
     expect(r.getByTestId("disc-btn").style.opacity).toBe("0.55");
+    expect(throbberIn(r.getByTestId("disc-btn"))).toBeNull();
     fireEvent.click(r.getByTestId("disc-btn"));
     expect(r.queryByTestId("disc-menu")).toBeNull();
 
@@ -1647,7 +1668,7 @@ describe("Desktop DiscSelector — what clears the guard", () => {
     expect(r.getByTestId("disc-btn")).toBeDisabled();
     vi.mocked(backend.getVersionList).mockResolvedValueOnce(landedMark);
     await syncFrame({ running: false, stage: "done" });
-    await waitFor(() => expect(faceColour(r)).toBe(DISC_ACCENT));
+    await waitFor(() => expect(backend.fetchCoverBase64).toHaveBeenCalledWith(LANDED_ROM_ID));
 
     expect(r.getByTestId("disc-btn")).toBeDisabled();
   });
@@ -1754,7 +1775,7 @@ describe("Desktop DiscSelector — the binding and the guard across a switch", (
     await pressJapan(r);
     await dataChanged({ type: "version_switched", app_id: 999, rom_id: 7 });
     await syncFrame({ running: false, stage: "done" });
-    await waitFor(() => expect(faceColour(r)).toBe(DISC_ACCENT));
+    await waitFor(() => expect(backend.fetchCoverBase64).toHaveBeenCalledWith(LANDED_ROM_ID));
 
     expect(r.getByTestId("disc-btn")).toBeDisabled();
     await act(async () => {

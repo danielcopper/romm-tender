@@ -18,6 +18,7 @@ import { useDialogHost } from "./dialogs/useDialogHost";
 import { CONTAINER_STYLE, BUTTON_GROUP_STYLE, BUTTON_BASE_STYLE } from "./styles";
 import { DiscSelector } from "./DiscSelector";
 import { PlayStateButton } from "./PlayStateButton";
+import { SvgThrobber } from "./SvgThrobber";
 import { usePlayLaunch, type PressState } from "./usePlayLaunch";
 
 interface PlayButtonProps {
@@ -51,6 +52,7 @@ const CONFLICT_BUTTON_STYLE: CSSProperties = {
   borderRadius: "2px",
   background: "linear-gradient(90deg, #d4a017 0%, #b8860b 100%)",
   fontSize: "13px",
+  whiteSpace: "nowrap",
 };
 
 const PLACEHOLDER_BUTTON_STYLE: CSSProperties = {
@@ -209,9 +211,10 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
             type="button"
             className="tender-desktop-btn-conflict"
             disabled={switching}
-            style={CONFLICT_BUTTON_STYLE}
+            style={switching ? { ...CONFLICT_BUTTON_STYLE, cursor: "default" } : CONFLICT_BUTTON_STYLE}
             onClick={() => detach(handleResolveConflictClick())}
           >
+            {switching && <SvgThrobber />}
             RESOLVE CONFLICT
           </button>
         </div>
@@ -225,7 +228,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
         pressState={null}
         refusal={playRefusal}
         checkFailed={startCheckFailed}
-        disabled={switching}
+        switching={switching}
         onPlay={() => detach(handlePlayClick())}
       />
     );

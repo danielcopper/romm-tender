@@ -18,6 +18,7 @@ page, and the rules every change to that page follows, are in
   columns' place while a RetroDECK migration is pending.
 - `gameview/PlayButton.tsx` — what `index.ts` hands the watcher as the page's `playButton`: Tender's Play button, whose
   presses are `gameview/usePlayLaunch.ts`'s, with the disc and version selector beside it (`gameview/DiscSelector.tsx`).
+  Both draw a version switch's wait with `gameview/SvgThrobber.tsx`.
 - `launchPromptHost.tsx` — the dialogs for a start the launch watcher catches, offered through
   `utils/launchPromptRouter.ts` and each drawn into the desktop window in a React root of its own.
 - `gameview/dialogs/` — those dialogs (`desktopLaunchPrompts`), the Play button's conflict walk and Stop dialog

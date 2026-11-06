@@ -10,6 +10,7 @@ import * as backend from "../../api/backend";
 import * as toast from "../../utils/toast";
 import { setStrandedAnswer } from "../../test-utils/stranded-panel";
 import { emitHostEvent } from "../../test-utils/host-event-bus";
+import { throbberIn } from "../../test-utils/throbber";
 import { stubAppStore } from "../../test-utils/steamStubs";
 import type { GameDetailState } from "../../utils/gameDetailStore";
 import type { DownloadItem, GameLaunch, PreLaunchSyncStartedEvent, SaveStatus, SyncConflict } from "../../types";
@@ -991,6 +992,61 @@ describe("PlayButton", () => {
 
       act(() => selectorProps()!.onSwitchingChange(false));
       expect(screen.getByRole("button", { name: /RESOLVE CONFLICT/ })).toBeEnabled();
+    });
+
+    it("draws the throbber in PLAY's triangle's place, with no pointer, while the selector is switching", () => {
+      render(<PlayButton appId={APP_ID} />);
+      const play = () => screen.getByRole("button", { name: /^PLAY/ });
+      expect(throbberIn(play())).toBeNull();
+      expect(play().querySelectorAll("svg")).toHaveLength(1);
+      expect(play()).toHaveStyle({ cursor: "pointer" });
+
+      act(() => selectorProps()!.onSwitchingChange(true));
+      expect(throbberIn(play())).not.toBeNull();
+      expect(play().querySelectorAll("svg")).toHaveLength(1);
+      expect(play()).toHaveStyle({ cursor: "default" });
+
+      act(() => selectorProps()!.onSwitchingChange(false));
+      expect(throbberIn(play())).toBeNull();
+      expect(play()).toHaveStyle({ cursor: "pointer" });
+    });
+
+    it("draws the throbber beside RESOLVE CONFLICT, on one line and with no pointer, while the selector is switching", () => {
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(
+        detailState({
+          saveSyncEnabled: true,
+          saveStatus: { rom_id: 100, files: [], conflicts: [CONFLICT] } as unknown as SaveStatus,
+        }),
+      );
+      render(<PlayButton appId={APP_ID} />);
+      const resolve = () => screen.getByRole("button", { name: /RESOLVE CONFLICT/ });
+      expect(throbberIn(resolve())).toBeNull();
+      expect(resolve()).toHaveStyle({ cursor: "pointer" });
+
+      act(() => selectorProps()!.onSwitchingChange(true));
+      expect(throbberIn(resolve())).not.toBeNull();
+      expect(resolve()).toHaveStyle({ cursor: "default", whiteSpace: "nowrap" });
+
+      act(() => selectorProps()!.onSwitchingChange(false));
+      expect(throbberIn(resolve())).toBeNull();
+      expect(resolve()).toHaveStyle({ cursor: "pointer" });
+    });
+
+    it("keeps a refused PLAY's cursor while the selector is switching, and its throbber", () => {
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(
+        detailState({
+          emulatorStart: { state: "cannot_start", reason: "not_installed", entry: "DuckStation" },
+          emulators: [{ label: "DuckStation" }] as never,
+          activeCoreLabel: "DuckStation",
+        }),
+      );
+      render(<PlayButton appId={APP_ID} />);
+
+      act(() => selectorProps()!.onSwitchingChange(true));
+
+      const play = screen.getByRole("button", { name: /^PLAY/ });
+      expect(throbberIn(play)).not.toBeNull();
+      expect(play).toHaveStyle({ cursor: "not-allowed" });
     });
 
     it("is told the file is missing", () => {
