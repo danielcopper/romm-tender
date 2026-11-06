@@ -350,7 +350,7 @@ describe("publishCommittedVersionSwitch stopped by its signal", () => {
     );
   });
 
-  it("logs that the cover and the broadcast were skipped when RomM has no cover, since the SteamGridDB pick would have been written", async () => {
+  it("logs that the cover and the broadcast were skipped when RomM has no cover, since Tender's SteamGridDB pick would have been tried next", async () => {
     vi.stubGlobal("SteamClient", { Apps: { SetCustomArtworkForApp: vi.fn().mockResolvedValue(undefined) } });
     vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false, chosen: false });
     vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: null });

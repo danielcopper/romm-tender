@@ -834,7 +834,7 @@ describe("Desktop DiscSelector — while a switch is under way", () => {
     expect(onSwitchingChange.mock.calls).toEqual([[true], [false]]);
   });
 
-  it("keeps the switch and its lease when the Play button hands it a new callback mid-switch", async () => {
+  it("keeps the switch and its lease when its caller hands it a new callback mid-switch", async () => {
     mockCachedDetail();
     vi.mocked(backend.switchVersion).mockReturnValue(new Promise(() => undefined));
     const calls: boolean[] = [];
