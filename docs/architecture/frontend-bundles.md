@@ -326,6 +326,89 @@ question is only ever put about a name whose search missed, and the check asks n
 lists, so they are never among the missing. Asking `in` of them would be a check this tree does not have: whether
 Decky's copy carries a name whose value this check never reads.
 
+## Every Steam internal Tender reaches
+
+The start-up check asks after the searches into Steam's module registry, all but the two named below. A **Steam
+internal** is a name of Steam's client Tender reaches as a global or through one — `SteamClient`'s calls, the stores and
+their members (those behind a cast of the window included), the overview objects' fields — or spells as an address:
+routes of Steam's router and `steam://` URLs, the `SharedJSContext` target title and the `steamloopback.host` origin.
+Valve promises none of them, and a Steam update that drops one breaks the feature built on it without a word. They are
+named in one list, each with the feature that needs it, in two halves: the panel's in
+`frontend/src/boot/steamInternals.ts`, what the backend spells in Steam in `backend/domain/steam_internals.py`. Nothing
+reads the list while the panel runs; only the two tests below read it.
+
+Three things are not on it, because each has a home of its own:
+
+- Steam's React tree and DOM: the desktop surface's fiber reads
+  ([Fiber, read-only](desktop-dom-architecture.md#fiber-read-only-frontendsrcdesktopwatcherfiberinspectorts)), its
+  selectors and the game page's `renderFunc`, which the invariant register covers in entries of their own.
+- Every search into Steam's module registry, `@decky/ui`'s and Tender's own: the start-up check's `STEAM_LOOKUPS` asks
+  after them, except `findReactClient` in `desktop/desktopWindow.ts` (dev build only) and the Quick Access entry's
+  search for `QuickAccessMenuBrowserView` in `qam/installEntry.tsx`, which no list names.
+- Decky Loader's globals (`DFL`, `DeckyPluginLoader`), which are not Steam's.
+
+**A path is Steam's own spelling, rooted at the global**, as the code reaches it at run time:
+`SteamClient.Apps.AddShortcut`, `App.GetServicesInitialized`, `__mobxGlobals.allowStateChanges`. A member of a value is
+named after where the value comes from: `.name` is a property, `()` the value a call answers (a promise unwrapped), `[]`
+an element of an array, an iterable or a set, and `(param)` the value at a call's parameter, the argument Steam hands a
+callback included — `appStore.GetAppOverviewByAppID().display_name`,
+`SteamClient.Apps.RegisterForAppDetails(callback)(details).strShortcutExe`. The panel's typed paths are derived from the
+type graph rather than written by hand: from Steam's roots — `steam.d.ts`'s globals, the properties of a window cast's
+target, the window properties `@decky/ui` declares that `steam.d.ts` does not — each type is named after the first route
+that reaches it: the shortest; among routes of one length, the one from the earlier root; from one root, the one through
+the member declared first. So a path names the TYPE's route, not every site's: a value several routes hand out appears
+once, under that first route. `unregister` is `SteamClient.Apps.RegisterForAppDetails().unregister`, although
+`bigpicture/StrandedPanelCard.tsx` reaches it through `SteamClient.GameSessions.RegisterForAppLifetimeNotifications()`,
+a route of the same length through a member `steam.d.ts` declares later.
+
+**The panel's half is held to what the type checker resolves**, by `frontend/src/boot/steamInternals.test.ts` over
+`frontend/src/test-utils/steamReach.ts`, in both directions. The scan builds one program over the shipped code and
+resolves every property read, call, literal-keyed element access, destructuring and object-literal property written
+where a Steam type is expected. A member counts when it is declared in one of three places:
+
+- `frontend/src/types/steam.d.ts`'s globals — `SteamClient`, `appStore`, `collectionStore`, `SteamUIStore`,
+  `__mobxGlobals` and the shapes they answer with;
+- `@decky/ui`'s `dist/globals/` and the `Window` augmentation in its `dist/webpack.d.ts`, which declare Steam's other
+  globals (`webpackChunksteamui`, `App`, …) with types of their own, so a reach typed by them compiles without
+  `steam.d.ts` naming it;
+- a shape the code casts the window to, with the types that shape names or extends within the cast's own file — which is
+  how `NotificationStore`'s members, read by the toaster through `utils/deckyUiInternals.ts`'s types, are seen, and why
+  a type of Tender's own inside such a shape (`api/host.ts`'s `ToastData`) is not.
+
+A member whose type is an inline type literal is a container and is not listed; its members are. A type holding a
+counted member that no route reaches fails the test by name. What a window cast reaches that is not Steam's — the React
+globals Tender's bundle installs, Decky Loader's namespace, the DOM's observers — stands in `NOT_STEAM_INTERNALS` with
+its reason. `steam.d.ts` is held the same way: a member it declares that nothing reaches fails, so what it declares is
+what the code uses.
+
+**`steam.d.ts`'s declarations are the ones in effect, and no error says so.** `@decky/ui` declares four of the same
+globals (`SteamClient`, `appStore`, `collectionStore`, `SteamUIStore`) with types of its own, the two conflict, and
+`skipLibCheck` (`frontend/tsconfig.json`) hides the conflict; the program takes the local one, wherever `@decky/ui`
+comes in the program, because a script file's globals are merged before any `declare global` block. Decky's would win
+once `steam.d.ts` stopped being a script — an `import` or `export` in it makes its globals local to it. The scan pins
+that without being asked to: the code's reaches would then resolve into Decky's types, and three of its tests would fail
+— a reach the list does not name, a listed entry nothing reaches, and a member `steam.d.ts` declares that nothing
+reaches.
+
+**A reach no type describes is listed by hand**, with `untypedIn` naming the files that make it: the readiness reads
+`utils/steamReadyForToasts.ts` makes by string key and through `unknown`, `utils/runningApps.ts`'s coercion of the
+running apps' fields, the routes of Steam's router (`/apprunning`, `/library/app/`), the `customimages` route and the
+desktop client's window name. Such an entry is held only to every part of its path being spelled in code — an
+identifier, or inside a string, template or regex literal, never a comment — in each file it names, which is weaker than
+the scan: a new member read under one of those heads is not seen. Two shapes that make untyped reaches are found
+mechanically instead: a cast of the window to a type with no members to read (a `Record`), and a route literal — a path
+handed to a `Navigate` call, or a literal spelling `steamloopback.host`, `steam://` or `/library/app/`. Each must sit in
+a file an untyped entry names.
+
+**The backend's half is held over the syntax tree**, by `tests/domain/test_steam_internals.py`. Every string under
+`backend/` but `_vendor/` and `native/` that names Steam, outside docstrings and logging calls, must be held in a
+module-level constant an entry names; each such constant must spell its entries; and every property it reads must be an
+entry's or one of its own JavaScript names. The `steam://` URL's path is taken from `domain/controller_focus.py` rather
+than spelled, because that module is the one place it may be spelled.
+
+What neither half can see is listed in the invariant register's entry, and neither checks what an internal does: a name
+Steam keeps while it changes what the name answers is found on the device.
+
 ## Talking to the backend
 
 `frontend/src/api/host.ts` is the one module the panel imports for what it gets from its host: `endpoint`,

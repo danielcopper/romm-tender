@@ -38,7 +38,7 @@ export function getAppDetails(appId: number, timeoutMs = 2000): Promise<SteamApp
     // synchronous callback fire can't hit the temporal dead zone when finish()
     // reads reg.
     // eslint-disable-next-line prefer-const -- the `let`-before-register ordering is the TDZ guard; `prefer-const` only sees the single assignment and can't model the closure reading `reg` before the assignment line executes.
-    let reg: { unregister: () => void } | undefined;
+    let reg: SteamRegistration | undefined;
     const finish = (value: SteamAppDetails | null) => {
       if (resolved) return;
       resolved = true;
@@ -131,7 +131,7 @@ function writeAndAwaitReport(appId: number, value: string, timeoutMs: number): P
     // synchronous callback fire can't hit the temporal dead zone when finish()
     // reads reg.
     // eslint-disable-next-line prefer-const -- the `let`-before-register ordering is the TDZ guard; `prefer-const` only sees the single assignment and can't model the closure reading `reg` before the assignment line executes.
-    let reg: { unregister: () => void } | undefined;
+    let reg: SteamRegistration | undefined;
     const finish = (matched: boolean) => {
       if (resolved) return;
       resolved = true;

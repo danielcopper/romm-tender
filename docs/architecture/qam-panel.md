@@ -2686,7 +2686,7 @@ The pages land in this order under #1808, each with the open work that already s
 
 1. **The wide frame** ([#1813](https://github.com/danielcopper/romm-tender/issues/1813)) — the two levers and their
    clearing paths, the Back row, tabs, list and detail, the measured height. No page uses it yet; it is the one piece
-   that rests on Steam internals and is reviewed on its own.
+   that rests on Steam's class maps and DOM and is reviewed on its own.
 2. **Library** ([#1815](https://github.com/danielcopper/romm-tender/issues/1815)) — Platforms and Collections; System
    and the Data Management platform modal retire. Carries #164, #1803's column, #1016's frontend half, #1020's
    collections fix. Second on purpose: the emu-atlas work under #1735 renders its BIOS and core changes into the new

@@ -17,34 +17,18 @@ declare var SteamClient: {
     ClearCustomArtworkForApp(appId: number, assetType: number): Promise<void>;
     // The runtime may invoke the callback with no details before the app's
     // data is loaded — `details` is genuinely absent on early fires.
-    RegisterForAppDetails(
-      appId: number,
-      callback: (details: SteamAppDetails | undefined) => void,
-    ): { unregister: () => void };
+    RegisterForAppDetails(appId: number, callback: (details: SteamAppDetails | undefined) => void): SteamRegistration;
     RunGame(gameId: string | number, launchId: string, param2: number, param3: number): void;
-    TerminateApp(appId: number, force: boolean): void;
     RegisterForGameActionStart(
       callback: (gameActionId: number, gameId: string, action: string, launchSource: number) => void,
-    ): { unregister: () => void };
+    ): SteamRegistration;
     CancelGameAction(gameActionId: number): void;
   };
   GameSessions: {
-    RegisterForAppLifetimeNotifications(
-      callback: (update: { unAppID: number; nInstanceID: number; bRunning: boolean }) => void,
-    ): { unregister: () => void };
+    RegisterForAppLifetimeNotifications(callback: (update: SteamAppLifetimeUpdate) => void): SteamRegistration;
   };
   System: {
-    GetSystemInfo(): Promise<{ sHostname: string; [key: string]: any }>;
-    // Restart the DEVICE — a full reboot, not a client restart. Takes no
-    // arguments. Optional because a future Steam build may not carry it, and
-    // every call site feature-detects rather than offering a button that would
-    // do nothing.
-    //
-    // Distinct from `User.StartRestart`, which reloads the Steam client and the
-    // frontend with it but does not start the backend again. Nothing calls this
-    // today; the distinction between the two restarts is what the declaration
-    // keeps.
-    RestartPC?: () => void;
+    GetSystemInfo(): Promise<SteamSystemInfo>;
   };
   User: {
     // Restart the whole Steam client (closes and reopens Steam). `force` skips the
@@ -53,6 +37,20 @@ declare var SteamClient: {
     StartRestart(force: boolean): void;
   };
 };
+
+/** What every `Register…` call answers: the handle that takes the callback back off. */
+interface SteamRegistration {
+  unregister(): void;
+}
+
+interface SteamAppLifetimeUpdate {
+  unAppID: number;
+  bRunning: boolean;
+}
+
+interface SteamSystemInfo {
+  sHostname: string;
+}
 
 interface SteamAppDetails {
   // The two launch-options fields the runtime exposes — keys vary by Steam
@@ -67,51 +65,30 @@ interface SteamAppDetails {
   strShortcutStartDir?: string;
 }
 
-interface SteamPerClientData {
-  clientid: string;
-  client_name: string;
-  installed: boolean;
-  streaming_to_local_client?: boolean;
-}
-
 interface SteamAppOverview {
   appid: number;
   display_name: string;
   strDisplayName: string;
-  app_type?: number;
   controller_support?: number;
   metacritic_score?: number;
   minutes_playtime_forever?: number;
   minutes_playtime_last_two_weeks?: number;
   rt_last_time_played?: number;
-  rt_last_time_played_or_installed?: number;
-  // Epoch-seconds cache-buster for the library tile's custom-image URL
-  // (`/customimage/{appid}?v={rt_custom_image_mtime}`). Steam stamps it itself
-  // when artwork is set through SetCustomArtworkForApp or on a client restart.
-  rt_custom_image_mtime?: number;
   m_setStoreCategories?: Set<number>;
-  local_per_client_data?: SteamPerClientData;
-  per_client_data?: SteamPerClientData[];
-  GetCanonicalReleaseDate?(): number;
-  BHasStoreCategory?(category: number): boolean;
-  BIsModOrShortcut?(): boolean;
-  BHasRecentlyLaunched?(): boolean;
   GetGameID?(): string;
-  GetPrimaryAppID?(): number;
 }
 
-// Keep the old name as an alias for backwards compatibility with existing code
-type AppStoreOverview = SteamAppOverview;
+interface SteamDragDropCollection {
+  AddApps(overviews: SteamAppOverview[]): void;
+  RemoveApps(overviews: SteamAppOverview[]): void;
+}
 
 interface SteamCollection {
-  AsDragDropCollection(): {
-    AddApps(overviews: SteamAppOverview[]): void;
-    RemoveApps(overviews: SteamAppOverview[]): void;
-  };
+  AsDragDropCollection(): SteamDragDropCollection;
   Save(): Promise<void>;
   Delete(): Promise<void>;
   allApps: SteamAppOverview[];
-  apps: { keys(): IterableIterator<number>; has(appId: number): boolean };
+  apps: { has(appId: number): boolean };
   displayName: string;
   id: string;
 }
@@ -120,11 +97,7 @@ declare var collectionStore: {
   // Populated asynchronously by Steam — absent until the desktop-apps
   // collection is built, so reads must guard.
   deckDesktopApps?: { apps: Map<number, any> };
-  localGamesCollection?: { apps: Map<number, any> };
   userCollections: SteamCollection[];
-  GetCollection(id: string): SteamCollection | undefined;
-  GetCollectionIDByUserTag(tag: string): string | null;
-  GetUserCollectionsByName(name: string): SteamCollection[];
   NewUnsavedCollection(tag: string, filter?: unknown, overviews?: SteamAppOverview[]): SteamCollection;
   // Steam's Hidden, asked for and set apart from the user collections. Optional,
   // because neither call has been measured on a device.
@@ -134,7 +107,6 @@ declare var collectionStore: {
 
 declare var appStore: {
   GetAppOverviewByAppID(appId: number): SteamAppOverview | null;
-  allApps: SteamAppOverview[];
   // The URLs Steam tries for a shortcut's custom images, `.jpg` before `.png`,
   // each with `?v=<rt_custom_image_mtime>`, relative to steamloopback.host
   // (measured, Desktop Mode, 2026-10-21). Candidates, not files: a URL may 404.
@@ -164,17 +136,6 @@ declare var SteamUIStore:
     }
   | null
   | undefined;
-
-declare var appDetailsStore: {
-  GetDescriptions(appId: number): any;
-  GetAssociations(appId: number): any;
-  GetAppData(appId: number): any;
-  SaveCustomLogoPosition(overview: any, position: any): void;
-};
-
-declare var appDetailsCache: {
-  SetCachedDataForApp(appId: number, key: string, num: number, data: any): void;
-};
 
 interface MobxGlobals {
   /** Mobx safety gate — flipped true around state mutations on Steam's stores. */

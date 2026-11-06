@@ -112,6 +112,8 @@ ALIVE_AFTER_SECONDS = 10.0
 
 _EVALUATE = "Runtime.evaluate"
 
+_EXECUTE_STEAM_URL = "SteamClient.URL.ExecuteSteamURL({})"
+
 # The two subscriptions one attachment watches, named so a waiter can say which
 # of them answered.
 _REBUILT = "rebuilt"
@@ -246,7 +248,7 @@ class PanelInjector:
         the expression only as a JSON string literal.
         """
         try:
-            await self._evaluate_attached(f"SteamClient.URL.ExecuteSteamURL({json.dumps(url)})")
+            await self._evaluate_attached(_EXECUTE_STEAM_URL.format(json.dumps(url)))
         except (CdpConnectionLost, CdpUnavailableError, TimeoutError):
             return False
         return True

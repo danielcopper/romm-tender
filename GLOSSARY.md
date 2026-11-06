@@ -215,6 +215,17 @@ the panel is whole or it is absent, and a half-mounted panel acting on what it c
 to refuse. A miss the panel survives is not degraded mode: what is absent is a decoration the one place that draws it
 renders without, or a name only a debug line reads — never something a page acts on.
 
+### Steam internal
+
+A name of Steam's client Tender depends on: a global or what it reaches through one (a `SteamClient` call, a store and
+its members, an overview object's field), a route of Steam's router or `steam://` URL, the `SharedJSContext` target
+title, the `steamloopback.host` origin. Valve promises none of them. Each is named, with the feature that needs it, in
+one list with two halves — the panel's in `frontend/src/boot/steamInternals.ts`, the backend's in
+`backend/domain/steam_internals.py`.
+
+Not a Steam internal in this sense: what a search into Steam's module registry finds, whether `@decky/ui` runs it or
+Tender does (the **start-up check**'s term), Steam's React tree and DOM, and Decky Loader's globals.
+
 ### Injection
 
 Loading the panel into Steam's renderer from outside it: the backend attaches to Steam's CEF debugger and evaluates one
