@@ -87,13 +87,21 @@ def leaves_its_folder(file_name: str) -> bool:
     return normal in ("", ".", "..") or normal.startswith(f"..{os.sep}") or os.path.isabs(file_name)
 
 
-def library_match(placement: FirmwarePlacement, library: Iterable[LibraryFirmware]) -> dict[str, Any] | None:
+def library_match(
+    placement: FirmwarePlacement, library: Iterable[LibraryFirmware], platform_folder: str
+) -> dict[str, Any] | None:
     """The library file that fills *placement*, as a row carries it, or ``None``.
 
-    ``matched`` says how (:mod:`domain.firmware_match`); ``no_checksum`` that
-    RomM states none for it, so a download of it could not be checked.
+    The platform's own file — one RomM lists under *platform_folder* — is taken
+    before any other platform's, so two platforms that share a slug each match
+    their own file of a name; another platform's file fills only where none of
+    the platform's own does. ``matched`` says how (:mod:`domain.firmware_match`);
+    ``no_checksum`` that RomM states none for it, so a download of it could not
+    be checked.
     """
-    file = first_filling(placement, library)
+    files = list(library)
+    own = [file for file in files if file.platform_folder == platform_folder]
+    file = first_filling(placement, own) or first_filling(placement, files)
     if file is None:
         return None
     return library_payload(file, fills(placement, file))

@@ -8063,3 +8063,33 @@ class TestTwoPlatformsThatShareASlug:
 
         assert refused.value.reason == "invalid_value"
         firmware.romm_api.list_platforms.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_each_platform_matches_and_fetches_its_own_file_of_a_name(self, firmware, fw, tmp_path):
+        """Where both platforms list a file of the name a requirement asks for, each takes its own (#2219 D11)."""
+        gc_bytes, gamecube_bytes = b"gc ipl", b"gamecube ipl"
+        firmware.romm_api.list_platforms.return_value = self._listing(
+            (self._GC, [self._file(10, 1, "IPL.bin", gc_bytes)]),
+            (self._GAMECUBE, [self._file(20, 2, "IPL.bin", gamecube_bytes)]),
+        )
+        content = {10: gc_bytes, 20: gamecube_bytes}
+
+        def write(firmware_id, _file_name, dest):
+            with open(dest, "wb") as f:
+                f.write(content[firmware_id])
+
+        firmware.romm_api.download_firmware.side_effect = write
+        _declare(fw, ("IPL.bin", "GameCube IPL", True))
+        (tmp_path / "bios").mkdir()
+        _resolver_reads(fw, tmp_path / "bios")
+        _set_loop(fw, asyncio.get_running_loop())
+
+        rows = {}
+        for folder in ("gc", "gamecube"):
+            platform = (await fw.get_platform_firmware_status("ngc", folder))["platform"]
+            rows[folder] = next(f for f in platform["files"] if f["file_name"] == "IPL.bin")
+        await fw.download_required_firmware("ngc", "gamecube")
+
+        assert rows["gc"]["id"] == 10
+        assert rows["gamecube"]["id"] == 20
+        assert (tmp_path / "Tender" / "bios" / "gamecube" / "IPL.bin").read_bytes() == gamecube_bytes

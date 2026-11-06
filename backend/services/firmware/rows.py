@@ -125,7 +125,7 @@ def _file_row(inputs: RowInputs, placement: FirmwarePlacement, emulator: str | N
     catalogue = inputs.catalogue
     place = placement.place
     look = inputs.look(place) if place is not None else None
-    library = library_match(placement, inputs.library)
+    library = library_match(placement, inputs.library, inputs.platform_folder)
     entry = build_file_entry(
         placement.file_name,
         placement.present is True,

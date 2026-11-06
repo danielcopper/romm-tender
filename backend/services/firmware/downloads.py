@@ -247,13 +247,17 @@ class FirmwareDownloader:
         for placement in placements.values():
             if not fetched_as_required(placement, identity, groups):
                 continue
-            file = self._required_file(placement, library, copies)
+            file = self._required_file(placement, library, copies, platform_folder)
             if file is not None:
                 wanted.setdefault(file.firmware_id, by_file[file])
         return list(wanted.values())
 
     def _required_file(
-        self, placement: FirmwarePlacement, library: list[LibraryFirmware], copies: list[StoreCopy]
+        self,
+        placement: FirmwarePlacement,
+        library: list[LibraryFirmware],
+        copies: list[StoreCopy],
+        platform_folder: str,
     ) -> LibraryFirmware | None:
         if placement.declares_directory:
             if placement.satisfied is True:
@@ -266,7 +270,7 @@ class FirmwareDownloader:
             return None
         if self._files.look(placement.place).lexists:
             return None
-        match = library_match(placement, library)
+        match = library_match(placement, library, platform_folder)
         if match is None:
             return None
         return next((file for file in library if file.firmware_id == match["firmware_id"]), None)

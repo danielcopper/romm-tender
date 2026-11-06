@@ -84,7 +84,9 @@ class FirmwareReplacer:
         too.
         """
         firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
-        firmware, source = await self._loop.run_in_executor(None, self._replaceable, system, place, firmware_list)
+        firmware, source = await self._loop.run_in_executor(
+            None, self._replaceable, system, platform_folder, place, firmware_list
+        )
         backup = await self._loop.run_in_executor(
             None, self._replace_io, platform_slug, platform_folder, place, firmware, source
         )
@@ -96,9 +98,13 @@ class FirmwareReplacer:
         return {"success": True, "backup_path": backup, **links.payload(), "placed": links.placed + 1}
 
     def _replaceable(
-        self, system: str | None, place: str, firmware_list: list[dict[str, Any]]
+        self, system: str | None, platform_folder: str, place: str, firmware_list: list[dict[str, Any]]
     ) -> tuple[dict[str, Any], str]:
-        """The library file that replaces what lies at *place*, asked again off a fresh reading. Blocking."""
+        """The library file that replaces what lies at *place*, asked again off a fresh reading. Blocking.
+
+        *platform_folder*'s own file is taken before another platform's
+        (:func:`~domain.firmware_rows.library_match`).
+        """
         catalogue = self._demand.platform_catalogue(system)
         library = [library_file(fw) for fw in firmware_list]
         found = _placement_at(catalogue, place)
@@ -118,7 +124,7 @@ class FirmwareReplacer:
             or is_own_link(place, look, owned.store_targets, owned.records)
         ):
             raise _not_replaceable(place)
-        file = _proven_copy(placement, place, library)
+        file = _proven_copy(placement, place, library, platform_folder)
         if file is None:
             raise _not_replaceable(place)
         return next(fw for fw in firmware_list if fw.get("id") == file.firmware_id), catalogue.source or ""
@@ -163,12 +169,14 @@ def _placement_at(catalogue: FirmwareCatalogue, place: str) -> tuple[FirmwarePla
     return None
 
 
-def _proven_copy(placement: FirmwarePlacement, place: str, library: list[LibraryFirmware]) -> LibraryFirmware | None:
+def _proven_copy(
+    placement: FirmwarePlacement, place: str, library: list[LibraryFirmware], platform_folder: str
+) -> LibraryFirmware | None:
     """The library file proven right for *place* by the checksum the resolver pins, or ``None``."""
     if placement.declares_directory:
         name = os.path.basename(place)
         return next((f for f in library if f.file_name == name and fills(placement, f) == MATCHED_CONTENT), None)
-    match = library_match(placement, library)
+    match = library_match(placement, library, platform_folder)
     if match is None or match["matched"] != MATCHED_CONTENT:
         return None
     return next((f for f in library if f.firmware_id == match["firmware_id"]), None)
