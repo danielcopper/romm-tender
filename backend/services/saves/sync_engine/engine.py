@@ -403,8 +403,9 @@ class SyncEngine:
         ``device_not_registered`` when it failed any other way: RomM, or a proxy
         in front of it, answered without registering the device (the id-less
         answer included), or the stored token could not be sent. Both refusals
-        carry *refusal_details*, so a caller whose own refusals all carry
-        details — a sync's ``synced=0`` — answers this one with them too.
+        carry *refusal_details*, so a caller whose own refusals carry details —
+        a sync's, ``.claude/rules/endpoints.md`` names them — answers this one
+        with them too.
 
         Takes only the registration lock, and nothing under it, so a caller
         may hold ``rom_lock`` or the device gate.

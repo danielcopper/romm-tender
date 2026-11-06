@@ -1,14 +1,17 @@
 """What a save sync answers when the device-id entry refuses it, over the real wiring.
 
-Every save-sync refusal carries ``synced=0``, and the sweep's also ``conflicts=0``
-(``.claude/rules/endpoints.md``); the device-id entry, ``SyncEngine.live_device_id``,
-refuses where the device's registration fails, and each of the four sync paths
-hands it its own refusal details. No device id is stored, so the entry registers
-the device, and the fake fails that registration in each way the entry tells
-apart: a server that cannot be reached, one that refuses the registration, and
-one that answers it without an id. The endpoints are called as the panel calls
-them; the sync after a game is reached through ``finalize_game_session``, whose
-``sync`` part is what the panel reads of it.
+Each of the four sync paths hands ``SyncEngine.live_device_id`` its own refusal
+details, the keys ``.claude/rules/endpoints.md`` gives a save-sync refusal, and
+the entry attaches them to the refusal it raises. A slot switch hands it none,
+and its refusal carries neither key.
+
+With a device id stored, the entry only touches it and keeps it on every failure
+but a 404, so no id is stored here: the entry registers the device, and the
+fake fails that registration in three ways — as a server that cannot be reached
+(``server_unreachable``), as one that refuses it, and as one that answers it
+without an id (both ``device_not_registered``). The endpoints are called as the
+panel calls them; the sync after a game is reached through
+``finalize_game_session``, whose ``sync`` part carries that sync's answer.
 """
 
 from __future__ import annotations
@@ -100,16 +103,27 @@ async def test_the_sync_before_a_start_answers_the_refusal_with_nothing_synced(h
     assert _nothing_listed(harness)
 
 
+# The toast the session's end shows for each failure: the refusal's own message.
+_TOAST_FOR = {
+    "unreachable": "Server unreachable — check your URL and ensure RomM is running",
+    "refused": "Device not registered with RomM",
+    "answered_without_an_id": "Device not registered with RomM",
+}
+
+
 @pytest.mark.parametrize(
-    "registration_fails", [pytest.param(param.values[0], id=param.id) for param in _REGISTRATION_FAILURES]
+    ("registration_fails", "toast"),
+    [pytest.param(param.values[0], _TOAST_FOR[param.id], id=param.id) for param in _REGISTRATION_FAILURES],
 )
-async def test_the_sync_after_a_game_answers_the_refusal_with_nothing_synced(harness, registration_fails):
+async def test_the_sync_after_a_game_answers_the_refusal_with_nothing_synced(harness, registration_fails, toast):
     _game(harness)
     registration_fails(harness)
 
     result = await harness.endpoints.finalize_game_session(_ROM)
 
     assert result["sync"]["success"] is False
+    assert result["sync"]["offline"] is False
+    assert result["sync"]["failure_toast"] == toast
     assert result["sync"]["synced"] == 0
     assert _nothing_listed(harness)
 
