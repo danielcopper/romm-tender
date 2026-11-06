@@ -427,7 +427,8 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
         dialogs: desktopAdoptionDialogs(ask),
         hooks: {
           setBusy: (busy) => {
-            if (busy) setPendingRomId(rid);
+            // prettier-ignore
+            if (busy) setPendingRomId(rid); // NOSONAR(typescript:S2301) — adoptFlow's shared hook takes one boolean
             else clearPendingFor(rid);
           },
           setTargetOccupied: (occupied) => noteAnswers(rid, { targetOccupied: occupied }),
