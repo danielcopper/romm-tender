@@ -15,7 +15,7 @@ import { readFileSync } from "node:fs";
 
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { createElement } from "react";
 import { recheckStranded, toaster, type PanelDefinition } from "./api/host";
 import { emitHostEvent, hostEventListenerCount } from "./test-utils/host-event-bus";
@@ -177,6 +177,8 @@ vi.mock("./utils/shortcutCarryOver", async () => {
 
 // Observe the surfaced error message (post-catch side effect).
 const logError = vi.fn();
+// Observe the warnings the start-up checks write to the backend log.
+const logWarn = vi.fn();
 const reportSyncRemovals = vi.fn().mockResolvedValue({ success: true, message: "" });
 vi.mock("./api/backend", async () => {
   const actual = await vi.importActual<typeof import("./api/backend")>("./api/backend");
@@ -184,6 +186,7 @@ vi.mock("./api/backend", async () => {
     ...actual,
     invalidateCachedGameDetail: vi.fn(),
     logError: (...args: unknown[]) => logError(...args),
+    logWarn: (...args: unknown[]) => logWarn(...args),
     logInfo: vi.fn(),
     reportSyncRemovals: (...args: unknown[]) => reportSyncRemovals(...args),
   };
@@ -240,6 +243,11 @@ import {
   setNotificationsUnavailable,
 } from "./utils/notificationsHealth";
 import { registerRomMAppId, unregisterRomMAppId } from "./utils/rommAppIds";
+import {
+  QUICK_ACCESS_MISSING_TOAST,
+  resetStartupMissNoticeForTests,
+  useStartupMissNotice,
+} from "./utils/startupMissNotice";
 import { installQuickAccessEntry } from "./qam/installEntry";
 import { initSessionManager } from "./utils/sessionManager";
 import "./index";
@@ -293,24 +301,31 @@ describe("index.tsx — what the factory does when a Steam search found nothing"
     missingPackageNames: ["Focusable", "PanelSection"],
     checked: 33,
   };
-  // The refusal is logged on purpose, and the suite fails a test that emits an
-  // unexpected `console.error` — so the spy both permits it and makes the line
-  // an assertion rather than noise nobody reads.
-  let consoleError: ReturnType<typeof vi.spyOn>;
-
   beforeEach(() => {
     startupAnswer = failing;
-    consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    logWarn.mockClear();
   });
 
   afterEach(() => {
-    consoleError.mockRestore();
     startupAnswer = everythingResolved();
   });
 
-  it("mounts the fallback page instead of the panel, and names what is missing", () => {
+  it("mounts the fallback page instead of the panel, and names what is missing", async () => {
+    // The page asks for the release check once, when it appears; answered
+    // once, with no newer release, for the reason the test below gives.
+    vi.mocked(getUpdateNotice).mockResolvedValueOnce({
+      available: false,
+      newer: false,
+      latest_version: "1.1.0",
+      current_version: "1.1.0",
+      enabled: true,
+      installed_program: true,
+      toast_owed: false,
+      seen: true,
+    });
     const panel = panelFactory();
     render(createElement("div", null, panel.content));
+    await act(flush);
 
     expect(screen.getByText(/can't start right now/i)).toBeInTheDocument();
     expect(screen.getByText(/Focusable, PanelSection/)).toBeInTheDocument();
@@ -318,7 +333,7 @@ describe("index.tsx — what the factory does when a Steam search found nothing"
 
   it("puts the same names in the log, where a user with no panel can still reach them", () => {
     panelFactory();
-    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining("Missing: Focusable, PanelSection"));
+    expect(logWarn).toHaveBeenCalledWith(expect.stringContaining("Focusable (panel), PanelSection (panel)"));
   });
 
   it("registers nothing at all — not the patches, not the listeners, not the relocation", () => {
@@ -383,15 +398,12 @@ describe("index.tsx — what the factory does when only a decoration was not fou
     missingPackageNames: [],
     checked: 33,
   };
-  let consoleWarn: ReturnType<typeof vi.spyOn>;
-
   beforeEach(() => {
     startupAnswer = cosmeticOnly;
-    consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    logWarn.mockClear();
   });
 
   afterEach(() => {
-    consoleWarn.mockRestore();
     startupAnswer = everythingResolved();
   });
 
@@ -408,8 +420,8 @@ describe("index.tsx — what the factory does when only a decoration was not fou
 
   it("reports it in the log, which is the only place it is reported at all", () => {
     panelFactory();
-    expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining("Missing: ControllerGlyph"));
-    expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining("a newer Tender is the repair"));
+    expect(logWarn).toHaveBeenCalledWith(expect.stringContaining("ControllerGlyph (appearance: button pictures)"));
+    expect(logWarn).toHaveBeenCalledWith(expect.stringContaining("a newer Tender is the repair"));
   });
 });
 
@@ -424,7 +436,7 @@ describe("index.tsx — what the factory records about the toasts", () => {
   });
 
   it("records that the notice is owed when a lookup a toast is raised through missed", () => {
-    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    logWarn.mockClear();
     startupAnswer = {
       everySearchAnswered: false,
       panelMayMount: true,
@@ -434,14 +446,147 @@ describe("index.tsx — what the factory records about the toasts", () => {
     };
     panelFactory();
     expect(notificationsUnavailable()).toBe(true);
-    expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining("Tender's notifications are off"));
-    consoleWarn.mockRestore();
+    expect(logWarn).toHaveBeenCalledWith(expect.stringContaining("Tender's notifications are off"));
   });
 
   it("records nothing owed when every search answered", () => {
     setNotificationsUnavailable(true);
     panelFactory();
     expect(notificationsUnavailable()).toBe(false);
+  });
+});
+
+describe("index.tsx — what the factory writes to the backend log and the notice on a miss", () => {
+  // One warning per check that missed, naming the check and every missing name
+  // with its cost (#2455 D1), whether the panel mounted over the miss or not
+  // (D2); and the losses on Main's notice for a miss the panel survives (D3).
+  const noticeMessage = (): string | undefined => {
+    const { result, unmount } = renderHook(() => useStartupMissNotice());
+    const message = result.current?.message;
+    unmount();
+    return message;
+  };
+  const linesOf = (check: string): string[] =>
+    logWarn.mock.calls.map(([line]) => String(line)).filter((line) => line.startsWith(`start-up check "${check}"`));
+
+  beforeEach(() => {
+    logWarn.mockClear();
+    resetStartupMissNoticeForTests();
+  });
+
+  afterEach(() => {
+    startupAnswer = everythingResolved();
+    resetStartupMissNoticeForTests();
+  });
+
+  it("writes one warning naming the check and every name a survived miss missed, and puts its losses on Main", () => {
+    startupAnswer = {
+      everySearchAnswered: false,
+      panelMayMount: true,
+      missing: ["ControllerGlyph", "playSectionClasses"],
+      missingPackageNames: ["playSectionClasses"],
+      checked: 33,
+    };
+    panelFactory();
+    const lines = linesOf("Steam's module registry");
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain(
+      "2 of 33 missed — ControllerGlyph (appearance: button pictures), playSectionClasses (diagnostic).",
+    );
+    expect(noticeMessage()).toContain("Not working: button pictures.");
+  });
+
+  it("writes the same warning where the fallback page stands in the panel's place, and nothing on Main", () => {
+    startupAnswer = {
+      everySearchAnswered: false,
+      panelMayMount: false,
+      missing: ["Focusable", "ToastRenderer"],
+      missingPackageNames: ["Focusable"],
+      checked: 33,
+    };
+    panelFactory();
+    expect(linesOf("Steam's module registry")).toEqual([
+      expect.stringContaining("2 of 33 missed — Focusable (panel), ToastRenderer (feature: Tender's notifications)."),
+    ]);
+    expect(noticeMessage()).toBeUndefined();
+  });
+
+  it("asks after the Steam internals once Steam is ready, logs what is missing with what it costs, and mounts the panel", async () => {
+    vi.stubGlobal("App", { GetServicesInitialized: () => true });
+    vi.stubGlobal("SteamClient", { Apps: { AddShortcut: 42 } });
+    const panel = panelFactory();
+    render(createElement("div", null, panel.content));
+
+    // Every factory call starts this check, so one an earlier test started may
+    // answer here as well; each answers in the same words.
+    await vi.waitFor(() => expect(linesOf("Steam internals").length).toBeGreaterThan(0));
+    const [line] = linesOf("Steam internals");
+    expect(line).toContain("SteamClient.Apps.AddShortcut (feature: adding and removing shortcuts; not a function)");
+    expect(line).toContain("SteamClient.Apps.RunGame (feature: starting a game; absent)");
+    expect(line).not.toContain("not reported its services initialised");
+    expect(noticeMessage()).toContain("adding and removing shortcuts");
+    expect(screen.queryByText(/can't start right now/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("index.tsx — the Steam internals asked once the wait for Steam ran out", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    resetStartupMissNoticeForTests();
+  });
+
+  it("asks anyway once the deadline has passed, and says in the line that Steam was not ready", async () => {
+    vi.useFakeTimers();
+    logWarn.mockClear();
+    panelFactory();
+    await vi.advanceTimersByTimeAsync(31_000);
+    const lines = logWarn.mock.calls.map(([line]) => String(line));
+    expect(lines).toContainEqual(
+      expect.stringMatching(
+        /^start-up check "Steam internals": .* Steam had not reported its services initialised after 30 s, so they were asked anyway\.$/,
+      ),
+    );
+  });
+});
+
+describe("index.tsx — the toast for a Quick Access entry that could not be added", () => {
+  const missing = (...names: string[]): StartupReport => ({
+    everySearchAnswered: false,
+    panelMayMount: true,
+    missing: names,
+    missingPackageNames: [],
+    checked: 33,
+  });
+  const raised = (): unknown[] =>
+    vi.mocked(toaster.toast).mock.calls.filter(([toast]) => toast.body === QUICK_ACCESS_MISSING_TOAST);
+
+  beforeEach(() => vi.mocked(toaster.toast).mockClear());
+
+  afterEach(() => {
+    startupAnswer = everythingResolved();
+    resetStartupMissNoticeForTests();
+    resetNotificationsHealthForTests();
+  });
+
+  it("raises one toast where the Quick Access search missed, since neither the panel nor its notice can be reached", async () => {
+    startupAnswer = missing("QuickAccessMenuBrowserView");
+    panelFactory();
+    await vi.waitFor(() => expect(raised()).toHaveLength(1));
+    expect(toaster.toast).toHaveBeenCalledWith({ title: "Tender", body: QUICK_ACCESS_MISSING_TOAST });
+  });
+
+  it("raises none where what a toast is raised through missed as well, leaving the log to carry it", async () => {
+    startupAnswer = missing("QuickAccessMenuBrowserView", "ToastRenderer");
+    panelFactory();
+    await act(flush);
+    expect(raised()).toHaveLength(0);
+  });
+
+  it("raises none where the Quick Access search answered", async () => {
+    startupAnswer = missing("ControllerGlyph");
+    panelFactory();
+    await act(flush);
+    expect(raised()).toHaveLength(0);
   });
 });
 

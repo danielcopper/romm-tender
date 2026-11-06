@@ -5,12 +5,19 @@ import { Focusable, PanelSection, PanelSectionRow } from "@decky/ui";
 import { StartupFailurePanel } from "./boot/StartupFailurePanel";
 import { FallbackActions } from "./boot/FallbackActions";
 import { fallbackButtons } from "./boot/fallbackButtons";
+import { DESKTOP_SURFACE } from "virtual:tender-desktop-surface";
+
 import { readSearchingCopy } from "./boot/searchingCopy";
+import { noticeFeatures, startupMissLine } from "./boot/startupMiss";
+import { STEAM_INTERNALS } from "./boot/steamInternals";
+import { checkSteamInternals } from "./boot/steamInternalsCheck";
 import {
   checkSteamModules,
   describeFailure,
+  describeMissedLookups,
   describeSurvivedMiss,
   notificationsMissing,
+  quickAccessMissing,
   sentenceNamesATenderUpdate,
 } from "./boot/steamModules";
 import { MainPage } from "./bigpicture/MainPage";
@@ -50,6 +57,7 @@ import {
   getUpdateInstallState,
   logError,
   logInfo,
+  logWarn,
 } from "./api/backend";
 import {
   createOrUpdateCollections,
@@ -83,6 +91,9 @@ import {
   placeEntryFocus,
 } from "./utils/entryFocus";
 import { setNotificationsUnavailable } from "./utils/notificationsHealth";
+import { QUICK_ACCESS_MISSING_TOAST, recordStartupMiss } from "./utils/startupMissNotice";
+import { TOAST_READINESS_DEADLINE_MS, waitUntilSteamServicesInitialized } from "./utils/steamReadyForToasts";
+import { toastWhenSteamIsReady } from "./utils/failedUpdateToast";
 import { detach } from "./utils/detach";
 import type {
   SyncProgress,
@@ -411,6 +422,27 @@ function registerAppIds(map: Record<string, number[]>): void {
   }
 }
 
+/** The two start-up checks, as the backend log names them. */
+const MODULES_CHECK = "Steam's module registry";
+const INTERNALS_CHECK = "Steam internals";
+
+/**
+ * Ask after the Steam internals once Steam reports its services initialised,
+ * or once the wait's deadline has passed, and report what missed: one warning
+ * in the backend log and the losses on Main's notice. The panel is mounted by
+ * then whatever this answers — no missing Steam internal costs the panel.
+ */
+async function checkSteamInternalsOnceSteamIsReady(): Promise<void> {
+  const inTime = await waitUntilSteamServicesInitialized();
+  const report = checkSteamInternals(STEAM_INTERNALS, { desktopSurface: DESKTOP_SURFACE });
+  if (report.missed.length === 0) return;
+  const late = inTime
+    ? ""
+    : ` Steam had not reported its services initialised after ${TOAST_READINESS_DEADLINE_MS / 1000} s, so they were asked anyway.`;
+  logWarn(`${startupMissLine(INTERNALS_CHECK, report.missed, report.asked)}${late}`);
+  recordStartupMiss("internals", noticeFeatures(report.missed));
+}
+
 const tender = definePanel(() => {
   // Before anything else runs, and before anything mounts: did every search into
   // Steam's own interface find what it was looking for?
@@ -439,8 +471,12 @@ const tender = definePanel(() => {
     // question about the machine separately and disagree. It is read only where
     // something missed, so the ordinary start touches none of Decky's globals.
     const copy = readSearchingCopy(startup);
+    // One warning in the backend log for every miss, whether or not the panel
+    // mounts over it, so the log holds the whole miss whatever the user saw.
+    const { missed, asked } = describeMissedLookups(startup);
+    const missLine = startupMissLine(MODULES_CHECK, missed, asked);
     if (!startup.panelMayMount) {
-      console.error(`[${DISPLAY_NAME}] ${describeFailure(startup, copy)} Missing: ${startup.missing.join(", ")}`);
+      logWarn(`${missLine} ${describeFailure(startup, copy)}`);
       return {
         name: DISPLAY_NAME,
         icon: <TabIcon />,
@@ -454,14 +490,22 @@ const tender = definePanel(() => {
         ),
       };
     }
-    // The panel mounts, so nothing on screen reports this: the log line is the
-    // whole record, and the next reader of it is whoever is asked why a button
-    // lost its glyph, or why a debug dump prints `UNDEFINED` where a class name
-    // belongs.
-    console.warn(`[${DISPLAY_NAME}] ${describeSurvivedMiss(startup, copy)} Missing: ${startup.missing.join(", ")}`);
+    // The panel mounts: the notice on Main names what the reader loses, and the
+    // log line the names behind it.
+    logWarn(`${missLine} ${describeSurvivedMiss(startup, copy)}`);
+    recordStartupMiss("modules", noticeFeatures(missed));
+    // Without its Quick Access entry the panel, and the notice with it, cannot
+    // be reached, so this one miss is also said where Steam shows it — unless
+    // what a toast is raised through missed too, when the log alone carries it.
+    if (quickAccessMissing(startup) && !notificationsMissing(startup)) {
+      detach(
+        toastWhenSteamIsReady(QUICK_ACCESS_MISSING_TOAST, "the toast that Tender's Quick Access entry is missing"),
+      );
+    }
   }
 
   watchStrandedPanel();
+  detach(checkSteamInternalsOnceSteamIsReady());
   disownStrandedPruneLeases();
   registerGameDetailPatch();
   registerLaunchInterceptor(() => launchPromptsForThisStart(gamepadLaunchPrompts));
