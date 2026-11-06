@@ -103,13 +103,14 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing, p
   // short of its broadcast asks for, and a change of game by the list effect's
   // cleanup.
   const [switching, setSwitching] = useState(false);
-  const updateSwitching = useCallback(
-    (next: boolean) => {
-      setSwitching(next);
-      onSwitchingChange(next);
-    },
-    [onSwitchingChange],
-  );
+  const onSwitchingChangeRef = useRef(onSwitchingChange);
+  useEffect(() => {
+    onSwitchingChangeRef.current = onSwitchingChange;
+  });
+  const updateSwitching = useCallback((next: boolean) => {
+    setSwitching(next);
+    onSwitchingChangeRef.current(next);
+  }, []);
   const [covers, setCovers] = useState<Record<number, string>>({});
   const coversRequested = useRef<Set<number>>(new Set());
   const memberIdsRef = useRef<Set<number>>(new Set());

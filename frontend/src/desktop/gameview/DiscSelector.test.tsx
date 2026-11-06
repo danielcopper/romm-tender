@@ -833,6 +833,28 @@ describe("Desktop DiscSelector — while a switch is under way", () => {
 
     expect(onSwitchingChange.mock.calls).toEqual([[true], [false]]);
   });
+
+  it("keeps the switch and its lease when the Play button hands it a new callback mid-switch", async () => {
+    mockCachedDetail();
+    vi.mocked(backend.switchVersion).mockReturnValue(new Promise(() => undefined));
+    const calls: boolean[] = [];
+
+    const r = render(<Selector appId={100} onSwitchingChange={(s) => calls.push(s)} />);
+    await waitFor(() => expect(r.getByTestId("disc-btn")).toHaveAttribute("aria-label", "Select Version"));
+    fireEvent.click(r.getByTestId("disc-btn"));
+    await act(async () => {
+      fireEvent.click(within(r.getByTestId("disc-menu")).getByText("Japan"));
+      await Promise.resolve();
+    });
+    const admission = capturePruneLeaseAdmission("desktop-version-picker:100");
+
+    r.rerender(<Selector appId={100} onSwitchingChange={(s) => calls.push(s)} />);
+    await flushAsync();
+
+    expect(isPruneLeaseAdmissionCurrent(admission)).toBe(true);
+    expect(r.getByTestId("disc-btn")).toBeDisabled();
+    expect(calls).toEqual([true]);
+  });
 });
 
 describe("Desktop DiscSelector — while the Play button's press is under way", () => {
