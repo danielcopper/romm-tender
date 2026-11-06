@@ -92,6 +92,18 @@ const everythingResolved = (): StartupReport => ({
   checked: 33,
 });
 let startupAnswer: StartupReport = everythingResolved();
+// The Steam-internals check as the factory reaches it, so a test can make it
+// fail; every other test runs the real one.
+let checkInternals: (typeof import("./boot/steamInternalsCheck"))["checkSteamInternals"] | null = null;
+vi.mock("./boot/steamInternalsCheck", async () => {
+  const actual = await vi.importActual<typeof import("./boot/steamInternalsCheck")>("./boot/steamInternalsCheck");
+  return {
+    ...actual,
+    checkSteamInternals: (...args: Parameters<typeof actual.checkSteamInternals>) =>
+      (checkInternals ?? actual.checkSteamInternals)(...args),
+  };
+});
+
 vi.mock("./boot/steamModules", async () => {
   const actual = await vi.importActual<typeof import("./boot/steamModules")>("./boot/steamModules");
   return { ...actual, checkSteamModules: () => startupAnswer };
@@ -291,6 +303,11 @@ beforeEach(() => {
   // appStore, so default them to no-ops here.
   vi.stubGlobal("SteamClient", { Apps: {} });
   vi.stubGlobal("appStore", { GetAppOverviewByAppID: () => null, allApps: [] });
+  // Every factory call starts the Steam-internals check, which waits until
+  // Steam's services are initialised; answered at once here, each check asks
+  // and answers inside the test that started it instead of polling for 30 s
+  // into the tests after it.
+  vi.stubGlobal("App", { GetServicesInitialized: () => true });
 });
 
 describe("index.tsx — what the factory does when a Steam search found nothing", () => {
@@ -418,24 +435,26 @@ describe("index.tsx — what the factory does when only a decoration was not fou
     expect(registerGameDetailPatch).toHaveBeenCalled();
   });
 
-  it("reports it in the log, which is the only place it is reported at all", () => {
+  it("reports it in the backend log, with whose search it was and the repair", () => {
     panelFactory();
-    expect(logWarn).toHaveBeenCalledWith(expect.stringContaining("ControllerGlyph (appearance: button pictures)"));
+    expect(logWarn).toHaveBeenCalledWith(
+      expect.stringContaining("ControllerGlyph (appearance: controller button icons)"),
+    );
     expect(logWarn).toHaveBeenCalledWith(expect.stringContaining("a newer Tender is the repair"));
   });
 });
 
 describe("index.tsx — what the factory records about the toasts", () => {
-  // The notice on Main is rendered off a module store rather than a probe, so
-  // the factory is the one place the start-up check's answer reaches it. Both
-  // directions, because a flag that was never written reads as "all well" and
-  // the notice would simply never appear.
+  // What the toaster can do is recorded in a module store rather than probed,
+  // so the factory is the one place the start-up check's answer reaches it.
+  // Both directions, because a flag that was never written reads as "all well"
+  // and a toast nobody can see would be raised all the same.
   afterEach(() => {
     startupAnswer = everythingResolved();
     resetNotificationsHealthForTests();
   });
 
-  it("records that the notice is owed when a lookup a toast is raised through missed", () => {
+  it("records that no toast can be raised when a lookup a toast is raised through missed, and logs it", () => {
     logWarn.mockClear();
     startupAnswer = {
       everySearchAnswered: false,
@@ -449,7 +468,7 @@ describe("index.tsx — what the factory records about the toasts", () => {
     expect(logWarn).toHaveBeenCalledWith(expect.stringContaining("Tender's notifications are off"));
   });
 
-  it("records nothing owed when every search answered", () => {
+  it("records that toasts can be raised when every search answered", () => {
     setNotificationsUnavailable(true);
     panelFactory();
     expect(notificationsUnavailable()).toBe(false);
@@ -491,9 +510,11 @@ describe("index.tsx — what the factory writes to the backend log and the notic
     const lines = linesOf("Steam's module registry");
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain(
-      "2 of 33 missed — ControllerGlyph (appearance: button pictures), playSectionClasses (diagnostic).",
+      'start-up check "Steam\'s module registry": missed — ControllerGlyph (appearance: controller button icons), ' +
+        "playSectionClasses (diagnostic). 2 of 33 searches into Steam's interface found nothing.",
     );
-    expect(noticeMessage()).toContain("Not working: button pictures.");
+    expect(lines[0]!.split("2 of 33")).toHaveLength(2);
+    expect(noticeMessage()).toContain("Not working: controller button icons.");
   });
 
   it("writes the same warning where the fallback page stands in the panel's place, and nothing on Main", () => {
@@ -512,20 +533,48 @@ describe("index.tsx — what the factory writes to the backend log and the notic
   });
 
   it("asks after the Steam internals once Steam is ready, logs what is missing with what it costs, and mounts the panel", async () => {
-    vi.stubGlobal("App", { GetServicesInitialized: () => true });
     vi.stubGlobal("SteamClient", { Apps: { AddShortcut: 42 } });
     const panel = panelFactory();
     render(createElement("div", null, panel.content));
 
-    // Every factory call starts this check, so one an earlier test started may
-    // answer here as well; each answers in the same words.
-    await vi.waitFor(() => expect(linesOf("Steam internals").length).toBeGreaterThan(0));
+    await vi.waitFor(() => expect(linesOf("Steam internals")).toHaveLength(1));
     const [line] = linesOf("Steam internals");
-    expect(line).toContain("SteamClient.Apps.AddShortcut (feature: adding and removing shortcuts; not a function)");
+    expect(line).toContain(
+      "SteamClient.Apps.AddShortcut (feature: adding, updating and removing Steam shortcuts; not a function)",
+    );
     expect(line).toContain("SteamClient.Apps.RunGame (feature: starting a game; absent)");
     expect(line).not.toContain("not reported its services initialised");
-    expect(noticeMessage()).toContain("adding and removing shortcuts");
+    expect(noticeMessage()).toContain("adding, updating and removing Steam shortcuts");
     expect(screen.queryByText(/can't start right now/i)).not.toBeInTheDocument();
+  });
+
+  it("asks after the Steam internals under the fallback page too, for the log alone", async () => {
+    startupAnswer = {
+      everySearchAnswered: false,
+      panelMayMount: false,
+      missing: ["Focusable"],
+      missingPackageNames: ["Focusable"],
+      checked: 33,
+    };
+    panelFactory();
+    await vi.waitFor(() => expect(linesOf("Steam internals")).toHaveLength(1));
+    expect(linesOf("Steam internals")[0]).toContain("SteamClient.Apps.RunGame (feature: starting a game; absent)");
+    expect(noticeMessage()).toBeUndefined();
+  });
+
+  it("logs a Steam-internals check that failed rather than dropping it", async () => {
+    logError.mockClear();
+    checkInternals = () => {
+      throw new Error("boom");
+    };
+    try {
+      panelFactory();
+      await vi.waitFor(() =>
+        expect(logError).toHaveBeenCalledWith('start-up check "Steam internals" could not be asked: Error: boom'),
+      );
+    } finally {
+      checkInternals = null;
+    }
   });
 });
 
@@ -537,13 +586,14 @@ describe("index.tsx — the Steam internals asked once the wait for Steam ran ou
 
   it("asks anyway once the deadline has passed, and says in the line that Steam was not ready", async () => {
     vi.useFakeTimers();
+    vi.stubGlobal("App", undefined);
     logWarn.mockClear();
     panelFactory();
     await vi.advanceTimersByTimeAsync(31_000);
     const lines = logWarn.mock.calls.map(([line]) => String(line));
     expect(lines).toContainEqual(
       expect.stringMatching(
-        /^start-up check "Steam internals": .* Steam had not reported its services initialised after 30 s, so they were asked anyway\.$/,
+        /^start-up check "Steam internals": .* Steam had not reported its services initialised after 30 s, so the Steam internals were asked anyway\.$/,
       ),
     );
   });
@@ -573,6 +623,12 @@ describe("index.tsx — the toast for a Quick Access entry that could not be add
     panelFactory();
     await vi.waitFor(() => expect(raised()).toHaveLength(1));
     expect(toaster.toast).toHaveBeenCalledWith({ title: "Tender", body: QUICK_ACCESS_MISSING_TOAST });
+  });
+
+  it("raises it under the fallback page too, which the missing entry leaves just as unreachable", async () => {
+    startupAnswer = { ...missing("Focusable", "QuickAccessMenuBrowserView"), panelMayMount: false };
+    panelFactory();
+    await vi.waitFor(() => expect(raised()).toHaveLength(1));
   });
 
   it("raises none where what a toast is raised through missed as well, leaving the log to carry it", async () => {
@@ -3477,5 +3533,43 @@ describe("index.tsx — the panel appearing places no focus", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("index.tsx — the Quick Access entry's installation", () => {
+  // The bundle's last act, run again in a module registry of its own so the
+  // installer can answer otherwise than the one this file was loaded with.
+  async function loadWith(patched: boolean, moduleFound: boolean): Promise<void> {
+    vi.resetModules();
+    vi.doMock("./qam/installEntry", () => ({ installQuickAccessEntry: vi.fn(() => ({ patched })) }));
+    vi.doMock("./utils/deckyUiInternals", async () => ({
+      ...(await vi.importActual<typeof import("./utils/deckyUiInternals")>("./utils/deckyUiInternals")),
+      QuickAccessMenuBrowserView: moduleFound ? {} : undefined,
+    }));
+    try {
+      await import("./index");
+    } finally {
+      vi.doUnmock("./qam/installEntry");
+      vi.doUnmock("./utils/deckyUiInternals");
+    }
+  }
+  const installLines = (): unknown[] =>
+    logWarn.mock.calls.filter(([line]) => String(line).startsWith("Steam's Quick Access module was found"));
+
+  beforeEach(() => logWarn.mockClear());
+
+  it("logs a module the start-up check found that holds no renderer to patch", async () => {
+    await loadWith(false, true);
+    expect(installLines()).toHaveLength(1);
+  });
+
+  it("logs nothing where a renderer was patched", async () => {
+    await loadWith(true, true);
+    expect(installLines()).toHaveLength(0);
+  });
+
+  it("leaves a module that is missing to the start-up check's warning", async () => {
+    await loadWith(false, false);
+    expect(installLines()).toHaveLength(0);
   });
 });

@@ -21,7 +21,13 @@ describe("the warning line a start-up check writes", () => {
   it("names the check, how many of how many missed, and every missing name with its cost and losses", () => {
     expect(startupMissLine("Steam internals", [shortcut, dump], 46)).toBe(
       'start-up check "Steam internals": 2 of 46 missed — SteamClient.Apps.AddShortcut ' +
-        "(feature: adding and removing shortcuts; absent), playSectionClasses (diagnostic).",
+        "(feature: adding, updating and removing Steam shortcuts; absent), playSectionClasses (diagnostic).",
+    );
+  });
+
+  it("leaves the count to the sentence that follows it where that sentence states one", () => {
+    expect(startupMissLine("Steam's module registry", [glyph], null)).toBe(
+      'start-up check "Steam\'s module registry": missed — ControllerGlyph (appearance: controller button icons).',
     );
   });
 
@@ -34,8 +40,8 @@ describe("the losses the notice names", () => {
   it("names each loss once, in the table's order rather than the order the names missed in", () => {
     const twice: MissedName = { ...shortcut, name: "SteamClient.Apps.RemoveShortcut" };
     expect(noticeFeatures([glyph, shortcut, twice, dump, tabs])).toEqual([
-      "adding and removing shortcuts",
-      "button pictures",
+      "adding, updating and removing Steam shortcuts",
+      "controller button icons",
     ]);
   });
 });

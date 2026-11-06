@@ -131,6 +131,51 @@ describe("what the Steam-internals check reports", () => {
   });
 });
 
+describe("alternatives the code falls back between", () => {
+  const either = (path: string, oneOf = "services initialised"): SteamInternal => ({ ...called(path), oneOf });
+
+  it("reports nothing while one alternative is there, whichever it is", () => {
+    const entries = [either("App.WaitForServicesInitialized"), either("App.GetServicesInitialized")];
+    expect(names(entries, { App: { GetServicesInitialized: () => true } })).toEqual([]);
+    expect(names(entries, { App: { WaitForServicesInitialized: () => Promise.resolve() } })).toEqual([]);
+  });
+
+  it("reports the group once, naming every alternative, where none of them is there", () => {
+    const entries = [either("App.WaitForServicesInitialized"), either("App.GetServicesInitialized")];
+    expect(names(entries, { App: { GetServicesInitialized: 1 } })).toEqual([
+      "App.WaitForServicesInitialized or App.GetServicesInitialized: absent, not a function",
+    ]);
+  });
+
+  it("counts a group as there where one of its alternatives cannot be asked at start-up", () => {
+    const entries: SteamInternal[] = [
+      { ...called("SteamUIStore.NavigateToRunningApp"), oneOf: "resume navigation" },
+      {
+        path: "/apprunning",
+        asked: { notAtStartUp: "a route" },
+        absenceCost: "feature",
+        features: ["resume"],
+        oneOf: "resume navigation",
+      },
+    ];
+    expect(names(entries, {})).toEqual([]);
+  });
+
+  it("keeps a group's place in the order the list first names it", () => {
+    const entries = [
+      called("SteamClient.Apps.AddShortcut"),
+      either("App.WaitForServicesInitialized"),
+      either("App.GetServicesInitialized"),
+      called("SteamClient.Apps.RunGame"),
+    ];
+    expect(names(entries, {}).map((line) => line.split(":")[0])).toEqual([
+      "SteamClient.Apps.AddShortcut",
+      "App.WaitForServicesInitialized or App.GetServicesInitialized",
+      "SteamClient.Apps.RunGame",
+    ]);
+  });
+});
+
 describe("the reader of the global scope", () => {
   it("finds what the global scope holds, and nothing it does not", () => {
     vi.stubGlobal("SteamClient", { Apps: { AddShortcut: () => 1, Gone: undefined } });

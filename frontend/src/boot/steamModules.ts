@@ -353,15 +353,16 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // is installed into (`qam/installEntry.tsx`). A search of ours in both
   // bundles. It costs a feature rather than the panel: without it the panel is
   // built and cannot be reached, and the game page's section, the launch check
-  // and every sync still run — the fallback page would take those away and be
-  // just as unreachable. So the notice on Main, which only the panel shows,
+  // and the save sync around a game still run — the fallback page would take
+  // those away and be just as unreachable. So the notice on Main, which only the panel shows,
   // cannot carry it either: the factory raises a toast instead (#2509 D10).
   truthyUnexported(QUICK_ACCESS_LOOKUP, "feature", () => QuickAccessMenuBrowserView, "quickAccess"),
 
   // React's client module in Steam's registry, which the desktop surface
   // mounts its own trees with (`desktop/desktopWindow.ts`). Asked only in the
-  // build that carries that surface; in every other build the stamp folds the
-  // entry, and with it the search, away (`frontend/rollup.config.js`).
+  // build that carries that surface: in every other build the stamp folds this
+  // entry away, and declaring the desktop modules free of side effects leaves
+  // the search out with it (`frontend/rollup.config.js`).
   ...(DESKTOP_SURFACE ? [truthyUnexported("ReactClient", "feature", () => ReactClient, "desktop")] : []),
 ];
 

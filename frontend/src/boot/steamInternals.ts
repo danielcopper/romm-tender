@@ -19,24 +19,24 @@ import type { AbsenceCost } from "./steamModules";
  * names one loss once whichever check found it missing.
  */
 export const STEAM_FEATURES = {
-  shortcuts: "adding and removing shortcuts",
+  shortcuts: "adding, updating and removing Steam shortcuts",
   launch: "starting a game",
   artwork: "setting artwork",
-  thumbnails: "artwork previews",
+  thumbnails: "artwork previews and carrying images set in Steam over",
   sessions: "playtime and the save sync after a game",
   library: "game details in Steam's library",
   collections: "Steam collections",
   cleanup: "the cleanup of removed games",
-  hidden: "carrying Hidden over to another version",
+  hidden: "keeping a game hidden when the sync merges its shortcuts",
   deviceName: "the device name in collection names",
   running: "telling whether a game is running",
-  resume: "Resume",
-  properties: "the Properties entry",
-  restart: "Restart Steam",
+  resume: "Resume for a running game",
+  properties: "Properties in a game's Steam menu",
+  restart: "restarting Steam from Tender",
   notifications: "Tender's notifications",
   notificationLook: "the look of Tender's notifications",
   gamePage: "Tender's section on a game page",
-  buttonPictures: "button pictures",
+  buttonPictures: "controller button icons",
   quickAccess: "Tender's Quick Access entry",
   desktop: "the desktop surface (dev build)",
 } as const;
@@ -71,21 +71,26 @@ export type SteamInternal = InternalCost & {
   readonly asked: AskedAs;
   /** Reached only by the desktop surface, so asked only in the build that carries it. */
   readonly devBuildOnly?: true;
+  /**
+   * Names the alternatives this entry is one of: the code falls back from one
+   * to another, so the group counts as there while any one of them is, and an
+   * alternative nothing can ask at start-up counts as there.
+   */
+  readonly oneOf?: string;
   /** The files that reach it where no type says so — a string key, a `Record`, an `unknown`, a route; absent for a typed reach. */
   readonly untypedIn?: readonly string[];
 };
 
 const cost = (...features: [SteamFeature, ...SteamFeature[]]): InternalCost => ({ absenceCost: "feature", features });
-const looks = (...features: [SteamFeature, ...SteamFeature[]]): InternalCost => ({
-  absenceCost: "appearance",
-  features,
-});
 const DIAGNOSTIC: InternalCost = { absenceCost: "diagnostic", features: [] };
 
 const SHORTCUTS = cost("shortcuts");
 const LAUNCH = cost("launch");
 const ARTWORK = cost("artwork");
-const THUMBNAILS = looks("thumbnails");
+// The thumbnails fall back to a placeholder, but the shortcut carry-over reads the
+// same URLs for an image set in Steam (`utils/shortcutCarryOver.ts`), and that
+// image is lost without them: a feature, not only an appearance.
+const THUMBNAILS = cost("thumbnails");
 const SESSIONS = cost("sessions");
 const LIBRARY = cost("library");
 const COLLECTIONS = cost("collections");
@@ -196,13 +201,16 @@ export const STEAM_INTERNALS: readonly SteamInternal[] = [
     untypedIn: ["utils/runningApps.ts"],
   },
   { path: "SteamUIStore.SetRunningApp", asked: "call", ...RESUME },
+  // Resume navigates through the store where it can and to the route where it
+  // cannot (`utils/runningGame.ts`), so neither alone is a loss.
   {
     path: "/apprunning",
     asked: { notAtStartUp: "a route of Steam's router" },
     ...RESUME,
+    oneOf: "resume navigation",
     untypedIn: ["utils/runningGame.ts"],
   },
-  { path: "SteamUIStore.NavigateToRunningApp", asked: "call", ...RESUME },
+  { path: "SteamUIStore.NavigateToRunningApp", asked: "call", ...RESUME, oneOf: "resume navigation" },
   { path: "SteamUIStore.MainInstanceUIMode", asked: "read", ...LAUNCH },
 
   { path: "NotificationStore", asked: "read", ...NOTIFICATIONS },
@@ -225,15 +233,23 @@ export const STEAM_INTERNALS: readonly SteamInternal[] = [
   { path: "NotificationStore.ProcessNotification(info).showToast", asked: "call", ...NOTIFICATIONS },
   { path: "NotificationStore.ProcessNotification(info).sound", asked: "call", ...NOTIFICATIONS },
   { path: "NotificationStore.ProcessNotification(info).toastDurationMS", asked: "call", ...NOTIFICATIONS },
-  // What a toast waits on before it is raised (`utils/steamReadyForToasts.ts`):
-  // without one, every toast waits out the deadline.
+  // What a toast waits on before it is raised (`utils/steamReadyForToasts.ts`),
+  // the getter asked where the wait is missing: without both, every toast waits
+  // out the deadline.
   {
     path: "App.WaitForServicesInitialized",
     asked: "call",
     ...NOTIFICATIONS,
+    oneOf: "services initialised",
     untypedIn: ["utils/steamReadyForToasts.ts"],
   },
-  { path: "App.GetServicesInitialized", asked: "call", ...NOTIFICATIONS, untypedIn: ["utils/steamReadyForToasts.ts"] },
+  {
+    path: "App.GetServicesInitialized",
+    asked: "call",
+    ...NOTIFICATIONS,
+    oneOf: "services initialised",
+    untypedIn: ["utils/steamReadyForToasts.ts"],
+  },
   {
     path: "securitystore.IsLockScreenActive",
     asked: "call",
@@ -248,8 +264,9 @@ export const STEAM_INTERNALS: readonly SteamInternal[] = [
   },
 
   { path: "App", asked: "read", ...STEAM_READY },
-  { path: "App.BFinishedInitBeforeLogin", asked: "call", ...STEAM_READY },
-  { path: "App.BFinishedInitStageOne", asked: "call", ...STEAM_READY },
+  // `boot/steamGlobals.ts` asks the second where the first is missing.
+  { path: "App.BFinishedInitBeforeLogin", asked: "call", ...STEAM_READY, oneOf: "init finished" },
+  { path: "App.BFinishedInitStageOne", asked: "call", ...STEAM_READY, oneOf: "init finished" },
   { path: "webpackChunksteamui", asked: "read", ...cost("gamePage") },
   { path: "steamloopback.host/customimages", asked: ADDRESS, ...THUMBNAILS, untypedIn: ["utils/artworkThumbs.ts"] },
 

@@ -29,10 +29,13 @@ const describeName = (missed: MissedName): string => {
 /**
  * The warning line for one check: its name, how many of how many it asked
  * missed, and every missing name with its cost. Empty when nothing missed.
+ * *asked* is `null` where a sentence following the line states the count
+ * already, so the line does not say it twice.
  */
-export function startupMissLine(check: string, missed: readonly MissedName[], asked: number): string {
+export function startupMissLine(check: string, missed: readonly MissedName[], asked: number | null): string {
   if (missed.length === 0) return "";
-  return `start-up check "${check}": ${missed.length} of ${asked} missed — ${missed.map(describeName).join(", ")}.`;
+  const count = asked === null ? "" : `${missed.length} of ${asked} `;
+  return `start-up check "${check}": ${count}missed — ${missed.map(describeName).join(", ")}.`;
 }
 
 /**

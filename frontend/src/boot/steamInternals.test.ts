@@ -173,6 +173,15 @@ describe("what the start-up check asks of each Steam internal", () => {
     expect(wrong.map((entry) => entry.path)).toEqual([]);
   });
 
+  it("groups alternatives only in twos or more, so no group stands for one internal", () => {
+    const sizes = new Map<string, number>();
+    for (const entry of STEAM_INTERNALS) {
+      if (entry.oneOf !== undefined) sizes.set(entry.oneOf, (sizes.get(entry.oneOf) ?? 0) + 1);
+    }
+    expect(sizes.size).toBeGreaterThan(0);
+    expect([...sizes].filter(([, size]) => size < 2)).toEqual([]);
+  });
+
   it("uses every loss it can name, in one list or the other", () => {
     const used = new Set([
       ...STEAM_INTERNALS.flatMap((entry) => entry.features),

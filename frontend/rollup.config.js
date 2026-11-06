@@ -129,10 +129,11 @@ const DESKTOP_SURFACE_MODULE = "virtual:tender-desktop-surface";
 /**
  * Tell a panel bundle whether the desktop surface is in it.
  *
- * The start-up check asks after the Steam internals only the desktop surface
- * reaches in the build that carries it alone (`pnpm build:desktop`); every
- * other build answers `false`, and `frontend/scripts/check-bundle-shape.mjs`
- * holds the release bundles to that. It is a build fact for the reason
+ * The start-up checks ask after what only the desktop surface reaches — its
+ * Steam internals and its `ReactClient` search — only in the build that
+ * carries that surface (`pnpm build:desktop`); every other build answers
+ * `false`, and `frontend/scripts/check-bundle-shape.mjs` holds the release
+ * bundles to that. It is a build fact for the reason
  * {@link stampBundleKind} gives.
  */
 const stampDesktopSurface = (desktopSurface) => ({

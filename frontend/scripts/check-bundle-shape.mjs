@@ -85,8 +85,9 @@ const stampedKind = (text) => /const BUNDLE_KIND\w* = "(standalone|coexistence)"
  * artefact: `true`, `false`, or `null` for a bundle that carries no such stamp.
  *
  * `rollup.config.js` serves `virtual:tender-desktop-surface` per panel build,
- * and the start-up check asks after the Steam internals only the desktop
- * surface reaches where it says `true` (#2509 D12). A release bundle stamped
+ * and the start-up checks ask after what only the desktop surface reaches — its
+ * Steam internals and its `ReactClient` search — only where it says `true`
+ * (#2509 D12). A release bundle stamped
  * `true` would tell every user about a surface their build does not have.
  */
 const stampedDesktopSurface = (text) => {
