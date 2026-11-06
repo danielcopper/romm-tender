@@ -18,7 +18,16 @@ export interface MissedName {
   readonly features: readonly SteamFeature[];
   /** Why it counts as missing, where there is more than one way to be. */
   readonly why?: string;
+  /**
+   * `false` for a miss that is logged and raises no notice: one alternative of
+   * a group missing while another stands in for it (#2509 D13).
+   */
+  readonly noticed?: false;
 }
+
+/** The misses that reach the notice on Main: all but those logged alone. */
+export const noticedMisses = (missed: readonly MissedName[]): MissedName[] =>
+  missed.filter((name) => name.noticed !== false);
 
 const describeName = (missed: MissedName): string => {
   const labels = missed.features.map((feature) => STEAM_FEATURES[feature]);

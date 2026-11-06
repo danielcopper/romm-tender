@@ -19,10 +19,10 @@ import type { AbsenceCost } from "./steamModules";
  * names one loss once whichever check found it missing.
  */
 export const STEAM_FEATURES = {
-  shortcuts: "adding, updating and removing Steam shortcuts",
+  shortcuts: "changes to Steam shortcuts",
   launch: "starting a game",
   artwork: "setting artwork",
-  thumbnails: "artwork previews and carrying images set in Steam over",
+  thumbnails: "artwork previews and keeping images set in Steam when the sync merges shortcuts",
   sessions: "playtime and the save sync after a game",
   library: "game details in Steam's library",
   collections: "Steam collections",
@@ -31,7 +31,7 @@ export const STEAM_FEATURES = {
   deviceName: "the device name in collection names",
   running: "telling whether a game is running",
   resume: "Resume for a running game",
-  properties: "Properties in a game's Steam menu",
+  properties: "Properties in the Steam menu on a game's page",
   restart: "restarting Steam from Tender",
   notifications: "Tender's notifications",
   notificationLook: "the look of Tender's notifications",
@@ -73,8 +73,8 @@ export type SteamInternal = InternalCost & {
   readonly devBuildOnly?: true;
   /**
    * Names the alternatives this entry is one of: the code falls back from one
-   * to another, so the group counts as there while any one of them is, and an
-   * alternative nothing can ask at start-up counts as there.
+   * to another. How the start-up check settles such a group (#2509 D13) is
+   * `steamInternalsCheck.ts`'s `settle`.
    */
   readonly oneOf?: string;
   /** The files that reach it where no type says so — a string key, a `Record`, an `unknown`, a route; absent for a typed reach. */
@@ -234,7 +234,7 @@ export const STEAM_INTERNALS: readonly SteamInternal[] = [
   { path: "NotificationStore.ProcessNotification(info).sound", asked: "call", ...NOTIFICATIONS },
   { path: "NotificationStore.ProcessNotification(info).toastDurationMS", asked: "call", ...NOTIFICATIONS },
   // What a toast waits on before it is raised (`utils/steamReadyForToasts.ts`),
-  // the getter asked where the wait is missing: without both, every toast waits
+  // the getter asked where the wait is missing: with neither, every toast waits
   // out the deadline.
   {
     path: "App.WaitForServicesInitialized",

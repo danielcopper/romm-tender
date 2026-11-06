@@ -8,7 +8,7 @@ import { fallbackButtons } from "./boot/fallbackButtons";
 import { DESKTOP_SURFACE } from "virtual:tender-desktop-surface";
 
 import { readSearchingCopy } from "./boot/searchingCopy";
-import { noticeFeatures, startupMissLine } from "./boot/startupMiss";
+import { noticeFeatures, noticedMisses, startupMissLine } from "./boot/startupMiss";
 import { STEAM_INTERNALS } from "./boot/steamInternals";
 import { checkSteamInternals } from "./boot/steamInternalsCheck";
 import {
@@ -443,7 +443,9 @@ async function checkSteamInternalsOnceSteamIsReady(notice: boolean): Promise<voi
     ? ""
     : ` Steam had not reported its services initialised after ${TOAST_READINESS_DEADLINE_MS / 1000} s, so the Steam internals were asked anyway.`;
   logWarn(`${startupMissLine(INTERNALS_CHECK, report.missed, report.asked)}${late}`);
-  if (notice) recordStartupMiss("internals", noticeFeatures(report.missed));
+  // A miss an alternative stands in for is logged and raises no notice.
+  const noticed = noticedMisses(report.missed);
+  if (notice && noticed.length > 0) recordStartupMiss("internals", noticeFeatures(noticed));
 }
 
 /** Start the Steam-internals check without waiting for it; a failure of the check itself is logged. */
@@ -456,8 +458,8 @@ function startSteamInternalsCheck(notice: boolean): void {
 /**
  * Without its Quick Access entry neither the panel, nor the fallback page in
  * its place, nor Main's notice can be reached, so this one miss is also said
- * where Steam shows it — unless what a toast is raised through missed too,
- * when the log alone carries it.
+ * where Steam shows it — unless one of the three searches a toast is raised
+ * through (`NOTIFICATION_LOOKUPS`) missed too, when the log alone carries it.
  */
 function toastAMissingQuickAccessEntry(startup: StartupReport): void {
   if (quickAccessMissing(startup) && !notificationsMissing(startup)) {
@@ -493,10 +495,10 @@ const tender = definePanel(() => {
     // question about the machine separately and disagree. It is read only where
     // something missed, so the ordinary start touches none of Decky's globals.
     const copy = readSearchingCopy(startup);
+    toastAMissingQuickAccessEntry(startup);
     // One warning in the backend log for every miss, whether or not the panel
     // mounts over it, so the log holds the whole miss whatever the user saw.
     const { missed, asked } = describeMissedLookups(startup);
-    toastAMissingQuickAccessEntry(startup);
     if (!startup.panelMayMount) {
       logWarn(`${startupMissLine(MODULES_CHECK, missed, asked)} ${describeFailure(startup, copy)}`);
       // The Steam internals are asked here too, for the log alone: the page has
@@ -1250,9 +1252,10 @@ const tender = definePanel(() => {
  * Nothing is awaited and nothing branches on the result: without a renderer to
  * patch the panel never appears, and there is no second way to show it that a
  * fallback could take. A module that is missing is the start-up check's to
- * report, with its warning and its toast; what is left for this line is an
- * installation that found no renderer in a module the check did find, which a
- * change to either of the two predicates alone would bring about.
+ * report, with its warning and, where a toast can be raised, its toast; what is
+ * left for this line is an installation that found no renderer in a module the
+ * check did find, which a change to either of the two predicates alone would
+ * bring about, and which raises no toast.
  */
 const quickAccessEntry = installQuickAccessEntry(tender);
 if (!quickAccessEntry.patched && QuickAccessMenuBrowserView !== undefined) {

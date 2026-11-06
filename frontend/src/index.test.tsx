@@ -539,12 +539,10 @@ describe("index.tsx — what the factory writes to the backend log and the notic
 
     await vi.waitFor(() => expect(linesOf("Steam internals")).toHaveLength(1));
     const [line] = linesOf("Steam internals");
-    expect(line).toContain(
-      "SteamClient.Apps.AddShortcut (feature: adding, updating and removing Steam shortcuts; not a function)",
-    );
+    expect(line).toContain("SteamClient.Apps.AddShortcut (feature: changes to Steam shortcuts; not a function)");
     expect(line).toContain("SteamClient.Apps.RunGame (feature: starting a game; absent)");
     expect(line).not.toContain("not reported its services initialised");
-    expect(noticeMessage()).toContain("adding, updating and removing Steam shortcuts");
+    expect(noticeMessage()).toContain("changes to Steam shortcuts");
     expect(screen.queryByText(/can't start right now/i)).not.toBeInTheDocument();
   });
 
@@ -560,6 +558,31 @@ describe("index.tsx — what the factory writes to the backend log and the notic
     await vi.waitFor(() => expect(linesOf("Steam internals")).toHaveLength(1));
     expect(linesOf("Steam internals")[0]).toContain("SteamClient.Apps.RunGame (feature: starting a game; absent)");
     expect(noticeMessage()).toBeUndefined();
+  });
+
+  it("logs a miss an alternative stands in for, and raises no notice for it", async () => {
+    checkInternals = () => ({
+      missed: [
+        {
+          name: "App.WaitForServicesInitialized",
+          absenceCost: "feature",
+          features: ["notifications"],
+          why: "absent; its alternative App.GetServicesInitialized is there",
+          noticed: false,
+        },
+      ],
+      asked: 1,
+    });
+    try {
+      panelFactory();
+      await vi.waitFor(() => expect(linesOf("Steam internals")).toHaveLength(1));
+      expect(linesOf("Steam internals")[0]).toContain(
+        "App.WaitForServicesInitialized (feature: Tender's notifications;",
+      );
+      expect(noticeMessage()).toBeUndefined();
+    } finally {
+      checkInternals = null;
+    }
   });
 
   it("logs a Steam-internals check that failed rather than dropping it", async () => {

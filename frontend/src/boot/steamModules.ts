@@ -354,8 +354,9 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // bundles. It costs a feature rather than the panel: without it the panel is
   // built and cannot be reached, and the game page's section, the launch check
   // and the save sync around a game still run — the fallback page would take
-  // those away and be just as unreachable. So the notice on Main, which only the panel shows,
-  // cannot carry it either: the factory raises a toast instead (#2509 D10).
+  // those away and be just as unreachable. So the notice on Main, which only
+  // the panel shows, cannot carry it either: the factory raises a toast instead
+  // (#2509 D10).
   truthyUnexported(QUICK_ACCESS_LOOKUP, "feature", () => QuickAccessMenuBrowserView, "quickAccess"),
 
   // React's client module in Steam's registry, which the desktop surface

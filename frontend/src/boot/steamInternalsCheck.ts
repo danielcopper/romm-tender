@@ -79,16 +79,17 @@ function costOf(entries: readonly SteamInternal[]): Pick<MissedName, "absenceCos
 
 interface StaticPart {
   readonly segments: readonly string[];
+  /** The group of alternatives the part's entries belong to, if any. */
+  readonly oneOf: string | undefined;
   call: boolean;
   readonly entries: SteamInternal[];
 }
 
 /** A group of alternatives as the check settles it. */
 interface Alternatives {
-  there: boolean;
-  readonly names: string[];
-  readonly whys: string[];
-  readonly entries: SteamInternal[];
+  /** An alternative that is there, or one nothing can ask at start-up, with how it stands. */
+  standing: string | undefined;
+  readonly missed: { readonly name: string; readonly why: string; readonly entries: readonly SteamInternal[] }[];
 }
 
 /** One static part's answer: why it missed, or `null` where it is there. */
@@ -99,28 +100,55 @@ function askPart(part: StaticPart, read: ReadPath): string | null {
 }
 
 /**
+ * A group's misses (#2509 D13): none where nothing in it missed; each missing
+ * member under its own name, logged but raising no notice, where an alternative
+ * stands; and the group once, naming every alternative, where none does.
+ */
+function settle(group: Alternatives): MissedName[] {
+  if (group.missed.length === 0) return [];
+  const { standing } = group;
+  if (standing !== undefined) {
+    return group.missed.map((member) => ({
+      name: member.name,
+      ...costOf(member.entries),
+      why: `${member.why}; ${standing}`,
+      noticed: false,
+    }));
+  }
+  return [
+    {
+      name: group.missed.map((member) => member.name).join(" or "),
+      ...costOf(group.missed.flatMap((member) => member.entries)),
+      why: [...new Set(group.missed.map((member) => member.why))].join(", "),
+    },
+  ];
+}
+
+/**
  * Ask every entry *entries* holds that can be asked at start-up — the dev
  * build's only where *desktopSurface* says the build carries it.
  *
- * Entries that are one of a group of alternatives (`oneOf`) miss only together:
- * the group is reported once, naming every alternative, where none of them is
- * there and none is an alternative nothing can ask at start-up.
+ * Entries that are one of a group of alternatives (`oneOf`) are settled by
+ * {@link settle}; an entry outside a group is never pulled into one, even on a
+ * static part a group's entry shares.
  */
 export function checkSteamInternals(
   entries: readonly SteamInternal[],
   { desktopSurface, read = readGlobalPath }: { readonly desktopSurface: boolean; readonly read?: ReadPath },
 ): InternalsReport {
   const parts = new Map<string, StaticPart>();
-  const unaskedAlternatives = new Set<string>();
+  const unaskedAlternatives = new Map<string, string>();
   for (const entry of entries) {
     if (entry.devBuildOnly === true && !desktopSurface) continue;
     if (typeof entry.asked !== "string") {
-      if (entry.oneOf !== undefined) unaskedAlternatives.add(entry.oneOf);
+      if (entry.oneOf !== undefined && !unaskedAlternatives.has(entry.oneOf)) {
+        unaskedAlternatives.set(entry.oneOf, `its alternative ${entry.path} cannot be asked at start-up`);
+      }
       continue;
     }
     const segments = staticPart(entry.path);
-    const key = segments.join(".");
-    const part = parts.get(key) ?? { segments, call: false, entries: [] };
+    const key = `${entry.oneOf ?? ""}\u0000${segments.join(".")}`;
+    const part = parts.get(key) ?? { segments, oneOf: entry.oneOf, call: false, entries: [] };
     part.call ||= entry.asked === "call";
     part.entries.push(entry);
     parts.set(key, part);
@@ -130,30 +158,22 @@ export function checkSteamInternals(
   // holds its place by its first member and is settled once every part is asked.
   const order: (MissedName | Alternatives)[] = [];
   const alternatives = new Map<string, Alternatives>();
-  for (const [name, part] of parts) {
+  for (const part of parts.values()) {
+    const name = part.segments.join(".");
     const why = askPart(part, read);
-    const oneOf = part.entries.find((entry) => entry.oneOf !== undefined)?.oneOf;
-    if (oneOf === undefined) {
+    if (part.oneOf === undefined) {
       if (why !== null) order.push({ name, ...costOf(part.entries), why });
       continue;
     }
-    let group = alternatives.get(oneOf);
+    let group = alternatives.get(part.oneOf);
     if (group === undefined) {
-      group = { there: unaskedAlternatives.has(oneOf), names: [], whys: [], entries: [] };
-      alternatives.set(oneOf, group);
+      group = { standing: unaskedAlternatives.get(part.oneOf), missed: [] };
+      alternatives.set(part.oneOf, group);
       order.push(group);
     }
-    if (why === null) group.there = true;
-    else {
-      group.names.push(name);
-      group.whys.push(why);
-      group.entries.push(...part.entries);
-    }
+    if (why === null) group.standing ??= `its alternative ${name} is there`;
+    else group.missed.push({ name, why, entries: part.entries });
   }
-  const reported = order.flatMap((item): MissedName[] => {
-    if (!("there" in item)) return [item];
-    if (item.there) return [];
-    return [{ name: item.names.join(" or "), ...costOf(item.entries), why: [...new Set(item.whys)].join(", ") }];
-  });
+  const reported = order.flatMap((item): MissedName[] => ("missed" in item ? settle(item) : [item]));
   return { missed: reported, asked: parts.size };
 }

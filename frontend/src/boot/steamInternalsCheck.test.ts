@@ -41,7 +41,7 @@ const read = (path: string): SteamInternal => ({
 
 const names = (entries: readonly SteamInternal[], scope: Record<string, unknown>): string[] =>
   checkSteamInternals(entries, { desktopSurface: true, read: over(scope) }).missed.map(
-    (missed) => `${missed.name}: ${missed.why ?? ""}`,
+    (missed) => `${missed.name}: ${missed.why ?? ""}${missed.noticed === false ? " (no notice)" : ""}`,
   );
 
 describe("the static part of a path", () => {
@@ -134,10 +134,20 @@ describe("what the Steam-internals check reports", () => {
 describe("alternatives the code falls back between", () => {
   const either = (path: string, oneOf = "services initialised"): SteamInternal => ({ ...called(path), oneOf });
 
-  it("reports nothing while one alternative is there, whichever it is", () => {
+  it("logs a member missing while its alternative is there under its own name, and raises no notice for it", () => {
     const entries = [either("App.WaitForServicesInitialized"), either("App.GetServicesInitialized")];
-    expect(names(entries, { App: { GetServicesInitialized: () => true } })).toEqual([]);
-    expect(names(entries, { App: { WaitForServicesInitialized: () => Promise.resolve() } })).toEqual([]);
+    expect(names(entries, { App: { GetServicesInitialized: () => true } })).toEqual([
+      "App.WaitForServicesInitialized: absent; its alternative App.GetServicesInitialized is there (no notice)",
+    ]);
+    expect(names(entries, { App: { WaitForServicesInitialized: () => Promise.resolve() } })).toEqual([
+      "App.GetServicesInitialized: absent; its alternative App.WaitForServicesInitialized is there (no notice)",
+    ]);
+  });
+
+  it("reports nothing where every alternative is there", () => {
+    const entries = [either("App.WaitForServicesInitialized"), either("App.GetServicesInitialized")];
+    const scope = { App: { WaitForServicesInitialized: () => Promise.resolve(), GetServicesInitialized: () => true } };
+    expect(names(entries, scope)).toEqual([]);
   });
 
   it("reports the group once, naming every alternative, where none of them is there", () => {
@@ -147,7 +157,7 @@ describe("alternatives the code falls back between", () => {
     ]);
   });
 
-  it("counts a group as there where one of its alternatives cannot be asked at start-up", () => {
+  it("logs a member missing beside an alternative that cannot be asked at start-up, and raises no notice for it", () => {
     const entries: SteamInternal[] = [
       { ...called("SteamUIStore.NavigateToRunningApp"), oneOf: "resume navigation" },
       {
@@ -158,7 +168,21 @@ describe("alternatives the code falls back between", () => {
         oneOf: "resume navigation",
       },
     ];
-    expect(names(entries, {})).toEqual([]);
+    expect(names(entries, {})).toEqual([
+      "SteamUIStore.NavigateToRunningApp: absent; its alternative /apprunning cannot be asked at start-up (no notice)",
+    ]);
+  });
+
+  it("never pulls an entry outside a group into one on a static part a group's entry shares", () => {
+    const entries: SteamInternal[] = [
+      either("App.GetServicesInitialized"),
+      either("App.WaitForServicesInitialized"),
+      { path: "App.GetServicesInitialized().x", asked: "call", absenceCost: "feature", features: ["library"] },
+    ];
+    expect(names(entries, { App: { WaitForServicesInitialized: () => Promise.resolve() } })).toEqual([
+      "App.GetServicesInitialized: absent; its alternative App.WaitForServicesInitialized is there (no notice)",
+      "App.GetServicesInitialized: absent",
+    ]);
   });
 
   it("keeps a group's place in the order the list first names it", () => {
