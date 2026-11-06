@@ -177,51 +177,60 @@ The question `frontend/src/boot/steamModules.ts` asks before anything mounts: di
 interface find something? Almost everything the panel renders is a search predicate over Steam's minified bundle, and
 one Steam has moved past returns `undefined` with nothing thrown.
 
-Each name checked states what its **absence costs**: the `panel`, which is every name's status quo, only its
-`appearance`, or — where the name is read by a `diagnostic` and nothing else — a debug line naming a class instead of
-the class. On a miss that costs the panel, the panel does not mount at all — the factory returns a **fallback page**
-instead and registers nothing. The page distinguishes SOME searches missing from ALL of them (the React bootstrap never
-ran, or Steam's registry was read before it was complete, neither of them `@decky/ui`'s doing), which is the first fact
-that leads to a repair.
+There are two checks. The first asks after the searches into Steam's module registry, in the panel's factory, before
+anything mounts. The second asks after the **Steam internals**, once Steam reports its services initialised, and never
+keeps the panel from mounting. Both word a miss in one shape (`boot/startupMiss.ts`).
 
-A **miss the panel survives** costs neither the panel nor anything the panel acts on: it mounts as usual and the log is
-the only place the miss is reported. That line answers the same question the page does — whose copy of `@decky/ui` ran
-the search — rather than naming a repair of its own, because the two costs below the panel do not all belong to the same
-program: `ControllerGlyph` is a search Tender runs itself, and `playSectionClasses` is a `@decky/ui` export whose search
-is Decky's in the coexistence bundle. _Avoid_ **cosmetic miss** for the pair: it is true of the glyph and false of
-`playSectionClasses`, whose absence nothing draws in the first place.
+Each name checked states what its **absence costs**: the `panel` — the status quo of every name the first check asks
+after, and never a Steam internal's —, a whole `feature` outside it, only its `appearance`, or — where the name is read
+by a `diagnostic` and nothing else — a debug line naming a class instead of the class. On a miss that costs the panel,
+the panel does not mount at all — the factory returns a **fallback page** instead and registers nothing. The page
+distinguishes SOME searches missing from ALL of them (the React bootstrap never ran, or Steam's registry was read before
+it was complete, neither of them `@decky/ui`'s doing), which is the first fact that leads to a repair.
 
-The second is the **searching copy**: which installed copy of `@decky/ui` ran the predicate that went stale, since the
-coexistence bundle runs Decky Loader's rather than ours. It is read ONCE per start and worded by both surfaces, which is
-what stops the page and the log line from answering it differently. It gives SOME four answers instead of one — Tender's
-own copy searched and missed (update Tender); Decky's copy searched and missed (update Decky Loader, whose own interface
-and other plugins are affected the same way); Decky's copy does not export a name Tender asks it for, which is two
-separately installed programs disagreeing about the package (bring both to current); or what missed spans both kinds,
-which still settles Decky's copy — it carries every name asked of it and its searches for them came back empty all the
-same — and leaves the rest to whichever kind of name that is. The **package disagreement** is asked before the mixed
-answer because a name Decky's copy does not export is a fact about the two installs, where a name it exports with an
-empty value is a search result whose cause is inferred.
+A **miss the panel survives** costs less than the panel: it mounts as usual, the backend log carries the missing names,
+and Main's notice ("Steam has changed") names what does not work. Every miss writes that warning, the fallback page's
+included. The log line answers the same question the page does — whose copy of `@decky/ui` ran the search — rather than
+naming a repair of its own, because the costs below the panel do not all belong to the same program: `ControllerGlyph`
+is a search Tender runs itself, and `playSectionClasses` is a `@decky/ui` export whose search is Decky's in the
+coexistence bundle. _Avoid_ **cosmetic miss** for the pair: it is true of the glyph and false of `playSectionClasses`,
+whose absence nothing draws in the first place.
 
-Asked before them all: four of the names checked are not `@decky/ui` lookups at all — the three `SP_*` React globals and
-`ControllerGlyph`, which Tender reaches with a predicate of its own — so a miss confined to those belongs to NO copy of
+The second fact that leads to a repair is the **searching copy**: which installed copy of `@decky/ui` ran the predicate
+that went stale, since the coexistence bundle runs Decky Loader's rather than ours. It is read ONCE per start and worded
+by both surfaces, which is what stops the page and the log line from answering it differently. It gives SOME four
+answers instead of one — Tender's own copy searched and missed (update Tender); Decky's copy searched and missed (update
+Decky Loader, whose own interface and other plugins are affected the same way); Decky's copy does not export a name
+Tender asks it for, which is two separately installed programs disagreeing about the package (bring both to current); or
+what missed spans both kinds, which still settles Decky's copy — it carries every name asked of it and its searches for
+them came back empty all the same — and leaves the rest to whichever kind of name that is. The **package disagreement**
+is asked before the mixed answer because a name Decky's copy does not export is a fact about the two installs, where a
+name it exports with an empty value is a search result whose cause is inferred.
+
+Asked before them all: some of the names checked are not `@decky/ui` lookups at all — every entry marked
+`deckyUiExport: false`: the three `SP_*` React globals, `NotificationStore`, a global Steam installs, and the searches
+Tender runs with predicates of its own, `ControllerGlyph` among them — so a miss confined to those belongs to NO copy of
 the package and names none. The **fallback page** then names no repair either, because a global can be among them and
 who installed it on a machine running both programs is not this page's to decide. The log line is not in that position:
-a global's absence costs the panel, so it never reaches one, and the names that do reach it in this answer are searches
-Tender runs itself — so there the repair is named, a newer Tender. (That is this answer's scope, not a universal:
-`playSectionClasses` reaches the log line too, and its search is the package's.)
+the globals whose absence costs the panel (the three `SP_*`) never reach it, and the names that do reach it in this
+answer are searches Tender runs itself or `NotificationStore`, which Tender reads itself — so there the repair is named,
+a newer Tender. (That is this answer's scope, not a universal: `playSectionClasses` reaches the log line too, and its
+search is the package's.)
 
 _Avoid_: **health check** — it asks one question at one moment and is not a recurring probe. Avoid **degraded mode**:
 the panel is whole or it is absent, and a half-mounted panel acting on what it cannot see is the thing the check exists
-to refuse. A miss the panel survives is not degraded mode: what is absent is a decoration the one place that draws it
-renders without, or a name only a debug line reads — never something a page acts on.
+to refuse. A miss the panel survives is not degraded mode: every page renders with every component it acts through, and
+what is lost — a function outside the panel, a decoration the one place that draws it renders without, a name only a
+debug line reads — is named on Main and in the log rather than left for a page to find.
 
 ### Steam internal
 
 A name of Steam's client Tender depends on: a global or what it reaches through one (a `SteamClient` call, a store and
 its members, an overview object's field), a route of Steam's router or `steam://` URL, the `SharedJSContext` target
-title, the `steamloopback.host` origin. Valve promises none of them. Each is named, with the feature that needs it, in
-one list with two halves — the panel's in `frontend/src/boot/steamInternals.ts`, the backend's in
-`backend/domain/steam_internals.py`.
+title, the `steamloopback.host` origin. Valve promises none of them. Each is named in one list with two halves — the
+panel's in `frontend/src/boot/steamInternals.ts`, the backend's in `backend/domain/steam_internals.py` — and each of the
+panel's carries what its absence costs, on the **start-up check**'s scale but never the `panel`, since a second check
+asks after them once Steam has started and the panel mounts whatever it finds missing.
 
 Not a Steam internal in this sense: what a search into Steam's module registry finds, whether `@decky/ui` runs it or
 Tender does (the **start-up check**'s term), Steam's React tree and DOM, and Decky Loader's globals.

@@ -1,9 +1,10 @@
 /**
- * Whether Tender can raise a toast at all, and the notice that says so.
+ * Whether Tender can raise a toast at all.
  *
- * The value is written once, from the start-up check's report, and read from
- * render. Why nothing subscribes and nothing polls is on the docs page
- * (`docs/architecture/qam-panel.md`, "Notices and homes").
+ * The value is written once, from the start-up check's report, before anything
+ * mounts, and read by what would raise a toast that cannot be shown. What the
+ * reader is told is the notice on Main for every start-up miss
+ * (`startupMissNotice.ts`).
  */
 
 let unavailable = false;
@@ -22,17 +23,3 @@ export function notificationsUnavailable(): boolean {
 export function resetNotificationsHealthForTests(): void {
   unavailable = false;
 }
-
-/**
- * The notice's copy. It names no action because there is none inside
- * Tender. Its example of a failure only a notification reports is one of the
- * known cases the docs page lists under the same heading, which is where the
- * list lives.
- */
-export const NOTIFICATIONS_UNAVAILABLE_NOTICE = {
-  title: "Tender's notifications unavailable",
-  message:
-    "Steam has changed, and Tender can't show its notifications right now. Syncs and downloads still work, and " +
-    "most results show in this panel — but a few failures, like a sync that cannot start, are only reported by a " +
-    "notification. An update should fix it.",
-} as const;

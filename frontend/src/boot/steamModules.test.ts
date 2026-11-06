@@ -34,10 +34,13 @@ import {
   type StartupReport,
   type SteamLookup,
   UNVERIFIABLE,
+  QUICK_ACCESS_LOOKUP,
   checkSteamModules,
   describeFailure,
+  describeMissedLookups,
   describeSurvivedMiss,
   notificationsMissing,
+  quickAccessMissing,
   searchOwner,
   sentenceAsksForAReport,
   sentenceNamesATenderUpdate,
@@ -362,10 +365,60 @@ describe("the start-up check's coverage of what the panel imports", () => {
     expect(Object.values(NOTIFICATION_LOOKUPS)).not.toContain("toastClasses");
   });
 
+  it("asks after the Quick Access entry's search and the desktop surface's, each as a search of Tender's own that keeps the panel up", () => {
+    // #2509 D9. Under the suite the desktop stamp is `true`, so the dev build's
+    // entry is in the list; what a release bundle leaves out is the bundle
+    // check's to assert.
+    const ownSearches = new Set(tenderOwnSearchNames());
+    for (const name of [QUICK_ACCESS_LOOKUP, "ReactClient"]) {
+      const entry = STEAM_LOOKUPS.find((lookup) => lookup.name === name);
+      expect(entry?.absenceCost).toBe("feature");
+      expect(ownSearches).toContain(name);
+    }
+  });
+
+  it("names a loss for every search whose absence the reader sees, and none for the others", () => {
+    const wrong = STEAM_LOOKUPS.filter((lookup) => {
+      const seen = lookup.absenceCost === "feature" || lookup.absenceCost === "appearance";
+      return seen !== (lookup.features !== undefined && lookup.features.length > 0);
+    });
+    expect(wrong.map((lookup) => lookup.name)).toEqual([]);
+  });
+
   it("asks a real question of every search it lists", () => {
     // A `found` that never reads anything would answer `true` forever. Each one
     // is called here, which is also what catches an entry whose thunk throws.
     for (const lookup of STEAM_LOOKUPS) expect(typeof lookup.found()).toBe("boolean");
+  });
+});
+
+describe("what the start-up check hands the log line", () => {
+  it("names each missing search with its cost and its losses, read off the list it was asked from", () => {
+    const report = checkSteamModules(
+      STEAM_LOOKUPS.filter((lookup) => ["ControllerGlyph", "Tabs"].includes(lookup.name)).map((lookup) => ({
+        ...lookup,
+        found: () => false,
+      })),
+    );
+    expect(describeMissedLookups(report)).toEqual({
+      missed: [
+        { name: "Tabs", absenceCost: "panel", features: [] },
+        { name: "ControllerGlyph", absenceCost: "appearance", features: ["buttonPictures"] },
+      ],
+      asked: 2,
+    });
+  });
+
+  it("tells whether the Quick Access entry's search missed", () => {
+    const missing = (names: string[]): StartupReport => ({
+      everySearchAnswered: names.length === 0,
+      panelMayMount: true,
+      missing: names,
+      missingPackageNames: [],
+      checked: 2,
+    });
+    expect(quickAccessMissing(missing([QUICK_ACCESS_LOOKUP]))).toBe(true);
+    expect(quickAccessMissing(missing(["ControllerGlyph"]))).toBe(false);
   });
 });
 

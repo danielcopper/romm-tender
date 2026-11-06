@@ -66,6 +66,10 @@ describe("scanSteamReach", () => {
     expect(reach.reached.has("BFinished")).toBe(true);
   });
 
+  it("marks as callable exactly the reached members declared as something to call", () => {
+    expect([...reach.callable].sort()).toEqual(["BFinished"]);
+  });
+
   it("names a type holding a counted member that no route from Steam's roots reaches", () => {
     const { reached, unrouted } = reach;
     expect([...unrouted]).toEqual(["SteamOrphan"]);
