@@ -101,8 +101,11 @@ you are running, and the notice names what does not work without them — for ex
 Tender's notifications. Everything else works as usual. The notice can appear a moment after the panel opens: some of
 Steam's parts are looked up only once Steam has finished starting.
 
-**What to do**: Report it, and include Tender's log, which names every part that was missing. An update of Tender, or of
-Steam, is what fixes it; the notice has no button because there is nothing to do inside Tender.
+**What to do**: Report it, and include Tender's log, which names every part that was missing
+(`grep "start-up check" ~/.local/state/romm-tender/backend.log | tail -n 5`). If **Log Level** in **Settings ›
+Advanced** is set to **Error**, set it back to **Warn** and restart Steam first, or the line is not written. What fixes
+it is a newer Tender, or, where you also run Decky Loader, possibly a newer Decky Loader; where the log line names a
+repair, it names which. The notice has no button because there is nothing to do inside Tender.
 
 ## Tender's Quick Access Entry Is Missing
 
@@ -110,8 +113,9 @@ Steam, is what fixes it; the notice has no button because there is nothing to do
 this.", and Tender's entry is not in the Quick Access menu.
 
 **Explanation**: The part of Steam that Tender's entry is put into was not found in this Steam version, so the panel
-cannot be opened. Tender keeps running without it: its section on a game's page, the check before a game starts and its
-syncs still work.
+cannot be opened. Tender keeps running without it: its section on a game's page, the check before a game starts and the
+save sync around a game still run. A library sync and Sync All Saves start from the panel, so they cannot be started
+until the entry is back.
 
 **What to do**: Report it, with Tender's log. Where Steam's notifications are affected as well, no notification appears,
 and the log alone says so.

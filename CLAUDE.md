@@ -1049,9 +1049,10 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   reads with no member after it, a read compared by its name rather than its path, a read the check's two patterns
   (`.name`, a double-quoted `["…"]`) miss — a single-quoted, computed or escaped key — and a constant that spells each
   part of an entry but not its path. Prompt-only: a reach no type describes is listed with its files, and its `asked` is
-  held by nothing; a `NOT_STEAM_INTERNALS` prefix names nothing of Steam's; whether an entry's cost and losses are what
-  its absence costs, and whether a `notAtStartUp` entry truly cannot be asked; and what an internal does stays a device
-  test
+  held by nothing where its path ends at its static part; which entries are alternatives of one another (`oneOf`), read
+  off the code's fallbacks by hand — the test holds only that no group has one member; a `NOT_STEAM_INTERNALS` prefix
+  names nothing of Steam's; whether an entry's cost and losses are what its absence costs, and whether a `notAtStartUp`
+  entry truly cannot be asked; and what an internal does stays a device test
 - **Whether every search answered and whether the panel may MOUNT are two questions, and a miss that costs less than the
   panel never takes the interface off the air** — check + test + prompt-only — the type (`SteamLookup.absenceCost` is
   required), `frontend/src/index.test.tsx`, and `frontend/src/boot/steamModules.test.ts`, which requires a non-blocking
@@ -1063,19 +1064,24 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   never from a `feature` cost; a name leaves `panel` only once its every consumer is read
 - **Every start-up check that misses something writes ONE warning to the backend log — which check, then every missing
   name with its cost and losses — whether the panel mounts or the fallback page stands in its place; every miss the
-  panel survives reaches the one notice on Main; a missed Quick Access search also raises one toast, unless what a toast
-  is raised through missed too; the Steam-internals check asks once Steam reports its services initialised, or once the
-  30-second deadline has passed; and what only the desktop surface reaches is asked only where the build stamp
-  `virtual:tender-desktop-surface` says the surface is in the build** — check + test + prompt-only —
-  `frontend/scripts/check-bundle-shape.mjs` (both release panel bundles stamped `DESKTOP_SURFACE = false` and carrying
-  no `createRoot` search); `frontend/src/index.test.tsx` (one warning for a survived and for a fallback miss, the
-  internals line once Steam is ready and past the deadline, the panel mounting over an internals miss, the toast and its
-  two absences); `frontend/src/boot/steamInternalsCheck.test.ts`, `frontend/src/boot/startupMiss.test.ts`,
-  `frontend/src/bigpicture/MainPage.test.tsx` (the card with and without a list, an answer landing after Main mounted,
-  no card) and `frontend/src/utils/steamReadyForToasts.test.ts`. Unseen by the bundle check: a desktop search that
-  spells no `createRoot`. Prompt-only: the warning is worded only by `boot/startupMiss.ts` and written only by the panel
-  factory; nothing else records into `utils/startupMissNotice.ts`; a new search or internal at `feature` or `appearance`
-  names its loss from `STEAM_FEATURES`, never a sentence of its own
+  panel survives reaches the one notice on Main; a missed Quick Access search also raises one toast, under the panel and
+  under the fallback page alike, unless one of `NOTIFICATION_LOOKUPS` missed too; the Steam-internals check asks once
+  Steam reports its services initialised, or once the 30-second deadline has passed, under the fallback page too, for
+  the log alone; a group of alternatives misses only where none of them is there; and what only the desktop surface
+  reaches is asked only where the build stamp `virtual:tender-desktop-surface` says the surface is in the build** —
+  check + test + prompt-only — `frontend/scripts/check-bundle-shape.mjs` (both release panel bundles stamped
+  `DESKTOP_SURFACE = false` and carrying no `createRoot` search); `frontend/src/index.test.tsx` (one warning for a
+  survived and for a fallback miss, the internals line once Steam is ready, past the deadline and under the fallback
+  page, a failed check logged, the panel mounting over an internals miss, the toast on both branches and its two
+  absences, the installation's own warning for a module the check found);
+  `frontend/src/boot/steamInternalsCheck.test.ts` (with the groups of alternatives),
+  `frontend/src/boot/startupMiss.test.ts`, `frontend/src/bigpicture/MainPage.test.tsx` (the card with and without a
+  list, an answer landing after Main mounted, no card) and `frontend/src/utils/steamReadyForToasts.test.ts`. Unseen by
+  the bundle check: a desktop search that spells no `createRoot`. Unseen: a log level set to `error`, which drops the
+  warning; a missing `NotificationStore.ProcessNotification`, asked only after the toast is decided, under which the
+  toast is raised into a store that refuses it. Prompt-only: the warning is worded only by `boot/startupMiss.ts` and
+  written only by the panel factory; nothing else records into `utils/startupMissNotice.ts`; a new search or internal at
+  `feature` or `appearance` names its loss from `STEAM_FEATURES`, never a sentence of its own
 - **The fallback page names the copy of `@decky/ui` that actually ran the search that missed, and the repair that
   follows from it** — check + test + prompt-only — `frontend/scripts/check-bundle-shape.mjs` checks the stamp the build
   puts on each bundle (`BUNDLE_KIND`, standalone or coexistence) and that `globals.js` carries none; every

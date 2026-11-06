@@ -960,25 +960,26 @@ Every row of that table is what the panel does today. The two full-page states �
 migration — are not notices; they replace the page, and neither carries a condition inside it any more: the one that did
 was the pre-rename plugin folder, which went with the plugin loader.
 
-The start-up row is the one condition read from the **start-up checks' reports** rather than from a backend answer or an
-event, and it is the one home of everything both checks missed that the panel survives (#2455 D3): the searches into
-Steam's module registry, settled before anything mounts, and the Steam internals, asked once Steam reports its services
-initialised — so it can appear after Main has mounted, and Main subscribes to it (`utils/startupMissNotice.ts`). It
-names what does not work, by the short labels both lists share (`STEAM_FEATURES`, `boot/steamInternals.ts`), each once —
-"Not working: setting artwork, starting a game." — and asks for a report; a miss whose absence nothing the reader sees
-depends on (a `diagnostic` one) still raises it, without a list: "Everything still works; please report this." (#2455
-D4). The names themselves go to the backend log only. Lookups whose absence costs the panel never reach it: the fallback
-page stands in the panel's place instead. Tender's own notifications are one of the losses it can name, and a miss of
-what they are raised through has no other home: syncs and downloads run, and most results a toast would have announced
-are on their page as well, but not all of them — a sync that fails before its work queue is built, which writes no run,
-so only the Sync page's status line and Main's transient line say it, each only if it is open when the sync fails (§
-Sync); a removed-game cleanup that the game page's version picker cannot prepare for one version, which it answers with
-a toast alone; and a play-button download that is refused or fails before it is queued, which never reaches the download
-queue.
+The row for Steam lacking parts Tender uses is the one condition read from the **start-up checks' reports** rather than
+from a backend answer or an event, and it is the one home of everything both checks missed that the panel survives
+(#2455 D3): the searches into Steam's module registry, settled before anything mounts, and the Steam internals, asked
+once Steam reports its services initialised — so it can appear after Main has mounted, and Main subscribes to it
+(`utils/startupMissNotice.ts`). It names what does not work, by the short labels both lists share (`STEAM_FEATURES`,
+`boot/steamInternals.ts`), each once — "Not working: starting a game, setting artwork." — and asks for a report; a miss
+whose absence nothing the reader sees depends on (a `diagnostic` one) still raises it, without a list: "Everything still
+works; please report this." (#2455 D4). The names themselves go to the backend log only. Lookups whose absence costs the
+panel never reach it: the fallback page stands in the panel's place instead. Tender's own notifications are one of the
+losses it can name, and a miss of what they are raised through has no other home: syncs and downloads run, and most
+results a toast would have announced are on their page as well, but not all of them — known cases, not a complete list:
+a sync that fails before its work queue is built, which writes no run, so only the Sync page's status line and Main's
+transient line say it, each only if it is open when the sync fails (§ Sync); a removed-game cleanup that the game page's
+version picker cannot prepare for one version, which it answers with a toast alone; and a play-button download that is
+refused or fails before it is queued, which never reaches the download queue.
 
-The one start-up miss this notice cannot carry is Tender's Quick Access entry's own search: without it neither the panel
-nor Main can be reached, so the panel factory raises one toast at start-up through Tender's own toaster (#2509 D10),
-once Steam can show it, and none where what a toast is raised through missed too.
+The one start-up miss this notice cannot carry is Tender's Quick Access entry's own search: without it neither the
+panel, nor the fallback page in its place, nor Main can be reached, so the panel factory raises one toast at start-up
+through Tender's own toaster (#2509 D10), once Steam can show it, and none where one of the three searches a toast is
+raised through (`NOTIFICATION_LOOKUPS`) missed too.
 
 The playtime notice is the one that carries **two** buttons, and they sit side by side on one row rather than on two
 full-width ones: Main is the narrow page, and a notice costing three rows pushes the status block it sits above off the

@@ -170,10 +170,10 @@ does not work. `AppDetailsRoute` and `appDetailsClasses` cost a feature for the 
 surface: the panel renders whole and [Steam's game page](#tenders-section-on-steams-game-page) carries no Tender
 section. So does `QuickAccessMenuBrowserView`, the module Steam draws its Quick Access menu from and Tender's entry is
 installed into (`qam/installEntry.tsx`, the search in `utils/deckyUiInternals.ts`): without it the panel is built and
-cannot be reached, while the game page's section, the launch check and every sync still run — the fallback page would
-take those away and be just as unreachable. `ReactClient`, the desktop surface's search for React's client module
-(`desktop/desktopWindow.ts`), costs a feature too, and is in the list only in the build that carries that surface
-([the desktop dev build](#the-desktop-dev-build-dev-build-only)).
+cannot be reached, while the game page's section, the launch check and the save sync around a game still run — the
+fallback page would take those away and be just as unreachable. `ReactClient`, the desktop surface's search for React's
+client module (`desktop/desktopWindow.ts`), costs a feature too, and is in the list only in the build that carries that
+surface ([the desktop dev build](#the-desktop-dev-build-dev-build-only)).
 
 **Only one of the four costs decides anything.** `checkSteamModules`'s `!== "panel"` decides whether the panel mounts;
 `feature`, `appearance` and `diagnostic` are read only to word a miss. They stay apart because they answer different
@@ -184,21 +184,27 @@ name none; `steamModules.test.ts` holds both directions. What the toaster can do
 (`notificationsMissing`, over `NOTIFICATION_LOOKUPS`, into `utils/notificationsHealth.ts`), so a future `feature` entry
 for something else cannot claim the notifications are what went missing.
 
-**Every miss writes one warning to the backend log** (`frontend_log`, at `warn`), whether the panel mounts over it or
-the fallback page stands in its place (#2455 D1, D2): `start-up check "Steam's module registry": 2 of 35 missed —`, then
-every missing name with its cost and its losses (`ControllerGlyph (appearance: button pictures)`), worded by
-`boot/startupMiss.ts`, the one wording the [Steam-internals check](#what-the-start-up-check-asks-of-them) shares. After
-the names comes the page's sentence where the fallback page shows, and otherwise `describeSurvivedMiss`'s: how many
-searches missed, that none of them is needed to render the panel, and then the same question the fallback page answers —
-whose copy of `@decky/ui` ran them. It used to name "a newer Tender" unconditionally, which was sound only while nothing
-that could reach it was a name the package exports; `playSectionClasses` is one, and in the coexistence bundle the
-search behind it is Decky's.
+**Every miss writes one warning to the backend log** (`frontend_log`, at `warn`, so at the log level Error it is dropped
+like any other warning), whether the panel mounts over it or the fallback page stands in its place (#2455 D1, D2):
+`start-up check "Steam's module registry": 2 of 33 missed —`, then every missing name with its cost and its losses
+(`ControllerGlyph (appearance: controller button icons)`), worded by `boot/startupMiss.ts`, the one wording the
+[Steam-internals check](#what-the-start-up-check-asks-of-them) shares. After the names comes the page's sentence where
+the fallback page shows, and otherwise `describeSurvivedMiss`'s: how many searches missed — which is why the line ahead
+of it leaves its own count out there — that none of them is needed to render the panel, and then the same question the
+fallback page answers — whose copy of `@decky/ui` ran them. It used to name "a newer Tender" unconditionally, which was
+sound only while nothing that could reach it was a name the package exports; `playSectionClasses` is one, and in the
+coexistence bundle the search behind it is Decky's.
 
 **A miss the panel survives also stands on Main**, as the one notice for everything the start-up checks missed
 ([notices and homes](qam-panel.md#notices-and-homes)): the losses of both checks, each once, and a request to report;
-the names stay in the log. Where the miss is `QuickAccessMenuBrowserView`, the panel and that notice cannot be reached,
-so the factory also raises one toast through Tender's own toaster once Steam can show it (#2509 D10) — unless what a
-toast is raised through missed as well, when the log line alone carries it.
+the names stay in the log. Where the miss is `QuickAccessMenuBrowserView`, the panel — or the fallback page in its place
+— and that notice cannot be reached, so the factory also raises one toast through Tender's own toaster once Steam can
+show it (#2509 D10), on either branch — unless one of the three searches a toast is raised through
+(`NOTIFICATION_LOOKUPS`) missed as well, when the log line alone carries it. The toast is drawn as a popup, which needs
+no `@decky/ui` component; only the notifications-tab layout uses `Focusable`, and a toast without subtext is not kept
+there. A missing `NotificationStore.ProcessNotification` is not one of the three: it is asked by the Steam-internals
+check, which answers only after the toast has been decided, so the toast is raised into a store that refuses it, and the
+toaster's own warning reaches Steam's console alone.
 
 A miss of something a toast is raised through adds one more sentence ahead of that verdict, because what is gone there
 is a whole function rather than a decoration. It states the loss and names **no repair of its own** — the verdict
@@ -360,9 +366,11 @@ Three things are not on it, because each has a home of its own:
 - Steam's React tree and DOM: the desktop surface's fiber reads
   ([Fiber, read-only](desktop-dom-architecture.md#fiber-read-only-frontendsrcdesktopwatcherfiberinspectorts)), its
   selectors and the game page's `renderFunc`, which the invariant register covers in entries of their own.
-- Every search into Steam's module registry, `@decky/ui`'s and Tender's own: the start-up check's `STEAM_LOOKUPS` asks
-  after them, the Quick Access entry's search for `QuickAccessMenuBrowserView` (`utils/deckyUiInternals.ts`) and, in the
-  desktop dev build, the desktop surface's `ReactClient` (`desktop/desktopWindow.ts`) included.
+- Every search into Steam's module registry, `@decky/ui`'s and Tender's own: the start-up check's lists classify them —
+  `STEAM_LOOKUPS` asks after each it can answer for, the Quick Access entry's search for `QuickAccessMenuBrowserView`
+  (`utils/deckyUiInternals.ts`) and, in the desktop dev build, the desktop surface's `ReactClient`
+  (`desktop/desktopWindow.ts`) included; `UNVERIFIABLE` names the two whose value is truthy whatever their search found,
+  and `ASKED_LIVE` the two answered by Steam's runtime state, which their consumers ask when they need them.
 - Decky Loader's globals (`DFL`, `DeckyPluginLoader`), which are not Steam's.
 
 **A path is Steam's own spelling, rooted at the global**, as the code reaches it at run time:
@@ -448,20 +456,30 @@ is asked (`asked`):
 
 Which leaves are `call` is not taken on trust: `steamInternals.test.ts` holds `call` to exactly the typed entries
 `steamReach.ts` finds declared as something to call, and a path naming what a call answers to `call`, one naming an
-element to `read`. An untyped entry's `asked` is held by nothing.
+element to `read`. An untyped entry's `asked` is held by nothing where its path ends at its static part.
 
 `boot/steamInternalsCheck.ts` asks each static part once, from the global scope: absent — not held by the value before
 it, `undefined`, under a value that can hold nothing, or behind a getter that throws — or, where it is a `call`, not a
 function. A static part that missed is reported once, with the highest cost and every loss of the entries resting on it,
-so the fifteen `NotificationStore.ProcessNotification(…)` entries make one name.
+so the fifteen entries resting on `NotificationStore.ProcessNotification` make one name.
+
+**Some internals are alternatives**: the code falls back from one to another, so one alone missing loses nothing.
+`App.WaitForServicesInitialized` and `App.GetServicesInitialized` (the services wait), `App.BFinishedInitBeforeLogin`
+and `App.BFinishedInitStageOne` (`boot/steamGlobals.ts`'s readiness), and `SteamUIStore.NavigateToRunningApp` with the
+`/apprunning` route Resume falls back to (`utils/runningGame.ts`) each name one group (`oneOf`). A group counts as there
+while any one of its alternatives is — and an alternative nothing can ask at start-up, the route, counts as there — and
+is reported once, naming every alternative, only where none is. `steamInternals.test.ts` holds that no group has a
+single member; which entries are alternatives is read off the code by hand.
 
 **It asks once Steam reports its services initialised** (#2509 D11) — `App.WaitForServicesInitialized()`, else
 `App.GetServicesInitialized()`, the condition toasts wait on (`utils/steamReadyForToasts.ts`) — and not in the factory:
 the panel is loaded the moment `webpackChunksteamui` exists, and whether Steam's stores are assigned by then is not
 established, so a check asked then could report a miss on every cold start. Past the same 30-second deadline it asks
 anyway, and its log line says Steam was not ready. A miss writes one warning, `start-up check "Steam internals": …`, in
-the shape the module-registry check writes (`boot/startupMiss.ts`), and puts its losses on Main's notice — which can
-therefore appear after Main has mounted, and Main subscribes to it.
+the shape the module-registry check writes (`boot/startupMiss.ts`), and, where the panel mounted, puts its losses on
+Main's notice — which can therefore appear after Main has mounted, and Main subscribes to it. Under the fallback page it
+is asked too, for the log alone: the page has no notice to carry it, and the log is complete whatever the user saw
+(#2455 D2). A failure of the check itself is logged as an error rather than dropped.
 
 **An entry only the desktop surface reaches is asked only in the build that carries it** (#2509 D12): it is marked
 `devBuildOnly` — `steamInternals.test.ts` holds the mark to exactly the entries reached from `desktop/` alone — and the

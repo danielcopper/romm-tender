@@ -177,20 +177,24 @@ The question `frontend/src/boot/steamModules.ts` asks before anything mounts: di
 interface find something? Almost everything the panel renders is a search predicate over Steam's minified bundle, and
 one Steam has moved past returns `undefined` with nothing thrown.
 
-Each name checked states what its **absence costs**: the `panel`, which is every name's status quo, only its
-`appearance`, or — where the name is read by a `diagnostic` and nothing else — a debug line naming a class instead of
-the class. On a miss that costs the panel, the panel does not mount at all — the factory returns a **fallback page**
-instead and registers nothing. The page distinguishes SOME searches missing from ALL of them (the React bootstrap never
-ran, or Steam's registry was read before it was complete, neither of them `@decky/ui`'s doing), which is the first fact
-that leads to a repair.
+There are two checks. The first asks after the searches into Steam's module registry, in the panel's factory, before
+anything mounts. The second asks after the **Steam internals**, once Steam reports its services initialised, and never
+keeps the panel from mounting. Both word a miss in one shape (`boot/startupMiss.ts`).
 
-A **miss the panel survives** costs neither the panel nor anything the panel acts on: it mounts as usual, the backend
-log carries the missing names, and Main's notice ("Steam has changed") names what does not work. Every miss writes that
-warning, the fallback page's included. The log line answers the same question the page does — whose copy of `@decky/ui`
-ran the search — rather than naming a repair of its own, because the two costs below the panel do not all belong to the
-same program: `ControllerGlyph` is a search Tender runs itself, and `playSectionClasses` is a `@decky/ui` export whose
-search is Decky's in the coexistence bundle. _Avoid_ **cosmetic miss** for the pair: it is true of the glyph and false
-of `playSectionClasses`, whose absence nothing draws in the first place.
+Each name checked states what its **absence costs**: the `panel`, which is every name's status quo, a whole `feature`
+outside it, only its `appearance`, or — where the name is read by a `diagnostic` and nothing else — a debug line naming
+a class instead of the class. On a miss that costs the panel, the panel does not mount at all — the factory returns a
+**fallback page** instead and registers nothing. The page distinguishes SOME searches missing from ALL of them (the
+React bootstrap never ran, or Steam's registry was read before it was complete, neither of them `@decky/ui`'s doing),
+which is the first fact that leads to a repair.
+
+A **miss the panel survives** costs less than the panel: it mounts as usual, the backend log carries the missing names,
+and Main's notice ("Steam has changed") names what does not work. Every miss writes that warning, the fallback page's
+included. The log line answers the same question the page does — whose copy of `@decky/ui` ran the search — rather than
+naming a repair of its own, because the costs below the panel do not all belong to the same program: `ControllerGlyph`
+is a search Tender runs itself, and `playSectionClasses` is a `@decky/ui` export whose search is Decky's in the
+coexistence bundle. _Avoid_ **cosmetic miss** for the pair: it is true of the glyph and false of `playSectionClasses`,
+whose absence nothing draws in the first place.
 
 The second is the **searching copy**: which installed copy of `@decky/ui` ran the predicate that went stale, since the
 coexistence bundle runs Decky Loader's rather than ours. It is read ONCE per start and worded by both surfaces, which is
@@ -213,8 +217,9 @@ Tender runs itself — so there the repair is named, a newer Tender. (That is th
 
 _Avoid_: **health check** — it asks one question at one moment and is not a recurring probe. Avoid **degraded mode**:
 the panel is whole or it is absent, and a half-mounted panel acting on what it cannot see is the thing the check exists
-to refuse. A miss the panel survives is not degraded mode: what is absent is a decoration the one place that draws it
-renders without, or a name only a debug line reads — never something a page acts on.
+to refuse. A miss the panel survives is not degraded mode: every page renders with the components it was written
+against, and what is lost — a function outside the panel, a decoration the one place that draws it renders without, a
+name only a debug line reads — is named on Main and in the log rather than left for a page to find.
 
 ### Steam internal
 

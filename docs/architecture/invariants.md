@@ -1450,7 +1450,9 @@ Format: **invariant** — tier — enforced by.
   a function") and a wrong `read` a miss nobody sees, so the leaves the type checker can judge are held to it: `call`
   exactly where `steamReach.ts` finds the member declared as something to call, and a path naming what a call answers or
   an element is held to its own shape. An entry only the desktop surface reaches is marked `devBuildOnly`, held to
-  exactly the entries reached from `desktop/` alone, because a release build has no such surface to tell a user about
+  exactly the entries reached from `desktop/` alone, because a release build has no such surface to tell a user about.
+  Entries the code falls back between are one group of alternatives (`oneOf`), which misses only where none of them is
+  there; which entries those are is read off the code by hand
 - **Whether every search answered and whether the panel may MOUNT are two questions, and a miss that costs less than the
   panel never takes the interface off the air** — check + test + prompt-only — the type carries the first half:
   `SteamLookup.absenceCost` is required, so a new entry does not compile until it states which of the four its absence
@@ -1498,18 +1500,23 @@ Format: **invariant** — tier — enforced by.
   survives is also the one notice on Main (`utils/startupMissNotice.ts`, #2455 D3, D4), which replaced the notice about
   Steam answering for no notifications: the losses both checks named, each once, or, where only a `diagnostic` name
   missed, the notice without a list; the names stay in the log. Its one blind spot is the Quick Access entry's own
-  search, without which neither the panel nor Main can be reached, so that miss also raises one toast at start-up — none
-  where what a toast is raised through missed as well, when the log line alone carries it (#2509 D10). The
+  search, without which neither the panel, nor the fallback page in its place, nor Main can be reached, so that miss
+  also raises one toast at start-up on either branch — none where one of the three searches a toast is raised through
+  (`NOTIFICATION_LOOKUPS`) missed as well, when the log line alone carries it (#2509 D10); a missing
+  `NotificationStore.ProcessNotification` is not one of them and is asked only after the toast is decided. The
   Steam-internals check asks once Steam reports its services initialised (#2509 D11), since the panel is loaded the
   moment `webpackChunksteamui` exists and whether Steam's stores are assigned by then is not established; asked earlier
   it could raise a false notice on every cold start, and past the 30-second deadline it asks anyway and says Steam was
-  not ready. The notice can therefore appear after Main has mounted, which is why Main subscribes. What only the desktop
-  surface reaches — `ReactClient`'s search and the desktop internals — is asked only where the build stamp
-  `virtual:tender-desktop-surface` says the surface is in the build (#2509 D12); every other build answers `false`,
-  declares the desktop modules free of side effects so the search is left out with the folded entry, and
-  `frontend/scripts/check-bundle-shape.mjs` holds the release bundles to both. Each half fails quietly: a miss logged
-  nowhere is the fault this entry removes, and a release bundle asking after the desktop surface tells every user about
-  a surface their build does not have
+  not ready. The notice can therefore appear after Main has mounted, which is why Main subscribes. Under the fallback
+  page the check is asked as well and only logged, since the log is to be complete whatever the user saw. Where the code
+  falls back from one internal to another, the two are one group of alternatives (`oneOf`) and miss only together, so a
+  Steam that drops one half raises no false notice. A log level set to `error` drops the warning like any other, and
+  nothing sees that. What only the desktop surface reaches — `ReactClient`'s search and the desktop internals — is asked
+  only where the build stamp `virtual:tender-desktop-surface` says the surface is in the build (#2509 D12); every other
+  build answers `false`, declares the desktop modules free of side effects so the search is left out with the folded
+  entry, and `frontend/scripts/check-bundle-shape.mjs` holds the release bundles to both. Each half fails quietly: a
+  miss logged nowhere is the fault this entry removes, and a release bundle asking after the desktop surface tells every
+  user about a surface their build does not have
 - **The fallback page names the copy of `@decky/ui` that actually ran the search that missed, and the repair that
   follows from it** — check + test + prompt-only — the artefact's stamp is checked
   (`frontend/scripts/check-bundle-shape.mjs`, per bundle and on `globals.js`, which must carry none), and the sentence
