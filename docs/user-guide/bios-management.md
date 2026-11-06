@@ -429,11 +429,12 @@ and the row you focus is the one the right-hand pane describes.
 ### Where downloads go
 
 A BIOS file is downloaded into **Tender's firmware store**, a folder of its own inside
-[Tender's folder](where-your-data-lives.md): `Tender/bios/<platform>/`, under the file's name in your RomM library. A
-file two platforms need lies in each of their folders. Tender then places a **link** to it at every place an emulator of
-the platform opens it, under the name that emulator asks for, in every emulator source you have switched on —
-Dreamcast's `dc_boot.bin` goes into `bios/dc/`, Cemu's `keys.txt` into Cemu's own folder. The file is there once, and
-every emulator that needs it reads the same copy.
+[Tender's folder](where-your-data-lives.md): `Tender/bios/<platform>/`, named after the platform's folder in your RomM
+library, under the file's name there. A file two platforms need lies in each of their folders, and so does a file of two
+RomM platforms that hold the same console (a `gc` and a `gamecube` folder, say). Tender then places a **link** to it at
+every place an emulator of the platform opens it, under the name that emulator asks for, in every emulator source you
+have switched on — Dreamcast's `dc_boot.bin` goes into `bios/dc/`, Cemu's `keys.txt` into Cemu's own folder. The file is
+there once, and every emulator that needs it reads the same copy.
 
 Every download is checked against the checksum RomM states for the file before Tender keeps it. A download that does not
 match is thrown away, nothing changes, and the row says _The download was damaged. Try again._ A file RomM states no

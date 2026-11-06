@@ -1810,17 +1810,24 @@ _FirmwareService notes — the live firmware resolver_ section below.
 
 #### The firmware store
 
-A BIOS file Tender downloads lands in its firmware store, `<Tender's folder>/bios/<platform>/<the file's name in
-RomM>`,
-where the platform is the one the download was made for
-([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D3). It is written to a `.tmp` beside its store path
-and kept only when its MD5 is the one RomM states (D9); a file RomM states none for is not downloaded. Every file is
-kept as it comes, two files with the same bytes included, and a file two platforms need lies in each of their folders,
-so no link points into another platform's folder. A file already lying at a store place with no record of Tender's is
-taken over where its MD5 matches and otherwise moved to the backup folder first (D25). The store is the first store that
-records something under Tender's folder (#2385 D2): `FirmwareStore` answers `TenderFolderRecordReader`, every write into
-the store goes through `do_prepare_for_write`, and every use case that writes into the store or links into it names the
-folder rule.
+A BIOS file Tender downloads lands in its firmware store,
+`<Tender's folder>/bios/<the platform's folder in RomM>/<the
+file's name in RomM>`, where the platform is the one the
+download was made for ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D3) and its folder in RomM is
+its `fs_slug` ([#2219](https://github.com/danielcopper/romm-tender/issues/2219) D11,
+[#2223](https://github.com/danielcopper/romm-tender/issues/2223) D25). The folder names one platform where two share a
+slug — RomM's built-in `gc` and `gamecube` folders are both `ngc` — so each keeps a store folder of its own, and Delete
+and the platform page stay with the platform RomM lists a file under. Store and link records are keyed by that folder;
+the record keeps the slug beside it, because the system and the emulator are still asked by the slug. Every platform use
+case takes both, and refuses `invalid_value` without a folder rather than asking by the slug. The game page asks by the
+folder the last sync recorded on the game (`roms.platform_fs_slug`, D45); until one is recorded its BIOS read answers as
+a check that could not run. It is written to a `.tmp` beside its store path and kept only when its MD5 is the one RomM
+states (D9); a file RomM states none for is not downloaded. Every file is kept as it comes, two files with the same
+bytes included, and a file two platforms need lies in each of their folders, so no link points into another platform's
+folder. A file already lying at a store place with no record of Tender's is taken over where its MD5 matches and
+otherwise moved to the backup folder first (D25). The store is the first store that records something under Tender's
+folder (#2385 D2): `FirmwareStore` answers `TenderFolderRecordReader`, every write into the store goes through
+`do_prepare_for_write`, and every use case that writes into the store or links into it names the folder rule.
 
 **An emulator reaches a store file through an absolute symlink at the place the resolver names for it** (#2219 D4). The
 link goes in for every emulator of the platform whose requirement the file fills and that its source does not state not
