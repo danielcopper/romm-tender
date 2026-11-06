@@ -74,7 +74,7 @@ import { seedUpdateInstallAttempt, setUpdateInstallAttempt } from "./utils/updat
 import { fetchUpdateNotice, takePushedUpdateNotice } from "./utils/updateNoticeStore";
 import { fetchUpdateOutcome, takePushedUpdateFailure } from "./utils/updateOutcomeStore";
 import { fetchStoppedUpdateAttempt, takePushedStoppedAttempt } from "./utils/stoppedUpdateStore";
-import { logToastFailure, toastOwedAttempt } from "./utils/failedUpdateToast";
+import { logToastFailure, toastOwedAttempt, toastWhenSteamIsReady } from "./utils/failedUpdateToast";
 import { watchUpdateAvailableToast } from "./utils/updateAvailableToast";
 import { relocateShortcutsToLauncher } from "./utils/launcherRelocation";
 import { setLauncherRelocated } from "./utils/launcherStore";
@@ -95,7 +95,6 @@ import { QuickAccessMenuBrowserView } from "./utils/deckyUiInternals";
 import { setNotificationsUnavailable } from "./utils/notificationsHealth";
 import { QUICK_ACCESS_MISSING_TOAST, recordStartupMiss } from "./utils/startupMissNotice";
 import { TOAST_READINESS_DEADLINE_MS, waitUntilSteamServicesInitialized } from "./utils/steamReadyForToasts";
-import { toastWhenSteamIsReady } from "./utils/failedUpdateToast";
 import { detach } from "./utils/detach";
 import type {
   SyncProgress,

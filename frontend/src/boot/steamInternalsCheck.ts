@@ -124,18 +124,18 @@ function settle(group: Alternatives): MissedName[] {
   ];
 }
 
+/** The static parts the check asks, and why each group's unaskable alternative stands in. */
+interface Asked {
+  readonly parts: ReadonlyMap<string, StaticPart>;
+  readonly unaskedAlternatives: ReadonlyMap<string, string>;
+}
+
 /**
- * Ask every entry *entries* holds that can be asked at start-up — the dev
- * build's only where *desktopSurface* says the build carries it.
- *
- * Entries that are one of a group of alternatives (`oneOf`) are settled by
- * {@link settle}; an entry outside a group is never pulled into one, even on a
- * static part a group's entry shares.
+ * Sort *entries* into the static parts the check asks, keyed by group and
+ * static part so an entry outside a group is never pulled into one, and note
+ * the groups an alternative that cannot be asked stands in for.
  */
-export function checkSteamInternals(
-  entries: readonly SteamInternal[],
-  { desktopSurface, read = readGlobalPath }: { readonly desktopSurface: boolean; readonly read?: ReadPath },
-): InternalsReport {
+function collectParts(entries: readonly SteamInternal[], desktopSurface: boolean): Asked {
   const parts = new Map<string, StaticPart>();
   const unaskedAlternatives = new Map<string, string>();
   for (const entry of entries) {
@@ -153,16 +153,28 @@ export function checkSteamInternals(
     part.entries.push(entry);
     parts.set(key, part);
   }
+  return { parts, unaskedAlternatives };
+}
 
-  // Each miss in the order the list first names it; a group of alternatives
-  // holds its place by its first member and is settled once every part is asked.
+/** Record one grouped part's answer on its group. */
+function answerInGroup(group: Alternatives, part: StaticPart, why: string | null): void {
+  const name = part.segments.join(".");
+  if (why === null) group.standing ??= `its alternative ${name} is there`;
+  else group.missed.push({ name, why, entries: part.entries });
+}
+
+/**
+ * Ask every part, in the order the list first names it: an ungrouped part
+ * that missed in its own place, a group of alternatives in its first member's,
+ * to be settled once every part is asked.
+ */
+function askParts({ parts, unaskedAlternatives }: Asked, read: ReadPath): (MissedName | Alternatives)[] {
   const order: (MissedName | Alternatives)[] = [];
   const alternatives = new Map<string, Alternatives>();
   for (const part of parts.values()) {
-    const name = part.segments.join(".");
     const why = askPart(part, read);
     if (part.oneOf === undefined) {
-      if (why !== null) order.push({ name, ...costOf(part.entries), why });
+      if (why !== null) order.push({ name: part.segments.join("."), ...costOf(part.entries), why });
       continue;
     }
     let group = alternatives.get(part.oneOf);
@@ -171,9 +183,24 @@ export function checkSteamInternals(
       alternatives.set(part.oneOf, group);
       order.push(group);
     }
-    if (why === null) group.standing ??= `its alternative ${name} is there`;
-    else group.missed.push({ name, why, entries: part.entries });
+    answerInGroup(group, part, why);
   }
-  const reported = order.flatMap((item): MissedName[] => ("missed" in item ? settle(item) : [item]));
-  return { missed: reported, asked: parts.size };
+  return order;
+}
+
+/**
+ * Ask every entry *entries* holds that can be asked at start-up — the dev
+ * build's only where *desktopSurface* says the build carries it.
+ *
+ * Entries that are one of a group of alternatives (`oneOf`) are settled by
+ * {@link settle}; an entry outside a group is never pulled into one, even on a
+ * static part a group's entry shares.
+ */
+export function checkSteamInternals(
+  entries: readonly SteamInternal[],
+  { desktopSurface, read = readGlobalPath }: { readonly desktopSurface: boolean; readonly read?: ReadPath },
+): InternalsReport {
+  const asked = collectParts(entries, desktopSurface);
+  const missed = askParts(asked, read).flatMap((item): MissedName[] => ("missed" in item ? settle(item) : [item]));
+  return { missed, asked: asked.parts.size };
 }

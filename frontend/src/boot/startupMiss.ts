@@ -32,7 +32,8 @@ export const noticedMisses = (missed: readonly MissedName[]): MissedName[] =>
 const describeName = (missed: MissedName): string => {
   const labels = missed.features.map((feature) => STEAM_FEATURES[feature]);
   const cost = labels.length > 0 ? `${missed.absenceCost}: ${labels.join(", ")}` : missed.absenceCost;
-  return `${missed.name} (${missed.why === undefined ? cost : `${cost}; ${missed.why}`})`;
+  const detail = missed.why === undefined ? cost : `${cost}; ${missed.why}`;
+  return `${missed.name} (${detail})`;
 };
 
 /**
