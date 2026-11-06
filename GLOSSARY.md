@@ -212,9 +212,10 @@ Asked before them all: some of the names checked are not `@decky/ui` lookups at 
 Tender runs with predicates of its own, `ControllerGlyph` among them — so a miss confined to those belongs to NO copy of
 the package and names none. The **fallback page** then names no repair either, because a global can be among them and
 who installed it on a machine running both programs is not this page's to decide. The log line is not in that position:
-a global's absence costs the panel, so it never reaches one, and the names that do reach it in this answer are searches
-Tender runs itself — so there the repair is named, a newer Tender. (That is this answer's scope, not a universal:
-`playSectionClasses` reaches the log line too, and its search is the package's.)
+the globals whose absence costs the panel (the three `SP_*`) never reach it, and the names that do reach it in this
+answer are searches Tender runs itself or `NotificationStore`, which Tender reads itself — so there the repair is named,
+a newer Tender. (That is this answer's scope, not a universal: `playSectionClasses` reaches the log line too, and its
+search is the package's.)
 
 _Avoid_: **health check** — it asks one question at one moment and is not a recurring probe. Avoid **degraded mode**:
 the panel is whole or it is absent, and a half-mounted panel acting on what it cannot see is the thing the check exists
