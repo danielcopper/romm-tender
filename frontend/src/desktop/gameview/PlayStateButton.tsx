@@ -1,19 +1,52 @@
 /**
  * The desktop Play button's PLAY, and the press's progress — PREPARING...,
- * SYNCING SAVES..., LAUNCHING... — in its place.
+ * SYNCING SAVES..., LAUNCHING... — in its place, with the chevron that opens the
+ * game's menu (Uninstall) beside it.
  */
 
-import type { CSSProperties, FC } from "react";
+import { useCallback, useRef, useState, type CSSProperties, type FC } from "react";
+import { useOutsideClick } from "../../utils/useOutsideClick";
 import type { PressState } from "./usePlayLaunch";
-import { BUTTON_GROUP_STYLE, BUTTON_BASE_STYLE } from "./styles";
+import { BUTTON_GROUP_STYLE, BUTTON_BASE_STYLE, SIDE_ACTION_STYLE } from "./styles";
+
+// The stops of Steam's own PLAY gradient in the desktop client, read in
+// DevTools (Steam client build 1792618285, CachyOS), drawn across the whole
+// button; Steam's and Big Picture's Play show a stretch of it instead.
+export const PLAY_GRADIENT = "linear-gradient(to right, #70d61d 0%, #01a75b 60%)";
 
 const PLAY_BUTTON_STYLE: CSSProperties = {
   ...BUTTON_BASE_STYLE,
   width: "100%",
-  // The stops of Steam's own PLAY gradient in the desktop client, read in
-  // DevTools (Steam client build 1792618285, CachyOS), drawn across the whole
-  // button; Steam's and Big Picture's Play show a stretch of it instead.
-  background: "linear-gradient(to right, #70d61d 0%, #01a75b 60%)",
+  background: PLAY_GRADIENT,
+};
+
+const MENU_STYLE: CSSProperties = {
+  position: "absolute",
+  top: "calc(100% + 4px)",
+  left: 0,
+  right: 0,
+  boxSizing: "border-box",
+  background: "#1e2837",
+  border: "1px solid #3c4856",
+  borderRadius: "2px",
+  boxShadow: "0 8px 16px rgba(0, 0, 0, 0.5)",
+  zIndex: 1000,
+  padding: "4px 0",
+};
+
+const UNINSTALL_ITEM_STYLE: CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "8px 16px",
+  textAlign: "left",
+  background: "transparent",
+  border: "none",
+  color: "#ff6b6b",
+  fontSize: "13px",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
 };
 
 const REFUSED_PLAY_BUTTON_STYLE: CSSProperties = {
@@ -41,7 +74,9 @@ interface PlayStateButtonProps {
   refusal: string | null;
   /** Whether the page's check of whether the game can start went wrong. */
   checkFailed: boolean;
+  disabled?: boolean;
   onPlay: () => void;
+  onUninstall: () => void;
 }
 
 function playStyle(refusal: string | null, checkFailed: boolean): CSSProperties {
@@ -49,20 +84,85 @@ function playStyle(refusal: string | null, checkFailed: boolean): CSSProperties 
   return checkFailed ? CHECK_FAILED_PLAY_BUTTON_STYLE : PLAY_BUTTON_STYLE;
 }
 
-export const PlayStateButton: FC<PlayStateButtonProps> = ({ pressState, refusal, checkFailed, onPlay }) => (
-  <div className="tender-desktop-play-btn-group" style={BUTTON_GROUP_STYLE}>
-    <button
-      type="button"
-      className="tender-desktop-btn-play"
-      disabled={pressState !== null || refusal !== null}
-      style={playStyle(refusal, checkFailed)}
-      {...(refusal === null ? {} : { title: refusal })}
-      onClick={onPlay}
+export const PlayStateButton: FC<PlayStateButtonProps> = ({
+  pressState,
+  refusal,
+  checkFailed,
+  disabled,
+  onPlay,
+  onUninstall,
+}) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const groupRef = useRef<HTMLDivElement>(null);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+  useOutsideClick(groupRef, closeMenu, menuOpen);
+  // The chevron is disabled while a press is under way, so no Uninstall is offered mid-start.
+  const open = menuOpen && pressState === null;
+
+  return (
+    <div
+      ref={groupRef}
+      className="tender-desktop-play-btn-group"
+      style={{ ...BUTTON_GROUP_STYLE, zIndex: open ? 1000 : BUTTON_GROUP_STYLE.zIndex }}
     >
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
-        <path d="M3 2L12 7L3 12V2Z" />
-      </svg>
-      {pressState === null ? "PLAY" : PRESS_LABEL[pressState]}
-    </button>
-  </div>
-);
+      <button
+        type="button"
+        className="tender-desktop-btn-play"
+        disabled={pressState !== null || refusal !== null || disabled}
+        style={{ ...playStyle(refusal, checkFailed), borderRadius: "2px 0 0 2px" }}
+        {...(refusal === null ? {} : { title: refusal })}
+        onClick={() => {
+          setMenuOpen(false);
+          onPlay();
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
+          <path d="M3 2L12 7L3 12V2Z" />
+        </svg>
+        {pressState === null ? "PLAY" : PRESS_LABEL[pressState]}
+      </button>
+      <button
+        type="button"
+        className="tender-desktop-menu-toggle"
+        title="Game Options"
+        aria-label="Game Options"
+        aria-expanded={open}
+        disabled={pressState !== null}
+        style={pressState === null ? SIDE_ACTION_STYLE : { ...SIDE_ACTION_STYLE, cursor: "default" }}
+        onClick={() => setMenuOpen((prev) => !prev)}
+      >
+        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+          <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && (
+        <div className="tender-desktop-play-menu" role="menu" style={MENU_STYLE}>
+          <button
+            type="button"
+            role="menuitem"
+            className="tender-desktop-menu-item-uninstall"
+            style={UNINSTALL_ITEM_STYLE}
+            onClick={() => {
+              setMenuOpen(false);
+              onUninstall();
+            }}
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 12 12"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              aria-hidden="true"
+            >
+              <path d="M1.5 3H10.5M4 3V1.5H8V3M4.5 5.5V9.5M7.5 5.5V9.5" strokeLinecap="round" />
+              <path d="M2.5 3L3.2 10.2C3.25 10.65 3.65 11 4.1 11H7.9C8.35 11 8.75 10.65 8.8 10.2L9.5 3" />
+            </svg>
+            Uninstall
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};

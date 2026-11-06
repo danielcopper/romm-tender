@@ -17,6 +17,8 @@ vi.mock("../../api/backend", async (importOriginal) => {
     preLaunchSync: vi.fn().mockResolvedValue({ success: true }),
     checkStartSource: vi.fn().mockResolvedValue({ switched_off: null }),
     stopRunningGame: vi.fn().mockResolvedValue({ success: true, stopped: 1, force_killed: 0 }),
+    removeRom: vi.fn().mockResolvedValue({ success: true, prune_lease_token: "tok" }),
+    invalidateCachedGameDetail: vi.fn(),
     debugLog: vi.fn(),
     logError: vi.fn(),
     getSaveSetupInfo: vi.fn(),
@@ -40,6 +42,9 @@ vi.mock("../../utils/pruneLease", async (importOriginal) => {
     ...actual,
     capturePruneLeaseAdmission: vi.fn((owner: string) => ({ owner, ownerGeneration: 1 })),
     isPruneLeaseAdmissionCurrent: vi.fn(() => true),
+    withPruneLease: vi.fn(async (_tok: string, _ctx: string, fn: (signal: { aborted: boolean }) => Promise<void>) =>
+      fn({ aborted: false }),
+    ),
   };
 });
 
@@ -57,6 +62,10 @@ vi.mock("../../utils/sessionManager", () => {
     }),
   };
 });
+
+vi.mock("../../utils/steamShortcuts", () => ({
+  setLaunchOptionsConfirmed: vi.fn().mockResolvedValue(true),
+}));
 
 vi.mock("../../utils/launchOptionsReconcile", () => ({
   prepareStart: vi.fn().mockResolvedValue({ status: "ready" }),
@@ -77,6 +86,8 @@ describe("usePlayLaunch", () => {
   const holdVerdict = vi.fn();
   const clearSessionRunning = vi.fn();
   const setStopPending = vi.fn();
+  const startAction = vi.fn();
+  const endAction = vi.fn();
   const runGame = vi.fn();
 
   const renderLaunch = (overrides: Partial<Parameters<typeof usePlayLaunch>[0]> = {}) =>
@@ -84,11 +95,14 @@ describe("usePlayLaunch", () => {
       usePlayLaunch({
         appId: 12345,
         romId: 100,
+        romName: "Test Game",
         pressState: null,
         startCheckFailed: false,
         ask,
         leaseOwner: "desktop-play-button:12345",
         setPressState,
+        startAction,
+        endAction,
         clearSessionRunning,
         holdVerdict,
         setStopPending,
@@ -183,6 +197,16 @@ describe("usePlayLaunch", () => {
       expect(backend.getSaveStatus).not.toHaveBeenCalled();
       expect(setPressState).not.toHaveBeenCalled();
       expect(holdVerdict).not.toHaveBeenCalled();
+    });
+    it("holds its verdict for the ROM it was pressed for", async () => {
+      vi.mocked(backend.getSaveStatus).mockResolvedValueOnce({ rom_id: 100, files: [], conflicts: [] } as never);
+      const result = renderLaunch();
+
+      await act(async () => {
+        await result.current.handleResolveConflictClick();
+      });
+
+      expect(holdVerdict).toHaveBeenCalledExactlyOnceWith(expect.any(String), 100);
     });
   });
 
@@ -442,6 +466,86 @@ describe("usePlayLaunch", () => {
 
       expect(toast.showToast).toHaveBeenCalledWith("Tender could not start this game: dialog host gone");
       expect(setPressState).toHaveBeenLastCalledWith(null);
+    });
+  });
+
+  describe("Uninstall", () => {
+    it("reads UNINSTALLING..., then holds DOWNLOAD once the game is removed", async () => {
+      const result = renderLaunch();
+
+      await act(async () => {
+        await result.current.handleUninstallClick();
+      });
+
+      expect(startAction).toHaveBeenCalledWith("uninstalling", 100);
+      expect(backend.removeRom).toHaveBeenCalledWith(100);
+      expect(backend.debugLog).toHaveBeenCalledWith("DesktopPlayButton: uninstalling romId=100");
+      expect(toast.showToast).toHaveBeenCalledWith("Test Game uninstalled");
+      expect(holdVerdict).toHaveBeenCalledWith("download", 100);
+      expect(endAction).toHaveBeenCalledWith("uninstalling", 100);
+    });
+
+    it("returns the button to its own state when the removal fails, saying why", async () => {
+      vi.mocked(backend.removeRom).mockResolvedValueOnce({ success: false, message: "Failed" } as never);
+      const result = renderLaunch();
+
+      await act(async () => {
+        await result.current.handleUninstallClick();
+      });
+
+      expect(startAction).toHaveBeenCalledWith("uninstalling", 100);
+      expect(toast.showToast).toHaveBeenCalledWith("Failed");
+      expect(holdVerdict).not.toHaveBeenCalled();
+      expect(endAction).toHaveBeenCalledWith("uninstalling", 100);
+    });
+
+    it("takes the next press once a refused removal has come back", async () => {
+      vi.mocked(backend.removeRom).mockResolvedValueOnce({ success: false, message: "Failed" } as never);
+      const result = renderLaunch();
+
+      await act(async () => {
+        await result.current.handleUninstallClick();
+      });
+      await act(async () => {
+        await result.current.handleUninstallClick();
+      });
+
+      expect(backend.removeRom).toHaveBeenCalledTimes(2);
+      expect(holdVerdict).toHaveBeenCalledWith("download", 100);
+    });
+
+    it("starts no second removal while one is under way", async () => {
+      let finish!: (value: unknown) => void;
+      vi.mocked(backend.removeRom).mockReturnValueOnce(
+        new Promise((resolve) => {
+          finish = resolve;
+        }) as never,
+      );
+      const result = renderLaunch();
+
+      let first!: Promise<void>;
+      await act(async () => {
+        first = result.current.handleUninstallClick();
+        await result.current.handleUninstallClick();
+      });
+      expect(backend.removeRom).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        finish({ success: true, prune_lease_token: "tok" });
+        await first;
+      });
+      expect(holdVerdict).toHaveBeenCalledWith("download", 100);
+    });
+
+    it("does nothing before the page's detail names a ROM", async () => {
+      const result = renderLaunch({ romId: null });
+
+      await act(async () => {
+        await result.current.handleUninstallClick();
+      });
+
+      expect(startAction).not.toHaveBeenCalled();
+      expect(backend.removeRom).not.toHaveBeenCalled();
     });
   });
 });
