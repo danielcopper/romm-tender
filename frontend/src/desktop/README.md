@@ -19,8 +19,8 @@ page, and the rules every change to that page follows, are in
 - `gameview/PlayButton.tsx` — what `index.ts` hands the watcher as the page's `playButton`: Tender's Play button, whose
   launch presses and Uninstall are `gameview/usePlayLaunch.ts`'s and DOWNLOAD's and the bar's its own, with PLAY and the
   game's menu in `gameview/PlayStateButton.tsx`, a download's bar in `gameview/DownloadingButton.tsx`, and the disc and
-  version selector beside it (`gameview/DiscSelector.tsx`). The button and the selector draw a version switch's wait
-  with `gameview/SvgThrobber.tsx`.
+  version selector and the play bar's badges beside it (`gameview/DiscSelector.tsx`, `gameview/PlayButtonBadges.tsx`).
+  The button and the selector draw a version switch's wait with `gameview/SvgThrobber.tsx`.
 - `launchPromptHost.tsx` — the dialogs for a start the launch watcher catches, offered through
   `utils/launchPromptRouter.ts` and each drawn into the desktop window in a React root of its own.
 - `gameview/dialogs/` — those dialogs (`desktopLaunchPrompts`), the Play button's conflict walk and Stop dialog

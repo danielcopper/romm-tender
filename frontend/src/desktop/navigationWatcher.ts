@@ -269,7 +269,13 @@ function attachToDesktopWindow(page: DesktopGamePage, deskWin: Window): () => vo
       nativePlayBtn.before(host);
       mountView("playButton", view, roots, host, appId);
     }
-    if (rendered("playButton", appId)) ledger.hide(nativePlayBtn);
+    if (rendered("playButton", appId)) {
+      ledger.hide(nativePlayBtn);
+      // desktop-dom-architecture.md says why Steam's wrapper shrinks and keeps its height.
+      ledger.style(nativePlayBtn.parentElement, "flex-shrink", "1");
+      ledger.style(nativePlayBtn.parentElement, "min-width", "0");
+      ledger.style(nativePlayBtn.parentElement, "height", "46px");
+    }
   }
 
   function refreshStickyPlayBar(

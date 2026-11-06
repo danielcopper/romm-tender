@@ -98,6 +98,10 @@ export interface SaveStatus {
    *  reason other than an unreachable RomM (backend `SyncEngine.live_device_id`),
    *  so nothing was listed. */
   server_query_reason?: RommErrorReason | "device_not_registered" | null;
+  /** Whether RomM holds a save for this ROM in any slot; false as well where the query failed. */
+  server_has_saves?: boolean;
+  /** True where a save sits beside the ROM, so nothing was probed and no sync carries it. */
+  savefiles_in_content_dir?: boolean;
   /** True when the active slot's current save spans more than one distinct
    *  file (e.g. Sega Saturn `.bkr`/`.bcr`/`.smpc`). Those siblings are
    *  components of one game state, not prior versions — so the frontend
@@ -183,6 +187,8 @@ export interface SaveSyncAvailability {
   // Present only where `available` is false: the refusal the game's sync is refused with.
   reason?: SyncRefusalReason;
   message?: string;
+  // The same refusal in a few words, for a surface with no room for the sentence.
+  short_message?: string;
 }
 
 /** One save file this device holds for a game (backend `get_local_save_files`). */

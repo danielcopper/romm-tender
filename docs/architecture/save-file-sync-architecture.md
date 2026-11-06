@@ -1024,7 +1024,8 @@ kind and emulator label where it carries them, so the panel words it as it does 
 nothing: no device registration, no listing. A game that syncs answers by the table above, its local probe reading that
 same answer ([#2153](https://github.com/danielcopper/romm-tender/issues/2153)). `get_save_sync_availability` asks the
 same refusal alone, with no device registration and no save listing, beside one catalogue question for the label below:
-`available`, with those fields where it is false; `installed`, since a game that is not downloaded is asked about the
+`available`, with those fields where it is false and `short_message`, the same refusal in a few words for a surface with
+no room for the sentence (`save_refusal_label`); `installed`, since a game that is not downloaded is asked about the
 path it would be downloaded to (the save answer's own `content_installed`, `RomInfoService._uninstalled_answer`);
 `established`, false where that reading established nothing — no path could be formed, or the emulator's answer could
 not be established — so a refusal there says nothing of whether the saves would sync; and `emulator_label`, the label of
@@ -2214,7 +2215,9 @@ Triggered by the game-detail panel and SAVES tab via `getSaveStatus(romId)`. Run
 counterpart of `do_sync_rom_saves` that returns the same `compute_sync_action` decisions but performs no upload/download
 I/O. The only mutation it allows is recording the baseline of a `Skip(adopt_baseline=True)` that needs no
 acknowledgement, so future drift detection works; one that must be acknowledged is left to the next sync, and its row
-reads "synced", which is true — the bytes are identical ([Outcomes](#outcomes)).
+reads "synced", which is true — the bytes are identical ([Outcomes](#outcomes)). `server_has_saves` says whether RomM's
+listing of the ROM's saves returned anything, in any slot, also for a game with no `files` row; it is false where the
+query failed or was never sent, with `server_query_failed` beside it.
 
 ### This device's save files (save sync off)
 

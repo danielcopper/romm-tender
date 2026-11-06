@@ -64,8 +64,7 @@ where that check went wrong, PLAY does what Big Picture's does
 ([Launch-target validation](backend-architecture.md#launch-target-validation)), and reads CHECKING... where Big
 Picture's shows its throbber. On a stranded panel it gates as the [invariant register](invariants/panel.md)'s
 stranded-panel entry says. Steam's Play button and the badges beside it are hidden as soon as the button's root has
-rendered, also while it draws nothing — before the page's detail names the ROM, and on a stranded panel — and the button
-draws no badges in their place.
+rendered, also while it draws nothing — before the page's detail names the ROM, and on a stranded panel.
 
 `DiscSelector` (`frontend/src/desktop/gameview/DiscSelector.tsx`) sits beside the Play button, one control where Big
 Picture has two beside `CustomPlayButton`, `frontend/src/bigpicture/DiscSelector.tsx` and
@@ -82,8 +81,33 @@ what draws it there); while the Play button's check or a press of DOWNLOAD is un
 has started or the adoption flow has ended, its trigger is disabled and dimmed and an open menu closes, since the two
 ask through one dialog host, where a newer question answers the open one dismissed.
 
-Neither the Play button nor the selector adds a stylesheet to Steam's document, so nothing changes on hover on either,
-and a download's glow, which pulses on Big Picture, stands still.
+`PlayButtonBadges` (`frontend/src/desktop/gameview/PlayButtonBadges.tsx`) stands after the selector in the button's row,
+in the place of Steam's own badges, and draws nothing where the button draws nothing. SPACE REQUIRED, LAST PLAYED, PLAY
+TIME and BIOS read what Big Picture's cells beside `CustomPlayButton` read
+(`frontend/src/bigpicture/RomMPlaySection.tsx`); PLAY TIME says it in the words of Steam's own cell rather than Big
+Picture's (`formatSteamPlaytime`), and like Steam's is not drawn for a game with none. SAVE SYNC has no counterpart
+there, where a game's save state is on its **SAVES** tab: what it says, and in which tone, is `saveSyncBadge`
+(`frontend/src/utils/saveSyncBadge.ts`), over the game detail store's save-sync status and this ROM's save status. For
+an installed game with save sync on, while RomM is reachable, it also asks whether a slot is still to be set up, in the
+launch gates' two steps, so a page that needs none asks RomM nothing for it, and whether the game's saves sync at all
+(`get_save_sync_availability`, which for an installed game asks RomM nothing). A game whose saves cannot sync says why
+in grey, in the backend's few words for the refusal (`short_message`); as on the **SAVES** tab, only a downloaded game's
+refusal stands. Both are asked again when a save sync, a platform's core or the emulator sources change, and a read that
+fails holds no answer rather than the one from before. With nothing established yet the badge makes no claim either: it
+reads **Not checked**, in grey. A time since the last sync moves on while the page stays open. None of the badges takes
+a press.
+
+The row takes its type and spacing from Steam's own play bar, as measured on a Linux desktop running Steam client build
+1792618285: Save Sync and BIOS keep their own colours, every other value is Steam's. It also behaves as Steam's does
+when the window narrows: it wraps inside a clipped box, so a badge that does not fit leaves whole, from the end of the
+row. That needs the watcher's help, because the element Steam's Play button stands in does not shrink (`flex-shrink: 0`,
+same client), and nothing inside it would learn the row no longer fits. The watcher also holds that element at its 46px:
+below a right panel of 884px Steam's page turns `NarrowRightPanel`, and that takes the element to 32px along with
+Steam's own button, while Tender's button keeps its height, so the bar would close up under it. The row keeps its type
+there too, where Steam's own cells get smaller.
+
+Neither the Play button, the selector nor the badges add a stylesheet to Steam's document, so nothing changes on hover
+on any of them, and a download's glow, which pulses on Big Picture, stands still.
 
 ## Two windows, two realms
 
@@ -245,10 +269,11 @@ So each pass (`pass()` in `frontend/src/desktop/navigationWatcher.ts`) runs in t
    unmounted with everything the ledger holds. Both of these come before the adaptations because they restore everything
    the ledger holds: after them, they would undo them all.
 3. **The adaptations, on every pass**, in this order: hide the page's content sections (once a `gameView` is drawn);
-   mount `playButton` beside Steam's Play button, and hide Steam's once it is drawn — remounted only when it is missing,
-   detached, for another appId or moved; set up or refresh the sticky play bar controller, which also keeps the hero
-   wrapper at `overflow: visible` (below); hide Steam's duplicate sticky header; hide the play bar's badges (once a
-   `playButton` is drawn); push the right-hand controls to the right edge.
+   mount `playButton` beside Steam's Play button, and once it is drawn hide Steam's, let the element both stand in
+   shrink, and hold it at its height — remounted only when it is missing, detached, for another appId or moved; set up
+   or refresh the sticky play bar controller, which also keeps the hero wrapper at `overflow: visible` (below); hide
+   Steam's duplicate sticky header; hide the play bar's badges (once a `playButton` is drawn); push the right-hand
+   controls to the right edge.
 4. **The mount guard.** If a `GameView` for this appId is already in place, or failed for it before, the pass ends here.
    Otherwise it mounts one right after the play bar.
 

@@ -61,6 +61,7 @@ async def test_get_save_status_full_shape_and_partial_flag(harness):
         "save_resolution",
         "save_sync_display",
         "server_query_failed",
+        "server_has_saves",
         "server_query_reason",
         "multi_file",
         "component_files",
@@ -86,6 +87,7 @@ async def test_get_save_status_server_failure_keeps_full_payload(harness):
     # bare {success: False}. The frontend still renders local state.
     assert result["server_query_failed"] is True
     assert result["server_query_reason"] == "server_unreachable"
+    assert result["server_has_saves"] is False
     assert result["rom_id"] == 42
     assert "files" in result
     assert "save_sync_display" in result
@@ -541,6 +543,7 @@ async def test_get_save_sync_availability_of_a_game_that_cannot_sync(harness):
         "finding": {"code": "saves-root-missing", "data": {"path": "/run/media/deck/sd/retrodeck/saves"}},
         "source": "retrodeck",
         "emulator": "mGBA",
+        "short_message": "Saves folder missing",
     }
 
 

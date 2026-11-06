@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act, within } from "@testing-library/react";
 import { PlayButton } from "./PlayButton";
 import { DiscSelector } from "./DiscSelector";
+import { PlayButtonBadges } from "./PlayButtonBadges";
 import * as gameDetailStore from "../../utils/gameDetailStore";
 import * as downloadStore from "../../utils/downloadStore";
 import * as downloadRehydrate from "../../utils/downloadRehydrate";
@@ -56,6 +57,10 @@ vi.mock("./DiscSelector", async () => {
     }),
   };
 });
+
+vi.mock("./PlayButtonBadges", () => ({
+  PlayButtonBadges: vi.fn(() => <div data-testid="play-bar-badges" />),
+}));
 
 vi.mock("../../utils/downloadStore", () => ({
   useDownloads: vi.fn(),
@@ -157,6 +162,7 @@ function detailState(overrides: Partial<GameDetailState> = {}): GameDetailState 
     saveStatus: null,
     saveSyncStatus: null,
     saveSyncLabel: "",
+    saveSyncCheckedAt: null,
     raId: null,
     achievementEarned: 0,
     achievementTotal: 0,
@@ -2096,6 +2102,68 @@ describe("PlayButton", () => {
       render(<PlayButton appId={APP_ID} />);
 
       expect(selectorProps()?.fileMissing).toBe(true);
+    });
+  });
+
+  describe("the badges", () => {
+    const badgeProps = () => vi.mocked(PlayButtonBadges).mock.lastCall?.[0];
+
+    it("sit in the button's row, with this game's detail", () => {
+      const detail = detailState();
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detail);
+      render(<PlayButton appId={APP_ID} />);
+
+      const container = screen.getByRole("button", { name: /^PLAY/ }).closest(".tender-desktop-play-btn-container");
+      expect(within(container as HTMLElement).getByTestId("play-bar-badges")).toBeInTheDocument();
+      expect(badgeProps()).toEqual({ appId: APP_ID, detail, saveStatus: null, isOffline: false });
+    });
+
+    it("stand after the selector", () => {
+      render(<PlayButton appId={APP_ID} />);
+
+      expect(screen.getByTestId("play-bar-badges").previousElementSibling).toBe(screen.getByTestId("disc-selector"));
+    });
+
+    it("are handed this ROM's save status", () => {
+      const saveStatus = { rom_id: 100, files: [] } as unknown as SaveStatus;
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ saveStatus }));
+      render(<PlayButton appId={APP_ID} />);
+
+      expect(badgeProps()?.saveStatus).toBe(saveStatus);
+    });
+
+    it("are not handed a status another version left in the detail", () => {
+      const saveStatus = { rom_id: 99, files: [] } as unknown as SaveStatus;
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ saveStatus }));
+      render(<PlayButton appId={APP_ID} />);
+
+      expect(badgeProps()?.saveStatus).toBeNull();
+    });
+
+    it("are told RomM is offline", () => {
+      setRommConnectionState("offline");
+      render(<PlayButton appId={APP_ID} />);
+
+      expect(badgeProps()?.isOffline).toBe(true);
+    });
+
+    it("are drawn beside DOWNLOAD", () => {
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ installed: false }));
+      render(<PlayButton appId={APP_ID} />);
+
+      expect(screen.getByRole("button", { name: /^DOWNLOAD/ })).toBeInTheDocument();
+      expect(screen.getByTestId("play-bar-badges")).toBeInTheDocument();
+    });
+
+    it("are drawn beside a download's bar", () => {
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ installed: false }));
+      vi.mocked(downloadStore.useDownloads).mockReturnValue([
+        { rom_id: 100, status: "downloading", progress: 0.5 } as DownloadItem,
+      ]);
+      render(<PlayButton appId={APP_ID} />);
+
+      expect(screen.getByRole("progressbar")).toBeInTheDocument();
+      expect(screen.getByTestId("play-bar-badges")).toBeInTheDocument();
     });
   });
 

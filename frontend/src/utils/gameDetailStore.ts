@@ -86,6 +86,8 @@ export interface GameDetailState extends BiosInfoFields, CoreInfoFields {
   saveStatus: SaveStatus | null;
   saveSyncStatus: "synced" | "pending" | "conflict" | "none" | null; // NOSONAR(typescript:S4323) — inline union inside GameDetailState; extracting an alias adds indirection for no reuse benefit.
   saveSyncLabel: string;
+  /** What a time-ago `saveSyncLabel` was worded from, so a surface that stays open can word it again; else `null`. */
+  saveSyncCheckedAt: string | null;
   raId: number | null;
   achievementEarned: number;
   achievementTotal: number;
@@ -104,6 +106,7 @@ const DEFAULT_STATE: GameDetailState = {
   saveStatus: null,
   saveSyncStatus: null,
   saveSyncLabel: "",
+  saveSyncCheckedAt: null,
   raId: null,
   achievementEarned: 0,
   achievementTotal: 0,
@@ -312,9 +315,11 @@ async function loadDetail(appId: number, entry: Entry): Promise<void> {
 
     let saveSyncStatus: GameDetailState["saveSyncStatus"] = null;
     let saveSyncLabel = "";
+    let saveSyncCheckedAt: string | null = null;
     if (cached.save_sync_enabled && cached.save_sync_display) {
       saveSyncStatus = cached.save_sync_display.status;
       saveSyncLabel = resolveSaveSyncLabel(cached.save_sync_display);
+      saveSyncCheckedAt = cached.save_sync_display.last_sync_check_at;
     }
 
     write((prev) => ({
@@ -333,6 +338,7 @@ async function loadDetail(appId: number, entry: Entry): Promise<void> {
       saveSyncEnabled: cached.save_sync_enabled ?? false,
       saveSyncStatus,
       saveSyncLabel,
+      saveSyncCheckedAt,
       raId: cached.ra_id ?? null,
       // Keep the last-known count when the re-derived cache has no achievement
       // summary (e.g. a version switch during an offline window, where the
@@ -523,6 +529,7 @@ function applySaveStatus(entry: Entry, generation: number, status: SaveStatus): 
     saveStatus: status,
     saveSyncStatus,
     saveSyncLabel,
+    saveSyncCheckedAt: status.save_sync_display?.last_sync_check_at ?? null,
   }));
 }
 
@@ -543,6 +550,7 @@ export function noteSaveSyncDisplay(appId: number, romId: number, display: SaveS
     ...prev,
     saveSyncStatus: display.status,
     saveSyncLabel: resolveSaveSyncLabel(display),
+    saveSyncCheckedAt: display.last_sync_check_at,
   }));
 }
 
@@ -713,6 +721,7 @@ async function handleSaveSyncSettingsChange(
       saveSyncEnabled: false,
       saveSyncStatus: null,
       saveSyncLabel: "",
+      saveSyncCheckedAt: null,
     }));
     return;
   }

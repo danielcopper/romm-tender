@@ -106,6 +106,7 @@ def compute_save_sync_display(
             return SaveSyncDisplay(status="pending", label="Server newer", last_sync_check_at=None)
         if last_sync_check_at:
             return SaveSyncDisplay(status="synced", label=None, last_sync_check_at=last_sync_check_at)
+        # The panel's SAVE SYNC badge takes its tone from this word (`NOT_SYNCED_LABEL`).
         return SaveSyncDisplay(status="synced", label="Not synced", last_sync_check_at=None)
 
     return SaveSyncDisplay(status="none", label="No local saves", last_sync_check_at=None)

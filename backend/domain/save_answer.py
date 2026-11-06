@@ -417,6 +417,25 @@ def save_shape_message(answer: SaveAnswer) -> str:
     return f"{sentence} ({answer.emulator})" if answer.emulator else sentence
 
 
+_STATE_LABELS: dict[str, str] = {
+    SAVE_STATE_SHARED: "Shared save",
+    SAVE_STATE_INSIDE_CONTENT: "Saved in the game file",
+    SAVE_STATE_HOLE: "Saved under an unknown ID",
+    SAVE_STATE_UNESTABLISHED: "Save files unknown",
+    SAVE_STATE_PLACE_NOT_READ: "Save location not read",
+    SAVE_STATE_SAVES_ROOT_MISSING: "Saves folder missing",
+}
+
+
+def save_refusal_label(answer: SaveAnswer) -> str:
+    """The few words a small surface says where a refusal's ``message`` will not fit."""
+    if answer.in_content_directory:
+        return "Saved beside the game"
+    if answer.state == SAVE_STATE_HOLE and HOLE_START_FOLDER in answer.needs:
+        return "Saves follow the start folder"
+    return _STATE_LABELS.get(answer.state, _STATE_LABELS[SAVE_STATE_UNESTABLISHED])
+
+
 def save_finding_details(answer: SaveAnswer) -> dict[str, object]:
     """What a refusal of *answer* carries beside its reason and message, for the panel to word it.
 
