@@ -350,7 +350,7 @@ describe("publishCommittedVersionSwitch stopped by its signal", () => {
     );
   });
 
-  it("logs that only the broadcast was skipped when RomM has no cover to write", async () => {
+  it("logs that the cover and the broadcast were skipped when RomM has no cover, since the SteamGridDB pick would have been written", async () => {
     vi.stubGlobal("SteamClient", { Apps: { SetCustomArtworkForApp: vi.fn().mockResolvedValue(undefined) } });
     vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false, chosen: false });
     vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: null });
@@ -364,7 +364,7 @@ describe("publishCommittedVersionSwitch stopped by its signal", () => {
     expect(broadcasts).toEqual([]);
     expect(SteamClient.Apps.SetCustomArtworkForApp).not.toHaveBeenCalled();
     expect(vi.mocked(backend.logWarn)).toHaveBeenCalledWith(
-      "Version switch: the lease for rom 42 (appId 5000) was cancelled; the broadcast was skipped",
+      "Version switch: the lease for rom 42 (appId 5000) was cancelled; the cover and the broadcast were skipped",
     );
   });
 

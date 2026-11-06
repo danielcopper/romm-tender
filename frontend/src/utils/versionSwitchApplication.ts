@@ -61,7 +61,7 @@ export async function publishCommittedVersionSwitch(
     }
     const cover = chosen.kind === "none" ? await fetchCoverBase64(romId) : null;
     if (signal?.aborted) {
-      logCancelled(appId, romId, cover?.base64 ? "the cover and the broadcast were" : "the broadcast was");
+      logCancelled(appId, romId, cover ? "the cover and the broadcast were" : "the broadcast was");
       return false;
     }
     if (cover?.base64) {
