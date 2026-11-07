@@ -5,8 +5,9 @@ for (:meth:`FirmwareStore.do_fetch`) and then brings that platform's links up to
 date in every enabled source (:meth:`FirmwareStore.do_update_links`), so a file
 reaches each emulator that wants it and its source does not state is not
 installed, at the place the resolver names. No download lands outside the
-store. A library file fills a requirement by its content wherever RomM files it
-(:mod:`domain.firmware_match`).
+store. A library file fills a requirement by its content
+(:mod:`domain.firmware_match`), and only one RomM lists under the platform's own
+folder does (:func:`~domain.firmware_rows.platform_library`).
 """
 
 from __future__ import annotations
@@ -18,7 +19,15 @@ from typing import TYPE_CHECKING, Any
 from domain.emulator_commands import resolve_firmware_option
 from domain.emulator_pick import pick_for, source_kind
 from domain.firmware_groups import fetched_as_required
-from domain.firmware_rows import LibraryFirmware, StoreCopy, folder_entries, library_file, library_match, store_copy
+from domain.firmware_rows import (
+    LibraryFirmware,
+    StoreCopy,
+    folder_entries,
+    library_file,
+    library_match,
+    platform_library,
+    store_copy,
+)
 from lib.errors import Refused, RommApiError, romm_error_log_level
 
 if TYPE_CHECKING:
@@ -104,7 +113,7 @@ class FirmwareDownloader:
         record holds.
         """
         firmware_list = await self._firmware_list()
-        rows = [fw for fw in firmware_list if fw["platform_folder"] == platform_folder]
+        rows = platform_library(firmware_list, platform_folder)
         return await self._fetch_and_link(
             platform_slug, platform_folder, rows, await self.platform_system(platform_slug, rom_id)
         )
@@ -114,21 +123,20 @@ class FirmwareDownloader:
     ) -> dict[str, Any]:
         """Fetch the library file *file_name* into *platform_folder*'s store folder, and link it.
 
-        *firmware_id* is the library file the row shows, so the file fetched is
-        that one even where two files share its name. An id the listing does
-        not hold under *file_name* counts for nothing, and neither does a missing
-        one: the name — the file's name in RomM — is then looked up among the
-        files RomM lists for the platform first, and then in the whole library,
-        since a file fills a requirement wherever RomM files it. A name the
-        library does not hold is a ``not_in_library`` refusal, never a silent
-        no-op. A single file's refusal or RomM error reaches the caller as it
-        stands.
+        Only a file RomM lists under *platform_folder* is fetched
+        (:func:`~domain.firmware_rows.platform_library`). *firmware_id* is the
+        library file the row shows, so the file fetched is that one even where
+        two of the platform's files share its name. An id the platform's files
+        do not hold under *file_name* counts for nothing, and neither does a
+        missing one: the platform's file of that name — its name in RomM — is
+        fetched instead. A name the platform's files do not hold is a
+        ``not_in_library`` refusal, never a silent no-op. A single file's
+        refusal or RomM error reaches the caller as it stands.
         """
         firmware_list = await self._firmware_list()
-        named = [fw for fw in firmware_list if fw.get("file_name") == file_name]
-        own = [fw for fw in named if fw["platform_folder"] == platform_folder]
+        named = [fw for fw in platform_library(firmware_list, platform_folder) if fw.get("file_name") == file_name]
         exact = [fw for fw in named if firmware_id is not None and fw.get("id") == firmware_id]
-        wanted = exact or own or named
+        wanted = exact or named
         if not wanted:
             raise Refused("not_in_library", f"{file_name} is not in your RomM library for {platform_folder}")
         fetched = await self._loop.run_in_executor(
@@ -233,31 +241,30 @@ class FirmwareDownloader:
     ) -> list[dict[str, Any]]:
         """The library files "Download required" fetches for *identity*. Blocking: it looks at each place.
 
-        A file requirement's library file, where the store holds no copy and
-        nothing lies at its place. A folder the emulator requires and lists,
-        whose verdict is not met: its alphabetically first recognised library
-        file, unless the store already holds one it recognises.
+        Only the files RomM lists under *platform_folder* are drawn on
+        (:func:`~domain.firmware_rows.platform_library`). A file requirement's
+        library file, where the store holds no copy and nothing lies at its
+        place. A folder the emulator requires and lists, whose verdict is not
+        met: its alphabetically first recognised library file, unless the store
+        already holds one it recognises.
         """
         placements = catalogue.placements_for(identity)
         groups = catalogue.groups_for(identity)
-        library = [library_file(fw) for fw in firmware_list]
-        by_file = dict(zip(library, firmware_list, strict=True))
+        own = platform_library(firmware_list, platform_folder)
+        library = [library_file(fw) for fw in own]
+        by_file = dict(zip(library, own, strict=True))
         copies = self._store.do_copies(self._store.do_read_records(), platform_folder)
         wanted: dict[int | None, dict[str, Any]] = {}
         for placement in placements.values():
             if not fetched_as_required(placement, identity, groups):
                 continue
-            file = self._required_file(placement, library, copies, platform_folder)
+            file = self._required_file(placement, library, copies)
             if file is not None:
                 wanted.setdefault(file.firmware_id, by_file[file])
         return list(wanted.values())
 
     def _required_file(
-        self,
-        placement: FirmwarePlacement,
-        library: list[LibraryFirmware],
-        copies: list[StoreCopy],
-        platform_folder: str,
+        self, placement: FirmwarePlacement, library: list[LibraryFirmware], copies: list[StoreCopy]
     ) -> LibraryFirmware | None:
         if placement.declares_directory:
             if placement.satisfied is True:
@@ -270,7 +277,7 @@ class FirmwareDownloader:
             return None
         if self._files.look(placement.place).lexists:
             return None
-        match = library_match(placement, library, platform_folder)
+        match = library_match(placement, library)
         if match is None:
             return None
         return next((file for file in library if file.firmware_id == match["firmware_id"]), None)

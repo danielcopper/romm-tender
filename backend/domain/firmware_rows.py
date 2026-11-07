@@ -5,9 +5,10 @@ file in that folder — and the resolver's verdict over it stands as it is
 (:mod:`domain.bios_status`). Beside the verdict a row carries Tender's own
 facts, each of which decides what the row offers:
 
-- **the library file that fills it** — by content anywhere in the RomM library,
-  by name only where content cannot say (:mod:`domain.firmware_match`), the
-  alphabetically first where several do;
+- **the library file that fills it** — one RomM lists under this platform's
+  own folder (:func:`platform_library`), by content, by name only where
+  content cannot say (:mod:`domain.firmware_match`), the alphabetically first
+  where several do;
 - **the store copy that fills it** — this platform's own, in its store folder;
 - **what lies at its place** (:func:`domain.firmware_places.link_state`) and
   why a link may not go there (:func:`domain.firmware_places.place_refusal`);
@@ -39,10 +40,9 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class LibraryFirmware(FirmwareFile):
-    """One firmware file the RomM library lists: its RomM id, and the folder and slug of the platform it is under."""
+    """One firmware file the RomM library lists: its RomM id and the platform RomM files it under."""
 
     firmware_id: int | None = None
-    platform_folder: str = ""
     platform_slug: str = ""
     size: int = 0
 
@@ -71,7 +71,6 @@ def library_file(firmware: Mapping[str, Any]) -> LibraryFirmware:
         file_name=str(firmware.get("file_name") or ""),
         md5=str(firmware.get("md5_hash") or ""),
         firmware_id=firmware.get("id"),
-        platform_folder=str(firmware.get("platform_folder") or ""),
         platform_slug=str(firmware.get("platform_slug") or ""),
         size=int(firmware.get("file_size_bytes") or 0),
     )
@@ -87,21 +86,24 @@ def leaves_its_folder(file_name: str) -> bool:
     return normal in ("", ".", "..") or normal.startswith(f"..{os.sep}") or os.path.isabs(file_name)
 
 
-def library_match(
-    placement: FirmwarePlacement, library: Iterable[LibraryFirmware], platform_folder: str
-) -> dict[str, Any] | None:
+def platform_library[F: Mapping[str, Any]](firmware_list: Iterable[F], platform_folder: str) -> list[F]:
+    """The files of RomM's firmware listing that RomM keeps under *platform_folder*.
+
+    The only library files a platform's rows, its "Download required" and its
+    "Replace…" draw on (#2223 D48): RomM keeps a platform's firmware in that
+    platform's folder, so a file it lists under another one fills no
+    requirement here, also where the two folders share a slug.
+    """
+    return [firmware for firmware in firmware_list if firmware.get("platform_folder") == platform_folder]
+
+
+def library_match(placement: FirmwarePlacement, library: Iterable[LibraryFirmware]) -> dict[str, Any] | None:
     """The library file that fills *placement*, as a row carries it, or ``None``.
 
-    The platform's own file — one RomM lists under *platform_folder* — is taken
-    before any other platform's, so two platforms that share a slug each match
-    their own file of a name; another platform's file fills only where none of
-    the platform's own does. ``matched`` says how (:mod:`domain.firmware_match`);
-    ``no_checksum`` that RomM states none for it, so a download of it could not
-    be checked.
+    ``matched`` says how (:mod:`domain.firmware_match`); ``no_checksum`` that
+    RomM states none for it, so a download of it could not be checked.
     """
-    files = list(library)
-    own = [file for file in files if file.platform_folder == platform_folder]
-    file = first_filling(placement, own) or first_filling(placement, files)
+    file = first_filling(placement, library)
     if file is None:
         return None
     return library_payload(file, fills(placement, file))

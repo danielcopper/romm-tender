@@ -43,7 +43,7 @@ from domain.bios_status import (
 from domain.emulator_commands import options_to_payload, resolve_firmware_option
 from domain.emulator_pick import pick_for, source_kind
 from domain.firmware_groups import console_regions_of, judge_groups
-from domain.firmware_rows import leaves_its_folder, library_file
+from domain.firmware_rows import leaves_its_folder, library_file, platform_library
 from domain.platform_names import PLATFORM_NAMES_KEY, decode_platform_names
 from services.firmware.emulator_answers import (
     EMULATOR_FIELDS,
@@ -150,7 +150,7 @@ class FirmwareStatusReader:
         inputs = RowInputs(
             catalogue=catalogue,
             platform_folder=platform_folder,
-            library=tuple(library_file(fw) for fw in self._storable(firmware_list)),
+            library=tuple(library_file(fw) for fw in self._storable(platform_library(firmware_list, platform_folder))),
             copies=tuple(self._store.do_copies(records, platform_folder)),
             owned=self._store.do_owned(records),
             files=self._firmware_file_store,
@@ -400,8 +400,9 @@ class FirmwareStatusReader:
 
         **The demand is read per platform**, because a standalone emulator's
         declarations belong to a platform only by way of the emulators ES-DE
-        offers for it. *firmware_list* is the whole library rather than this
-        platform's slice: a file fills a requirement wherever RomM files it.
+        offers for it. *firmware_list* is the whole library's listing; only
+        the files RomM keeps under *folder* make the rows
+        (:func:`~domain.firmware_rows.platform_library`).
         """
         slug = plat["platform_slug"]
         platform = await self._loop.run_in_executor(None, self._platform_systems.platform_system, slug)

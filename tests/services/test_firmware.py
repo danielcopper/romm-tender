@@ -2293,14 +2293,14 @@ class TestGetFirmwareStatusBiosAggregates:
         assert result["files"][0]["on_server"] is False
 
     @pytest.mark.asyncio
-    async def test_a_file_the_library_files_under_another_platform_is_not_called_absent(self, tmp_path):
-        """ "Not in your library" is a claim about the library, not about a directory.
+    async def test_a_file_the_library_files_under_another_platform_is_not_in_this_platforms_library(self, tmp_path):
+        """A file RomM keeps in another platform's folder fills no requirement here (#2223 D48).
 
         A core that serves several systems declares the same file for each of
-        them while RomM files it under one platform. Checking only this
-        platform's slice of the listing would tell the user to upload a file they
-        already have: the whole library fills a requirement, whichever platform
-        RomM files the file under.
+        them while RomM files it under one platform. Only that platform's row is
+        filled by it; the other platform's row reads it as not in the RomM
+        library, since RomM keeps a platform's firmware in that platform's
+        folder.
         """
         from tests.fakes.fake_core_info_provider import libretro_option
 
@@ -2327,13 +2327,10 @@ class TestGetFirmwareStatusBiosAggregates:
 
         result = await _entries(fw, "gamegear", "megadrive")
 
-        # The platform the listing files it under carries the row; the other
-        # platform the core serves carries its own requirement, filled by that
-        # same library file rather than called absent.
         assert [f["on_server"] for f in result["gamegear"]["files"]] == [True]
         (row,) = result["megadrive"]["files"]
-        assert row["on_server"] is True
-        assert (row["library"]["file_name"], row["library"]["platform_slug"]) == ("bios.gg", "gamegear")
+        assert row["on_server"] is False
+        assert row["library"] is None
 
     @pytest.mark.asyncio
     async def test_the_demand_is_read_once_per_platform(self, tmp_path):
@@ -4414,9 +4411,11 @@ class TestDownloadPlatformFirmwareFile:
         assert fetched == [2]
 
     @pytest.mark.asyncio
-    async def test_the_row_s_library_file_is_fetched_by_its_id_where_two_share_its_name(self, firmware, fw, tmp_path):
-        # The row shows the n64 folder's file, matched by content; the platform's
-        # own file of that name is another one.
+    async def test_an_id_from_another_platforms_folder_fetches_the_platforms_own_file_of_that_name(
+        self, firmware, fw, tmp_path
+    ):
+        # id 3 is the n64 folder's file of the name; only the platform's own
+        # file of that name is fetched (#2223 D48).
         bios_dir = tmp_path / "retrodeck" / "bios"
         bios_dir.mkdir(parents=True)
         _set_loop(fw, asyncio.get_running_loop())
@@ -4430,7 +4429,7 @@ class TestDownloadPlatformFirmwareFile:
             result = await fw.download_platform_firmware_file("dc", "dc", "missing.bin", 3)
 
         assert result["downloaded"] == 1
-        assert fetched == [3]
+        assert fetched == [2]
 
     @pytest.mark.asyncio
     async def test_an_id_the_listing_no_longer_holds_under_the_name_falls_back_to_the_name(
@@ -5135,9 +5134,8 @@ class TestCheckPlatformBiosRequired:
     async def test_only_the_files_romm_states_for_the_platform_are_its_library_rows(self, fw):
         """A file belongs to the platform RomM states for it, never to one whose name its folder resembles.
 
-        Another platform's file still fills a requirement here, whichever
-        platform RomM files it under; one that fills nothing here is no row of
-        this platform's library section.
+        Another platform's file fills no requirement here (#2223 D48), and one
+        that fills nothing here is no row of this platform's library section.
         """
         firmware_list = [
             {"id": 1, "file_name": "scph5501.bin", "platform_slug": "psx", "file_size_bytes": 1},
@@ -5151,8 +5149,8 @@ class TestCheckPlatformBiosRequired:
 
         result = await fw.check_platform_bios("psx", "psx")
 
-        assert (result["server_count"], result["required_count"]) == (2, 1)
-        assert sorted(f["file_name"] for f in result["files"] if f["on_server"]) == ["scph5501.bin", "scph5502.bin"]
+        assert (result["server_count"], result["required_count"]) == (1, 1)
+        assert sorted(f["file_name"] for f in result["files"] if f["on_server"]) == ["scph5501.bin"]
         assert [f["file_name"] for f in result["files"] if f["declared_by"] is None] == []
 
     @pytest.mark.asyncio
@@ -5962,6 +5960,7 @@ class TestCheckPlatformBiosOffline:
             {
                 "id": 1,
                 "file_name": "scph5501.bin",
+                "platform_folder": "psx",
                 "platform_slug": "psx",
                 "file_size_bytes": 512,
                 "md5_hash": "",
@@ -6271,7 +6270,7 @@ class TestDownloadFirmwareErrors:
             "file_size_bytes": len(content),
             "md5_hash": hashlib.md5(content).hexdigest(),
         }
-        fw._listing._firmware_cache = [{**fw_detail, "platform_folder": "", "platform_slug": ""}]
+        fw._listing._firmware_cache = [{**fw_detail, "platform_folder": "dc", "platform_slug": ""}]
         fw._listing._firmware_cache_epoch = fw._config.clock.time()
 
         bios_dir = tmp_path / "bios"
@@ -7971,6 +7970,16 @@ class TestTwoPlatformsThatShareASlug:
     def _listing(self, *firmware_by_platform: tuple[dict[str, Any], list[dict[str, Any]]]) -> list[dict[str, Any]]:
         return [{**platform, "firmware": files} for platform, files in firmware_by_platform]
 
+    @staticmethod
+    def _serves(data: bytes):
+        """RomM's download, writing *data* wherever it is asked to — so a fetch that should not happen succeeds."""
+
+        def write(_firmware_id, _file_name, dest):
+            with open(dest, "wb") as f:
+                f.write(data)
+
+        return write
+
     @pytest.mark.asyncio
     async def test_each_keeps_a_store_folder_and_a_delete_leaves_the_others_file(self, firmware, fw, tmp_path):
         gc_bytes, gamecube_bytes = b"gc ipl", b"gamecube ipl"
@@ -8093,3 +8102,90 @@ class TestTwoPlatformsThatShareASlug:
         assert rows["gc"]["id"] == 10
         assert rows["gamecube"]["id"] == 20
         assert (tmp_path / "Tender" / "bios" / "gamecube" / "IPL.bin").read_bytes() == gamecube_bytes
+
+    @pytest.mark.asyncio
+    async def test_another_platforms_file_never_fills_a_requirement_here(self, firmware, fw, tmp_path):
+        """A file RomM lists under ``gc`` fills no requirement of ``gamecube``, though both are ``ngc`` (#2223 D48).
+
+        On ``gamecube`` "Download required" fetches nothing for the free place,
+        and once a wrong file lies there the row reads the requirement as not in
+        the RomM library, a download by that file's id is refused and the wrong
+        file is not replaced by it; on ``gc`` the file fills the row and Replace
+        is offered.
+        """
+        ipl = b"gc ipl"
+        firmware.romm_api.list_platforms.return_value = self._listing(
+            (self._GC, [self._file(10, 1, "IPL.bin", ipl)]), (self._GAMECUBE, [])
+        )
+        firmware.romm_api.download_firmware.side_effect = self._serves(ipl)
+        bios = tmp_path / "bios"
+        bios.mkdir()
+        place = bios / "IPL.bin"
+        _resolver(fw).declare(
+            "IPL.bin",
+            required_by=[_id(_TEST_CORE)],
+            place=str(place),
+            identity_md5=hashlib.md5(ipl).hexdigest(),
+            identity_kind=IDENTITY_FILE,
+            checked="mismatch",
+        )
+        _resolver_reads(fw, bios)
+        _set_loop(fw, asyncio.get_running_loop())
+
+        assert (await fw.download_required_firmware("ngc", "gamecube"))["downloaded"] == 0
+
+        place.write_bytes(b"a wrong image")
+        rows = {}
+        for folder in ("gc", "gamecube"):
+            platform = (await fw.get_platform_firmware_status("ngc", folder))["platform"]
+            rows[folder] = next(f for f in platform["files"] if f["file_name"] == "IPL.bin")
+
+        assert (rows["gc"]["on_server"], rows["gc"]["id"], rows["gc"]["replace_offered"]) == (True, 10, True)
+        assert (rows["gamecube"]["on_server"], rows["gamecube"]["library"]) == (False, None)
+        assert rows["gamecube"]["replace_offered"] is False
+
+        with pytest.raises(Refused) as by_id:
+            await fw.download_platform_firmware_file("ngc", "gamecube", "IPL.bin", 10)
+        with pytest.raises(Refused) as replaced:
+            await fw.replace_bios_file("ngc", "gamecube", str(place))
+
+        assert by_id.value.reason == "not_in_library"
+        assert replaced.value.reason == "not_replaceable"
+        assert place.read_bytes() == b"a wrong image"
+        firmware.romm_api.download_firmware.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_another_platforms_file_never_fills_a_folder_declaration_here(self, firmware, fw, tmp_path):
+        """A file RomM lists under ``gc`` that a folder declaration recognises is no file of it on ``gamecube``.
+
+        On ``gc`` it is a row of the folder; on ``gamecube`` it is not, and
+        "Download required" fetches nothing into ``gamecube``'s store.
+        """
+        image = b"gc folder image"
+        firmware.romm_api.list_platforms.return_value = self._listing(
+            (self._GC, [self._file(10, 1, "image.bin", image)]), (self._GAMECUBE, [])
+        )
+        firmware.romm_api.download_firmware.side_effect = self._serves(image)
+        bios = tmp_path / "bios"
+        folder = bios / "images"
+        folder.mkdir(parents=True)
+        _resolver(fw).declare(
+            "images",
+            required_by=[_id(_TEST_CORE)],
+            place=str(folder),
+            relative_path="images",
+            declares_directory=True,
+            folder=FolderVerdict(satisfied=False),
+            folder_md5s=frozenset({hashlib.md5(image).hexdigest()}),
+        )
+        _resolver_reads(fw, bios)
+        _set_loop(fw, asyncio.get_running_loop())
+
+        names = {}
+        for platform_folder in ("gc", "gamecube"):
+            platform = (await fw.get_platform_firmware_status("ngc", platform_folder))["platform"]
+            names[platform_folder] = [f["file_name"] for f in platform["files"] if f["on_server"]]
+
+        assert names == {"gc": ["image.bin"], "gamecube": []}
+        assert (await fw.download_required_firmware("ngc", "gamecube"))["downloaded"] == 0
+        firmware.romm_api.download_firmware.assert_not_called()

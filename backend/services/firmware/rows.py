@@ -49,9 +49,10 @@ if TYPE_CHECKING:
 class RowInputs:
     """Everything one platform's rows are built from, read once for the whole page.
 
-    ``library`` is every file the RomM library lists, whichever platform it is
-    filed under — a file fills a requirement wherever it lies — and
-    ``copies`` this platform's store files. ``looks`` keeps one look per place,
+    ``library`` is the files RomM lists under this platform's own folder —
+    the only ones that fill a requirement here
+    (:func:`~domain.firmware_rows.platform_library`) — and ``copies`` this
+    platform's store files. ``looks`` keeps one look per place,
     so a place two rows name is looked at once.
     """
 
@@ -91,10 +92,9 @@ def library_rows(inputs: RowInputs, emulator: str | None) -> list[BiosFileEntry]
     """
     placements = inputs.catalogue.placements
     complete = inputs.catalogue.reading_complete_for(emulator)
-    mine = [file for file in inputs.library if file.platform_folder == inputs.platform_folder]
     spare = {copy.file_name: copy for copy in unused(inputs.copies, placements)}
     rows = []
-    for file in unclaimed(mine, placements):
+    for file in unclaimed(inputs.library, placements):
         copy = spare.pop(file.file_name, None)
         entry = build_file_entry(file.file_name, copy is not None, None, None, complete, emulator)
         rows.append(
@@ -125,7 +125,7 @@ def _file_row(inputs: RowInputs, placement: FirmwarePlacement, emulator: str | N
     catalogue = inputs.catalogue
     place = placement.place
     look = inputs.look(place) if place is not None else None
-    library = library_match(placement, inputs.library, inputs.platform_folder)
+    library = library_match(placement, inputs.library)
     entry = build_file_entry(
         placement.file_name,
         placement.present is True,
