@@ -293,6 +293,39 @@ export const NotificationStore: SteamNotificationStore | undefined = (
 ).NotificationStore;
 
 /**
+ * Whether *value* is a component whose render function's source names *name*.
+ *
+ * Steam's Quick Access renderers are exported under minified single letters,
+ * and their component names survive only inside the function bodies — so the
+ * source text is the only handle there is, as it is for Decky.
+ */
+export const rendersNamed =
+  (name: string) =>
+  (value: unknown): boolean => {
+    try {
+      const type = (value as { type?: { toString?: () => unknown } } | null | undefined)?.type;
+      const source = type?.toString?.();
+      return typeof source === "string" && source.includes(name);
+    } catch {
+      return false;
+    }
+  };
+
+/**
+ * The module Steam draws its Quick Access menu from: the one exporting the
+ * browser view Gaming Mode uses, beside the embedded one. Tender's own Quick
+ * Access entry is installed into its renderers (`qam/installEntry.tsx`).
+ *
+ * Asked the way `findModuleByExport` asks — any export of the module, or of its
+ * `default`, rendering `QuickAccessMenuBrowserView` — through `findModule`, so
+ * the search runs once, when this module is evaluated, like every other here.
+ */
+export const QuickAccessMenuBrowserView: Readonly<Record<string, unknown>> | undefined = findModule((m: unknown) => {
+  if (typeof m !== "object" || m === null || m === window) return false;
+  return Object.values(m).some(rendersNamed("QuickAccessMenuBrowserView"));
+});
+
+/**
  * The class names Steam's own notification templates are drawn with.
  *
  * Several class maps carry these template names; exactly one carries

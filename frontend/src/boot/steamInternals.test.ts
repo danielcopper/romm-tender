@@ -12,7 +12,9 @@ import { globSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { type SteamReach, codeWords, scanSteamReach } from "../test-utils/steamReach";
-import { NOT_STEAM_INTERNALS, STEAM_INTERNALS } from "./steamInternals";
+import { NOT_STEAM_INTERNALS, STEAM_FEATURES, STEAM_INTERNALS } from "./steamInternals";
+import { staticPart } from "./steamInternalsCheck";
+import { STEAM_LOOKUPS } from "./steamModules";
 
 const FRONTEND_DIR = process.cwd();
 const SRC_DIR = `${FRONTEND_DIR}/src/`;
@@ -113,5 +115,80 @@ describe("the Steam-internals list", () => {
       return navigated.length > 0 || strings.some(spellsARoute);
     });
     expect(unnamed).toEqual([]);
+  });
+});
+
+describe("what the start-up check asks of each Steam internal", () => {
+  /** What follows an entry's static part: a call, an element, or nothing. */
+  const after = (path: string): string =>
+    path.slice(staticPart(path).join(".").length, staticPart(path).join(".").length + 1);
+
+  it("costs the panel for none of them", () => {
+    // The type forbids it already; this says so for a list read without the
+    // compiler, as cut 3's script reads it (#2509 D3).
+    expect(STEAM_INTERNALS.filter((entry) => (entry.absenceCost as string) === "panel")).toEqual([]);
+  });
+
+  it("asks a member of what a call answers as a call, and a member of an element as a value", () => {
+    const wrong = STEAM_INTERNALS.filter(
+      (entry) =>
+        (after(entry.path) === "(" && entry.asked !== "call") || (after(entry.path) === "[" && entry.asked !== "read"),
+    );
+    expect(wrong.map((entry) => entry.path)).toEqual([]);
+  });
+
+  it("asks as a call exactly the typed internals declared as something to call", () => {
+    // Where the path ends at its static part, the declaration says whether the
+    // code calls it; a path naming what a call answers is held above.
+    const wrong = typed
+      .filter((entry) => after(entry.path) === "" && typeof entry.asked === "string")
+      .filter((entry) => (entry.asked === "call") !== reach.callable.has(entry.path));
+    expect(wrong.map((entry) => `${entry.path}: ${String(entry.asked)}`)).toEqual([]);
+  });
+
+  it("says why, for every internal it does not ask at start-up", () => {
+    const unexplained = STEAM_INTERNALS.filter(
+      (entry) => typeof entry.asked !== "string" && entry.asked.notAtStartUp.trim() === "",
+    );
+    expect(unexplained).toEqual([]);
+  });
+
+  it("marks as the dev build's exactly the internals only the desktop surface reaches", () => {
+    const filesOf = (entry: (typeof STEAM_INTERNALS)[number]): string[] => [
+      ...(entry.untypedIn ?? []),
+      ...(reach.reached.get(entry.path) ?? []),
+    ];
+    const wrong = STEAM_INTERNALS.filter((entry) => {
+      const files = filesOf(entry);
+      const onlyDesktop = files.length > 0 && files.every((file) => file.startsWith("desktop/"));
+      return onlyDesktop !== (entry.devBuildOnly === true);
+    });
+    expect(wrong.map((entry) => entry.path)).toEqual([]);
+  });
+
+  it("names a loss for every internal whose absence the reader sees, and none for a diagnostic one", () => {
+    const wrong = STEAM_INTERNALS.filter(
+      (entry) => (entry.absenceCost === "diagnostic") !== (entry.features.length === 0),
+    );
+    expect(wrong.map((entry) => entry.path)).toEqual([]);
+  });
+
+  it("groups alternatives only in twos or more, so no group stands for one internal", () => {
+    const sizes = new Map<string, number>();
+    for (const entry of STEAM_INTERNALS) {
+      if (entry.oneOf !== undefined) sizes.set(entry.oneOf, (sizes.get(entry.oneOf) ?? 0) + 1);
+    }
+    expect(sizes.size).toBeGreaterThan(0);
+    expect([...sizes].filter(([, size]) => size < 2)).toEqual([]);
+  });
+
+  it("uses every loss it can name, in one list or the other", () => {
+    const used = new Set([
+      ...STEAM_INTERNALS.flatMap((entry) => entry.features),
+      ...STEAM_LOOKUPS.flatMap((lookup) => lookup.features ?? []),
+    ]);
+    expect(Object.keys(STEAM_FEATURES).filter((feature) => !used.has(feature as keyof typeof STEAM_FEATURES))).toEqual(
+      [],
+    );
   });
 });

@@ -15,6 +15,8 @@ export interface SteamReach {
   readonly reached: ReadonlyMap<string, ReadonlySet<string>>;
   /** Every member `types/steam.d.ts` declares, as a path. */
   readonly declared: readonly string[];
+  /** The reached paths whose member is declared as something to call — a method, or a property of a function type. */
+  readonly callable: ReadonlySet<string>;
   /** The types holding a counted member that no route from Steam's roots reaches, by name. */
   readonly unrouted: ReadonlySet<string>;
   /** The files holding a cast of a window value to a type with no members to read — a `Record`, `unknown`. */
@@ -385,9 +387,23 @@ export function scanSteamReach(frontendDir: string): SteamReach {
   const pathOfCounted = (declaration: ts.Declaration): string | undefined =>
     isMember(declaration) && counts(declaration) ? pathOf(declaration) : undefined;
 
-  const reached = collectReached(sources, srcDir, checker, pathOfCounted);
+  const callable = new Set<string>();
+  const pathOfCountedCall = (declaration: ts.Declaration): string | undefined => {
+    const path = pathOfCounted(declaration);
+    const type = checker.getNonNullableType(checker.getTypeAtLocation(declaration));
+    if (path !== undefined && type.getCallSignatures().length > 0) callable.add(path);
+    return path;
+  };
+  const reached = collectReached(sources, srcDir, checker, pathOfCountedCall);
   const declared = collectDeclared(dts, pathOf);
-  return { reached, declared, unrouted, unreadableCastFiles: casts.unreadableFiles, sourceFiles: sources.length };
+  return {
+    reached,
+    declared,
+    callable,
+    unrouted,
+    unreadableCastFiles: casts.unreadableFiles,
+    sourceFiles: sources.length,
+  };
 }
 
 /**
