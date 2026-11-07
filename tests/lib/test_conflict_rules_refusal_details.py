@@ -62,9 +62,11 @@ class _Machine:
 
 
 async def _refusal(rules: ConflictRuleSet, **named: Any) -> Refused:
+    ran = False
     with pytest.raises(Refused) as refused:
         async with rules.hold("the_endpoint", **named):
-            pytest.fail("a refused block ran")
+            ran = True
+    assert not ran, "a refused block ran"
     return refused.value
 
 
