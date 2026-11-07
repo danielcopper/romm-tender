@@ -129,6 +129,9 @@ class ConflictRuleSet:
             refusal = self._folder_unreachable()
             if refusal is not None:
                 if details:
+                    # The folder reading builds a fresh refusal on every call
+                    # (TenderFolderService.unreachable_refusal), so rebinding
+                    # its details reaches no other caller.
                     refusal.details = {**refusal.details, **details}
                 raise refusal
         if migration and self._migration_pending():

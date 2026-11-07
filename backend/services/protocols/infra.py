@@ -400,10 +400,10 @@ class PruneRunClaim(Protocol):
 class ConflictRules(Protocol):
     """The conflict rules a use case checks at its entry, in their pinned order.
 
-    ``hold(label, update=…, folder=…, migration=…, sync=…, prune=…)`` raises the
-    ``Refused`` of the first named rule that holds, so the block does not run,
-    with the caller's ``refusal_details`` on every refusal it raises; with
-    ``prune`` the block runs under an operation named *label*. *label* is the
+    ``hold(label, update=…, folder=…, migration=…, sync=…, prune=…,
+    refusal_details=…)`` raises the ``Refused`` of the first named rule that
+    holds, carrying the caller's ``refusal_details``, so the block does not run;
+    with ``prune`` the block runs under an operation named *label*. *label* is the
     endpoint's name. ``hold_until_done`` holds an operation named *label*
     for detached work until *task* ends, and does not hold *task* itself; it
     checks no rule, so it is called inside the ``hold(..., prune=True)`` block

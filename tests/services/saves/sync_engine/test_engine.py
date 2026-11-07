@@ -2992,7 +2992,7 @@ class TestSyncPathsAbortWhenDeviceUnregisterable:
 
     The registration failure modelled here is a 200 whose body carries no device
     id: it leaves the device unregistered without a transport error, so no
-    reachability guard upstream of the device gate can account for the abort.
+    reachability guard upstream of the device-id entry can account for the abort.
     """
 
     @pytest.mark.asyncio

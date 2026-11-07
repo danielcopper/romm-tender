@@ -11,9 +11,9 @@ Endpoints returning a plain `dict` that can fail use `{success: False, reason: E
 reason is a string outside it — the `reason` of a named refusal class where a caller catches it or the panel branches on
 it (`config_error` is `NotConfigured`, `not_installed` is `NotInstalled`), otherwise `Refused`'s first argument
 (`sync_disabled`, …). A refusal's details travel beside `reason` and `message`; a payload's empty defaults do not,
-because the panel reads a payload only on success — except that every save-sync refusal carries `synced` — `0`, or what
-a stopped sync had moved by then — and the sweep's also `conflicts=0` (#2205 D2). A partial failure's extras are what
-was done. Where a refusal is raised, its reason is a literal, a module constant or a `StrEnum` value — what
+because the panel reads a payload only on success — except that every save-sync refusal carries `synced` (`0`, or what a
+stopped sync had moved by then), and the sweep's also `conflicts=0` (#2205 D2). A partial failure's extras are what was
+done. Where a refusal is raised, its reason is a literal, a module constant or a `StrEnum` value — what
 `scripts/check_reason_parity.py` reads; anything else fails it. Transport failures collapse onto `SERVER_UNREACHABLE`,
 and so do the answers nothing proves RomM gave — a proxy's 5xx, an unproven 404; an answer RomM or a proxy gave with a
 4xx answers its own reason or `UNKNOWN`, a 5xx RomM reports itself `server_error`, and a 429 `rate_limited`
