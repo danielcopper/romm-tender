@@ -2,6 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act, within } from "@testing-library/react";
 import { PlayButton } from "./PlayButton";
+import { DiscSelector } from "./DiscSelector";
 import * as gameDetailStore from "../../utils/gameDetailStore";
 import * as downloadStore from "../../utils/downloadStore";
 import * as sessionManager from "../../utils/sessionManager";
@@ -9,6 +10,7 @@ import * as backend from "../../api/backend";
 import * as toast from "../../utils/toast";
 import { setStrandedAnswer } from "../../test-utils/stranded-panel";
 import { emitHostEvent } from "../../test-utils/host-event-bus";
+import { throbberIn } from "../../test-utils/throbber";
 import { stubAppStore } from "../../test-utils/steamStubs";
 import type { GameDetailState } from "../../utils/gameDetailStore";
 import type { DownloadItem, GameLaunch, PreLaunchSyncStartedEvent, SaveStatus, SyncConflict } from "../../types";
@@ -19,6 +21,21 @@ vi.mock("../../utils/gameDetailStore", () => ({
   refreshSaveStatus: vi.fn(),
   recheckStart: vi.fn(),
 }));
+
+/** How many times the selector stand-in below has mounted. */
+const selectorMounts = vi.hoisted(() => ({ count: 0 }));
+
+vi.mock("./DiscSelector", async () => {
+  const { useEffect } = await import("react");
+  return {
+    DiscSelector: vi.fn(() => {
+      useEffect(() => {
+        selectorMounts.count += 1;
+      }, []);
+      return <div data-testid="disc-selector" />;
+    }),
+  };
+});
 
 vi.mock("../../utils/downloadStore", () => ({
   useDownloads: vi.fn(),
@@ -888,6 +905,155 @@ describe("PlayButton", () => {
       vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ fileMissingAt: "/roms/snes/smw.sfc" }));
       render(<PlayButton appId={APP_ID} />);
       expect(placeholder(/^FILE MISSING$/)).toHaveAttribute("title", "/roms/snes/smw.sfc");
+    });
+  });
+
+  describe("the disc and version selector", () => {
+    const selectorProps = () => vi.mocked(DiscSelector).mock.lastCall?.[0];
+
+    it("sits beside PLAY, asking through the button's dialogs", () => {
+      render(<PlayButton appId={APP_ID} />);
+
+      const container = screen.getByRole("button", { name: /^PLAY/ }).closest(".tender-desktop-play-btn-container");
+      expect(within(container as HTMLElement).getByTestId("disc-selector")).toBeInTheDocument();
+      expect(selectorProps()).toEqual({
+        appId: APP_ID,
+        ask: expect.any(Function),
+        fileMissing: false,
+        pressUnderWay: false,
+        onSwitchingChange: expect.any(Function),
+      });
+    });
+
+    it("sits beside STOP while the game runs", () => {
+      vi.mocked(sessionManager.isSessionActive).mockReturnValue(true);
+      render(<PlayButton appId={APP_ID} />);
+
+      expect(screen.getByRole("button", { name: /^STOP/ })).toBeInTheDocument();
+      expect(screen.getByTestId("disc-selector")).toBeInTheDocument();
+    });
+
+    it("asks its questions in the button's dialog host", () => {
+      render(<PlayButton appId={APP_ID} />);
+      const ask = selectorProps()!.ask;
+
+      act(() => {
+        void ask("dismissed", () => <div role="dialog" aria-label="from the selector" />);
+      });
+
+      expect(screen.getByRole("dialog", { name: "from the selector" })).toBeInTheDocument();
+    });
+
+    it("stays mounted while the button moves from PLAY to STOP", () => {
+      selectorMounts.count = 0;
+      render(<PlayButton appId={APP_ID} />);
+      expect(screen.getByRole("button", { name: /^PLAY/ })).toBeInTheDocument();
+
+      sessionChanged(true, 100);
+
+      expect(screen.getByRole("button", { name: /^STOP/ })).toBeInTheDocument();
+      expect(selectorMounts.count).toBe(1);
+    });
+
+    it("is told a press is under way while its check runs", async () => {
+      vi.mocked(backend.probeReachability).mockReturnValue(new Promise(() => {}));
+      render(<PlayButton appId={APP_ID} />);
+
+      pressPlay();
+
+      await screen.findByRole("button", { name: /PREPARING\.\.\./ });
+      expect(selectorProps()?.pressUnderWay).toBe(true);
+    });
+
+    it("is told the press is over once the start is handed to Steam", async () => {
+      render(<PlayButton appId={APP_ID} />);
+      pressPlay();
+      await waitFor(() => expect(mockRunGame).toHaveBeenCalled());
+
+      expect(screen.getByRole("button", { name: /LAUNCHING\.\.\./ })).toBeDisabled();
+      expect(selectorProps()?.pressUnderWay).toBe(false);
+    });
+
+    it("disables PLAY and RESOLVE CONFLICT while the selector is switching", () => {
+      const { rerender } = render(<PlayButton appId={APP_ID} />);
+      expect(screen.getByRole("button", { name: /^PLAY/ })).toBeEnabled();
+
+      act(() => selectorProps()!.onSwitchingChange(true));
+      expect(screen.getByRole("button", { name: /^PLAY/ })).toBeDisabled();
+
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(
+        detailState({
+          saveSyncEnabled: true,
+          saveStatus: { rom_id: 100, files: [], conflicts: [CONFLICT] } as unknown as SaveStatus,
+        }),
+      );
+      rerender(<PlayButton appId={APP_ID} />);
+      expect(screen.getByRole("button", { name: /RESOLVE CONFLICT/ })).toBeDisabled();
+
+      act(() => selectorProps()!.onSwitchingChange(false));
+      expect(screen.getByRole("button", { name: /RESOLVE CONFLICT/ })).toBeEnabled();
+    });
+
+    it("draws the throbber in PLAY's triangle's place, with no pointer, while the selector is switching", () => {
+      render(<PlayButton appId={APP_ID} />);
+      const play = () => screen.getByRole("button", { name: /^PLAY/ });
+      expect(throbberIn(play())).toBeNull();
+      expect(play().querySelectorAll("svg")).toHaveLength(1);
+      expect(play()).toHaveStyle({ cursor: "pointer" });
+
+      act(() => selectorProps()!.onSwitchingChange(true));
+      expect(throbberIn(play())).not.toBeNull();
+      expect(play().querySelectorAll("svg")).toHaveLength(1);
+      expect(play()).toHaveStyle({ cursor: "default" });
+
+      act(() => selectorProps()!.onSwitchingChange(false));
+      expect(throbberIn(play())).toBeNull();
+      expect(play()).toHaveStyle({ cursor: "pointer" });
+    });
+
+    it("draws the throbber beside RESOLVE CONFLICT, on one line and with no pointer, while the selector is switching", () => {
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(
+        detailState({
+          saveSyncEnabled: true,
+          saveStatus: { rom_id: 100, files: [], conflicts: [CONFLICT] } as unknown as SaveStatus,
+        }),
+      );
+      render(<PlayButton appId={APP_ID} />);
+      const resolve = () => screen.getByRole("button", { name: /RESOLVE CONFLICT/ });
+      expect(throbberIn(resolve())).toBeNull();
+      expect(resolve()).toHaveStyle({ cursor: "pointer" });
+
+      act(() => selectorProps()!.onSwitchingChange(true));
+      expect(throbberIn(resolve())).not.toBeNull();
+      expect(resolve()).toHaveStyle({ cursor: "default", whiteSpace: "nowrap" });
+
+      act(() => selectorProps()!.onSwitchingChange(false));
+      expect(throbberIn(resolve())).toBeNull();
+      expect(resolve()).toHaveStyle({ cursor: "pointer" });
+    });
+
+    it("keeps a refused PLAY's cursor while the selector is switching, and its throbber", () => {
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(
+        detailState({
+          emulatorStart: { state: "cannot_start", reason: "not_installed", entry: "DuckStation" },
+          emulators: [{ label: "DuckStation" }] as never,
+          activeCoreLabel: "DuckStation",
+        }),
+      );
+      render(<PlayButton appId={APP_ID} />);
+
+      act(() => selectorProps()!.onSwitchingChange(true));
+
+      const play = screen.getByRole("button", { name: /^PLAY/ });
+      expect(throbberIn(play)).not.toBeNull();
+      expect(play).toHaveStyle({ cursor: "not-allowed" });
+    });
+
+    it("is told the file is missing", () => {
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ fileMissingAt: "/roms/snes/smw.sfc" }));
+      render(<PlayButton appId={APP_ID} />);
+
+      expect(selectorProps()?.fileMissing).toBe(true);
     });
   });
 

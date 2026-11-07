@@ -16,7 +16,9 @@ import type { SaveStatus } from "../../types";
 import type { AskDialog } from "./dialogs/askDialog";
 import { useDialogHost } from "./dialogs/useDialogHost";
 import { CONTAINER_STYLE, BUTTON_GROUP_STYLE, BUTTON_BASE_STYLE } from "./styles";
+import { DiscSelector } from "./DiscSelector";
 import { PlayStateButton } from "./PlayStateButton";
+import { SvgThrobber } from "./SvgThrobber";
 import { usePlayLaunch, type PressState } from "./usePlayLaunch";
 
 interface PlayButtonProps {
@@ -50,6 +52,7 @@ const CONFLICT_BUTTON_STYLE: CSSProperties = {
   borderRadius: "2px",
   background: "linear-gradient(90deg, #d4a017 0%, #b8860b 100%)",
   fontSize: "13px",
+  whiteSpace: "nowrap",
 };
 
 const PLACEHOLDER_BUTTON_STYLE: CSSProperties = {
@@ -80,6 +83,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
   const stranded = useStrandedAnswer() !== null;
 
   const [pressState, setPressState] = useState<PressState | null>(null);
+  const [switching, setSwitching] = useState(false);
   // The last session start or stop seen for a ROM, whatever made it. A start
   // made elsewhere (Steam's own Play, a context menu, a `steam://` link) changes
   // nothing else this button renders from, so the event is held here.
@@ -206,9 +210,11 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
           <button
             type="button"
             className="tender-desktop-btn-conflict"
-            style={CONFLICT_BUTTON_STYLE}
+            disabled={switching}
+            style={switching ? { ...CONFLICT_BUTTON_STYLE, cursor: "default" } : CONFLICT_BUTTON_STYLE}
             onClick={() => detach(handleResolveConflictClick())}
           >
+            {switching && <SvgThrobber />}
             RESOLVE CONFLICT
           </button>
         </div>
@@ -222,6 +228,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
         pressState={null}
         refusal={playRefusal}
         checkFailed={startCheckFailed}
+        switching={switching}
         onPlay={() => detach(handlePlayClick())}
       />
     );
@@ -230,6 +237,13 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
   return (
     <div className="tender-desktop-play-btn-container" style={CONTAINER_STYLE}>
       {renderButtonGroup()}
+      <DiscSelector
+        appId={appId}
+        ask={ask}
+        fileMissing={detail.fileMissingAt !== null}
+        pressUnderWay={pressState !== null && pressState !== "launching"}
+        onSwitchingChange={setSwitching}
+      />
     </div>
   );
 };

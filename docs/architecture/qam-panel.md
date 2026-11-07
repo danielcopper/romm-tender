@@ -865,12 +865,18 @@ hide exactly that. What decides is what the reader has to see while typing, not 
 ### Waiting
 
 **Every state in which the panel waits on work shows the throbber** — the spinning ring Play shows while it prepares a
-start — left of the label that says what is under way; the label keeps its words. One module draws it,
-`frontend/src/shared/Throbber.tsx`: `ThrobberLabel` beside a label, which leaves the label a text child of its control
-so that a button's text and accessible name stay the label's alone, and `Throbber` by itself where a place lays it out —
-a loading row, a count slot, a picker's grid. Two places draw the `romm-throbber` span themselves, both on the game
-page, where the play row's sheet is present: Play's own throbbers, and the line under an emulator menu entry while
-whether that emulator can start the game is still being read (`frontend/src/utils/emulatorMenu.tsx`).
+start — left of the label that says what is under way; the label keeps its words. One module draws it for the panel and
+the game page in Big Picture, `frontend/src/shared/Throbber.tsx`: `ThrobberLabel` beside a label, which leaves the label
+a text child of its control so that a button's text and accessible name stay the label's alone, and `Throbber` by itself
+where a place lays it out — a loading row, a count slot, a picker's grid. Two places draw the `romm-throbber` span
+themselves, both on the game page, where the play row's sheet is present: Play's own throbbers, and the line under an
+emulator menu entry while whether that emulator can start the game is still being read
+(`frontend/src/utils/emulatorMenu.tsx`).
+
+The desktop client's disc and version selector, PLAY and RESOLVE CONFLICT (dev build only) show the same ring while a
+version switch is under way, without that class: `frontend/src/desktop/gameview/SvgThrobber.tsx` turns an SVG with SMIL,
+because the class's keyframes would be a stylesheet on Steam's page outside the restoration ledger
+([desktop-dom-architecture.md](desktop-dom-architecture.md)).
 
 The throbber puts its rules into the document it is drawn in (`Throbber.tsx`, with
 `frontend/src/utils/throbberStyle.ts`), because the panel's code runs in a different document from the ones it draws
@@ -901,9 +907,9 @@ Where it does not stand:
   answered.
 - **On the "Working on _X_" line of a platform pane whose platform is not the busy one**: the throbber stays on the pane
   whose run it is ([Library](#library)).
-- **In the desktop client's save conflict dialog** (dev build only): its spin would need a stylesheet on Steam's page
-  outside the restoration ledger ([desktop-dom-architecture.md](desktop-dom-architecture.md)), and no shipped bundle
-  carries that surface.
+- **In the desktop client's save conflict dialog** (dev build only): `Throbber`'s spin would need a stylesheet on
+  Steam's page outside the restoration ledger, as the selector's paragraph above says; no shipped bundle carries that
+  surface, and the SMIL ring has not been put there.
 - **In a tooltip** — the platform list's "Checking this platform's BIOS files…", the core picker's "Reading the
   emulators for this platform…" — **and on a short settings write** — an emulator source's switch, Tender's folder.
 
