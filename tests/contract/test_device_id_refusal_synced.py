@@ -103,17 +103,18 @@ async def test_the_sync_before_a_start_answers_the_refusal_with_nothing_synced(h
     assert _nothing_listed(harness)
 
 
-# The toast the session's end shows for each failure: the refusal's own message.
-_TOAST_FOR = {
-    "unreachable": "Server unreachable — check your URL and ensure RomM is running",
-    "refused": "Device not registered with RomM",
-    "answered_without_an_id": "Device not registered with RomM",
-}
+_UNREACHABLE_TOAST = "Server unreachable — check your URL and ensure RomM is running"
+_NOT_REGISTERED_TOAST = "Device not registered with RomM"
 
 
+# The toast the session's end shows for each failure is the refusal's own message.
 @pytest.mark.parametrize(
     ("registration_fails", "toast"),
-    [pytest.param(param.values[0], _TOAST_FOR[param.id], id=param.id) for param in _REGISTRATION_FAILURES],
+    [
+        pytest.param(_raises(RommConnectionError("connection refused")), _UNREACHABLE_TOAST, id="unreachable"),
+        pytest.param(_raises(RommForbiddenError("HTTP 403: Forbidden")), _NOT_REGISTERED_TOAST, id="refused"),
+        pytest.param(_answers_without_an_id, _NOT_REGISTERED_TOAST, id="answered_without_an_id"),
+    ],
 )
 async def test_the_sync_after_a_game_answers_the_refusal_with_nothing_synced(harness, registration_fails, toast):
     _game(harness)

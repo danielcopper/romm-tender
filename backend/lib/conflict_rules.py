@@ -129,7 +129,7 @@ class ConflictRuleSet:
             refusal = self._folder_unreachable()
             if refusal is not None:
                 if details:
-                    raise Refused(refusal.reason, refusal.message, **refusal.details, **details)
+                    refusal.details = {**refusal.details, **details}
                 raise refusal
         if migration and self._migration_pending():
             raise Refused("blocked_by_migration", MIGRATION_MESSAGE, **details)

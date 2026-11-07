@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 if TYPE_CHECKING:
     import asyncio
-    from collections.abc import Awaitable, Callable, Sequence
+    from collections.abc import Awaitable, Callable, Mapping, Sequence
     from contextlib import AbstractAsyncContextManager
 
     from domain.controller_focus import FocusedWindow, RunningSteam, XDisplay
@@ -401,9 +401,10 @@ class ConflictRules(Protocol):
     """The conflict rules a use case checks at its entry, in their pinned order.
 
     ``hold(label, update=…, folder=…, migration=…, sync=…, prune=…)`` raises the
-    ``Refused`` of the first named rule that holds, so the block does not run;
-    with ``prune`` the block runs under an operation named *label*. *label* is
-    the endpoint's name. ``hold_until_done`` holds an operation named *label*
+    ``Refused`` of the first named rule that holds, so the block does not run,
+    with the caller's ``refusal_details`` on every refusal it raises; with
+    ``prune`` the block runs under an operation named *label*. *label* is the
+    endpoint's name. ``hold_until_done`` holds an operation named *label*
     for detached work until *task* ends, and does not hold *task* itself; it
     checks no rule, so it is called inside the ``hold(..., prune=True)`` block
     that started *task*.
@@ -430,6 +431,7 @@ class ConflictRules(Protocol):
         migration: bool = False,
         sync: bool = False,
         prune: bool = False,
+        refusal_details: Mapping[str, Any] | None = None,
     ) -> AbstractAsyncContextManager[None]: ...
 
     def hold_start(
