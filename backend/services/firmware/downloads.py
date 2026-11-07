@@ -6,8 +6,8 @@ date in every enabled source (:meth:`FirmwareStore.do_update_links`), so a file
 reaches each emulator that wants it and its source does not state is not
 installed, at the place the resolver names. No download lands outside the
 store. A library file fills a requirement by its content
-(:mod:`domain.firmware_match`), and only one RomM lists under the platform's own
-folder does (:func:`~domain.firmware_rows.platform_library`).
+(:mod:`domain.firmware_match`). Only a file RomM lists under the platform's own
+folder is fetched (:func:`~domain.firmware_rows.platform_library`).
 """
 
 from __future__ import annotations
@@ -25,7 +25,6 @@ from domain.firmware_rows import (
     folder_entries,
     library_file,
     library_match,
-    platform_library,
     store_copy,
 )
 from lib.errors import Refused, RommApiError, romm_error_log_level
@@ -112,8 +111,7 @@ class FirmwareDownloader:
         one does. With *rom_id*, the links follow the system the game's install
         record holds.
         """
-        firmware_list = await self._firmware_list()
-        rows = platform_library(firmware_list, platform_folder)
+        rows = await self._platform_firmware(platform_folder)
         return await self._fetch_and_link(
             platform_slug, platform_folder, rows, await self.platform_system(platform_slug, rom_id)
         )
@@ -133,8 +131,7 @@ class FirmwareDownloader:
         ``not_in_library`` refusal, never a silent no-op. A single file's
         refusal or RomM error reaches the caller as it stands.
         """
-        firmware_list = await self._firmware_list()
-        named = [fw for fw in platform_library(firmware_list, platform_folder) if fw.get("file_name") == file_name]
+        named = [fw for fw in await self._platform_firmware(platform_folder) if fw.get("file_name") == file_name]
         exact = [fw for fw in named if firmware_id is not None and fw.get("id") == firmware_id]
         wanted = exact or named
         if not wanted:
@@ -167,9 +164,9 @@ class FirmwareDownloader:
         system = await self.platform_system(platform_slug, rom_id)
         catalogue = await self._loop.run_in_executor(None, self._demand.platform_catalogue, system)
         identity = await self._shown_emulator(catalogue, system, platform_slug, emulator)
-        firmware_list = await self._firmware_list()
+        platform_firmware = await self._platform_firmware(platform_folder)
         rows = await self._loop.run_in_executor(
-            None, self._required_files, catalogue, platform_folder, identity, firmware_list
+            None, self._required_files, catalogue, platform_folder, identity, platform_firmware
         )
         return await self._fetch_and_link(platform_slug, platform_folder, rows, system, what="required firmware files")
 
@@ -237,22 +234,19 @@ class FirmwareDownloader:
         catalogue: FirmwareCatalogue,
         platform_folder: str,
         identity: str | None,
-        firmware_list: list[dict[str, Any]],
+        platform_firmware: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        """The library files "Download required" fetches for *identity*. Blocking: it looks at each place.
+        """The files of *platform_firmware* "Download required" fetches for *identity*. Blocking: looks at each place.
 
-        Only the files RomM lists under *platform_folder* are drawn on
-        (:func:`~domain.firmware_rows.platform_library`). A file requirement's
-        library file, where the store holds no copy and nothing lies at its
-        place. A folder the emulator requires and lists, whose verdict is not
-        met: its alphabetically first recognised library file, unless the store
-        already holds one it recognises.
+        A file requirement's library file, where the store holds no copy and
+        nothing lies at its place. A folder the emulator requires and lists,
+        whose verdict is not met: its alphabetically first recognised library
+        file, unless the store already holds one it recognises.
         """
         placements = catalogue.placements_for(identity)
         groups = catalogue.groups_for(identity)
-        own = platform_library(firmware_list, platform_folder)
-        library = [library_file(fw) for fw in own]
-        by_file = dict(zip(library, own, strict=True))
+        library = [library_file(fw) for fw in platform_firmware]
+        by_file = dict(zip(library, platform_firmware, strict=True))
         copies = self._store.do_copies(self._store.do_read_records(), platform_folder)
         wanted: dict[int | None, dict[str, Any]] = {}
         for placement in placements.values():
@@ -282,9 +276,9 @@ class FirmwareDownloader:
             return None
         return next((file for file in library if file.firmware_id == match["firmware_id"]), None)
 
-    async def _firmware_list(self) -> list[dict[str, Any]]:
-        """The whole library's firmware; a listing that could not be read propagates as it was raised."""
-        return await self._loop.run_in_executor(None, self._listing.get_firmware_list)
+    async def _platform_firmware(self, platform_folder: str) -> list[dict[str, Any]]:
+        """The firmware RomM lists under *platform_folder*; a listing that could not be read propagates as raised."""
+        return await self._loop.run_in_executor(None, self._listing.get_platform_firmware_list, platform_folder)
 
     async def _shown_emulator(
         self, catalogue: FirmwareCatalogue, system: str | None, platform_slug: str, emulator: str | None

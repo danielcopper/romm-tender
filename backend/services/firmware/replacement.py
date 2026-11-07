@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.firmware_match import MATCHED_CONTENT, fills
 from domain.firmware_places import is_own_link, place_refusal
-from domain.firmware_rows import LibraryFirmware, library_file, library_match, platform_library
+from domain.firmware_rows import LibraryFirmware, library_file, library_match
 from lib.errors import Refused
 
 if TYPE_CHECKING:
@@ -83,10 +83,10 @@ class FirmwareReplacer:
         answers as one that did not, naming the backup, where the file stands
         too.
         """
-        firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
-        firmware, source = await self._loop.run_in_executor(
-            None, self._replaceable, system, platform_folder, place, firmware_list
+        platform_firmware = await self._loop.run_in_executor(
+            None, self._listing.get_platform_firmware_list, platform_folder
         )
+        firmware, source = await self._loop.run_in_executor(None, self._replaceable, system, place, platform_firmware)
         backup = await self._loop.run_in_executor(
             None, self._replace_io, platform_slug, platform_folder, place, firmware, source
         )
@@ -98,16 +98,11 @@ class FirmwareReplacer:
         return {"success": True, "backup_path": backup, **links.payload(), "placed": links.placed + 1}
 
     def _replaceable(
-        self, system: str | None, platform_folder: str, place: str, firmware_list: list[dict[str, Any]]
+        self, system: str | None, place: str, platform_firmware: list[dict[str, Any]]
     ) -> tuple[dict[str, Any], str]:
-        """The library file that replaces what lies at *place*, asked again off a fresh reading. Blocking.
-
-        Only a file RomM lists under *platform_folder* replaces it
-        (:func:`~domain.firmware_rows.platform_library`).
-        """
+        """The library file of *platform_firmware* that replaces what lies at *place*, off a fresh reading. Blocking."""
         catalogue = self._demand.platform_catalogue(system)
-        own = platform_library(firmware_list, platform_folder)
-        library = [library_file(fw) for fw in own]
+        library = [library_file(fw) for fw in platform_firmware]
         found = _placement_at(catalogue, place)
         if found is None:
             raise _not_replaceable(place)
@@ -128,7 +123,7 @@ class FirmwareReplacer:
         file = _proven_copy(placement, place, library)
         if file is None:
             raise _not_replaceable(place)
-        return next(fw for fw in own if fw.get("id") == file.firmware_id), catalogue.source or ""
+        return next(fw for fw in platform_firmware if fw.get("id") == file.firmware_id), catalogue.source or ""
 
     def _replace_io(
         self, platform_slug: str, platform_folder: str, place: str, firmware: dict[str, Any], source: str

@@ -43,7 +43,7 @@ from domain.bios_status import (
 from domain.emulator_commands import options_to_payload, resolve_firmware_option
 from domain.emulator_pick import pick_for, source_kind
 from domain.firmware_groups import console_regions_of, judge_groups
-from domain.firmware_rows import leaves_its_folder, library_file, platform_library
+from domain.firmware_rows import leaves_its_folder, library_file
 from domain.platform_names import PLATFORM_NAMES_KEY, decode_platform_names
 from services.firmware.emulator_answers import (
     EMULATOR_FIELDS,
@@ -130,7 +130,7 @@ class FirmwareStatusReader:
         return kept
 
     def _platform_rows(
-        self, system: str | None, platform_folder: str, firmware_list: list[dict[str, Any]], emulator: str | None
+        self, system: str | None, platform_folder: str, platform_firmware: list[dict[str, Any]], emulator: str | None
     ) -> tuple[FirmwareCatalogue, list[BiosFileEntry], dict[str, list[BiosFileEntry]]]:
         """One platform's demand and its whole row set, in one worker hop. Blocking.
 
@@ -150,7 +150,7 @@ class FirmwareStatusReader:
         inputs = RowInputs(
             catalogue=catalogue,
             platform_folder=platform_folder,
-            library=tuple(library_file(fw) for fw in self._storable(platform_library(firmware_list, platform_folder))),
+            library=tuple(library_file(fw) for fw in self._storable(platform_firmware)),
             copies=tuple(self._store.do_copies(records, platform_folder)),
             owned=self._store.do_owned(records),
             files=self._firmware_file_store,
@@ -376,14 +376,15 @@ class FirmwareStatusReader:
             f["deletable_count"] = 1 if name is not None else 0
 
     async def _enrich_platform(
-        self, plat: dict[str, Any], folder: str, synced_slugs, firmware_list, records: list[BiosFile]
+        self, plat: dict[str, Any], folder: str, synced_slugs, platform_firmware, records: list[BiosFile]
     ) -> None:
         """Add emulator info, the rows and the aggregates to one platform entry, whose store is *folder*'s.
 
         The core read seams key by the resolved RetroDECK ``system`` (ADR-0010
         §2), so each entry's RomM platform slug is normalized before the
-        ``get_emulator_options`` call; ``has_games`` and the library's files stay
-        on the RomM slug (their own vocabulary). ``active_core`` and
+        ``get_emulator_options`` call; ``has_games`` stays on the RomM slug (its
+        own vocabulary); the library's files are the ones RomM lists under
+        *folder*. ``active_core`` and
         ``active_core_label`` are the two projections of ONE pick
         (:meth:`_platform_emulator`), so the pane cannot name one emulator and
         judge by another; ``active_core`` is ``None`` only where the pick could
@@ -400,9 +401,8 @@ class FirmwareStatusReader:
 
         **The demand is read per platform**, because a standalone emulator's
         declarations belong to a platform only by way of the emulators ES-DE
-        offers for it. *firmware_list* is the whole library's listing; only
-        the files RomM keeps under *folder* make the rows
-        (:func:`~domain.firmware_rows.platform_library`).
+        offers for it. *platform_firmware* is the listing RomM keeps under
+        *folder* (:meth:`FirmwareListing.get_platform_firmware_list`).
         """
         slug = plat["platform_slug"]
         platform = await self._loop.run_in_executor(None, self._platform_systems.platform_system, slug)
@@ -418,7 +418,7 @@ class FirmwareStatusReader:
         plat["emulator_source"] = options["source"]
         plat["platform_system"] = platform.payload()
         catalogue, files, others = await self._loop.run_in_executor(
-            None, self._platform_rows, system, folder, firmware_list, identity
+            None, self._platform_rows, system, folder, platform_firmware, identity
         )
         plat["files"] = sorted(
             (_overview_payload(entry) for entry in files),
@@ -495,16 +495,18 @@ class FirmwareStatusReader:
         tells the two apart, and dropping either would leave the page to guess.
         """
         try:
-            firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
+            platform_firmware = await self._loop.run_in_executor(
+                None, self._listing.get_platform_firmware_list, platform_folder
+            )
         except Exception as e:
             self._logger.warning(f"Answering for {platform_slug} without the server listing: {e}")
-            firmware_list = []
+            platform_firmware = []
         # After the listing: a fresh read moves older records to their platform,
         # and the count must see them where they now are.
         synced_slugs, records = await self._loop.run_in_executor(None, self._read_status_inputs)
 
         plat: dict[str, Any] = {"platform_slug": platform_slug}
-        await self._enrich_platform(plat, platform_folder, synced_slugs, firmware_list, records)
+        await self._enrich_platform(plat, platform_folder, synced_slugs, platform_firmware, records)
         return {"success": True, "platform": plat}
 
     def _read_status_inputs(self) -> tuple[set[str], list[BiosFile]]:
@@ -590,14 +592,16 @@ class FirmwareStatusReader:
 
         server_offline = False
         try:
-            firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
+            platform_firmware = await self._loop.run_in_executor(
+                None, self._listing.get_platform_firmware_list, platform_folder
+            )
         except Exception as e:
             self._logger.warning(f"Answering BIOS status without the server listing: {e}")
-            firmware_list = []
+            platform_firmware = []
             server_offline = True
 
         catalogue, rows, others = await self._loop.run_in_executor(
-            None, self._platform_rows, system, platform_folder, firmware_list, identity
+            None, self._platform_rows, system, platform_folder, platform_firmware, identity
         )
         files = tuple(rows)
         groups = judge_groups(catalogue.groups_for(identity), console_regions_of(rom_regions))

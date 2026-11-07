@@ -40,7 +40,10 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class LibraryFirmware(FirmwareFile):
-    """One firmware file the RomM library lists: its RomM id and the platform RomM files it under."""
+    """One firmware file the RomM library lists.
+
+    Its RomM id, its size, and the slug of the platform RomM files it under.
+    """
 
     firmware_id: int | None = None
     platform_slug: str = ""

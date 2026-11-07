@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.firmware_cache import FirmwareCacheEntry
 from domain.firmware_platforms import library_firmware
+from domain.firmware_rows import platform_library
 
 if TYPE_CHECKING:
     import logging
@@ -153,6 +154,15 @@ class FirmwareListing:
             raise
         self._refile(platforms, result)
         return result
+
+    def get_platform_firmware_list(self, platform_folder: str) -> list[dict[str, Any]]:
+        """Return the firmware RomM lists under *platform_folder* (:func:`~domain.firmware_rows.platform_library`).
+
+        The only listing a platform's rows, downloads and replacements read. It
+        is a slice of :meth:`get_firmware_list`, so it is cached, falls back and
+        raises the same way.
+        """
+        return platform_library(self.get_firmware_list(), platform_folder)
 
     def _refile(self, platforms: list[dict[str, Any]], rows: list[dict[str, Any]]) -> None:
         """Move Tender's older entries to their platforms; a failure costs that move, never the listing."""
