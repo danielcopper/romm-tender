@@ -16,9 +16,11 @@
 /**
  * The three property names Steam's app-details factory carries.
  *
- * Property names survive Steam's minification and local identifiers do not, so
- * these three are the only stable handle on the module: its id and its export
- * names are both minifier output and change with every Steam build. Matching a
+ * Property names are Valve's own and survive Steam's minification where local
+ * identifiers do not, so these three are the handle on the module: its id and
+ * its export names are bundler output, which move when the module changes —
+ * not with every Steam build, but on no promise either (the rule for export
+ * names is on `utils/deckyUiInternals.ts`'s `ControllerGlyph`). Matching a
  * number instead would also match SVG path coordinates.
  */
 const APP_DETAILS_MARKS = ["renderFunc", "AppDetailsOverviewPanel", "InnerContainer"] as const;

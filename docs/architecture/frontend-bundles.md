@@ -159,21 +159,22 @@ surface is [#831](https://github.com/danielcopper/romm-tender/issues/831), and n
 **Whether every search answered and whether the panel may mount are two questions**, and each entry states which one it
 bears on through what its absence costs: the `panel`, a whole `feature` outside it, only its `appearance`, or only a
 `diagnostic`. Blocking is the status quo, which costs no evidence to stay at; moving a name off it is a decision taken
-per name, against each of its consumers. `ControllerGlyph` costs appearance — `bigpicture/layout/WidePage.tsx` is its
-one consumer and already draws `‹ Back` where the glyph would be — and so does `toastClasses`, whose every read is
-optional, leaving a toast that says everything it says in an unstyled box. `playSectionClasses` costs a diagnostic: its
-one read in the program is inside `gameDetailPatch.tsx`'s one-shot `dumpTree`, which already prints `UNDEFINED` where
-the class name would go, so nothing a user can see changes at all. `ToastRenderer`, `NotificationStore` and
-`ErrorBoundary` cost a feature: without any one of them no toast appears at all, and every page, every sync and every
-download is untouched, and the [notice on Main](qam-panel.md#notices-and-homes) names Tender's notifications among what
-does not work. `AppDetailsRoute` and `appDetailsClasses` cost a feature for the same shape of reason on the other
-surface: the panel renders whole and [Steam's game page](#tenders-section-on-steams-game-page) carries no Tender
-section. So does `QuickAccessMenuBrowserView`, the module Steam draws its Quick Access menu from and Tender's entry is
-installed into (`qam/installEntry.tsx`, the search in `utils/deckyUiInternals.ts`): without it the panel is built and
-cannot be reached, while the game page's section, the launch check and the save sync around a game still run — the
-fallback page would take those away and be just as unreachable. `ReactClient`, the desktop surface's search for React's
-client module (`desktop/desktopWindow.ts`), costs a feature too, and is in the list only in the build that carries that
-surface ([the desktop dev build](#the-desktop-dev-build-dev-build-only)).
+per name, against each of its consumers. `ControllerGlyph` costs appearance — both its consumers draw something where
+the glyph would be, `bigpicture/layout/WidePage.tsx`'s Back chip `‹ Back` and `bigpicture/EmulatorSelector.tsx` a key
+box naming L2 or R2 — and so does `toastClasses`, whose every read is optional, leaving a toast that says everything it
+says in an unstyled box. `playSectionClasses` costs a diagnostic: its one read in the program is inside
+`gameDetailPatch.tsx`'s one-shot `dumpTree`, which already prints `UNDEFINED` where the class name would go, so nothing
+a user can see changes at all. `ToastRenderer`, `NotificationStore` and `ErrorBoundary` cost a feature: without any one
+of them no toast appears at all, and every page, every sync and every download is untouched, and the
+[notice on Main](qam-panel.md#notices-and-homes) names Tender's notifications among what does not work.
+`AppDetailsRoute` and `appDetailsClasses` cost a feature for the same shape of reason on the other surface: the panel
+renders whole and [Steam's game page](#tenders-section-on-steams-game-page) carries no Tender section. So does
+`QuickAccessMenuBrowserView`, the module Steam draws its Quick Access menu from and Tender's entry is installed into
+(`qam/installEntry.tsx`, the search in `utils/deckyUiInternals.ts`): without it the panel is built and cannot be
+reached, while the game page's section, the launch check and the save sync around a game still run — the fallback page
+would take those away and be just as unreachable. `ReactClient`, the desktop surface's search for React's client module
+(`desktop/desktopWindow.ts`), costs a feature too, and is in the list only in the build that carries that surface
+([the desktop dev build](#the-desktop-dev-build-dev-build-only)).
 
 **Only one of the four costs decides anything.** `checkSteamModules`'s `!== "panel"` decides whether the panel mounts;
 `feature`, `appearance` and `diagnostic` are read only to word a miss. They stay apart because they answer different
@@ -621,12 +622,14 @@ and a props object dies with the element it was made for.
 `@decky/ui` obtains it — pushing a chunk keyed by a fresh Symbol, whose factory is handed it — and a module factory's
 source text is read from `require.m`. The factory carrying all three of `renderFunc`, `AppDetailsOverviewPanel` and
 `InnerContainer` is the one; its exports come from `@decky/ui`'s `modules` map, which is Decky's copy of the registry in
-the coexistence bundle and ours in the standalone one. Property names survive Steam's minification and local identifiers
-and module ids do not, which is why the predicate reads names and never a number — matching a number also matches SVG
-path coordinates. Every memo export of that module whose `type` is a function is patched, rather than the route picked
-out of them: nothing on an export says which one it is, and on any other export the handler finds no `renderFunc` and
-does nothing. Two matching factories are treated as no match at all, because a second match means the predicate no
-longer names one module.
+the coexistence bundle and ours in the standalone one. Property names are Valve's own and survive Steam's minification
+where local identifiers do not; a module's id and its export names are bundler output, which move when the module
+changes — not with every Steam build, but on no promise either (the rule for export names is on
+`utils/deckyUiInternals.ts`'s `ControllerGlyph`). That is why the predicate reads names and never a number — matching a
+number also matches SVG path coordinates. Every memo export of that module whose `type` is a function is patched, rather
+than the route picked out of them: nothing on an export says which one it is, and on any other export the handler finds
+no `renderFunc` and does nothing. Two matching factories are treated as no match at all, because a second match means
+the predicate no longer names one module.
 
 **Whose sources are read is decided first, by shape.** Reading the source text of every module Steam ships is not free,
 and this answer is wanted before the panel mounts — the start-up check asks for it. So a cheap pass goes first: over the
