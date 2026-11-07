@@ -331,7 +331,9 @@ class SaveService:
 
     async def pre_launch_sync(self, rom_id: int) -> dict[str, Any]:
         """Sync this ROM's saves with the server before the game starts."""
-        async with self._rules.hold("pre_launch_sync", update=True, migration=True, prune=True):
+        async with self._rules.hold(
+            "pre_launch_sync", update=True, migration=True, prune=True, refusal_details={"synced": 0}
+        ):
             return await self._sync_engine.pre_launch_sync(rom_id)
 
     def pre_launch_sync_state(self, rom_id: int) -> dict[str, Any]:
@@ -352,12 +354,16 @@ class SaveService:
 
     async def sync_rom_saves(self, rom_id: int) -> dict[str, Any]:
         """Bidirectional sync for a single ROM (manual trigger from game detail)."""
-        async with self._rules.hold("sync_rom_saves", update=True, migration=True, prune=True):
+        async with self._rules.hold(
+            "sync_rom_saves", update=True, migration=True, prune=True, refusal_details={"synced": 0}
+        ):
             return await self._sync_engine.sync_rom_saves(rom_id)
 
     async def sync_all_saves(self) -> dict[str, Any] | SaveSweepIncomplete:
         """Manual full sync of all ROMs with shortcuts (both directions)."""
-        async with self._rules.hold("sync_all_saves", update=True, migration=True, prune=True):
+        async with self._rules.hold(
+            "sync_all_saves", update=True, migration=True, prune=True, refusal_details={"synced": 0, "conflicts": 0}
+        ):
             return await self._sync_engine.sync_all_saves()
 
     async def record_save_directories_once(self) -> None:

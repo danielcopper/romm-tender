@@ -93,12 +93,12 @@ def _make_conflict_rules(
 
 
 @contextlib.contextmanager
-def _refused_by_conflict_rule(reason: str) -> Iterator[None]:
-    """Expect the block to raise the conflict rules' refusal *reason*: its own message, and nothing beside it."""
+def _refused_by_conflict_rule(reason: str, *, details: dict[str, Any] | None = None) -> Iterator[None]:
+    """Expect the block to raise the conflict rules' refusal *reason*: its own message, and *details* beside it."""
     with pytest.raises(Refused) as refused:
         yield
     assert (refused.value.reason, refused.value.message) == (reason, _CONFLICT_REFUSAL_MESSAGES[reason])
-    assert refused.value.details == {}
+    assert refused.value.details == (details or {})
 
 
 def _make_services_bundle(**services: Any) -> ServicesBundle:

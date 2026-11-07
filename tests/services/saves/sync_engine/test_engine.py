@@ -1808,7 +1808,7 @@ def _hold_at_device_registration(svc) -> asyncio.Event:
     release = asyncio.Event()
     engine = svc._sync_engine
 
-    async def held_registration() -> LiveDeviceId:
+    async def held_registration(**_refusal_details: Any) -> LiveDeviceId:
         await release.wait()
         return LiveDeviceId("test-device")
 
@@ -2992,7 +2992,7 @@ class TestSyncPathsAbortWhenDeviceUnregisterable:
 
     The registration failure modelled here is a 200 whose body carries no device
     id: it leaves the device unregistered without a transport error, so no
-    reachability guard upstream of the device gate can account for the abort.
+    reachability guard upstream of the device-id entry can account for the abort.
     """
 
     @pytest.mark.asyncio
@@ -3010,9 +3010,9 @@ class TestSyncPathsAbortWhenDeviceUnregisterable:
             await sync
 
         assert (refused.value.reason, refused.value.message) == ("device_not_registered", DEVICE_NOT_REGISTERED)
-        assert refused.value.details == {}
-        # Registration was attempted and yielded no id — the abort is the device
-        # gate's, not an upstream guard's.
+        assert refused.value.details == {"synced": 0}
+        # Registration was attempted and yielded no id — the abort is the
+        # device-id entry's, not an upstream guard's.
         assert any(c[0] == "register_device" for c in fake.call_log)
         assert _get_device_id(svc) is None
         # The server save the registered twin downloads was never even queried.
@@ -3033,7 +3033,7 @@ class TestSyncPathsAbortWhenDeviceUnregisterable:
             await sync
 
         assert (refused.value.reason, refused.value.message) == ("device_not_registered", DEVICE_NOT_REGISTERED)
-        assert refused.value.details == {}
+        assert refused.value.details == {"synced": 0}
         assert any(c[0] == "register_device" for c in fake.call_log)
         assert _get_device_id(svc) is None
         # The local save the registered twin uploads stays put — nothing is
@@ -3055,7 +3055,7 @@ class TestSyncPathsAbortWhenDeviceUnregisterable:
             await sync
 
         assert (refused.value.reason, refused.value.message) == ("device_not_registered", DEVICE_NOT_REGISTERED)
-        assert refused.value.details == {}
+        assert refused.value.details == {"synced": 0}
         assert any(c[0] == "register_device" for c in fake.call_log)
         assert _get_device_id(svc) is None
         assert _sync_server_calls(fake) == []
@@ -3076,7 +3076,7 @@ class TestSyncPathsAbortWhenDeviceUnregisterable:
             await sync
 
         assert (refused.value.reason, refused.value.message) == ("device_not_registered", DEVICE_NOT_REGISTERED)
-        assert refused.value.details == {}
+        assert refused.value.details == {"synced": 0, "conflicts": 0}
         assert any(c[0] == "register_device" for c in fake.call_log)
         assert _get_device_id(svc) is None
         # The sweep aborts ahead of the whole-device negotiate — no session is

@@ -73,6 +73,8 @@ def _call_sites() -> dict[tuple[str, str], set[str]]:
                     rules.add(_IMPLIED_RULE[method])
                 allowed = _RULE_KEYWORDS[method]
                 for keyword in call.keywords:
+                    if method == "hold" and keyword.arg == "refusal_details":
+                        continue
                     assert keyword.arg in allowed and isinstance(keyword.value, ast.Constant), (
                         f"{where}: {method}'s rules must be literal keywords among {sorted(allowed)}"
                     )

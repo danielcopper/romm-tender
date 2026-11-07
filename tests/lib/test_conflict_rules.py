@@ -99,7 +99,7 @@ class _Rules:
         )
 
 
-async def _refusal(rules: ConflictRuleSet, **named: bool) -> Refused | None:
+async def _refusal(rules: ConflictRuleSet, **named: Any) -> Refused | None:
     """What ``hold`` raises for *named*, or ``None`` when it ran the block; a refused block never runs."""
     ran = False
     try:

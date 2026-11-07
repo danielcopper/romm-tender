@@ -386,7 +386,7 @@ class SyncEngine:
             machine_id_provider=self._machine_id_provider,
         )
 
-    async def live_device_id(self) -> LiveDeviceId:
+    async def live_device_id(self, **refusal_details: Any) -> LiveDeviceId:
         """The device id a save operation sends to RomM, registered or healed a moment before.
 
         The one entry every save operation calls once, before its first request
@@ -402,7 +402,10 @@ class SyncEngine:
         reach RomM (an error :func:`classify_error` calls unreachable), and with
         ``device_not_registered`` when it failed any other way: RomM, or a proxy
         in front of it, answered without registering the device (the id-less
-        answer included), or the stored token could not be sent.
+        answer included), or the stored token could not be sent. Both refusals
+        carry *refusal_details*, so a caller whose own refusals carry details —
+        a sync's, ``.claude/rules/endpoints.md`` names them — answers this one
+        with them too.
 
         Takes only the registration lock, and nothing under it, so a caller
         may hold ``rom_lock`` or the device gate.
@@ -413,13 +416,13 @@ class SyncEngine:
             except RommApiError as e:
                 reason, message = classify_error(e)
                 if reason == ErrorCode.SERVER_UNREACHABLE.value:
-                    raise ServerUnreachable(message) from e
-                raise Refused("device_not_registered", DEVICE_NOT_REGISTERED) from e
+                    raise ServerUnreachable(message, **refusal_details) from e
+                raise Refused("device_not_registered", DEVICE_NOT_REGISTERED, **refusal_details) from e
             except Refused as e:
-                raise Refused("device_not_registered", DEVICE_NOT_REGISTERED) from e
+                raise Refused("device_not_registered", DEVICE_NOT_REGISTERED, **refusal_details) from e
             device_id = await self._loop.run_in_executor(None, self._devices.get_device_id)
         if not device_id:
-            raise Refused("device_not_registered", DEVICE_NOT_REGISTERED)
+            raise Refused("device_not_registered", DEVICE_NOT_REGISTERED, **refusal_details)
         return LiveDeviceId(device_id)
 
     async def list_devices(self) -> dict[str, Any]:
@@ -809,7 +812,7 @@ class SyncEngine:
         except (RommConnectionError, RommTimeoutError) as e:
             raise self._server_offline("pre_launch_sync", e) from e
 
-        device_id = await self.live_device_id()
+        device_id = await self.live_device_id(synced=0)
 
         # The panel reads this event as a sync of the game having begun;
         # _run_rom_sync says when it is sent.
@@ -889,7 +892,7 @@ class SyncEngine:
                 except (RommConnectionError, RommTimeoutError) as e:
                     raise self._server_offline("post_exit_sync", e) from e
 
-                device_id = await self.live_device_id()
+                device_id = await self.live_device_id(synced=0)
 
                 uploaded, downloaded, errors, conflicts = await self._run_rom_sync(
                     rom_id, device_id=device_id, save_answer=save_answer
@@ -969,7 +972,7 @@ class SyncEngine:
             await self.follow_save_directory(rom_id, save_answer)
             refuse_unsyncable(save_answer)
 
-            device_id = await self.live_device_id()
+            device_id = await self.live_device_id(synced=0)
 
             uploaded, downloaded, errors, conflicts = await self._run_rom_sync(
                 rom_id, device_id=device_id, save_answer=save_answer, stop=stop
@@ -1061,7 +1064,7 @@ class SyncEngine:
                 # Defense in depth, as in sync_rom_saves.
                 if self._is_update_in_progress():
                     raise Refused("blocked_by_update", UPDATE_MESSAGE, synced=0, conflicts=0)
-                device_id = await self.live_device_id()
+                device_id = await self.live_device_id(synced=0, conflicts=0)
 
                 # One whole-device transport-only negotiate session wraps the
                 # sweep (ADR-0017); when it can't open, each confirmed non-legacy
