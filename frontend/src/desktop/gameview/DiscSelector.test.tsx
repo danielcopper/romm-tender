@@ -802,7 +802,7 @@ describe("Desktop DiscSelector — while a switch is under way", () => {
     expect(r.getByTestId("disc-btn")).toBeDisabled();
     expect(r.getByTestId("disc-btn").style.opacity).toBe("0.55");
     expect(throbberIn(r.getByTestId("disc-btn"))).not.toBeNull();
-    expect(r.getByTestId("disc-btn").querySelectorAll("svg")).toHaveLength(glyphs);
+    expect(r.getByTestId("disc-btn").querySelectorAll("svg")).toHaveLength(glyphs + 1);
     expect(sheets()).toBe(before);
 
     await act(async () => {
@@ -815,20 +815,35 @@ describe("Desktop DiscSelector — while a switch is under way", () => {
     expect(throbberIn(r.getByTestId("disc-btn"))).toBeNull();
   });
 
-  it("keeps the trigger's width, its ring standing in the 20 px its face takes", async () => {
-    mockCachedDetail();
-    vi.mocked(backend.switchVersion).mockReturnValue(new Promise(() => undefined));
+  it.each([
+    ["the version face", { multi_disc: false } as DiscSelection, 1],
+    ["the playlist face", m3uSelection, 2],
+    ["a pinned disc's face", discDefaultSelection, 1],
+  ])(
+    "keeps the trigger's width for %s, which stays laid out hidden under the ring centred over it",
+    async (_face, selection, faceSvgs) => {
+      mockCachedDetail();
+      vi.mocked(backend.getDiscSelection).mockResolvedValue(selection);
+      vi.mocked(backend.switchVersion).mockReturnValue(new Promise(() => undefined));
 
-    const r = await renderAndOpen();
-    await act(async () => {
-      fireEvent.click(within(r.getByTestId("disc-menu")).getByText("Japan"));
-      await Promise.resolve();
-    });
+      const r = await renderAndOpen();
+      const faceText = r.getByTestId("disc-btn").textContent;
+      await act(async () => {
+        fireEvent.click(within(r.getByTestId("disc-menu")).getByText("Japan"));
+        await Promise.resolve();
+      });
 
-    const ring = throbberIn(r.getByTestId("disc-btn")) as SVGElement;
-    expect(ring.getAttribute("width")).toBe("18");
-    expect(ring.style.margin).toBe("1px");
-  });
+      const ring = throbberIn(r.getByTestId("disc-btn")) as SVGElement;
+      expect(ring.style.position).toBe("absolute");
+      expect(ring.style.margin).toBe("auto");
+      const wrapper = ring.parentElement!;
+      expect(wrapper.style.position).toBe("relative");
+      const face = [...wrapper.children].find((child) => child !== ring) as HTMLElement;
+      expect(face.style.visibility).toBe("hidden");
+      expect(face.querySelectorAll("svg")).toHaveLength(faceSvgs);
+      expect(face.textContent).toBe(faceText);
+    },
+  );
 
   it("tells the Play button when a switch starts and when it is over", async () => {
     mockCachedDetail();

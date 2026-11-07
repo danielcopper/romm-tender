@@ -54,12 +54,7 @@ const MENU_ITEM_STYLE = {
   whiteSpace: "nowrap",
 } as const;
 
-function selectorTriggerFace(
-  discDisplayState: DiscDisplayState | null,
-  offDefault: boolean,
-  switching: boolean,
-): ReactNode {
-  if (switching) return <SvgThrobber style={{ margin: "1px" }} />;
+function selectorTriggerGlyph(discDisplayState: DiscDisplayState | null, offDefault: boolean): ReactNode {
   if (!discDisplayState) {
     return <FaLayerGroup size={20} color={offDefault ? DISC_ACCENT : DISC_GREY} />;
   }
@@ -72,6 +67,24 @@ function selectorTriggerFace(
       color={discDisplayState.isPinned ? DISC_ACCENT : DISC_GREY}
       num={discDisplayState.activeNum}
     />
+  );
+}
+
+// The ring is drawn over the glyph rather than in its place: the glyph stays laid
+// out, hidden, so the trigger keeps its width whichever glyph it shows, and PLAY
+// beside it does not move.
+function selectorTriggerFace(
+  discDisplayState: DiscDisplayState | null,
+  offDefault: boolean,
+  switching: boolean,
+): ReactNode {
+  const glyph = selectorTriggerGlyph(discDisplayState, offDefault);
+  if (!switching) return glyph;
+  return (
+    <span style={{ position: "relative", display: "flex" }}>
+      <span style={{ display: "flex", visibility: "hidden" }}>{glyph}</span>
+      <SvgThrobber style={{ position: "absolute", inset: 0, margin: "auto" }} />
+    </span>
   );
 }
 
