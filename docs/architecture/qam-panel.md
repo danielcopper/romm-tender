@@ -907,8 +907,9 @@ Where it does not stand:
   answered.
 - **On the "Working on _X_" line of a platform pane whose platform is not the busy one**: the throbber stays on the pane
   whose run it is ([Library](#library)).
-- **In the desktop client's save conflict dialog** (dev build only): `Throbber`'s spin would need the stylesheet the
-  paragraph above names, no shipped bundle carries that surface, and the SMIL ring has not been put there.
+- **In the desktop client's save conflict dialog** (dev build only): `Throbber`'s spin would need a stylesheet on
+  Steam's page outside the restoration ledger, as the selector's paragraph above says; no shipped bundle carries that
+  surface, and the SMIL ring has not been put there.
 - **In a tooltip** — the platform list's "Checking this platform's BIOS files…", the core picker's "Reading the
   emulators for this platform…" — **and on a short settings write** — an emulator source's switch, Tender's folder.
 
