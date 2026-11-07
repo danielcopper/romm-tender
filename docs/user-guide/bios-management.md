@@ -216,8 +216,9 @@ question, whether the emulator you launch with could be read, so they all get th
   is, so nothing could be said about the file either way.
 
 A file your emulator needs that is **not in your RomM library** is listed too, with a violet ⊘ beside its mark. Tender
-cannot fetch it — nothing in it can — so it is shown for what it is rather than left out. Adding the file to RomM makes
-it downloadable like any other.
+cannot fetch it — nothing in it can — so it is shown for what it is rather than left out. Adding the file to RomM under
+this platform makes it downloadable like any other — a copy your server keeps under another platform does not count here
+(see [Which Files a Platform Lists](#which-files-a-platform-lists)).
 
 Not holding a file is a different question from not having it, and the row says both: the ⊘ stands beside a red ✗ where
 the file is also absent from your BIOS folder, and beside a green ✓ where it is already there and the resolver judges it
@@ -460,8 +461,8 @@ A link is only ever placed where the name is free. Where a file, a folder or a l
 there, Tender leaves it as it is, and the row says what the emulator makes of it: _Another file lies here, and the
 emulator does not accept it_, or _Another file lies here; it could not be checked_. A right file you placed yourself
 simply reads met, and nothing is offered. Where another platform's copy already serves the place — a boot ROM Game Boy
-and Game Boy Color both look for in the BIOS folder — the row reads met with _Linked to Tender's copy for Game Boy_ and
-still offers a download into this platform's own folder.
+and Game Boy Color both look for in the BIOS folder — the row reads met with _Linked to Tender's copy for Game Boy_ and,
+where your server keeps the file under Game Boy Color too, still offers a download into this platform's own folder.
 
 Some places are left alone for a reason the row names:
 
@@ -849,9 +850,10 @@ The second half follows what you can **launch** the platform with, not how a fil
 not always line up. RetroDECK offers NooDS under Game Boy Advance, and NooDS does run GBA games. Its description file
 names five firmware files — `bios7.bin`, `bios9.bin`, `firmware.bin`, `nds_sd_card.bin` and `gba_bios.bin` — and a core
 states its firmware once, for the whole core, with no way to say which of those a GBA game in particular needs. So a GBA
-page lists all five: they are exactly the files an emulator you can start a GBA game with declares. Filtering rows out
-by the system a file is usually filed under would, wherever such a file is genuinely required, leave you with a game
-that refuses to launch and nothing on the page explaining why.
+page lists all five: they are exactly the files an emulator you can start a GBA game with declares. They read as not in
+your RomM library there unless your server keeps them under Game Boy Advance too. Filtering rows out by the system a
+file is usually filed under would, wherever such a file is genuinely required, leave you with a game that refuses to
+launch and nothing on the page explaining why.
 
 Being listed is not the same as being needed. All five of NooDS's files are optional, so none of them turns a GBA page
 red by itself — and what each row means for the core you actually launch with is the next section's question.

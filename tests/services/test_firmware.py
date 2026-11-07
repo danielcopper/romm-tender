@@ -4414,8 +4414,7 @@ class TestDownloadPlatformFirmwareFile:
     async def test_an_id_from_another_platforms_folder_fetches_the_platforms_own_file_of_that_name(
         self, firmware, fw, tmp_path
     ):
-        # id 3 is the n64 folder's file of the name; only the platform's own
-        # file of that name is fetched (#2223 D48).
+        # id 3 is the n64 folder's file of the name.
         bios_dir = tmp_path / "retrodeck" / "bios"
         bios_dir.mkdir(parents=True)
         _set_loop(fw, asyncio.get_running_loop())

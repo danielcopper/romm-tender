@@ -1828,7 +1828,7 @@ slug — RomM's built-in `gc` and `gamecube` folders are both `ngc` — so each 
 the platform page and a file of the same name stay with the platform RomM lists a file under. A platform's rows, its
 Download required and its Replace draw only on the firmware RomM lists under its own folder
 (`domain/firmware_rows.py::platform_library`, #2223 D48), as RomM keeps a platform's firmware there: a file another
-platform's folder holds fills no requirement here, and a requirement the own folder holds no file for reads as not in
+platform's folder holds fills no requirement here, and a requirement its own folder holds no file for reads as not in
 the RomM library. Store and link records are keyed by that folder; a store record keeps the slug beside it, by which
 Tender finds the platform's system and its emulator pick. Every platform use case takes both, and refuses
 `invalid_value` without a folder rather than asking by the slug. The game page asks by the folder the last sync recorded
@@ -1848,9 +1848,9 @@ under that name: Tender places no link over a file, a folder or a link that is n
 into it under its name in RomM (D26). A place under a root the resolver only assumed gets no link, nor does any place of
 a source whose roots could not be asked, and nor does a place whose folder is not there — Tender creates none (D11,
 #2219 D6). For the first two the row says so, naming that source (D32). Which file fills which requirement is
-`domain/firmware_match.py`, over the files of the platform's own folder: its MD5 against the checksum the resolver pins
-for the requirement, by its declared name only for an archive or where no checksum is known (D2, D8, D16); where several
-fill one, the alphabetically first is linked.
+`domain/firmware_match.py`: its MD5 against the checksum the resolver pins for the requirement, by its declared name
+only for an archive or where no checksum is known (D2, D8, D16); where several fill one, the alphabetically first is
+linked.
 
 **Two records.** `firmware_store` holds one row per store file; `firmware_links` one row per link, keyed by its place,
 naming the store path it points at rather than the store row (`domain/firmware_store.py`). A link is Tender's own when

@@ -635,9 +635,8 @@ speculatively.
 The folder RomM keeps a platform's games and firmware in, its `fs_slug` (e.g. `gc`, `gamecube`). Unlike the
 **platform_slug** it names one platform, so what Tender keeps per platform rather than per console is keyed by it: the
 **firmware store**'s folders and records (`platform_folder`), and the folder a game's platform is in
-(`roms.platform_fs_slug`). A platform's BIOS rows draw only on the firmware RomM lists under its folder (#2223 D48). It
-is never replaced by the slug where it is not known (#2223 D45). _Avoid_: calling a system's ROM folder on this machine
-the platform folder; that folder is the resolver's answer.
+(`roms.platform_fs_slug`). It is never replaced by the slug where it is not known (#2223 D45). _Avoid_: calling a
+system's ROM folder on this machine the platform folder; that folder is the resolver's answer.
 
 ### Platform system
 
