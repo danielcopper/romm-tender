@@ -188,9 +188,10 @@ const isMemoComponent = (value: unknown): boolean =>
  * (`MangleExportsPlugin`): each is a hash of Valve's ORIGINAL export name
  * reduced into a range set by how many exports the module has — one character
  * for two exports, two characters for 3 to 172, the first character the same
- * in both. So an export name holds from one Steam build to the next, and moves
- * only when Valve renames the original or the module's export count leaves its
- * bracket: back down to two would most likely make these `W` and `X` again.
+ * in both. So an export name holds from one Steam build to the next: short of
+ * a hash collision or a change to Valve's webpack setup, it moves only when
+ * Valve renames the original or the module's export count leaves its bracket —
+ * back down to two would most likely make these `W` and `X` again.
  * This is the one home of that rule; the other probes that name it point here.
  *
  * `undefined` the day that happens, so every caller keeps a fallback rather
@@ -330,10 +331,18 @@ export const rendersNamed =
  * Asked the way `findModuleByExport` asks — any export of the module, or of its
  * `default`, rendering `QuickAccessMenuBrowserView` — through `findModule`, so
  * the search runs once, when this module is evaluated, like every other here.
+ * One difference: a module whose exports throw on read answers no here, where
+ * `findModuleByExport` reads each export outside its own catch
+ * (`dist/webpack.js`) and the throw would end the search and this module's
+ * evaluation with it.
  */
 export const QuickAccessMenuBrowserView: Readonly<Record<string, unknown>> | undefined = findModule((m: unknown) => {
-  if (typeof m !== "object" || m === null || m === window) return false;
-  return Object.values(m).some(rendersNamed("QuickAccessMenuBrowserView"));
+  try {
+    if (typeof m !== "object" || m === null || m === window) return false;
+    return Object.values(m).some(rendersNamed("QuickAccessMenuBrowserView"));
+  } catch {
+    return false;
+  }
 });
 
 /**

@@ -37,27 +37,51 @@ describe("rendersNamed", () => {
   });
 });
 
+/**
+ * This module as it evaluates with `findModule` walking *registry* the way
+ * `@decky/ui`'s does: each module's `default` first, then the module itself.
+ */
+async function evaluatedOver(registry: unknown[]): Promise<typeof import("./deckyUiInternals")> {
+  vi.resetModules();
+  const decky = await import("@decky/ui");
+  vi.mocked(decky.findModule).mockImplementation((filter: (m: unknown) => boolean) => {
+    for (const m of registry) {
+      const fallback = (m as { default?: unknown }).default;
+      if (fallback && filter(fallback)) return fallback;
+      if (filter(m)) return m;
+    }
+    return undefined;
+  });
+  return import("./deckyUiInternals");
+}
+
+/** A module whose export getter throws, as one belonging to a module whose own evaluation failed does. */
+const throwingModule = (name: string) =>
+  Object.defineProperty({}, name, {
+    enumerable: true,
+    get: () => {
+      throw new Error("module evaluation failed");
+    },
+  });
+
+describe("QuickAccessMenuBrowserView", () => {
+  afterEach(() => {
+    vi.resetModules();
+  });
+
+  it("goes on searching past a module whose exports throw on read", async () => {
+    const quickAccess = { b: { type: { toString: () => "function(){return QuickAccessMenuBrowserView}" } } };
+
+    const evaluated = await evaluatedOver([throwingModule("a"), quickAccess]);
+
+    expect(evaluated.QuickAccessMenuBrowserView).toBe(quickAccess);
+  });
+});
+
 describe("ControllerGlyph", () => {
   const memo = () => ({ $$typeof: Symbol.for("react.memo"), type: () => null });
 
-  /**
-   * `ControllerGlyph` as this module computes it at evaluation, with
-   * `findModule` walking *registry* the way `@decky/ui`'s does: each module's
-   * `default` first, then the module itself.
-   */
-  async function glyphIn(registry: unknown[]): Promise<unknown> {
-    vi.resetModules();
-    const decky = await import("@decky/ui");
-    vi.mocked(decky.findModule).mockImplementation((filter: (m: unknown) => boolean) => {
-      for (const m of registry) {
-        const fallback = (m as { default?: unknown }).default;
-        if (fallback && filter(fallback)) return fallback;
-        if (filter(m)) return m;
-      }
-      return undefined;
-    });
-    return (await import("./deckyUiInternals")).ControllerGlyph;
-  }
+  const glyphIn = async (registry: unknown[]): Promise<unknown> => (await evaluatedOver(registry)).ControllerGlyph;
 
   const unrelated = () => [{ a: memo() }, { jsx: () => null, jsxs: () => null }, { default: { Component: class {} } }];
 
@@ -84,19 +108,20 @@ describe("ControllerGlyph", () => {
     expect(await glyphIn([...unrelated(), { XH: memo(), WD: () => null, Nq: () => false }])).toBeUndefined();
   });
 
-  it("goes on searching past a module whose exports throw on read", async () => {
-    const throwing = Object.defineProperty({}, "WD", {
-      enumerable: true,
-      get: () => {
-        throw new Error("module evaluation failed");
-      },
-    });
+  it("passes over a module carrying WD without the legend beside it", async () => {
     const glyph = memo();
-    // The Quick Access search runs over the same registry and reads every
-    // export of each module it passes, so its own module comes first and that
-    // search stops before it reaches the throwing one.
-    const quickAccess = { b: { type: { toString: () => "function(){return QuickAccessMenuBrowserView}" } } };
+    const decoys = [
+      { WD: memo(), XH: () => null },
+      { WD: memo(), Q: memo() },
+    ];
 
-    expect(await glyphIn([quickAccess, throwing, { XH: memo(), WD: glyph, Nq: () => false }])).toBe(glyph);
+    expect(await glyphIn([...decoys, { XH: memo(), WD: glyph, Nq: () => false }])).toBe(glyph);
+    expect(await glyphIn(decoys)).toBeUndefined();
+  });
+
+  it("goes on searching past a module whose exports throw on read", async () => {
+    const glyph = memo();
+
+    expect(await glyphIn([throwingModule("WD"), { XH: memo(), WD: glyph, Nq: () => false }])).toBe(glyph);
   });
 });
