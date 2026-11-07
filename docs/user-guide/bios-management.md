@@ -432,10 +432,11 @@ and the row you focus is the one the right-hand pane describes.
 A BIOS file is downloaded into **Tender's firmware store**, a folder of its own inside
 [Tender's folder](where-your-data-lives.md): `Tender/bios/<platform>/`, named after the platform's folder in your RomM
 library, under the file's name there. A file two platforms need lies in each of their folders, two RomM platforms that
-hold the same console (a `gc` and a `gamecube` folder, say) included, and each platform downloads its own file of a
-name. Tender then places a **link** to it at every place an emulator of the platform opens it, under the name that
-emulator asks for, in every emulator source you have switched on — Dreamcast's `dc_boot.bin` goes into `bios/dc/`,
-Cemu's `keys.txt` into Cemu's own folder. The file is there once, and every emulator that needs it reads the same copy.
+hold the same console (a `gc` and a `gamecube` folder, say) included, and a platform downloads only what your server
+keeps in that platform's own folder. Tender then places a **link** to it at every place an emulator of the platform
+opens it, under the name that emulator asks for, in every emulator source you have switched on — Dreamcast's
+`dc_boot.bin` goes into `bios/dc/`, Cemu's `keys.txt` into Cemu's own folder. The file is there once, and every emulator
+that needs it reads the same copy.
 
 Every download is checked against the checksum RomM states for the file before Tender keeps it. A download that does not
 match is thrown away, nothing changes, and the row says _The download was damaged. Try again._ A file RomM states no
@@ -840,8 +841,9 @@ What that state does **not** do is flatten the rest of the page:
 
 A platform's list has two halves. The first is what your **server** files under that platform — a GBA page lists the
 firmware your server holds under GBA, not what it holds under Game Boy. The second is every file an **emulator RetroDECK
-offers for that platform** asks for, wherever your server keeps that file and even when your server does not hold it at
-all; rows in that half are marked as not being in your RomM library.
+offers for that platform** asks for, whether or not your server holds it. Such a row is filled only by a file your
+server keeps in this platform's own folder; where that folder holds none, the row is marked as not being in your RomM
+library, even when another platform's folder holds the file.
 
 The second half follows what you can **launch** the platform with, not how a file is usually catalogued, and the two do
 not always line up. RetroDECK offers NooDS under Game Boy Advance, and NooDS does run GBA games. Its description file

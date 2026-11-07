@@ -876,15 +876,15 @@ Format: **invariant** — tier — enforced by.
   `services/firmware/status.py::_bios_aggregates` scopes `server_count` / `local_count` to `on_server` rows, and the
   stated pair `ratio_server_count` / `ratio_local_count` further to those with a verdict; the download buttons'
   condition is `isFetchable` (`frontend/src/utils/biosFetchable.ts`), which reads the row's `library` — the RomM file
-  that fills it, by content or, where the resolver's identity is an archive or names no checksum, by name, wherever RomM
-  files it — its `store_file`, its `link` and its `place_refusal`, called from
-  `frontend/src/bigpicture/bios/BiosFiles.tsx`, the BIOS table both the platform detail and the game page's BIOS tab
-  draw — and since #1815 the per-row Download button reads the same filtered set, so a fourth reader of the axis now
-  exists in that one file. A fifth reads it in the same file for the On-disk cell's second mark (`⊘`), and that one is
-  display alone: it neither counts nor gates, which is what keeps it out of all three folds below. Both pages list every
-  row of the shown emulator ([#2429](https://github.com/danielcopper/romm-tender/issues/2429) D3) and call one
-  predicate, `isFetchable`, through one module rather than spelling its clauses twice: a second copy would let one page
-  point at a download button the other does not offer. Each fold has its own quiet failure: drop the row from the
+  that fills it, by content or, where the resolver's identity is an archive or names no checksum, by name, among the
+  files RomM lists under the platform's own folder (#2223 D48) — its `store_file`, its `link` and its `place_refusal`,
+  called from `frontend/src/bigpicture/bios/BiosFiles.tsx`, the BIOS table both the platform detail and the game page's
+  BIOS tab draw — and since #1815 the per-row Download button reads the same filtered set, so a fourth reader of the
+  axis now exists in that one file. A fifth reads it in the same file for the On-disk cell's second mark (`⊘`), and that
+  one is display alone: it neither counts nor gates, which is what keeps it out of all three folds below. Both pages
+  list every row of the shown emulator ([#2429](https://github.com/danielcopper/romm-tender/issues/2429) D3) and call
+  one predicate, `isFetchable`, through one module rather than spelling its clauses twice: a second copy would let one
+  page point at a download button the other does not offer. Each fold has its own quiet failure: drop the row from the
   required counts and a sentence reads "all in place" under a red verdict; add it to the ratio and a SNES page reports
   `0 / 26 files, 26 missing` for twenty-six optional files no core wants; add it to the buttons and the page offers a
   download that cannot succeed. The counts and the ratio read `on_server`, the buttons read `library` (`on_server` only
