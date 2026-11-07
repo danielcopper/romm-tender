@@ -836,6 +836,7 @@ describe("Desktop DiscSelector — while a switch is under way", () => {
       const ring = throbberIn(r.getByTestId("disc-btn")) as SVGElement;
       expect(ring.style.position).toBe("absolute");
       expect(ring.style.margin).toBe("auto");
+      expect(ring.style.inset).toBe("0");
       const wrapper = ring.parentElement!;
       expect(wrapper.style.position).toBe("relative");
       const face = [...wrapper.children].find((child) => child !== ring) as HTMLElement;
