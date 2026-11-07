@@ -237,10 +237,10 @@ interface FirmwareVerdict {
 }
 
 /**
- * The RomM library file that fills a row, and how — always one RomM lists under
- * the platform's own folder. `matched` is `content` for a file whose MD5 is the
- * one the resolver pins for the requirement; `archive_name` for an archive
- * matched by its declared name, whose contents cannot be compared;
+ * The RomM library file that fills a row, and how. `matched` is `content` for a
+ * file whose MD5 is the one the resolver pins for the requirement;
+ * `archive_name` for an archive matched by its declared name, whose contents
+ * cannot be compared;
  * `no_checksum_name` for a requirement the resolver knows no checksum for
  * (Cemu's `keys.txt`); `null` on a library row, which fills nothing.
  * `no_checksum` is true where RomM states no checksum for the file, so a
