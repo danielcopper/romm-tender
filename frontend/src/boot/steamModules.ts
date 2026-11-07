@@ -314,9 +314,10 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // `deckyUiInternals.ts` reaches it with a `findModule` predicate of our own,
   // so it is our search in both bundles.
   //
-  // The one name whose absence is cosmetic. `layout/WidePage.tsx` is its only
-  // consumer and already renders `‹ Back` where the glyph would be, so a miss
-  // costs one chip its button picture and nothing else.
+  // The one name whose absence is cosmetic. Both its consumers draw something
+  // in its place — `layout/WidePage.tsx`'s Back chip `‹ Back`, and
+  // `EmulatorSelector.tsx` a key box naming L2 or R2 — so a miss costs those
+  // button pictures and nothing else.
   truthyUnexported("ControllerGlyph", "appearance", () => ControllerGlyph, "buttonPictures"),
 
   // What a toast is drawn and pushed through (`utils/steamToaster.tsx`). All

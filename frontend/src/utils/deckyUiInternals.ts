@@ -154,9 +154,10 @@ export interface ControllerGlyphProps {
  * The value Steam's glyph component wants for **B**.
  *
  * It indexes Steam's own action-button enum — `A=0, B=1, X=2, Y=3, Left=4 … `
- * (`chunk~2dcc5aaf7.js`, module 43014) — which is a different enum from
- * `@decky/ui`'s `GamepadButton` (`INVALID=0, OK=1, CANCEL=2 …`), where 1 is the
- * A button. Passing the wrong one draws the wrong glyph rather than failing.
+ * (`steamui/sp.js`, module 14181, exported as `g4`) — which is a different
+ * enum from `@decky/ui`'s `GamepadButton` (`INVALID=0, OK=1, CANCEL=2 …`), where
+ * 1 is the A button. Passing the wrong one draws the wrong glyph rather than
+ * failing.
  */
 export const GLYPH_BUTTON_B = 1;
 
@@ -175,26 +176,36 @@ const isMemoComponent = (value: unknown): boolean =>
  * controller itself, which is why neither a lookalike SVG nor a typed letter is
  * an alternative: both would be wrong for someone.
  *
- * `@decky/ui` does not re-export it, so it is reached by a module probe. Its
- * module exports exactly two values — this glyph and the footer's glyph-plus-
- * label pair — and that shape is unique: across every `.js` file in this
- * install's `steamui`, exactly one module declares two exports under those two
- * names and nothing else. Both are mobx observers, which is a `React.memo`
- * object at runtime and the second half of the filter.
+ * `@decky/ui` does not re-export it, so it is reached by a module probe: the
+ * module exporting both `WD` (this glyph, which is the answer) and `XH` (the
+ * footer's glyph-plus-label legend), each a `React.memo` object — both are mobx
+ * observers, which is what one is at runtime. How many exports that module has
+ * is deliberately not asked. In `steamui/sp.js` of the Deck's stable client
+ * (1792618285) and its public beta (1794079253) the pair stands on exactly one
+ * module.
  *
- * `undefined` the day Steam renames or re-splits that module, so every caller
- * keeps a text fallback rather than a hole where the glyph was.
+ * The names are webpack 5's deterministic export mangling
+ * (`MangleExportsPlugin`): each is a hash of Valve's ORIGINAL export name
+ * reduced into a range set by how many exports the module has — one character
+ * for two exports, two characters for 3 to 172, the first character the same
+ * in both. So an export name holds from one Steam build to the next: short of
+ * a hash collision or a change to Valve's webpack setup, it moves only when
+ * Valve renames the original or the module's export count leaves its bracket —
+ * back down to two would most likely make these `W` and `X` again.
+ * This is the one home of that rule; the other probes that name it point here.
+ *
+ * `undefined` the day that happens, so every caller keeps a fallback rather
+ * than a hole where the glyph was.
  */
 export const ControllerGlyph: FC<ControllerGlyphProps> | undefined = findModule((m: unknown) => {
   try {
     if (typeof m !== "object" || m === null) return false;
     const exports = m as Record<string, unknown>;
-    const names = Object.keys(exports);
-    return names.length === 2 && isMemoComponent(exports.W) && isMemoComponent(exports.X);
+    return isMemoComponent(exports.WD) && isMemoComponent(exports.XH);
   } catch {
     return false;
   }
-})?.W;
+})?.WD;
 
 /** One notification as Steam's store carries it, with our own toast as its payload. */
 export interface SteamNotification {
@@ -263,7 +274,8 @@ export interface SteamToastRenderer {
  *
  * Found by the string its own body contains — it opens its result with
  * `controller:"notification",method:` — because the module exports it under a
- * minified name that changes with every Steam build.
+ * minified name, which moves whenever Valve renames it or the module's export
+ * count leaves its bracket ({@link ControllerGlyph} has the rule).
  *
  * What it would draw for a notification of ours, and why `utils/steamToaster.tsx`
  * puts a drawing in front of it, is on the docs page
@@ -319,10 +331,18 @@ export const rendersNamed =
  * Asked the way `findModuleByExport` asks — any export of the module, or of its
  * `default`, rendering `QuickAccessMenuBrowserView` — through `findModule`, so
  * the search runs once, when this module is evaluated, like every other here.
+ * One difference: a module whose exports throw on read answers no here, where
+ * `findModuleByExport` reads each export outside its own catch
+ * (`dist/webpack.js`) and the throw would end the search and this module's
+ * evaluation with it.
  */
 export const QuickAccessMenuBrowserView: Readonly<Record<string, unknown>> | undefined = findModule((m: unknown) => {
-  if (typeof m !== "object" || m === null || m === window) return false;
-  return Object.values(m).some(rendersNamed("QuickAccessMenuBrowserView"));
+  try {
+    if (typeof m !== "object" || m === null || m === window) return false;
+    return Object.values(m).some(rendersNamed("QuickAccessMenuBrowserView"));
+  } catch {
+    return false;
+  }
 });
 
 /**

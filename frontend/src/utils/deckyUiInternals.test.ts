@@ -1,11 +1,11 @@
 /**
- * The predicate Tender's Quick Access entry is found by. The search it runs in
- * reaches Steam's module registry and is the start-up check's to ask
- * (`boot/steamModules.ts`); what the predicate answers for one value is
- * decidable here.
+ * The predicates Tender's Quick Access entry and Steam's controller glyph are
+ * found by. The searches they run in reach Steam's module registry and are the
+ * start-up check's to ask (`boot/steamModules.ts`); what a predicate answers for
+ * one value, or for a registry handed to it, is decidable here.
  */
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { rendersNamed } from "./deckyUiInternals";
 
@@ -34,5 +34,94 @@ describe("rendersNamed", () => {
       },
     };
     expect(rendersNamed("QuickAccessMenuBrowserView")(throwing)).toBe(false);
+  });
+});
+
+/**
+ * This module as it evaluates with `findModule` walking *registry* the way
+ * `@decky/ui`'s does: each module's `default` first, then the module itself.
+ */
+async function evaluatedOver(registry: unknown[]): Promise<typeof import("./deckyUiInternals")> {
+  vi.resetModules();
+  const decky = await import("@decky/ui");
+  vi.mocked(decky.findModule).mockImplementation((filter: (m: unknown) => boolean) => {
+    for (const m of registry) {
+      const fallback = (m as { default?: unknown }).default;
+      if (fallback && filter(fallback)) return fallback;
+      if (filter(m)) return m;
+    }
+    return undefined;
+  });
+  return import("./deckyUiInternals");
+}
+
+/** A module whose export getter throws, as one belonging to a module whose own evaluation failed does. */
+const throwingModule = (name: string) =>
+  Object.defineProperty({}, name, {
+    enumerable: true,
+    get: () => {
+      throw new Error("module evaluation failed");
+    },
+  });
+
+describe("QuickAccessMenuBrowserView", () => {
+  afterEach(() => {
+    vi.resetModules();
+  });
+
+  it("goes on searching past a module whose exports throw on read", async () => {
+    const quickAccess = { b: { type: { toString: () => "function(){return QuickAccessMenuBrowserView}" } } };
+
+    const evaluated = await evaluatedOver([throwingModule("a"), quickAccess]);
+
+    expect(evaluated.QuickAccessMenuBrowserView).toBe(quickAccess);
+  });
+});
+
+describe("ControllerGlyph", () => {
+  const memo = () => ({ $$typeof: Symbol.for("react.memo"), type: () => null });
+
+  const glyphIn = async (registry: unknown[]): Promise<unknown> => (await evaluatedOver(registry)).ControllerGlyph;
+
+  const unrelated = () => [{ a: memo() }, { jsx: () => null, jsxs: () => null }, { default: { Component: class {} } }];
+
+  afterEach(() => {
+    vi.resetModules();
+  });
+
+  it("finds the glyph in a registry shaped like today's Steam", async () => {
+    const glyph = memo();
+    const registry = [...unrelated(), { XH: memo(), WD: glyph, Nq: () => false }];
+
+    expect(await glyphIn(registry)).toBe(glyph);
+  });
+
+  it("finds nothing in a registry without the glyph's module", async () => {
+    expect(await glyphIn(unrelated())).toBeUndefined();
+  });
+
+  it("finds nothing where only the old two-export shape W and X stands", async () => {
+    expect(await glyphIn([...unrelated(), { W: memo(), X: memo() }])).toBeUndefined();
+  });
+
+  it("finds nothing where WD is not a React.memo", async () => {
+    expect(await glyphIn([...unrelated(), { XH: memo(), WD: () => null, Nq: () => false }])).toBeUndefined();
+  });
+
+  it("passes over a module carrying WD without the legend beside it", async () => {
+    const glyph = memo();
+    const decoys = [
+      { WD: memo(), XH: () => null },
+      { WD: memo(), Q: memo() },
+    ];
+
+    expect(await glyphIn([...decoys, { XH: memo(), WD: glyph, Nq: () => false }])).toBe(glyph);
+    expect(await glyphIn(decoys)).toBeUndefined();
+  });
+
+  it("goes on searching past a module whose exports throw on read", async () => {
+    const glyph = memo();
+
+    expect(await glyphIn([throwingModule("WD"), { XH: memo(), WD: glyph, Nq: () => false }])).toBe(glyph);
   });
 });
