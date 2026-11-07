@@ -490,6 +490,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
     let style = DOWNLOAD_BUTTON_STYLE;
     if (isOffline) style = DOWNLOAD_BUTTON_OFFLINE_STYLE;
     else if (actionPending || blocked) style = DOWNLOAD_BUTTON_BLOCKED_STYLE;
+    else if (switching) style = { ...DOWNLOAD_BUTTON_STYLE, cursor: "default" };
 
     return (
       <div className="tender-desktop-play-btn-group" style={BUTTON_GROUP_STYLE}>
@@ -500,14 +501,18 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
           style={usesExisting ? { ...style, fontSize: "13px" } : style}
           onClick={() => detach(handleDownloadClick())}
         >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-            <path
-              d="M7 1V9M7 9L3.5 5.5M7 9L10.5 5.5M1 11H13M1 13H13"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </svg>
+          {switching ? (
+            <SvgThrobber />
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path
+                d="M7 1V9M7 9L3.5 5.5M7 9L10.5 5.5M1 11H13M1 13H13"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
+          )}
           {label}
         </button>
       </div>

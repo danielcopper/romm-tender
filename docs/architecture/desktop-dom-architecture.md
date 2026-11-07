@@ -64,11 +64,11 @@ and a version's row says what Big Picture's says (`frontend/src/utils/versionPic
 RomM is listed and offers nothing: Big Picture's way to its removed-game cleanup from the picker has no desktop
 counterpart. A switch that would leave unsynced saves behind asks in a desktop dialog. The selector draws nothing where
 the button draws nothing, and leaves the discs out while the bound version's file is missing. While a switch is under
-way its trigger is disabled and dimmed, with the throbber in place of its face, and PLAY and RESOLVE CONFLICT are
-disabled, with the throbber left of their labels and no pointer cursor ([qam-panel.md](qam-panel.md#waiting) says what
-draws it there), and DOWNLOAD is disabled; while the Play button's check or a press of DOWNLOAD is under way, the latter
-until the download has started or the adoption flow has ended, its trigger is disabled and dimmed and an open menu
-closes, since the two ask through one dialog host, where a newer question answers the open one dismissed.
+way its trigger is disabled and dimmed, with the throbber in place of its face, and PLAY, RESOLVE CONFLICT and DOWNLOAD
+are disabled, with the throbber left of their labels and no pointer cursor ([qam-panel.md](qam-panel.md#waiting) says
+what draws it there); while the Play button's check or a press of DOWNLOAD is under way, the latter until the download
+has started or the adoption flow has ended, its trigger is disabled and dimmed and an open menu closes, since the two
+ask through one dialog host, where a newer question answers the open one dismissed.
 
 Neither the Play button nor the selector adds a stylesheet to Steam's document, so nothing changes on hover on either,
 and a download's glow, which pulses on Big Picture, stands still.
