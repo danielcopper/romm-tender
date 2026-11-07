@@ -22,8 +22,8 @@ export async function getHostname(): Promise<string> {
   return _hostname;
 }
 
-function getOverviews(appIds: number[]): AppStoreOverview[] {
-  const overviews: AppStoreOverview[] = [];
+function getOverviews(appIds: number[]): SteamAppOverview[] {
+  const overviews: SteamAppOverview[] = [];
   for (const appId of appIds) {
     if (typeof appStore !== "undefined") {
       const overview = appStore.GetAppOverviewByAppID(appId);
@@ -45,7 +45,7 @@ function getOverviews(appIds: number[]): AppStoreOverview[] {
  */
 async function replaceCollectionApps(
   existing: SteamCollection,
-  overviews: AppStoreOverview[],
+  overviews: SteamAppOverview[],
   signal?: AbortSignal,
 ): Promise<boolean> {
   const existingApps = existing.allApps;
@@ -63,7 +63,7 @@ async function replaceCollectionApps(
 /** Create a new collection holding exactly *overviews*. False means aborted mid-write. */
 async function createCollectionWithApps(
   collectionName: string,
-  overviews: AppStoreOverview[],
+  overviews: SteamAppOverview[],
   signal?: AbortSignal,
 ): Promise<boolean> {
   const collection = collectionStore.NewUnsavedCollection(collectionName, undefined, []);
@@ -78,7 +78,7 @@ async function createCollectionWithApps(
 async function saveCollection(
   collectionName: string,
   noun: string,
-  overviews: AppStoreOverview[],
+  overviews: SteamAppOverview[],
   appCount: number,
   signal?: AbortSignal,
 ): Promise<boolean> {

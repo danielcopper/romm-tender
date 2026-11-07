@@ -63,11 +63,7 @@ import { resetPendingPreviewStoreForTests, adoptPreview, clearPendingPreview } f
 import * as syncManager from "../utils/syncManager";
 import * as connectionState from "../utils/connectionState";
 import { EntryPreferenceContext, firstBodyStop, pageEntryStop, placeEntryFocus } from "../utils/entryFocus";
-import {
-  NOTIFICATIONS_UNAVAILABLE_NOTICE,
-  resetNotificationsHealthForTests,
-  setNotificationsUnavailable,
-} from "../utils/notificationsHealth";
+import { recordStartupMiss, resetStartupMissNoticeForTests } from "../utils/startupMissNotice";
 import type {
   EmulatorSource,
   MigrationStatus,
@@ -3373,36 +3369,51 @@ describe("MainPage", () => {
     });
   });
 
-  describe("the notice for a Steam that answers for no notifications", () => {
-    // Written once by the panel factory out of the start-up check's report,
-    // which is why this sets the module store rather than a probe answer: what
-    // the check itself reads is pinned in `boot/steamModules.test.ts`.
-    afterEach(() => resetNotificationsHealthForTests());
+  describe("the notice for what the start-up checks missed", () => {
+    // Written by the panel factory out of the start-up checks' reports, which is
+    // why this records into the module store rather than a probe answer: what
+    // the checks themselves read is pinned in `boot/steamModules.test.ts` and
+    // `boot/steamInternalsCheck.test.ts`.
+    afterEach(() => resetStartupMissNoticeForTests());
 
-    it("names the condition and offers no action, because the repair is outside the panel", async () => {
-      setNotificationsUnavailable(true);
+    it("names what does not work and asks for a report, offering no action because the repair is outside the panel", async () => {
+      recordStartupMiss("modules", ["Tender's notifications"]);
+      recordStartupMiss("internals", ["setting artwork", "starting a game"]);
       const { findByText } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
-      expect(await findByText(NOTIFICATIONS_UNAVAILABLE_NOTICE.title)).toBeInTheDocument();
-      expect(await findByText(/Syncs and downloads still work/)).toBeInTheDocument();
-      expect(await findByText(/An update should fix it/)).toBeInTheDocument();
-    });
-
-    it("says that a few failures are reported only by a notification, rather than promising every result here", async () => {
-      setNotificationsUnavailable(true);
-      const { findByText } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
+      expect(await findByText("Steam has changed")).toBeInTheDocument();
       expect(
-        await findByText(/a few failures, like a sync that cannot start, are only reported by a notification/),
+        await findByText(
+          "This Steam version is missing parts Tender uses. Not working: Tender's notifications, setting artwork, " +
+            "starting a game. Please report this.",
+        ),
       ).toBeInTheDocument();
     });
 
-    it("says nothing at all when every lookup behind a toast answered", async () => {
-      resetNotificationsHealthForTests();
+    it("names no loss where nothing the reader sees was missed, and still asks for a report", async () => {
+      recordStartupMiss("modules", []);
+      const { findByText } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      expect(
+        await findByText(
+          "This Steam version is missing parts Tender uses. Everything still works; please report this.",
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it("appears on a Main already open when a check's answer lands after it mounted", async () => {
+      const { findByText, queryByText } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      expect(queryByText("Steam has changed")).toBeNull();
+      act(() => recordStartupMiss("internals", ["setting artwork"]));
+      expect(await findByText(/Not working: setting artwork\./)).toBeInTheDocument();
+    });
+
+    it("says nothing at all when every check found everything", async () => {
       const { queryByText } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
-      expect(queryByText(NOTIFICATIONS_UNAVAILABLE_NOTICE.title)).toBeNull();
-      expect(queryByText(/An update should fix it/)).toBeNull();
+      expect(queryByText("Steam has changed")).toBeNull();
+      expect(queryByText(/missing parts Tender uses/)).toBeNull();
     });
   });
 

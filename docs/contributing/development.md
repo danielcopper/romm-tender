@@ -664,7 +664,7 @@ frontend/src/                        # Frontend TypeScript
   desktop/                           # The desktop-client surface — peer of bigpicture/, see its README
   shared/                            # UI that belongs to both surfaces — launch prompts, disc glyphs; imports neither surface
   api/backend.ts                     # endpoint() wrappers (typed)
-  types/                             # TypeScript interfaces and Steam API declarations — types only; imports nothing else in src/
+  types/                             # TypeScript interfaces and the declarations of Steam internals — types only; imports nothing else in src/
   utils/                             # Shortcut CRUD, sync, downloads, collections, session manager, store patches
 bin/tender-rom-launcher              # Pure exec wrapper — installed to <bin root> at every start, and run from there
 tests/                               # Backend unit tests, mirroring backend/ layout

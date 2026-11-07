@@ -36,9 +36,19 @@ export function findDesktopWindow(): Window | undefined {
   return undefined;
 }
 
+const exportsCreateRoot = (m: unknown): boolean =>
+  typeof m === "object" && m !== null && typeof (m as Record<string, unknown>).createRoot === "function";
+
 /** The module in Steam's registry that exports `createRoot`. */
 export function findReactClient(): ReactClientModule | undefined {
-  return findModule((m: unknown) => {
-    return typeof m === "object" && m !== null && typeof (m as Record<string, unknown>).createRoot === "function";
-  }) as ReactClientModule | undefined;
+  return findModule(exportsCreateRoot) as ReactClientModule | undefined;
 }
+
+/**
+ * The same search, run once when this module is evaluated: what the start-up
+ * check asks after (`boot/steamModules.ts`), in the one build that carries the
+ * desktop surface. Every other build leaves this module out
+ * (`frontend/rollup.config.js`).
+ */
+export const ReactClient: ReactClientModule | undefined = findModule(exportsCreateRoot) as
+  ReactClientModule | undefined;

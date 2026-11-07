@@ -90,6 +90,37 @@ controller were among those not found: tap the buttons instead. Under the other 
 update: where it names Decky Loader alone, the update is Decky Loader's; where Tender started before Steam was ready,
 restart Steam; and where it asks for a report, send one with the names.
 
+## Main Says "Steam has changed"
+
+**Symptom**: Tender's panel works, and Main shows a notice titled "Steam has changed": "This Steam version is missing
+parts Tender uses. Not working: …. Please report this." — or, where nothing you can see is affected, "Everything still
+works; please report this."
+
+**Explanation**: When it starts, Tender looks up the parts of Steam it uses. Some were not found in the Steam version
+you are running, and the notice names what does not work without them — for example setting artwork, starting a game or
+Tender's notifications. Everything else works as usual. The notice can appear a moment after the panel opens: some of
+Steam's parts are looked up only once Steam has finished starting.
+
+**What to do**: Report it, and include Tender's log, which names every part that was missing
+(`grep "start-up check" ~/.local/state/romm-tender/backend.log | tail -n 5`). If **Log Level** in **Settings ›
+Advanced** is set to **Error**, set it back to **Warn** and restart Steam first, or the line is not written. What fixes
+it is a newer Tender, or, where you also run Decky Loader, possibly a newer Decky Loader; where the log line names a
+repair, it names which. The notice has no button because there is nothing to do inside Tender.
+
+## Tender's Quick Access Entry Is Missing
+
+**Symptom**: A notification says "Tender couldn't add its Quick Access entry with this Steam version. Please report
+this.", and Tender's entry is not in the Quick Access menu.
+
+**Explanation**: The part of Steam that Tender's entry is put into was not found in this Steam version, so the panel
+cannot be opened. Where nothing else is missing, Tender keeps running without it: its section on a game's page, the
+check before a game starts and the save sync around a game still run. A library sync and Sync All Saves start from the
+panel, so they cannot be started until the entry is back. Where something Tender needs to draw its panel is missing as
+well, none of these run, and the log names what was missing.
+
+**What to do**: Report it, with Tender's log. Where Steam's notifications are affected as well, no notification appears,
+and the log alone says so.
+
 ## Tender Says It Was Restarted
 
 **Symptom**: A notification says "Tender was restarted", and Tender's panel shows only one of two notes, on every page:
@@ -763,10 +794,13 @@ certain the small/empty local file is the one you want to keep — that uploads 
 If you need to recover a save by hand, look in the `.romm-backup` folder inside your saves directory (e.g.
 `<saves_path>/gba/.romm-backup/`): every file Tender moves aside is timestamped there. Tender moves a save aside
 whenever it is about to be overwritten or removed — not just when resolving a conflict with **Use Server**, but also
-when you switch save slots and when the setup wizard copies an archived save (one uploaded without a slot) into a slot.
-If a save can't be moved aside when you switch slots, the switch stops and the slot you were on stays active; you're
-told which saves, if any, were already moved into `.romm-backup`. If the `.romm-backup` folder itself can't take
-backups, the switch is refused before anything moves, and you're told the folder is the problem.
+when the setup wizard copies an archived save (one uploaded without a slot) into a slot. When you switch save slots,
+every save file of the game is moved aside, the ones the new slot replaces included, before the new slot's saves are
+downloaded. If one of the new slot's saves fails to download, the game may find no save under that name until its next
+sync; before the game starts, that sync runs while **Sync before launch** is on and RomM can be reached. If a save can't
+be moved aside when you switch slots, the switch stops and the slot you were on stays active; you're told which saves,
+if any, were already moved into `.romm-backup`. If the `.romm-backup` folder itself can't take backups, the switch is
+refused before anything moves, and you're told the folder is the problem.
 
 Backups are **not** kept forever. The folder keeps the **newest 10 backups per save file**; older ones are pruned the
 next time that same save is moved aside (one that can't be removed is kept). Backups of a different save file are never

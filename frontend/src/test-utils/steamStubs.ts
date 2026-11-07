@@ -40,6 +40,5 @@ export function stubAppStore(overviews: Record<number, OverviewLike>): void {
         ...(o.minutes_playtime_forever !== undefined ? { minutes_playtime_forever: o.minutes_playtime_forever } : {}),
       };
     }),
-    allApps: [],
   });
 }

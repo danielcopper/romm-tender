@@ -5,13 +5,21 @@ import { Focusable, PanelSection, PanelSectionRow } from "@decky/ui";
 import { StartupFailurePanel } from "./boot/StartupFailurePanel";
 import { FallbackActions } from "./boot/FallbackActions";
 import { fallbackButtons } from "./boot/fallbackButtons";
+import { DESKTOP_SURFACE } from "virtual:tender-desktop-surface";
+
 import { readSearchingCopy } from "./boot/searchingCopy";
+import { noticeFeatures, noticedMisses, startupMissLine } from "./boot/startupMiss";
+import { STEAM_INTERNALS } from "./boot/steamInternals";
+import { checkSteamInternals } from "./boot/steamInternalsCheck";
 import {
   checkSteamModules,
   describeFailure,
+  describeMissedLookups,
   describeSurvivedMiss,
   notificationsMissing,
+  quickAccessMissing,
   sentenceNamesATenderUpdate,
+  type StartupReport,
 } from "./boot/steamModules";
 import { MainPage } from "./bigpicture/MainPage";
 import { SettingsPage } from "./bigpicture/SettingsPage";
@@ -50,6 +58,7 @@ import {
   getUpdateInstallState,
   logError,
   logInfo,
+  logWarn,
 } from "./api/backend";
 import {
   createOrUpdateCollections,
@@ -65,7 +74,7 @@ import { seedUpdateInstallAttempt, setUpdateInstallAttempt } from "./utils/updat
 import { fetchUpdateNotice, takePushedUpdateNotice } from "./utils/updateNoticeStore";
 import { fetchUpdateOutcome, takePushedUpdateFailure } from "./utils/updateOutcomeStore";
 import { fetchStoppedUpdateAttempt, takePushedStoppedAttempt } from "./utils/stoppedUpdateStore";
-import { logToastFailure, toastOwedAttempt } from "./utils/failedUpdateToast";
+import { logToastFailure, toastOwedAttempt, toastWhenSteamIsReady } from "./utils/failedUpdateToast";
 import { watchUpdateAvailableToast } from "./utils/updateAvailableToast";
 import { relocateShortcutsToLauncher } from "./utils/launcherRelocation";
 import { setLauncherRelocated } from "./utils/launcherStore";
@@ -82,7 +91,10 @@ import {
   pageEntryStop,
   placeEntryFocus,
 } from "./utils/entryFocus";
+import { QuickAccessMenuBrowserView } from "./utils/deckyUiInternals";
 import { setNotificationsUnavailable } from "./utils/notificationsHealth";
+import { QUICK_ACCESS_MISSING_TOAST, recordStartupMiss } from "./utils/startupMissNotice";
+import { TOAST_READINESS_DEADLINE_MS, waitUntilSteamServicesInitialized } from "./utils/steamReadyForToasts";
 import { detach } from "./utils/detach";
 import type {
   SyncProgress,
@@ -411,6 +423,49 @@ function registerAppIds(map: Record<string, number[]>): void {
   }
 }
 
+/** The two start-up checks, as the backend log names them. */
+const MODULES_CHECK = "Steam's module registry";
+const INTERNALS_CHECK = "Steam internals";
+
+/**
+ * Ask after the Steam internals once Steam reports its services initialised,
+ * or once the wait's deadline has passed, and report what missed: one warning
+ * in the backend log, and — where the panel mounted — the losses on Main's
+ * notice. No missing Steam internal costs the panel, so nothing here decides
+ * whether it mounts.
+ */
+async function checkSteamInternalsOnceSteamIsReady(notice: boolean): Promise<void> {
+  const inTime = await waitUntilSteamServicesInitialized();
+  const report = checkSteamInternals(STEAM_INTERNALS, { desktopSurface: DESKTOP_SURFACE });
+  if (report.missed.length === 0) return;
+  const late = inTime
+    ? ""
+    : ` Steam had not reported its services initialised after ${TOAST_READINESS_DEADLINE_MS / 1000} s, so the Steam internals were asked anyway.`;
+  logWarn(`${startupMissLine(INTERNALS_CHECK, report.missed, report.asked)}${late}`);
+  // A miss an alternative stands in for is logged and raises no notice.
+  const noticed = noticedMisses(report.missed);
+  if (notice && noticed.length > 0) recordStartupMiss("internals", noticeFeatures(noticed));
+}
+
+/** Start the Steam-internals check without waiting for it; a failure of the check itself is logged. */
+function startSteamInternalsCheck(notice: boolean): void {
+  checkSteamInternalsOnceSteamIsReady(notice).catch((e: unknown) =>
+    logError(`start-up check "${INTERNALS_CHECK}" could not be asked: ${e}`),
+  );
+}
+
+/**
+ * Without its Quick Access entry neither the panel, nor the fallback page in
+ * its place, nor Main's notice can be reached, so this one miss is also said
+ * where Steam shows it — unless one of the three searches a toast is raised
+ * through (`NOTIFICATION_LOOKUPS`) missed too, when the log alone carries it.
+ */
+function toastAMissingQuickAccessEntry(startup: StartupReport): void {
+  if (quickAccessMissing(startup) && !notificationsMissing(startup)) {
+    detach(toastWhenSteamIsReady(QUICK_ACCESS_MISSING_TOAST, "the toast that Tender's Quick Access entry is missing"));
+  }
+}
+
 const tender = definePanel(() => {
   // Before anything else runs, and before anything mounts: did every search into
   // Steam's own interface find what it was looking for?
@@ -439,8 +494,15 @@ const tender = definePanel(() => {
     // question about the machine separately and disagree. It is read only where
     // something missed, so the ordinary start touches none of Decky's globals.
     const copy = readSearchingCopy(startup);
+    toastAMissingQuickAccessEntry(startup);
+    // One warning in the backend log for every miss, whether or not the panel
+    // mounts over it, so the log holds the whole miss whatever the user saw.
+    const { missed, asked } = describeMissedLookups(startup);
     if (!startup.panelMayMount) {
-      console.error(`[${DISPLAY_NAME}] ${describeFailure(startup, copy)} Missing: ${startup.missing.join(", ")}`);
+      logWarn(`${startupMissLine(MODULES_CHECK, missed, asked)} ${describeFailure(startup, copy)}`);
+      // The Steam internals are asked here too, for the log alone: the page has
+      // no notice to carry them, and the log is complete whatever the user saw.
+      startSteamInternalsCheck(false);
       return {
         name: DISPLAY_NAME,
         icon: <TabIcon />,
@@ -454,14 +516,15 @@ const tender = definePanel(() => {
         ),
       };
     }
-    // The panel mounts, so nothing on screen reports this: the log line is the
-    // whole record, and the next reader of it is whoever is asked why a button
-    // lost its glyph, or why a debug dump prints `UNDEFINED` where a class name
-    // belongs.
-    console.warn(`[${DISPLAY_NAME}] ${describeSurvivedMiss(startup, copy)} Missing: ${startup.missing.join(", ")}`);
+    // The panel mounts: the notice on Main names what the reader loses, and the
+    // log line the names behind it. Its sentence states the count, so the line
+    // ahead of it does not.
+    logWarn(`${startupMissLine(MODULES_CHECK, missed, null)} ${describeSurvivedMiss(startup, copy)}`);
+    recordStartupMiss("modules", noticeFeatures(missed));
   }
 
   watchStrandedPanel();
+  startSteamInternalsCheck(true);
   disownStrandedPruneLeases();
   registerGameDetailPatch();
   registerLaunchInterceptor(() => launchPromptsForThisStart(gamepadLaunchPrompts));
@@ -1185,13 +1248,17 @@ const tender = definePanel(() => {
  * Decky's; nothing else in the tree calls the factory, so without it the panel
  * is built for nobody.
  *
- * Nothing is awaited and nothing branches on the result: an installation that
- * found no renderer to patch says so on the console, and the panel simply never
- * appears — there is no second way to show it that a fallback could take.
+ * Nothing is awaited and nothing branches on the result: without a renderer to
+ * patch the panel never appears, and there is no second way to show it that a
+ * fallback could take. A module that is missing is the start-up check's to
+ * report, with its warning and, where a toast can be raised, its toast; what is
+ * left for this line is an installation that found no renderer in a module the
+ * check did find, which a change to either of the two predicates alone would
+ * bring about, and which raises no toast.
  */
 const quickAccessEntry = installQuickAccessEntry(tender);
-if (!quickAccessEntry.patched) {
-  console.error(
-    `[${DISPLAY_NAME}] Steam's Quick Access renderers were not found, so there is no tab to mount the panel behind.`,
+if (!quickAccessEntry.patched && QuickAccessMenuBrowserView !== undefined) {
+  logWarn(
+    "Steam's Quick Access module was found but holds no renderer Tender's entry can be installed into, so there is no tab to mount the panel behind.",
   );
 }

@@ -124,6 +124,37 @@ const stampBundleKind = (kind) => ({
   load: (id) => (id === `\0${BUNDLE_KIND_MODULE}` ? `export const BUNDLE_KIND = ${JSON.stringify(kind)};` : null),
 });
 
+const DESKTOP_SURFACE_MODULE = "virtual:tender-desktop-surface";
+
+/**
+ * Tell a panel bundle whether the desktop surface is in it.
+ *
+ * The start-up checks ask after what only the desktop surface reaches — its
+ * Steam internals and its `ReactClient` search — only in the build that
+ * carries that surface (`pnpm build:desktop`); every other build answers
+ * `false`, and `frontend/scripts/check-bundle-shape.mjs` holds the release
+ * bundles to that. It is a build fact for the reason
+ * {@link stampBundleKind} gives.
+ */
+const stampDesktopSurface = (desktopSurface) => ({
+  name: "stamp-desktop-surface",
+  resolveId: (id) => (id === DESKTOP_SURFACE_MODULE ? `\0${DESKTOP_SURFACE_MODULE}` : null),
+  load: (id) =>
+    id === `\0${DESKTOP_SURFACE_MODULE}` ? `export const DESKTOP_SURFACE = ${JSON.stringify(desktopSurface)};` : null,
+});
+
+const DESKTOP_SOURCE_DIR = `${path.resolve("src", "desktop")}${path.sep}`;
+
+/**
+ * Where the desktop surface is not in the build, its modules are declared free
+ * of side effects, so that one the start-up check imports for its dev-build
+ * entry (`src/desktop/desktopWindow.ts`, whose search runs at module scope) is
+ * left out once the stamp has folded that entry away. Rollup keeps a module
+ * whose top level calls anything, used or not, so the stamp alone would ship
+ * the search in every release.
+ */
+const withoutDesktopSideEffects = (id) => !id.startsWith(DESKTOP_SOURCE_DIR);
+
 // Not in `dist/`: docs/architecture/frontend-bundles.md, "Third-party package budgets".
 const PACKAGE_RECORD = "bundle-packages.json";
 
@@ -232,20 +263,21 @@ const plugins = ({ sourcemap }) => [
 // `context: "window"` is Steam's: a bundle evaluated through `import()` in the
 // SharedJSContext has no module `this`, and a dependency reading top-level
 // `this` expecting the global object would see `undefined`.
-const build = ({ input, file, external, bundleKind, extraPlugins = [], sourcemap }) => ({
+const build = ({ input, file, external, bundleKind, desktopSurface = false, extraPlugins = [], sourcemap }) => ({
   input,
   external,
   context: "window",
   plugins: [
-    ...(bundleKind ? [stampBundleKind(bundleKind)] : []),
+    ...(bundleKind ? [stampBundleKind(bundleKind), stampDesktopSurface(desktopSurface)] : []),
     ...plugins({ sourcemap }),
     ...extraPlugins,
     recordPackageBytes(),
   ],
+  ...(desktopSurface ? {} : { treeshake: { moduleSideEffects: withoutDesktopSideEffects } }),
   output: { file: `${OUT_DIR}/${file}`, format: "esm", sourcemap },
 });
 
-export const configure = ({ sourcemap }) => [
+export const configure = ({ sourcemap, desktopSurface = false }) => [
   // The React bootstrap. Its own bundle, and that is load-bearing rather than
   // tidy: `@decky/ui`'s component half reads React internals while its modules
   // evaluate, so it cannot be in the import graph of the module that creates the
@@ -267,6 +299,7 @@ export const configure = ({ sourcemap }) => [
     file: "index.js",
     external: Object.keys(STEAM_REACT_GLOBALS),
     bundleKind: "standalone",
+    desktopSurface,
     extraPlugins: [shipDeckyUiLicence()],
     sourcemap,
   }),
@@ -293,6 +326,7 @@ export const configure = ({ sourcemap }) => [
     file: "index-coexistence.js",
     external: [...Object.keys(STEAM_REACT_GLOBALS), "@decky/ui"],
     bundleKind: "coexistence",
+    desktopSurface,
     extraPlugins: [externalGlobals({ "@decky/ui": "DFL" })],
     sourcemap,
   }),

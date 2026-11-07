@@ -39,7 +39,7 @@ is invisible at the citation site), so reach it through the page that owns the t
 - QAM panel — pages and their widths, the wide-page frame, list-and-detail navigation, notices and their homes —
   [qam-panel.md](docs/architecture/qam-panel.md)
 - How the panel is BUILT — the three build outputs, the two copies of the panel and why, Steam's React globals, the
-  start-up check — [frontend-bundles.md](docs/architecture/frontend-bundles.md)
+  start-up check, the list of Steam internals — [frontend-bundles.md](docs/architecture/frontend-bundles.md)
 - How the panel GETS INTO STEAM — the CEF client, which bundle is chosen and from what, the marker, the crash watchdog,
   the load-failure card — [loading-the-panel.md](docs/architecture/loading-the-panel.md)
 - Save-file sync — slots, conflict resolution, negotiate transport, version history —
@@ -1013,14 +1013,76 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   global, never what Steam has mounted or focused. Unchecked: whether any other classification is true — a real search
   is never parked in `UNVERIFIABLE` to quieten the check — and a runtime-state reader reached through an arrow export, a
   re-export, another module's helper or a nested function can sit in `STEAM_LOOKUPS` unflagged
+- **Every Steam internal the code reaches is named in one list — the panel's in `frontend/src/boot/steamInternals.ts`,
+  what the backend spells in Steam in `backend/domain/steam_internals.py` — and `frontend/src/types/steam.d.ts` declares
+  nothing the code does not reach; every panel entry states what its absence costs, never the panel, and how the
+  start-up check asks it** — check + test + prompt-only — the type (`absenceCost` excludes `panel`, a `diagnostic` entry
+  names no loss and every other at least one), and `frontend/src/boot/steamInternals.test.ts`, which holds the list's
+  typed entries EQUAL to what `frontend/src/test-utils/steamReach.ts` reaches through the type checker over the shipped
+  code (members of `steam.d.ts`'s globals, of `@decky/ui`'s `dist/globals/` and `webpack.d.ts`, and of the shapes a cast
+  of the window names or extends in its own file), less `NOT_STEAM_INTERNALS`, and its untyped entries out of it; names
+  each member by its type's route from Steam's roots and fails on a type no route reaches; requires every `steam.d.ts`
+  member to be reached, every window cast it cannot read and every route literal (a path handed to `Navigate`, or one
+  spelling `steamloopback.host`, `steam://` or `/library/app/`) to sit in a file an untyped entry names, and every part
+  of an untyped entry's path to be spelled in code in each file it names; in the same file, that no entry costs `panel`,
+  that `asked` is `call` for a path naming what a call answers and `read` for one naming an element, that a leaf typed
+  entry is `call` exactly where `steamReach.ts` finds its member declared as something to call (`callable`), that
+  `devBuildOnly` marks exactly the entries reached from `desktop/` alone, that every `notAtStartUp` gives a reason, and
+  that every `STEAM_FEATURES` label is used by one list or the other; `frontend/src/test-utils/steamReach.test.ts` for
+  the scan's shapes the shipped code has no site of; and `tests/domain/test_steam_internals.py`, which holds every
+  string under `backend/` but `_vendor/` and `native/` naming Steam (outside docstrings and logging calls) to a
+  module-level constant the backend's list names, every such constant to spell its entries, and every property it reads
+  to be an entry's or one of its own JavaScript names. Unseen on the panel's side: a read beneath a value typed
+  `unknown`, `any` or `Record` (the coercions in `utils/runningApps.ts` and `utils/steamReadyForToasts.ts`, the values
+  of `deckDesktopApps.apps`, `webpackChunksteamui.push`'s factories), so a new member read beneath any of them; an
+  element access whose key is no string literal; a member asked by `in`, `Reflect` or `Object.keys`; a Steam shape
+  declared in another file than the window cast that reaches it; a Steam object reached neither through a declared
+  global nor through a window cast, or through a cast of something not typed as a window; a Steam global declared
+  anywhere but `steam.d.ts`, `@decky/ui`'s `dist/globals/` and `webpack.d.ts`; a member `steam.d.ts` declares in another
+  form than a property or method signature; a second unreadable cast or a second route literal in a file an untyped
+  entry already names; a route that spells none of those three whole and is not a string literal handed as the first
+  argument to a method named `Navigate` — one built from pieces, held in a variable, handed to `Navigate` called bare or
+  by element access, or handed to anything else; an untyped entry whose every part its file spells but not its path,
+  since the parts are matched one by one; and the route each site reaches a member by, since a member is named after its
+  type's first route. Unseen on the backend's: a Steam global the sweep's spellings do not name, a name built at run
+  time, a string inside a call to a method named like a logging one whatever its receiver, a global a listed expression
+  reads with no member after it, a read compared by its name rather than its path, a read the check's two patterns
+  (`.name`, a double-quoted `["…"]`) miss — a single-quoted, computed or escaped key — and a constant that spells each
+  part of an entry but not its path. Prompt-only: a reach no type describes is listed with its files, and its `asked` is
+  held by nothing where its path ends at its static part; which entries are alternatives of one another (`oneOf`), read
+  off the code's fallbacks by hand — the test holds only that no group has one member; a `NOT_STEAM_INTERNALS` prefix
+  names nothing of Steam's; whether an entry's cost and losses are what its absence costs, and whether a `notAtStartUp`
+  entry truly cannot be asked; and what an internal does stays a device test
 - **Whether every search answered and whether the panel may MOUNT are two questions, and a miss that costs less than the
   panel never takes the interface off the air** — check + test + prompt-only — the type (`SteamLookup.absenceCost` is
   required), `frontend/src/index.test.tsx`, and `frontend/src/boot/steamModules.test.ts`, which requires a non-blocking
-  name `@decky/ui` does not export to be one Tender resolves itself (so the `SP_*` globals stay blocking). Prompt-only:
-  `checkSteamModules` derives `panelMayMount`, and `index.tsx` gates the fallback page on it and otherwise logs
-  `describeSurvivedMiss`, which names no repair of its own; `absenceCost` is read only as `!== "panel"`; the notice on
-  Main that toasts are unavailable comes from `notificationsMissing` over `NOTIFICATION_LOOKUPS` names, never from a
-  `feature` cost; a name leaves `panel` only once its every consumer is read
+  name `@decky/ui` does not export to be one Tender resolves itself (so the `SP_*` globals stay blocking), and every
+  lookup at `feature` or `appearance`, and no other, to name a loss. Prompt-only: `checkSteamModules` derives
+  `panelMayMount`, and `index.tsx` gates the fallback page on it; `!== "panel"` is the only reading of `absenceCost`
+  that decides anything — the log line and the notice read the cost and the losses only to word a miss; what the toaster
+  can do (`utils/notificationsHealth.ts`) is recorded from `notificationsMissing` over `NOTIFICATION_LOOKUPS` names,
+  never from a `feature` cost; a name leaves `panel` only once its every consumer is read
+- **Every start-up check that misses something writes ONE warning to the backend log — which check, then every missing
+  name with its cost and losses — whether the panel mounts or the fallback page stands in its place; every miss the
+  panel survives reaches the one notice on Main; a missed Quick Access search also raises one toast, under the panel and
+  under the fallback page alike, unless one of `NOTIFICATION_LOOKUPS` missed too; the Steam-internals check asks once
+  Steam reports its services initialised, or once the 30-second deadline has passed, under the fallback page too, for
+  the log alone; a group of alternatives none of whose members is there is a miss like any other, while a member missing
+  beside an alternative that is there or cannot be asked is logged and raises no notice; and what only the desktop
+  surface reaches is asked only where the build stamp `virtual:tender-desktop-surface` says the surface is in the
+  build** — check + test + prompt-only — `frontend/scripts/check-bundle-shape.mjs` (both release panel bundles stamped
+  `DESKTOP_SURFACE = false` and carrying no `createRoot` search); `frontend/src/index.test.tsx` (one warning for a
+  survived and for a fallback miss, the internals line once Steam is ready, past the deadline and under the fallback
+  page, a failed check logged, a miss an alternative stands in for logged with no notice, the panel mounting over an
+  internals miss, the toast on both branches and its two absences, the installation's own warning for a module the check
+  found); `frontend/src/boot/steamInternalsCheck.test.ts` (with the groups of alternatives),
+  `frontend/src/boot/startupMiss.test.ts`, `frontend/src/bigpicture/MainPage.test.tsx` (the card with and without a
+  list, an answer landing after Main mounted, no card) and `frontend/src/utils/steamReadyForToasts.test.ts`. Unseen by
+  the bundle check: a desktop search that spells no `createRoot`. Unseen: a log level set to `error`, which drops the
+  warning; a missing `NotificationStore.ProcessNotification`, asked only after the toast is decided, under which the
+  toast is raised into a store that refuses it. Prompt-only: the warning is worded only by `boot/startupMiss.ts` and
+  written only by the panel factory; nothing else records into `utils/startupMissNotice.ts`; a new search or internal at
+  `feature` or `appearance` names its loss from `STEAM_FEATURES`, never a sentence of its own
 - **The fallback page names the copy of `@decky/ui` that actually ran the search that missed, and the repair that
   follows from it** — check + test + prompt-only — `frontend/scripts/check-bundle-shape.mjs` checks the stamp the build
   puts on each bundle (`BUNDLE_KIND`, standalone or coexistence) and that `globals.js` carries none; every

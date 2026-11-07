@@ -18,7 +18,7 @@ import { requestSyncCancel } from "../utils/syncManager";
 import { useConnectionProbe } from "../utils/connectionProbe";
 import type { BackendFailed, ConnectionFailure } from "../utils/connectionProbe";
 import { mainSourceBanners, type SourceBanner } from "../utils/emulatorSourceWording";
-import { NOTIFICATIONS_UNAVAILABLE_NOTICE, notificationsUnavailable } from "../utils/notificationsHealth";
+import { useStartupMissNotice } from "../utils/startupMissNotice";
 import { VersionErrorCard } from "./VersionErrorCard";
 import { useVersionError } from "../utils/connectionState";
 import { WarningCard } from "./WarningCard";
@@ -370,6 +370,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
   const [sourceBanners, setSourceBanners] = useState<SourceBanner[]>([]);
   const migration = useMigrationStatus();
   const settingsReset = useSettingsResetState();
+  const startupMiss = useStartupMissNotice();
   const tenderFolder = useTenderFolder();
   const playtimeScope = usePlaytimeScopeState();
   const downloads = useDownloads();
@@ -599,14 +600,10 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
             </Focusable>
           </PanelSectionRow>
         ))}
-        {notificationsUnavailable() && (
+        {startupMiss && (
           <PanelSectionRow>
             <Focusable onActivate={() => {}}>
-              <WarningCard
-                title={NOTIFICATIONS_UNAVAILABLE_NOTICE.title}
-                message={NOTIFICATIONS_UNAVAILABLE_NOTICE.message}
-                compact
-              />
+              <WarningCard title={startupMiss.title} message={startupMiss.message} compact />
             </Focusable>
           </PanelSectionRow>
         )}
