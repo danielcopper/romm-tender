@@ -384,10 +384,9 @@ class FirmwareStatusReader:
         §2), so each entry's RomM platform slug is normalized before the
         ``get_emulator_options`` call; ``has_games`` stays on the RomM slug (its
         own vocabulary); the library's files are the ones RomM lists under
-        *folder*. ``active_core`` and
-        ``active_core_label`` are the two projections of ONE pick
-        (:meth:`_platform_emulator`), so the pane cannot name one emulator and
-        judge by another; ``active_core`` is ``None`` only where the pick could
+        *folder*. ``active_core`` and ``active_core_label`` are the two
+        projections of ONE pick (:meth:`_platform_emulator`), so the pane cannot
+        name one emulator and judge by another; ``active_core`` is ``None`` only where the pick could
         not be made or the resolver could not identify it, and then no row is
         its requirement and the answer reads as not established. The
         ``emulators`` list is the full classified picker payload and
@@ -401,8 +400,7 @@ class FirmwareStatusReader:
 
         **The demand is read per platform**, because a standalone emulator's
         declarations belong to a platform only by way of the emulators ES-DE
-        offers for it. *platform_firmware* is the listing RomM keeps under
-        *folder* (:meth:`FirmwareListing.get_platform_firmware_list`).
+        offers for it.
         """
         slug = plat["platform_slug"]
         platform = await self._loop.run_in_executor(None, self._platform_systems.platform_system, slug)

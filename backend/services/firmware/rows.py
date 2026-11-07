@@ -50,9 +50,9 @@ class RowInputs:
     """Everything one platform's rows are built from, read once for the whole page.
 
     ``library`` is the files RomM lists under this platform's own folder
-    (:func:`~domain.firmware_rows.platform_library`), and ``copies`` this
-    platform's store files. ``looks`` keeps one look per place, so a place two
-    rows name is looked at once.
+    (:func:`~domain.firmware_rows.platform_library`) whose names can lie in the
+    store, and ``copies`` this platform's store files. ``looks`` keeps one look
+    per place, so a place two rows name is looked at once.
     """
 
     catalogue: FirmwareCatalogue

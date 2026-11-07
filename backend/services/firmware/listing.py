@@ -158,9 +158,8 @@ class FirmwareListing:
     def get_platform_firmware_list(self, platform_folder: str) -> list[dict[str, Any]]:
         """Return the firmware RomM lists under *platform_folder* (:func:`~domain.firmware_rows.platform_library`).
 
-        The only listing a platform's rows, downloads and replacements read. It
-        is a slice of :meth:`get_firmware_list`, so it is cached, falls back and
-        raises the same way.
+        It is a slice of :meth:`get_firmware_list`, so it is cached, falls back
+        and raises the same way.
         """
         return platform_library(self.get_firmware_list(), platform_folder)
 
