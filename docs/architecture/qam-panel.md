@@ -873,9 +873,9 @@ themselves, both on the game page, where the play row's sheet is present: Play's
 emulator menu entry while whether that emulator can start the game is still being read
 (`frontend/src/utils/emulatorMenu.tsx`).
 
-The desktop client's disc and version selector, PLAY and RESOLVE CONFLICT (dev build only) show the same ring while a
-version switch is under way, without that class: `frontend/src/desktop/gameview/SvgThrobber.tsx` turns an SVG with SMIL,
-because the class's keyframes would be a stylesheet on Steam's page outside the restoration ledger
+The desktop client's disc and version selector, PLAY, RESOLVE CONFLICT and DOWNLOAD (dev build only) show the same ring
+while a version switch is under way, without that class: `frontend/src/desktop/gameview/SvgThrobber.tsx` turns an SVG
+with SMIL, because the class's keyframes would be a stylesheet on Steam's page outside the restoration ledger
 ([desktop-dom-architecture.md](desktop-dom-architecture.md)).
 
 The throbber puts its rules into the document it is drawn in (`Throbber.tsx`, with

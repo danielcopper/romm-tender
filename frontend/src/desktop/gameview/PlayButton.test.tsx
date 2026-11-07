@@ -1851,16 +1851,36 @@ describe("PlayButton", () => {
       expect(play).toHaveStyle({ cursor: "not-allowed" });
     });
 
-    it("disables DOWNLOAD while the selector is switching, its label unchanged", () => {
+    it("disables DOWNLOAD while the selector is switching, with the throbber in its arrow's place and no pointer", () => {
       vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ installed: false }));
       render(<PlayButton appId={APP_ID} />);
-      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
+      const download = () => screen.getByRole("button", { name: "DOWNLOAD" });
+      expect(download()).toBeEnabled();
+      expect(throbberIn(download())).toBeNull();
+      expect(download()).toHaveStyle({ cursor: "pointer" });
 
       act(() => selectorProps()!.onSwitchingChange(true));
-      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeDisabled();
+      expect(download()).toBeDisabled();
+      expect(throbberIn(download())).not.toBeNull();
+      expect(download().querySelectorAll("svg")).toHaveLength(1);
+      expect(download()).toHaveStyle({ cursor: "default" });
 
       act(() => selectorProps()!.onSwitchingChange(false));
-      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
+      expect(download()).toBeEnabled();
+      expect(throbberIn(download())).toBeNull();
+      expect(download()).toHaveStyle({ cursor: "pointer" });
+    });
+
+    it("keeps an OFFLINE DOWNLOAD's cursor while the selector is switching, and its throbber", () => {
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ installed: false }));
+      setRommConnectionState("offline");
+      render(<PlayButton appId={APP_ID} />);
+
+      act(() => selectorProps()!.onSwitchingChange(true));
+
+      const download = screen.getByRole("button", { name: "OFFLINE" });
+      expect(throbberIn(download)).not.toBeNull();
+      expect(download).toHaveStyle({ cursor: "not-allowed" });
     });
 
     it("is told the press is over once the download has started", async () => {
