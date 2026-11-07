@@ -15,7 +15,7 @@ from lib.errors import Refused
 
 if TYPE_CHECKING:
     import asyncio
-    from collections.abc import AsyncGenerator, Awaitable, Callable
+    from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping
 
     from lib.prune_conflicts import PruneConflicts
 
@@ -54,27 +54,32 @@ class ConflictRuleSet:
         migration: bool = False,
         sync: bool = False,
         prune: bool = False,
+        refusal_details: Mapping[str, Any] | None = None,
     ) -> AsyncGenerator[None]:
         """Check the named rules for *label* and hold what they need for the block.
 
         Raises the ``Refused`` of the first named rule that holds, so the block
-        does not run, and a refused call registers nothing. With ``prune`` the
-        block runs under an operation named *label*, registered in the same
-        lock hold as the check and released when the block ends, however it
-        ends. The update rule is asked once more after the registration: an
-        install pressed while it waited for the lock saw no operation, and
-        would otherwise stop this process under the block.
+        does not run, and a refused call registers nothing. Every refusal it
+        raises carries *refusal_details*, so a caller whose own refusals carry
+        details — a save sync's, ``.claude/rules/endpoints.md`` names them —
+        answers these with them too. With ``prune`` the block runs under an
+        operation named *label*, registered in the same lock hold as the check
+        and released when the block ends, however it ends. The update rule is
+        asked once more after the registration: an install pressed while it
+        waited for the lock saw no operation, and would otherwise stop this
+        process under the block.
         """
-        self._refuse_on_first_rule(update=update, folder=folder, migration=migration, sync=sync)
+        details = dict(refusal_details or {})
+        self._refuse_on_first_rule(update=update, folder=folder, migration=migration, sync=sync, details=details)
         if not prune:
             yield
             return
         registration = await self._prune_conflicts.hold_operation(label)
         if registration is None:
-            raise Refused("prune_active", _PRUNE_ACTIVE_MESSAGE)
+            raise Refused("prune_active", _PRUNE_ACTIVE_MESSAGE, **details)
         if update and self._update_in_progress():
             await self._prune_conflicts.release_operation(registration)
-            raise Refused("blocked_by_update", UPDATE_MESSAGE)
+            raise Refused("blocked_by_update", UPDATE_MESSAGE, **details)
         try:
             yield
         finally:
@@ -106,7 +111,7 @@ class ConflictRuleSet:
         if message is not None:
             raise Refused("operation_active", message)
         try:
-            self._refuse_on_first_rule(update=update, folder=folder, migration=migration, sync=sync)
+            self._refuse_on_first_rule(update=update, folder=folder, migration=migration, sync=sync, details={})
         except BaseException:
             self._prune_conflicts.release_reservation()
             raise
@@ -115,17 +120,21 @@ class ConflictRuleSet:
         finally:
             self._prune_conflicts.release_reservation()
 
-    def _refuse_on_first_rule(self, *, update: bool, folder: bool, migration: bool, sync: bool) -> None:
+    def _refuse_on_first_rule(
+        self, *, update: bool, folder: bool, migration: bool, sync: bool, details: dict[str, Any]
+    ) -> None:
         if update and self._update_in_progress():
-            raise Refused("blocked_by_update", UPDATE_MESSAGE)
+            raise Refused("blocked_by_update", UPDATE_MESSAGE, **details)
         if folder:
             refusal = self._folder_unreachable()
             if refusal is not None:
+                if details:
+                    raise Refused(refusal.reason, refusal.message, **refusal.details, **details)
                 raise refusal
         if migration and self._migration_pending():
-            raise Refused("blocked_by_migration", MIGRATION_MESSAGE)
+            raise Refused("blocked_by_migration", MIGRATION_MESSAGE, **details)
         if sync and self._sync_in_flight():
-            raise Refused("sync_active", _SYNC_MESSAGE)
+            raise Refused("sync_active", _SYNC_MESSAGE, **details)
 
     async def hold_until_done(self, task: asyncio.Task[Any], label: str) -> None:
         """Hold an operation named *label* until *task* ends — detached work a use case started.

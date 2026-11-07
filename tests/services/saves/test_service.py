@@ -529,7 +529,7 @@ class TestRetroDeckMigrationBlocksSaveSync:
         spy = MagicMock(name="do_sync_rom_saves_spy")
         svc._sync_engine.do_sync_rom_saves = spy  # type: ignore[method-assign]
 
-        with _refused_by_conflict_rule("blocked_by_migration"):
+        with _refused_by_conflict_rule("blocked_by_migration", details={"synced": 0, "conflicts": 0}):
             await svc.sync_all_saves()
 
         spy.assert_not_called()

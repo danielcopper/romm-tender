@@ -331,8 +331,21 @@ def _assert_migration_refusal(result: dict[str, Any]) -> None:
     assert "blocked_by_migration" not in result
 
 
-def _assert_update_refusal(result: dict[str, Any]) -> None:
-    assert result == {"success": False, "reason": "blocked_by_update", "message": _UPDATE_MESSAGE}
+# The keys a save-sync endpoint's refusal carries beside the shape.
+_SYNC_KEYS: dict[str, dict[str, int]] = {
+    "pre_launch_sync": {"synced": 0},
+    "sync_rom_saves": {"synced": 0},
+    "sync_all_saves": {"synced": 0, "conflicts": 0},
+}
+
+
+def _assert_update_refusal(result: dict[str, Any], endpoint: str) -> None:
+    assert result == {
+        "success": False,
+        "reason": "blocked_by_update",
+        "message": _UPDATE_MESSAGE,
+        **_SYNC_KEYS.get(endpoint, {}),
+    }
 
 
 async def _until_entered(entered: asyncio.Event, running: asyncio.Task[Any]) -> None:
@@ -371,7 +384,7 @@ async def test_a_held_cleanup_refuses_the_endpoint(harness, endpoint):
 async def test_an_update_in_progress_refuses_the_endpoint(harness, endpoint):
     hold_update_in_progress(harness)
 
-    _assert_update_refusal(await _call(harness, endpoint))
+    _assert_update_refusal(await _call(harness, endpoint), endpoint)
 
 
 @pytest.mark.parametrize("endpoint", MIGRATION)
@@ -446,7 +459,7 @@ async def test_an_update_in_progress_answers_before_every_other_condition(harnes
     hold_sync_in_flight(harness)
     hold_prune_active(harness)
 
-    _assert_update_refusal(await _call(harness, endpoint))
+    _assert_update_refusal(await _call(harness, endpoint), endpoint)
 
 
 @pytest.mark.parametrize("endpoint", sorted(set(MIGRATION) & set(PRUNE_ACTIVE)))
