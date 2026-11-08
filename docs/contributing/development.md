@@ -563,6 +563,11 @@ Conventional Commits; and `label` (`labeler.yml`), which only sets labels. A pul
 `mkdocs.yml` also builds the documentation site (`docs.yml`, `mkdocs build --strict`), which `mise run docs:build` runs
 locally.
 
+One workflow is no check on a pull request at all: `steam-internals.yml` runs once a day and by hand, looks for every
+listed Steam internal in the client Valve publishes, and reports one Steam no longer spells on the issue labelled
+`steam-internals` rather than failing anything
+([Every Steam internal Tender reaches](../architecture/frontend-bundles.md#what-the-daily-watch-looks-for-in-steams-published-client)).
+
 ## Code Quality
 
 - **SonarCloud** — CI-based analysis on every PR to `main` and every push to `main`. Quality Gate enforces 80% coverage
