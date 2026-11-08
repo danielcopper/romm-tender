@@ -6,14 +6,10 @@
 
 import { useCallback, useRef, useState, type CSSProperties, type FC } from "react";
 import { useOutsideClick } from "../../utils/useOutsideClick";
+import { PLAY_GRADIENT } from "../../utils/playGradient";
 import type { PressState } from "./usePlayLaunch";
 import { BUTTON_GROUP_STYLE, BUTTON_BASE_STYLE, SIDE_ACTION_STYLE } from "./styles";
 import { SvgThrobber } from "./SvgThrobber";
-
-// The stops of Steam's own PLAY gradient in the desktop client, read in
-// DevTools (Steam client build 1792618285, CachyOS), drawn across the whole
-// button; Steam's and Big Picture's Play show a stretch of it instead.
-export const PLAY_GRADIENT = "linear-gradient(to right, #70d61d 0%, #01a75b 60%)";
 
 const PLAY_BUTTON_STYLE: CSSProperties = {
   ...BUTTON_BASE_STYLE,

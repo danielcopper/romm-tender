@@ -5,6 +5,7 @@ import {
   getDownloadPulseColor,
   getDownloadBaseBackground,
 } from "./downloadProgress";
+import { PLAY_GRADIENT } from "./playGradient";
 
 // The expected strings are what CustomPlayButton rendered before these helpers
 // left it, written out rather than rebuilt from the module's own stops.
@@ -63,6 +64,7 @@ describe("downloadProgress", () => {
       expect(getDownloadFillGradient(1, downloading, "desktop")).toBe(
         "linear-gradient(to right, rgb(112, 214, 29) 0%, rgb(1, 167, 91) 60%)",
       );
+      expect(getDownloadFillGradient(1, downloading, "desktop")).toBe(PLAY_GRADIENT);
     });
 
     it("is the desktop PLAY's gradient while extracting in the desktop client", () => {

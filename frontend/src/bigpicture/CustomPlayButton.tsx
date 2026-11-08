@@ -39,6 +39,7 @@ import {
 import { executeRomUninstall } from "../utils/romUninstall";
 import { activateRunningApp, executeStopRunningGame } from "../utils/runningGame";
 import {
+  READY_FLASH_MS,
   formatProgress,
   getDownloadFillGradient,
   getDownloadPulseColor,
@@ -414,7 +415,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
           const announced = lastAnnouncedState;
           lastAnnouncedState = null;
           setState(announced !== null && announced.romId === romIdRef.current ? announced.state : "play");
-        }, 1100);
+        }, READY_FLASH_MS);
       },
     );
 
@@ -494,7 +495,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
         // resting state is Download on success, and on a failed removal
         // `handleUninstall` restores the state it captured at the press.
         if (prev === "uninstall_pending" || prev === "uninstalling") return prev;
-        // The download flash holds the button for its own 1100ms and applies
+        // The download flash holds the button for its own READY_FLASH_MS and applies
         // `announced` from `lastAnnouncedState` when it ends.
         if (prev === "dl_complete") return prev;
         if (prev === "checking" || prev === "syncing" || prev === "launching" || prev === "download") return prev;

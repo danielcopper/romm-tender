@@ -25,6 +25,8 @@ import {
 } from "../../api/backend";
 import { useGameDetail, type GameDetailState } from "../../utils/gameDetailStore";
 import { removeDownload, useDownloads } from "../../utils/downloadStore";
+import { READY_FLASH_MS } from "../../utils/downloadProgress";
+import { PLAY_GRADIENT } from "../../utils/playGradient";
 import { isDownloadUnderWay, seedDownloadFromQueue } from "../../utils/downloadRehydrate";
 import {
   NO_DOWNLOAD_ANSWERS,
@@ -58,7 +60,7 @@ import { useDialogHost } from "./dialogs/useDialogHost";
 import { CONTAINER_STYLE, BUTTON_GROUP_STYLE, BUTTON_BASE_STYLE } from "./styles";
 import { DiscSelector } from "./DiscSelector";
 import { DownloadingButton } from "./DownloadingButton";
-import { PLAY_GRADIENT, PlayStateButton } from "./PlayStateButton";
+import { PlayStateButton } from "./PlayStateButton";
 import { SvgThrobber } from "./SvgThrobber";
 import { usePlayLaunch, type ActionState, type HeldState, type PressState } from "./usePlayLaunch";
 
@@ -99,9 +101,6 @@ interface UninstallCount {
   removed: number;
   total: number;
 }
-
-/** How long READY! stands once a download completes; Big Picture's Ready! stands as long. */
-const READY_MS = 1100;
 
 const STOP_BUTTON_STYLE: CSSProperties = {
   ...BUTTON_BASE_STYLE,
@@ -356,7 +355,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
       readyTimerRef.current = setTimeout(() => {
         readyTimerRef.current = null;
         endAction("dl_complete", romId);
-      }, READY_MS);
+      }, READY_FLASH_MS);
     });
     const onProgress = addEventListener<DownloadProgressEvent>("download_progress", (e) => {
       if (e.rom_id !== romId) return;
