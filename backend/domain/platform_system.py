@@ -8,7 +8,7 @@ platform; ``adapters/atlas_platforms.py`` asks and reads those answers into
 platform is there, or why it is none. RomM's slug is never a system name: it
 only chooses among the platforms the resolver named.
 
-What is kept of each platform RomM lists is kept offline beside the platform
+What is kept of each platform RomM lists lives offline beside the platform
 names (``kv_config``), under the platform's folder in RomM (``fs_slug``);
 decoding and encoding that value is here, reading and writing it is the
 caller's.
@@ -37,8 +37,8 @@ PLATFORM_IDS_KEY = "platform_ids"
 # not asked.
 ID_FIELDS = ("igdb_id", "libretro_slug", "ss_id", "tgdb_id")
 
-# The fields of RomM's platform kept in a kept platform's ``ids``, by the end
-# of their name, so that one RomM adds is kept with no change here.
+# A suffix rather than a list of fields, so that an identifier RomM adds
+# needs no change here.
 _IDENTIFIER_SUFFIXES = ("_id", "_slug")
 
 

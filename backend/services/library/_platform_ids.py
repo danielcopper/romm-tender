@@ -1,4 +1,4 @@
-"""Keeping what is kept of each platform RomM lists, which ``PlatformSystemService`` reads offline."""
+"""Keeping each listed platform's record, which ``PlatformSystemService`` reads offline."""
 
 from __future__ import annotations
 
