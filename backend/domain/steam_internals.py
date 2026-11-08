@@ -22,12 +22,15 @@ class SteamInternal:
     """One Steam internal, and the feature that needs it.
 
     ``spelled_in`` names each constant that spells it, as
-    ``<module>.<constant>`` under ``backend/``.
+    ``<module>.<constant>`` under ``backend/``. ``not_spelled_by_steam`` is why
+    Steam's own JavaScript never spells it, so the daily watch over Steam's
+    published client (``scripts/watch_steam_internals.py``) passes it over.
     """
 
     path: str
     feature: str
     spelled_in: tuple[str, ...]
+    not_spelled_by_steam: str | None = None
 
 
 _RUNNING_APPS = "host.inject.recovery.RUNNING_APPS_EXPRESSION"
@@ -47,6 +50,7 @@ STEAM_INTERNALS: tuple[SteamInternal, ...] = (
         "SteamClient.Browser.RestartJSContext",
         "replacing a stranded panel without restarting Steam",
         ("host.inject.recovery.RELOAD_EXPRESSION",),
+        not_spelled_by_steam="a binding of Steam's native side its JavaScript never calls",
     ),
     SteamInternal(
         "SteamClient.URL.ExecuteSteamURL",
@@ -54,7 +58,10 @@ STEAM_INTERNALS: tuple[SteamInternal, ...] = (
         ("host.inject.injector._EXECUTE_STEAM_URL",),
     ),
     SteamInternal(
-        _FORCE_INPUT, "the focus watcher's controller layout pin", ("domain.controller_focus._FORCE_INPUT_URL",)
+        _FORCE_INPUT,
+        "the focus watcher's controller layout pin",
+        ("domain.controller_focus._FORCE_INPUT_URL",),
+        not_spelled_by_steam="a steam:// URL Steam's JavaScript never spells",
     ),
     SteamInternal(
         "webpackChunksteamui",

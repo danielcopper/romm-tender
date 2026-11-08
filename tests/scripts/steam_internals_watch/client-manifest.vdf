@@ -1,0 +1,19 @@
+"steamrt64"
+{
+	"version"		"1792618285"
+	"tenfoot_images_all"
+	{
+		"file"		"tenfoot_images_all.zip.0123"
+		"sha2"		"00"
+	}
+	"steamui_websrc_all"
+	{
+		"file"		"steamui_websrc_all.zip.4567"
+		"size"		"100"
+		"sha2"		"SHA256"
+	}
+}
+"kvsignatures"
+{
+	"steamrt64"		"abcdef"
+}

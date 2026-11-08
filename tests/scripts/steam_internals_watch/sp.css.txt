@@ -1,0 +1,2 @@
+/* Not JavaScript, so not read: RemoveShortcut */
+.RemoveShortcut{display:none}

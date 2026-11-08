@@ -79,6 +79,11 @@ export type SteamInternal = InternalCost & {
   readonly oneOf?: string;
   /** The files that reach it where no type says so — a string key, a `Record`, an `unknown`, a route; absent for a typed reach. */
   readonly untypedIn?: readonly string[];
+  /**
+   * Why Steam's own JavaScript never spells this name, so the daily watch over
+   * Steam's published client (`scripts/watch_steam_internals.py`) passes it over.
+   */
+  readonly notSpelledBySteam?: string;
 };
 
 const cost = (...features: [SteamFeature, ...SteamFeature[]]): InternalCost => ({ absenceCost: "feature", features });
@@ -107,6 +112,7 @@ const DESKTOP = { ...cost("desktop"), devBuildOnly: true } as const;
 
 const ADDRESS = { notAtStartUp: "an address Steam answers, with nothing to look up" } as const;
 const liveState = (why: string): AskedAs => ({ notAtStartUp: why });
+const NEVER_SPELLED = "spelled nowhere in Steam's client; whether Steam ever had it is #2756's question";
 
 export const STEAM_INTERNALS: readonly SteamInternal[] = [
   { path: "SteamClient.Apps.AddShortcut", asked: "call", ...SHORTCUTS },
@@ -140,7 +146,12 @@ export const STEAM_INTERNALS: readonly SteamInternal[] = [
   { path: "SteamClient.System.GetSystemInfo().sHostname", asked: "call", ...DEVICE_NAME },
 
   { path: "SteamClient.Apps.RegisterForAppDetails(callback)(details).strLaunchOptions", asked: "call", ...LAUNCH },
-  { path: "SteamClient.Apps.RegisterForAppDetails(callback)(details).LaunchOptions", asked: "call", ...LAUNCH },
+  {
+    path: "SteamClient.Apps.RegisterForAppDetails(callback)(details).LaunchOptions",
+    asked: "call",
+    ...LAUNCH,
+    notSpelledBySteam: NEVER_SPELLED,
+  },
   { path: "SteamClient.Apps.RegisterForAppDetails(callback)(details).strShortcutExe", asked: "call", ...SHORTCUTS },
   { path: "SteamClient.Apps.RegisterForAppDetails(callback)(details).strDisplayName", asked: "call", ...CLEANUP },
   {
@@ -157,7 +168,12 @@ export const STEAM_INTERNALS: readonly SteamInternal[] = [
   { path: "appStore.GetAppOverviewByAppID().appid", asked: "call", ...COLLECTIONS },
   { path: "appStore.GetAppOverviewByAppID().display_name", asked: "call", ...LIBRARY },
   { path: "appStore.GetAppOverviewByAppID().strDisplayName", asked: "call", ...LIBRARY },
-  { path: "appStore.GetAppOverviewByAppID().controller_support", asked: "call", ...LIBRARY },
+  {
+    path: "appStore.GetAppOverviewByAppID().controller_support",
+    asked: "call",
+    ...LIBRARY,
+    notSpelledBySteam: NEVER_SPELLED,
+  },
   { path: "appStore.GetAppOverviewByAppID().metacritic_score", asked: "call", ...LIBRARY },
   { path: "appStore.GetAppOverviewByAppID().minutes_playtime_forever", asked: "call", ...LIBRARY },
   { path: "appStore.GetAppOverviewByAppID().minutes_playtime_last_two_weeks", asked: "call", ...CLEANUP },
@@ -221,7 +237,12 @@ export const STEAM_INTERNALS: readonly SteamInternal[] = [
   { path: "NotificationStore.ProcessNotification(notification).data", asked: "call", ...NOTIFICATIONS },
   { path: "NotificationStore.ProcessNotification(notification).eSource", asked: "call", ...NOTIFICATIONS },
   { path: "NotificationStore.ProcessNotification(notification).eType", asked: "call", ...NOTIFICATIONS },
-  { path: "NotificationStore.ProcessNotification(notification).nNotificationID", asked: "call", ...NOTIFICATIONS },
+  {
+    path: "NotificationStore.ProcessNotification(notification).nNotificationID",
+    asked: "call",
+    ...NOTIFICATIONS,
+    notSpelledBySteam: NEVER_SPELLED,
+  },
   { path: "NotificationStore.ProcessNotification(notification).nToastDurationMS", asked: "call", ...NOTIFICATIONS },
   { path: "NotificationStore.ProcessNotification(notification).notificationID", asked: "call", ...NOTIFICATIONS },
   { path: "NotificationStore.ProcessNotification(notification).rtCreated", asked: "call", ...NOTIFICATIONS },
@@ -293,6 +314,7 @@ export const STEAM_INTERNALS: readonly SteamInternal[] = [
     asked: { notAtStartUp: "a route of Steam's router" },
     ...DESKTOP,
     untypedIn: ["desktop/navigationWatcher.ts"],
+    notSpelledBySteam: "Steam's router builds it in a template from `/library` and `/app/` and never spells it whole",
   },
 ];
 

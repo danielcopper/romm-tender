@@ -1,0 +1,2 @@
+// Hand-written in the shape of Steam's minified UI JavaScript. No code of Valve's.
+"use strict";var e=globalThis.__mobxGlobals;e&&e.allowStateChanges;
