@@ -1008,7 +1008,9 @@ describe("PlayButton", () => {
       notInstalled();
       render(<PlayButton appId={APP_ID} />);
       await waitFor(() =>
-        expect(backend.debugLog).toHaveBeenCalledWith("DesktopPlayButton: on-disk read failed: Error: socket closed"),
+        expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+          "DesktopPlayButton: could not read what is on disk for romId=100: Error: socket closed",
+        ),
       );
       expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
     });
@@ -1144,12 +1146,19 @@ describe("PlayButton", () => {
 
     it("says why a resume was refused when something now sits at the game's location", async () => {
       vi.mocked(downloadStore.useDownloads).mockReturnValue([transfer({ status: "paused" })]);
-      vi.mocked(backend.resumeDownload).mockResolvedValueOnce({ success: false, reason: "target_occupied" } as never);
+      vi.mocked(backend.resumeDownload).mockResolvedValueOnce({
+        success: false,
+        reason: "target_occupied",
+        message: "occupied",
+      } as never);
       render(<PlayButton appId={APP_ID} />);
 
       fireEvent.click(screen.getByRole("button", { name: "Resume download" }));
 
       await waitFor(() => expect(toast.showToast).toHaveBeenCalledWith(RESUME_TARGET_OCCUPIED_TOAST));
+      expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+        "DesktopPlayButton: the backend refused to resume the download of romId=100: target_occupied: occupied",
+      );
     });
 
     it.each(["cancelled", "failed"] as const)(

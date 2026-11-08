@@ -3,7 +3,7 @@
  * is refused.
  */
 
-import { isTargetOccupied, resumeDownload } from "../api/backend";
+import { isTargetOccupied, logError, logWarn, resumeDownload } from "../api/backend";
 import { RESUME_REFUSED_TOAST, RESUME_TARGET_OCCUPIED_TOAST, RESUME_THREW_TOAST } from "./adoptWording";
 import { showToast } from "./toast";
 
@@ -16,13 +16,17 @@ import { showToast } from "./toast";
  * a silent refusal leaves the user pressing a button that does nothing, with
  * Cancel — which discards the transferred bytes — as their only way out.
  */
-export function executeDownloadResume(romId: number): Promise<void> {
+export function executeDownloadResume(romId: number, tag: string): Promise<void> {
   return resumeDownload(romId)
     .then((result) => {
       if (result.success) return;
+      logWarn(
+        `${tag}: the backend refused to resume the download of romId=${romId}: ${result.reason ?? "no reason"}: ${result.message}`,
+      );
       showToast(isTargetOccupied(result) ? RESUME_TARGET_OCCUPIED_TOAST : result.message || RESUME_REFUSED_TOAST);
     })
-    .catch(() => {
+    .catch((e: unknown) => {
+      logError(`${tag}: could not resume the download of romId=${romId}: ${String(e)}`);
       showToast(RESUME_THREW_TOAST);
     });
 }

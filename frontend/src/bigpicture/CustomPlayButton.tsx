@@ -798,7 +798,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
   // Resume a paused download; `executeDownloadResume` says why when it is refused.
   const handleResume = () => {
     if (romId == null) return;
-    detach(executeDownloadResume(romId));
+    detach(executeDownloadResume(romId, "CustomPlayButton"));
   };
 
   /**

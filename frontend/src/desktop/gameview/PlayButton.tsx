@@ -17,7 +17,6 @@ import {
 import { addEventListener, removeEventListener } from "../../api/host";
 import {
   cancelDownload,
-  debugLog,
   getCachedGameDetail,
   logError,
   logWarn,
@@ -302,7 +301,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
         setCachedAnswers({ romId, ...downloadAnswers(cached) });
       })
       .catch((e) => {
-        detach(debugLog(`DesktopPlayButton: on-disk read failed: ${e}`));
+        logWarn(`DesktopPlayButton: could not read what is on disk for romId=${romId}: ${e}`);
       });
     return () => {
       cancelled = true;
@@ -482,7 +481,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
     if (!romId || !activeDownload) return;
     const rid = romId;
     if (activeDownload.status === "paused") {
-      detach(executeDownloadResume(rid));
+      detach(executeDownloadResume(rid, "DesktopPlayButton"));
       return;
     }
     const onAnswer = (result: BackendResult) => {

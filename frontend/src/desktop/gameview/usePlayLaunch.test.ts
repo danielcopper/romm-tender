@@ -415,8 +415,8 @@ describe("usePlayLaunch", () => {
         await result.current.handlePlayClick();
       });
 
-      expect(backend.debugLog).toHaveBeenCalledWith(
-        "DesktopPlayButton: Play's launch check threw — resetting to play: Error: dialog host gone",
+      expect(backend.logError).toHaveBeenCalledExactlyOnceWith(
+        "DesktopPlayButton: Play's launch check of romId=100 threw — resetting to play: Error: dialog host gone",
       );
       expect(setPressState).toHaveBeenLastCalledWith(null);
       expect(gameDetailStore.recheckStart).not.toHaveBeenCalled();
