@@ -36,8 +36,8 @@
 -- -----------------------------------------------------------------------------
 ALTER TABLE firmware_store RENAME COLUMN platform_slug TO platform_folder;
 ALTER TABLE firmware_store ADD COLUMN platform_slug TEXT NOT NULL DEFAULT '';
--- Every row: the column was just added with DEFAULT ''.
-UPDATE firmware_store SET platform_slug = platform_folder WHERE platform_slug = '';
+-- Every row: platform_folder is NOT NULL (036).
+UPDATE firmware_store SET platform_slug = platform_folder WHERE platform_folder IS NOT NULL;
 
 ALTER TABLE firmware_links RENAME COLUMN platform_slug TO platform_folder;
 
