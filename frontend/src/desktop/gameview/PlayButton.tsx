@@ -15,9 +15,17 @@ import {
   type MouseEvent,
 } from "react";
 import { addEventListener, removeEventListener } from "../../api/host";
-import { cancelDownload, debugLog, getCachedGameDetail, pauseDownload } from "../../api/backend";
+import {
+  cancelDownload,
+  debugLog,
+  getCachedGameDetail,
+  logError,
+  logWarn,
+  pauseDownload,
+  type BackendResult,
+} from "../../api/backend";
 import { useGameDetail, type GameDetailState } from "../../utils/gameDetailStore";
-import { useDownloads } from "../../utils/downloadStore";
+import { removeDownload, useDownloads } from "../../utils/downloadStore";
 import { isDownloadUnderWay, seedDownloadFromQueue } from "../../utils/downloadRehydrate";
 import { useRommConnectionState } from "../../utils/connectionState";
 import { isBoundVanished, onBoundAvailabilityChange } from "../../utils/vanishedBinding";
@@ -171,6 +179,19 @@ function actionStateFor(action: PressedAction | null, romId: number | null): Act
 // occupied target is compared where it lies, a candidate is renamed into place.
 function answersFor(answers: CachedAnswers, romId: number | null, installed: boolean): CachedAnswers {
   return answers.romId !== null && answers.romId === romId && !installed ? answers : NO_ANSWERS;
+}
+
+/** What a press of the bar's Cancel or Pause asked the backend for. */
+type BarPress = "cancel" | "pause";
+
+function logBarRefusal(what: BarPress, romId: number, result: BackendResult): void {
+  logWarn(
+    `DesktopPlayButton: the backend refused to ${what} the download of romId=${romId}: ${result.reason ?? "no reason"}: ${result.message}`,
+  );
+}
+
+function logBarFailure(what: BarPress, romId: number, e: unknown): void {
+  logError(`DesktopPlayButton: could not ${what} the download of romId=${romId}: ${String(e)}`);
 }
 
 function downloadRatio(download: DownloadItem | undefined): number {
@@ -442,21 +463,35 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
     }
   };
 
-  // Fire-and-forget, as Big Picture's: the backend's cancelled frame is what
-  // takes the transfer out of the download store.
+  // What a cancel moves, and when: docs/architecture/desktop-dom-architecture.md.
   const handleCancelClick = (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     if (!romId) return;
-    detach(cancelDownload(romId).catch((err) => detach(debugLog(`DesktopPlayButton: cancel failed: ${err}`))));
-    endAction("downloading", romId);
-    setCachedAnswers(NO_ANSWERS);
+    const rid = romId;
+    const onAnswer = (result: BackendResult) => {
+      if (result.success) return;
+      logBarRefusal("cancel", rid, result);
+      // The backend holds neither a transfer nor a paused entry for the ROM, so no frame will end the bar.
+      if (result.reason === "no_active_download") {
+        endAction("downloading", rid);
+        removeDownload(rid);
+      }
+    };
+    detach(cancelDownload(rid).then(onAnswer, (err: unknown) => logBarFailure("cancel", rid, err)));
   };
 
   const handlePauseResumeClick = (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     if (!romId || !activeDownload) return;
-    if (activeDownload.status === "paused") detach(executeDownloadResume(romId));
-    else detach(pauseDownload(romId).catch((err) => detach(debugLog(`DesktopPlayButton: pause failed: ${err}`))));
+    const rid = romId;
+    if (activeDownload.status === "paused") {
+      detach(executeDownloadResume(rid));
+      return;
+    }
+    const onAnswer = (result: BackendResult) => {
+      if (!result.success) logBarRefusal("pause", rid, result);
+    };
+    detach(pauseDownload(rid).then(onAnswer, (err: unknown) => logBarFailure("pause", rid, err)));
   };
 
   if (romId === null) return null;
