@@ -286,19 +286,28 @@ game keeps the system its install record holds** for its saves, its emulator cho
 started from its page and its launch (`PlatformSystems.rom_system`); only a new download, and the platform page's BIOS
 download, follow the source's current answer. A source that renames, moves or drops a system is not followed yet.
 
-**The ids are kept.** `kv_config`'s `platform_ids` holds every listed platform's four ids and the `name` RomM's listing
-gives it, replaced at the start of every sync from RomM's listing (a failed write is logged and leaves the run alone).
-Where none are kept for a platform — the first start after an update — `PlatformSystemService` reads the listing once
-and keeps it. Where that read fails, the question answers the reason `classify_error` gives it — `server_unreachable`
-while RomM is offline — as every other read that needs RomM does, and keeps nothing; the next read with RomM reachable
-keeps the ids. A game not downloaded then shows the offline state on its page (its save status, its BIOS tab reading
-unknown), and its emulator menu, its BIOS tab and the platform page say **"RomM cannot be reached, so Tender does not
-know this platform's system yet."**; where RomM answered but refused the read for any other reason (`auth_failed`,
-`not_found`, `config_error`, …), they say **"RomM did not give this platform's ids, so Tender does not know its system
-yet."**, and the cause itself shows where Tender's connection state shows it; a downloaded game keeps its recorded
-system and is not affected. The game page's two looks at the disk — whether a download's target is already taken, and
-whether the game is there under another name — must reach no network, so they never read the listing: for them a
-platform with no kept ids has no system, and they go quiet.
+**The ids are kept.** `kv_config`'s `platform_ids` keeps what RomM's listing gives every listed platform, keyed by the
+platform's folder in RomM (`fs_slug`): its slug, its folder, its RomM id, its `name`, `is_identified`, the RomM version
+Tender had detected when the listing was read (none before a connection check has run), and under `ids` every field of
+the platform whose name ends in `_id` or `_slug`, as RomM sent it. Tender reads only the four ids the question above is
+asked with; the rest are kept for the resolver's platform table, so an id RomM adds is kept at the next sync with no
+change in Tender. A listed platform without a folder is not kept. The value is replaced at the start of every sync from
+RomM's listing (a failed write is logged and leaves the run alone); one kept before it was keyed by folder is read as it
+stands — each key as the slug it was kept under, the new fields empty — until that sync replaces it. A platform is found
+in it by its slug, the console's identity the question is put by; where several folders share a slug, the last listed
+answers (`domain/platform_system.py::kept_by_slug` says why that changes no question). Where none is kept for a platform
+— the first start after an update — `PlatformSystemService` reads the listing once and keeps it beside what was kept: an
+entry for a slug the listing names gives way to the listing's, and a slug the listing does not name is kept with nothing
+but that slug, so it is not read again. Where that read fails, the question answers the reason `classify_error` gives it
+— `server_unreachable` while RomM is offline — as every other read that needs RomM does, and keeps nothing; the next
+read with RomM reachable keeps the ids. A game not downloaded then shows the offline state on its page (its save status,
+its BIOS tab reading unknown), and its emulator menu, its BIOS tab and the platform page say **"RomM cannot be reached,
+so Tender does not know this platform's system yet."**; where RomM answered but refused the read for any other reason
+(`auth_failed`, `not_found`, `config_error`, …), they say **"RomM did not give this platform's ids, so Tender does not
+know its system yet."**, and the cause itself shows where Tender's connection state shows it; a downloaded game keeps
+its recorded system and is not affected. The game page's two looks at the disk — whether a download's target is already
+taken, and whether the game is there under another name — must reach no network, so they never read the listing: for
+them a platform with no kept ids has no system, and they go quiet.
 
 The platform page names the system taken with its source in its header line ([qam-panel.md](qam-panel.md#library)).
 

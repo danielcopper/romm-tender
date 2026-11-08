@@ -290,9 +290,10 @@ maps 1:1 onto these tables.
 
 `SyncRun` carries its own invariants, so per GLOSSARY.md it gets a typed table rather than untyped `kv_config` rows. The
 full live `kv_config` key set is `device_id` (the server-issued device identity), `platform_names` (the JSON-encoded
-`platform_slug → name` cache), `platform_ids` (each RomM platform's IGDB, libretro, ScreenScraper and TheGamesDB ids and
-the `name` RomM's listing gives it, keyed by slug: replaced with every listed platform's at the start of every sync, and
-read from RomM once for a platform none are kept for — what a platform's system is asked with, see
+`platform_slug → name` cache), `platform_ids` (what RomM's listing gives each platform — its slug, RomM id, name,
+`is_identified`, the RomM version the listing was read with, and every `*_id` and `*_slug` field as sent — keyed by its
+folder in RomM (`fs_slug`): replaced with every listed platform at the start of every sync, and read from RomM once for
+a platform none is kept for; a platform's system is asked with four of its ids, see
 [core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)), `retrodeck_home_path` (+ its
 pending-migration `_previous`, and — when the home is changed _again_ before the migration runs — a `_hops` JSON array
 of the additional pending homes, oldest→newest, so files under an intermediate home are never stranded,
