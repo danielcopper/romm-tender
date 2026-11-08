@@ -232,10 +232,16 @@ def fetch(
                     chunks.append(chunk)
                     if clock() - started > deadline:
                         raise TimeoutError(f"still downloading after {deadline:.0f} s")
+                data = b"".join(chunks)
+                # ``read1`` answers a body cut short of its Content-Length with
+                # an empty read, as at its end; only a chunked body raises.
+                expected = response.headers.get("Content-Length")
+                if expected is not None and len(data) != int(expected):
+                    raise http.client.IncompleteRead(data, int(expected) - len(data))
                 print(f"fetched {url} in {clock() - started:.1f} s", flush=True)
-                return b"".join(chunks)
+                return data
         # OSError covers urllib's URLError and HTTPError and TimeoutError;
-        # HTTPException is a body that breaks off part-way (IncompleteRead).
+        # HTTPException a body cut short (IncompleteRead).
         except (OSError, http.client.HTTPException) as error:
             failures.append(str(error))
     raise Refused(f"{url}: {'; '.join(failures)}")
@@ -426,8 +432,8 @@ Runner = Callable[[Sequence[str], str | None], str]
 
 
 def run_gh(arguments: Sequence[str], stdin: str | None = None) -> str:
-    """Run ``gh`` with ``arguments``, failing the run when it fails."""
-    finished = subprocess.run(["gh", *arguments], input=stdin, capture_output=True, text=True, check=True)
+    """Run ``gh`` with ``arguments``, failing the run when it fails; what ``gh`` writes to stderr reaches the log."""
+    finished = subprocess.run(["gh", *arguments], input=stdin, stdout=subprocess.PIPE, text=True, check=True)
     return finished.stdout
 
 

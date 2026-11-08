@@ -79,8 +79,8 @@ def _miss(
 
 class TestHowANameIsFound:
     def test_an_identifier_path_is_found_when_every_name_it_spells_is_an_identifier(self, spellings: Any) -> None:
-        # `callback` and `details` are Tender's own names for what a call hands
-        # back, and the fixture spells neither.
+        # `(callback)` and `(details)` name a call's parameter and the argument
+        # Steam hands that callback, in Tender's own words; the fixture spells neither.
         assert watch.not_found("SteamClient.Apps.AddShortcut(callback)(details).strAppName", spellings) == ()
         assert watch.not_found("appStore.GetAppOverviewByAppID().m_mapApps.has", spellings) == ()
 
@@ -194,6 +194,23 @@ class TestTheList:
             _internal("SharedJSContext", "finding Steam"),
         ]
 
+    def test_a_path_both_halves_list_is_the_dev_builds_only_when_both_say_so(self) -> None:
+        panel = [_internal("g_PopupManager", dev_build_only=True), _internal("App", dev_build_only=True)]
+        backend = [_internal("g_PopupManager"), _internal("App", dev_build_only=True)]
+
+        assert [entry.dev_build_only for entry in watch.merge(panel, backend)] == [False, True]
+
+    def test_a_path_both_halves_list_keeps_the_exemption_and_the_group_either_half_states(self) -> None:
+        panel = [_internal("a.b"), _internal("c.d", one_of="pair", not_spelled_by_steam="the panel's reason")]
+        backend = [_internal("a.b", one_of="pair", not_spelled_by_steam="native only"), _internal("c.d")]
+
+        merged = watch.merge(panel, backend)
+
+        assert [(entry.one_of, entry.not_spelled_by_steam) for entry in merged] == [
+            ("pair", "native only"),
+            ("pair", "the panel's reason"),
+        ]
+
     def test_reads_the_panel_dump(self) -> None:
         dump = json.dumps(
             [
@@ -248,10 +265,14 @@ class TestTheManifest:
 
 
 class _Response:
-    """A download that hands out ``chunks``, advancing ``clock`` by ``step`` seconds per chunk."""
+    """A download that hands out ``chunks``, advancing ``clock`` by ``step`` seconds per chunk.
 
-    def __init__(self, chunks: list[bytes], clock: list[float], step: float) -> None:
+    ``length`` is the Content-Length it states, none when ``None``.
+    """
+
+    def __init__(self, chunks: list[bytes], clock: list[float], step: float, length: int | None = None) -> None:
         self._chunks, self._clock, self._step = chunks, clock, step
+        self.headers = {} if length is None else {"Content-Length": str(length)}
 
     def __enter__(self) -> _Response:
         return self
@@ -274,6 +295,25 @@ class TestFetch:
 
         assert data == b"ab"
         assert responses == []
+
+    def test_a_download_cut_short_of_its_content_length_is_tried_again(self) -> None:
+        clock = [0.0]
+        cut_short, whole = _Response([b"a"], clock, 0.1, length=2), _Response([b"a", b"b"], clock, 0.1, length=2)
+        responses = [cut_short, whole]
+
+        data = watch.fetch("u", opener=lambda *_a, **_k: responses.pop(0), clock=lambda: clock[0])
+
+        assert data == b"ab"
+        assert responses == []
+
+    def test_a_download_cut_short_every_try_is_refused(self) -> None:
+        clock = [0.0]
+
+        def cut_short(*_a: object, **_k: object) -> _Response:
+            return _Response([b"a"], clock, 0.1, length=2)
+
+        with pytest.raises(watch.Refused, match="1 more expected"):
+            watch.fetch("u", opener=cut_short, clock=lambda: clock[0])
 
     def test_a_download_that_fails_every_try_is_refused(self) -> None:
         def unreachable(*_a: object, **_k: object) -> _Response:
@@ -381,6 +421,16 @@ class TestTheIssue:
 
         assert run("1") == run("2")
         assert run("1") != watch.finding_id([_result(misses=[_miss("a.c")])])
+
+    def test_results_that_differ_only_in_a_stale_exemption_are_different_findings(self) -> None:
+        def run(*stale: str) -> str | None:
+            spelled = frozenset(stale)
+            return watch.finding_id(
+                [_result("Public beta", spelled=spelled, misses=[_miss("a.b")]), _result(spelled=spelled)]
+            )
+
+        assert run() != run("SP Desktop")
+        assert run("SP Desktop") != run("/library/app/")
 
 
 class _FakeGh:
