@@ -89,7 +89,10 @@ interface CachedAnswers extends DownloadAnswers {
 
 const NO_ANSWERS: CachedAnswers = { romId: null, ...NO_DOWNLOAD_ANSWERS };
 
-/** What a press or a download's completion put on the button, and the ROM it is for; another ROM's reads as none. */
+/**
+ * What a download press, a download's completion or an uninstall put on the
+ * button, and the ROM it is for; another ROM's reads as none.
+ */
 interface PressedAction {
   state: ActionState;
   romId: number;
@@ -243,8 +246,6 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
 
   const [pressState, setPressState] = useState<PressState | null>(null);
   const [switching, setSwitching] = useState(false);
-  // A download's, an adoption's and an uninstall's state is kept with the ROM it
-  // was pressed for: docs/architecture/desktop-dom-architecture.md says what that covers.
   const [action, setAction] = useState<PressedAction | null>(null);
   const actionState = actionStateFor(action, romId);
   // Another version's press bar is dropped: a transfer that ends while that version

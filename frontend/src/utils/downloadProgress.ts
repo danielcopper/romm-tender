@@ -51,7 +51,10 @@ export function getDownloadFillGradient(
   return "linear-gradient(to right, #1a9fff, #0078d4)";
 }
 
-/** The pulse's colour: amber while paused, otherwise following the fill. */
+/**
+ * The glow's colour — Big Picture's pulse, the desktop client's still glow:
+ * amber while paused, otherwise following the fill.
+ */
 export function getDownloadPulseColor(
   t: number,
   { paused, extracting, downloading }: DownloadPhase & { paused: boolean },

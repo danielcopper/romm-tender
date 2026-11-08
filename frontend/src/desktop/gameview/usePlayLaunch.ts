@@ -33,9 +33,11 @@ const TAG = "DesktopPlayButton";
 export type PressState = "checking" | "syncing" | "launching";
 
 /**
- * What the button reads while a download or an uninstall runs, until the shared
- * detail catches up: a download this button started, before the download store
- * carries it; the moment it completed; an uninstall under way.
+ * What the button reads for one ROM, each ended by an event of its own rather
+ * than by the shared detail: a download this button started, until the
+ * download's first frame, its end or a switch to another version; the moment a
+ * download completed, for `READY_FLASH_MS`; an uninstall, until the removal
+ * answers.
  */
 export type ActionState = "downloading" | "dl_complete" | "uninstalling";
 
