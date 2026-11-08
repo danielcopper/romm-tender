@@ -18,6 +18,7 @@ import { addEventListener, removeEventListener } from "../../api/host";
 import { cancelDownload, debugLog, getCachedGameDetail, pauseDownload } from "../../api/backend";
 import { useGameDetail, type GameDetailState } from "../../utils/gameDetailStore";
 import { useDownloads } from "../../utils/downloadStore";
+import { isDownloadUnderWay, seedDownloadFromQueue } from "../../utils/downloadRehydrate";
 import { useRommConnectionState } from "../../utils/connectionState";
 import { isBoundVanished, onBoundAvailabilityChange } from "../../utils/vanishedBinding";
 import { runDownloadWithAdoption } from "../../utils/adoptFlow";
@@ -172,16 +173,6 @@ function answersFor(answers: CachedAnswers, romId: number | null, installed: boo
   return answers.romId !== null && answers.romId === romId && !installed ? answers : NO_ANSWERS;
 }
 
-function isTransferActive(download: DownloadItem | undefined): boolean {
-  return (
-    download !== undefined &&
-    (download.status === "downloading" ||
-      download.status === "extracting" ||
-      download.status === "queued" ||
-      download.status === "paused")
-  );
-}
-
 function downloadRatio(download: DownloadItem | undefined): number {
   const downloaded = download?.bytes_downloaded ?? 0;
   const total = download?.total_bytes ?? 0;
@@ -301,6 +292,10 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
     };
   }, [appId, romId, detail.installed]);
 
+  useEffect(() => {
+    if (romId) detach(seedDownloadFromQueue(romId, "DesktopPlayButton"));
+  }, [romId]);
+
   const saveStatus = saveStatusOf(detail);
   // A verdict reached for a ROM the page no longer shows is not held at all.
   const holdVerdict = useCallback((state: HeldVerdict["state"], forRomId: number) => {
@@ -412,7 +407,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
   };
 
   const activeDownload = romId === null ? undefined : downloads.find((d) => d.rom_id === romId);
-  const downloading = actionState === "downloading" || isTransferActive(activeDownload);
+  const downloading = actionState === "downloading" || isDownloadUnderWay(activeDownload);
 
   const clearPendingFor = (rid: number) => setPendingRomId((prev) => (prev === rid ? null : prev));
 

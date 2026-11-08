@@ -41,6 +41,10 @@ press where Big Picture's Download takes none — offline, while the bound versi
 no file for the game. A download in flight draws its progress with pause, resume and cancel
 (`frontend/src/desktop/gameview/DownloadingButton.tsx`), its fill ending on PLAY's own green, and a downloaded file that
 is gone draws a disabled FILE MISSING with the path as its title; DOWNLOAD's press and the bar's own are the button's.
+When the page shows a game, and again on a version switch, the button reads that game's download from the backend's
+queue into the download store, as Big Picture's reads it (`seedDownloadFromQueue`,
+`frontend/src/utils/downloadRehydrate.ts`): a paused download sends no frames, nor a queued one until it starts, so
+after Steam's interface reloads the bar would otherwise be missing and DOWNLOAD would start a paused one from nothing.
 The chevron beside PLAY opens the game's menu, whose one entry is Uninstall (`executeRomUninstall`,
 `frontend/src/utils/romUninstall.ts`), which, like Big Picture's, asks nothing first. What a download, an adoption or an
 uninstall puts on the button — STARTING..., the bar before the download store carries the transfer, READY!,

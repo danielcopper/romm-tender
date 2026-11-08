@@ -51,6 +51,7 @@ import { getEventTarget } from "../utils/events";
 import { handleButtonDownloadFailure } from "../utils/downloadFailure";
 import { runDownloadWithAdoption } from "../utils/adoptFlow";
 import { executeDownloadResume } from "../utils/downloadResume";
+import { isDownloadUnderWay } from "../utils/downloadRehydrate";
 import {
   DOWNLOAD_AGAIN_LABEL,
   FILE_MISSING_LABEL,
@@ -271,16 +272,10 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
   const rehydrateInflightDownload = async (rid: number): Promise<void> => {
     try {
       const queue = await getDownloadQueue();
-      // No post-await `cancelled` guard needed: React 18 no-ops a setState on an
+      // No post-await `cancelled` guard needed: React no-ops a setState on an
       // unmounted component, and a remount keeps its own state.
       const entry = queue.downloads.find((d) => d.rom_id === rid);
-      if (
-        entry &&
-        (entry.status === "downloading" ||
-          entry.status === "queued" ||
-          entry.status === "paused" ||
-          entry.status === "extracting")
-      ) {
+      if (isDownloadUnderWay(entry)) {
         setActionPending(true);
         setDlProgress({
           bytesDownloaded: entry.bytes_downloaded,
