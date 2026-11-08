@@ -363,7 +363,7 @@ Every step that runs once per machine — the covers' move above, a backend back
 of either version ladder — stays safe to run again and stays in every later release, because an update jumps from
 whatever release a machine is on straight to the newest; one leaves only deliberately, with that release's notes naming
 the oldest version it can be updated from directly. The rule and its reasons are in the
-[invariant register](../architecture/invariants.md).
+[invariant register](../architecture/invariants/install-update.md).
 
 **The install refuses while a backend of your own is up.** `mise run dev` and `mise run dev:backend` start one outside
 the unit, and it holds the same exclusive lock the unit's backend takes — `backend.lock`, beside the database. A second
@@ -461,7 +461,7 @@ answer can carry — a refusal's, a partial failure's or one `classify_error` re
 `WireReason` union in `frontend/src/types/reasons.ts`, or the union holds one none of them answers with; if the union's
 `RommErrorReason` part differs from `classify_error`'s reasons; and on a backend site whose reason it cannot read. Its
 tests are `tests/scripts/test_check_reason_parity.py`; what it reads and what it cannot see is its docstring, and why it
-exists is [the invariant's entry](../architecture/invariants.md).
+exists is [the invariant's entry](../architecture/invariants/endpoints.md).
 
 `mise run lint` (and CI) also runs `scripts/check_settings_owner.py`, which fails if the `settings.json` filename
 literal appears anywhere except its owning adapter (`adapters/persistence.py`); confining the literal to one module
@@ -475,6 +475,12 @@ listed at `SCOPE_DIRS` with the reason for each: `main.py` grows with the endpoi
 checksum-pinned upstream copies, a large file under `tests/` is the one-file-per-source-module rule working, `scripts/`
 never ships, and `frontend/src/` needs a per-scope glob before it can be added. There is deliberately no `--update` flag
 — re-baselining should be a reviewable diff, never a command someone runs to get back to green.
+
+`mise run lint` (and CI) also runs `scripts/check_invariant_register.py`, which holds the invariant register to its
+size: the register section of `CLAUDE.md` at most 6,000 characters, an entry's bold headline at most 300, one area file
+under `docs/architecture/invariants/` at most 40,000, and no headline standing in two places. The register was cut to
+one line per rule once before and grew back to three times its size in six weeks, because nothing measured it. What it
+reads and what it misses is its docstring; its tests are `tests/scripts/test_check_invariant_register.py`.
 
 `mise run lint` (and CI) also runs `scripts/check_generated_installer_logo.py`, which holds `install.sh`'s greeter to
 the mark. The installer draws the logo before it does anything, and it cannot render an image, so the art is text
@@ -602,10 +608,13 @@ locally.
 
 ## Where the coding conventions live
 
-Two files, split by how often they apply:
+Three places, split by how often they apply:
 
-- **`CLAUDE.md`** (repo root) — the traps, the cross-cutting invariant register, and the workflow. Everything here
-  applies no matter which file you touch, so it is read up front.
+- **`CLAUDE.md`** (repo root) — the traps, the invariant register's map from area to file with the few rules whose
+  breach loses data for good, and the workflow. Everything here applies no matter which file you touch, so it is read up
+  front.
+- **`docs/architecture/invariants/`** — the invariant register's entries, one file per area. Whoever implements or
+  reviews in an area reads that area's file first; `CLAUDE.md`'s map names it.
 - **`.claude/rules/*.md`** — the per-area conventions (services, adapters/domain, Python naming and docstrings, endpoint
   shapes, bootstrap wiring, vendored assets, backend and frontend testing). Each file carries a `paths:` frontmatter
   glob and is loaded when a matching file is opened, which keeps the always-on set small.
