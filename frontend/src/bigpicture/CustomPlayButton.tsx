@@ -52,6 +52,7 @@ import { handleButtonDownloadFailure } from "../utils/downloadFailure";
 import { runDownloadWithAdoption } from "../utils/adoptFlow";
 import { executeDownloadResume } from "../utils/downloadResume";
 import { isDownloadUnderWay } from "../utils/downloadRehydrate";
+import { downloadAnswers, downloadTakesNoPress } from "../utils/downloadPress";
 import {
   DOWNLOAD_AGAIN_LABEL,
   FILE_MISSING_LABEL,
@@ -225,7 +226,8 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
       setRomId(rid);
       romIdRef.current = rid;
       if (cached.rom_name) setRomName(cached.rom_name);
-      setNoFileOnRomm(cached.has_file_on_disk === false);
+      const answers = downloadAnswers(cached);
+      setNoFileOnRomm(answers.noFileOnRomm);
       setMissingPath(cached.installed && cached.file_missing_at ? cached.file_missing_at : null);
       if (cached.installed && cached.file_missing_at) {
         setDlProgress(null);
@@ -239,7 +241,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
         // previous ROM's answer says nothing about this one's location.
         setDlProgress(null);
         setActionPending(false);
-        enterDownloadState(cached.target_path_occupied === true, cached.adoption_candidate_present === true);
+        enterDownloadState(answers.targetOccupied, answers.candidatePresent);
       }
     },
     [appId],
@@ -309,7 +311,8 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
         setRomId(rid);
         romIdRef.current = rid;
         if (cached.rom_name) setRomName(cached.rom_name);
-        setNoFileOnRomm(cached.has_file_on_disk === false);
+        const answers = downloadAnswers(cached);
+        setNoFileOnRomm(answers.noFileOnRomm);
 
         // Seed the running overlay from the live session/running-app state so a
         // button mounted mid-session (or after a reload-adoption) shows Resume
@@ -340,7 +343,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
           }
         } else {
           detach(debugLog(`CustomPlayButton: -> download`));
-          enterDownloadState(cached.target_path_occupied === true, cached.adoption_candidate_present === true);
+          enterDownloadState(answers.targetOccupied, answers.candidatePresent);
           await rehydrateInflightDownload(rid);
         }
       } catch (e) {
@@ -1189,18 +1192,16 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
     // While a download is actively running, the main button shares the row
     // with a right-side action section (the cancel X or a Pause/Resume
     // dropdown). Square off its right edge so it butts cleanly against that
-    // section; idle/starting keeps the full pill radius. The pulse animation
+    // section; idle/starting keeps its 2px radius on every corner. The pulse animation
     // lives on the container (romm-dl-active-group) so it spans the whole
     // control — button + action — as one cohesive pulsing group.
-    // Only the idle Download action is blocked: a vanished bound ROM cannot be
-    // fetched, so offering it can only produce the not_found toast. The button
-    // stays visible rather than disappearing, matching how the picker shows a
-    // vanished version dimmed instead of hiding it. An in-flight download keeps
-    // its controls — that is a different action and out of scope.
-    const downloadBlockedByVanished = boundVanished && !downloading && !paused && !extracting;
-    // Nothing to download either: RomM holds no file for the ROM. An in-flight
-    // download keeps its controls, for the same reason as above.
-    const downloadBlockedByNoFile = noFileOnRomm && !downloading && !paused && !extracting;
+    // A vanished bound ROM cannot be fetched, so offering it can only produce
+    // the not_found toast, and a ROM RomM holds no file for has nothing to
+    // download. The button stays visible rather than disappearing, matching how
+    // the picker shows a vanished version dimmed instead of hiding it. A download
+    // in flight keeps its cancel and pause, which are presses of their own.
+    const downloadRefused = (pending: boolean) =>
+      downloadTakesNoPress({ offline: isOffline, pending, boundVanished, noFileOnRomm });
     const downloadBtn = (
       <DialogButton
         // romm-btn-download-idle carries the blue hover/focus highlight, which is
@@ -1218,7 +1219,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
         onClick={() => {
           detach(handleDownload());
         }}
-        disabled={actionPending || isOffline || downloadBlockedByVanished || downloadBlockedByNoFile}
+        disabled={downloadRefused(actionPending)}
       >
         {/* Progress fill bar — kept at its frozen width while paused. */}
         {downloading && (
@@ -1258,7 +1259,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
                 detach(handleDownload());
               }}
               onFocus={scrollToTop}
-              disabled={forgetPending || isOffline || downloadBlockedByVanished || downloadBlockedByNoFile}
+              disabled={downloadRefused(forgetPending)}
             >
               <span className="romm-dl-label">
                 <ThrobberLabel busy={forgetPending}>{missingMainLabel}</ThrobberLabel>
@@ -1270,11 +1271,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
               title={FILE_MISSING_LABEL}
               style={{ ...dropdownArrowStyle, background: dropdownBg, color: "#fff" }}
               onClick={(e: MouseEvent) =>
-                showMissingDownloadMenu(
-                  e,
-                  missingPath,
-                  forgetPending || isOffline || downloadBlockedByVanished || downloadBlockedByNoFile,
-                )
+                showMissingDownloadMenu(e, missingPath, downloadRefused(forgetPending))
               }
               onFocus={scrollToTop}
               disabled={forgetPending}

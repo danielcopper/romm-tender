@@ -38,7 +38,9 @@ body of the document the button is drawn in. Its save-tracking step is the one t
 DOWNLOAD in PLAY's place, which downloads through the adoption flow (`runDownloadWithAdoption`,
 `frontend/src/utils/adoptFlow.ts`) and asks its already-on-your-device questions in the desktop dialogs; it takes no
 press where Big Picture's Download takes none — offline, while the bound version is gone from RomM, or where RomM holds
-no file for the game. A download in flight draws its progress with pause, resume and cancel
+no file for the game — since both buttons ask `downloadTakesNoPress` (`frontend/src/utils/downloadPress.ts`), whose
+`downloadAnswers` also reads, for both, what the cached detail says lies on disk and whether RomM holds a file. A
+download in flight draws its progress with pause, resume and cancel
 (`frontend/src/desktop/gameview/DownloadingButton.tsx`), its fill ending on PLAY's own green, and a downloaded file that
 is gone draws a disabled FILE MISSING with the path as its title; DOWNLOAD's press and the bar's own are the button's.
 When the page shows a game, and again on a version switch, the button reads that game's download from the backend's

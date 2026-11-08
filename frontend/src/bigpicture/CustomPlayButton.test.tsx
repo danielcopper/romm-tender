@@ -945,6 +945,12 @@ describe("CustomPlayButton — extraction phase on a multi-file download", () =>
     expect(await findByText("Extracting… 42%")).toBeInTheDocument();
   });
 
+  it("takes no press on its main part while its download runs", async () => {
+    const { container } = await renderWithFrames([downloadingFrame]);
+
+    expect(container.querySelector<HTMLButtonElement>("button.romm-btn-download")?.disabled).toBe(true);
+  });
+
   it("removes the cancel control during extraction and surfaces a disabled throbber instead", async () => {
     const { findByLabelText, queryByLabelText } = await renderWithFrames([downloadingFrame, extractingFrame]);
 
@@ -5311,6 +5317,28 @@ describe("CustomPlayButton — content already on disk (#260)", () => {
     });
 
     expect(await utils.findByText("Use Existing Files")).toBeTruthy();
+  });
+
+  it("a version switch takes the incoming ROM's answer on whether RomM holds a file", async () => {
+    mockCachedDetail({ rom_id: 42, installed: false, has_file_on_disk: true });
+    const utils = render(<CustomPlayButton appId={100} />);
+    expect(await utils.findByText("Download")).toBeTruthy();
+
+    vi.mocked(getCachedGameDetail).mockResolvedValue({
+      found: true,
+      rom_id: 43,
+      rom_name: "Other version",
+      installed: false,
+      has_file_on_disk: false,
+    });
+    await act(async () => {
+      globalThis.dispatchEvent(
+        new CustomEvent("romm_data_changed", { detail: { type: "version_switched", app_id: 100, rom_id: 43 } }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(await utils.findByText("No file on RomM")).toBeTruthy();
   });
 
   it("opens the dialog on a target_occupied refusal instead of toasting a failure", async () => {
