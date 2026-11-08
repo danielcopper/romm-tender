@@ -5,6 +5,7 @@ import { PlayButton } from "./PlayButton";
 import { DiscSelector } from "./DiscSelector";
 import * as gameDetailStore from "../../utils/gameDetailStore";
 import * as downloadStore from "../../utils/downloadStore";
+import * as downloadRehydrate from "../../utils/downloadRehydrate";
 import * as sessionManager from "../../utils/sessionManager";
 import * as backend from "../../api/backend";
 import * as toast from "../../utils/toast";
@@ -56,6 +57,11 @@ vi.mock("./DiscSelector", async () => {
 
 vi.mock("../../utils/downloadStore", () => ({
   useDownloads: vi.fn(),
+}));
+
+vi.mock("../../utils/downloadRehydrate", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../utils/downloadRehydrate")>()),
+  seedDownloadFromQueue: vi.fn(async () => {}),
 }));
 
 /** Whether Steam lists the app as running, as the `readGameRunning` stand-in below reads it. */
@@ -246,6 +252,7 @@ describe("PlayButton", () => {
     vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ romId: null, installed: false }));
     const { container } = render(<PlayButton appId={APP_ID} />);
     expect(container).toBeEmptyDOMElement();
+    expect(downloadRehydrate.seedDownloadFromQueue).not.toHaveBeenCalled();
   });
 
   describe("PLAY", () => {
@@ -999,6 +1006,17 @@ describe("PlayButton", () => {
         expect(backend.debugLog).toHaveBeenCalledWith("DesktopPlayButton: on-disk read failed: Error: socket closed"),
       );
       expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
+    });
+
+    it("reads the backend's download queue for the ROM the page shows, and again on a version switch", () => {
+      notInstalled();
+      const { rerender } = render(<PlayButton appId={APP_ID} />);
+      expect(downloadRehydrate.seedDownloadFromQueue).toHaveBeenCalledExactlyOnceWith(100, "DesktopPlayButton");
+
+      notInstalled({ romId: 101 });
+      rerender(<PlayButton appId={APP_ID} />);
+      expect(downloadRehydrate.seedDownloadFromQueue).toHaveBeenCalledTimes(2);
+      expect(downloadRehydrate.seedDownloadFromQueue).toHaveBeenLastCalledWith(101, "DesktopPlayButton");
     });
 
     it("is not held by another ROM's download, or by one that has ended", () => {
