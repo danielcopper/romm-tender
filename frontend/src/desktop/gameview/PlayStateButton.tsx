@@ -8,7 +8,7 @@ import { useCallback, useRef, useState, type CSSProperties, type FC } from "reac
 import { useOutsideClick } from "../../utils/useOutsideClick";
 import { PLAY_GRADIENT } from "../../utils/playGradient";
 import type { PressState } from "./usePlayLaunch";
-import { BUTTON_GROUP_STYLE, BUTTON_BASE_STYLE, SIDE_ACTION_STYLE } from "./styles";
+import { BUTTON_GROUP_STYLE, BUTTON_BASE_STYLE, MENU_ITEM_STYLE, MENU_PANEL_STYLE, SIDE_ACTION_STYLE } from "./styles";
 import { SvgThrobber } from "./SvgThrobber";
 
 const PLAY_BUTTON_STYLE: CSSProperties = {
@@ -18,32 +18,17 @@ const PLAY_BUTTON_STYLE: CSSProperties = {
 };
 
 const MENU_STYLE: CSSProperties = {
-  position: "absolute",
-  top: "calc(100% + 4px)",
+  ...MENU_PANEL_STYLE,
   left: 0,
   right: 0,
   boxSizing: "border-box",
-  background: "#1e2837",
-  border: "1px solid #3c4856",
-  borderRadius: "2px",
-  boxShadow: "0 8px 16px rgba(0, 0, 0, 0.5)",
-  zIndex: 1000,
-  padding: "4px 0",
 };
 
 const UNINSTALL_ITEM_STYLE: CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  padding: "8px 16px",
-  textAlign: "left",
+  ...MENU_ITEM_STYLE,
   background: "transparent",
-  border: "none",
   color: "#ff6b6b",
-  fontSize: "13px",
   cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
 };
 
 const REFUSED_PLAY_BUTTON_STYLE: CSSProperties = {

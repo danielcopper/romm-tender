@@ -125,6 +125,31 @@ export const BUTTON_BASE_STYLE: CSSProperties = {
   transition: "filter 0.15s ease, background 0.15s ease",
 };
 
+/** A menu that opens under the Play button's controls: the game menu, and the disc and version selector's. */
+export const MENU_PANEL_STYLE: CSSProperties = {
+  position: "absolute",
+  top: "calc(100% + 4px)",
+  background: "#1e2837",
+  border: "1px solid #3c4856",
+  borderRadius: "2px",
+  boxShadow: "0 8px 16px rgba(0, 0, 0, 0.5)",
+  zIndex: 1000,
+  padding: "4px 0",
+};
+
+/** One entry of such a menu; each menu gives it its own colours and cursor. */
+export const MENU_ITEM_STYLE: CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "8px 16px",
+  textAlign: "left",
+  border: "none",
+  fontSize: "13px",
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+};
+
 /** The narrow button beside a Play button's main one: the chevron, a download's pause and cancel. */
 export const SIDE_ACTION_STYLE: CSSProperties = {
   height: "48px",

@@ -3,7 +3,7 @@
  * and does: `docs/architecture/desktop-dom-architecture.md`.
  */
 
-import { useState, useEffect, useRef, useCallback, type FC, type ReactNode } from "react";
+import { useState, useEffect, useRef, useCallback, type CSSProperties, type FC, type ReactNode } from "react";
 import { addEventListener, removeEventListener } from "../../api/host";
 import { FaCompactDisc, FaChevronDown, FaLayerGroup } from "react-icons/fa";
 import { getCachedGameDetail, logError, logWarn } from "../../api/backend";
@@ -27,6 +27,7 @@ import type { DownloadCompleteEvent, DownloadFailedEvent, SyncProgress } from ".
 import type { RommDataChangedDetail, RommRomUninstalledDetail } from "../../types/events";
 import type { AskDialog } from "./dialogs/askDialog";
 import { desktopUnsyncedSavesDialog } from "./dialogs/desktopDialogs";
+import { MENU_ITEM_STYLE, MENU_PANEL_STYLE } from "./styles";
 import { SvgThrobber } from "./SvgThrobber";
 
 interface DiscSelectorProps {
@@ -42,17 +43,7 @@ interface DiscSelectorProps {
 
 const LOG_TAG = "DesktopDiscSelector";
 
-const MENU_ITEM_STYLE = {
-  width: "100%",
-  padding: "8px 16px",
-  textAlign: "left",
-  border: "none",
-  fontSize: "13px",
-  display: "flex",
-  alignItems: "center",
-  gap: "10px",
-  whiteSpace: "nowrap",
-} as const;
+const SELECTOR_ITEM_STYLE: CSSProperties = { ...MENU_ITEM_STYLE, whiteSpace: "nowrap" };
 
 function selectorTriggerGlyph(discDisplayState: DiscDisplayState | null, offDefault: boolean): ReactNode {
   if (!discDisplayState) {
@@ -381,20 +372,7 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing, p
         <div
           data-testid="disc-menu"
           role="menu"
-          style={{
-            position: "absolute",
-            top: "calc(100% + 4px)",
-            left: "8px",
-            minWidth: "180px",
-            maxHeight: "360px",
-            overflowY: "auto",
-            background: "#1e2837",
-            border: "1px solid #3c4856",
-            borderRadius: "2px",
-            boxShadow: "0 8px 16px rgba(0, 0, 0, 0.5)",
-            zIndex: 1000,
-            padding: "4px 0",
-          }}
+          style={{ ...MENU_PANEL_STYLE, left: "8px", minWidth: "180px", maxHeight: "360px", overflowY: "auto" }}
         >
           {discDisplayState &&
             selection &&
@@ -406,7 +384,7 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing, p
                   type="button"
                   role="menuitem"
                   style={{
-                    ...MENU_ITEM_STYLE,
+                    ...SELECTOR_ITEM_STYLE,
                     background: isActive ? "rgba(89, 182, 255, 0.1)" : "transparent",
                     color: isActive ? DISC_ACCENT : "#c7d5e0",
                     cursor: "pointer",
@@ -437,7 +415,7 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId, ask, fileMissing, p
                 role="menuitem"
                 disabled={!selectable}
                 style={{
-                  ...MENU_ITEM_STYLE,
+                  ...SELECTOR_ITEM_STYLE,
                   background: v.active ? "rgba(89, 182, 255, 0.1)" : "transparent",
                   color: v.active ? DISC_ACCENT : "#c7d5e0",
                   cursor: selectable ? "pointer" : "default",
