@@ -947,6 +947,9 @@ describe("PlayButton", () => {
       fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
       const starting = await screen.findByRole("button", { name: "STARTING..." });
       expect(starting).toBeDisabled();
+      // The ring stands in the arrow's place rather than beside it.
+      expect(throbberIn(starting)).not.toBeNull();
+      expect(starting.querySelectorAll("svg")).toHaveLength(1);
       fireEvent.click(starting);
       expect(backend.startDownload).toHaveBeenCalledTimes(1);
 
@@ -1213,6 +1216,7 @@ describe("PlayButton", () => {
         vi.mocked(downloadStore.useDownloads).mockReturnValue([]);
         rerender(<PlayButton appId={APP_ID} />);
         expect(screen.getByRole("button", { name: "READY!" })).toBeDisabled();
+        expect(throbberIn(screen.getByRole("button", { name: "READY!" }))).toBeNull();
 
         act(() => {
           vi.advanceTimersByTime(1099);
@@ -1282,7 +1286,10 @@ describe("PlayButton", () => {
       openMenu();
       fireEvent.click(screen.getByRole("menuitem", { name: "Uninstall" }));
 
-      expect(await screen.findByRole("button", { name: "UNINSTALLING..." })).toBeDisabled();
+      const uninstalling = await screen.findByRole("button", { name: "UNINSTALLING..." });
+      expect(uninstalling).toBeDisabled();
+      expect(throbberIn(uninstalling)).not.toBeNull();
+      expect(uninstalling).toHaveStyle({ fontSize: "13px", whiteSpace: "nowrap" });
       expect(backend.removeRom).toHaveBeenCalledWith(100);
       await act(async () => removed({ success: true, message: "", prune_lease_token: null }));
       expect(await screen.findByRole("button", { name: "DOWNLOAD" })).toBeInTheDocument();
@@ -1301,6 +1308,7 @@ describe("PlayButton", () => {
       });
 
       expect(screen.getByRole("button", { name: "UNINSTALLING 3/10" })).toBeDisabled();
+      expect(throbberIn(screen.getByRole("button", { name: "UNINSTALLING 3/10" }))).not.toBeNull();
     });
 
     it("holds DOWNLOAD only until the page's detail moves on", async () => {

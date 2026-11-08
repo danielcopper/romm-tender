@@ -1,10 +1,11 @@
 /**
  * The desktop Play button's place while the game downloads: the transfer's bar
- * and the presses beside it.
+ * and the presses beside it, or the ring while it unpacks.
  */
 
 import type { CSSProperties, FC, MouseEvent } from "react";
 import { BUTTON_GROUP_STYLE, BUTTON_BASE_STYLE, SIDE_ACTION_STYLE } from "./styles";
+import { SvgThrobber } from "./SvgThrobber";
 import {
   getDownloadBaseBackground,
   getDownloadFillGradient,
@@ -66,7 +67,7 @@ export const DownloadingButton: FC<DownloadingButtonProps> = ({
           position: "relative",
           overflow: "hidden",
           background: getDownloadBaseBackground(progressRatio, { ...phase, isOffline: false }),
-          borderRadius: isExtracting ? "2px" : "2px 0 0 2px",
+          borderRadius: "2px 0 0 2px",
           padding: "0 10px",
         }}
       >
@@ -117,7 +118,18 @@ export const DownloadingButton: FC<DownloadingButtonProps> = ({
         </button>
       )}
 
-      {!isExtracting && (
+      {isExtracting ? (
+        <button
+          type="button"
+          className="tender-desktop-dl-extracting"
+          title="Extracting"
+          aria-label="Extracting"
+          disabled
+          style={{ ...sideActionStyle("36px", true), cursor: "default" }}
+        >
+          <SvgThrobber />
+        </button>
+      ) : (
         <button
           type="button"
           className="tender-desktop-dl-cancel"

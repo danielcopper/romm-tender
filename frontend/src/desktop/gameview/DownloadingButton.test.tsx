@@ -2,6 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { DownloadingButton } from "./DownloadingButton";
+import { throbberIn } from "../../test-utils/throbber";
 
 const renderButton = (props: Partial<Parameters<typeof DownloadingButton>[0]> = {}) =>
   render(
@@ -45,12 +46,22 @@ describe("DownloadingButton", () => {
     expect(screen.getByLabelText("Cancel download")).toBeInTheDocument();
   });
 
-  it("offers neither pause nor cancel while the download is unpacked", () => {
+  it("offers neither pause nor cancel while the download is unpacked, with the ring in cancel's place", () => {
     renderButton({ progressRatio: 0.8, isExtracting: true });
 
     expect(screen.getByRole("progressbar")).toHaveTextContent("Extracting… 80%");
     expect(screen.queryByLabelText("Cancel download")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Pause download")).not.toBeInTheDocument();
+    const unpacking = screen.getByLabelText("Extracting");
+    expect(unpacking).toBeDisabled();
+    expect(unpacking).toHaveStyle({ cursor: "default" });
+    expect(throbberIn(unpacking)).not.toBeNull();
+  });
+
+  it("draws no ring while the download runs", () => {
+    const { container } = renderButton();
+
+    expect(throbberIn(container)).toBeNull();
   });
 
   it("reads Paused with its percentage, glows amber, and offers resume", () => {

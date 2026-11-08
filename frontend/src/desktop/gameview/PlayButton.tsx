@@ -142,6 +142,8 @@ const UNINSTALLING_BUTTON_STYLE: CSSProperties = {
   background: "#2a3f5a",
   color: "#8fa3b8",
   opacity: 1,
+  fontSize: "13px",
+  whiteSpace: "nowrap",
 };
 
 const DOWNLOAD_BUTTON_STYLE: CSSProperties = {
@@ -492,9 +494,15 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
   // Nothing on a stranded panel: docs/architecture/invariants/panel.md's stranded-panel entry says why.
   if (stranded) return null;
 
-  const placeholder = (label: string, title?: string, style: CSSProperties = PLACEHOLDER_BUTTON_STYLE) => (
+  const placeholder = (
+    label: string,
+    title?: string,
+    style: CSSProperties = PLACEHOLDER_BUTTON_STYLE,
+    busy = false,
+  ) => (
     <div className="tender-desktop-play-btn-group" style={BUTTON_GROUP_STYLE}>
       <button type="button" disabled style={style} {...(title === undefined ? {} : { title })}>
+        {busy && <SvgThrobber />}
         {label}
       </button>
     </div>
@@ -508,9 +516,10 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
       noFileOnRomm,
     });
     const usesExisting = !isOffline && !actionPending && !noFileOnRomm && (targetOccupied || candidatePresent);
+    const starting = !isOffline && actionPending;
     let label = "DOWNLOAD";
     if (isOffline) label = "OFFLINE";
-    else if (actionPending) label = "STARTING...";
+    else if (starting) label = "STARTING...";
     else if (noFileOnRomm) label = NO_FILE_ON_ROMM_LABEL.toUpperCase();
     else if (usesExisting) label = "USE EXISTING FILES";
 
@@ -528,7 +537,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
           style={usesExisting ? { ...style, fontSize: "13px" } : style}
           onClick={() => detach(handleDownloadClick())}
         >
-          {switching ? (
+          {switching || starting ? (
             <SvgThrobber />
           ) : (
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
@@ -563,7 +572,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
     }
 
     if (actionState === "uninstalling") {
-      return placeholder(uninstallingLabel(uninstallProgress, romId), undefined, UNINSTALLING_BUTTON_STYLE);
+      return placeholder(uninstallingLabel(uninstallProgress, romId), undefined, UNINSTALLING_BUTTON_STYLE, true);
     }
     if (actionState === "dl_complete") return placeholder("READY!", undefined, READY_BUTTON_STYLE);
     if (downloading) {
