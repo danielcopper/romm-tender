@@ -2,7 +2,7 @@
  * A ROM's metadata record, read through the page's shared read.
  *
  * The hook binds what it holds to the ROM it was read for, and shows it only while
- * that ROM is the one asked about (`docs/architecture/invariants.md`, the entry on
+ * that ROM is the one asked about (`docs/architecture/invariants/panel.md`, the entry on
  * per-rom detail state).
  */
 

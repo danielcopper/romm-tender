@@ -180,7 +180,7 @@ def main(argv: list[str]) -> int:
         print(
             "ERROR: a module declared read-only does not hold to it — put the write with the "
             "pipeline that performs it (or fix the declared path), or drop the module's read-only "
-            "declaration (CLAUDE.md → Invariant register, #1777)."
+            "declaration (docs/architecture/invariants/library-sync.md, #1777)."
         )
         return 1
     print(f"OK: all {len(READ_ONLY_MODULES)} read-only module(s) call repository reads only.")

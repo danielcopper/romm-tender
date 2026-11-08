@@ -517,7 +517,7 @@ def main(argv: list[str]) -> int:
             print(
                 "ERROR: a UoW-opening seam (ActiveCoreResolver / "
                 "PlatformSystems / uow_factory) must not be called while a UoW is open on the same path "
-                "(CLAUDE.md → Invariant register). Snapshot inside the UoW, close it, then "
+                "(docs/architecture/invariants/code-structure.md). Snapshot inside the UoW, close it, then "
                 "resolve outside."
             )
         if any(_WRITE_LOCK_REMEDY in line for line in findings):
@@ -525,8 +525,8 @@ def main(argv: list[str]) -> int:
             print(
                 "ERROR: a file-I/O seam (DiscResolver / CoreInfoProvider / SaveLocationReader) "
                 "must not be called while a UoW is open — a Unit of Work wraps database "
-                "reads and writes only, never file or server I/O (CLAUDE.md → Invariant "
-                "register, GLOSSARY.md → Unit of Work, ADR-0006). Snapshot inside the UoW, "
+                "reads and writes only, never file or server I/O (docs/architecture/invariants/"
+                "code-structure.md, GLOSSARY.md → Unit of Work, ADR-0006). Snapshot inside the UoW, "
                 "close it, then do the I/O outside."
             )
         return 1

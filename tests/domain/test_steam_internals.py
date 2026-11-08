@@ -2,7 +2,7 @@
 
 What the sweep reads is ``docs/architecture/frontend-bundles.md``'s, "Every Steam
 internal Tender reaches"; what it cannot see is the invariant register's entry in
-CLAUDE.md.
+``docs/architecture/invariants/startup.md``.
 """
 
 from __future__ import annotations

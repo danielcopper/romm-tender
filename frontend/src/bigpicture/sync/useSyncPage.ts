@@ -502,8 +502,9 @@ export function useSyncPage(): SyncPageState {
   // preview (`{running: false, stage: ""}`): that ended no run, and there is
   // nothing about one for them to read. Reading it that way rests on the
   // backend's half — an emitted frame stops a run only with a terminal stage,
-  // which CLAUDE.md's invariant register carries as its own entry — so a
-  // stopping frame without one came from here. `useSyncRunView`'s own callbacks
+  // which the invariant register carries as its own entry
+  // (docs/architecture/invariants/library-sync.md) — so a stopping frame
+  // without one came from here. `useSyncRunView`'s own callbacks
   // are not used for it either: those belong to the page that owns the run's
   // end (Main), and a second consumer passing them is exactly what the hook's
   // contract forbids.

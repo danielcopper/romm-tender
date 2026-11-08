@@ -138,7 +138,7 @@ def main(argv: list[str]) -> int:
         print(
             f"ERROR: a {TYPE_NAME} is built only by {ENTRY_CLASS}.{ENTRY_METHOD}() "
             "(backend/services/saves/sync_engine/engine.py), the one entry that registers or heals the device "
-            "before a save operation reaches RomM (CLAUDE.md → Invariant register)."
+            "before a save operation reaches RomM (docs/architecture/invariants/saves.md)."
         )
         return 1
     print(f"OK: {TYPE_NAME} is built only by {ENTRY_CLASS}.{ENTRY_METHOD}().")

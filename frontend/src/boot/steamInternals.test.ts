@@ -4,7 +4,7 @@
  * nothing the code does not reach.
  *
  * What the scan reads is `test-utils/steamReach.ts`'s; what it cannot see is
- * the invariant register's entry in CLAUDE.md.
+ * the invariant register's entry in `docs/architecture/invariants/startup.md`.
  */
 
 import { globSync } from "node:fs";

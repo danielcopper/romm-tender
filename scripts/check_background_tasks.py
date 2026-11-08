@@ -6,8 +6,8 @@ are called only in ``backend/lib/background_tasks.py``, whose
 ``BackgroundTasks`` holds every task it starts until the task ends: ``spawn``
 for a task nobody awaits, which it also logs when it fails, and
 ``start_awaited`` for one its starter awaits itself. Why, and what an owner's
-shutdown does with them, is the invariant register's long form
-(``docs/architecture/invariants.md``). A task ``asyncio.gather`` or
+shutdown does with them, is the invariant register's entry
+(``docs/architecture/invariants/code-structure.md``). A task ``asyncio.gather`` or
 ``asyncio.shield`` makes from a coroutine its caller awaits on the spot is the
 other kind, and outside the rule.
 
@@ -136,7 +136,7 @@ def main(argv: list[str]) -> int:
         print(
             "ERROR: a task is created only by BackgroundTasks (backend/lib/background_tasks.py), which holds it "
             "until it ends — spawn for a task nobody awaits, start_awaited for one its starter awaits itself; keep "
-            "the task it answers if you need a handle (CLAUDE.md → Invariant register)."
+            "the task it answers if you need a handle (docs/architecture/invariants/code-structure.md)."
         )
         return 1
     print(

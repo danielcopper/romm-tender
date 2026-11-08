@@ -3,7 +3,7 @@
  * what is earned, and the earned-first order a list is drawn in.
  *
  * The hook binds what it holds to the ROM it was read for, and shows it only while
- * that ROM is the one asked about (`docs/architecture/invariants.md`, the entry on
+ * that ROM is the one asked about (`docs/architecture/invariants/panel.md`, the entry on
  * per-rom detail state): the game page calls it from the panel, which a version
  * switch does not remount.
  */

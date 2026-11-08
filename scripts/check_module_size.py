@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Hold the line on module size: no new god classes, no growth in the old ones.
 
-CLAUDE.md sets a decomposition threshold for every first-party backend tree —
+The invariant register (``docs/architecture/invariants/code-structure.md``)
+sets a decomposition threshold for every first-party backend tree —
 ``services/``, ``bootstrap/``, ``adapters/``, ``domain/``, ``lib/`` and
 ``models/``. It lived in prose, and prose drifted: ``sync_orchestrator.py`` was
 901 lines when #999 wrote it down and kept growing. Nothing failed in between,

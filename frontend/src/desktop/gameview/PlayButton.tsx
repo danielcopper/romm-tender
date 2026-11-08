@@ -148,7 +148,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
   });
 
   if (romId === null) return null;
-  // Nothing on a stranded panel: docs/architecture/invariants.md's stranded-panel entry says why.
+  // Nothing on a stranded panel: docs/architecture/invariants/panel.md's stranded-panel entry says why.
   if (stranded) return null;
 
   const placeholder = (label: string, title?: string) => (

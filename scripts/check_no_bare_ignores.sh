@@ -88,7 +88,8 @@ if [[ -n "$ts_ignore" ]]; then
 fi
 
 if [[ $found_any -ne 0 ]]; then
-    echo "ERROR: suppression directives must carry a reason (CLAUDE.md / issue #838)."
+    echo "ERROR: suppression directives must carry a reason"
+    echo "       (docs/architecture/invariants/code-structure.md, issue #838)."
     exit 1
 fi
 
