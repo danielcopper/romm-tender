@@ -2,8 +2,8 @@
  * The words of the "already on your device" dialogs a download opens (#260,
  * ADR-0028) — every title, sentence and label of theirs that the frontend
  * writes, fixed labels included — and the toasts about the same case: how a
- * Download press ended, and a resume refused because something now sits at the
- * game's location. One home, so every surface that draws those dialogs states
+ * Download press ended, and how a resume of a paused download was refused or
+ * failed. One home, so every surface that draws those dialogs states
  * the same case the same way; the drawing itself stays with each surface. Why a
  * sentence says what it says sits on the constant or function that builds it,
  * so whoever draws a dialog sees which sentences must not be softened.
