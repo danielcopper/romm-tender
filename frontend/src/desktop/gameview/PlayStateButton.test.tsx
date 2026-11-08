@@ -76,4 +76,55 @@ describe("PlayStateButton", () => {
     fireEvent.click(toggle);
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
+
+  it("disables the chevron while a version switch is under way, and closes an open menu when one starts", () => {
+    const { rerender } = renderButton();
+    fireEvent.click(screen.getByRole("button", { name: "Game Options" }));
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+
+    rerender(
+      <PlayStateButton
+        pressState={null}
+        refusal={null}
+        checkFailed={false}
+        switching
+        onPlay={vi.fn()}
+        onUninstall={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    const toggle = screen.getByRole("button", { name: "Game Options" });
+    expect(toggle).toBeDisabled();
+    expect(toggle).toHaveStyle({ cursor: "default" });
+    expect(toggle).toHaveAttribute("title", "Game Options");
+  });
+
+  it("disables the chevron, saying why, while an uninstall of another version runs", () => {
+    renderButton({ uninstallUnderWay: true });
+
+    const toggle = screen.getByRole("button", { name: "Game Options" });
+    expect(toggle).toBeDisabled();
+    expect(toggle).toHaveStyle({ cursor: "default" });
+    expect(toggle).toHaveAttribute("title", "Another version of this game is being uninstalled");
+    fireEvent.click(toggle);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["a version switch", { switching: true }],
+    ["a press", { pressState: "checking" as const }],
+    ["another version's removal", { uninstallUnderWay: true }],
+  ])("leaves a menu that %s closed shut once it ends", (_, refusing) => {
+    const props = { pressState: null, refusal: null, checkFailed: false, onPlay: vi.fn(), onUninstall: vi.fn() };
+    const { rerender } = render(<PlayStateButton {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Game Options" }));
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+
+    rerender(<PlayStateButton {...props} {...refusing} />);
+    rerender(<PlayStateButton {...props} />);
+
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Game Options" })).toHaveAttribute("aria-expanded", "false");
+  });
 });

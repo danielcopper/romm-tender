@@ -63,6 +63,8 @@ const CHECK_FAILED_PLAY_BUTTON_STYLE: CSSProperties = {
   background: "linear-gradient(to right, #6b7b6b 0%, #5a6a5a 60%)",
 };
 
+const UNINSTALL_ELSEWHERE_TITLE = "Another version of this game is being uninstalled";
+
 const PRESS_LABEL: Record<PressState, string> = {
   checking: "PREPARING...",
   syncing: "SYNCING SAVES...",
@@ -77,6 +79,8 @@ interface PlayStateButtonProps {
   checkFailed: boolean;
   /** Whether a version switch is under way. */
   switching?: boolean;
+  /** Whether a removal the page started for another version still runs. */
+  uninstallUnderWay?: boolean;
   onPlay: () => void;
   onUninstall: () => void;
 }
@@ -92,6 +96,7 @@ export const PlayStateButton: FC<PlayStateButtonProps> = ({
   refusal,
   checkFailed,
   switching = false,
+  uninstallUnderWay = false,
   onPlay,
   onUninstall,
 }) => {
@@ -99,14 +104,17 @@ export const PlayStateButton: FC<PlayStateButtonProps> = ({
   const groupRef = useRef<HTMLDivElement>(null);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
   useOutsideClick(groupRef, closeMenu, menuOpen);
-  // The chevron is disabled while a press is under way, so no Uninstall is offered mid-start.
-  const open = menuOpen && pressState === null;
+  // No Uninstall mid-start or mid-switch, nor while another version's removal runs,
+  // which takes no second one.
+  const menuRefused = pressState !== null || switching || uninstallUnderWay;
+  if (menuRefused && menuOpen) setMenuOpen(false);
+  const menuTitle = uninstallUnderWay ? UNINSTALL_ELSEWHERE_TITLE : "Game Options";
 
   return (
     <div
       ref={groupRef}
       className="tender-desktop-play-btn-group"
-      style={{ ...BUTTON_GROUP_STYLE, zIndex: open ? 1000 : BUTTON_GROUP_STYLE.zIndex }}
+      style={{ ...BUTTON_GROUP_STYLE, zIndex: menuOpen ? 1000 : BUTTON_GROUP_STYLE.zIndex }}
     >
       <button
         type="button"
@@ -131,18 +139,18 @@ export const PlayStateButton: FC<PlayStateButtonProps> = ({
       <button
         type="button"
         className="tender-desktop-menu-toggle"
-        title="Game Options"
+        title={menuTitle}
         aria-label="Game Options"
-        aria-expanded={open}
-        disabled={pressState !== null}
-        style={pressState === null ? SIDE_ACTION_STYLE : { ...SIDE_ACTION_STYLE, cursor: "default" }}
+        aria-expanded={menuOpen}
+        disabled={menuRefused}
+        style={menuRefused ? { ...SIDE_ACTION_STYLE, cursor: "default" } : SIDE_ACTION_STYLE}
         onClick={() => setMenuOpen((prev) => !prev)}
       >
         <svg width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
           <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
-      {open && (
+      {menuOpen && (
         <div className="tender-desktop-play-menu" role="menu" style={MENU_STYLE}>
           <button
             type="button"

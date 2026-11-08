@@ -90,25 +90,32 @@ describe("usePlayLaunch", () => {
   const endAction = vi.fn();
   const runGame = vi.fn();
 
-  const renderLaunch = (overrides: Partial<Parameters<typeof usePlayLaunch>[0]> = {}) =>
-    renderHook(() =>
-      usePlayLaunch({
-        appId: 12345,
-        romId: 100,
-        romName: "Test Game",
-        pressState: null,
-        startCheckFailed: false,
-        ask,
-        leaseOwner: "desktop-play-button:12345",
-        setPressState,
-        startAction,
-        endAction,
-        clearSessionRunning,
-        holdVerdict,
-        setStopPending,
-        ...overrides,
-      }),
-    ).result;
+  type LaunchOptions = Partial<Parameters<typeof usePlayLaunch>[0]>;
+
+  /** The hook rendered with *initialProps*, whose `rerender` takes the options a version switch changes. */
+  const renderSwitchable = (initialProps: LaunchOptions = {}) =>
+    renderHook(
+      (props: LaunchOptions) =>
+        usePlayLaunch({
+          appId: 12345,
+          romId: 100,
+          romName: "Test Game",
+          pressState: null,
+          startCheckFailed: false,
+          ask,
+          leaseOwner: "desktop-play-button:12345",
+          setPressState,
+          startAction,
+          endAction,
+          clearSessionRunning,
+          holdVerdict,
+          setStopPending,
+          ...props,
+        }),
+      { initialProps },
+    );
+
+  const renderLaunch = (overrides: LaunchOptions = {}) => renderSwitchable(overrides).result;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -535,6 +542,29 @@ describe("usePlayLaunch", () => {
         await first;
       });
       expect(holdVerdict).toHaveBeenCalledWith("download", 100);
+    });
+
+    it("says an uninstall is under way from the press until the removal answers", async () => {
+      let finish!: (value: unknown) => void;
+      vi.mocked(backend.removeRom).mockReturnValueOnce(
+        new Promise((resolve) => {
+          finish = resolve;
+        }) as never,
+      );
+      const result = renderLaunch();
+      expect(result.current.uninstallUnderWay).toBe(false);
+
+      let removal!: Promise<void>;
+      act(() => {
+        removal = result.current.handleUninstallClick();
+      });
+      expect(result.current.uninstallUnderWay).toBe(true);
+
+      await act(async () => {
+        finish({ success: false, message: "In use" });
+        await removal;
+      });
+      expect(result.current.uninstallUnderWay).toBe(false);
     });
 
     it("does nothing before the page's detail names a ROM", async () => {
