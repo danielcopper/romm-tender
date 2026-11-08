@@ -1,10 +1,11 @@
 """Tender's firmware store: the BIOS files it downloads from RomM, and the links that reach them.
 
 A file lies in the store under the platform it was downloaded for and under the
-name RomM gives it, inside Tender's folder (``<folder>/bios/<platform>/<name>``):
-every file is kept as it comes, a file two platforms need lies in each of their
-folders, and two files with the same bytes both lie there. An emulator reaches a
-store file through an absolute symlink at the place the resolver names for it.
+name RomM gives it, inside Tender's folder (``<folder>/bios/<the platform's
+folder in RomM>/<name>``): every file is kept as it comes, a file two platforms
+need lies in each of their folders, and two files with the same bytes both lie
+there. An emulator reaches a store file through an absolute symlink at the place
+the resolver names for it.
 
 Two records, two aggregates. :class:`StoredFirmware` is one store file, and it
 is what Tender's folder counts as recorded under it. :class:`FirmwareLink` is
@@ -39,27 +40,32 @@ BACKUP_STAMP_FORMAT = "%Y-%m-%d_%H-%M-%S"
 
 @cosmic_aggregate
 class StoredFirmware:
-    """One file in the firmware store, keyed by the platform it was downloaded for and its name in RomM.
+    """One file in the firmware store, keyed by the platform folder it was downloaded for and its name in RomM.
 
-    ``folder`` is Tender's folder the file was written under, as the folder
-    service gave it; the store path is that folder joined with
-    :data:`STORE_FOLDER`, the platform and the name. ``md5`` is the checksum
-    RomM states and the file was checked against, ``size`` its size in bytes,
-    and ``firmware_id`` RomM's id for it, which is metadata and not identity.
+    ``platform_folder`` is the folder RomM keeps the platform in (``fs_slug``),
+    and ``platform_slug`` that platform's slug, by which Tender finds its
+    system and its emulator pick. ``folder`` is Tender's folder the file was written under, as the
+    folder service gave it; the store path is that folder joined with
+    :data:`STORE_FOLDER`, the platform folder and the name. ``md5`` is the
+    checksum RomM states and the file was checked against, ``size`` its size in
+    bytes, and ``firmware_id`` RomM's id for it, which is metadata and not
+    identity.
     """
 
-    platform_slug: str
+    platform_folder: str
     file_name: str
     folder: str
     md5: str
     size: int
     downloaded_at: str
+    platform_slug: str
     firmware_id: int | None = None
 
     @classmethod
     def mark_downloaded(
         cls,
         *,
+        platform_folder: str,
         platform_slug: str,
         file_name: str,
         folder: str,
@@ -69,17 +75,18 @@ class StoredFirmware:
         firmware_id: int | None = None,
     ) -> StoredFirmware:
         """Record a file that reached the store at ISO timestamp *downloaded_at* with the checksum RomM states."""
-        if not platform_slug or not file_name or not folder:
-            raise ValueError("platform_slug, file_name and folder are required")
+        if not platform_folder or not platform_slug or not file_name or not folder:
+            raise ValueError("platform_folder, platform_slug, file_name and folder are required")
         if not md5:
             raise ValueError("a store file is recorded only with the checksum it was checked against")
         return cls(
-            platform_slug=platform_slug,
+            platform_folder=platform_folder,
             file_name=file_name,
             folder=folder,
             md5=md5.lower(),
             size=size,
             downloaded_at=downloaded_at,
+            platform_slug=platform_slug,
             firmware_id=firmware_id,
         )
 
@@ -88,14 +95,14 @@ class StoredFirmware:
 class FirmwareLink:
     """One link Tender placed: at *place*, pointing at the store path *target*, in the emulator source *source*.
 
-    ``platform_slug`` and ``file_name`` name the store file the link was
+    ``platform_folder`` and ``file_name`` name the store file the link was
     placed for. The record outlives that store file only where the link could
     not be removed with it.
     """
 
     place: str
     target: str
-    platform_slug: str
+    platform_folder: str
     file_name: str
     source: str
     placed_at: str
@@ -106,7 +113,7 @@ class FirmwareLink:
         *,
         place: str,
         target: str,
-        platform_slug: str,
+        platform_folder: str,
         file_name: str,
         source: str,
         placed_at: str,
@@ -117,7 +124,7 @@ class FirmwareLink:
         return cls(
             place=place,
             target=target,
-            platform_slug=platform_slug,
+            platform_folder=platform_folder,
             file_name=file_name,
             source=source,
             placed_at=placed_at,

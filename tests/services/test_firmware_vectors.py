@@ -383,7 +383,7 @@ async def _sweep(stem: str, vector: dict[str, Any]) -> _Sweep:
         for emulator, verdict in _verdicts(answer).items():
             files = _LookingFileStore()
             service = _service(inp, installation.kind, detected, emulator, files)
-            platform = (await service.get_platform_firmware_status(system))["platform"]
+            platform = (await service.get_platform_firmware_status(system, system))["platform"]
             assert platform["active_core"] == emulator
             sweep.compared += 1
             sweep.looked_at.extend(files.looked_at)

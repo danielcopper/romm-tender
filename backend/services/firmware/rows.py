@@ -49,14 +49,14 @@ if TYPE_CHECKING:
 class RowInputs:
     """Everything one platform's rows are built from, read once for the whole page.
 
-    ``library`` is every file the RomM library lists, whichever platform it is
-    filed under — a file fills a requirement wherever it lies — and
-    ``copies`` this platform's store files. ``looks`` keeps one look per place,
-    so a place two rows name is looked at once.
+    ``library`` is the files RomM lists under this platform's own folder
+    (:func:`~domain.firmware_rows.platform_library`) whose names can lie in the
+    store, and ``copies`` this platform's store files. ``looks`` keeps one look
+    per place, so a place two rows name is looked at once.
     """
 
     catalogue: FirmwareCatalogue
-    platform_slug: str
+    platform_folder: str
     library: tuple[LibraryFirmware, ...]
     copies: tuple[StoreCopy, ...]
     owned: OwnedLinks
@@ -91,10 +91,9 @@ def library_rows(inputs: RowInputs, emulator: str | None) -> list[BiosFileEntry]
     """
     placements = inputs.catalogue.placements
     complete = inputs.catalogue.reading_complete_for(emulator)
-    mine = [file for file in inputs.library if file.platform_slug == inputs.platform_slug]
     spare = {copy.file_name: copy for copy in unused(inputs.copies, placements)}
     rows = []
-    for file in unclaimed(mine, placements):
+    for file in unclaimed(inputs.library, placements):
         copy = spare.pop(file.file_name, None)
         entry = build_file_entry(file.file_name, copy is not None, None, None, complete, emulator)
         rows.append(
@@ -142,7 +141,7 @@ def _file_row(inputs: RowInputs, placement: FirmwarePlacement, emulator: str | N
         refusal=_refusal(catalogue, placement, place, look),
         library=library,
         copy=store_copy(placement, inputs.copies),
-        platform_slug=inputs.platform_slug,
+        platform_folder=inputs.platform_folder,
         source=catalogue.source or "",
         owned=inputs.owned,
         satisfied=placement.satisfied,
@@ -217,7 +216,7 @@ def _recognised_folder_rows(
             refusal=_refusal(catalogue, placement, place, look),
             library=library,
             copy=copy,
-            platform_slug=inputs.platform_slug,
+            platform_folder=inputs.platform_folder,
             source=catalogue.source or "",
             owned=inputs.owned,
             satisfied=satisfied,
@@ -274,7 +273,7 @@ def _stated_folder_rows(
             refusal=None,
             library=None,
             copy=None,
-            platform_slug=inputs.platform_slug,
+            platform_folder=inputs.platform_folder,
             source=inputs.catalogue.source or "",
             owned=inputs.owned,
             satisfied=statement.satisfied,

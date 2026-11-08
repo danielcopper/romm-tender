@@ -5,9 +5,10 @@ file in that folder — and the resolver's verdict over it stands as it is
 (:mod:`domain.bios_status`). Beside the verdict a row carries Tender's own
 facts, each of which decides what the row offers:
 
-- **the library file that fills it** — by content anywhere in the RomM library,
-  by name only where content cannot say (:mod:`domain.firmware_match`), the
-  alphabetically first where several do;
+- **the library file that fills it** — one RomM lists under this platform's
+  own folder (:func:`platform_library`), by content, by name only where
+  content cannot say (:mod:`domain.firmware_match`), the alphabetically first
+  where several do;
 - **the store copy that fills it** — this platform's own, in its store folder;
 - **what lies at its place** (:func:`domain.firmware_places.link_state`) and
   why a link may not go there (:func:`domain.firmware_places.place_refusal`);
@@ -39,7 +40,10 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class LibraryFirmware(FirmwareFile):
-    """One firmware file the RomM library lists: its RomM id and the platform RomM files it under."""
+    """One firmware file the RomM library lists.
+
+    Its RomM id, its size, and the slug of the platform RomM files it under.
+    """
 
     firmware_id: int | None = None
     platform_slug: str = ""
@@ -48,16 +52,16 @@ class LibraryFirmware(FirmwareFile):
 
 @dataclass(frozen=True, slots=True)
 class StoreCopy(FirmwareFile):
-    """One file in Tender's firmware store: the platform it lies under, its path, and whether it is on disk."""
+    """One file in Tender's firmware store: the platform folder it lies under, its path, and whether it is on disk."""
 
-    platform_slug: str = ""
+    platform_folder: str = ""
     path: str = ""
     present: bool = True
 
 
 @dataclass(frozen=True, slots=True)
 class OwnedLinks:
-    """What decides whose a link is: every recorded store path with its platform, the ones on disk, the records."""
+    """What decides whose a link is: each recorded store path with its platform folder, those on disk, the records."""
 
     store_targets: Mapping[str, str]
     present: frozenset[str]
@@ -83,6 +87,17 @@ def leaves_its_folder(file_name: str) -> bool:
     """
     normal = os.path.normpath(file_name) if file_name else ""
     return normal in ("", ".", "..") or normal.startswith(f"..{os.sep}") or os.path.isabs(file_name)
+
+
+def platform_library[F: Mapping[str, Any]](firmware_list: Iterable[F], platform_folder: str) -> list[F]:
+    """The files of RomM's firmware listing that RomM keeps under *platform_folder*.
+
+    The only library files a platform's rows, its "Download required" and its
+    "Replace…" draw on (#2223 D48): RomM keeps a platform's firmware in that
+    platform's folder, so a file it lists under another one fills no
+    requirement here, also where the two folders share a slug.
+    """
+    return [firmware for firmware in firmware_list if firmware.get("platform_folder") == platform_folder]
 
 
 def library_match(placement: FirmwarePlacement, library: Iterable[LibraryFirmware]) -> dict[str, Any] | None:
@@ -129,7 +144,7 @@ def place_facts(
     refusal: PlaceRefusal | None,
     library: dict[str, Any] | None,
     copy: StoreCopy | None,
-    platform_slug: str,
+    platform_folder: str,
     source: str,
     owned: OwnedLinks,
     satisfied: bool | None,
@@ -147,7 +162,7 @@ def place_facts(
         want = WantedLink(
             place=place,
             target=copy.path if copy is not None else None,
-            platform_slug=platform_slug,
+            platform_folder=platform_folder,
             file_name=copy.file_name if copy is not None else None,
             source=source,
         )
@@ -168,7 +183,7 @@ def place_facts(
         "library": library,
         "store_file": copy.file_name if copy is not None else None,
         "link": link,
-        "linked_for": linked_for if linked_for != platform_slug else None,
+        "linked_for": linked_for if linked_for != platform_folder else None,
         "place_refusal": (
             {"reason": refusal.reason, "folder": refusal.folder, "source": source} if refusal is not None else None
         ),
@@ -208,9 +223,9 @@ def library_payload(file: LibraryFirmware, matched: str | None) -> dict[str, Any
 
 
 def wanted_links(
-    placements: Iterable[FirmwarePlacement], platform_slug: str, source: str, copies: Sequence[StoreCopy]
+    placements: Iterable[FirmwarePlacement], platform_folder: str, source: str, copies: Sequence[StoreCopy]
 ) -> list[tuple[WantedLink, FirmwarePlacement]]:
-    """Every place *placements* want a store file of *platform_slug* at, with the copy that fills it, if any.
+    """Every place *placements* want a store file of *platform_folder* at, with the copy that fills it, if any.
 
     A file requirement's place is wanted with the alphabetically first copy on
     disk that fills it, or with none; a folder declaration's with each copy it
@@ -223,9 +238,9 @@ def wanted_links(
             for name, _file, copy in folder_entries(placement, (), copies):
                 place = folder_place(placement, name)
                 if place is not None and copy is not None:
-                    wanted.append((_want(place, copy, platform_slug, source), placement))
+                    wanted.append((_want(place, copy, platform_folder, source), placement))
         elif placement.place is not None:
-            wanted.append((_want(placement.place, store_copy(placement, copies), platform_slug, source), placement))
+            wanted.append((_want(placement.place, store_copy(placement, copies), platform_folder, source), placement))
     return wanted
 
 
@@ -244,11 +259,11 @@ def wants_place(placements: Iterable[FirmwarePlacement], place: str, copy: Store
     return False
 
 
-def _want(place: str, copy: StoreCopy | None, platform_slug: str, source: str) -> WantedLink:
+def _want(place: str, copy: StoreCopy | None, platform_folder: str, source: str) -> WantedLink:
     return WantedLink(
         place=place,
         target=copy.path if copy is not None else None,
-        platform_slug=platform_slug,
+        platform_folder=platform_folder,
         file_name=copy.file_name if copy is not None else None,
         source=source,
     )

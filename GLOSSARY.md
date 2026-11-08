@@ -621,12 +621,22 @@ and no edit distance or token scoring is involved.
 
 ### platform_slug (denormalized)
 
-The RomM platform identifier (e.g. `gba`, `psx`) carried as a plain string on the rows that need it (`roms`,
-`rom_installs`, `downloaded_bios`, `firmware_cache`). There is **no local `Platform` aggregate** — that was proposed in
-ADR-0001 and **dropped by [ADR-0003](docs/adr/0003-json-sqlite-persistence-boundary.md)** on YAGNI grounds. Platform
-display names resolve live from RomM; sync exclusion is the user-intent `enabled_platforms` config in `settings.json`,
-not per-platform local state. A `Platform` aggregate is reintroduced only when a concrete need lands (the
-standalone-emulator roadmap), not speculatively.
+RomM's slug for a platform's console (e.g. `gba`, `psx`), carried as a plain string on the rows that need it (`roms`,
+`rom_installs`, `downloaded_bios`, `firmware_store`, `firmware_cache`). Two RomM platforms can share one — RomM's
+built-in `gc` and `gamecube` are both `ngc` — so a slug does not name one platform; the **platform folder** does. There
+is **no local `Platform` aggregate** — that was proposed in ADR-0001 and **dropped by
+[ADR-0003](docs/adr/0003-json-sqlite-persistence-boundary.md)** on YAGNI grounds. Platform display names resolve live
+from RomM; sync exclusion is the user-intent `enabled_platforms` config in `settings.json`, not per-platform local
+state. A `Platform` aggregate is reintroduced only when a concrete need lands (the standalone-emulator roadmap), not
+speculatively.
+
+### Platform folder (fs_slug)
+
+The folder RomM keeps a platform's games and firmware in, its `fs_slug` (e.g. `gc`, `gamecube`). Unlike the
+**platform_slug** it names one platform, so what Tender keeps per platform rather than per console is keyed by it: the
+**firmware store**'s folders and records (`platform_folder`), and the folder a game's platform is in
+(`roms.platform_fs_slug`). It is never replaced by the slug where it is not known (#2223 D45). _Avoid_: calling a
+system's ROM folder on this machine the platform folder; that folder is the resolver's answer.
 
 ### Platform system
 
@@ -919,8 +929,8 @@ counting every row the library holds.
 
 ### Firmware store
 
-Tender's own store of the BIOS files it downloads from RomM, in `Tender/bios/<platform>/` under each file's name in
-RomM, reaching each emulator source through a link at the place emu-atlas names
+Tender's own store of the BIOS files it downloads from RomM, in `Tender/bios/<the platform's folder in RomM>/` under
+each file's name in RomM, reaching each emulator source through a link at the place emu-atlas names
 ([ADR-0042](docs/adr/0042-tender-takes-emulator-answers-starts-emulators-and-keeps-its-own-store.md)). A file is held
 once per platform it was downloaded for, never once for the whole machine (#2191 D3). A **link** of Tender's is an
 absolute symlink at such a place, pointing at a store file; it is Tender's own when it points at a store file Tender has

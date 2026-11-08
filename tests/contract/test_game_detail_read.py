@@ -42,6 +42,8 @@ def _seed_versioned_rom(harness, **overrides):
                 ),
                 fs_size_bytes=overrides.get("fs_size_bytes", 3_145_728),
                 has_file_on_disk=overrides.get("has_file_on_disk", True),
+                # The sync records RomM's folder for the platform; it is the slug here.
+                platform_fs_slug=overrides.get("platform_slug", "snes"),
             )
         )
     return app_id

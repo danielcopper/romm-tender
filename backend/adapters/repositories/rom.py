@@ -62,6 +62,10 @@ _SYNC_COLUMNS = (
     # The gone-from-RomM mark. Unlike the route it is NOT merged, so a
     # commit's fresh Rom writes NULL; why is docs/architecture/database-design.md.
     "gone_from_romm",
+    # The folder RomM keeps the platform in, from the ROM's payload. Merged
+    # like the fetch generation: a commit whose dict carries none keeps the
+    # existing value.
+    "platform_fs_slug",
 )
 
 # Read set: the synced columns plus the pin-only emulator_override, selected_disc,
@@ -120,6 +124,7 @@ def _row_to_rom(row: sqlite3.Row) -> Rom:
         last_fetch_id=row["last_fetch_id"],
         delivered_through=row["delivered_through"],
         gone_from_romm=row["gone_from_romm"],
+        platform_fs_slug=row["platform_fs_slug"],
     )
 
 
@@ -195,6 +200,7 @@ class SqliteRomRepository(BaseRepository):
                 rom.last_fetch_id,
                 rom.delivered_through,
                 rom.gone_from_romm,
+                rom.platform_fs_slug,
             ),
         )
 

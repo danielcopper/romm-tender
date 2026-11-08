@@ -69,6 +69,9 @@ def seed_rom(
                 fs_name=f"rom-{rom_id}",
                 shortcut_app_id=rom_id if shortcut_app_id == BIND_TO_ROM_ID else shortcut_app_id,
                 synced_at="2026-01-01T00:00:00",
+                # The folder the sync records for the platform; the seeded
+                # platforms keep it equal to their slug.
+                platform_fs_slug=platform_slug,
             )
         )
 

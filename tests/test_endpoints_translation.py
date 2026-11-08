@@ -1488,7 +1488,7 @@ class TestTheFirmwareAnswersOnTheWire:
                 )
 
         dispatcher = _dispatcher_over_firmware(FakeRommApi(), store, uow)
-        message = json.loads(await dispatcher.dispatch(1, "delete_platform_bios", ["dc"]))
+        message = json.loads(await dispatcher.dispatch(1, "delete_platform_bios", ["dc", "dc"]))
 
         assert message["type"] == TYPE_REPLY
         assert message["result"] == {
@@ -1506,7 +1506,9 @@ class TestTheFirmwareAnswersOnTheWire:
         ]
         dispatcher = _dispatcher_over_firmware(romm_api, FakeFirmwareFileStore(), FakeUnitOfWork())
 
-        message = json.loads(await dispatcher.dispatch(1, "download_platform_firmware_file", ["n64", "dc_boot.bin"]))
+        message = json.loads(
+            await dispatcher.dispatch(1, "download_platform_firmware_file", ["n64", "n64", "dc_boot.bin"])
+        )
 
         assert message["type"] == TYPE_REPLY
         assert message["result"] == {
@@ -1520,7 +1522,7 @@ class TestTheFirmwareAnswersOnTheWire:
         romm_api.list_platforms_side_effect = RommConnectionError("connection refused")
         dispatcher = _dispatcher_over_firmware(romm_api, FakeFirmwareFileStore(), FakeUnitOfWork())
 
-        message = json.loads(await dispatcher.dispatch(1, "download_all_firmware", ["dc", None]))
+        message = json.loads(await dispatcher.dispatch(1, "download_all_firmware", ["dc", "dc", None]))
 
         reason, text = classify_error(RommConnectionError("connection refused"))
         assert message["type"] == TYPE_REPLY

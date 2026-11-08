@@ -45,7 +45,7 @@ def _want(place: str, target: str | None, platform: str = "gbc", **extra) -> Wan
     return WantedLink(
         place=place,
         target=target,
-        platform_slug=platform,
+        platform_folder=platform,
         file_name=target.rsplit("/", 1)[-1] if target else None,
         source="retrodeck",
         **extra,
@@ -56,7 +56,7 @@ def _record(place: str, target: str, platform: str = "gbc") -> FirmwareLink:
     return FirmwareLink.mark_placed(
         place=place,
         target=target,
-        platform_slug=platform,
+        platform_folder=platform,
         file_name=target.rsplit("/", 1)[-1],
         source="retrodeck",
         placed_at="2026-10-21T20:00:00",
@@ -238,7 +238,7 @@ class TestBringingTheLinksUpToDate:
         )
 
         assert [link.place for link in plan.record] == [new]
-        assert plan.record[0].platform_slug == "gbc"
+        assert plan.record[0].platform_folder == "gbc"
         assert plan.drop == (old,)
 
     def test_a_blocked_record_is_kept(self):

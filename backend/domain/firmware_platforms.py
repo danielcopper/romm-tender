@@ -26,23 +26,27 @@ if TYPE_CHECKING:
 
 
 def library_firmware(platforms: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """Every firmware file the platform list carries, each with its platform's ``platform_slug``.
+    """Every firmware file the platform list carries, each with its platform's folder and slug.
 
-    The platform is the one whose ``id`` the file's ``platform_id`` names. A
-    file RomM marks ``missing_from_fs`` is left out: the server lists it while
-    its bytes are gone. So is a file whose ``platform_id`` names no platform of
-    the list, which has no platform to belong to.
+    The platform is the one whose ``id`` the file's ``platform_id`` names: its
+    folder (``platform_folder``) is the one RomM keeps it in (``fs_slug``), and
+    its slug is ``platform_slug``. A file RomM marks ``missing_from_fs`` is left
+    out: the server lists it while its bytes are gone. So is a file whose
+    ``platform_id`` names no platform of the list, or one with no slug or no
+    folder, which has no platform to belong to.
     """
     listed = list(platforms)
     slugs = _slugs_by_id(listed)
+    folders = _folders_by_id(listed)
     rows: list[dict[str, Any]] = []
     for platform in listed:
         for firmware in platform.get("firmware") or ():
             if firmware.get("missing_from_fs"):
                 continue
-            slug = slugs.get(firmware.get("platform_id"))
-            if slug is not None:
-                rows.append({**firmware, "platform_slug": slug})
+            platform_id = firmware.get("platform_id")
+            slug, folder = slugs.get(platform_id), folders.get(platform_id)
+            if slug is not None and folder is not None:
+                rows.append({**firmware, "platform_folder": folder, "platform_slug": slug})
     return rows
 
 
@@ -113,8 +117,16 @@ def override_moves(overrides: Mapping[str, str], folders: Mapping[str, str]) -> 
 
 
 def _slugs_by_id(platforms: list[Mapping[str, Any]]) -> dict[Any, str]:
+    return _by_id(platforms, "slug")
+
+
+def _folders_by_id(platforms: list[Mapping[str, Any]]) -> dict[Any, str]:
+    return _by_id(platforms, "fs_slug")
+
+
+def _by_id(platforms: list[Mapping[str, Any]], key: str) -> dict[Any, str]:
     return {
-        platform.get("id"): slug
+        platform.get("id"): value
         for platform in platforms
-        if isinstance(slug := platform.get("slug"), str) and slug and platform.get("id") is not None
+        if isinstance(value := platform.get(key), str) and value and platform.get("id") is not None
     }

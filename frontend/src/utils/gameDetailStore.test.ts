@@ -232,6 +232,7 @@ describe("gameDetailStore", () => {
     rom_id: 42,
     rom_name: "Test ROM",
     platform_slug: "snes",
+    platform_fs_slug: "snes",
     ...overrides,
   });
 
@@ -2196,11 +2197,31 @@ describe("gameDetailStore", () => {
       await flush();
       await flush();
 
-      expect(vi.mocked(backend.updateBiosLinks)).toHaveBeenCalledExactlyOnceWith("snes", 42);
+      expect(vi.mocked(backend.updateBiosLinks)).toHaveBeenCalledExactlyOnceWith("snes", "snes", 42);
       expect(vi.mocked(backend.getBiosStatus)).toHaveBeenCalledWith(42);
       const [asked] = vi.mocked(backend.updateBiosLinks).mock.invocationCallOrder;
       const [loaded] = vi.mocked(cachedStore.getCachedGameDetail).mock.invocationCallOrder;
       expect(asked).toBeGreaterThan(loaded ?? Infinity);
+    });
+
+    it("asks by the folder RomM keeps the platform in, and not at all while that folder is unknown", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(
+        found({ platform_slug: "ngc", platform_fs_slug: "gc" }),
+      );
+      vi.mocked(backend.updateBiosLinks).mockResolvedValue(linked(0));
+      subscribe(nextAppId);
+      await flush();
+      await flush();
+
+      expect(vi.mocked(backend.updateBiosLinks)).toHaveBeenCalledExactlyOnceWith("ngc", "gc", 42);
+
+      vi.mocked(backend.updateBiosLinks).mockClear();
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ platform_fs_slug: null }));
+      subscribe(nextAppId + 1);
+      await flush();
+      await flush();
+
+      expect(vi.mocked(backend.updateBiosLinks)).not.toHaveBeenCalled();
     });
 
     it("reads nothing again where no link changed", async () => {
@@ -2230,7 +2251,7 @@ describe("gameDetailStore", () => {
         done = refreshCoreAndBios(nextAppId);
         await Promise.resolve();
       });
-      expect(vi.mocked(backend.updateBiosLinks)).toHaveBeenCalledExactlyOnceWith("snes", 42);
+      expect(vi.mocked(backend.updateBiosLinks)).toHaveBeenCalledExactlyOnceWith("snes", "snes", 42);
       expect(vi.mocked(backend.getBiosStatus)).not.toHaveBeenCalled();
 
       await act(async () => {

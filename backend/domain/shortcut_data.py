@@ -117,6 +117,7 @@ def build_shortcuts_data(roms: list[dict[str, Any]], launcher_exe: str) -> list[
             "start_dir": start_dir,
             "platform_name": rom.get("platform_name", "Unknown"),
             "platform_slug": rom.get("platform_slug", ""),
+            "platform_fs_slug": rom.get("platform_fs_slug"),
             "igdb_id": rom.get("igdb_id"),
             "sgdb_id": rom.get("sgdb_id"),
             "ra_id": rom.get("ra_id"),

@@ -5,8 +5,9 @@ for (:meth:`FirmwareStore.do_fetch`) and then brings that platform's links up to
 date in every enabled source (:meth:`FirmwareStore.do_update_links`), so a file
 reaches each emulator that wants it and its source does not state is not
 installed, at the place the resolver names. No download lands outside the
-store. A library file fills a requirement by its content wherever RomM files it
-(:mod:`domain.firmware_match`).
+store. A library file fills a requirement by its content
+(:mod:`domain.firmware_match`). Only a file RomM lists under the platform's own
+folder is fetched (:func:`~domain.firmware_rows.platform_library`).
 """
 
 from __future__ import annotations
@@ -18,7 +19,14 @@ from typing import TYPE_CHECKING, Any
 from domain.emulator_commands import resolve_firmware_option
 from domain.emulator_pick import pick_for, source_kind
 from domain.firmware_groups import fetched_as_required
-from domain.firmware_rows import LibraryFirmware, StoreCopy, folder_entries, library_file, library_match, store_copy
+from domain.firmware_rows import (
+    LibraryFirmware,
+    StoreCopy,
+    folder_entries,
+    library_file,
+    library_match,
+    store_copy,
+)
 from lib.errors import Refused, RommApiError, romm_error_log_level
 
 if TYPE_CHECKING:
@@ -96,41 +104,42 @@ class FirmwareDownloader:
         finally:
             self._calls_in_flight -= 1
 
-    async def download_all_firmware(self, platform_slug, rom_id: int | None = None) -> dict[str, Any]:
-        """Fetch every firmware file RomM lists for *platform_slug* into its store folder, and link them.
+    async def download_all_firmware(self, platform_slug, platform_folder, rom_id: int | None = None) -> dict[str, Any]:
+        """Fetch every firmware file RomM lists for the platform in *platform_folder* into its store folder; link them.
 
         A file no emulator asks for lands in the store too, and is linked once
         one does. With *rom_id*, the links follow the system the game's install
         record holds.
         """
-        firmware_list = await self._firmware_list()
-        rows = [fw for fw in firmware_list if fw["platform_slug"] == platform_slug]
-        return await self._fetch_and_link(platform_slug, rows, await self.platform_system(platform_slug, rom_id))
+        rows = await self._platform_firmware(platform_folder)
+        return await self._fetch_and_link(
+            platform_slug, platform_folder, rows, await self.platform_system(platform_slug, rom_id)
+        )
 
     async def download_platform_firmware_file(
-        self, platform_slug, file_name, firmware_id: int | None = None, rom_id: int | None = None
+        self, platform_slug, platform_folder, file_name, firmware_id: int | None = None, rom_id: int | None = None
     ) -> dict[str, Any]:
-        """Fetch the library file *file_name* into *platform_slug*'s store folder, and link it.
+        """Fetch the library file *file_name* into *platform_folder*'s store folder, and link it.
 
-        *firmware_id* is the library file the row shows, so the file fetched is
-        that one even where two files share its name. An id the listing does
-        not hold under *file_name* counts for nothing, and neither does a missing
-        one: the name — the file's name in RomM — is then looked up among the
-        files RomM lists for the platform first, and then in the whole library,
-        since a file fills a requirement wherever RomM files it. A name the
-        library does not hold is a ``not_in_library`` refusal, never a silent
-        no-op. A single file's refusal or RomM error reaches the caller as it
-        stands.
+        Only a file RomM lists under *platform_folder* is fetched
+        (:func:`~domain.firmware_rows.platform_library`). *firmware_id* is the
+        library file the row shows, so the file fetched is that one even where
+        two of the platform's files share its name. An id the platform's files
+        do not hold under *file_name* counts for nothing, and neither does a
+        missing one: the platform's file of that name — its name in RomM — is
+        fetched instead. A name the platform's files do not hold is a
+        ``not_in_library`` refusal, never a silent no-op. A single file's
+        refusal or RomM error reaches the caller as it stands.
         """
-        firmware_list = await self._firmware_list()
-        named = [fw for fw in firmware_list if fw.get("file_name") == file_name]
-        own = [fw for fw in named if fw["platform_slug"] == platform_slug]
+        named = [fw for fw in await self._platform_firmware(platform_folder) if fw.get("file_name") == file_name]
         exact = [fw for fw in named if firmware_id is not None and fw.get("id") == firmware_id]
-        wanted = exact or own or named
+        wanted = exact or named
         if not wanted:
-            raise Refused("not_in_library", f"{file_name} is not in your RomM library for {platform_slug}")
-        fetched = await self._loop.run_in_executor(None, self._store.do_fetch, platform_slug, wanted[0])
-        links = await self._update(platform_slug, await self.platform_system(platform_slug, rom_id))
+            raise Refused("not_in_library", f"{file_name} is not in your RomM library for {platform_folder}")
+        fetched = await self._loop.run_in_executor(
+            None, self._store.do_fetch, platform_slug, platform_folder, wanted[0]
+        )
+        links = await self._update(platform_slug, platform_folder, await self.platform_system(platform_slug, rom_id))
         return {
             "success": True,
             "message": f"Downloaded {file_name}" if fetched.downloaded else f"{file_name} is already here",
@@ -140,7 +149,7 @@ class FirmwareDownloader:
         }
 
     async def download_required_firmware(
-        self, platform_slug, emulator: str | None = None, rom_id: int | None = None
+        self, platform_slug, platform_folder, emulator: str | None = None, rom_id: int | None = None
     ) -> dict[str, Any]:
         """Fetch what *emulator* will not run without, where nothing lies at its place yet, and link it.
 
@@ -155,14 +164,20 @@ class FirmwareDownloader:
         system = await self.platform_system(platform_slug, rom_id)
         catalogue = await self._loop.run_in_executor(None, self._demand.platform_catalogue, system)
         identity = await self._shown_emulator(catalogue, system, platform_slug, emulator)
-        firmware_list = await self._firmware_list()
+        platform_firmware = await self._platform_firmware(platform_folder)
         rows = await self._loop.run_in_executor(
-            None, self._required_files, catalogue, platform_slug, identity, firmware_list
+            None, self._required_files, catalogue, platform_folder, identity, platform_firmware
         )
-        return await self._fetch_and_link(platform_slug, rows, system, what="required firmware files")
+        return await self._fetch_and_link(platform_slug, platform_folder, rows, system, what="required firmware files")
 
     async def _fetch_and_link(
-        self, platform_slug: str, rows: list[dict[str, Any]], system: str | None, *, what: str = "firmware files"
+        self,
+        platform_slug: str,
+        platform_folder: str,
+        rows: list[dict[str, Any]],
+        system: str | None,
+        *,
+        what: str = "firmware files",
     ) -> dict[str, Any]:
         """Fetch each of *rows* into the store, then bring the platform's links up to date once.
 
@@ -177,7 +192,9 @@ class FirmwareDownloader:
         for fw in rows:
             name = fw.get("file_name", str(fw.get("id")))
             try:
-                fetched = await self._loop.run_in_executor(None, self._store.do_fetch, platform_slug, fw)
+                fetched = await self._loop.run_in_executor(
+                    None, self._store.do_fetch, platform_slug, platform_folder, fw
+                )
             except Refused as exc:
                 if exc.reason == "folder_unreachable":
                     raise
@@ -192,7 +209,7 @@ class FirmwareDownloader:
             downloaded += 1 if fetched.downloaded else 0
             if fetched.backup:
                 backups.append(fetched.backup)
-        links = await self._update(platform_slug, system)
+        links = await self._update(platform_slug, platform_folder, system)
         message = f"Downloaded {downloaded} {what}"
         if failed:
             message += f" ({len(failed)} failed: {', '.join(failed)})"
@@ -205,19 +222,21 @@ class FirmwareDownloader:
             **links.payload(),
         }
 
-    async def _update(self, platform_slug: str, system: str | None) -> LinkOutcome:
-        outcome = await self._loop.run_in_executor(None, self._store.do_update_links, platform_slug, system)
+    async def _update(self, platform_slug: str, platform_folder: str, system: str | None) -> LinkOutcome:
+        outcome = await self._loop.run_in_executor(
+            None, self._store.do_update_links, platform_slug, platform_folder, system
+        )
         self._listing.invalidate()
         return outcome
 
     def _required_files(
         self,
         catalogue: FirmwareCatalogue,
-        platform_slug: str,
+        platform_folder: str,
         identity: str | None,
-        firmware_list: list[dict[str, Any]],
+        platform_firmware: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        """The library files "Download required" fetches for *identity*. Blocking: it looks at each place.
+        """The files of *platform_firmware* "Download required" fetches for *identity*. Blocking: looks at each place.
 
         A file requirement's library file, where the store holds no copy and
         nothing lies at its place. A folder the emulator requires and lists,
@@ -226,9 +245,9 @@ class FirmwareDownloader:
         """
         placements = catalogue.placements_for(identity)
         groups = catalogue.groups_for(identity)
-        library = [library_file(fw) for fw in firmware_list]
-        by_file = dict(zip(library, firmware_list, strict=True))
-        copies = self._store.do_copies(self._store.do_read_records(), platform_slug)
+        library = [library_file(fw) for fw in platform_firmware]
+        by_file = dict(zip(library, platform_firmware, strict=True))
+        copies = self._store.do_copies(self._store.do_read_records(), platform_folder)
         wanted: dict[int | None, dict[str, Any]] = {}
         for placement in placements.values():
             if not fetched_as_required(placement, identity, groups):
@@ -257,9 +276,9 @@ class FirmwareDownloader:
             return None
         return next((file for file in library if file.firmware_id == match["firmware_id"]), None)
 
-    async def _firmware_list(self) -> list[dict[str, Any]]:
-        """The whole library's firmware; a listing that could not be read propagates as it was raised."""
-        return await self._loop.run_in_executor(None, self._listing.get_firmware_list)
+    async def _platform_firmware(self, platform_folder: str) -> list[dict[str, Any]]:
+        """The firmware RomM lists under *platform_folder*; a listing that could not be read propagates as raised."""
+        return await self._loop.run_in_executor(None, self._listing.get_platform_firmware_list, platform_folder)
 
     async def _shown_emulator(
         self, catalogue: FirmwareCatalogue, system: str | None, platform_slug: str, emulator: str | None

@@ -111,7 +111,9 @@ describe("LibraryPage", () => {
     beforeEach(() => {
       vi.mocked(backend.getPlatforms).mockResolvedValue({
         success: true,
-        platforms: [{ id: 1, name: "Game Boy Advance", slug: "gba", rom_count: 12, sync_enabled: false }],
+        platforms: [
+          { id: 1, name: "Game Boy Advance", slug: "gba", fs_slug: "gba", rom_count: 12, sync_enabled: false },
+        ],
       });
       vi.mocked(backend.getPlatformFirmwareStatus).mockRejectedValue(new Error("net"));
       vi.mocked(backend.getSystemCoreInfo).mockRejectedValue(new Error("net"));

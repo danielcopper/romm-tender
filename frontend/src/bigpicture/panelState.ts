@@ -42,6 +42,9 @@ export interface PanelState {
   romId: number | null;
   romName: string;
   platformName: string;
+  /** The folder RomM keeps the game's platform in, which the BIOS tab's presses
+   *  are addressed by; absent or empty until a sync has recorded it. */
+  platformFolder?: string;
   installed: boolean;
   installedRom: InstalledRom | null;
   metadata: RomMetadata | null;
@@ -502,6 +505,7 @@ export async function loadData(
     const romName = cached.rom_name || "";
     const platformName = cached.platform_name || "";
     const platformSlug = cached.platform_slug || "";
+    const platformFolder = cached.platform_fs_slug || "";
 
     romIdRef.current = romId;
     platformSlugRef.current = platformSlug;
@@ -524,6 +528,7 @@ export async function loadData(
       romId,
       romName,
       platformName,
+      platformFolder,
       installed: cached.installed ?? false,
       installedRom: null, // Will be filled by background fetch if installed
       metadata: cached.metadata as RomMetadata | null,

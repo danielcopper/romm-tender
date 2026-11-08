@@ -96,7 +96,7 @@ class WantedLink:
 
     place: str
     target: str | None
-    platform_slug: str
+    platform_folder: str
     file_name: str | None
     source: str
     refusal: PlaceRefusal | None = None
@@ -179,7 +179,7 @@ def is_own_link(
 ) -> bool:
     """Is the link at *place* Tender's own?
 
-    *store_targets* maps every recorded store file's path to its platform;
+    *store_targets* maps every recorded store file's path to its platform folder;
     *records* are Tender's link records by place.
     """
     target = look.link_target
@@ -212,13 +212,13 @@ def link_state(
     if target not in present:
         return (LINK_NOT_LINKED if wanted.target is not None else LINK_FREE), None
     owner = store_targets.get(target)
-    if owner is None or owner == wanted.platform_slug:
-        return LINK_LINKED, wanted.platform_slug
+    if owner is None or owner == wanted.platform_folder:
+        return LINK_LINKED, wanted.platform_folder
     return LINK_ELSEWHERE, owner
 
 
 def plan_link_update(
-    platform_slug: str,
+    platform_folder: str,
     wanted: Iterable[WantedLink],
     looks: Mapping[str, PlaceLook],
     *,
@@ -229,7 +229,7 @@ def plan_link_update(
     judged: frozenset[str] = frozenset(),
     wanted_elsewhere: frozenset[tuple[str, str]] = frozenset(),
 ) -> LinkUpdatePlan:
-    """Bring *platform_slug*'s links up to date over every place an emulator wants a store file at.
+    """Bring *platform_folder*'s links up to date over every place an emulator wants a store file at.
 
     *looks* hold a look at every wanted place and at the place of every record
     of the platform; *blocked* are the recorded places that may not be touched
@@ -252,7 +252,7 @@ def plan_link_update(
         seen.add(want.place)
         _plan_wanted(plan, want, looks[want.place], store_targets, present, records)
     for place, record in records.items():
-        if place in seen or record.platform_slug != platform_slug or place in blocked:
+        if place in seen or record.platform_folder != platform_folder or place in blocked:
             continue
         unwanted = record.source in judged and (record.source, place) not in wanted_elsewhere
         _plan_recorded(plan, record, looks[place], present, unwanted=unwanted)
@@ -305,7 +305,7 @@ def _found_link(want: WantedLink, target: str, store_targets: Mapping[str, str])
     return WantedLink(
         place=want.place,
         target=target,
-        platform_slug=store_targets.get(target, want.platform_slug),
+        platform_folder=store_targets.get(target, want.platform_folder),
         file_name=os.path.basename(target),
         source=want.source,
     )

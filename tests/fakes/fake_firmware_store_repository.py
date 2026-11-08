@@ -12,19 +12,19 @@ if TYPE_CHECKING:
 
 
 class FakeFirmwareStoreRepository:
-    """Dict-backed ``FirmwareStoreRepository`` keyed by ``(platform_slug, file_name)``."""
+    """Dict-backed ``FirmwareStoreRepository`` keyed by ``(platform_folder, file_name)``."""
 
     def __init__(self) -> None:
         self._files: dict[tuple[str, str], StoredFirmware] = {}
 
-    def get(self, platform_slug: str, file_name: str) -> StoredFirmware | None:
-        return copy.deepcopy(self._files.get((platform_slug, file_name)))
+    def get(self, platform_folder: str, file_name: str) -> StoredFirmware | None:
+        return copy.deepcopy(self._files.get((platform_folder, file_name)))
 
     def save(self, stored: StoredFirmware) -> None:
-        self._files[(stored.platform_slug, stored.file_name)] = copy.deepcopy(stored)
+        self._files[(stored.platform_folder, stored.file_name)] = copy.deepcopy(stored)
 
-    def delete(self, platform_slug: str, file_name: str) -> None:
-        self._files.pop((platform_slug, file_name), None)
+    def delete(self, platform_folder: str, file_name: str) -> None:
+        self._files.pop((platform_folder, file_name), None)
 
     def iter_all(self) -> Iterator[StoredFirmware]:
         return iter([copy.deepcopy(f) for f in self._files.values()])

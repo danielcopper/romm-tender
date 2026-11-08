@@ -566,6 +566,44 @@ class TestCommitUnitResults:
         assert rom is not None
         assert rom.shortcut_applied is True
 
+    def test_commit_records_the_folder_romm_keeps_the_platform_in(self, library):
+        """The ROM's payload names its platform's folder, and the commit records it (#2223 D45)."""
+        uow = library.uow
+        _stage(
+            library.sync._box,
+            42,
+            {"name": "Game", "fs_name": "game.iso", "platform_slug": "ngc", "platform_fs_slug": "gc", "cover_path": ""},
+        )
+
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
+
+        with uow:
+            rom = uow.roms.get(42)
+        assert rom is not None
+        assert rom.platform_fs_slug == "gc"
+
+    def test_a_commit_whose_dict_names_no_folder_keeps_the_recorded_one(self, library):
+        """A dict rebuilt from stored rows carries no folder, and committing it leaves the recorded one standing."""
+        uow = library.uow
+        _stage(
+            library.sync._box,
+            42,
+            {"name": "Game", "fs_name": "game.iso", "platform_slug": "ngc", "platform_fs_slug": "gc", "cover_path": ""},
+        )
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
+        _stage(
+            library.sync._box,
+            42,
+            {"name": "Game", "fs_name": "game.iso", "platform_slug": "ngc", "cover_path": ""},
+        )
+
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
+
+        with uow:
+            rom = uow.roms.get(42)
+        assert rom is not None
+        assert rom.platform_fs_slug == "gc"
+
     def test_commit_preserves_applied_for_unacked_row(self, library):
         """A row committed this chunk but NOT acked (a skipped-unchanged item riding
         chunk 0's leftover) keeps its binding AND its recorded applied state — save()

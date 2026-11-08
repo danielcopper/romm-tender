@@ -56,6 +56,9 @@ export interface BiosActionsConfig {
    *  one its rows were read for and its links placed for — or `null` for the
    *  platform's own system. */
   romId: number | null;
+  /** The folder RomM keeps *slug*'s platform in, which every press passes beside
+   *  the slug (`api/backend.ts`); `""` where it is not known. */
+  folderOf: (slug: string) => string;
 }
 
 export interface BiosActions {
@@ -123,6 +126,7 @@ export function useBiosActions({
   reread,
   announce = announceBiosChange,
   romId,
+  folderOf,
 }: BiosActionsConfig): BiosActions {
   const [downloadPending, setDownloadPending] = useState<string | null>(null);
   const [downloadFailed, setDownloadFailed] = useState<string | null>(null);
@@ -229,12 +233,12 @@ export function useBiosActions({
 
   const downloadRequired = useCallback(
     (slug: string, emulator: string | null) =>
-      runDownload(slug, "required", () => downloadRequiredFirmware(slug, emulator, romId)),
-    [romId, runDownload],
+      runDownload(slug, "required", () => downloadRequiredFirmware(slug, folderOf(slug), emulator, romId)),
+    [folderOf, romId, runDownload],
   );
   const downloadAll = useCallback(
-    (slug: string) => runDownload(slug, "all", () => downloadAllFirmware(slug, romId)),
-    [romId, runDownload],
+    (slug: string) => runDownload(slug, "all", () => downloadAllFirmware(slug, folderOf(slug), romId)),
+    [folderOf, romId, runDownload],
   );
   const downloadOne = useCallback(
     (slug: string, fileName: string, firmwareId: number | null) => {
@@ -245,9 +249,11 @@ export function useBiosActions({
         delete next[key];
         return next;
       });
-      runDownload(slug, fileName, () => downloadPlatformFirmwareFile(slug, fileName, firmwareId, romId));
+      runDownload(slug, fileName, () =>
+        downloadPlatformFirmwareFile(slug, folderOf(slug), fileName, firmwareId, romId),
+      );
     },
-    [romId, runDownload],
+    [folderOf, romId, runDownload],
   );
 
   const replaceBios = useCallback(
@@ -257,7 +263,7 @@ export function useBiosActions({
       detach(
         (async () => {
           try {
-            const result = await replaceBiosFile(slug, place, romId);
+            const result = await replaceBiosFile(slug, folderOf(slug), place, romId);
             if (!result.success) {
               setStatus({ slug, scope: "bios", text: `Failed to replace the file: ${result.message}` });
               return;
@@ -279,7 +285,7 @@ export function useBiosActions({
         })(),
       );
     },
-    [announce, noteLinkFailures, reread, romId, setBusy, setStatus],
+    [announce, folderOf, noteLinkFailures, reread, romId, setBusy, setStatus],
   );
 
   const attemptFor = useCallback(
@@ -296,7 +302,7 @@ export function useBiosActions({
       detach(
         (async () => {
           try {
-            const result = await deletePlatformBios(slug);
+            const result = await deletePlatformBios(slug, folderOf(slug));
             const kept = result.success ? keptLines(result.kept) : [];
             setStatus({ slug, scope: "bios", text: [result.message, ...kept].join("\n") });
             // A `delete_incomplete` may have removed files or dropped records
@@ -314,7 +320,7 @@ export function useBiosActions({
         })(),
       );
     },
-    [announce, reread, setBusy, setStatus],
+    [announce, folderOf, reread, setBusy, setStatus],
   );
 
   /** One row's Delete. A success is said by the rows coming back re-read; only
@@ -348,9 +354,9 @@ export function useBiosActions({
 
   const deleteBiosFile = useCallback(
     (slug: string, fileName: string) => {
-      runRowDelete(slug, () => deleteBiosFileCall(slug, fileName), fileName);
+      runRowDelete(slug, () => deleteBiosFileCall(slug, folderOf(slug), fileName), fileName);
     },
-    [runRowDelete],
+    [folderOf, runRowDelete],
   );
 
   return {

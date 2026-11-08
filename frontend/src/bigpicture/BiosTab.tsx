@@ -23,7 +23,7 @@
  * styleInjector.
  */
 
-import { FC, useState, type FocusEvent, type ReactElement } from "react";
+import { FC, useCallback, useState, type FocusEvent, type ReactElement } from "react";
 import { Focusable } from "@decky/ui";
 import type { BiosLevel, BiosStatus, CoreInfo } from "../types";
 import { biosColorForLevel } from "../utils/biosColor";
@@ -78,6 +78,9 @@ export interface BiosTabStateInput {
   platformName?: string;
   /** The game's platform, which every press acts on. */
   platformSlug?: string;
+  /** The folder RomM keeps that platform in, which every press passes beside the
+   *  slug; `""` while it is not known. */
+  platformFolder?: string | undefined;
   /** The game every press is for. */
   romId?: number | null;
   /** Read the BIOS answers a press changes — the tab's own and the play row's;
@@ -104,18 +107,21 @@ export function useBiosTab({
   biosStatus,
   platformName,
   platformSlug = "",
+  platformFolder = "",
   romId = null,
   onReread = NO_REREAD,
   onAnnounce = announceBiosChange,
 }: BiosTabStateInput): BiosTabState {
   const [busySlug, setBusySlug] = useState<string | null>(null);
   const [status, setStatus] = useState<BiosStatusLine | null>(null);
+  const folderOf = useCallback(() => platformFolder, [platformFolder]);
   const actions = useBiosActions({
     setBusy: setBusySlug,
     setStatus,
     reread: onReread,
     announce: onAnnounce,
     romId,
+    folderOf,
   });
   const part = useBiosFiles({
     slug: platformSlug,

@@ -669,8 +669,6 @@ export interface BiosPartInput {
    *  shown entry's emulator (`"shown"`, where a game may launch with another). */
   launching: "pick" | "shown";
   stop: BiosRowStop;
-  /** The name a page knows a platform by, for a link into another platform's store copy. */
-  platformNameOf?: (slug: string) => string;
 }
 
 export interface BiosPart {
@@ -749,7 +747,6 @@ export const BiosShownTable: FC<{ part: BiosPart }> = ({ part }) => {
               file,
               emulator,
               input.actions.attemptFor(input.slug, file.local_path, downloadName(file)),
-              input.platformNameOf,
             )}
             stop={input.stop}
           />

@@ -171,6 +171,7 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
     biosStatus: state.biosStatus,
     platformName: state.platformName,
     platformSlug,
+    platformFolder: state.platformFolder,
     romId: state.romId,
     onReread: rereadBios,
     onAnnounce: announceBios,

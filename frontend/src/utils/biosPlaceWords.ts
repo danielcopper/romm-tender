@@ -46,16 +46,9 @@ export interface RowAttempt {
 
 /**
  * The lines under one requirement row. *emulator* names the emulator the row
- * is shown for, which the missing-folder line asks the reader to start;
- * *platformName* names a platform by its slug, where the surface knows the
- * name, for the line about another platform's store copy.
+ * is shown for, which the missing-folder line asks the reader to start.
  */
-export function biosPlaceLines(
-  row: PlaceRow,
-  emulator: string | null,
-  attempt: RowAttempt = {},
-  platformName: (slug: string) => string = (slug) => slug,
-): string[] {
+export function biosPlaceLines(row: PlaceRow, emulator: string | null, attempt: RowAttempt = {}): string[] {
   const lines: string[] = [];
   // A folder declaration is a row of its own only while nothing lies in it and
   // no library file is recognised for it.
@@ -79,7 +72,7 @@ export function biosPlaceLines(
     // there — a file, or another platform's link — is not worded.
     lines.push(`${emulator ?? "The emulator"} is not installed here, so Tender links nothing for it.`);
   } else {
-    lines.push(...linkLines(row, platformName));
+    lines.push(...linkLines(row));
   }
   if (attempt.linkFailure) lines.push(`Could not place a link at ${row.local_path}: ${attempt.linkFailure}`);
   if (attempt.damaged) lines.push(DOWNLOAD_DAMAGED);
@@ -87,12 +80,12 @@ export function biosPlaceLines(
   return lines;
 }
 
-function linkLines(row: PlaceRow, platformName: (slug: string) => string): string[] {
+function linkLines(row: PlaceRow): string[] {
   switch (row.link) {
     case "not_linked":
       return ["In Tender's firmware store, not linked here yet"];
     case "linked_elsewhere":
-      return [`Linked to Tender's copy for ${row.linked_for_name ?? platformName(row.linked_for ?? "")}`];
+      return [`Linked to Tender's copy for ${row.linked_for_name ?? ""}`];
     case "occupied":
       if (row.satisfied === false) return ["Another file lies here, and the emulator does not accept it"];
       return row.satisfied === null ? ["Another file lies here; it could not be checked"] : [];

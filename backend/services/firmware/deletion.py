@@ -114,9 +114,13 @@ class PlatformBiosDeleter:
         self._logger = config.logger
 
     def _delete_io(
-        self, platform_slug: str, names: frozenset[str] | None
+        self, platform_slug: str, platform_folder: str, names: frozenset[str] | None
     ) -> tuple[int, list[dict[str, str | None]], list[str]]:
-        """Remove *platform_slug*'s store files and older downloads named in *names* — every one for ``None``.
+        """Remove a platform's store files and older downloads named in *names* — every one for ``None``.
+
+        The store files are the ones kept in the platform's folder in RomM,
+        *platform_folder*; the older downloads are recorded under its slug,
+        *platform_slug*.
 
         The one removal, deliberately: both buttons reach it, and they differ
         only in which names they select. Runs in an executor: the store's files
@@ -129,7 +133,7 @@ class PlatformBiosDeleter:
         Answers what was removed, what stays and why, and what could not be
         removed.
         """
-        outcome = self._store.do_remove(platform_slug, names)
+        outcome = self._store.do_remove(platform_folder, names)
         deleted, kept, errors = outcome.deleted, list(outcome.kept), list(outcome.errors)
         bound = self._retrodeck_folders.bios_folder()
         pruned: list[tuple[str, str]] = []
@@ -177,14 +181,16 @@ class PlatformBiosDeleter:
         with self._uow_factory() as uow:
             return list(uow.bios_files.iter_by_platform(platform_slug))
 
-    async def delete_bios_file(self, platform_slug, file_name) -> dict[str, Any] | FirmwareDeletionIncomplete:
+    async def delete_bios_file(
+        self, platform_slug, platform_folder, file_name
+    ) -> dict[str, Any] | FirmwareDeletionIncomplete:
         """Delete one BIOS file of Tender's — the store file, or an older download — by its name in RomM.
 
         A name Tender holds nothing under removes nothing and says so; a caller
         cannot widen this into a presence-based delete by passing another name.
         """
         deleted, kept, errors = await self._loop.run_in_executor(
-            None, self._delete_io, platform_slug, frozenset({file_name})
+            None, self._delete_io, platform_slug, platform_folder, frozenset({file_name})
         )
         self._listing.invalidate()
         if errors:
@@ -199,9 +205,11 @@ class PlatformBiosDeleter:
             message = f"Nothing to delete for {file_name}"
         return {"success": True, "deleted_count": deleted, "message": message, "kept": kept}
 
-    async def delete_platform_bios(self, platform_slug) -> dict[str, Any] | FirmwareDeletionIncomplete:
+    async def delete_platform_bios(self, platform_slug, platform_folder) -> dict[str, Any] | FirmwareDeletionIncomplete:
         """Delete every BIOS file of Tender's for a platform, and every link of Tender's to them."""
-        deleted, kept, errors = await self._loop.run_in_executor(None, self._delete_io, platform_slug, None)
+        deleted, kept, errors = await self._loop.run_in_executor(
+            None, self._delete_io, platform_slug, platform_folder, None
+        )
         self._listing.invalidate()
         if errors:
             return FirmwareDeletionIncomplete(

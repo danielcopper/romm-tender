@@ -350,7 +350,9 @@ class TestFakeFirmwareCacheRepository:
     def test_replace_all_clear_epoch(self):
         repo = FakeFirmwareCacheRepository()
         assert repo.get_cache_epoch() is None
-        entry = FirmwareCacheEntry(id=1, name="x.bin", platform_slug="psx", file_size_bytes=10, cached_at=5.0)
+        entry = FirmwareCacheEntry(
+            id=1, name="x.bin", platform_folder="psx", platform_slug="psx", file_size_bytes=10, cached_at=5.0
+        )
         repo.replace_all([entry])
         assert repo.get("psx", "x.bin") == entry
         assert repo.get("psx", "missing") is None
@@ -692,7 +694,16 @@ class TestFakeUnitOfWorkRomIdForeignKey:
                 BiosFile(platform_slug="psx", file_name="b.bin", file_path="/b", downloaded_at="2026-01-01T00:00:00Z")
             )
             uow.firmware_cache.replace_all(
-                [FirmwareCacheEntry(id=1, name="x.bin", platform_slug="psx", file_size_bytes=10, cached_at=5.0)]
+                [
+                    FirmwareCacheEntry(
+                        id=1,
+                        name="x.bin",
+                        platform_folder="psx",
+                        platform_slug="psx",
+                        file_size_bytes=10,
+                        cached_at=5.0,
+                    )
+                ]
             )
             uow.sync_runs.save(SyncRun.start(id="r1", at="2026-01-01T00:00:00Z", platforms_planned=1, roms_planned=1))
             uow.platform_sync_state.save(

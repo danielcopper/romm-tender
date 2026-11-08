@@ -14,6 +14,7 @@ def _entry(platform: str, name: str, *, fw_id: int | None = 1, cached_at: float 
     return FirmwareCacheEntry(
         id=fw_id,
         name=name,
+        platform_folder=platform,
         platform_slug=platform,
         file_size_bytes=1024,
         cached_at=cached_at,
@@ -29,7 +30,13 @@ class TestRoundTrip:
 
     def test_the_checksum_romm_states_is_kept(self, uow: SqliteUnitOfWork):
         entry = FirmwareCacheEntry.cached(
-            id=7, name="bios.bin", platform_slug="psx", file_size_bytes=1, cached_at=1.0, md5_hash="abc"
+            id=7,
+            name="bios.bin",
+            platform_folder="psx",
+            platform_slug="psx",
+            file_size_bytes=1,
+            cached_at=1.0,
+            md5_hash="abc",
         )
         uow.firmware_cache.replace_all([entry])
 

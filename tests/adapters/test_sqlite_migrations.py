@@ -92,8 +92,8 @@ def _set_user_version(db_path: str, version: int) -> None:
 # + 037_add_rom_artwork_checked_at + 038_add_last_sync_content_size
 # + 039_add_rom_emulator_override_source + 040_drop_rom_install_launchable
 # + 041_replace_applied_launch_options_with_shortcut_applied
-# + 042_add_rom_install_fetched_size).
-_SHIPPED_VERSION = 42
+# + 042_add_rom_install_fetched_size + 043_key_firmware_store_by_platform_folder).
+_SHIPPED_VERSION = 43
 
 # Tables after every shipped migration: the v1 set plus 006's play-session outbox,
 # 012's per-platform completion stamp, 019's per-collection completion stamp,
@@ -2142,7 +2142,7 @@ class Test031AddPlatformSkipFetchStartAndChecksum:
         finally:
             conn.close()
 
-        assert apply_migrations(db_path) == _SHIPPED_VERSION
+        assert apply_migrations(db_path, str(_only_migrations_through(tmp_path, 31))) == 31
 
         conn = sqlite3.connect(db_path)
         try:
@@ -2187,7 +2187,7 @@ class Test032AddCollectionSkipFetchStartAndChecksum:
         finally:
             conn.close()
 
-        assert apply_migrations(db_path) == _SHIPPED_VERSION
+        assert apply_migrations(db_path, str(_only_migrations_through(tmp_path, 32))) == 32
 
         conn = sqlite3.connect(db_path)
         try:
@@ -2483,8 +2483,9 @@ class Test036AddFirmwareStore:
         try:
             with pytest.raises(sqlite3.IntegrityError):
                 conn.execute(
-                    "INSERT INTO firmware_store (platform_slug, file_name, folder, md5, size, downloaded_at) "
-                    "VALUES ('psx', 'scph5501.bin', '/home/deck/Tender', '', 1, 'now')"
+                    "INSERT INTO firmware_store "
+                    "(platform_folder, platform_slug, file_name, folder, md5, size, downloaded_at) "
+                    "VALUES ('psx', 'psx', 'scph5501.bin', '/home/deck/Tender', '', 1, 'now')"
                 )
         finally:
             conn.close()
@@ -2781,3 +2782,128 @@ class Test042AddRomInstallFetchedSize:
         finally:
             conn.close()
         assert value is None
+
+
+class Test043KeyFirmwareStoreByPlatformFolder:
+    """043 — the firmware store is keyed by the platform's folder in RomM, and a game records its platform's folder.
+
+    #2734, #2223 D25, D45, D46, D47: the key column is renamed and keeps its
+    values, the record gains the slug, the cache is rebuilt by folder and
+    starts empty, roms gain a nullable ``platform_fs_slug``, every platform
+    stamp is revoked and every collection stamp dropped.
+    """
+
+    @staticmethod
+    def _at_042(tmp_path: Path) -> str:
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 42)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute(
+                "INSERT INTO firmware_store (platform_slug, file_name, folder, md5, size, downloaded_at, firmware_id) "
+                "VALUES ('psx', 'scph5501.bin', '/home/deck/Tender', 'abc', 4, 'now', 7)"
+            )
+            conn.execute(
+                "INSERT INTO firmware_links (place, target, platform_slug, file_name, source, placed_at) "
+                "VALUES ('/bios/scph5501.bin', '/home/deck/Tender/bios/psx/scph5501.bin', 'psx', 'scph5501.bin', "
+                "'retrodeck', 'now')"
+            )
+            conn.execute(
+                "INSERT INTO firmware_cache (id, name, platform_slug, file_size_bytes, cached_at, md5_hash) "
+                "VALUES (1, 'scph5501.bin', 'psx', 4, 1000.0, 'abc')"
+            )
+            _insert_rom(conn, 1, 101)
+        finally:
+            conn.close()
+        return db_path
+
+    def test_a_store_record_keeps_its_value_under_the_folder_and_gains_the_slug(self, tmp_path: Path):
+        db_path = self._at_042(tmp_path)
+
+        assert apply_migrations(db_path) == _SHIPPED_VERSION
+
+        conn = sqlite3.connect(db_path)
+        try:
+            store = conn.execute(
+                "SELECT platform_folder, platform_slug, file_name, md5, firmware_id FROM firmware_store"
+            ).fetchall()
+            links = conn.execute("SELECT place, platform_folder, file_name FROM firmware_links").fetchall()
+        finally:
+            conn.close()
+        assert store == [("psx", "psx", "scph5501.bin", "abc", 7)]
+        assert links == [("/bios/scph5501.bin", "psx", "scph5501.bin")]
+        assert "platform_slug" not in _columns(db_path, "firmware_links")
+
+    def test_the_cache_is_rebuilt_by_folder_and_starts_empty(self, tmp_path: Path):
+        db_path = self._at_042(tmp_path)
+
+        apply_migrations(db_path)
+
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            count = conn.execute("SELECT COUNT(*) FROM firmware_cache").fetchone()[0]
+            # Two platforms sharing a slug keep a cached file of the same name each.
+            for folder in ("gc", "gamecube"):
+                conn.execute(
+                    "INSERT INTO firmware_cache (platform_folder, platform_slug, name, id, file_size_bytes, cached_at) "
+                    "VALUES (?, 'ngc', 'IPL.bin', NULL, 1, 1.0)",
+                    (folder,),
+                )
+            kept = conn.execute("SELECT COUNT(*) FROM firmware_cache WHERE name = 'IPL.bin'").fetchone()[0]
+        finally:
+            conn.close()
+        assert count == 0
+        assert kept == 2
+
+    def test_a_game_gains_its_platforms_folder_unknown_until_the_sync_writes_it(self, tmp_path: Path):
+        db_path = self._at_042(tmp_path)
+        assert "platform_fs_slug" not in _columns(db_path, "roms")
+
+        apply_migrations(db_path)
+
+        conn = sqlite3.connect(db_path)
+        try:
+            value = conn.execute("SELECT platform_fs_slug FROM roms WHERE rom_id = 1").fetchone()[0]
+        finally:
+            conn.close()
+        assert value is None
+
+    def test_every_platform_stamp_loses_its_skip_so_the_next_sync_writes_the_folder(self, tmp_path: Path):
+        db_path = self._at_042(tmp_path)
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute(
+                "INSERT INTO platform_sync_state (platform_slug, completed_at, rom_count) VALUES ('psx', 'now', 1)"
+            )
+        finally:
+            conn.close()
+
+        apply_migrations(db_path)
+
+        conn = sqlite3.connect(db_path)
+        try:
+            revoked = conn.execute("SELECT platform_slug, skip_revoked FROM platform_sync_state").fetchall()
+        finally:
+            conn.close()
+        assert revoked == [("psx", 1)]
+
+    def test_every_collection_stamp_is_dropped_so_its_collection_is_fetched_in_full(self, tmp_path: Path):
+        db_path = self._at_042(tmp_path)
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute(
+                "INSERT INTO collection_sync_state "
+                "(collection_id, collection_kind, updated_at, completed_at, rom_count, member_rom_ids) "
+                "VALUES ('7', 'standard', '2026-10-01T09:00:00', '2026-10-15T10:00:00+00:00', 1, '[1]')"
+            )
+        finally:
+            conn.close()
+
+        apply_migrations(db_path)
+
+        conn = sqlite3.connect(db_path)
+        try:
+            count = conn.execute("SELECT COUNT(*) FROM collection_sync_state").fetchone()[0]
+        finally:
+            conn.close()
+        assert count == 0

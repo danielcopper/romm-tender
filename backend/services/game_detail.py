@@ -306,6 +306,7 @@ class GameDetailService:
             "rom_id": rom_id,
             "rom_name": rom.name,
             "platform_slug": platform_slug,
+            "platform_fs_slug": rom.platform_fs_slug,
             "platform_name": platform_name,
             "installed": installed,
             "save_sync_enabled": save_sync_enabled,
@@ -399,7 +400,9 @@ class GameDetailService:
         aggregates, only what the page's BIOS part stands on (the emulator
         entries and the delete counts among it); with no level and no status, a
         check that raised. A ROM that is gone or has no platform
-        ships neither a status nor the flag; nothing has been asked about it.
+        ships neither a status nor the flag; nothing has been asked about it. A
+        ROM whose platform's folder in RomM is not recorded yet — the sync
+        writes it — ships the flag with no status, as a check that raised.
         The frontend reads this contract as ``BiosAnswer`` in
         ``frontend/src/api/backend.ts``.
         """
@@ -417,6 +420,10 @@ class GameDetailService:
         platform_slug = rom.platform_slug
         if not platform_slug:
             return self._bios_answer()
+        platform_folder = rom.platform_fs_slug
+        if not platform_folder:
+            self._logger.info(f"No BIOS check for ROM {rom_id}: its platform's folder in RomM is not recorded yet")
+            return self._bios_answer(unknown=True)
 
         # The BIOS filter keys off the entry the game starts with (the pin over
         # the default), resolved by rom_id from the shared seam — the CHOSEN
@@ -431,7 +438,7 @@ class GameDetailService:
 
         try:
             bios = await self._bios_checker.check_platform_bios(
-                platform_slug, launching_emulator=emulator, rom_regions=rom.regions, install=install
+                platform_slug, platform_folder, launching_emulator=emulator, rom_regions=rom.regions, install=install
             )
         except Exception as e:
             self._logger.warning(f"BIOS status check failed for {platform_slug}: {e}")

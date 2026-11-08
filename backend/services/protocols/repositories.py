@@ -410,11 +410,11 @@ class BiosFileRepository(Protocol):
 class FirmwareCacheRepository(Protocol):
     """Persistence seam for the ``FirmwareCacheEntry`` aggregate (cached firmware listing).
 
-    Identity is the composite ``(platform_slug, name)``. The cache is refreshed
+    Identity is the composite ``(platform_folder, name)``. The cache is refreshed
     wholesale on a TTL, not mutated per row.
     """
 
-    def get(self, platform_slug: str, name: str) -> FirmwareCacheEntry | None:
+    def get(self, platform_folder: str, name: str) -> FirmwareCacheEntry | None:
         """Return the firmware entry for the composite key, or ``None``."""
         ...
 
@@ -438,10 +438,10 @@ class FirmwareCacheRepository(Protocol):
 class FirmwareStoreRepository(Protocol):
     """Persistence seam for the ``StoredFirmware`` aggregate (a file in Tender's firmware store).
 
-    Identity is the composite ``(platform_slug, file_name)``.
+    Identity is the composite ``(platform_folder, file_name)``.
     """
 
-    def get(self, platform_slug: str, file_name: str) -> StoredFirmware | None:
+    def get(self, platform_folder: str, file_name: str) -> StoredFirmware | None:
         """Return the store file for the composite key, or ``None``."""
         ...
 
@@ -449,7 +449,7 @@ class FirmwareStoreRepository(Protocol):
         """Upsert *stored*. (firmware/store.py, after a download or a takeover)"""
         ...
 
-    def delete(self, platform_slug: str, file_name: str) -> None:
+    def delete(self, platform_folder: str, file_name: str) -> None:
         """Remove the store file's record for the composite key. Idempotent."""
         ...
 

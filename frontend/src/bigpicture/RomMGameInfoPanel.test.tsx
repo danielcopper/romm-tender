@@ -231,6 +231,7 @@ function biosNeedingDetail(overrides: Partial<CachedGameDetail> = {}): CachedGam
     found: true,
     rom_id: 60,
     platform_slug: "snes",
+    platform_fs_slug: "snes",
     save_sync_enabled: true,
     metadata: makeMetadata(),
     stale_fields: [],
@@ -1703,7 +1704,9 @@ describe("RomMGameInfoPanel", () => {
     });
 
     it("bios: replaces a row's file for this panel's own platform", async () => {
-      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(biosNeedingDetail({ platform_slug: "psx" }));
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(
+        biosNeedingDetail({ platform_slug: "psx", platform_fs_slug: "psx" }),
+      );
       vi.mocked(backend.getBiosStatus).mockResolvedValue({
         bios_status: {
           platform_slug: "psx",
@@ -1765,7 +1768,7 @@ describe("RomMGameInfoPanel", () => {
       });
       await flushAsync();
 
-      expect(vi.mocked(backend.replaceBiosFile)).toHaveBeenCalledWith("psx", "/bios/scph5501.bin", 60);
+      expect(vi.mocked(backend.replaceBiosFile)).toHaveBeenCalledWith("psx", "psx", "/bios/scph5501.bin", 60);
     });
 
     it("bios: reads the tab's BIOS answer once after a press", async () => {

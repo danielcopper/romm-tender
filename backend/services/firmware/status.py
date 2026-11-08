@@ -130,7 +130,7 @@ class FirmwareStatusReader:
         return kept
 
     def _platform_rows(
-        self, system: str | None, platform_slug: str, firmware_list: list[dict[str, Any]], emulator: str | None
+        self, system: str | None, platform_folder: str, platform_firmware: list[dict[str, Any]], emulator: str | None
     ) -> tuple[FirmwareCatalogue, list[BiosFileEntry], dict[str, list[BiosFileEntry]]]:
         """One platform's demand and its whole row set, in one worker hop. Blocking.
 
@@ -149,9 +149,9 @@ class FirmwareStatusReader:
         records = self._store.do_read_records()
         inputs = RowInputs(
             catalogue=catalogue,
-            platform_slug=platform_slug,
-            library=tuple(library_file(fw) for fw in self._storable(firmware_list)),
-            copies=tuple(self._store.do_copies(records, platform_slug)),
+            platform_folder=platform_folder,
+            library=tuple(library_file(fw) for fw in self._storable(platform_firmware)),
+            copies=tuple(self._store.do_copies(records, platform_folder)),
             owned=self._store.do_owned(records),
             files=self._firmware_file_store,
         )
@@ -166,10 +166,11 @@ class FirmwareStatusReader:
             if other != emulator
         }
         names = self._platform_names()
+        slugs = {stored.platform_folder: stored.platform_slug for stored in records.stored}
         return (
             catalogue,
-            _named(rows, names),
-            {other: _named(other_rows, names) for other, other_rows in others.items()},
+            _named(rows, names, slugs),
+            {other: _named(other_rows, names, slugs) for other, other_rows in others.items()},
         )
 
     def _platform_names(self) -> dict[str, str]:
@@ -332,15 +333,15 @@ class FirmwareStatusReader:
         with self._uow_factory() as uow:
             return uow.roms.get_bound_platform_slugs()
 
-    def _store_files(self, platform_slug: str) -> list[str]:
-        """Every recorded file of *platform_slug*'s store that is on disk, by its name in RomM. Blocking.
+    def _store_files(self, platform_folder: str) -> list[str]:
+        """Every recorded file of *platform_folder*'s store that is on disk, by its name in RomM. Blocking.
 
         A file in the store folder without a record is not Tender's to count.
         All the recorded ones, whichever row they fill or none: a copy only
         another emulator uses, and a second copy of the same bytes, are
         Tender's to delete as much as the one a row shows.
         """
-        copies = self._store.do_copies(self._store.do_read_records(), platform_slug)
+        copies = self._store.do_copies(self._store.do_read_records(), platform_folder)
         return sorted(copy.file_name for copy in copies if copy.present)
 
     def _stamp_deletable(self, plat: dict[str, Any], platform_slug: str, records: list[BiosFile]) -> None:
@@ -375,17 +376,17 @@ class FirmwareStatusReader:
             f["deletable_count"] = 1 if name is not None else 0
 
     async def _enrich_platform(
-        self, plat: dict[str, Any], synced_slugs, firmware_list, records: list[BiosFile]
+        self, plat: dict[str, Any], folder: str, synced_slugs, platform_firmware, records: list[BiosFile]
     ) -> None:
-        """Add emulator info, the rows and the aggregates to one platform entry.
+        """Add emulator info, the rows and the aggregates to one platform entry, whose store is *folder*'s.
 
         The core read seams key by the resolved RetroDECK ``system`` (ADR-0010
         §2), so each entry's RomM platform slug is normalized before the
-        ``get_emulator_options`` call; ``has_games`` and the library's files stay
-        on the RomM slug (their own vocabulary). ``active_core`` and
-        ``active_core_label`` are the two projections of ONE pick
-        (:meth:`_platform_emulator`), so the pane cannot name one emulator and
-        judge by another; ``active_core`` is ``None`` only where the pick could
+        ``get_emulator_options`` call; ``has_games`` stays on the RomM slug (its
+        own vocabulary); the library's files are the ones RomM lists under
+        *folder*. ``active_core`` and ``active_core_label`` are the two
+        projections of ONE pick (:meth:`_platform_emulator`), so the pane cannot
+        name one emulator and judge by another; ``active_core`` is ``None`` only where the pick could
         not be made or the resolver could not identify it, and then no row is
         its requirement and the answer reads as not established. The
         ``emulators`` list is the full classified picker payload and
@@ -399,8 +400,7 @@ class FirmwareStatusReader:
 
         **The demand is read per platform**, because a standalone emulator's
         declarations belong to a platform only by way of the emulators ES-DE
-        offers for it. *firmware_list* is the whole library rather than this
-        platform's slice: a file fills a requirement wherever RomM files it.
+        offers for it.
         """
         slug = plat["platform_slug"]
         platform = await self._loop.run_in_executor(None, self._platform_systems.platform_system, slug)
@@ -416,13 +416,13 @@ class FirmwareStatusReader:
         plat["emulator_source"] = options["source"]
         plat["platform_system"] = platform.payload()
         catalogue, files, others = await self._loop.run_in_executor(
-            None, self._platform_rows, system, slug, firmware_list, identity
+            None, self._platform_rows, system, folder, platform_firmware, identity
         )
         plat["files"] = sorted(
             (_overview_payload(entry) for entry in files),
             key=lambda f: (f.get("declared_path") or f.get("file_name", "")).lower(),
         )
-        plat["store_files"] = await self._loop.run_in_executor(None, self._store_files, slug)
+        plat["store_files"] = await self._loop.run_in_executor(None, self._store_files, folder)
         plat["store_only"] = _store_only(system, catalogue, identity)
         plat["backup_root"] = self._store.backup_root()
         plat["has_games"] = slug in synced_slugs
@@ -482,8 +482,8 @@ class FirmwareStatusReader:
             return {"success": True, "server_offline": True}
         return {"success": True, "server_offline": False}
 
-    async def get_platform_firmware_status(self, platform_slug: str) -> dict[str, Any]:
-        """Return one platform's whole BIOS entry.
+    async def get_platform_firmware_status(self, platform_slug: str, platform_folder: str) -> dict[str, Any]:
+        """Return one platform's whole BIOS entry: the console *platform_slug*, kept in RomM in *platform_folder*.
 
         The half of the page that pays the reading, asked for exactly the
         platform the caller wants next. Every platform gets its entry, with or
@@ -493,16 +493,18 @@ class FirmwareStatusReader:
         tells the two apart, and dropping either would leave the page to guess.
         """
         try:
-            firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
+            platform_firmware = await self._loop.run_in_executor(
+                None, self._listing.get_platform_firmware_list, platform_folder
+            )
         except Exception as e:
             self._logger.warning(f"Answering for {platform_slug} without the server listing: {e}")
-            firmware_list = []
+            platform_firmware = []
         # After the listing: a fresh read moves older records to their platform,
         # and the count must see them where they now are.
         synced_slugs, records = await self._loop.run_in_executor(None, self._read_status_inputs)
 
         plat: dict[str, Any] = {"platform_slug": platform_slug}
-        await self._enrich_platform(plat, synced_slugs, firmware_list, records)
+        await self._enrich_platform(plat, platform_folder, synced_slugs, platform_firmware, records)
         return {"success": True, "platform": plat}
 
     def _read_status_inputs(self) -> tuple[set[str], list[BiosFile]]:
@@ -531,11 +533,16 @@ class FirmwareStatusReader:
     async def check_platform_bios(
         self,
         platform_slug,
+        platform_folder,
         launching_emulator: LaunchingEmulator | None = None,
         rom_regions: tuple[str, ...] = (),
         install: RomInstall | None = None,
     ) -> dict[str, Any]:
         """Check if RomM has firmware for this platform and whether it's downloaded.
+
+        *platform_slug* is the slug by which the system and the emulator pick
+        are found, and *platform_folder* the folder RomM keeps the platform in,
+        whose store the rows read.
 
         Returns BIOS status only. ``launching_emulator`` is the pre-resolved
         per-game PICK — the whole resolution rather than its identity, because
@@ -583,14 +590,16 @@ class FirmwareStatusReader:
 
         server_offline = False
         try:
-            firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
+            platform_firmware = await self._loop.run_in_executor(
+                None, self._listing.get_platform_firmware_list, platform_folder
+            )
         except Exception as e:
             self._logger.warning(f"Answering BIOS status without the server listing: {e}")
-            firmware_list = []
+            platform_firmware = []
             server_offline = True
 
         catalogue, rows, others = await self._loop.run_in_executor(
-            None, self._platform_rows, system, platform_slug, firmware_list, identity
+            None, self._platform_rows, system, platform_folder, platform_firmware, identity
         )
         files = tuple(rows)
         groups = judge_groups(catalogue.groups_for(identity), console_regions_of(rom_regions))
@@ -611,16 +620,22 @@ class FirmwareStatusReader:
         payload["server_offline"] = server_offline
         # After the listing, as for the platform entry: a fresh read moves older
         # records to their platform, and the count must see them where they now are.
-        payload["store_files"] = await self._loop.run_in_executor(None, self._store_files, platform_slug)
+        payload["store_files"] = await self._loop.run_in_executor(None, self._store_files, platform_folder)
         records = await self._loop.run_in_executor(None, self._read_bios_records)
         self._stamp_deletable(payload, platform_slug, records)
         return payload
 
 
-def _named(rows: list[BiosFileEntry], names: dict[str, str]) -> list[BiosFileEntry]:
-    """*rows* with the name of the platform a link of Tender's serves them for, its slug where none is recorded."""
+def _named(rows: list[BiosFileEntry], names: dict[str, str], slugs: dict[str, str]) -> list[BiosFileEntry]:
+    """*rows* with the name of the platform a link of Tender's serves them for, its folder where none is recorded.
+
+    ``linked_for`` is the platform's folder; *slugs* gives each store folder's
+    slug, which the recorded names are kept under.
+    """
     return [
-        replace(row, linked_for_name=names.get(row.linked_for, row.linked_for)) if row.linked_for else row
+        replace(row, linked_for_name=names.get(slugs.get(row.linked_for, row.linked_for), row.linked_for))
+        if row.linked_for
+        else row
         for row in rows
     ]
 

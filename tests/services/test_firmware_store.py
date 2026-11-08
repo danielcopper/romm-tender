@@ -228,7 +228,7 @@ class TestADownloadLandsInTheStore:
         _saturn(machine)
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
 
-        result = await machine.service.download_all_firmware("saturn")
+        result = await machine.service.download_all_firmware("saturn", "saturn")
 
         stored = machine.store_path("saturn", "sega_101.bin")
         assert stored.read_bytes() == _SATURN
@@ -244,7 +244,7 @@ class TestADownloadLandsInTheStore:
         _saturn(machine)
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
 
-        await machine.service.download_all_firmware("saturn")
+        await machine.service.download_all_firmware("saturn", "saturn")
 
         written = [path for path in machine.bios.rglob("*") if path.is_file() and not path.is_symlink()]
         assert written == []
@@ -255,7 +255,7 @@ class TestADownloadLandsInTheStore:
         machine.romm.served[1] = b"damaged"
 
         with pytest.raises(Refused) as refused:
-            await machine.service.download_platform_firmware_file("saturn", "sega_101.bin")
+            await machine.service.download_platform_firmware_file("saturn", "saturn", "sega_101.bin")
 
         assert refused.value.reason == "bios_download_damaged"
         assert refused.value.message == "The download was damaged. Try again."
@@ -267,7 +267,7 @@ class TestADownloadLandsInTheStore:
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN, md5=None)
 
         with pytest.raises(Refused) as refused:
-            await machine.service.download_platform_firmware_file("saturn", "sega_101.bin")
+            await machine.service.download_platform_firmware_file("saturn", "saturn", "sega_101.bin")
 
         assert refused.value.reason == "no_checksum"
         assert refused.value.message == "RomM states no checksum for sega_101.bin, so Tender cannot check a download."
@@ -277,7 +277,7 @@ class TestADownloadLandsInTheStore:
         machine.romm.add(1, "saturn", "../dc/dc_boot.bin", _SATURN)
 
         with pytest.raises(Refused) as refused:
-            await machine.service.download_platform_firmware_file("saturn", "../dc/dc_boot.bin")
+            await machine.service.download_platform_firmware_file("saturn", "saturn", "../dc/dc_boot.bin")
 
         assert refused.value.reason == "path_traversal"
         assert machine.romm.downloads == []
@@ -287,7 +287,7 @@ class TestADownloadLandsInTheStore:
         machine.romm.add(1, "../roms", "sega_101.bin", _SATURN)
 
         with pytest.raises(Refused) as refused:
-            await machine.service.download_platform_firmware_file("../roms", "sega_101.bin")
+            await machine.service.download_platform_firmware_file("../roms", "../roms", "sega_101.bin")
 
         assert refused.value.reason == "path_traversal"
         assert machine.romm.downloads == []
@@ -295,9 +295,9 @@ class TestADownloadLandsInTheStore:
 
     async def test_a_second_download_of_a_stored_file_fetches_nothing(self, machine):
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
-        await machine.service.download_platform_firmware_file("saturn", "sega_101.bin")
+        await machine.service.download_platform_firmware_file("saturn", "saturn", "sega_101.bin")
 
-        again = await machine.service.download_platform_firmware_file("saturn", "sega_101.bin")
+        again = await machine.service.download_platform_firmware_file("saturn", "saturn", "sega_101.bin")
 
         assert machine.romm.downloads == [1]
         assert again["downloaded"] == 0
@@ -314,7 +314,7 @@ class TestByContent:
         )
         machine.romm.add(1, "saturn", "sega_100.bin", _SATURN)
 
-        entry = (await machine.service.get_platform_firmware_status("saturn"))["platform"]
+        entry = (await machine.service.get_platform_firmware_status("saturn", "saturn"))["platform"]
 
         (row,) = [f for f in entry["files"] if f["declared_by"] == _YABA]
         assert row["file_name"] == "saturn_bios.bin"
@@ -334,7 +334,7 @@ class TestByContent:
         )
         machine.romm.add(1, "psx", "PSXONPSP660.BIN", psp)
 
-        await machine.service.download_all_firmware("psx")
+        await machine.service.download_all_firmware("psx", "psx")
 
         assert os.readlink(machine.bios / "psxonpsp660.bin") == str(machine.store_path("psx", "PSXONPSP660.BIN"))
 
@@ -342,7 +342,7 @@ class TestByContent:
         _saturn(machine)
         machine.romm.add(1, "saturn", "mystery.bin", b"nobody knows these")
 
-        entry = (await machine.service.get_platform_firmware_status("saturn"))["platform"]
+        entry = (await machine.service.get_platform_firmware_status("saturn", "saturn"))["platform"]
 
         claimed = [f for f in entry["files"] if f["declared_by"] is not None]
         assert all(f["library"] is None for f in claimed)
@@ -355,7 +355,7 @@ class TestByContent:
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
         machine.romm.add(2, "saturn", "Sega_100.bin", _SATURN)
 
-        await machine.service.download_all_firmware("saturn")
+        await machine.service.download_all_firmware("saturn", "saturn")
 
         assert machine.store_path("saturn", "sega_101.bin").exists()
         assert machine.store_path("saturn", "Sega_100.bin").exists()
@@ -373,7 +373,7 @@ class TestByContent:
         machine.romm.add(1, "saturn", "NEOGEO.ZIP", b"repacked")
         machine.romm.add(2, "saturn", "keys.txt", b"keys")
 
-        entry = (await machine.service.get_platform_firmware_status("saturn"))["platform"]
+        entry = (await machine.service.get_platform_firmware_status("saturn", "saturn"))["platform"]
 
         matched = {f["file_name"]: f["library"]["matched"] for f in entry["files"] if f["library"]}
         assert matched == {"neogeo.zip": "archive_name", "keys.txt": "no_checksum_name"}
@@ -389,9 +389,9 @@ class TestAPlaceOutsideTheBiosFolder:
         machine.resolver.declare("keys.txt", required_by=["CEMU"], place=str(cemu / "keys.txt"))
         machine.romm.add(1, "wiiu", "keys.txt", b"keys")
 
-        before = (await machine.service.get_platform_firmware_status("wiiu"))["platform"]
-        await machine.service.download_all_firmware("wiiu")
-        after = (await machine.service.get_platform_firmware_status("wiiu"))["platform"]
+        before = (await machine.service.get_platform_firmware_status("wiiu", "wiiu"))["platform"]
+        await machine.service.download_all_firmware("wiiu", "wiiu")
+        after = (await machine.service.get_platform_firmware_status("wiiu", "wiiu"))["platform"]
 
         assert os.readlink(cemu / "keys.txt") == str(machine.store_path("wiiu", "keys.txt"))
         assert [f["downloaded"] for f in before["files"] if f["file_name"] == "keys.txt"] == [False]
@@ -403,8 +403,8 @@ class TestAPlaceOutsideTheBiosFolder:
         machine.resolver.declare("keys.txt", required_by=["CEMU"], place=str(cemu / "keys.txt"))
         machine.romm.add(1, "wiiu", "keys.txt", b"keys")
 
-        await machine.service.download_all_firmware("wiiu")
-        entry = (await machine.service.get_platform_firmware_status("wiiu"))["platform"]
+        await machine.service.download_all_firmware("wiiu", "wiiu")
+        entry = (await machine.service.get_platform_firmware_status("wiiu", "wiiu"))["platform"]
 
         assert not cemu.exists()
         (row,) = [f for f in entry["files"] if f["file_name"] == "keys.txt"]
@@ -415,22 +415,22 @@ class TestASourceWhoseRootsCouldNotBeAsked:
     @pytest.mark.parametrize(
         ("press", "args"),
         [
-            ("download_all_firmware", ("saturn",)),
-            ("download_required_firmware", ("saturn",)),
-            ("download_platform_firmware_file", ("saturn", "sega_101.bin")),
-            ("update_bios_links", ("saturn",)),
+            ("download_all_firmware", ("saturn", "saturn")),
+            ("download_required_firmware", ("saturn", "saturn")),
+            ("download_platform_firmware_file", ("saturn", "saturn", "sega_101.bin")),
+            ("update_bios_links", ("saturn", "saturn")),
         ],
     )
     async def test_no_bios_press_places_a_link_there(self, machine, press, args):
         _saturn(machine)
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
-        await machine.service.download_platform_firmware_file("saturn", "sega_101.bin")
+        await machine.service.download_platform_firmware_file("saturn", "saturn", "sega_101.bin")
         for place in machine.links():
             os.unlink(place)
         machine.resolver.roots = None
 
         await getattr(machine.service, press)(*args)
-        entry = (await machine.service.get_platform_firmware_status("saturn"))["platform"]
+        entry = (await machine.service.get_platform_firmware_status("saturn", "saturn"))["platform"]
 
         assert not os.path.lexists(machine.bios / "saturn_bios.bin")
         assert not os.path.lexists(machine.bios / "kronos" / "saturn_bios.bin")
@@ -463,7 +463,7 @@ class TestTwoSources:
         )
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
 
-        result = await machine.service.download_all_firmware("saturn")
+        result = await machine.service.download_all_firmware("saturn", "saturn")
 
         stored = str(machine.store_path("saturn", "sega_101.bin"))
         assert os.readlink(machine.bios / "saturn_bios.bin") == stored
@@ -478,7 +478,7 @@ class TestAPlaceSomethingElseLiesAt:
         (machine.bios / "saturn_bios.bin").write_bytes(b"the user's own copy")
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
 
-        result = await machine.service.download_all_firmware("saturn")
+        result = await machine.service.download_all_firmware("saturn", "saturn")
 
         assert (machine.bios / "saturn_bios.bin").read_bytes() == b"the user's own copy"
         assert not (machine.bios / "saturn_bios.bin").is_symlink()
@@ -489,7 +489,7 @@ class TestAPlaceSomethingElseLiesAt:
         (machine.bios / "saturn_bios.bin").write_bytes(b"the user's own copy")
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
 
-        result = await machine.service.download_required_firmware("saturn", _KRONOS)
+        result = await machine.service.download_required_firmware("saturn", "saturn", _KRONOS)
 
         assert (result["downloaded"], result["placed"], result["left_in_place"]) == (1, 1, 1)
 
@@ -497,7 +497,7 @@ class TestAPlaceSomethingElseLiesAt:
         _saturn(machine)
         (machine.bios / "saturn_bios.bin").write_bytes(b"the user's own copy")
 
-        entry = (await machine.service.get_platform_firmware_status("saturn"))["platform"]
+        entry = (await machine.service.get_platform_firmware_status("saturn", "saturn"))["platform"]
 
         (row,) = [f for f in entry["files"] if f["declared_by"] == _YABA]
         assert row["link"] == "occupied"
@@ -521,8 +521,8 @@ class TestReplacingAWrongFile:
     async def test_download_required_leaves_it_and_the_row_offers_replace(self, machine):
         place = self._wrong(machine)
 
-        await machine.service.download_required_firmware("saturn")
-        entry = (await machine.service.get_platform_firmware_status("saturn"))["platform"]
+        await machine.service.download_required_firmware("saturn", "saturn")
+        entry = (await machine.service.get_platform_firmware_status("saturn", "saturn"))["platform"]
 
         assert place.read_bytes() == b"a wrong image"
         (row,) = [f for f in entry["files"] if f["declared_by"] == _YABA]
@@ -532,7 +532,7 @@ class TestReplacingAWrongFile:
     async def test_replace_moves_it_to_the_backup_folder_and_links_tenders_copy(self, machine):
         place = self._wrong(machine)
 
-        result = await machine.service.replace_bios_file("saturn", str(place))
+        result = await machine.service.replace_bios_file("saturn", "saturn", str(place))
 
         backup = machine.data / "backups" / "bios" / "2026-10-21_20-00-00" / str(place).lstrip("/")
         assert result["backup_path"] == str(backup)
@@ -544,7 +544,7 @@ class TestReplacingAWrongFile:
         time.tzset()
         place = self._wrong(machine)
 
-        result = await machine.service.replace_bios_file("saturn", str(place))
+        result = await machine.service.replace_bios_file("saturn", "saturn", str(place))
 
         # 20:00 UTC on 21 October is 22:00 in Berlin, still on summer time.
         backup = machine.data / "backups" / "bios" / "2026-10-21_22-00-00" / str(place).lstrip("/")
@@ -559,7 +559,7 @@ class TestReplacingAWrongFile:
 
         monkeypatch.setattr(machine.store._files, "symlink", refuse)
         with pytest.raises(Refused) as refused:
-            await machine.service.replace_bios_file("saturn", str(place))
+            await machine.service.replace_bios_file("saturn", "saturn", str(place))
 
         assert refused.value.reason == "replace_failed"
         assert refused.value.message == (
@@ -579,7 +579,7 @@ class TestReplacingAWrongFile:
 
         monkeypatch.setattr(machine.store._files, "symlink", taken)
         with pytest.raises(Refused) as refused:
-            await machine.service.replace_bios_file("saturn", str(place))
+            await machine.service.replace_bios_file("saturn", "saturn", str(place))
 
         backup = machine.data / "backups" / "bios" / "2026-10-21_20-00-00" / str(place).lstrip("/")
         assert refused.value.reason == "replace_failed"
@@ -605,7 +605,7 @@ class TestReplacingAWrongFile:
         monkeypatch.setattr(files, "symlink", refuse)
         monkeypatch.setattr(files, "move_aside", no_way_back)
         with pytest.raises(Refused) as refused:
-            await machine.service.replace_bios_file("saturn", str(place))
+            await machine.service.replace_bios_file("saturn", "saturn", str(place))
 
         backup = machine.data / "backups" / "bios" / "2026-10-21_20-00-00" / str(place).lstrip("/")
         assert refused.value.reason == "replace_failed"
@@ -621,9 +621,9 @@ class TestReplacingAWrongFile:
         machine.resolver.declare("keys.txt", required_by=[_YABA], place=str(place), checked="mismatch")
         machine.romm.add(1, "saturn", "keys.txt", b"keys")
 
-        entry = (await machine.service.get_platform_firmware_status("saturn"))["platform"]
+        entry = (await machine.service.get_platform_firmware_status("saturn", "saturn"))["platform"]
         with pytest.raises(Refused) as refused:
-            await machine.service.replace_bios_file("saturn", str(place))
+            await machine.service.replace_bios_file("saturn", "saturn", str(place))
 
         (row,) = [f for f in entry["files"] if f["file_name"] == "keys.txt"]
         assert row["replace_offered"] is False
@@ -644,7 +644,7 @@ class TestReplacingAWrongFile:
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
 
         with pytest.raises(Refused):
-            await machine.service.replace_bios_file("saturn", str(place))
+            await machine.service.replace_bios_file("saturn", "saturn", str(place))
 
         assert not place.is_symlink()
 
@@ -653,11 +653,11 @@ class TestBringingLinksUpToDate:
     async def test_a_link_deleted_by_hand_is_placed_again(self, machine):
         _saturn(machine)
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
-        await machine.service.download_all_firmware("saturn")
+        await machine.service.download_all_firmware("saturn", "saturn")
         (machine.bios / "saturn_bios.bin").unlink()
 
-        before = (await machine.service.get_platform_firmware_status("saturn"))["platform"]
-        result = await machine.service.update_bios_links("saturn")
+        before = (await machine.service.get_platform_firmware_status("saturn", "saturn"))["platform"]
+        result = await machine.service.update_bios_links("saturn", "saturn")
 
         (row,) = [f for f in before["files"] if f["declared_by"] == _YABA]
         assert row["link"] == "not_linked"
@@ -674,11 +674,11 @@ class TestBringingLinksUpToDate:
         )
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
         machine.romm.add(2, "saturn", "unrelated.bin", b"x")
-        await machine.service.download_platform_firmware_file("saturn", "sega_101.bin")
+        await machine.service.download_platform_firmware_file("saturn", "saturn", "sega_101.bin")
         machine.romm.downloads.clear()
         (machine.bios / "kronos_only.bin").unlink()
 
-        await machine.service.update_bios_links("saturn")
+        await machine.service.update_bios_links("saturn", "saturn")
 
         assert machine.romm.downloads == []
         assert (machine.bios / "kronos_only.bin").is_symlink()
@@ -686,10 +686,10 @@ class TestBringingLinksUpToDate:
     async def test_a_link_of_tenders_with_no_store_copy_left_is_removed(self, machine):
         _saturn(machine)
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
-        await machine.service.download_all_firmware("saturn")
+        await machine.service.download_all_firmware("saturn", "saturn")
         machine.store_path("saturn", "sega_101.bin").unlink()
 
-        await machine.service.update_bios_links("saturn")
+        await machine.service.update_bios_links("saturn", "saturn")
 
         assert not os.path.lexists(machine.bios / "saturn_bios.bin")
         assert machine.links() == {}
@@ -697,7 +697,7 @@ class TestBringingLinksUpToDate:
     async def test_a_link_that_moved_with_its_folder_keeps_its_record(self, machine, tmp_path):
         _saturn(machine)
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
-        await machine.service.download_all_firmware("saturn")
+        await machine.service.download_all_firmware("saturn", "saturn")
         moved = tmp_path / "sd" / "bios"
         moved.parent.mkdir()
         os.rename(machine.bios, moved)
@@ -707,7 +707,7 @@ class TestBringingLinksUpToDate:
         ]
         machine.resolver.roots = _roots(moved)
 
-        await machine.service.update_bios_links("saturn")
+        await machine.service.update_bios_links("saturn", "saturn")
 
         assert set(machine.links()) == {str(moved / "saturn_bios.bin"), str(moved / "kronos" / "saturn_bios.bin")}
 
@@ -718,7 +718,7 @@ class TestOnlyAnInstalledEmulatorIsLinkedFor:
         machine.resolver.not_installed = frozenset({_KRONOS})
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
 
-        await machine.service.download_all_firmware("saturn")
+        await machine.service.download_all_firmware("saturn", "saturn")
 
         assert (machine.bios / "saturn_bios.bin").is_symlink()
         assert not os.path.lexists(machine.bios / "kronos" / "saturn_bios.bin")
@@ -727,10 +727,10 @@ class TestOnlyAnInstalledEmulatorIsLinkedFor:
     async def test_a_link_no_installed_emulator_wants_any_more_is_removed(self, machine):
         _saturn(machine)
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
-        await machine.service.download_all_firmware("saturn")
+        await machine.service.download_all_firmware("saturn", "saturn")
         machine.resolver.not_installed = frozenset({_KRONOS})
 
-        result = await machine.service.update_bios_links("saturn")
+        result = await machine.service.update_bios_links("saturn", "saturn")
 
         assert not os.path.lexists(machine.bios / "kronos" / "saturn_bios.bin")
         assert (machine.bios / "saturn_bios.bin").is_symlink()
@@ -741,7 +741,7 @@ class TestOnlyAnInstalledEmulatorIsLinkedFor:
     async def test_a_file_someone_put_where_that_link_was_is_left_alone(self, machine):
         _saturn(machine)
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
-        await machine.service.download_all_firmware("saturn")
+        await machine.service.download_all_firmware("saturn", "saturn")
         kronos = machine.bios / "kronos" / "saturn_bios.bin"
         own = machine.bios / "my_saturn.bin"
         own.write_bytes(b"the user's own copy")
@@ -749,7 +749,7 @@ class TestOnlyAnInstalledEmulatorIsLinkedFor:
         kronos.symlink_to(own)
         machine.resolver.not_installed = frozenset({_KRONOS})
 
-        await machine.service.update_bios_links("saturn")
+        await machine.service.update_bios_links("saturn", "saturn")
 
         assert os.readlink(kronos) == str(own)
         assert str(kronos) not in machine.links()
@@ -757,11 +757,11 @@ class TestOnlyAnInstalledEmulatorIsLinkedFor:
     async def test_an_unwanted_link_under_a_root_only_assumed_stays(self, machine):
         _saturn(machine)
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
-        await machine.service.download_all_firmware("saturn")
+        await machine.service.download_all_firmware("saturn", "saturn")
         machine.resolver.not_installed = frozenset({_KRONOS})
         machine.resolver.roots = _roots(machine.bios, "assumed")
 
-        await machine.service.update_bios_links("saturn")
+        await machine.service.update_bios_links("saturn", "saturn")
 
         assert (machine.bios / "kronos" / "saturn_bios.bin").is_symlink()
         assert str(machine.bios / "kronos" / "saturn_bios.bin") in machine.links()
@@ -782,11 +782,11 @@ class TestOnlyAnInstalledEmulatorIsLinkedFor:
         machine.resolver.other_sources.append(other)
         _saturn(machine)
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
-        await machine.service.download_all_firmware("saturn")
+        await machine.service.download_all_firmware("saturn", "saturn")
         # Switched off, or its reading failed: its wants were not read, so nothing there is judged.
         other.resolved = False
 
-        await machine.service.update_bios_links("saturn")
+        await machine.service.update_bios_links("saturn", "saturn")
 
         assert (other_bios / "saturn_bios.bin").is_symlink()
         assert str(other_bios / "saturn_bios.bin") in machine.links()
@@ -794,10 +794,10 @@ class TestOnlyAnInstalledEmulatorIsLinkedFor:
     async def test_its_row_says_the_emulator_is_not_installed_rather_than_not_linked_yet(self, machine):
         _saturn(machine)
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
-        await machine.service.download_all_firmware("saturn")
+        await machine.service.download_all_firmware("saturn", "saturn")
         machine.resolver.not_installed = frozenset({_KRONOS})
 
-        entry = (await machine.service.get_platform_firmware_status("saturn"))["platform"]
+        entry = (await machine.service.get_platform_firmware_status("saturn", "saturn"))["platform"]
 
         rows = [*entry["files"], *(row for tab in entry["emulator_tabs"] for row in tab.get("rows") or ())]
         refusals = {row["declared_by"]: row["place_refusal"] for row in rows}
@@ -821,12 +821,12 @@ class TestOnlyAnInstalledEmulatorIsLinkedFor:
         machine.resolver.other_sources.append(other)
         _saturn(machine)
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
-        await machine.service.download_all_firmware("saturn")
+        await machine.service.download_all_firmware("saturn", "saturn")
         assert (other_bios / "saturn_bios.bin").is_symlink()
         # The sealed list no longer names the place: an incomplete list is no evidence nobody wants it.
         other.placements = []
 
-        await machine.service.update_bios_links("saturn")
+        await machine.service.update_bios_links("saturn", "saturn")
 
         assert (other_bios / "saturn_bios.bin").is_symlink()
         assert str(other_bios / "saturn_bios.bin") in machine.links()
@@ -839,12 +839,12 @@ class TestOnlyAnInstalledEmulatorIsLinkedFor:
         machine.resolver.declare(
             "gb_bios.bin", required_by=[_YABA], place=str(place), identity_md5=_md5(boot), identity_kind=IDENTITY_FILE
         )
-        await machine.service.download_all_firmware("gb")
-        await machine.service.download_all_firmware("gbc")
+        await machine.service.download_all_firmware("gb", "gb")
+        await machine.service.download_all_firmware("gbc", "gbc")
         # No emulator for Game Boy wants the place any more; Game Boy Color's still does.
         machine.resolver.not_installed_in = {"gb": frozenset({_YABA})}
 
-        await machine.service.update_bios_links("gb")
+        await machine.service.update_bios_links("gb", "gb")
 
         assert os.readlink(place) == str(machine.store_path("gb", "gb_bios.bin"))
         assert str(place) in machine.links()
@@ -857,11 +857,11 @@ class TestOnlyAnInstalledEmulatorIsLinkedFor:
         machine.resolver.declare(
             "gb_bios.bin", required_by=[_YABA], place=str(place), identity_md5=_md5(boot), identity_kind=IDENTITY_FILE
         )
-        await machine.service.download_all_firmware("gb")
-        await machine.service.download_all_firmware("gbc")
+        await machine.service.download_all_firmware("gb", "gb")
+        await machine.service.download_all_firmware("gbc", "gbc")
         machine.resolver.not_installed_in = {"gb": frozenset({_YABA}), "gbc": frozenset({_YABA})}
 
-        await machine.service.update_bios_links("gb")
+        await machine.service.update_bios_links("gb", "gb")
 
         assert not os.path.lexists(place)
         assert str(place) not in machine.links()
@@ -880,9 +880,9 @@ class TestOnlyAnInstalledEmulatorIsLinkedFor:
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
         machine.resolver.not_installed = frozenset({_YABA})
 
-        entry = (await machine.service.get_platform_firmware_status("saturn"))["platform"]
+        entry = (await machine.service.get_platform_firmware_status("saturn", "saturn"))["platform"]
         with pytest.raises(Refused) as refused:
-            await machine.service.replace_bios_file("saturn", str(place))
+            await machine.service.replace_bios_file("saturn", "saturn", str(place))
 
         (row,) = [f for f in entry["files"] if f["declared_by"] == _YABA]
         assert row["replace_offered"] is False
@@ -902,7 +902,7 @@ class TestALinkAnotherPlatformMayStillWant:
         machine.resolver.declare(
             "gb_bios.bin", required_by=[_YABA], place=str(place), identity_md5=_md5(_BOOT), identity_kind=IDENTITY_FILE
         )
-        await machine.service.download_all_firmware("gb")
+        await machine.service.download_all_firmware("gb", "gb")
         assert place.is_symlink()
         machine.resolver.not_installed_in = {"gb": frozenset({_YABA})}
         machine.platform_systems.listed = frozenset({"gb", "gbc"})
@@ -922,7 +922,7 @@ class TestALinkAnotherPlatformMayStillWant:
     async def test_a_listed_platform_without_store_files_that_wants_the_place_keeps_it(self, machine):
         place = await self._unwanted_on_gb(machine)
 
-        await machine.service.update_bios_links("gb")
+        await machine.service.update_bios_links("gb", "gb")
 
         self._stays(machine, place)
 
@@ -930,7 +930,7 @@ class TestALinkAnotherPlatformMayStillWant:
         place = await self._unwanted_on_gb(machine)
         self._gbc_wants_nothing(machine)
 
-        await machine.service.update_bios_links("gb")
+        await machine.service.update_bios_links("gb", "gb")
 
         self._goes(machine, place)
 
@@ -939,7 +939,7 @@ class TestALinkAnotherPlatformMayStillWant:
         self._gbc_wants_nothing(machine)
         machine.platform_systems.answers["gbc"] = PlatformSystem(UNASKED, "gbc", "gbc", unasked="server_unreachable")
 
-        await machine.service.update_bios_links("gb")
+        await machine.service.update_bios_links("gb", "gb")
 
         self._stays(machine, place)
 
@@ -948,7 +948,7 @@ class TestALinkAnotherPlatformMayStillWant:
         self._gbc_wants_nothing(machine)
         machine.resolver.unread_in = frozenset({"gbc"})
 
-        await machine.service.update_bios_links("gb")
+        await machine.service.update_bios_links("gb", "gb")
 
         self._stays(machine, place)
 
@@ -957,7 +957,7 @@ class TestALinkAnotherPlatformMayStillWant:
         self._gbc_wants_nothing(machine)
         machine.platform_systems.listed = None
 
-        await machine.service.update_bios_links("gb")
+        await machine.service.update_bios_links("gb", "gb")
 
         self._stays(machine, place)
 
@@ -965,7 +965,7 @@ class TestALinkAnotherPlatformMayStillWant:
         place = await self._unwanted_on_gb(machine)
         machine.resolver.sealed_in = frozenset({"gbc"})
 
-        await machine.service.update_bios_links("gb")
+        await machine.service.update_bios_links("gb", "gb")
 
         self._stays(machine, place)
 
@@ -973,7 +973,7 @@ class TestALinkAnotherPlatformMayStillWant:
         place = await self._unwanted_on_gb(machine)
         machine.platform_systems.answers["gbc"] = PlatformSystem(SWITCHED_OFF, "gbc", "gbc", system="gbc")
 
-        await machine.service.update_bios_links("gb")
+        await machine.service.update_bios_links("gb", "gb")
 
         self._stays(machine, place)
 
@@ -981,7 +981,7 @@ class TestALinkAnotherPlatformMayStillWant:
         place = await self._unwanted_on_gb(machine)
         machine.platform_systems.answers["gbc"] = PlatformSystem(NO_SYSTEM, "gbc", "gbc")
 
-        await machine.service.update_bios_links("gb")
+        await machine.service.update_bios_links("gb", "gb")
 
         self._goes(machine, place)
 
@@ -992,7 +992,7 @@ class TestALinkAnotherPlatformMayStillWant:
         machine.platform_systems.mapping = {"gbc-hacks": "gbc"}
         machine.resolver.calls.clear()
 
-        await machine.service.update_bios_links("gb")
+        await machine.service.update_bios_links("gb", "gb")
 
         assert machine.resolver.calls.count("gbc") == 1
 
@@ -1001,7 +1001,7 @@ class TestALinkAnotherPlatformMayStillWant:
         machine.platform_systems.listed = frozenset({"gb", "gbc", "sgb"})
         machine.resolver.calls.clear()
 
-        await machine.service.update_bios_links("gb")
+        await machine.service.update_bios_links("gb", "gb")
 
         self._stays(machine, place)
         assert "gbc" in machine.resolver.calls
@@ -1022,7 +1022,7 @@ class TestALinkAnotherPlatformMayStillWant:
         )
         for firmware_id, (name, data) in enumerate(images.items(), start=1):
             machine.romm.add(firmware_id, "ps2", name, data)
-        await machine.service.download_all_firmware("ps2")
+        await machine.service.download_all_firmware("ps2", "ps2")
         machine.resolver.not_installed_in = {"ps2": frozenset({"pcsx2_libretro.so"})}
         machine.platform_systems.listed = frozenset({"ps2", "ps2-homebrew"})
         # The folder another platform's emulator reads recognises the USA image only.
@@ -1030,7 +1030,7 @@ class TestALinkAnotherPlatformMayStillWant:
             replace(placement, folder_md5s=frozenset({_md5(b"usa")})) for placement in machine.resolver.placements
         ]
 
-        await machine.service.update_bios_links("ps2")
+        await machine.service.update_bios_links("ps2", "ps2")
 
         assert os.readlink(folder / "SCPH-39001.bin") == str(machine.store_path("ps2", "SCPH-39001.bin"))
         assert not os.path.lexists(folder / "SCPH-70004.bin")
@@ -1038,7 +1038,7 @@ class TestALinkAnotherPlatformMayStillWant:
     async def test_a_download_keeps_it_where_a_listed_platform_still_wants_it(self, machine):
         place = await self._unwanted_on_gb(machine)
 
-        await machine.service.download_all_firmware("gb")
+        await machine.service.download_all_firmware("gb", "gb")
 
         self._stays(machine, place)
 
@@ -1056,7 +1056,7 @@ class TestALinkAnotherPlatformMayStillWant:
             checked="mismatch",
         )
 
-        await machine.service.replace_bios_file("gb", str(other))
+        await machine.service.replace_bios_file("gb", "gb", str(other))
 
         assert other.is_symlink()
         self._stays(machine, place)
@@ -1074,16 +1074,16 @@ class TestAPlaceAnotherPlatformsLinkServes:
             identity_md5=_md5(boot),
             identity_kind=IDENTITY_FILE,
         )
-        await machine.service.download_all_firmware("gb")
-        await machine.service.download_all_firmware("gbc")
+        await machine.service.download_all_firmware("gb", "gb")
+        await machine.service.download_all_firmware("gbc", "gbc")
 
         machine.uow.kv_config.set("platform_names", json.dumps({"gb": "Game Boy", "gbc": "Game Boy Color"}))
-        gbc = (await machine.service.get_platform_firmware_status("gbc"))["platform"]
+        gbc = (await machine.service.get_platform_firmware_status("gbc", "gbc"))["platform"]
         (row,) = [f for f in gbc["files"] if f["declared_by"] == _YABA]
         assert (row["link"], row["linked_for"], row["linked_for_name"]) == ("linked_elsewhere", "gb", "Game Boy")
 
-        await machine.service.delete_platform_bios("gb")
-        await machine.service.update_bios_links("gbc")
+        await machine.service.delete_platform_bios("gb", "gb")
+        await machine.service.update_bios_links("gbc", "gbc")
 
         assert os.readlink(machine.bios / "gb_bios.bin") == str(machine.store_path("gbc", "gb_bios.bin"))
 
@@ -1092,9 +1092,9 @@ class TestDeleting:
     async def test_a_rows_delete_removes_the_store_file_and_every_link_to_it(self, machine):
         _saturn(machine)
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
-        await machine.service.download_all_firmware("saturn")
+        await machine.service.download_all_firmware("saturn", "saturn")
 
-        result = await machine.service.delete_bios_file("saturn", "sega_101.bin")
+        result = await machine.service.delete_bios_file("saturn", "saturn", "sega_101.bin")
 
         assert not machine.store_path("saturn", "sega_101.bin").exists()
         assert not os.path.lexists(machine.bios / "saturn_bios.bin")
@@ -1116,10 +1116,10 @@ class TestDeleting:
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
         machine.romm.add(2, "saturn", "Sega_100.bin", _SATURN)
         machine.romm.add(3, "saturn", "kronos_extra.bin", other)
-        await machine.service.download_all_firmware("saturn")
+        await machine.service.download_all_firmware("saturn", "saturn")
 
-        entry = (await machine.service.get_platform_firmware_status("saturn"))["platform"]
-        deleted = await machine.service.delete_platform_bios("saturn")
+        entry = (await machine.service.get_platform_firmware_status("saturn", "saturn"))["platform"]
+        deleted = await machine.service.delete_platform_bios("saturn", "saturn")
 
         assert entry["deletable_count"] == 3
         assert deleted["deleted_count"] == 3
@@ -1128,19 +1128,19 @@ class TestDeleting:
         _saturn(machine)
         (machine.bios / "saturn_bios.bin").write_bytes(b"mine")
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
-        await machine.service.download_all_firmware("saturn")
+        await machine.service.download_all_firmware("saturn", "saturn")
 
-        await machine.service.delete_platform_bios("saturn")
+        await machine.service.delete_platform_bios("saturn", "saturn")
 
         assert (machine.bios / "saturn_bios.bin").read_bytes() == b"mine"
 
     async def test_a_link_under_an_assumed_root_stays_with_its_record_and_goes_once_the_root_is_read(self, machine):
         _saturn(machine)
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
-        await machine.service.download_all_firmware("saturn")
+        await machine.service.download_all_firmware("saturn", "saturn")
         machine.resolver.roots = _roots(machine.bios, provenance="assumed")
 
-        result = await machine.service.delete_bios_file("saturn", "sega_101.bin")
+        result = await machine.service.delete_bios_file("saturn", "saturn", "sega_101.bin")
 
         assert not machine.store_path("saturn", "sega_101.bin").exists()
         assert os.path.lexists(machine.bios / "saturn_bios.bin")
@@ -1152,7 +1152,7 @@ class TestDeleting:
         assert len(machine.links()) == 2
 
         machine.resolver.roots = _roots(machine.bios)
-        await machine.service.update_bios_links("saturn")
+        await machine.service.update_bios_links("saturn", "saturn")
 
         assert not os.path.lexists(machine.bios / "saturn_bios.bin")
         assert machine.links() == {}
@@ -1171,12 +1171,12 @@ class TestDeleting:
         _saturn(machine)
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
 
-        entry = (await machine.service.get_platform_firmware_status("saturn"))["platform"]
+        entry = (await machine.service.get_platform_firmware_status("saturn", "saturn"))["platform"]
         assert older.read_bytes() == _SATURN
         (row,) = [f for f in entry["files"] if f["declared_by"] == _YABA]
         assert row["delete_name"] == "sega_101.bin"
 
-        await machine.service.delete_bios_file("saturn", "sega_101.bin")
+        await machine.service.delete_bios_file("saturn", "saturn", "sega_101.bin")
 
         assert not older.exists()
         assert list(machine.uow.bios_files.iter_all()) == []
@@ -1199,8 +1199,8 @@ class TestAFolderTheEmulatorLists:
         for firmware_id, (name, data) in enumerate(images.items(), start=1):
             machine.romm.add(firmware_id, "ps2", name, data)
 
-        await machine.service.download_all_firmware("ps2")
-        entry = (await machine.service.get_platform_firmware_status("ps2"))["platform"]
+        await machine.service.download_all_firmware("ps2", "ps2")
+        entry = (await machine.service.get_platform_firmware_status("ps2", "ps2"))["platform"]
 
         for name in images:
             assert os.readlink(folder / name) == str(machine.store_path("ps2", name))
@@ -1222,7 +1222,7 @@ class TestAFolderTheEmulatorLists:
             folder_files=(FolderFile(path=str(folder / "mine.bin"), satisfied=True, description="Europe"),),
         )
 
-        entry = (await machine.service.get_platform_firmware_status("ps2"))["platform"]
+        entry = (await machine.service.get_platform_firmware_status("ps2", "ps2"))["platform"]
 
         (row,) = [f for f in entry["files"] if f["file_name"] == "mine.bin"]
         assert (row["satisfied"], list(row["images"]), row["deletable_count"]) == (True, ["Europe"], 0)
@@ -1234,8 +1234,8 @@ class TestOnlyTheStore:
         machine.resolver.describe_emulator("RYUBING", declaration="unsupported")
         machine.romm.add(1, "switch", "prod.keys", b"keys")
 
-        await machine.service.download_all_firmware("switch")
-        entry = (await machine.service.get_platform_firmware_status("switch"))["platform"]
+        await machine.service.download_all_firmware("switch", "switch")
+        entry = (await machine.service.get_platform_firmware_status("switch", "switch"))["platform"]
 
         assert machine.store_path("switch", "prod.keys").exists()
         assert list(machine.bios.rglob("*")) == []
@@ -1245,8 +1245,8 @@ class TestOnlyTheStore:
         machine.platform_systems.answers["switch"] = PlatformSystem(NO_SYSTEM, "switch", "switch")
         machine.romm.add(1, "switch", "prod.keys", b"keys")
 
-        result = await machine.service.download_all_firmware("switch")
-        entry = (await machine.service.get_platform_firmware_status("switch"))["platform"]
+        result = await machine.service.download_all_firmware("switch", "switch")
+        entry = (await machine.service.get_platform_firmware_status("switch", "switch"))["platform"]
 
         assert result["downloaded"] == 1
         assert machine.store_path("switch", "prod.keys").exists()
@@ -1256,8 +1256,8 @@ class TestOnlyTheStore:
         _saturn(machine)
         machine.romm.add(1, "saturn", "extra.bin", b"nobody asks")
 
-        await machine.service.download_all_firmware("saturn")
-        entry = (await machine.service.get_platform_firmware_status("saturn"))["platform"]
+        await machine.service.download_all_firmware("saturn", "saturn")
+        entry = (await machine.service.get_platform_firmware_status("saturn", "saturn"))["platform"]
 
         (row,) = [f for f in entry["files"] if f["file_name"] == "extra.bin"]
         assert (row["declared_by"], row["store_file"], row["delete_name"]) == (None, "extra.bin", "extra.bin")
@@ -1270,7 +1270,7 @@ class TestAStoreFileWithoutARecord:
         path.parent.mkdir(parents=True)
         path.write_bytes(_SATURN)
 
-        result = await machine.service.download_all_firmware("saturn")
+        result = await machine.service.download_all_firmware("saturn", "saturn")
 
         assert machine.romm.downloads == []
         assert [s.file_name for s in machine.uow.firmware_store.iter_all()] == ["sega_101.bin"]
@@ -1282,7 +1282,7 @@ class TestAStoreFileWithoutARecord:
         path.parent.mkdir(parents=True)
         path.write_bytes(b"something else")
 
-        result = await machine.service.download_all_firmware("saturn")
+        result = await machine.service.download_all_firmware("saturn", "saturn")
 
         (backup,) = result["backups"]
         assert Path(backup).read_bytes() == b"something else"
@@ -1293,7 +1293,7 @@ class TestTendersFolderRecords:
     async def test_the_store_names_the_folder_its_files_lie_under_and_forgetting_removes_the_links(self, machine):
         _saturn(machine)
         machine.romm.add(1, "saturn", "sega_101.bin", _SATURN)
-        await machine.service.download_all_firmware("saturn")
+        await machine.service.download_all_firmware("saturn", "saturn")
 
         assert machine.store.recorded_folders() == frozenset({str(machine.tender)})
         machine.store.forget_records_under(str(machine.tender))
@@ -1320,13 +1320,13 @@ class TestFolderRule:
     @pytest.mark.parametrize(
         ("call", "args"),
         [
-            ("download_all_firmware", ("saturn",)),
-            ("download_required_firmware", ("saturn",)),
-            ("download_platform_firmware_file", ("saturn", "sega_101.bin")),
-            ("update_bios_links", ("saturn",)),
-            ("replace_bios_file", ("saturn", "/x")),
-            ("delete_bios_file", ("saturn", "sega_101.bin")),
-            ("delete_platform_bios", ("saturn",)),
+            ("download_all_firmware", ("saturn", "saturn")),
+            ("download_required_firmware", ("saturn", "saturn")),
+            ("download_platform_firmware_file", ("saturn", "saturn", "sega_101.bin")),
+            ("update_bios_links", ("saturn", "saturn")),
+            ("replace_bios_file", ("saturn", "saturn", "/x")),
+            ("delete_bios_file", ("saturn", "saturn", "sega_101.bin")),
+            ("delete_platform_bios", ("saturn", "saturn")),
         ],
     )
     async def test_each_use_case_names_the_folder_rule(self, machine, call, args):

@@ -252,9 +252,9 @@ async def test_get_platforms_happy_shape(harness):
     # rom_count==0 platform is filtered out
     assert [p["slug"] for p in result["platforms"]] == ["snes"]
     p = result["platforms"][0]
-    # The payload is these five keys and nothing else: `rom_count` is RomM's
+    # The payload is these six keys and nothing else: `rom_count` is RomM's
     # own, which is what the Library page's list shows.
-    assert set(p.keys()) == {"id", "name", "slug", "rom_count", "sync_enabled"}
+    assert set(p.keys()) == {"id", "name", "slug", "fs_slug", "rom_count", "sync_enabled"}
     assert p["id"] == 1
     assert isinstance(p["sync_enabled"], bool)
 
@@ -273,7 +273,7 @@ async def test_get_platforms_reports_romms_count_for_a_synced_platform(harness):
     result = await harness.endpoints.get_platforms()
     p = result["platforms"][0]
     assert p["rom_count"] == 3
-    assert set(p.keys()) == {"id", "name", "slug", "rom_count", "sync_enabled"}
+    assert set(p.keys()) == {"id", "name", "slug", "fs_slug", "rom_count", "sync_enabled"}
 
 
 async def test_get_platforms_server_failure_shape(harness):

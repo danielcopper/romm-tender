@@ -215,10 +215,10 @@ interface FirmwareVerdict {
   /** What lies at the row's place — see {@link PlaceLink}. `null` for a library
    *  row, which has no place. */
   link?: PlaceLink | null;
-  /** The platform whose store copy a link of Tender's at the place points at,
-   *  where that is another platform's (`link: "linked_elsewhere"`). */
+  /** The folder in RomM of the platform whose store copy a link of Tender's at
+   *  the place points at, where that is another platform's (`link: "linked_elsewhere"`). */
   linked_for?: string | null;
-  /** The name the platform `linked_for` slugs is shown under, as the library sync last recorded it. */
+  /** The name the platform `linked_for` names is shown under, as the library sync last recorded it. */
   linked_for_name?: string | null;
   /** Why no link may go to the row's place, `null` where one may — see
    *  {@link PlaceRefusal}. */
@@ -238,12 +238,12 @@ interface FirmwareVerdict {
 
 /**
  * The RomM library file that fills a row, and how. `matched` is `content` for a
- * file whose MD5 is the one the resolver pins for the requirement, wherever RomM
- * files it; `archive_name` for an archive matched by its declared name, whose
- * contents cannot be compared; `no_checksum_name` for a requirement the resolver
- * knows no checksum for (Cemu's `keys.txt`); `null` on a library row, which
- * fills nothing. `no_checksum` is true where RomM states no checksum for the
- * file, so a download of it could not be checked and none is offered.
+ * file whose MD5 is the one the resolver pins for the requirement;
+ * `archive_name` for an archive matched by its declared name, whose contents
+ * cannot be compared; `no_checksum_name` for a requirement the resolver knows
+ * no checksum for (Cemu's `keys.txt`); `null` on a library row, which fills
+ * nothing. `no_checksum` is true where RomM states no checksum for the file,
+ * so a download of it could not be checked and none is offered.
  */
 export interface LibraryMatch {
   firmware_id: number | null;

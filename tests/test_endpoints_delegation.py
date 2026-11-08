@@ -263,23 +263,23 @@ class TestFirmwareEndpointDelegation:
     @pytest.mark.asyncio
     async def test_download_all_firmware_delegates(self, endpoints, services):
         services.firmware_service.download_all_firmware = AsyncMock(return_value={"success": True})
-        result = await endpoints.download_all_firmware("snes", 7)
-        services.firmware_service.download_all_firmware.assert_awaited_once_with("snes", 7)
+        result = await endpoints.download_all_firmware("snes", "snes", 7)
+        services.firmware_service.download_all_firmware.assert_awaited_once_with("snes", "snes", 7)
         assert result == {"success": True}
 
     @pytest.mark.asyncio
     async def test_download_required_firmware_delegates(self, endpoints, services):
         services.firmware_service.download_required_firmware = AsyncMock(return_value={"success": True})
-        result = await endpoints.download_required_firmware("snes", None)
-        services.firmware_service.download_required_firmware.assert_awaited_once_with("snes", None, None)
+        result = await endpoints.download_required_firmware("snes", "snes", None)
+        services.firmware_service.download_required_firmware.assert_awaited_once_with("snes", "snes", None, None)
         assert result == {"success": True}
 
     @pytest.mark.asyncio
     async def test_download_required_firmware_passes_the_shown_emulator(self, endpoints, services):
         services.firmware_service.download_required_firmware = AsyncMock(return_value={"success": True})
-        await endpoints.download_required_firmware("saturn", "kronos_libretro.so")
+        await endpoints.download_required_firmware("saturn", "saturn", "kronos_libretro.so")
         services.firmware_service.download_required_firmware.assert_awaited_once_with(
-            "saturn", "kronos_libretro.so", None
+            "saturn", "saturn", "kronos_libretro.so", None
         )
 
     @pytest.mark.asyncio
@@ -287,8 +287,8 @@ class TestFirmwareEndpointDelegation:
         services.firmware_service.check_platform_bios = AsyncMock(return_value={"present": []})
         # The frontend sends only the slug; main.py threads no per-game
         # core, so the system default drives the BIOS filter (active_core_so=None).
-        result = await endpoints.check_platform_bios("snes")
-        services.firmware_service.check_platform_bios.assert_awaited_once_with("snes")
+        result = await endpoints.check_platform_bios("snes", "snes")
+        services.firmware_service.check_platform_bios.assert_awaited_once_with("snes", "snes")
         assert result == {"present": []}
 
     @pytest.mark.asyncio
@@ -301,8 +301,8 @@ class TestFirmwareEndpointDelegation:
     @pytest.mark.asyncio
     async def test_delete_platform_bios_delegates(self, endpoints, services):
         services.firmware_service.delete_platform_bios = AsyncMock(return_value={"removed": 0})
-        result = await endpoints.delete_platform_bios("snes")
-        services.firmware_service.delete_platform_bios.assert_awaited_once_with("snes")
+        result = await endpoints.delete_platform_bios("snes", "snes")
+        services.firmware_service.delete_platform_bios.assert_awaited_once_with("snes", "snes")
         assert result == {"removed": 0}
 
 

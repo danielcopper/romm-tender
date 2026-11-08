@@ -13,10 +13,15 @@ from domain._aggregate import cosmic_aggregate
 
 @cosmic_aggregate
 class FirmwareCacheEntry:
-    """One cached firmware-inventory item from RomM, with the checksum RomM states for it (``""`` where none)."""
+    """One cached firmware-inventory item from RomM, with the checksum RomM states for it (``""`` where none).
+
+    ``platform_folder`` is the folder RomM keeps the file's platform in
+    (``fs_slug``), and ``platform_slug`` that platform's slug.
+    """
 
     id: int | None
     name: str
+    platform_folder: str
     platform_slug: str
     file_size_bytes: int
     cached_at: float
@@ -28,6 +33,7 @@ class FirmwareCacheEntry:
         *,
         id: int | None,
         name: str,
+        platform_folder: str,
         platform_slug: str,
         file_size_bytes: int,
         cached_at: float,
@@ -37,6 +43,7 @@ class FirmwareCacheEntry:
         return cls(
             id=id,
             name=name,
+            platform_folder=platform_folder,
             platform_slug=platform_slug,
             file_size_bytes=file_size_bytes,
             cached_at=cached_at,
