@@ -12,10 +12,8 @@
  * screen behind it.
  */
 
-import { FC, useEffect, useState } from "react";
+import { FC, useState } from "react";
 import { ModalRoot, DialogButton, showModal } from "@decky/ui";
-import { addEventListener, removeEventListener } from "../api/host";
-import { debugLog, verifyExistingContent } from "../api/backend";
 import {
   CANCEL_LABEL,
   CHECK_AGAINST_SERVER_LABEL,
@@ -25,7 +23,6 @@ import {
   GO_BACK_LABEL,
   ON_THE_SERVER_HEADING,
   ON_THIS_DEVICE_HEADING,
-  VERIFY_UNREACHABLE_MESSAGE,
   adoptButtonLabel,
   existingIntro,
   existingSize,
@@ -38,8 +35,9 @@ import {
 } from "../utils/adoptWording";
 import type { AdoptChoice } from "../utils/adoptFlow";
 import { detach } from "../utils/detach";
+import { useContentCheck } from "../utils/useContentCheck";
 import { ThrobberLabel } from "../shared/Throbber";
-import type { TargetOccupiedResult, VerifyContentResult, VerifyProgressEvent } from "../types";
+import type { TargetOccupiedResult, VerifyContentResult } from "../types";
 
 interface AdoptExistingModalProps {
   romId: number;
@@ -68,34 +66,8 @@ export const AdoptExistingModal: FC<AdoptExistingModalProps> = ({
   closeModal,
   onChoice,
 }) => {
-  const [verifying, setVerifying] = useState(false);
-  const [verifyProgress, setVerifyProgress] = useState<number | null>(null);
-  const [verdict, setVerdict] = useState<VerifyContentResult | null>(null);
+  const { verifying, progress, verdict, verify } = useContentCheck(romId, candidatePath, "AdoptExistingModal");
   const [confirmingReplace, setConfirmingReplace] = useState(false);
-
-  useEffect(() => {
-    const listener = addEventListener<VerifyProgressEvent>("verify_progress", (payload) => {
-      if (payload.rom_id !== romId || !payload.bytes_total) return;
-      setVerifyProgress(payload.bytes_done / payload.bytes_total);
-    });
-    return () => removeEventListener("verify_progress", listener);
-  }, [romId]);
-
-  const handleVerify = async () => {
-    if (verifying) return;
-    setVerifying(true);
-    setVerdict(null);
-    setVerifyProgress(0);
-    try {
-      setVerdict(await verifyExistingContent(romId, candidatePath ?? null));
-    } catch (e) {
-      detach(debugLog(`AdoptExistingModal: verify failed: ${e}`));
-      setVerdict({ status: "error", message: VERIFY_UNREACHABLE_MESSAGE, differences: [] });
-    } finally {
-      setVerifying(false);
-      setVerifyProgress(null);
-    }
-  };
 
   const choose = (choice: AdoptChoice) => {
     closeModal?.();
@@ -135,7 +107,7 @@ export const AdoptExistingModal: FC<AdoptExistingModalProps> = ({
 
         {verifying && (
           <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.7)", marginBottom: "12px" }}>
-            <ThrobberLabel busy>{verifyProgressLabel(verifyProgress)}</ThrobberLabel>
+            <ThrobberLabel busy>{verifyProgressLabel(progress)}</ThrobberLabel>
           </div>
         )}
         {!verifying && verdict && (
@@ -164,7 +136,7 @@ export const AdoptExistingModal: FC<AdoptExistingModalProps> = ({
             </DialogButton>
             <DialogButton
               onClick={() => {
-                detach(handleVerify());
+                detach(verify());
               }}
               disabled={verifying}
             >

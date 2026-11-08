@@ -9,9 +9,7 @@
  * inside this dialog, with the comparison still on screen above it.
  */
 
-import { useEffect, useState, type FC } from "react";
-import { addEventListener, removeEventListener } from "../../../api/host";
-import { debugLog, verifyExistingContent } from "../../../api/backend";
+import { useState, type FC } from "react";
 import {
   CANCEL_LABEL,
   CHECK_AGAINST_SERVER_LABEL,
@@ -21,7 +19,6 @@ import {
   GO_BACK_LABEL,
   ON_THE_SERVER_HEADING,
   ON_THIS_DEVICE_HEADING,
-  VERIFY_UNREACHABLE_MESSAGE,
   adoptButtonLabel,
   existingIntro,
   existingSize,
@@ -34,7 +31,8 @@ import {
 } from "../../../utils/adoptWording";
 import type { AdoptChoice } from "../../../utils/adoptFlow";
 import { detach } from "../../../utils/detach";
-import type { TargetOccupiedResult, VerifyContentResult, VerifyProgressEvent } from "../../../types";
+import { useContentCheck } from "../../../utils/useContentCheck";
+import type { TargetOccupiedResult, VerifyContentResult } from "../../../types";
 import {
   DIALOG_ACTIONS_STYLE,
   DIALOG_MUTED_STYLE,
@@ -76,34 +74,8 @@ export const DesktopAdoptExistingDialog: FC<DesktopAdoptExistingDialogProps> = (
   candidatePath,
   onChoice,
 }) => {
-  const [verifying, setVerifying] = useState(false);
-  const [verifyProgress, setVerifyProgress] = useState<number | null>(null);
-  const [verdict, setVerdict] = useState<VerifyContentResult | null>(null);
+  const { verifying, progress, verdict, verify } = useContentCheck(romId, candidatePath, "DesktopAdoptExistingDialog");
   const [confirmingReplace, setConfirmingReplace] = useState(false);
-
-  useEffect(() => {
-    const listener = addEventListener<VerifyProgressEvent>("verify_progress", (payload) => {
-      if (payload.rom_id !== romId || !payload.bytes_total) return;
-      setVerifyProgress(payload.bytes_done / payload.bytes_total);
-    });
-    return () => removeEventListener("verify_progress", listener);
-  }, [romId]);
-
-  const handleVerify = async () => {
-    if (verifying) return;
-    setVerifying(true);
-    setVerdict(null);
-    setVerifyProgress(0);
-    try {
-      setVerdict(await verifyExistingContent(romId, candidatePath ?? null));
-    } catch (e) {
-      detach(debugLog(`DesktopAdoptExistingDialog: verify failed: ${e}`));
-      setVerdict({ status: "error", message: VERIFY_UNREACHABLE_MESSAGE, differences: [] });
-    } finally {
-      setVerifying(false);
-      setVerifyProgress(null);
-    }
-  };
 
   const candidate = Boolean(candidatePath);
   const lastChanged = lastChangedLine(occupied);
@@ -134,7 +106,7 @@ export const DesktopAdoptExistingDialog: FC<DesktopAdoptExistingDialogProps> = (
 
       {verifying && (
         <div className="tender-desktop-adopt-verify-progress" style={DIALOG_TEXT_STYLE}>
-          {verifyProgressLabel(verifyProgress)}
+          {verifyProgressLabel(progress)}
         </div>
       )}
       {!verifying && verdict && (
@@ -174,7 +146,7 @@ export const DesktopAdoptExistingDialog: FC<DesktopAdoptExistingDialogProps> = (
             type="button"
             style={dialogButtonStyle("secondary", verifying)}
             disabled={verifying}
-            onClick={() => detach(handleVerify())}
+            onClick={() => detach(verify())}
           >
             {CHECK_AGAINST_SERVER_LABEL}
           </button>

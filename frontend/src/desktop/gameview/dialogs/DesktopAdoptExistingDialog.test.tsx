@@ -3,12 +3,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import { DesktopAdoptExistingDialog } from "./DesktopAdoptExistingDialog";
 import { emitHostEvent, hostEventListenerCount } from "../../../test-utils/host-event-bus";
-import { debugLog, verifyExistingContent } from "../../../api/backend";
+import { logWarn, verifyExistingContent } from "../../../api/backend";
 import type { TargetOccupiedResult, VerifyContentResult, VerifyProgressEvent } from "../../../types";
 
 vi.mock("../../../api/backend", () => ({
   verifyExistingContent: vi.fn(),
-  debugLog: vi.fn(async () => {}),
+  logWarn: vi.fn(),
 }));
 
 const ROM_ID = 42;
@@ -141,7 +141,9 @@ describe("DesktopAdoptExistingDialog", () => {
     vi.mocked(verifyExistingContent).mockRejectedValueOnce(new Error("socket closed"));
     fireEvent.click(screen.getByRole("button", { name: "Check Against Server" }));
     await waitFor(() => expect(screen.getByText("Couldn't reach the server to check these files")).toBeInTheDocument());
-    expect(debugLog).toHaveBeenCalledWith("DesktopAdoptExistingDialog: verify failed: Error: socket closed");
+    expect(logWarn).toHaveBeenCalledExactlyOnceWith(
+      "DesktopAdoptExistingDialog: the content check of romId=42 failed: Error: socket closed",
+    );
   });
 
   it("stops listening for verify progress once it closes", () => {
