@@ -6,6 +6,7 @@ import json
 from typing import TYPE_CHECKING
 
 import pytest
+from _romm_platforms import LISTED_GAMECUBE
 
 from domain.emulator_sources import ALL_SOURCES_SWITCHED_OFF, CATALOGUE_UNAVAILABLE, NO_SOURCE_DETECTED, ArrangedSource
 from domain.platform_system import (
@@ -132,51 +133,9 @@ class TestPlatformIds:
         }
 
 
-# RomM 5.4.1's platform as ``/api/platforms`` sends it (``PlatformSchema``), less its firmware.
-_LISTED_GC = {
-    "id": 12,
-    "slug": "ngc",
-    "fs_slug": "gc",
-    "rom_count": 40,
-    "name": "Nintendo GameCube",
-    "igdb_slug": "ngc",
-    "moby_slug": "gamecube",
-    "hltb_slug": None,
-    "libretro_slug": "Nintendo - GameCube",
-    "custom_name": "GameCube",
-    "description": None,
-    "igdb_id": 21,
-    "sgdb_id": None,
-    "moby_id": 14,
-    "launchbox_id": 30,
-    "ss_id": 13,
-    "ra_id": 16,
-    "hasheous_id": None,
-    "tgdb_id": 2,
-    "flashpoint_id": None,
-    "category": "Console",
-    "generation": 6,
-    "family_name": "Nintendo",
-    "family_slug": "nintendo",
-    "url": None,
-    "url_logo": None,
-    "firmware": [],
-    "created_at": "2026-01-01T00:00:00Z",
-    "updated_at": "2026-01-01T00:00:00Z",
-    "fs_size_bytes": 0,
-    "is_unidentified": False,
-    "is_identified": True,
-    "missing_from_fs": False,
-    "display_name": "GameCube",
-    "abbreviation": "NGC",
-    "alternative_names": [],
-    "firmware_count": 0,
-}
-
-
 class TestKeptPlatform:
     def test_a_listed_platform_is_kept_with_its_named_fields_and_every_identifier_as_sent(self):
-        assert kept_platforms([_LISTED_GC], "5.4.1") == {
+        assert kept_platforms([LISTED_GAMECUBE], "5.4.1") == {
             "gc": KeptPlatform(
                 slug="ngc",
                 fs_slug="gc",
@@ -205,22 +164,22 @@ class TestKeptPlatform:
         }
 
     def test_an_identifier_rom_m_adds_later_is_kept_with_no_change(self):
-        kept = kept_platform_of({**_LISTED_GC, "newdb_id": 77, "newdb_slug": "gcn"}, "5.5.0")
+        kept = kept_platform_of({**LISTED_GAMECUBE, "newdb_id": 77, "newdb_slug": "gcn"}, "5.5.0")
 
         assert (kept.ids["newdb_id"], kept.ids["newdb_slug"]) == (77, "gcn")
 
     def test_a_listed_platform_without_a_folder_is_left_out(self):
-        assert kept_platforms([{**_LISTED_GC, "fs_slug": None}, {"slug": "psx", "fs_slug": "psx"}], None) == {
+        assert kept_platforms([{**LISTED_GAMECUBE, "fs_slug": None}, {"slug": "psx", "fs_slug": "psx"}], None) == {
             "psx": KeptPlatform(slug="psx", fs_slug="psx", ids={"fs_slug": "psx"})
         }
 
     def test_two_folders_that_share_a_slug_are_both_kept(self):
-        kept = kept_platforms([_LISTED_GC, {**_LISTED_GC, "id": 13, "fs_slug": "gamecube"}], "5.4.1")
+        kept = kept_platforms([LISTED_GAMECUBE, {**LISTED_GAMECUBE, "id": 13, "fs_slug": "gamecube"}], "5.4.1")
 
         assert list(kept) == ["gc", "gamecube"]
 
     def test_of_folders_that_share_a_slug_the_last_kept_answers_it(self):
-        kept = kept_platforms([_LISTED_GC, {**_LISTED_GC, "id": 13, "fs_slug": "gamecube"}], "5.4.1")
+        kept = kept_platforms([LISTED_GAMECUBE, {**LISTED_GAMECUBE, "id": 13, "fs_slug": "gamecube"}], "5.4.1")
 
         found = kept_by_slug(kept, "ngc")
 
@@ -229,7 +188,7 @@ class TestKeptPlatform:
         assert kept_by_slug(kept, "gc") is None
 
     def test_the_question_is_asked_with_the_four_ids_and_the_name_alone(self):
-        kept = kept_platform_of(_LISTED_GC, "5.4.1")
+        kept = kept_platform_of(LISTED_GAMECUBE, "5.4.1")
 
         assert kept.question_ids() == PlatformIds(
             igdb_id=21, libretro_slug="Nintendo - GameCube", ss_id=13, tgdb_id=2, name="Nintendo GameCube"

@@ -1,14 +1,14 @@
 """Which system a RomM platform is in one emulator source, decided from the resolver's answers.
 
 RomM names a platform by its own slug, which only sometimes equals a system a
-source declares, and by the ids it holds for the platform in four public
-vocabularies. The source answers per id which of its systems belong to that
+source declares, and by the ids it holds for the platform in public
+vocabularies, four of which the resolver knows. The source answers per id which of its systems belong to that
 platform; ``adapters/atlas_platforms.py`` asks and reads those answers into
 :class:`IdAnswer`, and this module decides from them which system the
 platform is there, or why it is none. RomM's slug is never a system name: it
 only chooses among the platforms the resolver named.
 
-What RomM's listing gives each platform is kept offline beside the platform
+What is kept of each platform RomM lists is kept offline beside the platform
 names (``kv_config``), under the platform's folder in RomM (``fs_slug``);
 decoding and encoding that value is here, reading and writing it is the
 caller's.
@@ -19,7 +19,7 @@ Pure compute — no I/O, no state mutation.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
@@ -88,7 +88,7 @@ def platform_ids_of(platform: Mapping[str, Any]) -> PlatformIds:
         libretro_slug=_text(platform.get("libretro_slug")),
         ss_id=_number(platform.get("ss_id")),
         tgdb_id=_number(platform.get("tgdb_id")),
-        name=_text(platform.get("name")) or _text(platform.get("display_name")),
+        name=_listed_name(platform),
     )
 
 
@@ -99,15 +99,12 @@ def platform_ids_by_slug(platforms: Iterable[Mapping[str, Any]]) -> dict[str, Pl
 
 @dataclass(frozen=True, slots=True)
 class KeptPlatform:
-    """One RomM platform as its listing gave it, kept under its folder in RomM (``fs_slug``).
+    """What is kept of one platform RomM lists, under its folder in RomM (``fs_slug``).
 
     ``ids`` holds every field of RomM's platform whose name ends in ``_id`` or
     ``_slug``, each as RomM sent it. Tender reads none of them but the ones
     :meth:`question_ids` asks the resolver with. ``romm_version`` is the RomM
     version known when the listing was read, ``None`` where none was.
-
-    An entry kept before these fields were holds its key as ``slug`` — it was
-    keyed by the slug — and its ids and name; every other field is ``None``.
     """
 
     slug: str | None = None
@@ -130,7 +127,7 @@ def kept_platform_of(platform: Mapping[str, Any], romm_version: str | None) -> K
         slug=_text(platform.get("slug")),
         fs_slug=_text(platform.get("fs_slug")),
         platform_id=_number(platform.get("id")),
-        name=_text(platform.get("name")) or _text(platform.get("display_name")),
+        name=_listed_name(platform),
         is_identified=identified if isinstance(identified, bool) else None,
         romm_version=romm_version,
         ids={key: value for key, value in platform.items() if key.endswith(_IDENTIFIER_SUFFIXES)},
@@ -195,16 +192,7 @@ def _decode_entry(key: str, entry: Mapping[str, Any]) -> KeptPlatform:
         return KeptPlatform(
             slug=_text(key), name=_text(entry.get("name")), ids={f: entry[f] for f in ID_FIELDS if f in entry}
         )
-    identified = entry.get("is_identified")
-    return KeptPlatform(
-        slug=_text(entry.get("slug")),
-        fs_slug=_text(entry.get("fs_slug")),
-        platform_id=_number(entry.get("id")),
-        name=_text(entry.get("name")),
-        is_identified=identified if isinstance(identified, bool) else None,
-        romm_version=_text(entry.get("romm_version")),
-        ids=ids,
-    )
+    return replace(kept_platform_of(entry, _text(entry.get("romm_version"))), ids=ids)
 
 
 def _number(value: Any) -> int | None:
@@ -219,6 +207,10 @@ def _number(value: Any) -> int | None:
 
 def _text(value: Any) -> str | None:
     return value if isinstance(value, str) and value.strip() else None
+
+
+def _listed_name(platform: Mapping[str, Any]) -> str | None:
+    return _text(platform.get("name")) or _text(platform.get("display_name"))
 
 
 @dataclass(frozen=True, slots=True)

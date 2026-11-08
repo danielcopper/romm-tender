@@ -141,10 +141,7 @@ class PlatformSystemService:
     def _read_and_keep(self, platform_slug: str) -> PlatformIds:
         """*platform_slug*'s ids from RomM's listing, kept with every listed platform beside those kept before.
 
-        A kept platform whose slug the listing names is replaced by what the
-        listing gives. A slug the listing does not name is kept, with nothing
-        but the slug, under the slug itself, below the listing, so a listed
-        folder of that name takes the key.
+        How the two are merged: ``docs/architecture/core-emulator-selection.md#a-platforms-system``.
         """
         listed = kept_platforms(self._romm_api.list_platforms(), self._romm_api.get_version())
         entry = kept_by_slug(listed, platform_slug)

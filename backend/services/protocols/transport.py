@@ -104,7 +104,7 @@ class RommFirmwareApi(Protocol):
 
 
 class RommPlatformReader(Protocol):
-    """Read-only RomM platform listing surface."""
+    """Read-only RomM platform listing, with the server version it is read with."""
 
     def list_platforms(self) -> list[dict[str, Any]]:
         """Fetch all platforms configured on the RomM server.
@@ -114,7 +114,7 @@ class RommPlatformReader(Protocol):
         ...
 
     def get_version(self) -> str | None:
-        """The RomM server version last detected, which a listing read now is read with; ``None`` if unset."""
+        """Return the detected RomM server version string, or ``None`` if unset."""
         ...
 
 

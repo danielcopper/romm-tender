@@ -12,10 +12,10 @@ import base64
 import json
 import logging
 from dataclasses import replace
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from _romm_platforms import LISTED_GAMECUBE
 
 from domain.platform_system import PLATFORM_IDS_KEY, KeptPlatform, decode_platform_ids
 from domain.sync_state import SyncCancelled, SyncState
@@ -2347,48 +2347,6 @@ class TestThePlanPredictsWhatTheCollectionGateDecides:
         assert (skip.member_rom_ids is not None) is expected
 
 
-# RomM 5.4.1's platform as ``/api/platforms`` sends it (``PlatformSchema``), less its firmware.
-_LISTED_GC: dict[str, Any] = {
-    "id": 12,
-    "slug": "ngc",
-    "fs_slug": "gc",
-    "rom_count": 0,
-    "name": "Nintendo GameCube",
-    "igdb_slug": "ngc",
-    "moby_slug": "gamecube",
-    "hltb_slug": None,
-    "libretro_slug": "Nintendo - GameCube",
-    "custom_name": "GameCube",
-    "description": None,
-    "igdb_id": 21,
-    "sgdb_id": None,
-    "moby_id": 14,
-    "launchbox_id": 30,
-    "ss_id": 13,
-    "ra_id": 16,
-    "hasheous_id": None,
-    "tgdb_id": 2,
-    "flashpoint_id": None,
-    "category": "Console",
-    "generation": 6,
-    "family_name": "Nintendo",
-    "family_slug": "nintendo",
-    "url": None,
-    "url_logo": None,
-    "firmware": [],
-    "created_at": "2026-01-01T00:00:00Z",
-    "updated_at": "2026-01-01T00:00:00Z",
-    "fs_size_bytes": 0,
-    "is_unidentified": False,
-    "is_identified": True,
-    "missing_from_fs": False,
-    "display_name": "GameCube",
-    "abbreviation": "NGC",
-    "alternative_names": [],
-    "firmware_count": 0,
-}
-
-
 class TestTheSyncKeepsThePlatformsIds:
     """Every sync keeps each listed platform's ids, which the platform's system is asked with offline."""
 
@@ -2424,14 +2382,14 @@ class TestTheSyncKeepsThePlatformsIds:
     ):
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.set_version("5.4.1")
-        fake_romm_api.platforms = [_LISTED_GC, {**_LISTED_GC, "id": 13, "fs_slug": "gamecube", "newdb_id": 7}]
+        fake_romm_api.platforms = [LISTED_GAMECUBE, {**LISTED_GAMECUBE, "id": 13, "fs_slug": "gamecube", "newdb_id": 7}]
         library.settings["enabled_platforms"] = {"12": True, "13": True}
 
         await library.sync._fetcher.build_work_queue()
 
         with library.sync._fetcher._uow_factory() as uow:
             raw = json.loads(uow.kv_config.get(PLATFORM_IDS_KEY) or "{}")
-        identifiers = {key: value for key, value in _LISTED_GC.items() if key.endswith(("_id", "_slug"))}
+        identifiers = {key: value for key, value in LISTED_GAMECUBE.items() if key.endswith(("_id", "_slug"))}
         assert raw == {
             "gc": {
                 "slug": "ngc",
@@ -2456,7 +2414,7 @@ class TestTheSyncKeepsThePlatformsIds:
     @pytest.mark.asyncio
     async def test_a_record_kept_before_the_folder_was_is_filled_by_the_next_sync(self, make_library, fake_romm_api):
         library = make_library(romm_api=fake_romm_api)
-        fake_romm_api.platforms = [_LISTED_GC]
+        fake_romm_api.platforms = [LISTED_GAMECUBE]
         library.settings["enabled_platforms"] = {"12": True}
         with library.sync._fetcher._uow_factory() as uow:
             uow.kv_config.set(PLATFORM_IDS_KEY, '{"ngc": {"igdb_id": 21, "name": "Nintendo GameCube"}}')
