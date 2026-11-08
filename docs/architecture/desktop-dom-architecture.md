@@ -44,14 +44,14 @@ download in flight draws its progress (`frontend/src/desktop/gameview/Downloadin
 own green, with pause or resume where the download can be resumed, and cancel; while it unpacks none of them shows, and
 the ring stands in cancel's place. A downloaded file that is gone draws a disabled FILE MISSING with the path as its
 title. DOWNLOAD's press and the bar's own are the button's. When the page shows a game, and again on a version switch,
-the button reads that game's download from the backend's queue into the download store, as Big Picture's reads it
-(`seedDownloadFromQueue`, `frontend/src/utils/downloadRehydrate.ts`): a paused download sends no frames, nor a queued
-one until it starts, so after Steam's interface reloads the bar would otherwise be missing and DOWNLOAD would start a
-paused one from nothing. A press of cancel or pause moves nothing on the button, as Big Picture's moves nothing: the
-bar, and what the cached detail found on disk, go with the backend's cancelled or failed frame, since a press that is
-refused or gets no answer leaves the transfer running. Such a press is logged, and a cancel the backend refuses because
-it holds no download of the game, running or paused, ends the press's own bar and drops the game from the download
-store, since no frame will. The chevron beside PLAY opens the game's menu, whose one entry is Uninstall
+the button reads that game's download from the backend's queue into the download store, as Big Picture's reads it when
+its page opens (`seedDownloadFromQueue`, `frontend/src/utils/downloadRehydrate.ts`): a paused download sends no frames,
+nor a queued one until it starts, so after Steam's interface reloads the bar would otherwise be missing and DOWNLOAD
+would start a paused one from nothing. A press of cancel or pause moves nothing on the button, as Big Picture's moves
+nothing: the bar, and what the cached detail found on disk, go with the backend's cancelled or failed frame, since a
+press that is refused or gets no answer leaves the transfer running. Such a press is logged, and a cancel the backend
+refuses because it holds no download of the game, running or paused, ends the press's own bar and drops the game from
+the download store, since no frame will. The chevron beside PLAY opens the game's menu, whose one entry is Uninstall
 (`executeRomUninstall`, `frontend/src/utils/romUninstall.ts`), which, like Big Picture's, asks nothing first. The
 chevron is disabled while a press or a version switch is under way, an open menu closing when one starts, and, with a
 title that says why, while a removal the page started for another version still runs, since the button takes no second
