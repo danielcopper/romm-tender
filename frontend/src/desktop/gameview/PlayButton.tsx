@@ -27,6 +27,12 @@ import {
 import { useGameDetail, type GameDetailState } from "../../utils/gameDetailStore";
 import { removeDownload, useDownloads } from "../../utils/downloadStore";
 import { isDownloadUnderWay, seedDownloadFromQueue } from "../../utils/downloadRehydrate";
+import {
+  NO_DOWNLOAD_ANSWERS,
+  downloadAnswers,
+  downloadTakesNoPress,
+  type DownloadAnswers,
+} from "../../utils/downloadPress";
 import { useRommConnectionState } from "../../utils/connectionState";
 import { isBoundVanished, onBoundAvailabilityChange } from "../../utils/vanishedBinding";
 import { runDownloadWithAdoption } from "../../utils/adoptFlow";
@@ -75,19 +81,12 @@ interface HeldVerdict {
   installed: boolean;
 }
 
-/**
- * What the cached detail answered for this ROM, as last read or proven: what
- * lies on this device where the download would go, and whether RomM holds a file.
- */
-interface CachedAnswers {
+/** What the cached detail answered for a ROM, as last read or proven, and the ROM it answered for. */
+interface CachedAnswers extends DownloadAnswers {
   romId: number | null;
-  targetOccupied: boolean;
-  candidatePresent: boolean;
-  /** RomM holds no file for the ROM, so there is nothing to download. */
-  noFileOnRomm: boolean;
 }
 
-const NO_ANSWERS: CachedAnswers = { romId: null, targetOccupied: false, candidatePresent: false, noFileOnRomm: false };
+const NO_ANSWERS: CachedAnswers = { romId: null, ...NO_DOWNLOAD_ANSWERS };
 
 /** What a press or a download's completion put on the button, and the ROM it is for; another ROM's reads as none. */
 interface PressedAction {
@@ -298,12 +297,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
     getCachedGameDetail(appId)
       .then((cached) => {
         if (cancelled || !cached.found || cached.rom_id !== romId || cached.installed) return;
-        setCachedAnswers({
-          romId,
-          targetOccupied: cached.target_path_occupied === true,
-          candidatePresent: cached.adoption_candidate_present === true,
-          noFileOnRomm: cached.has_file_on_disk === false,
-        });
+        setCachedAnswers({ romId, ...downloadAnswers(cached) });
       })
       .catch((e) => {
         detach(debugLog(`DesktopPlayButton: on-disk read failed: ${e}`));
@@ -507,9 +501,12 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
   );
 
   const renderDownloadButton = () => {
-    // A bound version gone from RomM, or a ROM RomM holds no file for, has
-    // nothing to download, as on Big Picture's.
-    const blocked = boundVanished || noFileOnRomm;
+    const refused = downloadTakesNoPress({
+      offline: isOffline,
+      pending: actionPending,
+      boundVanished,
+      noFileOnRomm,
+    });
     const usesExisting = !isOffline && !actionPending && !noFileOnRomm && (targetOccupied || candidatePresent);
     let label = "DOWNLOAD";
     if (isOffline) label = "OFFLINE";
@@ -519,7 +516,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
 
     let style = DOWNLOAD_BUTTON_STYLE;
     if (isOffline) style = DOWNLOAD_BUTTON_OFFLINE_STYLE;
-    else if (actionPending || blocked) style = DOWNLOAD_BUTTON_BLOCKED_STYLE;
+    else if (refused) style = DOWNLOAD_BUTTON_BLOCKED_STYLE;
     else if (switching) style = { ...DOWNLOAD_BUTTON_STYLE, cursor: "default" };
 
     return (
@@ -527,7 +524,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
         <button
           type="button"
           className="tender-desktop-btn-download"
-          disabled={isOffline || actionPending || blocked || switching}
+          disabled={refused || switching}
           style={usesExisting ? { ...style, fontSize: "13px" } : style}
           onClick={() => detach(handleDownloadClick())}
         >
