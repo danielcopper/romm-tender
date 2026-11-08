@@ -33,6 +33,7 @@ import type {
   UninstallProgressEvent,
 } from "../../types";
 import { launchRefusal } from "../../utils/gameLaunch";
+import { PLAY_GRADIENT } from "../../utils/playGradient";
 
 vi.mock("../../utils/gameDetailStore", () => ({
   useGameDetail: vi.fn(),
@@ -543,7 +544,7 @@ describe("PlayButton", () => {
       expect(play).toBeEnabled();
       expect(play).not.toHaveAttribute("title");
       expect(play).not.toHaveStyle({ opacity: "0.5" });
-      expect(play).toHaveStyle({ background: "linear-gradient(to right, #70d61d 0%, #01a75b 60%)" });
+      expect(play.style.background).toBe(PLAY_GRADIENT);
     });
 
     it("shows PLAY for a save status that holds no conflict", () => {

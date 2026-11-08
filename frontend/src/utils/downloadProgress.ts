@@ -1,8 +1,12 @@
 /**
- * The download button's progress colours and its "x / y MB" text.
+ * The download button's progress colours, its "x / y MB" text, and how long
+ * Ready! stands once a download completes.
  */
 
-type RGB = [number, number, number];
+import { PLAY_LEFT_STOP, PLAY_RIGHT_STOP, PLAY_RIGHT_STOP_AT, rgb, type RGB } from "./playGradient";
+
+/** How long a game page's Play button reads Ready! once its download completes, in milliseconds. */
+export const READY_FLASH_MS = 1100;
 
 function lerpColor(a: RGB, b: RGB, t: number): string {
   const r = Math.round(a[0] + (b[0] - a[0]) * t);
@@ -17,11 +21,6 @@ const BLUE_RIGHT: RGB = [0, 120, 212]; // #0078d4
 // Play button visible green (computed from gradient + backgroundSize 330% + backgroundPosition 25%)
 const GREEN_LEFT: RGB = [80, 200, 47]; // #50c82f
 const GREEN_RIGHT: RGB = [24, 177, 78]; // #18b14e
-// The desktop client's Play button draws the whole of Steam's PLAY gradient
-// rather than a stretch of it (#2675 D10), so a desktop fill ends on those two
-// stops, the right one at 60%.
-const DESKTOP_GREEN_LEFT: RGB = [112, 214, 29]; // #70d61d
-const DESKTOP_GREEN_RIGHT: RGB = [1, 167, 91]; // #01a75b
 
 /** Which Play button the bar is drawn in: Big Picture's, or the desktop client's. */
 type DownloadSurface = "bigpicture" | "desktop";
@@ -38,9 +37,10 @@ export function getDownloadFillGradient(
   surface: DownloadSurface = "bigpicture",
 ): string {
   if (surface === "desktop" && (extracting || downloading)) {
-    const left = lerpColor(BLUE_LEFT, DESKTOP_GREEN_LEFT, extracting ? 1 : t);
-    const right = lerpColor(BLUE_RIGHT, DESKTOP_GREEN_RIGHT, extracting ? 1 : t);
-    return `linear-gradient(to right, ${left} 0%, ${right} 60%)`;
+    // The desktop fill ends on the desktop PLAY's own gradient.
+    const left = lerpColor(BLUE_LEFT, PLAY_LEFT_STOP, extracting ? 1 : t);
+    const right = lerpColor(BLUE_RIGHT, PLAY_RIGHT_STOP, extracting ? 1 : t);
+    return `linear-gradient(to right, ${left} 0%, ${right} ${PLAY_RIGHT_STOP_AT})`;
   }
   if (extracting) {
     return `linear-gradient(to right, rgb(${GREEN_LEFT.join(",")}), rgb(${GREEN_RIGHT.join(",")}))`;
@@ -57,9 +57,9 @@ export function getDownloadPulseColor(
   { paused, extracting, downloading }: DownloadPhase & { paused: boolean },
   surface: DownloadSurface = "bigpicture",
 ): string {
-  const green = surface === "desktop" ? DESKTOP_GREEN_LEFT : GREEN_LEFT;
+  const green = surface === "desktop" ? PLAY_LEFT_STOP : GREEN_LEFT;
   if (paused) return "rgba(212,167,44,0.7)";
-  if (extracting) return `rgb(${green.join(", ")})`;
+  if (extracting) return rgb(green);
   if (downloading) return lerpColor(BLUE_LEFT, green, t);
   return "rgba(26,159,255,0.7)";
 }
