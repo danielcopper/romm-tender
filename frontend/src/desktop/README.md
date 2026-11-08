@@ -29,7 +29,8 @@ page, and the rules every change to that page follows, are in
   drawn in (`DesktopDialog`), `AskDialog`, the shape of one question, and `useDialogHost`, which asks one from inside a
   component.
 - `gameview/styles.ts` — the play bar's glass and pinned colours, which `stickyPlayBarController.ts` applies, the cards'
-  styles, the dialog frame's backdrop and buttons, and the shapes the Play button's group and buttons start from.
+  styles, the dialog frame's backdrop and buttons, the shapes the Play button's group and buttons start from, and the
+  panel and entries of the menus that open under them, the game menu's and the selector's.
 
 **Dev build only.** `rollup.config.js` builds the panel from `./src/index.tsx` — the module that mounts the bigpicture
 surface — and nothing there imports this directory, so `pnpm build`, `build:dev`, CI and the release tarball ship none
