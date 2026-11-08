@@ -563,7 +563,7 @@ Conventional Commits; and `label` (`labeler.yml`), which only sets labels. A pul
 `mkdocs.yml` also builds the documentation site (`docs.yml`, `mkdocs build --strict`), which `mise run docs:build` runs
 locally.
 
-`steam-internals.yml` is no pull-request check either, and the gate does not run it: once a day and by hand it looks for
+`steam-internals.yml` is no pull-request check, and the gate does not run it either: once a day and by hand it looks for
 every listed Steam internal in the client Valve publishes, and puts a finding on the issue labelled `steam-internals`
 instead of failing the run
 ([What the daily watch looks for](../architecture/frontend-bundles.md#what-the-daily-watch-looks-for-in-steams-published-client)).
