@@ -9,9 +9,10 @@ whose SHA-256 is not the manifest's, and looks for each listed name in every
 ``.js`` file of it. A finding — an internal not found in a channel, or an
 exempted name both channels now spell — goes to the one open issue labelled
 ``steam-internals``: a new issue when none is open, a comment when the finding
-differs from the last one the issue records, nothing when it does not. A failed
-fetch or a checksum that does not match exits 1 and reports nothing; a finding
-never fails the run.
+differs from the last one the issue records, nothing when it does not. A
+download that still fails after three tries of up to two minutes each, a
+manifest the script cannot read, or a package that does not match its manifest
+exits 1 and reports nothing; a finding never fails the run.
 
 How a name is looked for, and what that cannot see, is
 ``docs/architecture/frontend-bundles.md``'s, "Every Steam internal Tender
@@ -291,7 +292,7 @@ def judge(internals: Sequence[Internal], spellings: Spellings, *, channel: str, 
     """One channel's answer for every listed internal.
 
     A group is a miss only when none of its members is found; an exempted
-    member counts as found, since it is not looked for.
+    member counts as found, since it is never reported missing.
     """
     missing = {internal.path: not_found(internal.path, spellings) for internal in internals}
     exempted_spelled = frozenset(
@@ -386,9 +387,10 @@ def _sections(results: Sequence[ChannelResult]) -> list[str]:
 
 
 _CAVEAT = (
-    "This is an early warning, not a proof: a name is looked for anywhere in the client's UI JavaScript, so a "
-    "refactor on Valve's side can raise it with nothing removed, and a name Steam keeps can still have changed what "
-    'it does. How a name is looked for: docs/architecture/frontend-bundles.md, "Every Steam internal Tender reaches".'
+    "This is an early warning, not a proof: a name is looked for as text anywhere in the client's UI JavaScript, not "
+    "on the object Tender reaches it on: a refactor that stops spelling it can raise this with nothing removed, a name "
+    "spelled elsewhere can hide one that was, and a name Steam keeps can still have changed what it does. How a name "
+    'is looked for: docs/architecture/frontend-bundles.md, "Every Steam internal Tender reaches".'
 )
 
 

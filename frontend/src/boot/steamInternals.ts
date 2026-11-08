@@ -81,7 +81,8 @@ export type SteamInternal = InternalCost & {
   readonly untypedIn?: readonly string[];
   /**
    * Why Steam's own JavaScript never spells this name, so the daily watch over
-   * Steam's published client (`scripts/watch_steam_internals.py`) passes it over.
+   * Steam's published client (`scripts/watch_steam_internals.py`) never reports
+   * it missing.
    */
   readonly notSpelledBySteam?: string;
 };
@@ -112,7 +113,7 @@ const DESKTOP = { ...cost("desktop"), devBuildOnly: true } as const;
 
 const ADDRESS = { notAtStartUp: "an address Steam answers, with nothing to look up" } as const;
 const liveState = (why: string): AskedAs => ({ notAtStartUp: why });
-const NEVER_SPELLED = "spelled nowhere in Steam's client; whether Steam ever had it is #2756's question";
+const NEVER_SPELLED = "spelled nowhere in Steam's client JavaScript; whether Steam ever had it is #2756's question";
 
 export const STEAM_INTERNALS: readonly SteamInternal[] = [
   { path: "SteamClient.Apps.AddShortcut", asked: "call", ...SHORTCUTS },

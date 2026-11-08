@@ -1,7 +1,8 @@
 name: Steam internals watch
 
-# What it looks for, where it reports, and what it cannot see:
-# docs/architecture/frontend-bundles.md, "Every Steam internal Tender reaches".
+# What it looks for and where it reports: docs/architecture/frontend-bundles.md,
+# "Every Steam internal Tender reaches"; and, for what it cannot see, the
+# invariant register's entry for the list.
 
 on:
   schedule:
@@ -21,8 +22,10 @@ permissions:
 jobs:
   watch:
     runs-on: ubuntu-latest
-    # A package download may take three tries of up to two minutes each.
-    timeout-minutes: 20
+    # The run makes four fetches, two manifests and two packages, each of up to
+    # three tries of two minutes and a last read of 15 s: about 27 minutes at
+    # worst.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 

@@ -365,10 +365,11 @@ class TestTheIssue:
             "\n"
             "Every listed internal was found.\n"
             "\n"
-            "This is an early warning, not a proof: a name is looked for anywhere in the client's UI JavaScript, so "
-            "a refactor on Valve's side can raise it with nothing removed, and a name Steam keeps can still have "
-            'changed what it does. How a name is looked for: docs/architecture/frontend-bundles.md, "Every Steam '
-            'internal Tender reaches".\n'
+            "This is an early warning, not a proof: a name is looked for as text anywhere in the client's UI "
+            "JavaScript, not on the object Tender reaches it on: a refactor that stops spelling it can raise this "
+            "with nothing removed, a name spelled elsewhere can hide one that was, and a name Steam keeps can still "
+            'have changed what it does. How a name is looked for: docs/architecture/frontend-bundles.md, "Every '
+            'Steam internal Tender reaches".\n'
             "\n"
             f"Run: {_RUN}\n"
             "\n"

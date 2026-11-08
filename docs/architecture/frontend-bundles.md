@@ -523,19 +523,20 @@ A group (`oneOf`) is missing in a channel only when none of its members is found
 found is written to the run's log and reported nowhere else. A path both halves list is judged once.
 
 **A name Steam's own JavaScript never spells carries an exemption with its reason** — `notSpelledBySteam` on the panel's
-entry, `not_spelled_by_steam` on the backend's — and is not looked for: a binding only Steam's native side has
+entry, `not_spelled_by_steam` on the backend's: a binding only Steam's native side has
 (`SteamClient.Browser.RestartJSContext`), a `steam://` URL Steam's JavaScript never spells, a route Steam's router
-builds in a template, and three fields Tender reaches that nothing shows Steam ever had (#2509 D15). An exempted member
+builds in a template, and three fields Tender reaches that nothing shows Steam ever had (#2509 D15). Such a name is
+never reported missing; it is still looked for, so one both channels now spell is reported (below). An exempted member
 of a group counts as found. Each half's list test holds that every exemption gives a reason.
 
-**What it finds goes to one issue**, the open one labelled `steam-internals`, which the job creates when the label is
-missing: an internal not found in a channel, named with what it costs and the manifest version checked, and an exempted
+**What it finds goes to one issue**, the open one labelled `steam-internals` (the job creates the label when it is
+missing): an internal not found in a channel, named with what it costs and the manifest version checked, and an exempted
 name both channels now spell, whose exemption is then no longer needed. With no issue open it opens one; with one open
 it comments only when the finding — the paths missing per channel and the stale exemptions, not the manifest versions —
 differs from the last one the issue records in its hidden `steam-internals-watch` marker. A run that finds nothing calls
-GitHub not at all. A finding never fails the run (D4); a download that fails, after an overall deadline of two minutes
-and three tries, or a package that does not match its manifest does, and reports nothing. Locally,
-`node frontend/scripts/steam-internals.mjs > panel.json` and then
+GitHub not at all. A finding never fails the run (D4); a download that still fails after three tries of up to two
+minutes each, a manifest the script cannot read, or a package that does not match its manifest fails the run and reports
+nothing. Locally, `node frontend/scripts/steam-internals.mjs > panel.json` and then
 `python scripts/watch_steam_internals.py --panel panel.json --dry-run` prints the issue's text instead of reporting it.
 
 It is an early warning, not a proof: what a name search cannot see is listed in the invariant register's entry for the

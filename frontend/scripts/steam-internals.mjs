@@ -1,7 +1,7 @@
 // Prints the panel's half of the Steam-internals list as JSON, for
 // `scripts/watch_steam_internals.py`, which reads the backend's half itself.
-// Node imports the TypeScript module directly by stripping its types, which
-// works because the module imports nothing but a type.
+// Node imports the TypeScript module by stripping its types, which works for
+// the reason `src/boot/steamInternals.ts`'s header gives.
 import { pathToFileURL } from "node:url";
 
 import { STEAM_FEATURES, STEAM_INTERNALS } from "../src/boot/steamInternals.ts";

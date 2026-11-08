@@ -24,7 +24,8 @@ class SteamInternal:
     ``spelled_in`` names each constant that spells it, as
     ``<module>.<constant>`` under ``backend/``. ``not_spelled_by_steam`` is why
     Steam's own JavaScript never spells it, so the daily watch over Steam's
-    published client (``scripts/watch_steam_internals.py``) passes it over.
+    published client (``scripts/watch_steam_internals.py``) never reports it
+    missing.
     """
 
     path: str
