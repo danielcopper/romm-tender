@@ -111,7 +111,25 @@ nav:
       - Controller Focus in Desktop Mode: architecture/controller-focus.md
       - Desktop Surface: architecture/desktop-dom-architecture.md
       - Steam Remote Play & Cross-Device: architecture/steam-remote-play.md
-      - Invariant Register: architecture/invariants.md
+      - Invariant Register:
+          - "Overview": architecture/invariants/index.md
+          - "Endpoints and the Wire": architecture/invariants/endpoints.md
+          - "RomM HTTP": architecture/invariants/romm-http.md
+          - "Install and Update": architecture/invariants/install-update.md
+          - "The Resolver": architecture/invariants/resolver.md
+          - "Library Sync: the Run": architecture/invariants/library-sync.md
+          - "Library Sync: Skips and Stamps": architecture/invariants/library-sync-skips.md
+          - "Library Sync: Representatives and Removals": architecture/invariants/library-sync-removals.md
+          - "Firmware: Answers and Verdicts": architecture/invariants/firmware.md
+          - "Firmware: Files, Links and Tender's Folder": architecture/invariants/firmware-files.md
+          - "Save-File Sync": architecture/invariants/saves.md
+          - "Removed-Game Cleanup": architecture/invariants/prune.md
+          - "The Host and Loading the Panel": architecture/invariants/host.md
+          - "Bundles and the Start-Up Check": architecture/invariants/startup.md
+          - "The Panel": architecture/invariants/panel.md
+          - "The Desktop Surface": architecture/invariants/desktop.md
+          - "Code Structure": architecture/invariants/code-structure.md
+          - "Cross-Cutting": architecture/invariants/cross-cutting.md
   - Contributing:
       - Development: contributing/development.md
       - Frontend dev loop: contributing/frontend-dev-loop.md

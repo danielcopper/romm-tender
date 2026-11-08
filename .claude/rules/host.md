@@ -119,7 +119,7 @@ that failed, never on the path where the panel came up. A refused binding is car
 button that cannot report a press is worse on that card than none.
 
 Which bundles are loaded, and the record that stops the injection when it takes the interface down, are in the invariant
-register — they span more than this package.
+register's `docs/architecture/invariants/host.md` — they span more than this package.
 
 ## And one that is not about silence at all
 

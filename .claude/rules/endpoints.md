@@ -25,8 +25,8 @@ does.
 **`main.py` builds the shape** from what a use case raises or returns (below), and no other module builds it from a
 literal; `scripts/check_failure_shape.py --check` fails on one that does. The gate reads where the shape is built, not
 its keys. The full rule — what the gate reads and what fails it, and the two results that compute a failing `success`
-outside `main.py` — is the invariant register's entry in `CLAUDE.md` and `docs/architecture/backend-architecture.md`,
-§4.
+outside `main.py` — is the invariant register's entry in `docs/architecture/invariants/endpoints.md` and
+`docs/architecture/backend-architecture.md`, §4.
 
 Two carve-outs, which carry no `success` key, so the gate passes them:
 

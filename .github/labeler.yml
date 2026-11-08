@@ -82,7 +82,7 @@ area:architecture:
           - 'backend/domain/**'
           - 'backend/lib/**'
           - 'CLAUDE.md'
-          - 'docs/architecture/invariants.md'
+          - 'docs/architecture/invariants/**'
 
 area:ci:
   - changed-files:

@@ -1990,8 +1990,8 @@ it, for the focused platform:
   replacement**: a present file you could not fetch again keeps its green `✓` and gains the `⊘`, and a required missing
   one keeps its red `✗`. Folding the two axes into one colour channel is what would collapse required and optional among
   exactly the rows that cannot be downloaded. It reads the field only for display; the readiness count, the progress
-  ratio and the download affordance each read it their own way, and the invariant register in `CLAUDE.md` owns that
-  rule.
+  ratio and the download affordance each read it their own way, and the invariant register's entry on it
+  ([firmware](invariants/firmware.md)) owns that rule.
 
   A legend under the table names the marks it actually contains, **one entry per line** — an entry for a state no row is
   in explains nothing and costs a row, and mark 2 is inside that filter with one line of its own rather than one per

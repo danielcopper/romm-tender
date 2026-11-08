@@ -1304,7 +1304,7 @@ generation still records what RomM served. Deleting the stamp would blind discov
 completed apply, which never comes while its sync stays off. The skip gate, the plan estimate (`predicted_skip` and the
 stamp-gated `collapsed_count`) and the preview's `restamp_platform_count` read the stamp through
 `domain/platform_sync_state.py::stamp_for_skip`, which answers a revoked stamp with none; what each of them breaks by
-reading it raw is in the [invariant register](invariants.md). The resume offer asks
+reading it raw is in the [invariant register](invariants/library-sync-skips.md). The resume offer asks
 `PlatformSyncStateRepository.has_any`, whose query applies the same rule, so that is the one other place it lives. The
 final chunk's fresh stamp replaces the row, which clears the flag. The apply start deletes rather than revokes, because
 its chunks re-mark rows with the new run's generation and a kept stamp naming the old one would make discovery read
@@ -2653,7 +2653,7 @@ swaps the tree and rolls back what does not answer
   outside the rules. `hold` asks the update rule once more after it registers a use case's operation, since a press that
   came while it waited for the lock saw no operation; and the save engine's manual syncs (`sync_rom_saves`,
   `sync_all_saves`) ask it again once they hold the device gate, as defense in depth. A successful install ends it with
-  the process. The rule and where it holds: [invariants](invariants.md).
+  the process. The rule and where it holds: [invariants](invariants/install-update.md).
 - **Leftovers.** The update directory is removed at every start (`remove_update_leftovers`); the installer never removes
   a tarball it was given.
 - **The attempt record.** An installer that stops without updating after it stopped this process can tell nobody: the
@@ -2732,7 +2732,7 @@ it as every backend line does. What is shown of a run is `domain/update_output.p
   stderr while succeeding — a journal file it skipped — is logged at debug.
 - **What is shown of a run.** The last 300 lines, each cut at 500 characters, with how many earlier ones were left out
   (`earlier`), and every admission-token value replaced by `[hidden]` before a line leaves the backend — why, and the
-  spellings that catches, is the register's journal-line entry ([invariants.md](invariants.md)).
+  spellings that catches, is the register's journal-line entry ([invariants](invariants/install-update.md)).
 - **Each of the installer's rows in its last state.** With no terminal, `install.sh` prints a row again on every step —
   `[..] Checking`, then `[..] Checking     python 3.13`, and so on to `[ok] Checking …` — so the installer's part
   (`installer_section`) keeps only the last line of each row, where that line stood: a finished row's `[ok]`, `[!!]` or
@@ -3772,8 +3772,8 @@ script's docstring names what it cannot see, a computed `success` first.
 `scripts/check_background_tasks.py` (also bundled into `mise run lint`) fails on a call named `create_task` or
 `ensure_future`, on `asyncio.Task(...)` and on a bare `Task(...)` imported from `asyncio`, anywhere under `backend/` but
 `lib/background_tasks.py`, `host/`, `_vendor/` and `native/`. The rule and why it exists are the invariant register's
-long form ([invariants](invariants.md)); what the shutdown does with the tasks is the shutdown paragraph above; what the
-check does not see is listed in its docstring.
+entry ([invariants](invariants/code-structure.md)); what the shutdown does with the tasks is the shutdown paragraph
+above; what the check does not see is listed in its docstring.
 
 ### 6. Resolver-reading gate
 
@@ -3787,8 +3787,8 @@ distinctive value of any other closed vocabulary it exports, or a read of one of
 panel is held by the ESLint rule `tender/no-resolver-vocabulary` over the same codes, values and names, which the script
 writes to `frontend/resolver-vocabulary.json`, less a few values the panel speaks with a meaning of its own.
 `tests/adapters/test_resolver_codes.py` fails at an update of the vendored resolver on a code it adds that no adapter
-classifies. The rule and its lists are the invariant register's ([invariants](invariants.md)), and what the script does
-not see is listed in its docstring.
+classifies. The rule and its lists are the invariant register's ([invariants](invariants/resolver.md)), and what the
+script does not see is listed in its docstring.
 
 ### 7. Enforced: underscore prefix
 

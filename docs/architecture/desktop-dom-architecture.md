@@ -40,10 +40,10 @@ and where the game cannot start — its emulator cannot, or its file does not st
 sentence `startRefusal` (`frontend/src/utils/emulatorStart.ts`) answers. While the page checks whether the game can
 start, and where that check went wrong, PLAY does what Big Picture's does
 ([Launch-target validation](backend-architecture.md#launch-target-validation)), and reads CHECKING... where Big
-Picture's shows its throbber. On a stranded panel it gates as the [invariant register](invariants.md)'s stranded-panel
-entry says. Steam's Play button and the badges beside it are hidden as soon as the button's root has rendered, also
-while it draws nothing — before the page's detail names the ROM, and on a stranded panel — and the button draws no
-badges in their place.
+Picture's shows its throbber. On a stranded panel it gates as the [invariant register](invariants/panel.md)'s
+stranded-panel entry says. Steam's Play button and the badges beside it are hidden as soon as the button's root has
+rendered, also while it draws nothing — before the page's detail names the ROM, and on a stranded panel — and the button
+draws no badges in their place.
 
 `DiscSelector` (`frontend/src/desktop/gameview/DiscSelector.tsx`) sits beside the Play button, one control where Big
 Picture has two beside `CustomPlayButton`, `frontend/src/bigpicture/DiscSelector.tsx` and

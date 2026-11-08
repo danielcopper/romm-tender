@@ -2299,8 +2299,8 @@ save transfer's steps that name the device (`SaveTransfer.download_save_file`, `
 a stored id or `None`. The entry pays one `PUT /api/devices/{id}` per operation, reads included: a cheaper path for
 reads would be the divergence the entry exists to remove. Concurrent callers wait on one lock, taken innermost — nothing
 is taken under it, so a holder of `rom_lock` or the device gate may call the entry — and two of them never register
-twice. What keeps the rule and what those checks miss: the invariant register in `CLAUDE.md` and
-[invariants.md](invariants.md).
+twice. What keeps the rule and what those checks miss: its entry in the invariant register
+([Save-file sync](invariants/saves.md)).
 
 The cached id outside that entry is read by the play-session upload (`SaveService.get_device_id`, the
 `DeviceIdProvider`), and by the device list, which marks this device's row. Registration happens whether save sync is on
