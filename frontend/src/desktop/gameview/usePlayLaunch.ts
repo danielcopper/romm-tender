@@ -6,7 +6,7 @@
  */
 
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { debugLog } from "../../api/backend";
+import { debugLog, logError } from "../../api/backend";
 import { desktopLaunchPrompts, desktopResolveConflicts, desktopStopGameDialog } from "./dialogs/desktopDialogs";
 import { executeRomUninstall } from "../../utils/romUninstall";
 import { executeStopRunningGame } from "../../utils/runningGame";
@@ -174,7 +174,7 @@ export function usePlayLaunch({
         onRetry: () => setPressState("checking"),
       });
     } catch (e) {
-      detach(debugLog(`${TAG}: Play's launch check threw — resetting to play: ${e}`));
+      logError(`${TAG}: Play's launch check of romId=${romId} threw — resetting to play: ${e}`);
       if (startCheckFailed) showToast(startFailedSentence(e));
       setPressState(null);
     }
