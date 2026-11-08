@@ -57,6 +57,7 @@ vi.mock("./DiscSelector", async () => {
 
 vi.mock("../../utils/downloadStore", () => ({
   useDownloads: vi.fn(),
+  removeDownload: vi.fn(),
 }));
 
 vi.mock("../../utils/downloadRehydrate", async (importOriginal) => ({
@@ -95,6 +96,7 @@ vi.mock("../../api/backend", async (importOriginal) => {
     preLaunchSync: vi.fn(),
     stopRunningGame: vi.fn(),
     debugLog: vi.fn(),
+    logWarn: vi.fn(),
     logError: vi.fn(),
     getSaveSetupInfo: vi.fn(),
     confirmSlotChoice: vi.fn(),
@@ -1068,19 +1070,25 @@ describe("PlayButton", () => {
       },
     );
 
-    it("cancels the download and offers DOWNLOAD again", async () => {
+    it("cancels the download, and offers DOWNLOAD again once the cancelled frame lands", async () => {
       render(<PlayButton appId={APP_ID} />);
       fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
       fireEvent.click(await screen.findByRole("button", { name: "Cancel download" }));
 
       expect(backend.cancelDownload).toHaveBeenCalledWith(100);
+      await act(async () => {});
+      expect(screen.getByRole("progressbar")).toBeInTheDocument();
+
+      act(() =>
+        emitHostEvent<Partial<DownloadProgressEvent>>("download_progress", { rom_id: 100, status: "cancelled" }),
+      );
       expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
     });
 
     it.each([
       ["Cancel download", "cancel", "cancelDownload"],
       ["Pause download", "pause", "pauseDownload"],
-    ] as const)("logs a %s press the backend fails", async (label, what, call) => {
+    ] as const)("logs a %s press that got no answer as an error, and keeps the bar", async (label, what, call) => {
       vi.mocked(downloadStore.useDownloads).mockReturnValue([transfer()]);
       vi.mocked(backend[call]).mockRejectedValueOnce(new Error("socket closed"));
       render(<PlayButton appId={APP_ID} />);
@@ -1088,9 +1096,36 @@ describe("PlayButton", () => {
       fireEvent.click(screen.getByRole("button", { name: label }));
 
       await waitFor(() =>
-        expect(backend.debugLog).toHaveBeenCalledWith(`DesktopPlayButton: ${what} failed: Error: socket closed`),
+        expect(backend.logError).toHaveBeenCalledExactlyOnceWith(
+          `DesktopPlayButton: could not ${what} the download of romId=100: Error: socket closed`,
+        ),
       );
+      expect(screen.getByRole("progressbar")).toBeInTheDocument();
+      expect(downloadStore.removeDownload).not.toHaveBeenCalled();
     });
+
+    it.each([
+      ["Cancel download", "server_unreachable", "cancel", "cancelDownload"],
+      ["Pause download", "server_unreachable", "pause", "pauseDownload"],
+      ["Pause download", "no_active_download", "pause", "pauseDownload"],
+    ] as const)(
+      "logs a %s press refused with %s as a warning, and keeps the bar",
+      async (label, reason, what, call) => {
+        vi.mocked(downloadStore.useDownloads).mockReturnValue([transfer()]);
+        vi.mocked(backend[call]).mockResolvedValueOnce({ success: false, reason, message: "No." } as never);
+        render(<PlayButton appId={APP_ID} />);
+
+        fireEvent.click(screen.getByRole("button", { name: label }));
+
+        await waitFor(() =>
+          expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+            `DesktopPlayButton: the backend refused to ${what} the download of romId=100: ${reason}: No.`,
+          ),
+        );
+        expect(screen.getByRole("progressbar")).toBeInTheDocument();
+        expect(downloadStore.removeDownload).not.toHaveBeenCalled();
+      },
+    );
 
     it("pauses a running download, and resumes a paused one", () => {
       vi.mocked(downloadStore.useDownloads).mockReturnValue([transfer()]);
@@ -1541,8 +1576,54 @@ describe("PlayButton", () => {
       fireEvent.click(await screen.findByRole("button", { name: "Download Instead" }));
       fireEvent.click(screen.getByRole("button", { name: "Delete and Download" }));
       fireEvent.click(await screen.findByRole("button", { name: "Cancel download" }));
+      act(() =>
+        emitHostEvent<Partial<DownloadProgressEvent>>("download_progress", { rom_id: 100, status: "cancelled" }),
+      );
 
       expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeInTheDocument();
+    });
+
+    describe("a cancel from the bar the press drew", () => {
+      const pressUseExistingFiles = async () => {
+        vi.mocked(backend.getCachedGameDetail).mockResolvedValue({
+          found: true,
+          rom_id: 100,
+          installed: false,
+          target_path_occupied: true,
+        });
+        render(<PlayButton appId={APP_ID} />);
+        fireEvent.click(await screen.findByRole("button", { name: "USE EXISTING FILES" }));
+        const cancel = await screen.findByRole("button", { name: "Cancel download" });
+        await act(async () => fireEvent.click(cancel));
+      };
+
+      it("keeps the bar and the files it found when the cancel gets no answer", async () => {
+        vi.mocked(backend.cancelDownload).mockRejectedValueOnce(new Error("socket closed"));
+        await pressUseExistingFiles();
+
+        await waitFor(() => expect(backend.logError).toHaveBeenCalled());
+        expect(screen.getByRole("progressbar")).toBeInTheDocument();
+
+        act(() =>
+          emitHostEvent<Partial<DownloadProgressEvent>>("download_progress", { rom_id: 100, status: "downloading" }),
+        );
+        expect(screen.getByRole("button", { name: "USE EXISTING FILES" })).toBeInTheDocument();
+      });
+
+      it("ends its bar and drops the store's entry, keeping the files it found, once the backend says nothing runs", async () => {
+        vi.mocked(backend.cancelDownload).mockResolvedValueOnce({
+          success: false,
+          reason: "no_active_download",
+          message: "No active download",
+        } as never);
+        await pressUseExistingFiles();
+
+        expect(screen.getByRole("button", { name: "USE EXISTING FILES" })).toBeEnabled();
+        expect(downloadStore.removeDownload).toHaveBeenCalledExactlyOnceWith(100);
+        expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+          "DesktopPlayButton: the backend refused to cancel the download of romId=100: no_active_download: No active download",
+        );
+      });
     });
 
     it("forgets the files it found once a cancelled download may have removed them", async () => {
