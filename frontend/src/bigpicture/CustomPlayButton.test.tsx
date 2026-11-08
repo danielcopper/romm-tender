@@ -32,6 +32,7 @@ import type {
   AdoptResult,
   DownloadCompleteEvent,
   DownloadFailedEvent,
+  DownloadItem,
   DownloadProgressEvent,
   PreLaunchSyncStartedEvent,
 } from "../types";
@@ -841,6 +842,51 @@ describe("CustomPlayButton — pause/resume on active download (#1124)", () => {
     });
 
     expect(backend.resumeDownload).toHaveBeenCalledWith(42);
+  });
+
+  it("drops a queue answer that lands after the page moved to another game", async () => {
+    vi.mocked(getCachedGameDetail).mockImplementation(async (appId: number) => ({
+      found: true,
+      rom_id: appId === 100 ? 42 : 43,
+      rom_name: appId === 100 ? "Test ROM" : "Other Game",
+      installed: false,
+    }));
+    let answerA!: (value: { downloads: DownloadItem[] }) => void;
+    vi.mocked(backend.getDownloadQueue)
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          answerA = resolve;
+        }),
+      )
+      .mockResolvedValue({ downloads: [] });
+
+    const { findByText, queryByText, rerender } = render(<CustomPlayButton appId={100} />);
+    await waitFor(() => expect(backend.getDownloadQueue).toHaveBeenCalledTimes(1));
+    rerender(<CustomPlayButton appId={200} />);
+    await waitFor(() => expect(backend.getDownloadQueue).toHaveBeenCalledTimes(2));
+    expect(await findByText("Download")).toBeInTheDocument();
+
+    await act(async () => {
+      answerA({
+        downloads: [
+          {
+            rom_id: 42,
+            rom_name: "Test ROM",
+            platform_name: "PSX",
+            file_name: "test.chd",
+            status: "paused",
+            progress: 0.3,
+            bytes_downloaded: 300,
+            total_bytes: 1000,
+            resumable: true,
+          },
+        ],
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(queryByText("Paused")).toBeNull();
+    expect(queryByText("Download")).toBeInTheDocument();
   });
 
   it("rehydrates a plain downloading (non-paused) download on mount from the queue (#145 / #1126)", async () => {

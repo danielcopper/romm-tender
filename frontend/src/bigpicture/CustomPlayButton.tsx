@@ -266,17 +266,17 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
     };
   }, []);
 
-  // Rehydrate an in-flight or paused download on remount. The cached detail
-  // only knows installed-or-not, so without this a paused (or still-running)
-  // download shows a plain "Download" button — and a click would `start_download`
-  // → truncate the partial .tmp → restart from 0, discarding the paused progress
-  // the user expected to resume. Seed from the live queue so the Pause/Resume
-  // state survives navigating away and back (#1124).
-  const rehydrateInflightDownload = async (rid: number): Promise<void> => {
+  // Rehydrate an in-flight or paused download on remount: nothing in the cached
+  // detail says a download is under way, so without this a paused one shows a
+  // plain "Download" button, whose press calls `start_download` rather than
+  // resuming it (#1124). Seeding from the live queue keeps Pause/Resume across
+  // navigating away and back.
+  // The button stays mounted when the page moves to another game, so a read that
+  // answers after its init was cleaned up is dropped: it may be the old game's.
+  const rehydrateInflightDownload = async (rid: number, stale: () => boolean): Promise<void> => {
     try {
       const queue = await getDownloadQueue();
-      // No post-await `cancelled` guard needed: React no-ops a setState on an
-      // unmounted component, and a remount keeps its own state.
+      if (stale()) return;
       const entry = queue.downloads.find((d) => d.rom_id === rid);
       if (isDownloadUnderWay(entry)) {
         setActionPending(true);
@@ -324,7 +324,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
           detach(debugLog(`CustomPlayButton: -> file missing`));
           setMissingPath(cached.file_missing_at);
           enterDownloadState();
-          await rehydrateInflightDownload(rid);
+          await rehydrateInflightDownload(rid, () => cancelled);
         } else if (cached.installed) {
           // Check for conflicts from cached save status
           const hasConflict = hasAnySaveConflict(cached.save_status);
@@ -345,7 +345,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
         } else {
           detach(debugLog(`CustomPlayButton: -> download`));
           enterDownloadState(answers.targetOccupied, answers.candidatePresent);
-          await rehydrateInflightDownload(rid);
+          await rehydrateInflightDownload(rid, () => cancelled);
         }
       } catch (e) {
         logError(`CustomPlayButton init error: ${e}`);
