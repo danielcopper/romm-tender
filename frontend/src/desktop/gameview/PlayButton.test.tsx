@@ -17,6 +17,7 @@ import { setStrandedAnswer } from "../../test-utils/stranded-panel";
 import { emitHostEvent } from "../../test-utils/host-event-bus";
 import { throbberIn } from "../../test-utils/throbber";
 import { stubAppStore } from "../../test-utils/steamStubs";
+import { flushMacrotask } from "../../test-utils/flush";
 import type { GameDetailState } from "../../utils/gameDetailStore";
 import type {
   AdoptionCandidate,
@@ -202,6 +203,18 @@ const sessionChanged = (running: boolean, romId: number) =>
   });
 
 const pressPlay = () => fireEvent.click(screen.getByRole("button", { name: /^PLAY/ }));
+
+/** What the selector was last told of the button's press; false once the press, its questions included, has ended. */
+const pressUnderWay = () => vi.mocked(DiscSelector).mock.lastCall?.[0].pressUnderWay;
+
+/** Wait for the button's press to have ended, the one end of it a test can see. */
+const pressEnded = () => waitFor(() => expect(pressUnderWay()).toBe(false));
+
+/** Dismiss the open question with Escape, and wait for the press that asked it to end. */
+const dismissTheQuestion = async () => {
+  fireEvent.keyDown(window, { key: "Escape" });
+  await pressEnded();
+};
 
 describe("PlayButton", () => {
   beforeEach(() => {
@@ -635,7 +648,8 @@ describe("PlayButton", () => {
       await screen.findByRole("dialog", { name: "RomM Unreachable" });
       fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
-      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      await pressEnded();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       expect(mockRunGame).not.toHaveBeenCalled();
       expect(screen.getByRole("button", { name: /^PLAY/ })).toBeEnabled();
     });
@@ -808,7 +822,8 @@ describe("PlayButton", () => {
       fireEvent.click(screen.getByRole("button", { name: /RESOLVE CONFLICT/ }));
       fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
 
-      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      await pressEnded();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       expect(screen.getByRole("button", { name: /RESOLVE CONFLICT/ })).toBeInTheDocument();
       expect(backend.resolveSyncConflict).not.toHaveBeenCalled();
     });
@@ -1089,6 +1104,8 @@ describe("PlayButton", () => {
         emitHostEvent<Partial<DownloadProgressEvent>>("download_progress", { rom_id: 100, status: "cancelled" }),
       );
       expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
+      expect(backend.logWarn).not.toHaveBeenCalled();
+      expect(backend.logError).not.toHaveBeenCalled();
     });
 
     it.each([
@@ -1133,11 +1150,14 @@ describe("PlayButton", () => {
       },
     );
 
-    it("pauses a running download, and resumes a paused one", () => {
+    it("pauses a running download, and resumes a paused one", async () => {
       vi.mocked(downloadStore.useDownloads).mockReturnValue([transfer()]);
       const { rerender } = render(<PlayButton appId={APP_ID} />);
       fireEvent.click(screen.getByRole("button", { name: "Pause download" }));
       expect(backend.pauseDownload).toHaveBeenCalledWith(100);
+      await flushMacrotask();
+      expect(backend.logWarn).not.toHaveBeenCalled();
+      expect(backend.logError).not.toHaveBeenCalled();
 
       vi.mocked(downloadStore.useDownloads).mockReturnValue([transfer({ status: "paused" })]);
       rerender(<PlayButton appId={APP_ID} />);
@@ -1172,6 +1192,7 @@ describe("PlayButton", () => {
         act(() => emitHostEvent<Partial<DownloadProgressEvent>>("download_progress", { rom_id: 100, status }));
 
         expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
+        expect(toast.showToast).not.toHaveBeenCalled();
       },
     );
 
@@ -1539,6 +1560,26 @@ describe("PlayButton", () => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
+    it("reads STARTING..., with the ring, while the adoption's request is in flight", async () => {
+      let adopted!: (value: AdoptResult) => void;
+      vi.mocked(backend.startDownload).mockResolvedValueOnce(OCCUPIED as never);
+      vi.mocked(backend.adoptExistingRom).mockReturnValueOnce(
+        new Promise((resolve) => {
+          adopted = resolve;
+        }),
+      );
+
+      render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Use These Files" }));
+
+      const starting = await screen.findByRole("button", { name: "STARTING..." });
+      expect(starting).toBeDisabled();
+      expect(throbberIn(starting)).not.toBeNull();
+      await act(async () => adopted(ADOPTED));
+      expect(await screen.findByRole("button", { name: /^PLAY/ })).toBeInTheDocument();
+    });
+
     it("Download Instead asks a second time, and Delete and Download re-sends with replace", async () => {
       vi.mocked(backend.startDownload).mockResolvedValueOnce(OCCUPIED as never);
 
@@ -1562,9 +1603,9 @@ describe("PlayButton", () => {
       render(<PlayButton appId={APP_ID} />);
       fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
       await screen.findByRole("dialog");
-      fireEvent.keyDown(window, { key: "Escape" });
+      await dismissTheQuestion();
 
-      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       expect(screen.getByRole("button", { name: "USE EXISTING FILES" })).toBeEnabled();
       expect(backend.adoptExistingRom).not.toHaveBeenCalled();
       expect(backend.startDownload).toHaveBeenCalledTimes(1);
@@ -1575,8 +1616,8 @@ describe("PlayButton", () => {
       render(<PlayButton appId={APP_ID} />);
       fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
       await screen.findByRole("dialog");
-      fireEvent.keyDown(window, { key: "Escape" });
-      const existing = await screen.findByRole("button", { name: "USE EXISTING FILES" });
+      await dismissTheQuestion();
+      const existing = screen.getByRole("button", { name: "USE EXISTING FILES" });
       expect(existing).toHaveStyle({ fontSize: "13px" });
 
       act(() => emitHostEvent<Partial<DownloadProgressEvent>>("download_progress", { rom_id: 100, status: "queued" }));
@@ -1589,8 +1630,8 @@ describe("PlayButton", () => {
       render(<PlayButton appId={APP_ID} />);
       fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
       await screen.findByRole("dialog");
-      fireEvent.keyDown(window, { key: "Escape" });
-      await screen.findByRole("button", { name: "USE EXISTING FILES" });
+      await dismissTheQuestion();
+      expect(screen.getByRole("button", { name: "USE EXISTING FILES" })).toBeInTheDocument();
 
       act(() => emitHostEvent<Partial<DownloadFailedEvent>>("download_failed", { rom_id: 100 }));
 
@@ -1602,9 +1643,9 @@ describe("PlayButton", () => {
       render(<PlayButton appId={APP_ID} />);
       fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
       await screen.findByRole("dialog");
-      fireEvent.keyDown(window, { key: "Escape" });
+      await dismissTheQuestion();
 
-      fireEvent.click(await screen.findByRole("button", { name: "USE EXISTING FILES" }));
+      fireEvent.click(screen.getByRole("button", { name: "USE EXISTING FILES" }));
 
       expect(await screen.findByRole("dialog")).toBeInTheDocument();
       expect(backend.startDownload).toHaveBeenCalledTimes(2);
@@ -1672,14 +1713,15 @@ describe("PlayButton", () => {
       render(<PlayButton appId={APP_ID} />);
       fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
       await screen.findByRole("dialog");
-      fireEvent.keyDown(window, { key: "Escape" });
-      await screen.findByRole("button", { name: "USE EXISTING FILES" });
+      await dismissTheQuestion();
+      expect(screen.getByRole("button", { name: "USE EXISTING FILES" })).toBeInTheDocument();
 
       act(() =>
         emitHostEvent<Partial<DownloadProgressEvent>>("download_progress", { rom_id: 100, status: "cancelled" }),
       );
 
       expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeInTheDocument();
+      expect(toast.showToast).not.toHaveBeenCalled();
     });
 
     it("lists two candidates, compares the one picked, and adopts it by its path", async () => {
@@ -1756,8 +1798,8 @@ describe("PlayButton", () => {
       });
 
       render(<PlayButton appId={APP_ID} />);
-      await waitFor(() => expect(backend.getCachedGameDetail).toHaveBeenCalledWith(APP_ID));
-      await act(async () => {});
+      expect(backend.getCachedGameDetail).toHaveBeenCalledWith(APP_ID);
+      await flushMacrotask();
       expect(screen.getByRole("button", { name: "DOWNLOAD" })).toHaveTextContent(/^DOWNLOAD$/);
     });
 
@@ -1776,10 +1818,13 @@ describe("PlayButton", () => {
       rerender(<PlayButton appId={APP_ID} />);
       expect(answers).toHaveLength(2);
 
-      await act(async () => answers[1]?.({ found: true, rom_id: 100, installed: false }));
+      // The newer answer lands first and is seen, so the stale one after it is judged against an answer that counts.
+      await act(async () => answers[1]?.({ found: true, rom_id: 100, installed: false, has_file_on_disk: false }));
+      await screen.findByRole("button", { name: "NO FILE ON ROMM" });
       await act(async () => answers[0]?.({ found: true, rom_id: 100, installed: false, target_path_occupied: true }));
+      await flushMacrotask();
 
-      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "NO FILE ON ROMM" })).toBeInTheDocument();
     });
 
     it("reads no other ROM's cached answer", async () => {
@@ -1791,7 +1836,8 @@ describe("PlayButton", () => {
       });
 
       render(<PlayButton appId={APP_ID} />);
-      await waitFor(() => expect(backend.getCachedGameDetail).toHaveBeenCalledWith(APP_ID));
+      expect(backend.getCachedGameDetail).toHaveBeenCalledWith(APP_ID);
+      await flushMacrotask();
       expect(screen.getByRole("button", { name: "DOWNLOAD" })).toHaveTextContent(/^DOWNLOAD$/);
     });
 
@@ -1812,7 +1858,6 @@ describe("PlayButton", () => {
     });
 
     it("tells the selector a press is under way through the request and the question, until the flow ends", async () => {
-      const pressUnderWay = () => vi.mocked(DiscSelector).mock.lastCall?.[0].pressUnderWay;
       let answer!: (value: never) => void;
       vi.mocked(backend.startDownload).mockReturnValueOnce(
         new Promise<never>((resolve) => {
@@ -1830,9 +1875,8 @@ describe("PlayButton", () => {
       await screen.findByRole("dialog");
       expect(pressUnderWay()).toBe(true);
 
-      fireEvent.keyDown(window, { key: "Escape" });
-      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-      expect(pressUnderWay()).toBe(false);
+      await dismissTheQuestion();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
     it("unmounting with the comparison open ends the flow at its cancel exit", async () => {
@@ -1844,7 +1888,7 @@ describe("PlayButton", () => {
       unmount();
 
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-      await act(async () => {});
+      await flushMacrotask();
       expect(backend.startDownload).toHaveBeenCalledTimes(1);
       expect(backend.adoptExistingRom).not.toHaveBeenCalled();
     });

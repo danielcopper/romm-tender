@@ -215,6 +215,61 @@ describe("usePlayLaunch", () => {
 
       expect(holdVerdict).toHaveBeenCalledExactlyOnceWith(expect.any(String), 100);
     });
+
+    it("holds its verdict for the ROM it was pressed for when the page switches before the answer lands", async () => {
+      let answer!: (value: unknown) => void;
+      vi.mocked(backend.getSaveStatus).mockReturnValueOnce(
+        new Promise((resolve) => {
+          answer = resolve;
+        }) as never,
+      );
+      const { result, rerender } = renderSwitchable({ romId: 100 });
+
+      let press!: Promise<void>;
+      act(() => {
+        press = result.current.handleResolveConflictClick();
+      });
+      rerender({ romId: 101 });
+      await act(async () => {
+        answer({ rom_id: 100, files: [], conflicts: [] });
+        await press;
+      });
+
+      expect(holdVerdict).toHaveBeenCalledExactlyOnceWith(expect.any(String), 100);
+    });
+  });
+
+  describe("a conflict cancelled at the start", () => {
+    it("is held for the ROM Play was pressed for when the page switches before it is cancelled", async () => {
+      vi.mocked(backend.preLaunchSync).mockResolvedValueOnce({
+        success: true,
+        synced: 0,
+        uploaded: 0,
+        downloaded: 0,
+        conflicts: [{ type: "sync_conflict", rom_id: 100, filename: "smw.srm" }],
+      } as never);
+      let cancel!: (value: unknown) => void;
+      ask.mockReturnValueOnce(
+        new Promise((resolve) => {
+          cancel = resolve;
+        }),
+      );
+      const { result, rerender } = renderSwitchable({ romId: 100 });
+
+      let press!: Promise<void>;
+      act(() => {
+        press = result.current.handlePlayClick();
+      });
+      await vi.waitFor(() => expect(ask).toHaveBeenCalledTimes(1));
+      rerender({ romId: 101 });
+      await act(async () => {
+        cancel("cancel");
+        await press;
+      });
+
+      expect(holdVerdict).toHaveBeenCalledExactlyOnceWith("conflict", 100);
+      expect(runGame).not.toHaveBeenCalled();
+    });
   });
 
   describe("Play", () => {

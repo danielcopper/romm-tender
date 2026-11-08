@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { DownloadingButton } from "./DownloadingButton";
 import { throbberIn } from "../../test-utils/throbber";
+import { PLAY_GRADIENT, PLAY_LEFT_STOP, rgb } from "../../utils/playGradient";
 
 const renderButton = (props: Partial<Parameters<typeof DownloadingButton>[0]> = {}) =>
   render(
@@ -36,7 +37,18 @@ describe("DownloadingButton", () => {
 
     const fill = container.querySelector<HTMLElement>(".tender-desktop-dl-fill");
     expect(fill?.style.width).toBe("100%");
-    expect(fill?.style.background).toBe("linear-gradient(to right, rgb(112, 214, 29) 0%, rgb(1, 167, 91) 60%)");
+    expect(fill?.style.background).toBe(PLAY_GRADIENT);
+  });
+
+  it.each([
+    ["finishing", { progressRatio: 1 }],
+    ["unpacking", { progressRatio: 0.3, isExtracting: true }],
+  ])("glows in the desktop PLAY's green, not Big Picture's, while %s", (_, props) => {
+    const { container } = renderButton(props);
+
+    const group = container.querySelector<HTMLElement>(".tender-desktop-play-btn-group");
+    expect(group?.style.boxShadow).toContain(rgb(PLAY_LEFT_STOP));
+    expect(group?.style.boxShadow).not.toContain("rgb(80, 200, 47)");
   });
 
   it("offers no pause where the download cannot be resumed", () => {

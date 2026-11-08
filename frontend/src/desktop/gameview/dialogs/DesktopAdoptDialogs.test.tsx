@@ -114,12 +114,13 @@ describe("DesktopAdoptUnusableDialog", () => {
     expect(dialog).not.toHaveTextContent("Only the first");
   });
 
-  it("resolves download and cancel", () => {
+  it("resolves download, and cancel from Cancel and from the close button", () => {
     const onChoice = vi.fn();
     render(<DesktopAdoptUnusableDialog namesake={UNUSABLE} onChoice={onChoice} />);
     fireEvent.click(screen.getByRole("button", { name: "Download Game.sfc Anyway" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     fireEvent.click(screen.getByRole("button", { name: "Close dialog" }));
-    expect(onChoice.mock.calls).toEqual([["download"], ["cancel"]]);
+    expect(onChoice.mock.calls).toEqual([["download"], ["cancel"], ["cancel"]]);
   });
 });
 
@@ -138,7 +139,8 @@ describe("DesktopAdoptVanishedDialog", () => {
     expect(dialog).toHaveTextContent(VANISHED_INTRO);
     expect(dialog).toHaveTextContent(VANISHED_DOWNLOAD_NOTE);
     fireEvent.click(screen.getByRole("button", { name: "Download Game.sfc" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(onChoice.mock.calls).toEqual([["download"], ["cancel"]]);
+    expect(onChoice.mock.calls).toEqual([["download"], ["cancel"], ["cancel"]]);
   });
 });
