@@ -34,9 +34,9 @@ interface DiscSelectorProps {
   ask: AskDialog;
   /** Whether the bound version's file is missing, which leaves its discs out. */
   fileMissing: boolean;
-  /** Whether the Play button's check is under way, which the trigger waits for. */
+  /** Whether the Play button's check or a press of DOWNLOAD is under way, which the trigger waits for. */
   pressUnderWay: boolean;
-  /** Report whether a version switch is under way, which PLAY and RESOLVE CONFLICT wait for. */
+  /** Report whether a version switch is under way, which PLAY, RESOLVE CONFLICT, DOWNLOAD and the chevron wait for. */
   onSwitchingChange: (switching: boolean) => void;
 }
 

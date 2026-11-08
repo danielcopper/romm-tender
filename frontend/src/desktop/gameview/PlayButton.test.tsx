@@ -1391,6 +1391,29 @@ describe("PlayButton", () => {
       expect(screen.queryByRole("button", { name: "DOWNLOAD" })).not.toBeInTheDocument();
     });
 
+    it("disables the chevron of the version switched to, saying why, until the other version's removal answers", async () => {
+      let removed!: (value: unknown) => void;
+      vi.mocked(backend.removeRom).mockReturnValueOnce(
+        new Promise((resolve) => {
+          removed = resolve;
+        }) as never,
+      );
+      const { rerender } = render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "Game Options" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "Uninstall" }));
+      await screen.findByRole("button", { name: "UNINSTALLING..." });
+
+      otherVersion();
+      rerender(<PlayButton appId={APP_ID} />);
+      const toggle = screen.getByRole("button", { name: "Game Options" });
+      expect(toggle).toBeDisabled();
+      expect(toggle).toHaveAttribute("title", "Another version of this game is being uninstalled");
+
+      await act(async () => removed({ success: true, message: "", prune_lease_token: null }));
+      expect(screen.getByRole("button", { name: "Game Options" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "Game Options" })).toHaveAttribute("title", "Game Options");
+    });
+
     it("leaves a download press's state with the version it was pressed for", async () => {
       let started!: (value: unknown) => void;
       vi.mocked(backend.startDownload).mockReturnValueOnce(
@@ -1901,6 +1924,20 @@ describe("PlayButton", () => {
 
       act(() => selectorProps()!.onSwitchingChange(false));
       expect(screen.getByRole("button", { name: /RESOLVE CONFLICT/ })).toBeEnabled();
+    });
+
+    it("disables the chevron while the selector is switching, so no Uninstall is offered", () => {
+      render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "Game Options" }));
+      expect(screen.getByRole("menuitem", { name: "Uninstall" })).toBeInTheDocument();
+
+      act(() => selectorProps()!.onSwitchingChange(true));
+
+      expect(screen.queryByRole("menuitem", { name: "Uninstall" })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Game Options" })).toBeDisabled();
+      act(() => selectorProps()!.onSwitchingChange(false));
+      expect(screen.getByRole("button", { name: "Game Options" })).toBeEnabled();
+      expect(screen.queryByRole("menuitem", { name: "Uninstall" })).not.toBeInTheDocument();
     });
 
     it("draws the throbber in PLAY's triangle's place, with no pointer, while the selector is switching", () => {

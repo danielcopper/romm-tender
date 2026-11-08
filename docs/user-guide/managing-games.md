@@ -824,7 +824,9 @@ refused while a single uninstall is running, and a single uninstall is refused w
 Tender's backend restarts or the Deck shuts down mid-removal, the next uninstall of that game picks up where the
 interrupted one stopped.
 
-**Coming soon:** **on the desktop client's game page** **Uninstall** is in the menu the arrow beside **PLAY** opens.
+**Coming soon:** **on the desktop client's game page** **Uninstall** is in the menu the arrow beside **PLAY** opens. The
+arrow takes no press while you switch to another version, or while another version of the game is still being
+uninstalled.
 
 ## When a Downloaded Game's File Is Missing
 

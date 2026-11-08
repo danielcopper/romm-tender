@@ -400,23 +400,24 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
     startCheckFailed || detail.emulatorStart === null
       ? null
       : startRefusal(detail.emulatorStart, detail.gameLaunch ?? null, false);
-  const { handlePlayClick, handleResolveConflictClick, handleStopClick, handleUninstallClick } = usePlayLaunch({
-    appId,
-    romId,
-    romName: detail.romName,
-    pressState,
-    startCheckFailed,
-    ask,
-    leaseOwner,
-    setPressState,
-    startAction,
-    endAction,
-    clearSessionRunning: () => {
-      if (romId !== null) setSessionSeen({ romId, running: false });
-    },
-    holdVerdict,
-    setStopPending,
-  });
+  const { handlePlayClick, handleResolveConflictClick, handleStopClick, handleUninstallClick, uninstallUnderWay } =
+    usePlayLaunch({
+      appId,
+      romId,
+      romName: detail.romName,
+      pressState,
+      startCheckFailed,
+      ask,
+      leaseOwner,
+      setPressState,
+      startAction,
+      endAction,
+      clearSessionRunning: () => {
+        if (romId !== null) setSessionSeen({ romId, running: false });
+      },
+      holdVerdict,
+      setStopPending,
+    });
 
   const uninstall = () => {
     setUninstallProgress(null);
@@ -618,6 +619,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
         refusal={playRefusal}
         checkFailed={startCheckFailed}
         switching={switching}
+        uninstallUnderWay={uninstallUnderWay}
         onPlay={() => detach(handlePlayClick())}
         onUninstall={uninstall}
       />

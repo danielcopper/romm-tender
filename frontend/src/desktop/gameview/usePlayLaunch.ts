@@ -5,7 +5,7 @@
  * handlers are the gamepad drawing of the same presses.
  */
 
-import { useRef, type Dispatch, type SetStateAction } from "react";
+import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { debugLog } from "../../api/backend";
 import { desktopLaunchPrompts, desktopResolveConflicts, desktopStopGameDialog } from "./dialogs/desktopDialogs";
 import { executeRomUninstall } from "../../utils/romUninstall";
@@ -67,6 +67,8 @@ interface UsePlayLaunchResult {
   handleResolveConflictClick: () => Promise<void>;
   handleStopClick: () => Promise<void>;
   handleUninstallClick: () => Promise<void>;
+  /** Whether a removal the page started is still running, whichever version it was pressed for. */
+  uninstallUnderWay: boolean;
 }
 
 export function usePlayLaunch({
@@ -85,7 +87,9 @@ export function usePlayLaunch({
   setStopPending,
 }: UsePlayLaunchOptions): UsePlayLaunchResult {
   const stopInFlightRef = useRef(false);
+  // The ref refuses a second press in the same turn; the state is what the button draws from.
   const uninstallInFlightRef = useRef(false);
+  const [uninstallUnderWay, setUninstallUnderWay] = useState(false);
 
   // Every start is prepared first; without the hand-over nothing starts, so a
   // preparation that does not come about refuses the start with its sentence
@@ -203,6 +207,7 @@ export function usePlayLaunch({
     if (romId === null || uninstallInFlightRef.current) return;
     const rid = romId;
     uninstallInFlightRef.current = true;
+    setUninstallUnderWay(true);
     startAction("uninstalling", rid);
     detach(debugLog(`${TAG}: uninstalling romId=${rid}`));
     try {
@@ -210,9 +215,10 @@ export function usePlayLaunch({
       if (removed) holdVerdict("download", rid);
     } finally {
       uninstallInFlightRef.current = false;
+      setUninstallUnderWay(false);
       endAction("uninstalling", rid);
     }
   };
 
-  return { handlePlayClick, handleResolveConflictClick, handleStopClick, handleUninstallClick };
+  return { handlePlayClick, handleResolveConflictClick, handleStopClick, handleUninstallClick, uninstallUnderWay };
 }
