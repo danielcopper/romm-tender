@@ -40,23 +40,23 @@ DOWNLOAD in PLAY's place, which downloads through the adoption flow (`runDownloa
 press where Big Picture's Download takes none — offline, while the bound version is gone from RomM, or where RomM holds
 no file for the game — since both buttons ask `downloadTakesNoPress` (`frontend/src/utils/downloadPress.ts`), whose
 `downloadAnswers` also reads, for both, what the cached detail says lies on disk and whether RomM holds a file. A
-download in flight draws its progress with pause, resume and cancel
-(`frontend/src/desktop/gameview/DownloadingButton.tsx`), its fill ending on PLAY's own green, and a downloaded file that
-is gone draws a disabled FILE MISSING with the path as its title; DOWNLOAD's press and the bar's own are the button's.
-When the page shows a game, and again on a version switch, the button reads that game's download from the backend's
-queue into the download store, as Big Picture's reads it (`seedDownloadFromQueue`,
-`frontend/src/utils/downloadRehydrate.ts`): a paused download sends no frames, nor a queued one until it starts, so
-after Steam's interface reloads the bar would otherwise be missing and DOWNLOAD would start a paused one from nothing. A
-press of cancel or pause moves nothing on the button, as Big Picture's moves nothing: the bar, and what the cached
-detail found on disk, go with the backend's cancelled or failed frame, since a press that is refused or gets no answer
-leaves the transfer running. Such a press is logged, and a cancel the backend refuses because it holds no download of
-the game, running or paused, ends the press's own bar and drops the game from the download store, since no frame will.
-The chevron beside PLAY opens the game's menu, whose one entry is Uninstall (`executeRomUninstall`,
-`frontend/src/utils/romUninstall.ts`), which, like Big Picture's, asks nothing first. What a download, an adoption or an
-uninstall puts on the button — STARTING..., the bar before the download store carries the transfer, READY!,
-UNINSTALLING..., the verdict it holds after — stays with the version it was pressed for, so a version switch while it
-runs leaves it behind and the button draws the new version's own state. Where the game cannot start — its emulator
-cannot, or its file does not start with it — PLAY is disabled with the sentence `startRefusal`
+download in flight draws its progress (`frontend/src/desktop/gameview/DownloadingButton.tsx`), its fill ending on PLAY's
+own green, with pause or resume where the download can be resumed, and cancel; while it unpacks none of them shows, and
+the ring stands in cancel's place. A downloaded file that is gone draws a disabled FILE MISSING with the path as its
+title. DOWNLOAD's press and the bar's own are the button's. When the page shows a game, and again on a version switch,
+the button reads that game's download from the backend's queue into the download store, as Big Picture's reads it
+(`seedDownloadFromQueue`, `frontend/src/utils/downloadRehydrate.ts`): a paused download sends no frames, nor a queued
+one until it starts, so after Steam's interface reloads the bar would otherwise be missing and DOWNLOAD would start a
+paused one from nothing. A press of cancel or pause moves nothing on the button, as Big Picture's moves nothing: the
+bar, and what the cached detail found on disk, go with the backend's cancelled or failed frame, since a press that is
+refused or gets no answer leaves the transfer running. Such a press is logged, and a cancel the backend refuses because
+it holds no download of the game, running or paused, ends the press's own bar and drops the game from the download
+store, since no frame will. The chevron beside PLAY opens the game's menu, whose one entry is Uninstall
+(`executeRomUninstall`, `frontend/src/utils/romUninstall.ts`), which, like Big Picture's, asks nothing first. What a
+download, an adoption or an uninstall puts on the button — STARTING..., the bar before the download store carries the
+transfer, READY!, UNINSTALLING..., the verdict it holds after — stays with the version it was pressed for, so a version
+switch while it runs leaves it behind and the button draws the new version's own state. Where the game cannot start —
+its emulator cannot, or its file does not start with it — PLAY is disabled with the sentence `startRefusal`
 (`frontend/src/utils/emulatorStart.ts`) answers. While the page checks whether the game can start, and where that check
 went wrong, PLAY does what Big Picture's does
 ([Launch-target validation](backend-architecture.md#launch-target-validation)), and reads CHECKING... where Big

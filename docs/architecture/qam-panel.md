@@ -874,8 +874,10 @@ emulator menu entry while whether that emulator can start the game is still bein
 (`frontend/src/utils/emulatorMenu.tsx`).
 
 The desktop client's disc and version selector, PLAY, RESOLVE CONFLICT and DOWNLOAD (dev build only) show the same ring
-while a version switch is under way, without that class: `frontend/src/desktop/gameview/SvgThrobber.tsx` turns an SVG
-with SMIL, because the class's keyframes would be a stylesheet on Steam's page outside the restoration ledger
+while a version switch is under way, and its Play button shows it where Big Picture's shows its throbber on a download
+or an uninstall: on STARTING..., on UNINSTALLING... and in cancel's place while a download unpacks. They draw it without
+that class: `frontend/src/desktop/gameview/SvgThrobber.tsx` turns an SVG with SMIL, because the class's keyframes would
+be a stylesheet on Steam's page outside the restoration ledger
 ([desktop-dom-architecture.md](desktop-dom-architecture.md)).
 
 The throbber puts its rules into the document it is drawn in (`Throbber.tsx`, with
