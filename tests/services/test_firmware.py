@@ -8065,9 +8065,10 @@ class TestTwoPlatformsThatShareASlug:
         self, firmware, fw, use_case, args
     ):
         firmware.romm_api.list_platforms.return_value = self._listing((self._GC, []))
+        call = getattr(fw, use_case)
 
         with pytest.raises(Refused) as refused:
-            await getattr(fw, use_case)(*args)
+            await call(*args)
 
         assert refused.value.reason == "invalid_value"
         firmware.romm_api.list_platforms.assert_not_called()

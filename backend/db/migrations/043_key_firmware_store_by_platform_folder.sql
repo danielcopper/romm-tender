@@ -36,7 +36,8 @@
 -- -----------------------------------------------------------------------------
 ALTER TABLE firmware_store RENAME COLUMN platform_slug TO platform_folder;
 ALTER TABLE firmware_store ADD COLUMN platform_slug TEXT NOT NULL DEFAULT '';
-UPDATE firmware_store SET platform_slug = platform_folder;
+-- Every row: the column was just added with DEFAULT ''.
+UPDATE firmware_store SET platform_slug = platform_folder WHERE platform_slug = '';
 
 ALTER TABLE firmware_links RENAME COLUMN platform_slug TO platform_folder;
 
@@ -57,4 +58,4 @@ ALTER TABLE roms ADD COLUMN platform_fs_slug TEXT;
 
 UPDATE platform_sync_state SET skip_revoked = 1 WHERE skip_revoked = 0;
 
-DELETE FROM collection_sync_state;
+DELETE FROM collection_sync_state WHERE collection_id IS NOT NULL;  -- every row: collection_id is NOT NULL (019)
