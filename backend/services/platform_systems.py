@@ -1,8 +1,9 @@
 """PlatformSystemService — the system a RomM platform is in an emulator source, and the one an installed game keeps.
 
-Owns the platform's kept ids — the ``kv_config`` value written at every sync
-beside the platform names — and their one live read from RomM where none are
-kept for a platform yet. Which system the ids give is asked of one source at a
+Owns the kept platforms — the ``kv_config`` value written at every sync
+beside the platform names, keyed by each platform's folder in RomM and read
+here by its slug — and their one live read from RomM where none is kept for a
+platform yet. Which system the ids give is asked of one source at a
 time (``SourcePlatformSystems``); an installed game keeps the system its
 install record holds, because only a new download follows the resolver's
 current answer.
@@ -20,11 +21,13 @@ from domain.platform_system import (
     FOUND,
     PLATFORM_IDS_KEY,
     UNASKED,
+    KeptPlatform,
     PlatformIds,
     PlatformSystem,
     decode_platform_ids,
     encode_platform_ids,
-    platform_ids_by_slug,
+    kept_by_slug,
+    kept_platforms,
 )
 from lib.errors import RommApiError, classify_error, romm_error_log_level
 
@@ -110,7 +113,7 @@ class PlatformSystemService:
         return self.platform_system(platform_slug, reading=reading)
 
     def listed_platforms(self) -> frozenset[str] | None:
-        """Every platform whose ids are kept, or ``None`` where no listing was ever kept. Reads nothing from RomM.
+        """The slug of every kept platform, or ``None`` where no listing was ever kept. Reads nothing from RomM.
 
         That is each platform RomM listed at the last sync, every one a listing
         read since named (:meth:`_read_and_keep` keeps the whole listing), and
@@ -118,14 +121,17 @@ class PlatformSystemService:
         """
         with self._uow_factory() as uow:
             kept = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY))
-        return frozenset(kept) if kept is not None else None
+        if kept is None:
+            return None
+        return frozenset(entry.slug for entry in kept.values() if entry.slug is not None)
 
     def _ids_and_name(self, platform_slug: str, *, ask_romm: bool) -> tuple[PlatformIds, str]:
         with self._uow_factory() as uow:
             kept = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY))
             names = decode_platform_names(uow.kv_config.get(PLATFORM_NAMES_KEY))
-        if kept is not None and platform_slug in kept:
-            ids = kept[platform_slug]
+        entry = kept_by_slug(kept, platform_slug) if kept is not None else None
+        if entry is not None:
+            ids = entry.question_ids()
         elif ask_romm:
             ids = self._read_and_keep(platform_slug)
         else:
@@ -133,11 +139,20 @@ class PlatformSystemService:
         return ids, names.get(platform_slug) or ids.name or platform_slug
 
     def _read_and_keep(self, platform_slug: str) -> PlatformIds:
-        """*platform_slug*'s ids from RomM's listing, kept with every listed platform's beside those kept before."""
-        listed = platform_ids_by_slug(self._romm_api.list_platforms())
-        ids = listed.get(platform_slug, PlatformIds())
+        """*platform_slug*'s ids from RomM's listing, kept with every listed platform beside those kept before.
+
+        A kept platform whose slug the listing names is replaced by what the
+        listing gives. A slug the listing does not name is kept, with nothing
+        but the slug, under the slug itself, below the listing, so a listed
+        folder of that name takes the key.
+        """
+        listed = kept_platforms(self._romm_api.list_platforms(), self._romm_api.get_version())
+        entry = kept_by_slug(listed, platform_slug)
         self._log_debug(f"[platforms] no ids kept for {platform_slug}; read {len(listed)} from RomM")
+        listed_slugs = {kept.slug for kept in listed.values()}
+        unlisted = {platform_slug: KeptPlatform(slug=platform_slug)} if entry is None else {}
         with self._uow_factory() as uow:
             current = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY)) or {}
-            uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids({**current, **listed, platform_slug: ids}))
-        return ids
+            before = {key: kept for key, kept in current.items() if kept.slug not in listed_slugs}
+            uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids({**before, **unlisted, **listed}))
+        return entry.question_ids() if entry is not None else PlatformIds()

@@ -13,7 +13,7 @@ import os
 
 import pytest
 
-from domain.platform_system import PLATFORM_IDS_KEY, PlatformIds, encode_platform_ids
+from domain.platform_system import PLATFORM_IDS_KEY, KeptPlatform, encode_platform_ids
 from domain.rom import Rom
 from domain.version_metadata import VersionMetadata
 
@@ -148,7 +148,9 @@ async def test_bios_status_unreachable_server_is_unknown(harness):
     # The platform's ids were kept by an earlier reading, so only the firmware
     # listing, which comes off the same platform list, meets the offline server.
     with harness.uow_factory() as uow:
-        uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids({"psvita": PlatformIds()}))
+        uow.kv_config.set(
+            PLATFORM_IDS_KEY, encode_platform_ids({"psvita": KeptPlatform(slug="psvita", fs_slug="psvita")})
+        )
     harness.romm.list_platforms_side_effect = RuntimeError("offline")
 
     result = await harness.endpoints.get_bios_status(42)

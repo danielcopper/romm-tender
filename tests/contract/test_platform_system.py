@@ -13,7 +13,15 @@ import os
 
 import pytest
 
-from domain.platform_system import FOUND, NO_SYSTEM, PLATFORM_IDS_KEY, SWITCHED_OFF, PlatformIds, decode_platform_ids
+from domain.platform_system import (
+    FOUND,
+    NO_SYSTEM,
+    PLATFORM_IDS_KEY,
+    SWITCHED_OFF,
+    KeptPlatform,
+    PlatformIds,
+    decode_platform_ids,
+)
 from lib.errors import RommAuthError, RommConnectionError
 
 from ._seed import enable_save_sync, seed_rom
@@ -22,11 +30,26 @@ pytestmark = pytest.mark.usefixtures("seeded_retrodeck")
 
 # RomM's own slug for a platform the catalogue calls ``gba``.
 _SLUG = "game-boy-advance"
+_KEPT_GBA = KeptPlatform(
+    slug=_SLUG,
+    fs_slug="gba",
+    platform_id=1,
+    name="Game Boy Advance",
+    ids={"fs_slug": "gba", "igdb_id": 24, "tgdb_id": 5},
+)
 
 
 def _seed_server(harness, rom_id: int = 5) -> None:
     harness.romm.platforms = [
-        {"id": 1, "slug": _SLUG, "name": "Game Boy Advance", "rom_count": 1, "igdb_id": 24, "tgdb_id": 5}
+        {
+            "id": 1,
+            "slug": _SLUG,
+            "fs_slug": "gba",
+            "name": "Game Boy Advance",
+            "rom_count": 1,
+            "igdb_id": 24,
+            "tgdb_id": 5,
+        }
     ]
     harness.romm.roms[rom_id] = {
         "id": rom_id,
@@ -117,7 +140,7 @@ async def test_where_no_ids_are_kept_they_are_read_once_from_rom_m_and_kept(harn
     ] * 2
     with harness.uow_factory() as uow:
         kept = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY))
-    assert kept == {_SLUG: PlatformIds(igdb_id=24, tgdb_id=5, name="Game Boy Advance")}
+    assert kept == {"gba": _KEPT_GBA}
 
 
 async def test_with_rom_m_unreachable_and_no_ids_kept_the_pages_show_the_offline_state(harness):
@@ -162,7 +185,7 @@ async def test_the_next_read_with_rom_m_reachable_keeps_the_ids(harness):
     assert core["platform_system"]["state"] == "found"
     with harness.uow_factory() as uow:
         kept = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY))
-    assert kept == {_SLUG: PlatformIds(igdb_id=24, tgdb_id=5, name="Game Boy Advance")}
+    assert kept == {"gba": _KEPT_GBA}
 
 
 async def test_with_rom_m_refusing_the_read_the_pages_name_its_reason(harness):

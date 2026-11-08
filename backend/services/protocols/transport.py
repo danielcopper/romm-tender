@@ -113,6 +113,10 @@ class RommPlatformReader(Protocol):
         """
         ...
 
+    def get_version(self) -> str | None:
+        """The RomM server version last detected, which a listing read now is read with; ``None`` if unset."""
+        ...
+
 
 class RommPlaytimeApi(Protocol):
     """RomM native play-session ingest surface for playtime tracking (ADR-0018)."""

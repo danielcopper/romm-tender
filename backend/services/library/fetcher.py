@@ -344,7 +344,9 @@ class LibraryFetcher:
         listed = await self._loop.run_in_executor(None, self._romm_api.list_platforms)
         self._sync_state.run_listed_platform_slugs = frozenset(platform_ids_by_slug(listed))
         self._sync_state.run_listed_platform_names = listed_platform_names(listed)
-        await self._loop.run_in_executor(None, keep_platform_ids, self._uow_factory, self._logger, listed)
+        await self._loop.run_in_executor(
+            None, keep_platform_ids, self._uow_factory, self._logger, listed, self._romm_api.get_version()
+        )
 
         # Empty map = "all platforms enabled" (the safety floor for a user who
         # syncs without ever opening the Platforms page). ``get_platforms``
