@@ -1,8 +1,9 @@
 # Invariants: Save-file sync
 
 A running game's saves, the device id every save operation sends, the per-ROM lock, the emulator's answer for which
-files a save is, save places with holes, slots, and the decisions the gavel core makes. How an entry reads and binds,
-and the other areas: [the register's index](index.md).
+files a save is, save places with holes, slots, and the decisions the gavel core makes. Which RetroDECK folders a save
+path may use, and where the resolver's answer is read, are entries of [the resolver](resolver.md). How an entry reads
+and binds, and the other areas: [the register's index](index.md).
 
 - **No save path but the sync before a start, the one after a game and a conflict resolved before a start changes the
   saves of a game Steam lists as running** — test + prompt-only

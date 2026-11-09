@@ -1,7 +1,8 @@
 # Invariants: The desktop surface
 
-The desktop client's surface in the dev build: its restoration ledgers and its selectors. How an entry reads and binds,
-and the other areas: [the register's index](index.md).
+The desktop client's surface in the dev build: its restoration ledgers and its selectors. The desktop Play button's
+stranded-panel gate and the per-ROM detail state it reads are entries of [the panel](panel.md). How an entry reads and
+binds, and the other areas: [the register's index](index.md).
 
 - **Every change the desktop surface makes to Steam's desktop window goes through a restoration ledger and is given
   back: the navigation watcher's on leaving the page whenever the ledger holds anything — a pass that threw partway

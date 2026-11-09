@@ -1,9 +1,10 @@
 # Invariants: Cross-cutting
 
 Rules no single area owns: who writes `settings.json`, the program's directories and identifiers, naming, coverage
-exclusions, locks, links and vendored trees. It also holds the long form of the backup-or-confirm rule, whose statement
-stands in `CLAUDE.md`. How the code is layered is in [code-structure](code-structure.md). How an entry reads and binds,
-and the other areas: [the register's index](index.md).
+exclusions, lock files, links, vendored trees and the register itself. It also holds the long form of the
+backup-or-confirm rule, whose statement stands in `CLAUDE.md`. How the code is layered is in
+[code-structure](code-structure.md). How an entry reads and binds, and the other areas:
+[the register's index](index.md).
 
 ## Entries
 
@@ -115,6 +116,12 @@ and the other areas: [the register's index](index.md).
   `docs/requirements.*` beside the docs)** — check — `scripts/check_lock_sync.py`
 - **Every local markdown link in tracked docs resolves (file target + heading/attr-list anchor)** — check —
   `scripts/check_markdown_links.py`
+- **The invariant register stays within its size limits, and every entry stands in one place** — check —
+  `scripts/check_invariant_register.py`, over the register section of `CLAUDE.md` and every file in this folder; the
+  limits are in `docs/contributing/development.md`, and what it reads is its docstring. It also fails a second register
+  section in `CLAUDE.md`, an entry with a tier anywhere outside that section, and an area headline that stands anywhere
+  in `CLAUDE.md`. Unseen by it: a rule set as a paragraph or a heading rather than a `- **` list item, an area headline
+  copied into `CLAUDE.md` in other words, and two headlines that state one rule in different words
 - **Every tree under `backend/_vendor/`, and the resolver's recorded machines under `tests/adapters/atlas_vectors/`, is
   pinned by the `<pkg>.SHA256SUMS` beside it: every manifest entry under `<pkg>/` matches the vendored file's digest** —
   check
@@ -154,8 +161,8 @@ and the other areas: [the register's index](index.md).
 ## Backup or confirm
 
 The rule — every destructive operation has backup-or-confirm, and never deletes data that exists nowhere else — stands
-in `CLAUDE.md`'s register, because its breach loses data for good and any area can break it. What holds it, the deletes
-it covers and what stays prompt-only:
+in `CLAUDE.md`'s register section, which says why it stands there. What holds it, the deletes it covers and what stays
+prompt-only:
 
 save-file removals route through the `.romm-backup` funnel, the save backup (`SaveBackup.back_up_save_file`; the
 removed-game cleanup's claimed variant is `SaveBackup.back_up_claimed_save_file`, reached through

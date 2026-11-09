@@ -479,9 +479,8 @@ green.
 
 `mise run lint` (and CI) also runs `scripts/check_invariant_register.py`, which holds the invariant register to its
 size: the register section of `CLAUDE.md` at most 6,000 characters, an entry's bold headline at most 300, one area file
-under `docs/architecture/invariants/` at most 40,000, and no headline standing in two places. The register was cut to
-one line per rule once before and grew back to three times its size in six weeks, because nothing measured it. What it
-reads and what it misses is its docstring; its tests are `tests/scripts/test_check_invariant_register.py`.
+under `docs/architecture/invariants/` at most 40,000, and no headline standing in two places. What it reads and what it
+misses is its docstring; its tests are `tests/scripts/test_check_invariant_register.py`.
 
 `mise run lint` (and CI) also runs `scripts/check_generated_installer_logo.py`, which holds `install.sh`'s greeter to
 the mark. The installer draws the logo before it does anything, and it cannot render an image, so the art is text
@@ -611,11 +610,10 @@ locally.
 
 Three places, split by how often they apply:
 
-- **`CLAUDE.md`** (repo root) — the traps, the invariant register's map from area to file with the few rules whose
-  breach loses data for good, and the workflow. Everything here applies no matter which file you touch, so it is read up
-  front.
-- **`docs/architecture/invariants/`** — the invariant register's entries, one file per area. Whoever implements or
-  reviews in an area reads that area's file first; `CLAUDE.md`'s map names it.
+- **`CLAUDE.md`** (repo root) — the traps, the invariant register's map from area to file with the few rules it keeps,
+  and the workflow. Everything here applies no matter which file you touch, so it is read up front.
+- **`docs/architecture/invariants/`** — the invariant register's entries, one file per area; `CLAUDE.md`'s map names
+  each area's file and when to read it.
 - **`.claude/rules/*.md`** — the per-area conventions (services, adapters/domain, Python naming and docstrings, endpoint
   shapes, bootstrap wiring, vendored assets, backend and frontend testing). Each file carries a `paths:` frontmatter
   glob and is loaded when a matching file is opened, which keeps the always-on set small.

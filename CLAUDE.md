@@ -24,9 +24,9 @@ Three things, and nothing else:
 3. **Workflow** — how we work here; not derivable from the code.
 
 Everything else is topic depth: `docs/` for humans (the invariant register's entries among them, one file per area),
-`.claude/rules/` for path-scoped coding conventions. A rule with a mechanical check needs only its one-line statement
-here (CI carries the enforcement); a rule without one needs its full statement here, in the rule file that owns its area
-or in its area's register file, because nothing else will catch it.
+`.claude/rules/` for path-scoped coding conventions. A rule with a mechanical check needs only its one-line statement —
+in its area's register file, or here if it is a trap (CI carries the enforcement); a rule without one needs its full
+statement here, in the rule file that owns its area or in its area's register file, because nothing else will catch it.
 
 ## Where the details live
 
@@ -366,18 +366,19 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
 ## Code Quality
 
 CI runs SonarCloud (Quality Gate: 80% coverage on new code, 0 bugs, 0 vulnerabilities), Ruff, basedpyright,
-import-linter, pytest-cov branch coverage, and the repo's `scripts/check_*` gates. **The per-rule checks and what each
-one enforces are listed in the invariant register's area files** (the map below) — they are the single inventory; do not
-duplicate it here.
+import-linter, pytest-cov branch coverage, and the repo's `scripts/check_*` gates. **The checks that hold a
+cross-cutting rule, and what each one enforces, are listed with the rule in the invariant register's area files** (the
+map below) — the single inventory of them; do not duplicate it here.
 
 ## Invariant register — cross-cutting safety rules
 
 The safety rules that span files, so no diff-scoped review (human or agent) sees the whole rule, each with its
 enforcement tier: a `check`/`test` rule is enforced by the named artifact, a `prompt-only` rule only by review until a
-check exists. A rule is never weakened to stay green, and a real drift is a finding to triage, never an exemption. The
-entries stand once each, in one file per area under `docs/architecture/invariants/`; how an entry reads and binds is
-that folder's [index](docs/architecture/invariants/index.md). `scripts/check_invariant_register.py` holds this section
-to 6,000 characters, a headline to 300 and an area file to 40,000.
+check exists, and moves to the `check` tier once one does. A rule is never weakened to stay green, and a real drift is a
+finding to triage, never an exemption. Every entry but the two below stands once, in one file per area under
+`docs/architecture/invariants/`; how an entry reads and binds is that folder's
+[index](docs/architecture/invariants/index.md). `scripts/check_invariant_register.py` holds this section, every headline
+and every area file to a size limit.
 
 **Before implementing or reviewing in an area, read that area's file** — every file whose area a change touches.
 
@@ -409,8 +410,8 @@ to 6,000 characters, a headline to 300 and an area file to 40,000.
 - The desktop surface — `frontend/src/desktop/` — [desktop.md](docs/architecture/invariants/desktop.md)
 - Code structure — layering, aggregates, Units of Work, tasks, clocks, module size —
   [code-structure.md](docs/architecture/invariants/code-structure.md)
-- Cross-cutting — settings, directories, identifiers, naming, coverage, locks, links, vendored trees —
-  [cross-cutting.md](docs/architecture/invariants/cross-cutting.md)
+- Cross-cutting — settings, directories, identifiers, naming, coverage, lock files, links, vendored trees, the register
+  — [cross-cutting.md](docs/architecture/invariants/cross-cutting.md)
 
 Two rules stand here, because a breach loses user data for good, any area can break them, and no check holds them fully:
 

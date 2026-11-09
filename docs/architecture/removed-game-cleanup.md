@@ -4,9 +4,9 @@ When RomM stops serving a ROM id, Tender keeps the local row. Nothing is ever de
 that no longer sees an id retains everything it already has. Removing that local state is an explicit, separately
 confirmed operation, and this page owns how it stays safe.
 
-The cleanup's entries in the invariant register ([Removed-game cleanup](invariants/prune.md)) are short statements of
-the rules below; this page is where their detail lives. Save-side path resolution and backup mechanics belong to
-[save-file-sync-architecture.md](save-file-sync-architecture.md); shortcut identity and artwork belong to
+The cleanup's entries in the invariant register ([Removed-game cleanup](invariants/prune.md)) state the rules below and
+what holds them; this page is where the design behind them lives. Save-side path resolution and backup mechanics belong
+to [save-file-sync-architecture.md](save-file-sync-architecture.md); shortcut identity and artwork belong to
 [steam-non-steam-shortcuts.md](steam-non-steam-shortcuts.md).
 
 ## Where the code lives

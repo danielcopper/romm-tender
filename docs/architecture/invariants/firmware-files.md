@@ -1,7 +1,8 @@
 # Invariants: Firmware: files, links and Tender's folder
 
 Tender's folder, where a BIOS link may be placed or removed, and which BIOS files may be deleted. Answers and verdicts
-are in [firmware](firmware.md). How an entry reads and binds, and the other areas: [the register's index](index.md).
+are in [firmware](firmware.md); which RetroDECK folders a download or removal may use is an entry of
+[the resolver](resolver.md). How an entry reads and binds, and the other areas: [the register's index](index.md).
 
 - **Tender's folder is unreachable only while a store has recorded something under it; only its owner,
   `services/tender_folder.py`, creates it, writing its `.tender-folder` id file into `Tender/` whenever it creates it**

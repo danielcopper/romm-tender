@@ -1,8 +1,9 @@
 # Invariants: The panel: Quick Access and the game page
 
 Tender's Quick Access entry, its section on Steam's game page, the stranded panel, per-ROM detail state, focusable rows,
-list-and-detail entry focus and focus-group values. How an entry reads and binds, and the other areas:
-[the register's index](index.md).
+list-and-detail entry focus and focus-group values. The BIOS tables and platform pages under `frontend/src/bigpicture/`
+are also bound by the entries of [firmware](firmware.md), and the Sync page by those of [library sync](library-sync.md).
+How an entry reads and binds, and the other areas: [the register's index](index.md).
 
 - **Tender's Quick Access entry composes with Decky's rather than going through it, and everything it binds to the Quick
   Access window is bound from inside that window's React tree** — test + prompt-only —

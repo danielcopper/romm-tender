@@ -1,17 +1,12 @@
 # Invariant register
 
-The audit's clearest pattern: every rule with a mechanical check held; every rule that lived in prose or in a reviewer's
-head drifted. This register is the single inventory of the cross-cutting safety rules — the ones that span files, so no
-diff-scoped review (human or agent) sees the whole rule — plus the current enforcement tier of each. It is a **map of
-the enforcement surface, not the enforcement itself**: a `check`/`test` rule is enforced by the named artifact; a
-`prompt-only` rule is not yet mechanized and is carried by review until a check exists. The moment a `prompt-only` rule
-gets a mechanical check it moves to the `check` tier — a rule is never weakened to stay green, and a real drift is a
-finding to triage, never an exemption.
+The cross-cutting safety rules — the ones that span files, so no diff-scoped review (human or agent) sees the whole rule
+— each with its enforcement tier. It is a **map of the enforcement surface, not the enforcement itself**. What the tiers
+mean, who reads which file and when, and which rules stand in `CLAUDE.md` instead of here is the register section of the
+repository's `CLAUDE.md`, which also holds the map from area to file.
 
-Each entry stands once, in the file of the area it belongs to; an entry that concerns two areas stands in one of them,
-and the other points to it. `CLAUDE.md` keeps the map from area to file and the rules whose breach loses user data for
-good, any area can break, and no check holds fully. Whoever implements or reviews in an area reads that area's file
-first.
+Every other entry stands once, in the file of the area it belongs to; an entry that concerns two areas stands in one of
+them, and the other points to it.
 
 ## How an entry reads
 
@@ -21,9 +16,8 @@ An entry binds as a whole. The bold headline names the rule. Where the rule is l
 directly under the headline holds the rest of it and binds the same way. What follows — what enforces the rule, what
 that does not see, why the rule exists, the tests that pin it — stays what it is.
 
-`scripts/check_invariant_register.py` holds the register to its size: a headline at most 300 characters, an area file at
-most 40,000 (an area that grows past it is split), the register section of `CLAUDE.md` at most 6,000, and every headline
-in one place only.
+What holds the register to its size and every headline to one place is its own entry in
+[Cross-cutting](cross-cutting.md); the limits are in the [development guide](../../contributing/development.md).
 
 ## The areas
 

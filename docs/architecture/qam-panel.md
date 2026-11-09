@@ -1206,8 +1206,8 @@ and the page behind the slot is where it is said which. An expired preview count
 its 30-minute TTL (`PREVIEW_MAX_AGE_SECONDS`). What ticks for that is a single timer aimed at the deadline, not a
 per-second interval: nothing on Main counts a preview down, so the only moment the clock changes anything here is the
 one the slot disappears at. **Main never discards a preview**, and since it can no longer start one either, it holds
-none of the paths that answer the preview question — the invariant register's pending-preview entry names all of them,
-and every one is the Sync page's.
+none of the paths that answer the preview question — the invariant register's pending-preview entry
+([Library sync: the run](invariants/library-sync.md)) names all of them, and every one is the Sync page's.
 
 **Cancel Sync** sits directly under the slot while a run is in flight, and nowhere else. It is an action on the thing
 being displayed rather than navigation, so it does not break the rule above; the alternative was two presses to stop a
