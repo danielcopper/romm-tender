@@ -5,7 +5,6 @@
 
 import { getDownloadQueue, logWarn } from "../api/backend";
 import type { DownloadItem } from "../types";
-import type { DownloadStoreLike } from "./downloadFailure";
 import { getDownloadState, updateDownload } from "./downloadStore";
 
 /** Whether a download is under way: queued, downloading, paused or unpacking. */
@@ -26,11 +25,7 @@ export function isDownloadUnderWay(download: DownloadItem | undefined): download
  * the last frame. A read that fails is logged as a warning. Why a page reads the
  * queue at all: docs/architecture/desktop-dom-architecture.md.
  */
-export async function seedDownloadFromQueue(
-  romId: number,
-  tag: string,
-  store: DownloadStoreLike = { getDownloadState, updateDownload },
-): Promise<void> {
+export async function seedDownloadFromQueue(romId: number, tag: string): Promise<void> {
   let downloads: DownloadItem[];
   try {
     ({ downloads } = await getDownloadQueue());
@@ -39,6 +34,6 @@ export async function seedDownloadFromQueue(
     return;
   }
   const entry = downloads.find((d) => d.rom_id === romId);
-  if (!isDownloadUnderWay(entry) || store.getDownloadState().some((d) => d.rom_id === romId)) return;
-  store.updateDownload(entry);
+  if (!isDownloadUnderWay(entry) || getDownloadState().some((d) => d.rom_id === romId)) return;
+  updateDownload(entry);
 }
