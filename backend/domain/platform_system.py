@@ -1,15 +1,17 @@
 """Which system a RomM platform is in one emulator source, decided from the resolver's answers.
 
 RomM names a platform by its own slug, which only sometimes equals a system a
-source declares, and by the ids it holds for the platform in four public
-vocabularies. The source answers per id which of its systems belong to that
+source declares, and by the ids it holds for the platform in public
+vocabularies, four of which the resolver knows. The source answers per id which of its systems belong to that
 platform; ``adapters/atlas_platforms.py`` asks and reads those answers into
 :class:`IdAnswer`, and this module decides from them which system the
 platform is there, or why it is none. RomM's slug is never a system name: it
 only chooses among the platforms the resolver named.
 
-The ids are kept offline beside the platform names (``kv_config``); decoding
-and encoding that value is here, reading and writing it is the caller's.
+What is kept of each platform RomM lists lives offline beside the platform
+names (``kv_config``), under the platform's folder in RomM (``fs_slug``);
+decoding and encoding that value is here, reading and writing it is the
+caller's.
 
 Pure compute — no I/O, no state mutation.
 """
@@ -17,7 +19,7 @@ Pure compute — no I/O, no state mutation.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
@@ -27,13 +29,17 @@ from domain.retrodeck_folders import FolderRefused, not_installed, switched_off,
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
-# Where the ids are kept in ``kv_config``, beside ``platform_names``.
+# Where the listed platforms are kept in ``kv_config``, beside ``platform_names``.
 PLATFORM_IDS_KEY = "platform_ids"
 
 # The fields of RomM's platform the resolver can be asked about, in the order
 # they are asked. RomM's other ids have no crosswalk in the resolver and are
 # not asked.
 ID_FIELDS = ("igdb_id", "libretro_slug", "ss_id", "tgdb_id")
+
+# A suffix rather than a list of fields, so that an identifier RomM adds
+# needs no change here.
+_IDENTIFIER_SUFFIXES = ("_id", "_slug")
 
 
 class SystemStatus(StrEnum):
@@ -82,27 +88,88 @@ def platform_ids_of(platform: Mapping[str, Any]) -> PlatformIds:
         libretro_slug=_text(platform.get("libretro_slug")),
         ss_id=_number(platform.get("ss_id")),
         tgdb_id=_number(platform.get("tgdb_id")),
-        name=_text(platform.get("name")) or _text(platform.get("display_name")),
+        name=_listed_name(platform),
     )
 
 
-def platform_ids_by_slug(platforms: Iterable[Mapping[str, Any]]) -> dict[str, PlatformIds]:
-    """Every listed platform's ids, keyed by its RomM slug; a platform without a slug is left out."""
-    return {slug: platform_ids_of(p) for p in platforms if (slug := _text(p.get("slug"))) is not None}
+@dataclass(frozen=True, slots=True)
+class KeptPlatform:
+    """What is kept of one platform RomM lists, under its folder in RomM (``fs_slug``).
+
+    ``ids`` holds every field of RomM's platform whose name ends in ``_id`` or
+    ``_slug``, each as RomM sent it. Tender reads none of them but the ones
+    :meth:`question_ids` asks the resolver with. ``romm_version`` is the RomM
+    version known when the listing was read, ``None`` where none was.
+    """
+
+    slug: str | None = None
+    fs_slug: str | None = None
+    platform_id: int | None = None
+    name: str | None = None
+    is_identified: bool | None = None
+    romm_version: str | None = None
+    ids: dict[str, Any] = field(default_factory=dict)
+
+    def question_ids(self) -> PlatformIds:
+        """The ids and name the platform's system is asked with."""
+        return platform_ids_of({**self.ids, "name": self.name})
 
 
-def encode_platform_ids(ids: Mapping[str, PlatformIds]) -> str:
+def kept_platform_of(platform: Mapping[str, Any], romm_version: str | None) -> KeptPlatform:
+    """What is kept of one RomM platform read with *romm_version*; a named field of the wrong kind counts as none."""
+    identified = platform.get("is_identified")
+    return KeptPlatform(
+        slug=_text(platform.get("slug")),
+        fs_slug=_text(platform.get("fs_slug")),
+        platform_id=_number(platform.get("id")),
+        name=_listed_name(platform),
+        is_identified=identified if isinstance(identified, bool) else None,
+        romm_version=romm_version,
+        ids={key: value for key, value in platform.items() if key.endswith(_IDENTIFIER_SUFFIXES)},
+    )
+
+
+def kept_platforms(platforms: Iterable[Mapping[str, Any]], romm_version: str | None) -> dict[str, KeptPlatform]:
+    """Every listed platform kept, keyed by its folder in RomM; a platform without one is left out."""
+    return {
+        folder: entry
+        for entry in (kept_platform_of(p, romm_version) for p in platforms)
+        if (folder := entry.fs_slug) is not None
+    }
+
+
+def kept_by_slug(kept: Mapping[str, KeptPlatform], slug: str) -> KeptPlatform | None:
+    """The kept platform whose slug is *slug* — of several, the last kept — or ``None``."""
+    # Folders that share a slug carry the same ids: RomM looks every
+    # metadata id up by the platform's slug (``handler/scan_handler.py::
+    # scan_platform``, 5.4.1), so which of them answers changes no question.
+    return next((entry for entry in reversed(list(kept.values())) if entry.slug == slug), None)
+
+
+def encode_platform_ids(kept: Mapping[str, KeptPlatform]) -> str:
     """The value kept under :data:`PLATFORM_IDS_KEY`."""
     return json.dumps(
         {
-            slug: {**{field: getattr(entry, field) for field in ID_FIELDS}, "name": entry.name}
-            for slug, entry in ids.items()
+            key: {
+                "slug": entry.slug,
+                "fs_slug": entry.fs_slug,
+                "id": entry.platform_id,
+                "name": entry.name,
+                "is_identified": entry.is_identified,
+                "romm_version": entry.romm_version,
+                "ids": entry.ids,
+            }
+            for key, entry in kept.items()
         }
     )
 
 
-def decode_platform_ids(raw: str | None) -> dict[str, PlatformIds] | None:
-    """The kept ids by slug, or ``None`` where none are kept — absent, empty, or not a JSON object."""
+def decode_platform_ids(raw: str | None) -> dict[str, KeptPlatform] | None:
+    """The kept platforms by key, or ``None`` where none are kept — absent, empty, or not a JSON object.
+
+    An entry without an ``ids`` object was kept before the record held more
+    than a platform's ids and name, keyed by its slug, and is read as such.
+    """
     if not raw:
         return None
     try:
@@ -111,7 +178,25 @@ def decode_platform_ids(raw: str | None) -> dict[str, PlatformIds] | None:
         return None
     if not isinstance(decoded, dict):
         return None
-    return {slug: platform_ids_of(entry) for slug, entry in decoded.items() if isinstance(entry, dict)}
+    return {key: _decode_entry(key, entry) for key, entry in decoded.items() if isinstance(entry, dict)}
+
+
+def _decode_entry(key: str, entry: Mapping[str, Any]) -> KeptPlatform:
+    ids = entry.get("ids")
+    if not isinstance(ids, dict):
+        return KeptPlatform(
+            slug=_text(key), name=_text(entry.get("name")), ids={f: entry[f] for f in ID_FIELDS if f in entry}
+        )
+    kept = kept_platform_of(entry, _text(entry.get("romm_version")))
+    return KeptPlatform(
+        slug=kept.slug,
+        fs_slug=kept.fs_slug,
+        platform_id=kept.platform_id,
+        name=kept.name,
+        is_identified=kept.is_identified,
+        romm_version=kept.romm_version,
+        ids=ids,
+    )
 
 
 def _number(value: Any) -> int | None:
@@ -126,6 +211,10 @@ def _number(value: Any) -> int | None:
 
 def _text(value: Any) -> str | None:
     return value if isinstance(value, str) and value.strip() else None
+
+
+def _listed_name(platform: Mapping[str, Any]) -> str | None:
+    return _text(platform.get("name")) or _text(platform.get("display_name"))
 
 
 @dataclass(frozen=True, slots=True)

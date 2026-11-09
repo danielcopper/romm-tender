@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
 
 import pytest
+from _romm_platforms import LISTED_GAMECUBE
 
 from domain.emulator_sources import ALL_SOURCES_SWITCHED_OFF, CATALOGUE_UNAVAILABLE, NO_SOURCE_DETECTED, ArrangedSource
 from domain.platform_system import (
@@ -13,6 +15,7 @@ from domain.platform_system import (
     SWITCHED_OFF,
     UNASKED,
     IdAnswer,
+    KeptPlatform,
     PlatformIds,
     PlatformSystem,
     SystemMatch,
@@ -20,8 +23,10 @@ from domain.platform_system import (
     SystemStatus,
     decode_platform_ids,
     encode_platform_ids,
+    kept_by_slug,
+    kept_platform_of,
+    kept_platforms,
     pick_system,
-    platform_ids_by_slug,
     platform_ids_of,
 )
 from domain.retrodeck_folders import GAME_DOWNLOAD, EveryFolderRefused, FolderRefused
@@ -96,15 +101,18 @@ class TestPlatformIds:
     def test_a_name_of_the_wrong_kind_counts_as_none(self, value):
         assert platform_ids_of({"libretro_slug": value}) == PlatformIds()
 
-    def test_every_listed_platform_is_keyed_by_its_slug(self):
-        listing = [{"slug": "snes", "igdb_id": 19}, {"slug": "", "igdb_id": 7}, {"igdb_id": 4}, {"slug": "psx"}]
-
-        assert platform_ids_by_slug(listing) == {"snes": PlatformIds(igdb_id=19), "psx": PlatformIds()}
-
     def test_the_kept_value_reads_back_as_it_was_kept(self):
         kept = {
-            "snes": PlatformIds(igdb_id=19, tgdb_id=6, name="Super Nintendo"),
-            "psx": PlatformIds(libretro_slug="Sony - PlayStation"),
+            "sfc": KeptPlatform(
+                slug="snes",
+                fs_slug="sfc",
+                platform_id=3,
+                name="Super Nintendo",
+                is_identified=True,
+                romm_version="5.4.1",
+                ids={"igdb_id": 19, "tgdb_id": 6, "moby_slug": None},
+            ),
+            "psx": KeptPlatform(slug="psx", ids={"libretro_slug": "Sony - PlayStation"}),
         }
 
         assert decode_platform_ids(encode_platform_ids(kept)) == kept
@@ -114,7 +122,88 @@ class TestPlatformIds:
         assert decode_platform_ids(raw) is None
 
     def test_an_entry_that_is_not_an_object_is_dropped(self):
-        assert decode_platform_ids('{"snes": {"igdb_id": 19}, "psx": 7}') == {"snes": PlatformIds(igdb_id=19)}
+        assert decode_platform_ids('{"snes": {"igdb_id": 19}, "psx": 7}') == {
+            "snes": KeptPlatform(slug="snes", ids={"igdb_id": 19})
+        }
+
+
+class TestKeptPlatform:
+    def test_a_listed_platform_is_kept_with_its_named_fields_and_every_identifier_as_sent(self):
+        assert kept_platforms([LISTED_GAMECUBE], "5.4.1") == {
+            "gc": KeptPlatform(
+                slug="ngc",
+                fs_slug="gc",
+                platform_id=12,
+                name="Nintendo GameCube",
+                is_identified=True,
+                romm_version="5.4.1",
+                ids={
+                    "fs_slug": "gc",
+                    "igdb_slug": "ngc",
+                    "moby_slug": "gamecube",
+                    "hltb_slug": None,
+                    "libretro_slug": "Nintendo - GameCube",
+                    "igdb_id": 21,
+                    "sgdb_id": None,
+                    "moby_id": 14,
+                    "launchbox_id": 30,
+                    "ss_id": 13,
+                    "ra_id": 16,
+                    "hasheous_id": None,
+                    "tgdb_id": 2,
+                    "flashpoint_id": None,
+                    "family_slug": "nintendo",
+                },
+            )
+        }
+
+    def test_an_identifier_rom_m_adds_later_is_kept_with_no_change(self):
+        kept = kept_platform_of({**LISTED_GAMECUBE, "newdb_id": 77, "newdb_slug": "gcn"}, "5.5.0")
+
+        assert (kept.ids["newdb_id"], kept.ids["newdb_slug"]) == (77, "gcn")
+
+    def test_a_listed_platform_without_a_folder_is_left_out(self):
+        assert kept_platforms([{**LISTED_GAMECUBE, "fs_slug": None}, {"slug": "psx", "fs_slug": "psx"}], None) == {
+            "psx": KeptPlatform(slug="psx", fs_slug="psx", ids={"fs_slug": "psx"})
+        }
+
+    def test_two_folders_that_share_a_slug_are_both_kept(self):
+        kept = kept_platforms([LISTED_GAMECUBE, {**LISTED_GAMECUBE, "id": 13, "fs_slug": "gamecube"}], "5.4.1")
+
+        assert list(kept) == ["gc", "gamecube"]
+
+    def test_of_folders_that_share_a_slug_the_last_kept_answers_it(self):
+        kept = kept_platforms([LISTED_GAMECUBE, {**LISTED_GAMECUBE, "id": 13, "fs_slug": "gamecube"}], "5.4.1")
+
+        found = kept_by_slug(kept, "ngc")
+
+        assert found is not None
+        assert found.fs_slug == "gamecube"
+        assert kept_by_slug(kept, "gc") is None
+
+    def test_the_question_is_asked_with_the_four_ids_and_the_name_alone(self):
+        kept = kept_platform_of(LISTED_GAMECUBE, "5.4.1")
+
+        assert kept.question_ids() == PlatformIds(
+            igdb_id=21, libretro_slug="Nintendo - GameCube", ss_id=13, tgdb_id=2, name="Nintendo GameCube"
+        )
+
+    def test_a_record_kept_before_the_folder_was_reads_as_the_slug_it_was_kept_under(self):
+        raw = '{"snes": {"igdb_id": 19, "libretro_slug": null, "ss_id": null, "tgdb_id": 6, "name": "Super Nintendo"}}'
+
+        assert decode_platform_ids(raw) == {
+            "snes": KeptPlatform(
+                slug="snes",
+                name="Super Nintendo",
+                ids={"igdb_id": 19, "libretro_slug": None, "ss_id": None, "tgdb_id": 6},
+            )
+        }
+
+    def test_a_record_kept_before_asks_the_question_it_asked_before(self):
+        before = {"igdb_id": 19, "libretro_slug": None, "ss_id": 4, "tgdb_id": 6, "name": "Super Nintendo"}
+        [kept] = (decode_platform_ids(json.dumps({"snes": before})) or {}).values()
+
+        assert kept.question_ids() == platform_ids_of(before)
 
 
 class TestOneMatch:

@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from domain.platform_system import PLATFORM_IDS_KEY, PlatformIds, encode_platform_ids
+from domain.platform_system import PLATFORM_IDS_KEY, KeptPlatform, encode_platform_ids
 
 from ._seed import seed_es_systems, seed_rom
 
@@ -218,7 +218,10 @@ async def test_the_listing_is_fetched_once_for_the_whole_walk(harness):
     # The platforms' ids were kept by an earlier reading, so the platform list
     # is read by the page's own list and by the firmware listing alone.
     with harness.uow_factory() as uow:
-        uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids({"dc": PlatformIds(), "gba": PlatformIds()}))
+        uow.kv_config.set(
+            PLATFORM_IDS_KEY,
+            encode_platform_ids({slug: KeptPlatform(slug=slug, fs_slug=slug) for slug in ("dc", "gba")}),
+        )
 
     _, entries = await _compose(harness)
 

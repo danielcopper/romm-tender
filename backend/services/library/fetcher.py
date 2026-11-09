@@ -25,11 +25,11 @@ from domain.fetch_generation import (
     count_rows_for_skip,
     hidden_without_a_listed_version,
 )
+from domain.firmware_platforms import listed_slugs
 from domain.platform_names import listed_platform_names
 from domain.platform_prefs import materialize_enabled_platforms, resolve_sync_enabled
 from domain.platform_skip import probe_verdict, stamp_can_match
 from domain.platform_sync_state import stamp_for_skip
-from domain.platform_system import platform_ids_by_slug
 from domain.skip_prediction import (
     collapsed_shortcut_count,
     new_shortcut_count,
@@ -342,9 +342,11 @@ class LibraryFetcher:
         slug and name are held on the run's box.
         """
         listed = await self._loop.run_in_executor(None, self._romm_api.list_platforms)
-        self._sync_state.run_listed_platform_slugs = frozenset(platform_ids_by_slug(listed))
+        self._sync_state.run_listed_platform_slugs = listed_slugs(listed)
         self._sync_state.run_listed_platform_names = listed_platform_names(listed)
-        await self._loop.run_in_executor(None, keep_platform_ids, self._uow_factory, self._logger, listed)
+        await self._loop.run_in_executor(
+            None, keep_platform_ids, self._uow_factory, self._logger, listed, self._romm_api.get_version()
+        )
 
         # Empty map = "all platforms enabled" (the safety floor for a user who
         # syncs without ever opening the Platforms page). ``get_platforms``

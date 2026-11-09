@@ -15,8 +15,9 @@ from dataclasses import replace
 from unittest.mock import MagicMock
 
 import pytest
+from _romm_platforms import LISTED_GAMECUBE
 
-from domain.platform_system import PLATFORM_IDS_KEY, PlatformIds, decode_platform_ids
+from domain.platform_system import PLATFORM_IDS_KEY, KeptPlatform, decode_platform_ids
 from domain.sync_state import SyncCancelled, SyncState
 from domain.work_unit import WorkUnit
 from lib.errors import Refused, RommApiError, RommNotFoundError, classify_error
@@ -2353,8 +2354,8 @@ class TestTheSyncKeepsThePlatformsIds:
     async def test_every_listed_platform_is_kept_switched_off_ones_too(self, make_library, fake_romm_api):
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [
-            {"id": 1, "name": "N64", "slug": "n64", "rom_count": 3, "igdb_id": 4},
-            {"id": 2, "name": "SNES", "slug": "snes", "rom_count": 2, "igdb_id": 19, "tgdb_id": 6},
+            {"id": 1, "name": "N64", "slug": "n64", "fs_slug": "n64", "rom_count": 3, "igdb_id": 4},
+            {"id": 2, "name": "SNES", "slug": "snes", "fs_slug": "sfc", "rom_count": 2, "igdb_id": 19, "tgdb_id": 6},
         ]
         library.settings["enabled_platforms"] = {"1": True, "2": False}
 
@@ -2363,9 +2364,68 @@ class TestTheSyncKeepsThePlatformsIds:
         with library.sync._fetcher._uow_factory() as uow:
             kept = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY))
         assert kept == {
-            "n64": PlatformIds(igdb_id=4, name="N64"),
-            "snes": PlatformIds(igdb_id=19, tgdb_id=6, name="SNES"),
+            "n64": KeptPlatform(
+                slug="n64", fs_slug="n64", platform_id=1, name="N64", ids={"fs_slug": "n64", "igdb_id": 4}
+            ),
+            "sfc": KeptPlatform(
+                slug="snes",
+                fs_slug="sfc",
+                platform_id=2,
+                name="SNES",
+                ids={"fs_slug": "sfc", "igdb_id": 19, "tgdb_id": 6},
+            ),
         }
+
+    @pytest.mark.asyncio
+    async def test_each_platform_is_kept_by_its_folder_with_every_identifier_rom_m_sent(
+        self, make_library, fake_romm_api
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.set_version("5.4.1")
+        fake_romm_api.platforms = [LISTED_GAMECUBE, {**LISTED_GAMECUBE, "id": 13, "fs_slug": "gamecube", "newdb_id": 7}]
+        library.settings["enabled_platforms"] = {"12": True, "13": True}
+
+        await library.sync._fetcher.build_work_queue()
+
+        with library.sync._fetcher._uow_factory() as uow:
+            raw = json.loads(uow.kv_config.get(PLATFORM_IDS_KEY) or "{}")
+        identifiers = {key: value for key, value in LISTED_GAMECUBE.items() if key.endswith(("_id", "_slug"))}
+        assert raw == {
+            "gc": {
+                "slug": "ngc",
+                "fs_slug": "gc",
+                "id": 12,
+                "name": "Nintendo GameCube",
+                "is_identified": True,
+                "romm_version": "5.4.1",
+                "ids": identifiers,
+            },
+            "gamecube": {
+                "slug": "ngc",
+                "fs_slug": "gamecube",
+                "id": 13,
+                "name": "Nintendo GameCube",
+                "is_identified": True,
+                "romm_version": "5.4.1",
+                "ids": {**identifiers, "fs_slug": "gamecube", "newdb_id": 7},
+            },
+        }
+
+    @pytest.mark.asyncio
+    async def test_a_record_kept_before_the_folder_was_is_filled_by_the_next_sync(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.platforms = [LISTED_GAMECUBE]
+        library.settings["enabled_platforms"] = {"12": True}
+        with library.sync._fetcher._uow_factory() as uow:
+            uow.kv_config.set(PLATFORM_IDS_KEY, '{"ngc": {"igdb_id": 21, "name": "Nintendo GameCube"}}')
+
+        await library.sync._fetcher.build_work_queue()
+
+        with library.sync._fetcher._uow_factory() as uow:
+            kept = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY))
+        assert kept is not None
+        assert list(kept) == ["gc"]
+        assert (kept["gc"].slug, kept["gc"].platform_id, kept["gc"].ids["ra_id"]) == ("ngc", 12, 16)
 
     @pytest.mark.asyncio
     async def test_a_write_that_fails_leaves_the_plan_and_says_so(self, make_library, fake_romm_api, caplog):

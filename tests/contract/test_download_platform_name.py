@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from domain.platform_system import FOUND, PLATFORM_IDS_KEY, PlatformIds, encode_platform_ids
+from domain.platform_system import FOUND, PLATFORM_IDS_KEY, KeptPlatform, encode_platform_ids
 
 from ._seed import seed_rom
 
@@ -75,7 +75,9 @@ def _keep(harness, *, cached: str | None, kept: str | None) -> None:
         if cached is not None:
             uow.kv_config.set("platform_names", f'{{"{_SLUG}": "{cached}"}}')
         if kept is not None:
-            uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids({_SLUG: PlatformIds(name=kept)}))
+            uow.kv_config.set(
+                PLATFORM_IDS_KEY, encode_platform_ids({_SLUG: KeptPlatform(slug=_SLUG, fs_slug=_SLUG, name=kept)})
+            )
 
 
 async def _drain_background_tasks() -> None:
