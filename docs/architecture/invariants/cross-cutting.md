@@ -119,9 +119,10 @@ backup-or-confirm rule, whose statement stands in `CLAUDE.md`. How the code is l
 - **The invariant register stays within its size limits, and every entry stands in one place** — check —
   `scripts/check_invariant_register.py`, over the register section of `CLAUDE.md` and every file in this folder; the
   limits are in `docs/contributing/development.md`, and what it reads is its docstring. It also fails a second register
-  section in `CLAUDE.md`, an entry-shaped item outside it, and an area headline anywhere in `CLAUDE.md`. Unseen by it: a
-  rule set as a paragraph, a heading or an indented list item rather than a `- **` item at the left margin; a plain list
-  item without a bold headline; a headline followed by anything but `—` or one `(…) —` (a colon, nested or two
+  section in `CLAUDE.md`, an entry-shaped item outside the register section, and an area headline anywhere in
+  `CLAUDE.md`. Unseen by it: a rule set as a paragraph, a heading or an indented list item rather than a `- **` item at
+  the left margin; a plain list item without a bold headline; a headline followed by anything but an em dash with a
+  space on each side, alone or after one parenthesis group (a colon, a dash without a space on each side, nested or two
   parentheses); a tier spelled other than with its tier words (`— Check —`, `— checked by …`, an en dash, a bold tier);
   a headline continued at column 0; a rule inside a fenced code block; a backtick fence whose info string holds a
   backtick; a fence opened inside a list item; an area headline copied into `CLAUDE.md` in other words; and two
