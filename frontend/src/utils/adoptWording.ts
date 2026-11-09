@@ -338,3 +338,9 @@ export function adoptedToast(romName: string): string {
 /** The toast for a paused download whose resume found something else at the game's location. */
 export const RESUME_TARGET_OCCUPIED_TOAST =
   "Something else is at this game's location now — cancel the download and start again";
+
+/** A resume refused for any other reason, when the refusal carries no sentence of its own. */
+export const RESUME_REFUSED_TOAST = "Couldn't resume the download";
+
+/** The resume request threw: no answer came back at all. */
+export const RESUME_THREW_TOAST = "Couldn't resume the download — is RomM server running?";

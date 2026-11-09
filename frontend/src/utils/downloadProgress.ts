@@ -17,6 +17,14 @@ const BLUE_RIGHT: RGB = [0, 120, 212]; // #0078d4
 // Play button visible green (computed from gradient + backgroundSize 330% + backgroundPosition 25%)
 const GREEN_LEFT: RGB = [80, 200, 47]; // #50c82f
 const GREEN_RIGHT: RGB = [24, 177, 78]; // #18b14e
+// The desktop client's Play button draws the whole of Steam's PLAY gradient
+// rather than a stretch of it (#2675 D10), so a desktop fill ends on those two
+// stops, the right one at 60%.
+const DESKTOP_GREEN_LEFT: RGB = [112, 214, 29]; // #70d61d
+const DESKTOP_GREEN_RIGHT: RGB = [1, 167, 91]; // #01a75b
+
+/** Which Play button the bar is drawn in: Big Picture's, or the desktop client's. */
+type DownloadSurface = "bigpicture" | "desktop";
 
 export interface DownloadPhase {
   extracting: boolean;
@@ -24,7 +32,16 @@ export interface DownloadPhase {
 }
 
 /** The filled part's gradient: blue turning green as `t` (downloaded / total) grows. */
-export function getDownloadFillGradient(t: number, { extracting, downloading }: DownloadPhase): string {
+export function getDownloadFillGradient(
+  t: number,
+  { extracting, downloading }: DownloadPhase,
+  surface: DownloadSurface = "bigpicture",
+): string {
+  if (surface === "desktop" && (extracting || downloading)) {
+    const left = lerpColor(BLUE_LEFT, DESKTOP_GREEN_LEFT, extracting ? 1 : t);
+    const right = lerpColor(BLUE_RIGHT, DESKTOP_GREEN_RIGHT, extracting ? 1 : t);
+    return `linear-gradient(to right, ${left} 0%, ${right} 60%)`;
+  }
   if (extracting) {
     return `linear-gradient(to right, rgb(${GREEN_LEFT.join(",")}), rgb(${GREEN_RIGHT.join(",")}))`;
   }
@@ -38,10 +55,12 @@ export function getDownloadFillGradient(t: number, { extracting, downloading }: 
 export function getDownloadPulseColor(
   t: number,
   { paused, extracting, downloading }: DownloadPhase & { paused: boolean },
+  surface: DownloadSurface = "bigpicture",
 ): string {
+  const green = surface === "desktop" ? DESKTOP_GREEN_LEFT : GREEN_LEFT;
   if (paused) return "rgba(212,167,44,0.7)";
-  if (extracting) return `rgb(${GREEN_LEFT.join(", ")})`;
-  if (downloading) return lerpColor(BLUE_LEFT, GREEN_LEFT, t);
+  if (extracting) return `rgb(${green.join(", ")})`;
+  if (downloading) return lerpColor(BLUE_LEFT, green, t);
   return "rgba(26,159,255,0.7)";
 }
 
