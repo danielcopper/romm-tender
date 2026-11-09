@@ -152,3 +152,12 @@ class TestTheList:
 
     def test_carries_no_javascript_name_for_a_constant_it_does_not_name(self) -> None:
         assert set(_JAVASCRIPTS_OWN) <= _LISTED
+
+    def test_gives_a_reason_for_every_name_it_exempts_from_the_watch_over_steams_client(self) -> None:
+        unexplained = [
+            entry.path
+            for entry in STEAM_INTERNALS
+            if entry.not_spelled_by_steam is not None and not entry.not_spelled_by_steam.strip()
+        ]
+
+        assert unexplained == []

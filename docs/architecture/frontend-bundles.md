@@ -500,6 +500,48 @@ the check imports for its `STEAM_LOOKUPS` entry, is left out once the stamp has 
 `frontend/scripts/check-bundle-shape.mjs` holds both release panel bundles to the stamp `false` and to carrying no
 `createRoot` search.
 
+### What the daily watch looks for in Steam's published client
+
+**Once a day, and by hand, a job looks for every listed name in the client Valve publishes** (#2509 D4, D14):
+`.github/workflows/steam-internals.yml` runs `scripts/watch_steam_internals.py`, which reads the backend's half by
+import and the panel's from the JSON `frontend/scripts/steam-internals.mjs` prints, Node importing `steamInternals.ts`
+by stripping its types. It fetches the Deck client's stable and public-beta manifests from Valve's client CDN
+(`steam_client_steamdeck_stable_steamrt64`, `steam_client_steamdeck_publicbeta_steamrt64`) and the `steamui_websrc_all`
+package each names, refuses a package whose SHA-256 is not the one its manifest states, and looks in every `.js` file of
+it — not `sp.js` alone, since some names are spelled only in the others. A path is looked for by its shape:
+
+- **An identifier path** (`.`, `()`, `[]`, `(param)`) is found when every name it spells is a whole identifier of that
+  JavaScript. A `(param)` name is Tender's own and is not looked for, and a name inside a longer one does not count:
+  `LaunchOptions` inside `AppProperties_LaunchOptionsSection` is no spelling of it.
+- **An address** with no scheme (`steamloopback.host/customimages`) is found when its host and its route are each
+  spelled.
+- **Anything else** — a route, a `steam://` or `https://` URL, a window's name — is found when the whole of it is
+  spelled with no letter, digit or underscore directly on either side: `/apprunning` inside
+  `steam://open/apprunningcontrols` does not count.
+
+A group (`oneOf`) is missing in a channel only when none of its members is found; a member missing beside one that is
+found is written to the run's log and reported nowhere else. A path both halves list is judged once.
+
+**A name Steam's own JavaScript never spells carries an exemption with its reason** — `notSpelledBySteam` on the panel's
+entry, `not_spelled_by_steam` on the backend's: a binding only Steam's native side has
+(`SteamClient.Browser.RestartJSContext`), a `steam://` URL Steam's JavaScript never spells, a route Steam's router
+builds in a template, and three fields Tender reaches that nothing shows Steam ever had (#2509 D15). Such a name is
+never reported missing; it is still looked for, so one both channels now spell is reported (below). An exempted member
+of a group counts as found. Each half's list test holds that every exemption gives a reason.
+
+**What it finds goes to one issue**, the open one labelled `steam-internals` (the job creates the label when it is
+missing): an internal not found in a channel, named with what it costs and the manifest version checked, and an exempted
+name both channels now spell, whose exemption is then no longer needed. With no issue open it opens one; with one open
+it comments only when the finding — the paths missing per channel and the stale exemptions, not the manifest versions —
+differs from the last one the issue records in its hidden `steam-internals-watch` marker. A run that finds nothing calls
+GitHub not at all. A finding never fails the run (D4); a download that still fails after three tries of up to two
+minutes each, a manifest the script cannot read, or a package that does not match its manifest fails the run and reports
+nothing. Locally, `node frontend/scripts/steam-internals.mjs > panel.json` and then
+`python scripts/watch_steam_internals.py --panel panel.json --dry-run` prints the issue's text instead of reporting it.
+
+It is an early warning, not a proof: what a name search cannot see is listed in the invariant register's entry for the
+list ([Bundles and the start-up check](invariants/startup.md)).
+
 ## Talking to the backend
 
 `frontend/src/api/host.ts` is the one module the panel imports for what it gets from its host: `endpoint`,

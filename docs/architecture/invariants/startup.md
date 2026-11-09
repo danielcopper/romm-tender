@@ -128,7 +128,27 @@ what the start-up check asks, logs and shows. How an entry reads and binds, and 
   Prompt-only: a reach no type describes is listed with its files, and its `asked` is held by nothing where its path
   ends at its static part; which entries are alternatives of one another (`oneOf`); a `NOT_STEAM_INTERNALS` prefix names
   nothing of Steam's; and whether an entry's cost and losses are what its absence costs, and whether a `notAtStartUp`
-  entry truly cannot be asked
+  entry truly cannot be asked.
+
+  **The list is also what a daily job looks for in the client Valve publishes** (#2509 D4, D14):
+  `.github/workflows/steam-internals.yml` runs `scripts/watch_steam_internals.py` over the Deck client's stable and
+  public-beta UI packages on Valve's client CDN and reports an internal Steam no longer spells on one issue, so a drop
+  is seen in the public beta before it reaches stable, and within a day of any release, rather than on a device. It is
+  an early warning and fails no check, because a name search proves nothing about Tender's code and a refactor on
+  Valve's side can raise it with nothing removed. A name Steam's own JavaScript never spells carries a stated exemption
+  on its entry, so the warning is not raised every day for a name it could never find; the job also reports an exemption
+  both channels now spell, which nothing else would notice. The watch is tested by
+  `tests/scripts/test_watch_steam_internals.py` and `frontend/scripts/steam-internals.test.mjs`, and each half's list
+  test holds that every exemption gives a reason. Unseen by it: which object a name is on, since a name found anywhere
+  counts, so an entry with generic names such as `id`, `data`, `Save`, `appid`, `has` or `App` is watched only through
+  its other names; a refactor of the one site Steam spells a name at, which raises an alarm with nothing removed; a
+  binding gone from Steam's native side while its JavaScript still spells it; an exempted name, and a group with an
+  exempted member, which are never missing — only an exemption both channels now spell is reported, and whether a reason
+  is true is prompt-only; `SharedJSContext`, found as a service name rather than as the debugger target's title; a
+  manifest that stops moving, checked at its old version with only that version in the issue; a group member missing
+  beside a found alternative, which reaches the run's log alone; a run that cannot fetch or verify a channel, which
+  fails red and puts nothing on the issue; what a name does; and the job itself once GitHub disables a scheduled
+  workflow after 60 days without activity in the repository, which the job cannot report
 - **Whether every search answered and whether the panel may MOUNT are two questions, and a miss that costs less than the
   panel never takes the interface off the air** — check + test + prompt-only — the type carries the first half:
   `SteamLookup.absenceCost` is required, so a new entry does not compile until it states which of the four its absence

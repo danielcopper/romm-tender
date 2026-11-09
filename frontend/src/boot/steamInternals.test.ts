@@ -95,6 +95,11 @@ describe("the Steam-internals list", () => {
     expect(unused).toEqual([]);
   });
 
+  it("gives a reason for every name it exempts from the watch over Steam's client", () => {
+    const unexplained = STEAM_INTERNALS.filter((entry) => entry.notSpelledBySteam?.trim() === "");
+    expect(unexplained.map((entry) => entry.path)).toEqual([]);
+  });
+
   it("finds every member types/steam.d.ts declares reached by the code", () => {
     expect(reach.declared.filter((path) => !reach.reached.has(path))).toEqual([]);
   });

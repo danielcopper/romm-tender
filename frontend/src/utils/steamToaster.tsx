@@ -170,7 +170,8 @@ export function createSteamToaster(seams: SteamToasterSeams): Toaster {
     const notification: TenderNotification = {
       // Both spellings, one value: `RemoveGroupFromTray` matches a group on
       // `notifications[0].notificationID` and the tab list uses it as its React
-      // key, while `nNotificationID` is the counter's own name.
+      // key. `nNotificationID` is spelled nowhere in Steam's client JavaScript;
+      // whether anything reads it is not established.
       notificationID: id,
       nNotificationID: id,
       rtCreated: Date.now(),

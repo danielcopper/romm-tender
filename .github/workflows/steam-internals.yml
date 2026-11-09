@@ -1,0 +1,47 @@
+name: Steam internals watch
+
+# What it looks for and where it reports: docs/architecture/frontend-bundles.md,
+# "Every Steam internal Tender reaches"; and, for what it cannot see, the
+# invariant register's entry for the list in docs/architecture/invariants/startup.md.
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+# A manual run beside a scheduled one would otherwise find no open issue twice
+# and open two.
+concurrency:
+  group: steam-internals-watch
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    # The run makes four fetches, two manifests and two packages, each of up to
+    # three tries of two minutes and a last read of 15 s: about 27 minutes at
+    # worst.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      # Node 24 imports the panel's TypeScript list by stripping its types.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Print the panel's half of the list
+        run: node frontend/scripts/steam-internals.mjs > "$RUNNER_TEMP/panel.json"
+
+      - name: Look for every listed name in Steam's published client
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/watch_steam_internals.py --panel "$RUNNER_TEMP/panel.json"
