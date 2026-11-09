@@ -29,10 +29,8 @@ import { hasAnySaveConflict } from "../utils/saveStatus";
 import {
   getCachedGameDetail,
   invalidateCachedGameDetail,
-  isTargetOccupied,
   cancelDownload,
   pauseDownload,
-  resumeDownload,
   getDownloadQueue,
   forgetDownload,
   debugLog,
@@ -52,7 +50,7 @@ import { scrollToTop } from "../utils/scrollHelpers";
 import { getEventTarget } from "../utils/events";
 import { handleButtonDownloadFailure } from "../utils/downloadFailure";
 import { runDownloadWithAdoption } from "../utils/adoptFlow";
-import { RESUME_TARGET_OCCUPIED_TOAST } from "../utils/adoptWording";
+import { executeDownloadResume } from "../utils/downloadResume";
 import {
   DOWNLOAD_AGAIN_LABEL,
   FILE_MISSING_LABEL,
@@ -799,27 +797,10 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
     detach(pauseDownload(romId).catch(() => {}));
   };
 
-  // Resume a paused download. The success path is fire-and-forget — the backend
-  // re-begins the transfer from the partial .tmp and emits "downloading" frames
-  // the listener reacts to (clears the paused flag). A REFUSAL has to be said out
-  // loud: a resume can be turned down (content appeared at the game's location
-  // while it sat paused, or a version switch stranded this target), and a silent
-  // refusal leaves the user pressing a button that does nothing, with Cancel —
-  // which discards the transferred bytes — as their only way out.
+  // Resume a paused download; `executeDownloadResume` says why when it is refused.
   const handleResume = () => {
     if (romId == null) return;
-    detach(
-      resumeDownload(romId)
-        .then((result) => {
-          if (result.success) return;
-          showToast(
-            isTargetOccupied(result)
-              ? RESUME_TARGET_OCCUPIED_TOAST
-              : result.message || "Couldn't resume the download",
-          );
-        })
-        .catch(() => showToast("Couldn't resume the download — is RomM server running?")),
-    );
+    detach(executeDownloadResume(romId));
   };
 
   /**
