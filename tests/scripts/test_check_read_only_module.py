@@ -280,7 +280,9 @@ class TestTables:
 
 
 class TestReadShapedWriteBlindSpot:
-    """The asymmetry the docstring and the register entry (library-sync.md) both state.
+    """The asymmetry the docstring and the register entry both state.
+
+    The entry is in ``docs/architecture/invariants/library-sync.md``.
 
     A read named outside the shapes fails loud (safe); a WRITE named like a read
     passes in silence. These two pin the direction so the texts cannot claim the

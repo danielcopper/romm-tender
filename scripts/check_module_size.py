@@ -4,8 +4,7 @@
 The invariant register (``docs/architecture/invariants/code-structure.md``)
 sets a decomposition threshold for every tree in ``SCOPE_DIRS``. Every in-scope
 module above the threshold carries a ceiling in ``ALLOWLIST`` — the size it had
-when it was recorded, movable only under the narrow condition stated at that
-list. So:
+when it was recorded. So:
 
 * a **new** module cannot cross the threshold at all, because it is not listed;
 * a **listed** module cannot grow past its ceiling, and that ceiling goes up
