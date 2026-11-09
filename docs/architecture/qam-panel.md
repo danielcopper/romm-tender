@@ -255,13 +255,14 @@ there is nothing to read a document's visibility off. It is asked through `utils
 copy of `@decky/ui`'s hook, because upstream's throws on that reading instead of answering — why a copy rather than a
 guard at the call site is written out at that module, along with what else it changes besides the guard.
 
-Steam moves the same flag on its own, in both directions, and neither is a bug in Tender. `OpenQuickAccessMenu` clears
-it (`SetQAMFriendsChatExpanded(false)`) on every QAM tab change away from Friends, which is a second net under Tender's
-own `ActiveTab` observer; and the Friends tab's list expands it from `onFocusWithin`, so Friends goes wide the moment
-gamepad focus enters it. A Friends panel that widens after a wide page closed is Steam doing that. Both are in
-`chunk~2dcc5aaf7.js` in Steam's own bundle, where the receiver is also visible: `OnMessage` on the FriendsUI store sets
-`m_bQamFriendsExpanded` from exactly the two messages Tender sends, and Steam's own senders post with the literal
-`"https://steamloopback.host"` — which is what `window.origin` is in the SharedJSContext.
+Steam moves the same flag on its own, in both directions, and neither is a bug in Tender. `MenuStore`'s
+`SetQuickAccessTab`, which `OpenQuickAccessMenu` goes through, clears it (`SetQAMFriendsChatExpanded(false)`) on every
+QAM tab change away from Friends, which is a second net under Tender's own `ActiveTab` observer; and the Friends tab's
+list (`FriendsListAndChatsSteamDeck`) expands it from `onFocusWithin`, so Friends goes wide the moment gamepad focus
+enters it. A Friends panel that widens after a wide page closed is Steam doing that. Both are in Steam's
+`steamui/sp.js`, where the receiver is also visible: `OnMessage` on the FriendsUI store sets `m_bQamFriendsExpanded`
+from exactly the two messages Tender sends, and Steam's own senders post with the literal `"https://steamloopback.host"`
+— which is what `window.origin` is in the SharedJSContext.
 
 Steam's tabbed page fills its parent instead of growing, and nothing in the QAM chain provides a height. A wide page
 therefore measures the space left below its header and takes that as its height; its regions scroll inside it. A
@@ -703,11 +704,11 @@ that root — an absolutely positioned element at the region's top left, which S
 and the size Steam takes for a row's ring (`GetBoundingRectForFocusRing` on its nav node) is the row's own box, which
 there was the column's full width and, for the first row, started at the region's top. Read from Steam's stylesheet
 rather than measured: the ring is the `FocusRing` class of the same module that exports `FocusRingRoot` (in
-`css/chunk~2dcc5aaf7.css` for the client this was read on — the chunk name changes between Steam builds, the module's
-two class names are how to find it again), a 2 px outline at a 2 px offset, so it reaches 4 px past every edge of what
-is focused, and the region clips it at its own box. The ring itself could not be observed through CEF — Steam draws it
-only in the active navigation context. So without the room, a row spanning its column loses both side edges of its ring,
-and the first and last rows their top and bottom edges too.
+`steamui/css/sp.css` under a hashed name that changes between Steam builds; the module's two class names, in
+`steamui/sp.js`, are how to find it), a 2 px outline at a 2 px offset, so it reaches 4 px past every edge of what is
+focused, and the region clips it at its own box. The ring itself could not be observed through CEF — Steam draws it only
+in the active navigation context. So without the room, a row spanning its column loses both side edges of its ring, and
+the first and last rows their top and bottom edges too.
 
 **The room is the region's own padding**, not something inside it and not something on the outside of it. Outside is
 ruled out by the region's sideways clip, which is deliberate (`ScrollRegion`). Inside — a padded element between the

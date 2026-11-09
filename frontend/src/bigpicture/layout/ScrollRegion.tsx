@@ -61,10 +61,12 @@ export interface ScrollRegionProps {
 //
 // No overflow here — the panel branch must not set one. Steam's own `ScrollY`
 // class carries `overflow-y: auto` with `overflow-x: hidden` and a 20 px scroll
-// padding (`._29WypCpglgRKsR_fMPsoFX`, `css/chunk~2dcc5aaf7.css`), and an inline
-// `overflow` shorthand beats both of those axes. The sideways scroll it would
-// restore is one Steam clips on purpose: one over-wide row and every focus step
-// inside the region would drag the whole pane left and right under the reader.
+// padding (`steamui/css/sp.css`, under the hashed name the scroll panel's class
+// map in `steamui/sp.js` gives `ScrollY`, beside `ScrollPanel` and `ScrollX`),
+// and an inline `overflow` shorthand beats both of those axes. The sideways
+// scroll it would restore is one Steam clips on purpose: one over-wide row and
+// every focus step inside the region would drag the whole pane left and right
+// under the reader.
 //
 // `overscroll-behavior` is a different property and safe to set: it does not
 // name an axis of `overflow`, so it cannot undo Steam's sideways clipping. It

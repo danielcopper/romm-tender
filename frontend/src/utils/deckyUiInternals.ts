@@ -154,7 +154,8 @@ export interface ControllerGlyphProps {
  * The value Steam's glyph component wants for **B**.
  *
  * It indexes Steam's own action-button enum — `A=0, B=1, X=2, Y=3, Left=4 … `
- * (`steamui/sp.js`, module 14181, exported as `g4`) — which is a different
+ * (`steamui/sp.js`, the enum whose members go on `HomeMenu=8, QuickMenu=9`
+ * and reach `LeftTrigger=14, RightTrigger=15`) — which is a different
  * enum from `@decky/ui`'s `GamepadButton` (`INVALID=0, OK=1, CANCEL=2 …`), where
  * 1 is the A button. Passing the wrong one draws the wrong glyph rather than
  * failing.

@@ -63,8 +63,9 @@ const TAB_PANEL_SELECTOR = quickAccessMenuClasses?.TabGroupPanel
 // variants with `background: #000` on `.DialogButton[disabled].gpfocus`, but
 // those rules are scoped to hashed class names ours does not carry. The outline
 // is Steam's other focus form, taken verbatim from the one it uses where a fill
-// will not read (`outline: outset #fff 2px`, `chunk~2dcc5aaf7.css`), and it is
-// scoped to a wide page of ours.
+// will not read (`outline: outset #fff 2px` on `button.DialogButton.gpfocus`
+// inside the QR login's `Overlay` and `Box`, the class map that also names
+// `LoginQR`; `steamui/css/sp.css`), and it is scoped to a wide page of ours.
 //
 // **The third rule overrides Steam's own styling, deliberately. It is not a
 // defect fix, and Steam's rule is not wrong** — it is simply applied to a box

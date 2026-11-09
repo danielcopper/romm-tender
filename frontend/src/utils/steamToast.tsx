@@ -39,7 +39,8 @@ const classNames = (...names: (string | undefined | false)[]): string => names.f
 
 /**
  * Steam's subtext rule allows one line, or two with `Multiline`, and ends the
- * rest in an ellipsis (`css/chunk~2dcc5aaf7.css`, `StandardNotificationSubText`).
+ * rest in an ellipsis (`StandardNotificationSubText` and `Multiline`, in
+ * `steamui/css/sp.css` under the hashed names `steamui/sp.js` maps them to).
  * The tab entry is where a reason has to be readable in full, so its subtext
  * takes neither and wraps as far as it runs.
  */
