@@ -72,15 +72,12 @@ const TAB_PANEL_SELECTOR = quickAccessMenuClasses?.TabGroupPanel
 // that is ours. Steam's tabbed page gives its content scroller a
 // `padding-bottom: 40px` (its `TabContentsScroll` class, `steamui/css/sp.css`).
 // That scroller sits INSIDE the body `WidePage` measured and handed the tab as
-// its height, so on a tabbed page 40 px of a height the frame sized to the panel go to a reserve nothing of ours asked for — and the
-// reader meets a band under Library that Settings and Sync do not have, those
-// being untabbed and rendering no such scroller at all. Measured at the dev
-// window's metrics: our body ran to y=752 inside a panel box ending at 764.3
-// while the tab's content stopped at 712, and the tab's own scrolling region
-// went from a `clientHeight` of 550 to 590 with this rule alone. What overriding
-// it is worth is that difference: 40 px of content back on every tabbed wide
-// page. The 602 the page reaches today is this rule and the frame's own gap
-// going together — two changes, and only one of them is this one.
+// its height, so on a tabbed page 40 px of a height the frame sized to the
+// panel go to a reserve nothing of ours asked for — and the reader meets a band
+// under Library that Settings and Sync do not have, those being untabbed and
+// rendering no such scroller at all. Overriding it gives those 40 px back to
+// every tabbed wide page; what that was measured to give the reader is
+// `docs/architecture/qam-panel.md`, "Two widths".
 //
 // It is ours to override because the box is ours: the scroller is rendered
 // inside a page of ours at a height of our own measuring, and that measurement
