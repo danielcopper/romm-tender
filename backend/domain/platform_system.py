@@ -19,7 +19,7 @@ Pure compute — no I/O, no state mutation.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
@@ -187,7 +187,16 @@ def _decode_entry(key: str, entry: Mapping[str, Any]) -> KeptPlatform:
         return KeptPlatform(
             slug=_text(key), name=_text(entry.get("name")), ids={f: entry[f] for f in ID_FIELDS if f in entry}
         )
-    return replace(kept_platform_of(entry, _text(entry.get("romm_version"))), ids=ids)
+    kept = kept_platform_of(entry, _text(entry.get("romm_version")))
+    return KeptPlatform(
+        slug=kept.slug,
+        fs_slug=kept.fs_slug,
+        platform_id=kept.platform_id,
+        name=kept.name,
+        is_identified=kept.is_identified,
+        romm_version=kept.romm_version,
+        ids=ids,
+    )
 
 
 def _number(value: Any) -> int | None:
