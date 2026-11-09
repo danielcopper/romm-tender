@@ -389,7 +389,8 @@ and every area file to a size limit.
 - Install and update — `install.sh`, `backend/check.py`, `backend/*/update_*.py`, `scripts/package.sh` —
   [install-update.md](docs/architecture/invariants/install-update.md)
 - The resolver — `backend/adapters/atlas_*.py`, `emulator_sources.py`, `retrodeck_folders.py`,
-  `backend/services/downloads/`, `rom_removal.py` — [resolver.md](docs/architecture/invariants/resolver.md)
+  `backend/services/downloads/`, `backend/services/rom_removal.py` —
+  [resolver.md](docs/architecture/invariants/resolver.md)
 - Library sync — `backend/services/library/`, `backend/domain/sync_diff.py`, `platform_skip.py`, `collection_skip.py`:
   the run, [library-sync.md](docs/architecture/invariants/library-sync.md); skips and stamps,
   [library-sync-skips.md](docs/architecture/invariants/library-sync-skips.md); representatives and removals,
