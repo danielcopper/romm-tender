@@ -300,6 +300,14 @@ class SqliteRomRepository(BaseRepository):
         for row in cursor:
             yield _row_to_rom(row)
 
+    def iter_by_platform_folder(self, platform_folder: str) -> Iterator[Rom]:
+        cursor = self._conn.execute(
+            f"SELECT {_SELECT_COLUMNS} FROM roms WHERE platform_fs_slug = ?",
+            (platform_folder,),
+        )
+        for row in cursor:
+            yield _row_to_rom(row)
+
     def iter_by_group_key(self, group_key: str) -> Iterator[Rom]:
         # Range-scans the migration-010 index idx_roms_sibling_group_key. A NULL
         # key never matches (WHERE = ? excludes NULL), so an unbackfilled / solo

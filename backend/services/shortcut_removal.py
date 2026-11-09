@@ -14,7 +14,7 @@ shortcuts were removed locally and leave the removal never recreated; for a
 sync's removal the run's finalize does both. Why the
 platform stamp is kept is in docs/architecture/backend-architecture.md,
 "Incremental skip". Reads the synced-shortcut binding from ``uow.roms``; the offline
-``platform_slug → name`` label comes from the ``kv_config`` cache the
+``fs_slug → name`` label comes from the ``kv_config`` cache the
 library sync refreshes each run.
 """
 
@@ -23,7 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.platform_names import PLATFORM_NAMES_KEY, decode_platform_names
+from domain.platform_names import PLATFORM_NAMES_KEY, platform_display_name
 
 if TYPE_CHECKING:
     import asyncio
@@ -168,14 +168,12 @@ class ShortcutRemovalService:
     def _remove_platform_shortcuts_io(self, platform_slug: str) -> dict[str, Any]:
         with self._uow_factory() as uow:
             roms = list(uow.roms.iter_by_platform(platform_slug))
-            platform_name = self._read_platform_name_cache(uow).get(platform_slug, platform_slug)
+            # The names cache is keyed by folder; the panel asks by slug until it knows the folder.
+            folder = next((rom.platform_fs_slug for rom in roms if rom.platform_fs_slug is not None), None)
+            platform_name = platform_display_name(uow.kv_config.get(PLATFORM_NAMES_KEY), folder, platform_slug)
         app_ids = [rom.shortcut_app_id for rom in roms if rom.shortcut_app_id is not None]
         rom_ids = [str(rom.rom_id) for rom in roms]
         return {"success": True, "app_ids": app_ids, "rom_ids": rom_ids, "platform_name": platform_name}
-
-    def _read_platform_name_cache(self, uow) -> dict[str, str]:
-        """Decode the ``platform_slug → name`` cache, ``{}`` when absent/corrupt."""
-        return decode_platform_names(uow.kv_config.get(PLATFORM_NAMES_KEY))
 
     # ── Removal results ────────────────────────────────────────────────────
 
@@ -208,24 +206,26 @@ class ShortcutRemovalService:
         # removed shortcuts (the #1025 silent-gap class). Both bulk flows — Data
         # Management's remove-all and the per-platform removal on the Library
         # page's Platforms tab — funnel their unbind here, so revoking per touched
-        # slug covers each: remove-all reports every ROM (every platform revoked),
-        # a per-platform removal reports only that platform's ROMs (only its slug
-        # revoked). Same write UoW as the unbind.
+        # platform folder covers each: remove-all reports every ROM (every platform
+        # revoked), a per-platform removal reports only that platform's ROMs (only
+        # its folder revoked). A row with no folder recorded has no stamp of its
+        # own to revoke. Same write UoW as the unbind.
         removed_ids: set[int] = set()
         with self._uow_factory() as uow:
-            touched_slugs: set[str] = set()
+            touched_folders: set[str] = set()
             for rom_id in removed_rom_ids:
                 removed_ids.add(int(rom_id))
                 rom = uow.roms.get(int(rom_id))
                 if rom is None:
                     continue
-                touched_slugs.add(rom.platform_slug)
+                if rom.platform_fs_slug is not None:
+                    touched_folders.add(rom.platform_fs_slug)
                 if rom.shortcut_app_id is None:
                     continue
                 rom.unbind_shortcut()
                 uow.roms.save(rom)
-            for slug in touched_slugs:
-                uow.platform_sync_state.revoke_skip(slug)
+            for folder in touched_folders:
+                uow.platform_sync_state.revoke_skip(folder)
             uow.collection_sync_state.delete_intersecting(removed_ids)
 
     @staticmethod
@@ -329,13 +329,14 @@ class ShortcutRemovalService:
                 continue
 
         unbound = 0
-        touched_slugs: set[str] = set()
+        touched_folders: set[str] = set()
         unbound_ids: set[int] = set()
         with self._uow_factory() as uow:
             for rom in list(uow.roms.iter_all()):
                 if rom.shortcut_app_id is None or rom.shortcut_app_id in live:
                     continue
-                touched_slugs.add(rom.platform_slug)
+                if rom.platform_fs_slug is not None:
+                    touched_folders.add(rom.platform_fs_slug)
                 unbound_ids.add(rom.rom_id)
                 rom.unbind_shortcut()
                 uow.roms.save(rom)
@@ -347,8 +348,8 @@ class ShortcutRemovalService:
             # Revoke the skip of every platform we unbound here, in the same
             # write UoW, so the platform full-fetches and recreates the shortcut
             # (completing the #1046 recovery).
-            for slug in touched_slugs:
-                uow.platform_sync_state.revoke_skip(slug)
+            for folder in touched_folders:
+                uow.platform_sync_state.revoke_skip(folder)
             uow.collection_sync_state.delete_intersecting(unbound_ids)
         return unbound
 

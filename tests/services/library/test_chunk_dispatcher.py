@@ -75,7 +75,7 @@ class TestApplyChunking:
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-chunk"
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=5)
         await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -125,7 +125,7 @@ class TestApplyChunking:
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-chunk"
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=5)
         await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -161,7 +161,7 @@ class TestApplyChunking:
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-single"
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=3)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=3)
         await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -219,7 +219,7 @@ class TestApplyChunking:
         box.sync_state = SyncState.RUNNING
         box.current_sync_id = "run-cancel-chunk"
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=5)
         await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -280,7 +280,7 @@ class TestApplyChunking:
         box.sync_state = SyncState.RUNNING
         box.current_sync_id = "run-inter-chunk"
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=5)
         await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -336,7 +336,7 @@ class TestApplyChunking:
         box.sync_state = SyncState.RUNNING
         box.current_sync_id = "run-timeout-chunk"
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=5)
         await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -361,7 +361,7 @@ class TestWaitForUnitComplete:
 
     @pytest.mark.asyncio
     async def test_returns_results_when_event_set(self, library):
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
         event = asyncio.Event()
         event.set()
         library.sync._box.sync_state = SyncState.RUNNING
@@ -373,7 +373,7 @@ class TestWaitForUnitComplete:
 
     @pytest.mark.asyncio
     async def test_returns_none_on_cancel(self, library):
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
         event = asyncio.Event()
         library.sync._box.sync_state = SyncState.CANCELLING
         library.sync._box.sync_last_heartbeat = library.chunk_dispatcher._clock.monotonic()
@@ -383,7 +383,7 @@ class TestWaitForUnitComplete:
 
     @pytest.mark.asyncio
     async def test_returns_none_on_heartbeat_timeout(self, library):
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
         event = asyncio.Event()
         library.sync._box.sync_state = SyncState.RUNNING
         # Heartbeat is way too old — should timeout immediately on first loop check
@@ -408,7 +408,7 @@ class TestWaitForUnitCompleteCancelled:
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.sync_last_heartbeat = library.chunk_dispatcher._clock.monotonic()
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
         event = asyncio.Event()  # never set — wait will enter the sleep path
 
         with pytest.raises(asyncio.CancelledError):
@@ -462,7 +462,7 @@ class TestWholeUnitStaging:
 
         library.sync._reporter.commit_unit_results = capture_commit  # type: ignore[method-assign]
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=2)
         await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -822,7 +822,7 @@ class TestAckIdentityPrecedesTheEmit:
         box.sync_state = SyncState.RUNNING
         box.current_sync_id = "run-ack-identity"
 
-        unit = WorkUnit(type="platform", id=7, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=7, name="N64", slug="n64", platform_folder="n64", rom_count=2)
         await dispatcher.apply_unit_in_chunks(
             unit,
             unit_index=0,
@@ -919,7 +919,7 @@ class TestThePlaceholderIcon:
         library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-placeholder"
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
         await library.unit_applier.apply_unit(
             unit,
             unit_index=0,

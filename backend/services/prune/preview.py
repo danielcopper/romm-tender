@@ -44,14 +44,16 @@ def _gone_from_romm_ids(uow: UnitOfWork, rows: list[Rom], hidden_rom_ids: frozen
     """Every row absent from its own platform's last completed fetch, and every row carrying a gone-from-RomM mark.
 
     A row the user hid in RomM (*hidden_rom_ids*) is absent from every fetch
-    and still on RomM, so it is not gone (#2502 D5).
+    and still on RomM, so it is not gone (#2502 D5). A row with no platform
+    folder recorded has no platform stamp to be absent from.
     """
-    platform_rows: dict[str, list[Rom]] = {}
+    platform_rows: dict[str | None, list[Rom]] = {}
     for row in rows:
-        platform_rows.setdefault(row.platform_slug, []).append(row)
+        platform_rows.setdefault(row.platform_fs_slug, []).append(row)
     gone_ids: set[int] = set()
-    for slug, platform in platform_rows.items():
-        gone_ids.update(gone_from_romm_ids(platform, uow.platform_sync_state.get(slug)))
+    for folder, platform in platform_rows.items():
+        stamp = uow.platform_sync_state.get(folder) if folder is not None else None
+        gone_ids.update(gone_from_romm_ids(platform, stamp))
     return gone_ids - hidden_rom_ids
 
 

@@ -250,7 +250,9 @@ class GameDetailService:
             install = uow.rom_installs.get(rom_id)
             save_state = uow.rom_save_sync_states.get(rom_id)
             metadata_raw = uow.rom_metadata.get(rom_id)
-            platform_name = platform_display_name(uow.kv_config.get(PLATFORM_NAMES_KEY), rom.platform_slug)
+            platform_name = platform_display_name(
+                uow.kv_config.get(PLATFORM_NAMES_KEY), rom.platform_fs_slug, rom.platform_slug
+            )
 
         rom_id_str = str(rom_id)
         platform_slug = rom.platform_slug

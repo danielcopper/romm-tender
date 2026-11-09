@@ -103,8 +103,8 @@ class UnitApplier:
         self._emit_progress = config.emit_progress
         self._running_rom_ids = config.running_rom_ids
 
-    def _clear_platform_stamp_io(self, platform_slug: str) -> None:
-        """Delete *platform_slug*'s completion stamp in one short write UoW.
+    def _clear_platform_stamp_io(self, platform_folder: str) -> None:
+        """Delete the completion stamp of the platform in *platform_folder* in one short write UoW.
 
         Called at a platform unit's apply start (ADR-0023 / #1025): the stamp
         asserts "this platform's last apply completed", so a fresh apply must
@@ -112,7 +112,7 @@ class UnitApplier:
         finish. A no-op when no stamp exists.
         """
         with self._uow_factory() as uow:
-            uow.platform_sync_state.delete(platform_slug)
+            uow.platform_sync_state.delete(platform_folder)
 
     async def fetch_collection_units(
         self, units: list[WorkUnit], synced_rom_ids: set[int], *, unit_index: int, total_units: int
@@ -150,7 +150,7 @@ class UnitApplier:
             registry,
             loop=self._loop,
             local_library_reader=self._local_library_reader,
-            platform_slugs=set(units[0].unwalked_platform_slugs),
+            platform_folders=set(units[0].unwalked_platform_folders),
             preferred_region=self._settings.get("preferred_region", AUTO_REGION),
             running_rom_ids=self._running_rom_ids,
             logger=self._logger,
@@ -246,7 +246,7 @@ class UnitApplier:
             # every platform it finished before the pause, and those games ARE done
             # (#1383).
             box.run_done_items += len(unit_roms)
-            box.run_skip_rebuilt_rows.update((rom["id"], rom["platform_slug"]) for rom in unit_roms)
+            box.run_skip_rebuilt_rows.update((rom["id"], rom.get("platform_fs_slug")) for rom in unit_roms)
             return len(unit_roms)
 
         installed = await self._loop.run_in_executor(
@@ -261,7 +261,7 @@ class UnitApplier:
         # delivery, which the keying leaves alone.
         registry = await self._loop.run_in_executor(None, self._local_library_reader.do_read_apply_registry, unit)
         resident_keys = await self._loop.run_in_executor(None, self._local_library_reader.do_read_resident_group_keys)
-        complete_view = unit.type == "platform" and bool(unit.slug)
+        complete_view = unit.type == "platform" and bool(unit.platform_folder)
         unlisted = {int(rid) for rid in registry} - {rom["id"] for rom in unit_roms}
         # A platform unit's listing is a complete view of its groups, so the rows
         # it left out follow their groups' keys, and the convergence and the
@@ -285,7 +285,7 @@ class UnitApplier:
                 shortcuts_data,
                 registry,
                 installed,
-                platform_slugs={unit.slug},
+                platform_folders={unit.platform_folder},
                 preferred_region=preferred_region,
                 running_rom_ids=self._running_rom_ids,
                 logger=self._logger,
@@ -399,7 +399,7 @@ class UnitApplier:
         # naming the old one would make removed-game discovery read every
         # re-marked row as gone from RomM.
         if complete_view:
-            await self._loop.run_in_executor(None, self._clear_platform_stamp_io, unit.slug)
+            await self._loop.run_in_executor(None, self._clear_platform_stamp_io, unit.platform_folder)
 
         # A collection unit's final chunk stamps a CollectionSyncState over its
         # full membership (the accumulator just populated by the fetch, #742); a

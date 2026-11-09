@@ -59,6 +59,7 @@ def _make_rom(rom_id, name, platform_name, platform_slug="gba"):
         "fs_name": f"{name}.zip",
         "platform_name": platform_name,
         "platform_slug": platform_slug,
+        "platform_fs_slug": platform_slug,
     }
 
 
@@ -74,6 +75,7 @@ def _make_registry_entry(name, platform_name, app_id, platform_slug="gba", short
         "fs_name": f"{name}.zip",
         "platform_name": platform_name,
         "platform_slug": platform_slug,
+        "platform_fs_slug": platform_slug,
         "cover_path": "",
         "shortcut_applied": shortcut_applied,
     }
@@ -94,6 +96,7 @@ def _seed_install(library, rom_id, *, file_path, platform_slug="n64"):
             Rom(
                 rom_id=rom_id,
                 platform_slug=platform_slug,
+                platform_fs_slug=platform_slug,
                 name=f"Game {rom_id}",
                 fs_name=f"game_{rom_id}.z64",
                 shortcut_app_id=None,
@@ -142,6 +145,7 @@ def _seed_rom_row(
     rom = Rom(
         rom_id=rom_id,
         platform_slug=platform_slug,
+        platform_fs_slug=platform_slug,
         name=name,
         fs_name=fs_name if fs_name is not None else f"{name}.z64",
         shortcut_app_id=app_id,
@@ -168,6 +172,7 @@ def _seed_platform(fake_romm_api, *, platform_id, name, slug, roms):
             "platform_id": platform_id,
             "platform_name": name,
             "platform_slug": slug,
+            "platform_fs_slug": slug,
             **rom,
         }
         fake_romm_api.roms[rom_id] = full_rom
@@ -204,6 +209,7 @@ def _seed_persisted_rom(uow, rom_id, *, app_id, group_key, platform_slug="n64", 
             Rom(
                 rom_id=rom_id,
                 platform_slug=platform_slug,
+                platform_fs_slug=platform_slug,
                 name=f"G{rom_id}",
                 fs_name=f"g{rom_id}.z64",
                 shortcut_app_id=app_id,

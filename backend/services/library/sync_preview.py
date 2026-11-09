@@ -167,10 +167,11 @@ class SyncPreview:
             installed = await self._loop.run_in_executor(
                 None, self._local_library_reader.do_read_every_installed_rom_id
             )
-            platform_name_set = {u.name for u in work_queue if u.type == "platform"}
-            slug_to_name = {u.slug: u.name for u in work_queue if u.type == "platform" and u.slug}
+            folder_to_name = {
+                u.platform_folder: u.name for u in work_queue if u.type == "platform" and u.platform_folder
+            }
             registry, last_synced_platforms, last_synced_collections = await self._loop.run_in_executor(
-                None, self._local_library_reader.do_read_preview_baseline, slug_to_name
+                None, self._local_library_reader.do_read_preview_baseline, folder_to_name
             )
             # Stamp each fresh ROM's component sibling-group key before the build so the
             # collapse below groups games, not dumps. The preview union holds every member
@@ -190,7 +191,7 @@ class SyncPreview:
                 unfetched_bound_ids={
                     int(rid)
                     for rid, reg in registry.items()
-                    if reg.get("platform_slug") in full_fetched_platforms and int(rid) not in listed_ids
+                    if reg.get("platform_fs_slug") in full_fetched_platforms and int(rid) not in listed_ids
                 },
             )
             registry = with_followed_keys(registry, followed_keys)
@@ -206,7 +207,7 @@ class SyncPreview:
             restamp_platform_count = await self._loop.run_in_executor(
                 None,
                 self._local_library_reader.do_count_platforms_to_restamp,
-                set(slug_to_name),
+                set(folder_to_name),
                 full_fetched_platforms,
             )
             # Collapse to one entry per sibling group (ADR-0021) so the preview
@@ -233,7 +234,7 @@ class SyncPreview:
                     [sd for sd in shortcuts_data if sd["rom_id"] in listed_ids],
                     registry,
                     installed,
-                    platform_slugs=set(full_fetched_platforms),
+                    platform_folders=set(full_fetched_platforms),
                     preferred_region=preferred_region,
                     running_rom_ids=self._running_rom_ids,
                     logger=self._logger,
@@ -251,7 +252,7 @@ class SyncPreview:
                         registry,
                         loop=self._loop,
                         local_library_reader=self._local_library_reader,
-                        platform_slugs=set(collection_units[0].unwalked_platform_slugs),
+                        platform_folders=set(collection_units[0].unwalked_platform_folders),
                         preferred_region=preferred_region,
                         running_rom_ids=self._running_rom_ids,
                         logger=self._logger,
@@ -274,7 +275,7 @@ class SyncPreview:
             new, changed, unchanged_ids, stale, _disabled_count = classify_roms(
                 emitted,
                 registry,
-                platform_name_set,
+                set(folder_to_name),
                 skipped_rom_ids=classify_skipped,
             )
             collection_listed = await self._loop.run_in_executor(
@@ -283,31 +284,43 @@ class SyncPreview:
             # The marks are discarded: docs/architecture/backend-architecture.md,
             # "The stale removal keeps a game gone from RomM".
             stale_rows = stale_rows_of([rid for rid in stale if rid not in converged_ids], registry)
-            removals, kept, _marks = await settle_stale_rows(
+            verdict = await settle_stale_rows(
                 stale_rows,
                 ask_romm=self._fetcher.ask_romm_for_roms,
                 logger=self._logger,
-                read_platform_slugs=set(slug_to_name),
-                listed_platform_slugs=box.run_listed_platform_slugs,
+                read_platform_folders=set(folder_to_name),
+                listed_platform_folders=box.run_listed_platform_folders,
                 collection_listed_rom_ids=collection_listed,
                 synced_group_keys=preview_group_keys(synced_rom_ids, resident_keys, all_roms),
                 hidden_rom_ids=box.run_hidden_rom_ids,
             )
+            removals, kept = verdict.remove, verdict.kept
+            # A row RomM answered with its folder is counted under it, as the apply records it.
+            registry = {
+                rid: {**reg, "platform_fs_slug": verdict.found_folders[int(rid)]}
+                if int(rid) in verdict.found_folders
+                else reg
+                for rid, reg in registry.items()
+            }
             removed_ids = {row.rom_id for row in removals} | converged_ids
             kept_ids = {row.rom_id for row in kept}
-            left_bound = [row for row in stale_rows if row.rom_id not in removed_ids and row.rom_id not in kept_ids]
+            left_bound = [
+                row._replace(platform_folder=verdict.found_folders.get(row.rom_id, row.platform_folder))
+                for row in stale_rows
+                if row.rom_id not in removed_ids and row.rom_id not in kept_ids
+            ]
             stale = [rid for rid in stale if rid in removed_ids]
-            rebuilt = {rom["id"]: rom["platform_slug"] for rom in all_roms if rom["id"] in classify_skipped}
-            kept += stale_rows_of(rebuilt_rows_filed_as_kept(rebuilt, set(slug_to_name), platform_rom_ids), registry)
+            rebuilt = {rom["id"]: rom.get("platform_fs_slug") for rom in all_roms if rom["id"] in classify_skipped}
+            kept += stale_rows_of(rebuilt_rows_filed_as_kept(rebuilt, set(folder_to_name), platform_rom_ids), registry)
             platform_names = await with_kept_platform_names(
-                {row.platform_slug for row in [*kept, *left_bound, *removals]}
-                | {sd["platform_slug"] for sd in emitted},
+                {row.platform_folder for row in [*kept, *left_bound, *removals] if row.platform_folder is not None}
+                | {sd["platform_fs_slug"] for sd in emitted if sd.get("platform_fs_slug")},
                 box.run_listed_platform_names,
-                read_kept_names=lambda slugs: self._loop.run_in_executor(
-                    None, self._local_library_reader.do_read_kept_platform_names, slugs
+                read_kept_names=lambda folders: self._loop.run_in_executor(
+                    None, self._local_library_reader.do_read_kept_platform_names, folders
                 ),
             )
-            disabled_count = count_disabled_platform_removals(stale, registry, platform_name_set)
+            disabled_count = count_disabled_platform_removals(stale, registry, set(folder_to_name))
             # Cover-only work (#1386): count the bound fetched ROMs whose server
             # cover fingerprint changed and whose cover is not set in Steam, by
             # the SAME rule the apply-path invalidation pass refreshes by (what
@@ -384,7 +397,7 @@ class SyncPreview:
                     # registry — no further read, so the preview stays
                     # side-effect-free — and named as the diff below files.
                     "platform_breakdown": platform_breakdown(
-                        new, changed, stale, registry, slug_to_name, platform_names
+                        new, changed, stale, registry, folder_to_name, platform_names
                     ),
                     "platform_collection_diff": compute_platform_collection_diff(
                         emitted,
@@ -392,7 +405,7 @@ class SyncPreview:
                         last_synced_platforms,
                         self._settings.get("collection_create_platform_groups", False),
                         platform_names,
-                        kept_platform_slugs={row.platform_slug for row in kept},
+                        kept_platform_folders={row.platform_folder for row in kept if row.platform_folder is not None},
                         left_bound_rows=left_bound,
                     ),
                 },
@@ -456,7 +469,7 @@ class SyncPreview:
         (#1503). ``all_roms`` is extended in both cases, and ``skipped_rom_ids``
         too with the ROMs of a unit the fetcher reports as skipped, platform or
         collection alike — the units the apply will skip. A platform unit the
-        fetcher did not skip lands in ``full_fetched_platforms`` under its slug,
+        fetcher did not skip lands in ``full_fetched_platforms`` under its folder,
         so the restamp count can judge its stamp against what the fetch returned.
         A collection unit lands in ``restamp_collections`` under its membership
         key when the fetcher reports its skip refused for a reason a fresh stamp
@@ -473,8 +486,8 @@ class SyncPreview:
             for rom in unit_roms:
                 platform_rom_ids.add(rom["id"])
                 synced_rom_ids.add(rom["id"])
-            if not skipped and unit.slug:
-                full_fetched_platforms[unit.slug] = unit_roms
+            if not skipped and unit.platform_folder:
+                full_fetched_platforms[unit.platform_folder] = unit_roms
         else:
             unit_roms, all_collection_rom_ids, skipped, settles = await self._collection_fetcher.fetch_collection_unit(
                 unit, synced_rom_ids, progress_step=progress_step, progress_total_steps=progress_total_steps

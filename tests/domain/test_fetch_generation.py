@@ -20,6 +20,7 @@ def _row(rom_id: int, fetch_id: str | None) -> Rom:
     rom = Rom.synced(
         rom_id=rom_id,
         platform_slug="dc",
+        platform_fs_slug="dc",
         name=f"rom-{rom_id}",
         fs_name=f"rom-{rom_id}.gdi",
         shortcut_app_id=None,
@@ -76,19 +77,21 @@ class TestCountRowsForSkip:
 
 class TestPruneCandidateIds:
     def test_mismatch_and_null_are_candidates(self):
-        stamp = PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id="new")
+        stamp = PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=1, fetch_id="new")
         assert prune_candidate_ids([_row(1, "new"), _row(2, "old"), _row(3, None)], stamp) == {2, 3}
 
     def test_missing_legacy_and_empty_completion_yield_none(self):
         rows = [_row(1, "old")]
         assert prune_candidate_ids(rows, None) == set()
         assert (
-            prune_candidate_ids(rows, PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id=None))
+            prune_candidate_ids(
+                rows, PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=1, fetch_id=None)
+            )
             == set()
         )
         assert (
             prune_candidate_ids(
-                rows, PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=0, fetch_id="new")
+                rows, PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=0, fetch_id="new")
             )
             == set()
         )
@@ -96,7 +99,7 @@ class TestPruneCandidateIds:
 
 class TestGoneFromRommIds:
     def test_the_stamp_s_candidates_and_every_marked_row(self):
-        stamp = PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id="new")
+        stamp = PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=1, fetch_id="new")
         returned_but_marked = _row(1, "new")
         returned_but_marked.mark_gone_from_romm("delisted")
 
@@ -114,6 +117,7 @@ def _keyed_row(rom_id: int, fetch_id: str | None, group_key: str | None) -> Rom:
     return Rom(
         rom_id=rom_id,
         platform_slug="dc",
+        platform_fs_slug="dc",
         name=f"rom-{rom_id}",
         fs_name=f"rom-{rom_id}.gdi",
         shortcut_app_id=None,
@@ -151,12 +155,12 @@ class TestBackfillNeeded:
 class TestCurrentGenerationIds:
     def test_returns_only_rows_carrying_the_stamped_generation(self):
         rows = [_row(4375, "run-old"), _row(25135, "run-new"), _row(25136, "run-new")]
-        stamp = PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=2, fetch_id="run-new")
+        stamp = PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=2, fetch_id="run-new")
         assert current_generation_ids(rows, stamp) == {25135, 25136}
 
     def test_is_the_exact_complement_of_the_candidate_set(self):
         rows = [_row(4375, "run-old"), _row(25135, "run-new")]
-        stamp = PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id="run-new")
+        stamp = PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=1, fetch_id="run-new")
         assert current_generation_ids(rows, stamp) | prune_candidate_ids(rows, stamp) == {4375, 25135}
         assert current_generation_ids(rows, stamp) & prune_candidate_ids(rows, stamp) == set()
 
@@ -164,8 +168,8 @@ class TestCurrentGenerationIds:
         "stamp",
         [
             None,
-            PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id=""),
-            PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=0, fetch_id="run-new"),
+            PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=1, fetch_id=""),
+            PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=0, fetch_id="run-new"),
         ],
     )
     def test_an_unusable_stamp_establishes_nothing(self, stamp):
@@ -173,7 +177,7 @@ class TestCurrentGenerationIds:
         assert current_generation_ids([_row(25135, "run-new")], stamp) == set()
 
     def test_no_rows_yields_nothing(self):
-        stamp = PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id="run-new")
+        stamp = PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=1, fetch_id="run-new")
         assert current_generation_ids([], stamp) == set()
 
 

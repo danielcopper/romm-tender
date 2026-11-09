@@ -236,7 +236,7 @@ export const PreviewPanel: FC<{ state: SyncPageState; preview: SyncPreview }> = 
           ) : (
             breakdown.map((row) => (
               <PreviewRow
-                key={row.slug}
+                key={row.fs_slug}
                 columns={PREVIEW_COLUMNS}
                 name={row.name}
                 inlineNote={row.synced ? undefined : NOT_SYNCED_NOTE}

@@ -58,9 +58,9 @@ class PruneRegistry:
         with self._uow_factory() as uow:
             rows = list(uow.roms.iter_all())
             served: set[int] = set()
-            for slug in sorted({row.platform_slug for row in rows}):
-                platform_rows = [row for row in rows if row.platform_slug == slug]
-                served |= current_generation_ids(platform_rows, uow.platform_sync_state.get(slug))
+            for folder in sorted({row.platform_fs_slug for row in rows if row.platform_fs_slug is not None}):
+                platform_rows = [row for row in rows if row.platform_fs_slug == folder]
+                served |= current_generation_ids(platform_rows, uow.platform_sync_state.get(folder))
         marked = {row.rom_id for row in rows if row.gone_from_romm is not None}
         return sorted(served - marked - exclude)[:limit]
 

@@ -46,7 +46,7 @@ class ClassificationResult(NamedTuple):
 def classify_roms(
     shortcuts_data: list[dict[str, Any]],
     registry: dict[str, Any],
-    fetched_platform_names: set[str],
+    fetched_platform_folders: set[str],
     *,
     skipped_rom_ids: frozenset[int] = frozenset(),
 ) -> ClassificationResult:
@@ -60,8 +60,8 @@ def classify_roms(
     name while its binding moves to the target, which is work the apply does
     and the preview has to offer),
     unchanged_ids (otherwise), stale (in registry but not in the current
-    fetch), and the count of stale ROMs whose stored platform no longer appears
-    in fetched_platform_names.
+    fetch), and the count of stale ROMs whose stored platform folder no longer
+    appears in *fetched_platform_folders*.
 
     ``shortcut_applied`` records that the sync's commit applied the ROM's
     Steam shortcut (#1383, #2221 D17). It is what lets the delta-restricted
@@ -90,15 +90,13 @@ def classify_roms(
 
     ``platform_name`` is deliberately excluded from the changed comparison:
     it is a derived display field, never persisted on the ``roms`` row. The
-    registry side resolves it from the enabled-platforms-only slug→name map
+    registry side resolves it from the enabled-platforms-only folder→name map
     (falling back to the bare slug for a disabled platform), while an entry
     carries RomM's display name, so a divergence between the two can never be
     healed by an apply (the upsert writes only platform_slug/name/fs_name) —
     comparing it produced a permanent phantom "changed" delta (#1292). Platform
     display renames are diffed separately by
-    ``compute_platform_collection_diff``. ``platform_name`` is still read here
-    for the disabled-platform stale count, which intentionally keys on the
-    live-resolved display name.
+    ``compute_platform_collection_diff``.
 
     Changed ROMs are returned as fresh dicts with an added ``existing_app_id``
     key — the caller's shortcuts_data is not mutated.
@@ -120,15 +118,18 @@ def classify_roms(
 
     current_ids = {sd["rom_id"] for sd in shortcuts_data}
     stale = [int(rid) for rid in registry if int(rid) not in current_ids]
-    disabled_count = count_disabled_platform_removals(stale, registry, fetched_platform_names)
+    disabled_count = count_disabled_platform_removals(stale, registry, fetched_platform_folders)
     return ClassificationResult(new, changed, unchanged_ids, stale, disabled_count)
 
 
 def count_disabled_platform_removals(
-    stale: Iterable[int], registry: dict[str, Any], fetched_platform_names: set[str]
+    stale: Iterable[int], registry: dict[str, Any], fetched_platform_folders: set[str]
 ) -> int:
-    """How many of the *stale* rom ids sit on a platform whose name is not in *fetched_platform_names*."""
-    return sum(1 for rid in stale if registry.get(str(rid), {}).get("platform_name") not in fetched_platform_names)
+    """How many of the *stale* rom ids sit on a platform whose folder is not in *fetched_platform_folders*.
+
+    A row with no folder recorded counts: no fetched platform is its own.
+    """
+    return sum(1 for rid in stale if registry.get(str(rid), {}).get("platform_fs_slug") not in fetched_platform_folders)
 
 
 def _identity_differs(reg: dict[str, Any], sd: dict[str, Any]) -> bool:
@@ -151,16 +152,17 @@ def platform_breakdown(
     """Regroup one classification's buckets into per-platform rows.
 
     *new* and *changed* are the built entries :func:`classify_roms` returned,
-    each carrying ``platform_slug``; *stale* are its stale rom ids, whose
+    each carrying ``platform_fs_slug``; *stale* are its stale rom ids, whose
     platform is read off their *registry* entry. *registry* is the
     ``do_read_preview_baseline`` projection keyed by ``str(rom_id)``.
-    *synced_platforms* are the slugs of the run's platform units, so membership
-    in it is what ``synced`` reports.
+    *synced_platforms* are the folders of the run's platform units, so
+    membership in it is what ``synced`` reports. A row with no folder recorded
+    counts under ``""``.
 
     Returns one row per platform holding at least one of the three counts —
-    ``{"slug", "name", "synced", "new_count", "changed_count", "remove_count"}``
-    — ordered by name (case-insensitively, the slug breaking a tie). The name
-    is the one *platform_names* holds for the slug, else the slug: the names
+    ``{"fs_slug", "name", "synced", "new_count", "changed_count", "remove_count"}``
+    — ordered by name (case-insensitively, the folder breaking a tie). The name
+    is the one *platform_names* holds for the folder, else the folder: the names
     the preview's platform-collection diff files by, so a row carries the name
     the apply gives the platform's Steam collection, synced or not.
     The ``platform_name`` an entry or the registry carries is not read.
@@ -179,20 +181,20 @@ def platform_breakdown(
     counts: dict[str, dict[str, int]] = {}
     for column, entries in (("new_count", new), ("changed_count", changed)):
         for sd in entries:
-            counts.setdefault(sd.get("platform_slug") or "", _zero_counts())[column] += 1
+            counts.setdefault(sd.get("platform_fs_slug") or "", _zero_counts())[column] += 1
     for rom_id in stale:
-        slug = registry.get(str(rom_id), {}).get("platform_slug") or ""
-        counts.setdefault(slug, _zero_counts())["remove_count"] += 1
+        folder = registry.get(str(rom_id), {}).get("platform_fs_slug") or ""
+        counts.setdefault(folder, _zero_counts())["remove_count"] += 1
 
-    names = {slug: platform_names.get(slug, slug) for slug in counts}
+    names = {folder: platform_names.get(folder, folder) for folder in counts}
     return [
         {
-            "slug": slug,
-            "name": names[slug],
-            "synced": slug in synced_platforms,
-            **counts[slug],
+            "fs_slug": folder,
+            "name": names[folder],
+            "synced": folder in synced_platforms,
+            **counts[folder],
         }
-        for slug in sorted(counts, key=lambda slug: (names[slug].casefold(), slug))
+        for folder in sorted(counts, key=lambda folder: (names[folder].casefold(), folder))
     ]
 
 
@@ -215,8 +217,8 @@ def collapse_sibling_groups(
     A sibling group (same ``sibling_group_key``) is one game = at most one NEW
     Steam shortcut (ADR-0021 §2). *shortcuts_data* is the built entry for every
     fetched ROM; *registry* is the bound ``roms`` rows keyed by ``str(rom_id)``
-    (each carrying ``app_id``, ``name``, ``fs_name``, ``platform_slug`` and
-    ``sibling_group_key``); *installed_rom_ids* are the ROMs currently on disk.
+    (each carrying ``app_id``, ``name``, ``fs_name``, ``platform_slug``,
+    ``platform_fs_slug`` and ``sibling_group_key``); *installed_rom_ids* are the ROMs currently on disk.
 
     *complete_group_view* asserts whether *shortcuts_data* holds the WHOLE
     membership of a group a bound row belongs to — the load-bearing safety
@@ -422,6 +424,7 @@ def stored_version(rom: Rom, *, is_main_sibling: bool) -> dict[str, Any]:
         "name": rom.name,
         "fs_name_no_ext": fs_name_stem(rom.fs_name),
         "platform_slug": rom.platform_slug,
+        "platform_fs_slug": rom.platform_fs_slug,
         "sibling_group_key": rom.sibling_group_key,
         "regions": list(rom.regions),
         "revision": rom.revision,
@@ -436,15 +439,15 @@ def converge_bound_groups(
     registry: dict[str, dict[str, Any]],
     installed_rom_ids: AbstractSet[int],
     *,
-    platform_slugs: AbstractSet[str],
+    platform_folders: AbstractSet[str],
     preferred_region: str = AUTO_REGION,
     running_rom_ids: AbstractSet[int] = frozenset(),
     hidden_rom_ids: Collection[int] = frozenset(),
 ) -> list[ConvergedBinding]:
-    """Every bound row of *platform_slugs* whose group keeps another row's shortcut (#2645).
+    """Every bound row of *platform_folders* whose group keeps another row's shortcut (#2645).
 
     *listed* is the built entry of every ROM the platform listings of
-    *platform_slugs* returned — a complete view of those platforms, since a
+    *platform_folders* returned — a complete view of those platforms, since a
     sibling group is per-platform. *registry* is the bound ``roms`` rows as
     :func:`collapse_sibling_groups` takes it, grouped as that collapse groups
     them; a row on another platform is left alone. *installed_rom_ids* must
@@ -478,7 +481,7 @@ def converge_bound_groups(
     listed_keys = {sd.get("sibling_group_key") for sd in listed}
     bound_by_group = _bound_rows_by_group(
         {rom_id: sd.get("sibling_group_key") for rom_id, sd in members_by_id.items()},
-        {rid: reg for rid, reg in registry.items() if reg.get("platform_slug") in platform_slugs},
+        {rid: reg for rid, reg in registry.items() if reg.get("platform_fs_slug") in platform_folders},
     )
     bound_by_group = {
         key: rows if key in listed_keys else [(rom_id, reg) for rom_id, reg in rows if rom_id not in hidden_rom_ids]
@@ -706,6 +709,7 @@ def _rebind_entry(rep: dict[str, Any], kept_rom_id: int, kept_reg: dict[str, Any
         "name": kept_reg.get("name", rep.get("name", "")),
         "fs_name": kept_reg.get("fs_name", ""),
         "platform_slug": kept_reg.get("platform_slug", rep.get("platform_slug", "")),
+        "platform_fs_slug": kept_reg.get("platform_fs_slug") or rep.get("platform_fs_slug"),
         BIND_ROM_ID_KEY: rep["rom_id"],
     }
 
@@ -732,11 +736,15 @@ def select_stale_removals(
 
 
 class StaleRow(NamedTuple):
-    """A bound row no unit of the run returned: its id, its appId, its platform, how it last arrived, and its group."""
+    """A bound row no unit of the run returned: its id, its appId, its platform, how it last arrived, and its group.
+
+    ``platform_folder`` is the folder RomM keeps the row's platform in
+    (``roms.platform_fs_slug``), ``None`` where no sync has recorded it.
+    """
 
     rom_id: int
     app_id: int
-    platform_slug: str
+    platform_folder: str | None
     delivered_through: DeliveryRoute | None = None
     sibling_group_key: str | None = None
 
@@ -751,11 +759,24 @@ def group_keys_of(rom_ids: Iterable[int], key_by_rom_id: Mapping[int, str]) -> f
 RomAnswer = Literal["gone", "present", "unknown"]
 
 
+class ExactAnswers(NamedTuple):
+    """RomM's answers to exact-id questions: each ROM's :data:`RomAnswer`, and the folder each one it returned names.
+
+    ``folders`` holds the ROM's ``platform_fs_slug`` for a ``present`` answer
+    that carried one.
+    """
+
+    answers: dict[int, RomAnswer]
+    folders: dict[int, str]
+
+
 class StaleSort(NamedTuple):
     """The stale rows split by what the run knows about each.
 
     :attr:`ask_only` holds the rows RomM is asked about for their mark alone:
     their game was synced, so they stay bound whatever RomM answers.
+    :attr:`unplaced` holds the rows with no platform folder recorded, which RomM
+    is asked about so its answer places them (:func:`settle_unplaced_rows`).
     :attr:`hidden` holds the rows of :attr:`remove` that go because the user
     hid them in RomM.
     """
@@ -765,14 +786,15 @@ class StaleSort(NamedTuple):
     ask: list[StaleRow]
     ask_only: tuple[StaleRow, ...] = ()
     hidden: tuple[StaleRow, ...] = ()
+    unplaced: tuple[StaleRow, ...] = ()
 
     def gone_from_romm_marks(
-        self, answers: Mapping[int, RomAnswer], read_platform_slugs: Collection[str]
+        self, answers: Mapping[int, RomAnswer], read_platform_folders: Collection[str]
     ) -> dict[int, GoneEvidence | None]:
         """What an apply records on each stale row about RomM still serving it: a mark, ``None`` to clear one.
 
         *answers* are RomM's to the exact ids of :attr:`ask` and :attr:`ask_only`, and
-        *read_platform_slugs* the platforms :func:`sort_stale_rows` was given as
+        *read_platform_folders* the platforms :func:`sort_stale_rows` was given as
         read whole. A kept row whose platform the run did not read is on a
         platform RomM no longer lists, and is marked ``delisted``. An asked row
         is marked ``not_found`` on a proven 404 and has its mark cleared when
@@ -783,7 +805,7 @@ class StaleSort(NamedTuple):
         its mark cleared: RomM still serves it.
         """
         marks: dict[int, GoneEvidence | None] = {
-            row.rom_id: "delisted" for row in self.keep if row.platform_slug not in read_platform_slugs
+            row.rom_id: "delisted" for row in self.keep if row.platform_folder not in read_platform_folders
         }
         marks.update((row.rom_id, None) for row in self.hidden)
         for row in (*self.ask, *self.ask_only):
@@ -798,17 +820,17 @@ class StaleSort(NamedTuple):
 def sort_stale_rows(
     rows: Iterable[StaleRow],
     *,
-    read_platform_slugs: Collection[str],
-    listed_platform_slugs: Collection[str] | None,
+    read_platform_folders: Collection[str],
+    listed_platform_folders: Collection[str] | None,
     collection_listed_rom_ids: Collection[int],
     synced_group_keys: Collection[str] = frozenset(),
     hidden_rom_ids: Collection[int] = frozenset(),
 ) -> StaleSort:
     """Split the stale rows into the ones to remove, to keep, and to ask RomM about.
 
-    *read_platform_slugs* are the platforms the run read whole, skipped or
-    fetched; *listed_platform_slugs* every platform RomM's listing named this
-    run, on in Tender or not (``None`` where that is not known, which reads as
+    *read_platform_folders* are the folders of the platforms the run read whole,
+    skipped or fetched; *listed_platform_folders* those of every platform RomM's
+    listing named this run, on in Tender or not (``None`` where that is not known, which reads as
     every platform listed); *collection_listed_rom_ids* the members every
     collection held at its last completed apply, read before the run rewrote
     any of them; *synced_group_keys* the games the run synced — the group keys
@@ -832,7 +854,10 @@ def sort_stale_rows(
       delivered through a collection, or, with no route recorded, a
       collection's last completed apply listed it. Only RomM's answer to its
       exact id tells "gone" from "left the collection".
-    * **ask_only** — a row the rule above asks about whose game the run
+    * **unplaced** — any other row with no platform folder recorded: it counts
+      as on a platform the run did not read, never as on one RomM no longer
+      lists, and RomM's answer to its exact id places it (#2452 D5).
+    * **ask_only** — a row the rules above ask about whose game the run
       synced: RomM's answer still sets or clears its mark, and it stays bound
       whatever the answer is.
     * **none of these** — any other row whose game the run synced, on a
@@ -842,26 +867,62 @@ def sort_stale_rows(
     * **remove** — the rest: the row's platform is listed and turned off in
       Tender, no collection reached it, and no unit delivered its game.
     """
-    listed = None if listed_platform_slugs is None else set(listed_platform_slugs)
+    listed = None if listed_platform_folders is None else set(listed_platform_folders)
     sort = StaleSort(remove=[], keep=[], ask=[])
     ask_only: list[StaleRow] = []
     hidden: list[StaleRow] = []
+    unplaced: list[StaleRow] = []
     for row in rows:
         game_synced = row.sibling_group_key in synced_group_keys
         if row.rom_id in hidden_rom_ids and not game_synced:
             sort.remove.append(row)
             hidden.append(row)
-        elif row.platform_slug in read_platform_slugs:
+        elif row.platform_folder is not None and row.platform_folder in read_platform_folders:
             sort.keep.append(row)
         elif _reached_through_a_collection(row, collection_listed_rom_ids):
             (ask_only if game_synced else sort.ask).append(row)
+        elif row.platform_folder is None:
+            (ask_only if game_synced else unplaced).append(row)
         elif game_synced:
             continue
-        elif listed is not None and row.platform_slug not in listed:
+        elif listed is not None and row.platform_folder not in listed:
             sort.keep.append(row)
         else:
             sort.remove.append(row)
-    return sort._replace(ask_only=tuple(ask_only), hidden=tuple(hidden))
+    return sort._replace(ask_only=tuple(ask_only), hidden=tuple(hidden), unplaced=tuple(unplaced))
+
+
+def settle_unplaced_rows(
+    unplaced: Iterable[StaleRow],
+    answers: Mapping[int, RomAnswer],
+    folders: Mapping[int, str],
+    *,
+    read_platform_folders: Collection[str],
+    listed_platform_folders: Collection[str] | None,
+) -> StaleSort:
+    """The verdict on the :attr:`StaleSort.unplaced` rows, once RomM answered their exact ids (#2452 D5).
+
+    *folders* holds the platform folder RomM answered each ROM with. A row RomM
+    returned with its folder is sorted as :func:`sort_stale_rows` sorts a row on
+    that folder: removed on a platform RomM lists and the run did not read, kept
+    otherwise. Every other row — a proven 404, an answer that established
+    nothing, a ROM answered without a folder — stays bound, in
+    :attr:`StaleSort.ask_only`, so its mark follows RomM's answer.
+    """
+    rows = list(unplaced)
+    placed = [
+        row._replace(platform_folder=folders[row.rom_id])
+        for row in rows
+        if answers.get(row.rom_id) == "present" and row.rom_id in folders
+    ]
+    placed_ids = {row.rom_id for row in placed}
+    sort = sort_stale_rows(
+        placed,
+        read_platform_folders=read_platform_folders,
+        listed_platform_folders=listed_platform_folders,
+        collection_listed_rom_ids=(),
+    )
+    return sort._replace(ask_only=tuple(row for row in rows if row.rom_id not in placed_ids))
 
 
 def _reached_through_a_collection(row: StaleRow, collection_listed_rom_ids: Collection[int]) -> bool:
@@ -872,12 +933,12 @@ def _reached_through_a_collection(row: StaleRow, collection_listed_rom_ids: Coll
 
 
 def rebuilt_rows_filed_as_kept(
-    rebuilt: Mapping[int, str], read_platform_slugs: Collection[str], platform_rom_ids: Collection[int]
+    rebuilt: Mapping[int, str | None], read_platform_folders: Collection[str], platform_rom_ids: Collection[int]
 ) -> list[int]:
     """The rows of *rebuilt* the run files in their platform's Steam collection as it files a kept stale row.
 
     *rebuilt* maps each bound row a skipped unit rebuilt from its stored row to
-    its platform slug, *read_platform_slugs* and *platform_rom_ids* are what
+    its platform folder, *read_platform_folders* and *platform_rom_ids* are what
     :func:`sort_stale_rows` and the platform-collection filing take as the
     platforms the run read whole and the rows they returned. A rebuilt row
     whose platform the run read whole without returning it is filed: no unit
@@ -887,8 +948,8 @@ def rebuilt_rows_filed_as_kept(
     """
     return [
         rom_id
-        for rom_id, platform_slug in rebuilt.items()
-        if platform_slug in read_platform_slugs and rom_id not in platform_rom_ids
+        for rom_id, platform_folder in rebuilt.items()
+        if platform_folder is not None and platform_folder in read_platform_folders and rom_id not in platform_rom_ids
     ]
 
 
@@ -976,7 +1037,7 @@ def should_include_in_platform_collection(
 
 def platform_collection_name(
     rom_id: int,
-    platform_slug: str,
+    platform_folder: str | None,
     platform_rom_ids: set[int] | None,
     platform_names: Mapping[str, str],
     create_platform_groups: bool,
@@ -984,13 +1045,15 @@ def platform_collection_name(
     """The platform name *rom_id* is filed under, or ``None`` where it is filed under none.
 
     The name is the platform's display name — the one *platform_names* holds for
-    *platform_slug*, else the slug — not the Steam collection's full name; it is
-    filed under none where :func:`should_include_in_platform_collection` leaves
-    the ROM out.
+    *platform_folder*, else the folder — not the Steam collection's full name; it
+    is filed under none where :func:`should_include_in_platform_collection` leaves
+    the ROM out, and where no platform folder is recorded for it.
     """
+    if platform_folder is None:
+        return None
     if not should_include_in_platform_collection(rom_id, platform_rom_ids, create_platform_groups):
         return None
-    return platform_names.get(platform_slug, platform_slug)
+    return platform_names.get(platform_folder, platform_folder)
 
 
 def compute_platform_collection_diff(
@@ -1000,14 +1063,14 @@ def compute_platform_collection_diff(
     create_platform_groups: bool,
     platform_names: Mapping[str, str],
     *,
-    kept_platform_slugs: Collection[str] = (),
+    kept_platform_folders: Collection[str] = (),
     left_bound_rows: Iterable[StaleRow] = (),
 ) -> dict[str, Any]:
     """Diff future platform-group collections against last-synced platforms.
 
     Returns ``{"has_changes": bool, "added_count": int, "removed_count": int}``.
     Each entry is filed by :func:`platform_collection_name` over
-    *platform_names* and its ``platform_slug``, by the rule the apply files its
+    *platform_names* and its ``platform_fs_slug``, by the rule the apply files its
     bound rows by. The ``platform_name`` an entry carries is not read. Platform
     names are compared case-insensitively, for the reason
     :func:`compute_collection_diff` gives.
@@ -1020,13 +1083,11 @@ def compute_platform_collection_diff(
     the predicate on the entry's own ``rom_id`` would drop a fully-rebinding
     platform out of ``future_platforms`` and mis-count it as removed (#1417); the
     apply path, which reads the post-commit bound rows, never had this bug. Its
-    name, unlike its membership, comes from its own ``platform_slug``, the bound
-    version's; the two slugs differ only where RomM renamed a platform's slug
-    under the same platform id, since a sibling group is scoped by platform id,
-    and naming it by the target's would need each entry's pre-collapse slug
-    passed in for that case alone.
+    name, unlike its membership, comes from its own ``platform_fs_slug``, the
+    bound version's, which is the target's: a sibling group is scoped by
+    platform id, and RomM keeps one platform in one folder.
 
-    *kept_platform_slugs* are the platforms of the stale removal's kept rows — a
+    *kept_platform_folders* are the platforms of the stale removal's kept rows — a
     version gone from RomM, fetched by nothing — whose collections the apply
     keeps whatever the setting, named through the same *platform_names*.
     *left_bound_rows* are the other stale rows the run leaves bound — one RomM
@@ -1035,17 +1096,17 @@ def compute_platform_collection_diff(
     apply's end-of-run scan files every bound row. A stale row is in no
     *platform_rom_ids* set, so with a set only *create_platform_groups* files it.
     """
-    future_platforms = {platform_names.get(slug, slug) for slug in kept_platform_slugs}
+    future_platforms = {platform_names.get(folder, folder) for folder in kept_platform_folders}
     for row in left_bound_rows:
         name = platform_collection_name(
-            row.rom_id, row.platform_slug, platform_rom_ids, platform_names, create_platform_groups
+            row.rom_id, row.platform_folder, platform_rom_ids, platform_names, create_platform_groups
         )
         if name is not None:
             future_platforms.add(name)
     for sd in shortcuts_data:
         rid = sd.get(BIND_ROM_ID_KEY, sd["rom_id"])
         name = platform_collection_name(
-            rid, sd["platform_slug"], platform_rom_ids, platform_names, create_platform_groups
+            rid, sd.get("platform_fs_slug"), platform_rom_ids, platform_names, create_platform_groups
         )
         if name is not None:
             future_platforms.add(name)

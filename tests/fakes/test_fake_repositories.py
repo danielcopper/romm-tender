@@ -416,13 +416,13 @@ class TestFakePlatformSyncStateRepository:
     def test_round_trip_upsert_clear(self):
         repo = FakePlatformSyncStateRepository()
         assert repo.get("n64") is None
-        repo.save(PlatformSyncState.stamp(platform_slug="n64", at="2026-01-01T00:00:00+00:00", rom_count=100))
+        repo.save(PlatformSyncState.stamp(platform_folder="n64", at="2026-01-01T00:00:00+00:00", rom_count=100))
         loaded = repo.get("n64")
         assert loaded is not None
         assert loaded.rom_count == 100
         assert repo.save_count == 1
         # Same slug overwrites.
-        repo.save(PlatformSyncState.stamp(platform_slug="n64", at="2026-02-01T00:00:00+00:00", rom_count=105))
+        repo.save(PlatformSyncState.stamp(platform_folder="n64", at="2026-02-01T00:00:00+00:00", rom_count=105))
         overwritten = repo.get("n64")
         assert overwritten is not None
         assert overwritten.rom_count == 105
@@ -431,7 +431,7 @@ class TestFakePlatformSyncStateRepository:
 
     def test_get_returns_copy_so_caller_mutations_dont_leak(self):
         repo = FakePlatformSyncStateRepository()
-        repo.save(PlatformSyncState.stamp(platform_slug="n64", at="2026-01-01T00:00:00+00:00", rom_count=100))
+        repo.save(PlatformSyncState.stamp(platform_folder="n64", at="2026-01-01T00:00:00+00:00", rom_count=100))
         first = repo.get("n64")
         assert first is not None
         first.rom_count = 999  # mutate the returned copy, no save()
@@ -441,8 +441,8 @@ class TestFakePlatformSyncStateRepository:
 
     def test_delete_removes_only_the_named_slug(self):
         repo = FakePlatformSyncStateRepository()
-        repo.save(PlatformSyncState.stamp(platform_slug="n64", at="2026-01-01T00:00:00+00:00", rom_count=100))
-        repo.save(PlatformSyncState.stamp(platform_slug="snes", at="2026-01-01T00:00:00+00:00", rom_count=200))
+        repo.save(PlatformSyncState.stamp(platform_folder="n64", at="2026-01-01T00:00:00+00:00", rom_count=100))
+        repo.save(PlatformSyncState.stamp(platform_folder="snes", at="2026-01-01T00:00:00+00:00", rom_count=200))
         repo.delete("n64")
         assert repo.get("n64") is None
         assert repo.get("snes") is not None
@@ -452,20 +452,20 @@ class TestFakePlatformSyncStateRepository:
         """Keyed by slug like the SQLite table, so deleting the last slug empties it."""
         repo = FakePlatformSyncStateRepository()
         assert repo.has_any() is False
-        repo.save(PlatformSyncState.stamp(platform_slug="n64", at="2026-01-01T00:00:00+00:00", rom_count=100))
-        repo.save(PlatformSyncState.stamp(platform_slug="n64", at="2026-02-01T00:00:00+00:00", rom_count=105))
+        repo.save(PlatformSyncState.stamp(platform_folder="n64", at="2026-01-01T00:00:00+00:00", rom_count=100))
+        repo.save(PlatformSyncState.stamp(platform_folder="n64", at="2026-02-01T00:00:00+00:00", rom_count=105))
         assert repo.has_any() is True
         repo.delete("n64")
         assert repo.has_any() is False
-        repo.save(PlatformSyncState.stamp(platform_slug="snes", at="2026-01-01T00:00:00+00:00", rom_count=200))
+        repo.save(PlatformSyncState.stamp(platform_folder="snes", at="2026-01-01T00:00:00+00:00", rom_count=200))
         repo.clear()
         assert repo.has_any() is False
 
     def test_revoke_skip_flags_the_stored_stamp_and_hides_it_from_has_any(self):
         """Mirrors the SQLite ``UPDATE``: the stamp stays, flagged, and a fresh save clears it."""
         repo = FakePlatformSyncStateRepository()
-        repo.save(PlatformSyncState.stamp(platform_slug="n64", at="2026-01-01T00:00:00+00:00", rom_count=3))
-        repo.save(PlatformSyncState.stamp(platform_slug="snes", at="2026-01-01T00:00:00+00:00", rom_count=200))
+        repo.save(PlatformSyncState.stamp(platform_folder="n64", at="2026-01-01T00:00:00+00:00", rom_count=3))
+        repo.save(PlatformSyncState.stamp(platform_folder="snes", at="2026-01-01T00:00:00+00:00", rom_count=200))
 
         repo.revoke_skip("n64")
         repo.revoke_skip("nope")  # absent slug is a no-op, and creates nothing
@@ -481,7 +481,7 @@ class TestFakePlatformSyncStateRepository:
         repo.revoke_skip("snes")
         assert repo.has_any() is False
 
-        repo.save(PlatformSyncState.stamp(platform_slug="n64", at="2026-02-01T00:00:00+00:00", rom_count=3))
+        repo.save(PlatformSyncState.stamp(platform_folder="n64", at="2026-02-01T00:00:00+00:00", rom_count=3))
         refreshed = repo.get("n64")
         assert refreshed is not None
         assert refreshed.skip_revoked is False
@@ -707,7 +707,7 @@ class TestFakeUnitOfWorkRomIdForeignKey:
             )
             uow.sync_runs.save(SyncRun.start(id="r1", at="2026-01-01T00:00:00Z", platforms_planned=1, roms_planned=1))
             uow.platform_sync_state.save(
-                PlatformSyncState.stamp(platform_slug="psx", at="2026-01-01T00:00:00Z", rom_count=1)
+                PlatformSyncState.stamp(platform_folder="psx", at="2026-01-01T00:00:00Z", rom_count=1)
             )
             uow.kv_config.set("k", "v")
         assert uow.committed is True

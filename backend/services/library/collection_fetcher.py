@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 from domain.collection_skip import (
     CollectionSkip,
     holds_a_game_to_converge,
+    holds_a_game_without_its_platform_folder,
     membership_verdict,
     probe_verdict,
     recorded_updated_at,
@@ -112,8 +113,13 @@ class CollectionFetcher:
         """:func:`~domain.collection_skip.holds_a_game_to_converge` over the stored rows, in one short read UoW."""
         with self._uow_factory() as uow:
             return holds_a_game_to_converge(
-                uow.roms.iter_all(), member_rom_ids, platform_slugs=set(unit.unwalked_platform_slugs)
+                uow.roms.iter_all(), member_rom_ids, platform_folders=set(unit.unwalked_platform_folders)
             )
+
+    def _read_holds_a_game_without_its_platform_folder(self, member_rom_ids: Collection[int]) -> bool:
+        """:func:`~domain.collection_skip.holds_a_game_without_its_platform_folder` over the stored rows, one UoW."""
+        with self._uow_factory() as uow:
+            return holds_a_game_without_its_platform_folder(uow.roms.iter_all(), member_rom_ids)
 
     def _reconstruct_collection_members(
         self, member_rom_ids: list[int], already_synced: set[int]
@@ -145,6 +151,7 @@ class CollectionFetcher:
                         "name": rom.name,
                         "fs_name": rom.fs_name,
                         "platform_slug": rom.platform_slug,
+                        "platform_fs_slug": rom.platform_fs_slug,
                         "platform_name": rom.platform_slug,
                         "igdb_id": rom.igdb_id,
                         "sgdb_id": rom.sgdb_id,
@@ -202,6 +209,11 @@ class CollectionFetcher:
 
         if await self._loop.run_in_executor(None, self._read_holds_a_game_to_converge, unit, stamp.member_rom_ids):
             self._logger.info(f"Per-unit fetch {unit.name}: a game it holds has more than one shortcut — fetch")
+            return CollectionSkip(None)
+        if await self._loop.run_in_executor(
+            None, self._read_holds_a_game_without_its_platform_folder, stamp.member_rom_ids
+        ):
+            self._logger.info(f"Per-unit fetch {unit.name}: a game it holds has no platform folder recorded — fetch")
             return CollectionSkip(None)
         try:
             delta_resp: object = await self._loop.run_in_executor(
@@ -464,7 +476,7 @@ class CollectionFetcher:
                     continue
                 synced_rom_ids.add(rid)
                 rom["platform_name"] = rom.get("platform_name", rom.get("platform_display_name", "Unknown"))
-                rom["platform_slug"] = rom.get("platform_slug", rom.get("platform_fs_slug", ""))
+                rom.setdefault("platform_slug", "")
                 rom.pop("files", None)
                 new_roms.append(rom)
 

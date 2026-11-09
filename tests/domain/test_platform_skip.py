@@ -25,7 +25,7 @@ _REFERENCE = "2026-10-19T11:50:00+00:00"
 
 def _stamp(*, ids=(1, 2, 3), started: str | None = _STARTED, checksum: str | None = "auto") -> PlatformSyncState:
     return PlatformSyncState.stamp(
-        platform_slug="n64",
+        platform_folder="n64",
         at="2026-10-19T12:30:00+00:00",
         rom_count=len(ids),
         fetch_id="run-1",

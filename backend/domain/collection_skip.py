@@ -8,7 +8,9 @@ collection the same ``updated_at`` — and then a scoped ``updated_after`` probe
 keyed off the fetch start less the platform skip's margin to answer no ROM. What
 RomM does with a hidden member is docs/architecture/backend-architecture.md,
 "Incremental skip". A collection holding a game that still has more than one
-bound shortcut on a platform the sync leaves off is not skipped either (#2661).
+bound shortcut on a platform the sync leaves off is not skipped either (#2661),
+and neither is one holding a game whose platform folder no sync has recorded yet
+(#2452 D5).
 """
 
 from __future__ import annotations
@@ -131,11 +133,11 @@ def probe_verdict(answer: object, reference: datetime) -> CollectionVerdict:
 
 
 def holds_a_game_to_converge(
-    rows: Iterable[Rom], member_rom_ids: Collection[int], *, platform_slugs: AbstractSet[str]
+    rows: Iterable[Rom], member_rom_ids: Collection[int], *, platform_folders: AbstractSet[str]
 ) -> bool:
     """Whether a version of a game among *member_rom_ids* still holds more than one bound shortcut by its stored key.
 
-    *rows* are the stored ``roms`` rows; only those of *platform_slugs* — the
+    *rows* are the stored ``roms`` rows; only those of *platform_folders* — the
     platforms the sync leaves off, which RomM still lists — count, since a
     platform unit converges its own platform's groups and a platform RomM no
     longer lists is walked by no collection. A member counts whether bound or
@@ -146,7 +148,17 @@ def holds_a_game_to_converge(
     sibling (D3); where the delivered version is the one regrouped, its fresh
     key is committed and the stored keys part (D5).
     """
-    scoped = [row for row in rows if row.platform_slug in platform_slugs]
+    scoped = [row for row in rows if row.platform_fs_slug in platform_folders]
     pending = groups_to_converge(row.sibling_group_key for row in scoped if row.shortcut_app_id is not None)
     members = set(member_rom_ids)
     return any(row.sibling_group_key in pending for row in scoped if row.rom_id in members)
+
+
+def holds_a_game_without_its_platform_folder(rows: Iterable[Rom], member_rom_ids: Collection[int]) -> bool:
+    """Whether a stored row among *member_rom_ids* records no platform folder (``platform_fs_slug``).
+
+    Such a collection is fetched rather than skipped, so the fetch's payload
+    records the folder (#2452 D5); a skip would rebuild the row as it stands.
+    """
+    members = set(member_rom_ids)
+    return any(row.platform_fs_slug is None for row in rows if row.rom_id in members)

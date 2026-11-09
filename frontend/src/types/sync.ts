@@ -304,13 +304,14 @@ export interface SyncAddItem {
  *
  * `name` is the name the apply gives the platform's Steam collection: RomM's
  * listed name for every platform the run's listing names, synced or not, else
- * the name the last sync cached for it, else the bare slug.
+ * the name the last sync cached for it, else its folder in RomM.
  *
  * Collections are NOT a row here — `collection_diff` on the same summary already
  * carries the added and removed collection names.
  */
 export interface PlatformBreakdownRow {
-  slug: string;
+  /** The folder RomM keeps the platform in, which names one platform where a slug may name two. */
+  fs_slug: string;
   name: string;
   synced: boolean;
   new_count: number;

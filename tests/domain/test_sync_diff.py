@@ -2,7 +2,7 @@
 
 from collections.abc import Iterable
 from collections.abc import Set as AbstractSet
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 
@@ -12,6 +12,7 @@ from domain.sync_diff import (
     BroughtIn,
     ClassificationResult,
     ConvergedBinding,
+    RomAnswer,
     StaleRow,
     StaleSort,
     brought_in_by_delivery,
@@ -28,6 +29,7 @@ from domain.sync_diff import (
     rebuilt_rows_filed_as_kept,
     select_stale_removals,
     settle_asked_rows,
+    settle_unplaced_rows,
     should_include_in_platform_collection,
     sort_stale_rows,
     stored_version,
@@ -52,6 +54,7 @@ def _make_sd(
         "name": name,
         "platform_name": platform_name,
         "platform_slug": platform_slug,
+        "platform_fs_slug": platform_slug,
         "fs_name": fs_name,
         "igdb_id": igdb_id,
         "sgdb_id": sgdb_id,
@@ -77,6 +80,7 @@ def _reg(
         "name": name,
         "platform_name": platform_name,
         "platform_slug": platform_slug,
+        "platform_fs_slug": platform_slug,
         "fs_name": fs_name,
         "shortcut_applied": shortcut_applied,
     }
@@ -87,7 +91,7 @@ class TestClassifyRoms:
 
     def test_all_new_empty_registry(self):
         sd = [_make_sd(1, "Game A"), _make_sd(2, "Game B")]
-        new, changed, unchanged_ids, stale, disabled = classify_roms(sd, {}, {"N64"})
+        new, changed, unchanged_ids, stale, disabled = classify_roms(sd, {}, {"n64"})
         assert len(new) == 2
         assert changed == []
         assert unchanged_ids == []
@@ -103,7 +107,7 @@ class TestClassifyRoms:
             _make_sd(1, "Game A", fs_name="gamea.z64"),
             _make_sd(2, "Game B", fs_name="gameb.z64"),
         ]
-        new, changed, unchanged_ids, stale, _ = classify_roms(sd, registry, {"N64"})
+        new, changed, unchanged_ids, stale, _ = classify_roms(sd, registry, {"n64"})
         assert new == []
         assert changed == []
         assert set(unchanged_ids) == {1, 2}
@@ -119,7 +123,7 @@ class TestClassifyRoms:
             _make_sd(2, "New Name", fs_name="gameb.z64"),  # changed (name)
             _make_sd(3, "Game C", fs_name="gamec.z64"),  # new
         ]
-        new, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"N64"})
+        new, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"n64"})
         assert len(new) == 1
         assert new[0]["rom_id"] == 3
         assert len(changed) == 1
@@ -130,28 +134,28 @@ class TestClassifyRoms:
     def test_stale_detection(self):
         registry = {
             "1": _reg(name="Game A", fs_name="", platform_slug="n64", app_id=1001),
-            "99": {"app_id": 1099, "name": "Deleted Game", "platform_name": "N64"},
+            "99": {"app_id": 1099, "name": "Deleted Game", "platform_name": "N64", "platform_fs_slug": "n64"},
         }
         sd = [_make_sd(1, "Game A", fs_name="")]
-        _, _, _, stale, disabled = classify_roms(sd, registry, {"N64"})
+        _, _, _, stale, disabled = classify_roms(sd, registry, {"n64"})
         assert 99 in stale
-        assert disabled == 0  # N64 is in fetched_platform_names
+        assert disabled == 0  # n64 is in fetched_platform_folders
 
     def test_disabled_platform_stale_count(self):
         registry = {
-            "1": {"app_id": 1001, "name": "Game A", "platform_name": "SNES"},
+            "1": {"app_id": 1001, "name": "Game A", "platform_name": "SNES", "platform_fs_slug": "snes"},
         }
         sd: list[dict[str, Any]] = []  # nothing fetched
-        _, _, _, stale, disabled = classify_roms(sd, registry, {"N64"})
+        _, _, _, stale, disabled = classify_roms(sd, registry, {"n64"})
         assert 1 in stale
-        assert disabled == 1  # SNES not in {"N64"}
+        assert disabled == 1  # snes not in {"n64"}
 
     def test_name_change_detected(self):
         registry = {
             "1": _reg(name="Old Title", app_id=1001),
         }
         sd = [_make_sd(1, "New Title")]
-        new, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"N64"})
+        new, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"n64"})
         assert len(changed) == 1
         assert changed[0]["existing_app_id"] == 1001
         assert new == []
@@ -162,7 +166,7 @@ class TestClassifyRoms:
         # already correct, so the item is genuinely unchanged (skipped).
         registry = {"1": _reg(name="Game A", fs_name="gamea.z64", app_id=1001, shortcut_applied=True)}
         sd = [_make_sd(1, "Game A", fs_name="gamea.z64")]
-        new, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"N64"})
+        new, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"n64"})
         assert new == []
         assert changed == []
         assert unchanged_ids == [1]
@@ -173,7 +177,7 @@ class TestClassifyRoms:
         # "no skip on unknown state" contract (#1383, #2221 D17).
         registry = {"1": _reg(name="Game A", fs_name="gamea.z64", app_id=1001, shortcut_applied=False)}
         sd = [_make_sd(1, "Game A", fs_name="gamea.z64")]
-        new, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"N64"})
+        new, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"n64"})
         assert new == []
         assert [c["rom_id"] for c in changed] == [1]
         assert unchanged_ids == []
@@ -195,7 +199,7 @@ class TestClassifyRoms:
             "1": _reg(name="Game A", platform_name="gba", platform_slug="gba", fs_name="game.gba", app_id=1001),
         }
         sd = [_make_sd(1, "Game A", platform_name="Game Boy Advance", platform_slug="gba", fs_name="game.gba")]
-        new, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"N64"})
+        new, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"n64"})
         assert changed == []
         assert new == []
         assert unchanged_ids == [1]
@@ -206,7 +210,7 @@ class TestClassifyRoms:
             "1": _reg(name="Game A", platform_name="Game Boy Advance", platform_slug="gba", app_id=1001),
         }
         sd = [_make_sd(1, "Game A", platform_name="Game Boy Color", platform_slug="gbc")]
-        _, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"N64"})
+        _, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"n64"})
         assert len(changed) == 1
         assert changed[0]["rom_id"] == 1
         assert changed[0]["existing_app_id"] == 1001
@@ -217,7 +221,7 @@ class TestClassifyRoms:
             "1": _reg(name="Game A", fs_name="old.z64", app_id=1001),
         }
         sd = [_make_sd(1, "Game A", fs_name="new.z64")]
-        _, changed, _, _, _ = classify_roms(sd, registry, {"N64"})
+        _, changed, _, _, _ = classify_roms(sd, registry, {"n64"})
         assert len(changed) == 1
         assert changed[0]["rom_id"] == 1
 
@@ -226,7 +230,7 @@ class TestClassifyRoms:
             "1": _reg(name="Game A", app_id=1001),
         }
         sd = [_make_sd(1, "Game A", igdb_id=999, sgdb_id=888)]
-        new, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"N64"})
+        new, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"n64"})
         assert unchanged_ids == [1]
         assert changed == []
         assert new == []
@@ -236,14 +240,14 @@ class TestClassifyRoms:
             "1": {"name": "Game A", "platform_name": "N64"},
         }
         sd = [_make_sd(1, "Game A")]
-        new, changed, _, _, _ = classify_roms(sd, registry, {"N64"})
+        new, changed, _, _, _ = classify_roms(sd, registry, {"n64"})
         assert len(new) == 1
         assert new[0]["rom_id"] == 1
         assert changed == []
 
     def test_first_sync_empty_registry_all_new(self):
         sd = [_make_sd(i, f"Game {i}") for i in range(1, 6)]
-        new, changed, unchanged_ids, stale, disabled = classify_roms(sd, {}, {"N64"})
+        new, changed, unchanged_ids, stale, disabled = classify_roms(sd, {}, {"n64"})
         assert len(new) == 5
         assert changed == []
         assert unchanged_ids == []
@@ -255,7 +259,7 @@ class TestClassifyRoms:
             "1": _reg(name="Game A", app_id=1001),
         }
         sd = [_make_sd(1, "Game A")]
-        new, changed, unchanged_ids, stale, _ = classify_roms(sd, registry, {"N64"})
+        new, changed, unchanged_ids, stale, _ = classify_roms(sd, registry, {"n64"})
         assert len(new) == 0
         assert len(changed) == 0
         assert len(stale) == 0
@@ -263,17 +267,17 @@ class TestClassifyRoms:
 
     def test_all_stale_disabled_platforms(self):
         registry = {
-            "1": {"app_id": 1001, "name": "Game A", "platform_name": "GBA"},
-            "2": {"app_id": 1002, "name": "Game B", "platform_name": "SNES"},
+            "1": {"app_id": 1001, "name": "Game A", "platform_name": "GBA", "platform_fs_slug": "gba"},
+            "2": {"app_id": 1002, "name": "Game B", "platform_name": "SNES", "platform_fs_slug": "snes"},
         }
         sd: list[dict[str, Any]] = []
-        _, _, _, stale, disabled = classify_roms(sd, registry, {"N64"})
+        _, _, _, stale, disabled = classify_roms(sd, registry, {"n64"})
         assert len(stale) == 2
         assert disabled == 2
 
     def test_returns_classification_result_namedtuple(self):
         """Result supports both positional unpacking and attribute access."""
-        result = classify_roms([_make_sd(1)], {}, {"N64"})
+        result = classify_roms([_make_sd(1)], {}, {"n64"})
         assert isinstance(result, ClassificationResult)
         # Attribute access
         assert result.new[0]["rom_id"] == 1
@@ -297,7 +301,7 @@ class TestClassifyRoms:
         sd_item = _make_sd(1, "New Title")
         sd_snapshot = dict(sd_item)
         sd = [sd_item]
-        _, changed, _, _, _ = classify_roms(sd, registry, {"N64"})
+        _, changed, _, _, _ = classify_roms(sd, registry, {"n64"})
         # Caller's dict is unchanged — no existing_app_id leaked in
         assert sd_item == sd_snapshot
         assert "existing_app_id" not in sd_item
@@ -319,7 +323,7 @@ class TestClassifyRomsOnASkippedUnit:
         registry = {"1": _reg(name="Game A", fs_name="a.z64", shortcut_applied=False)}
         sd = [_make_sd(1, "Game A", fs_name="a.z64")]
 
-        _, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"N64"}, skipped_rom_ids=frozenset({1}))
+        _, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"n64"}, skipped_rom_ids=frozenset({1}))
 
         assert changed == []
         assert unchanged_ids == [1]
@@ -338,7 +342,7 @@ class TestClassifyRomsOnASkippedUnit:
         registry = {"1": _reg(**reg_fields)}
         sd = [_make_sd(1, **sd_fields)]
 
-        _, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"N64"}, skipped_rom_ids=frozenset({1}))
+        _, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"n64"}, skipped_rom_ids=frozenset({1}))
 
         assert [c["rom_id"] for c in changed] == [1]
         assert changed[0]["existing_app_id"] == 1001
@@ -356,7 +360,7 @@ class TestClassifyRomsOnASkippedUnit:
             _make_sd(2, "Game B", fs_name="b.z64"),
         ]
 
-        _, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"N64"}, skipped_rom_ids=frozenset({1}))
+        _, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"n64"}, skipped_rom_ids=frozenset({1}))
 
         assert [c["rom_id"] for c in changed] == [2]
         assert unchanged_ids == [1]
@@ -640,7 +644,7 @@ class TestComputePlatformCollectionDiff:
 
     def test_a_kept_row_s_platform_is_named_through_the_same_names(self):
         result = compute_platform_collection_diff(
-            [], set(), ["Nintendo 64"], False, {"n64": "Nintendo 64"}, kept_platform_slugs={"n64"}
+            [], set(), ["Nintendo 64"], False, {"n64": "Nintendo 64"}, kept_platform_folders={"n64"}
         )
         assert result == {"has_changes": False, "added_count": 0, "removed_count": 0}
 
@@ -723,6 +727,7 @@ def _gsd(
         "fs_name_no_ext": fs_name_no_ext,
         "platform_name": "N64",
         "platform_slug": platform_slug,
+        "platform_fs_slug": platform_slug,
         "launch_options": launch_options,
         "cover_path": "",
         "sibling_group_key": group_key,
@@ -756,6 +761,7 @@ def _greg(
         "name": name,
         "fs_name": fs_name,
         "platform_slug": platform_slug,
+        "platform_fs_slug": platform_slug,
         "platform_name": "N64",
         "sibling_group_key": group_key,
         "shortcut_applied": shortcut_applied,
@@ -766,7 +772,7 @@ def _converge_then_collapse(
     members: list[dict[str, Any]], registry: dict[str, dict[str, Any]], installed_rom_ids: set[int]
 ) -> tuple[list[dict[str, Any]], list[ConvergedBinding]]:
     """A platform unit's collapse: the convergence over its listing *members*, then the collapse handed its losers."""
-    converged = converge_bound_groups(members, registry, installed_rom_ids, platform_slugs={"n64"})
+    converged = converge_bound_groups(members, registry, installed_rom_ids, platform_folders={"n64"})
     emitted = collapse_sibling_groups(
         members,
         registry,
@@ -823,7 +829,7 @@ class TestCollapseSiblingGroups:
         registry = {"1": _greg(1, app_id=1001, name="Game", fs_name="game.z64")}
         emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
         assert [e["rom_id"] for e in emitted] == [1]
-        result = classify_roms(emitted, registry, {"N64"})
+        result = classify_roms(emitted, registry, {"n64"})
         assert result.new == []
         assert result.unchanged_ids == [1]
         assert result.stale == []
@@ -852,7 +858,7 @@ class TestCollapseSiblingGroups:
         registry = {"1": _greg(1, app_id=1001, name="Gone", group_key="g1")}
         emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
         assert 1 not in {e["rom_id"] for e in emitted}
-        result = classify_roms(emitted, registry, {"N64"})
+        result = classify_roms(emitted, registry, {"n64"})
         assert result.stale == [1]
 
     def test_a_vanished_bound_sibling_keeps_its_binding_beside_live_siblings_under_other_names(self):
@@ -918,7 +924,7 @@ class TestCollapseSiblingGroups:
 
         # classify reads the rebind as a re-touch, never stale or new — the old
         # rom_id stays emitted, so it is not torn down.
-        result = classify_roms(emitted, registry, {"N64"})
+        result = classify_roms(emitted, registry, {"n64"})
         assert result.new == []
         assert result.stale == []
         assert [e["rom_id"] for e in result.changed] == [1]
@@ -958,7 +964,7 @@ class TestCollapseSiblingGroups:
         registry = {"1": _greg(1, app_id=1001, name="Game", group_key=None)}
         emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
         assert [e["rom_id"] for e in emitted] == [1]
-        result = classify_roms(emitted, registry, {"N64"})
+        result = classify_roms(emitted, registry, {"n64"})
         assert result.unchanged_ids == [1]
 
     def test_solo_unmatched_group_degrades_to_per_rom(self):
@@ -972,8 +978,10 @@ class TestConvergeBoundGroups:
     """``converge_bound_groups`` — a group holding more than one bound shortcut keeps one (#2645 D1, D3)."""
 
     @staticmethod
-    def _kept(members, registry, installed: Iterable[int] = (), platform_slugs: AbstractSet[str] = frozenset({"n64"})):
-        converged = converge_bound_groups(members, registry, set(installed), platform_slugs=platform_slugs)
+    def _kept(
+        members, registry, installed: Iterable[int] = (), platform_folders: AbstractSet[str] = frozenset({"n64"})
+    ):
+        converged = converge_bound_groups(members, registry, set(installed), platform_folders=platform_folders)
         return [(binding.rom_id, binding.kept_rom_id) for binding in converged]
 
     @pytest.mark.parametrize(
@@ -1026,25 +1034,27 @@ class TestConvergeBoundGroups:
         """No version of it is listed, and each bound one goes as a hidden stale row (#2502 D1)."""
         members = [_gsd(9, group_key="other")]
         registry = {str(rom_id): _greg(rom_id, app_id=1000 + rom_id) for rom_id in (1, 2)}
-        assert converge_bound_groups(members, registry, set(), platform_slugs={"n64"}, hidden_rom_ids={1, 2}) == []
+        assert converge_bound_groups(members, registry, set(), platform_folders={"n64"}, hidden_rom_ids={1, 2}) == []
 
     def test_a_hidden_version_beside_one_romm_no_longer_lists_leaves_that_one_alone(self):
         members = [_gsd(9, group_key="other")]
         registry = {str(rom_id): _greg(rom_id, app_id=1000 + rom_id) for rom_id in (1, 2)}
-        assert converge_bound_groups(members, registry, {1}, platform_slugs={"n64"}, hidden_rom_ids={1}) == []
+        assert converge_bound_groups(members, registry, {1}, platform_folders={"n64"}, hidden_rom_ids={1}) == []
 
     @pytest.mark.parametrize(("installed", "kept"), [((), 1), ((2,), 2)], ids=["none", "the-hidden"])
     def test_a_hidden_version_of_a_listed_game_converges_as_an_unlisted_one(self, installed, kept):
         members = [_gsd(1, fs_name_no_ext="game_jp")]
         registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
         removed = 2 if kept == 1 else 1
-        converged = converge_bound_groups(members, registry, set(installed), platform_slugs={"n64"}, hidden_rom_ids={2})
+        converged = converge_bound_groups(
+            members, registry, set(installed), platform_folders={"n64"}, hidden_rom_ids={2}
+        )
         assert [(binding.rom_id, binding.kept_rom_id) for binding in converged] == [(removed, kept)]
 
     def test_the_binding_carries_both_app_ids(self):
         members = [_gsd(1), _gsd(2)]
         registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
-        assert converge_bound_groups(members, registry, set(), platform_slugs={"n64"}) == [
+        assert converge_bound_groups(members, registry, set(), platform_folders={"n64"}) == [
             ConvergedBinding(rom_id=2, app_id=1002, kept_rom_id=1, kept_app_id=1001)
         ]
 
@@ -1066,7 +1076,7 @@ class TestConvergeBoundGroups:
             "1": _greg(1, app_id=1001, platform_slug="snes"),
             "2": _greg(2, app_id=1002, platform_slug="snes"),
         }
-        assert self._kept([], registry, platform_slugs={"n64"}) == []
+        assert self._kept([], registry, platform_folders={"n64"}) == []
 
     def test_each_group_converges_on_its_own(self):
         members = [_gsd(1, group_key="a"), _gsd(2, group_key="a"), _gsd(3, group_key="b"), _gsd(4, group_key="b")]
@@ -1091,7 +1101,7 @@ class TestAGroupWithARunningGameIsLeftOut:
             "3": _greg(3, app_id=1003, group_key="b"),
             "4": _greg(4, app_id=1004, group_key="b"),
         }
-        converged = converge_bound_groups(members, registry, set(), platform_slugs={"n64"}, running_rom_ids=running)
+        converged = converge_bound_groups(members, registry, set(), platform_folders={"n64"}, running_rom_ids=running)
         return sorted((binding.rom_id, binding.kept_rom_id) for binding in converged)
 
     @pytest.mark.parametrize("running", [{1}, {2}], ids=["the-kept-one", "the-other"])
@@ -1231,7 +1241,7 @@ class TestCollapseSiblingGroupsCanonicalNaming:
         emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
         assert [e["rom_id"] for e in emitted] == [1]
         assert emitted[0]["name"] == "Japan Name"
-        result = classify_roms(emitted, registry, {"N64"})
+        result = classify_roms(emitted, registry, {"n64"})
         assert result.unchanged_ids == [1]
         assert result.changed == []
 
@@ -1405,7 +1415,7 @@ class TestPlatformBreakdown:
 
         assert [row["name"] for row in rows] == ["Game Boy Advance", "Nintendo 64", "Super Nintendo"]
         assert rows[0] == {
-            "slug": "gba",
+            "fs_slug": "gba",
             "name": "Game Boy Advance",
             "synced": True,
             "new_count": 0,
@@ -1423,7 +1433,7 @@ class TestPlatformBreakdown:
         rows = platform_breakdown([_make_sd(5, platform_slug="n64")], [], [], registry, platforms, platforms)
         assert rows == [
             {
-                "slug": "n64",
+                "fs_slug": "n64",
                 "name": "Nintendo 64",
                 "synced": True,
                 "new_count": 1,
@@ -1441,7 +1451,7 @@ class TestPlatformBreakdown:
         rows = platform_breakdown([], [], [7], registry, {"n64"}, {"n64": "Nintendo 64", "gg": "Game Gear"})
         assert rows == [
             {
-                "slug": "gg",
+                "fs_slug": "gg",
                 "name": "Game Gear",
                 "synced": False,
                 "new_count": 0,
@@ -1461,7 +1471,7 @@ class TestPlatformBreakdown:
         rows = platform_breakdown(new, changed, [], registry, {"n64"}, {"n64": "Nintendo 64", "gg": "Game Gear"})
         assert rows == [
             {
-                "slug": "gg",
+                "fs_slug": "gg",
                 "name": "Game Gear",
                 "synced": False,
                 "new_count": 1,
@@ -1569,13 +1579,13 @@ class TestPlatformBreakdownConservesTheClassification:
         rows = platform_breakdown(new, changed, stale, registry, _TRIPWIRE_PLATFORMS, _TRIPWIRE_ENTRY_NAMES)
 
         assert _column_sums(rows) == (len(new), len(changed), len(stale))
-        slugs = [row["slug"] for row in rows]
+        slugs = [row["fs_slug"] for row in rows]
         assert sorted(slugs) == sorted(set(slugs))
         assert set(slugs) == {"n64", "snes", "gba", "gg"}
         # The one slug outside the run map: flagged unsynced, named from the
         # names map, and carrying all three counts at once — the causes of leaving
         # the run compose, so removals and changes sit on one row.
-        outside = next(row for row in rows if row["slug"] == "gg")
+        outside = next(row for row in rows if row["fs_slug"] == "gg")
         assert outside["synced"] is False
         assert outside["name"] == "Game Gear"
         assert outside["new_count"]
@@ -1711,7 +1721,7 @@ class TestClassifyCountsARebindAsChanged:
         members = [_no_file(_gsd(1, fs_name_no_ext="Game (USA)")), _gsd(2, fs_name_no_ext="Game (USA)")]
         registry = {"1": _greg(1, app_id=1001)}
         emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
-        result = classify_roms(emitted, registry, {"N64"})
+        result = classify_roms(emitted, registry, {"n64"})
         assert [e["rom_id"] for e in result.changed] == [1]
         assert result.unchanged_ids == []
 
@@ -1725,7 +1735,7 @@ class TestClassifyCountsARebindAsChanged:
         registry = {"1": _greg(1, app_id=1001, fs_name="Game (USA).zip")}
         emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
         assert emitted[0][BIND_ROM_ID_KEY] == 2
-        result = classify_roms(emitted, registry, {"N64"}, skipped_rom_ids=frozenset({1}))
+        result = classify_roms(emitted, registry, {"n64"}, skipped_rom_ids=frozenset({1}))
         assert result.changed == []
         assert result.unchanged_ids == [1]
 
@@ -1735,7 +1745,7 @@ class TestClassifyCountsARebindAsChanged:
         registry = {"1": _greg(1, app_id=1001)}
         emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
         assert emitted[0][BIND_ROM_ID_KEY] == 2
-        result = classify_roms(emitted, registry, {"N64"})
+        result = classify_roms(emitted, registry, {"n64"})
         assert [e["rom_id"] for e in result.changed] == [1]
         assert result.unchanged_ids == []
 
@@ -1762,8 +1772,8 @@ class TestSortStaleRows:
                 unrecorded_unlisted,
                 unrecorded_platform_gone,
             ],
-            read_platform_slugs={"n64"},
-            listed_platform_slugs={"n64", "gba"},
+            read_platform_folders={"n64"},
+            listed_platform_folders={"n64", "gba"},
             collection_listed_rom_ids={5},
         )
 
@@ -1777,7 +1787,7 @@ class TestSortStaleRows:
         row = StaleRow(1, 1001, "psx", "collection")
 
         sort = sort_stale_rows(
-            [row], read_platform_slugs=set(), listed_platform_slugs=set(), collection_listed_rom_ids=()
+            [row], read_platform_folders=set(), listed_platform_folders=set(), collection_listed_rom_ids=()
         )
 
         assert sort.ask == [row]
@@ -1786,14 +1796,14 @@ class TestSortStaleRows:
         row = StaleRow(1, 1001, "psx", "platform")
 
         sort = sort_stale_rows(
-            [row], read_platform_slugs=set(), listed_platform_slugs=None, collection_listed_rom_ids=()
+            [row], read_platform_folders=set(), listed_platform_folders=None, collection_listed_rom_ids=()
         )
 
         assert sort.remove == [row]
 
     def test_nothing_stale_sorts_into_nothing(self):
         assert sort_stale_rows(
-            [], read_platform_slugs=set(), listed_platform_slugs=set(), collection_listed_rom_ids=set()
+            [], read_platform_folders=set(), listed_platform_folders=set(), collection_listed_rom_ids=set()
         ) == StaleSort([], [], [])
 
     def test_a_row_whose_game_a_unit_delivered_is_never_removed_and_asked_only_where_another_would_be(self):
@@ -1812,8 +1822,8 @@ class TestSortStaleRows:
                 via_platform_gone_from_romm,
                 unrecorded_listed,
             ],
-            read_platform_slugs=set(),
-            listed_platform_slugs={"gba"},
+            read_platform_folders=set(),
+            listed_platform_folders={"gba"},
             collection_listed_rom_ids={5},
             synced_group_keys={"igdb:1:1", "igdb:2:1", "igdb:3:1", "igdb:4:1", "igdb:5:1"},
         )
@@ -1825,8 +1835,8 @@ class TestSortStaleRows:
         gone, present, unknown = (StaleRow(rid, 1000 + rid, "gba", "collection", "igdb:1:1") for rid in (1, 2, 3))
         sort = sort_stale_rows(
             [gone, present, unknown],
-            read_platform_slugs=set(),
-            listed_platform_slugs={"gba"},
+            read_platform_folders=set(),
+            listed_platform_folders={"gba"},
             collection_listed_rom_ids=(),
             synced_group_keys={"igdb:1:1"},
         )
@@ -1838,8 +1848,8 @@ class TestSortStaleRows:
 
         sort = sort_stale_rows(
             [row],
-            read_platform_slugs={"n64"},
-            listed_platform_slugs={"n64"},
+            read_platform_folders={"n64"},
+            listed_platform_folders={"n64"},
             collection_listed_rom_ids=(),
             synced_group_keys={"igdb:1:1"},
         )
@@ -1852,8 +1862,8 @@ class TestSortStaleRows:
 
         sort = sort_stale_rows(
             [row],
-            read_platform_slugs=set(),
-            listed_platform_slugs={"gba"},
+            read_platform_folders=set(),
+            listed_platform_folders={"gba"},
             collection_listed_rom_ids=(),
             synced_group_keys={"igdb:1:1"},
         )
@@ -1878,8 +1888,8 @@ class TestAHiddenRowInTheStaleSort:
 
         sort = sort_stale_rows(
             [read, via_collection, unrecorded_listed],
-            read_platform_slugs={"n64"},
-            listed_platform_slugs={"n64", "gba"},
+            read_platform_folders={"n64"},
+            listed_platform_folders={"n64", "gba"},
             collection_listed_rom_ids={3},
             synced_group_keys={"other"},
             hidden_rom_ids={1, 2, 3},
@@ -1898,8 +1908,8 @@ class TestAHiddenRowInTheStaleSort:
 
         sort = sort_stale_rows(
             [read, via_collection],
-            read_platform_slugs={"n64"},
-            listed_platform_slugs={"n64", "gba"},
+            read_platform_folders={"n64"},
+            listed_platform_folders={"n64", "gba"},
             collection_listed_rom_ids=(),
             synced_group_keys={"g"},
             hidden_rom_ids={1, 2},
@@ -1912,8 +1922,8 @@ class TestAHiddenRowInTheStaleSort:
 
         sort = sort_stale_rows(
             [row],
-            read_platform_slugs={"n64"},
-            listed_platform_slugs={"n64"},
+            read_platform_folders={"n64"},
+            listed_platform_folders={"n64"},
             collection_listed_rom_ids=(),
             synced_group_keys={"g"},
             hidden_rom_ids={1},
@@ -1925,8 +1935,8 @@ class TestAHiddenRowInTheStaleSort:
         row = StaleRow(1, 1001, "n64", "platform", "g1")
         sort = sort_stale_rows(
             [row],
-            read_platform_slugs={"n64"},
-            listed_platform_slugs={"n64"},
+            read_platform_folders={"n64"},
+            listed_platform_folders={"n64"},
             collection_listed_rom_ids=(),
             hidden_rom_ids={1},
         )
@@ -1970,8 +1980,8 @@ class TestGoneFromRommMarks:
         delisted = StaleRow(2, 1002, "psx", "platform")
         sort = sort_stale_rows(
             [read_whole, delisted],
-            read_platform_slugs={"n64"},
-            listed_platform_slugs={"n64"},
+            read_platform_folders={"n64"},
+            listed_platform_folders={"n64"},
             collection_listed_rom_ids=(),
         )
 
@@ -1980,7 +1990,7 @@ class TestGoneFromRommMarks:
     def test_a_row_the_run_removes_unasked_writes_nothing(self):
         turned_off = StaleRow(1, 1001, "gba", "platform")
         sort = sort_stale_rows(
-            [turned_off], read_platform_slugs=set(), listed_platform_slugs={"gba"}, collection_listed_rom_ids=()
+            [turned_off], read_platform_folders=set(), listed_platform_folders={"gba"}, collection_listed_rom_ids=()
         )
 
         assert sort.gone_from_romm_marks({}, set()) == {}
@@ -2041,6 +2051,7 @@ def _stored_rom(rom_id: int, **fields: Any) -> Rom:
     return Rom(
         rom_id=rom_id,
         platform_slug="gba",
+        platform_fs_slug="gba",
         name=f"Golf {rom_id}",
         fs_name=f"Golf ({rom_id}).zip",
         shortcut_app_id=6000 + rom_id,
@@ -2060,6 +2071,7 @@ class TestStoredVersion:
             "name": "Golf 30",
             "fs_name_no_ext": "Golf (30)",
             "platform_slug": "gba",
+            "platform_fs_slug": "gba",
             "sibling_group_key": "g1",
             "regions": ["USA"],
             "revision": "1",
@@ -2080,7 +2092,7 @@ class TestStoredVersion:
             "30": _greg(30, app_id=6030, platform_slug="gba"),
             "31": _greg(31, app_id=6031, platform_slug="gba"),
         }
-        converged = converge_bound_groups(listed, registry, set(), platform_slugs={"gba"}, preferred_region="USA")
+        converged = converge_bound_groups(listed, registry, set(), platform_folders={"gba"}, preferred_region="USA")
         assert [(binding.rom_id, binding.kept_rom_id) for binding in converged] == [(removed, kept)]
 
     def test_an_installed_version_still_wins(self):
@@ -2090,5 +2102,46 @@ class TestStoredVersion:
             "30": _greg(30, app_id=6030, platform_slug="gba"),
             "31": _greg(31, app_id=6031, platform_slug="gba"),
         }
-        converged = converge_bound_groups(listed, registry, {31}, platform_slugs={"gba"}, preferred_region="USA")
+        converged = converge_bound_groups(listed, registry, {31}, platform_folders={"gba"}, preferred_region="USA")
         assert [(binding.rom_id, binding.kept_rom_id) for binding in converged] == [(30, 31)]
+
+
+class TestARowWithoutAFolder:
+    """#2452 D5: a stale row with no platform folder recorded counts as on a platform the run did not read."""
+
+    _SORT: ClassVar[dict[str, Any]] = {
+        "read_platform_folders": {"n64"},
+        "listed_platform_folders": {"n64", "snes"},
+        "collection_listed_rom_ids": (),
+    }
+
+    def test_it_is_asked_never_kept_as_delisted(self):
+        sort = sort_stale_rows([StaleRow(1, 1001, None)], **self._SORT)
+        assert (sort.remove, sort.keep, sort.ask, sort.unplaced) == ([], [], [], (StaleRow(1, 1001, None),))
+
+    def test_one_whose_game_the_run_synced_is_asked_for_its_mark_alone(self):
+        sort = sort_stale_rows([StaleRow(1, 1001, None, None, "g1")], synced_group_keys={"g1"}, **self._SORT)
+        assert (sort.unplaced, sort.ask_only) == ((), (StaleRow(1, 1001, None, None, "g1"),))
+
+    def test_one_a_collection_delivered_is_asked_as_a_collection_row(self):
+        sort = sort_stale_rows([StaleRow(1, 1001, None, "collection")], **self._SORT)
+        assert (sort.ask, sort.unplaced) == ([StaleRow(1, 1001, None, "collection")], ())
+
+    def test_romm_s_answer_places_it_and_today_s_rule_decides(self):
+        rows = [StaleRow(1, 1001, None), StaleRow(2, 1002, None), StaleRow(3, 1003, None)]
+        answers: dict[int, RomAnswer] = {1: "present", 2: "present", 3: "present"}
+        folders = {1: "snes", 2: "gb", 3: "n64"}
+        settled = settle_unplaced_rows(
+            rows, answers, folders, read_platform_folders={"n64"}, listed_platform_folders={"n64", "snes"}
+        )
+        assert settled.remove == [StaleRow(1, 1001, "snes")], "listed and switched off: removed"
+        assert settled.keep == [StaleRow(2, 1002, "gb"), StaleRow(3, 1003, "n64")], "delisted or read whole: kept"
+        assert settled.gone_from_romm_marks(answers, {"n64"}) == {2: "delisted"}
+
+    def test_a_404_or_no_answer_keeps_it_bound_and_marks_it_by_the_answer(self):
+        rows = [StaleRow(1, 1001, None), StaleRow(2, 1002, None), StaleRow(3, 1003, None)]
+        answers: dict[int, RomAnswer] = {1: "gone", 2: "unknown", 3: "present"}
+        settled = settle_unplaced_rows(rows, answers, {}, read_platform_folders=set(), listed_platform_folders={"snes"})
+        assert (settled.remove, settled.keep) == ([], [])
+        assert settled.ask_only == tuple(rows), "3 answered without a folder places nothing"
+        assert settled.gone_from_romm_marks(answers, set()) == {1: "not_found", 3: None}

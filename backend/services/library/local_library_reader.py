@@ -100,15 +100,15 @@ class LocalLibraryReader:
         self._uow_factory = config.uow_factory
 
     def do_read_preview_baseline(
-        self, slug_to_name: dict[str, str]
+        self, folder_to_name: dict[str, str]
     ) -> tuple[dict[str, dict[str, Any]], list[str], list[str]]:
         """Read the classify baseline from SQLite in one short read UoW.
 
         Returns ``(registry, last_synced_platforms, last_synced_collections)``
         where ``registry`` is the ``classify_roms``-shaped dict (keyed by
         ``str(rom_id)``) reconstructed from the bound ``roms`` rows, with
-        the platform display name resolved from *slug_to_name* (the live
-        work-queue) and falling back to the slug. Each entry also carries the
+        the platform display name resolved by its folder from *folder_to_name*
+        (the live work-queue) and falling back to the slug. Each entry also carries the
         persisted ``cover_source`` fingerprint so the preview's cover-work
         count (#1386) compares in memory against the same projection — no
         second DB pass. The last-synced platform/collection lists come from
@@ -123,8 +123,9 @@ class LocalLibraryReader:
                     "app_id": rom.shortcut_app_id,
                     "name": rom.name,
                     "fs_name": rom.fs_name,
-                    "platform_name": slug_to_name.get(rom.platform_slug, rom.platform_slug),
+                    "platform_name": folder_to_name.get(rom.platform_fs_slug or "", rom.platform_slug),
                     "platform_slug": rom.platform_slug,
+                    "platform_fs_slug": rom.platform_fs_slug,
                     "sibling_group_key": rom.sibling_group_key,
                     "shortcut_applied": rom.shortcut_applied,
                     "cover_source": rom.cover_source,
@@ -136,13 +137,15 @@ class LocalLibraryReader:
         return registry, last_platforms, last_collections
 
     def do_count_platforms_to_restamp(
-        self, platform_slugs: set[str], full_fetched: Mapping[str, Sequence[Mapping[str, Any]]]
+        self, platform_folders: set[str], full_fetched: Mapping[str, Sequence[Mapping[str, Any]]]
     ) -> int:
-        """Count enabled platform slugs whose wholesale skip only a fresh ``PlatformSyncState`` stamp can restore.
+        """Count enabled platforms whose wholesale skip only a fresh ``PlatformSyncState`` stamp can restore.
+
+        *platform_folders* are their folders in RomM, the stamps' key.
 
         A platform lacking a completion stamp, or holding one whose skip was
         revoked (``stamp_for_skip``), has no wholesale-skip authority. One the
-        preview fetched in full (*full_fetched*, slug → the ROMs that fetch
+        preview fetched in full (*full_fetched*, folder → the ROMs that fetch
         returned) counts too when its stamp does not match that fetch
         (``domain/platform_skip.restamp_due``): no checksum or fetch start, other
         ids, or a ROM updated after its reference. Either way
@@ -155,9 +158,9 @@ class LocalLibraryReader:
         with self._uow_factory() as uow:
             return sum(
                 1
-                for slug in platform_slugs
-                if (stamp := stamp_for_skip(uow.platform_sync_state.get(slug))) is None
-                or (slug in full_fetched and restamp_due(stamp, full_fetched[slug]))
+                for folder in platform_folders
+                if (stamp := stamp_for_skip(uow.platform_sync_state.get(folder))) is None
+                or (folder in full_fetched and restamp_due(stamp, full_fetched[folder]))
             )
 
     def do_read_apply_registry(self, unit: WorkUnit) -> dict[str, dict[str, Any]]:
@@ -182,7 +185,9 @@ class LocalLibraryReader:
         """
         with self._uow_factory() as uow:
             rows = (
-                uow.roms.iter_by_platform(unit.slug) if unit.type == "platform" and unit.slug else uow.roms.iter_all()
+                uow.roms.iter_by_platform_folder(unit.platform_folder)
+                if unit.type == "platform" and unit.platform_folder
+                else uow.roms.iter_all()
             )
             return {
                 str(rom.rom_id): {
@@ -190,6 +195,7 @@ class LocalLibraryReader:
                     "name": rom.name,
                     "fs_name": rom.fs_name,
                     "platform_slug": rom.platform_slug,
+                    "platform_fs_slug": rom.platform_fs_slug,
                     "sibling_group_key": rom.sibling_group_key,
                     "shortcut_applied": rom.shortcut_applied,
                     "cover_source": rom.cover_source,
@@ -268,8 +274,8 @@ class LocalLibraryReader:
                 rom_id for stamp in uow.collection_sync_state.iter_all() for rom_id in stamp.member_rom_ids
             )
 
-    def do_read_kept_platform_names(self, platform_slugs: Collection[str]) -> dict[str, str]:
-        """The name the names cache holds for each of *platform_slugs* that has one.
+    def do_read_kept_platform_names(self, platform_folders: Collection[str]) -> dict[str, str]:
+        """The name the names cache holds for each of *platform_folders* that has one.
 
         Every sync's finalize writes the cache, a stopped run's included.
 
@@ -277,7 +283,7 @@ class LocalLibraryReader:
         """
         with self._uow_factory() as uow:
             kept = decode_platform_names(uow.kv_config.get(PLATFORM_NAMES_KEY))
-        return {slug: kept[slug] for slug in platform_slugs if slug in kept}
+        return {folder: kept[folder] for folder in platform_folders if folder in kept}
 
     def do_scan_stale_roms(self, synced_rom_ids: set[int], synced_app_ids: set[int]) -> list[StaleRow]:
         """Return a :class:`StaleRow` for every bound ROM not synced this run.
@@ -308,7 +314,7 @@ class LocalLibraryReader:
             StaleRow(
                 rom_id,
                 app_id,
-                candidates[rom_id].platform_slug,
+                candidates[rom_id].platform_fs_slug,
                 candidates[rom_id].delivered_through,
                 candidates[rom_id].sibling_group_key,
             )

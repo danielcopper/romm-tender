@@ -1708,3 +1708,27 @@ class TestTheTargetsSteamGridDbCover:
 
         with uow as u:
             assert u.artwork_slot_outcomes.get(2, ArtworkSlot.COVER) is not None
+
+
+class TestAServerOnlyTargetKeepsItsPlatformFolder:
+    """A detail that names no platform folder takes the bound row's: versions share one platform (#2452 Q9)."""
+
+    def test_the_bound_row_s_folder_stands_in(self, event_loop, service, uow, romm):
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID, group_key=_GROUP)
+        with uow as u:
+            bound = u.roms.get(1)
+            bound.record_platform_folder("snes-hacks")
+            u.roms.save(bound)
+        romm.roms[3] = {
+            "id": 3,
+            "name": "Game (Japan)",
+            "fs_name": "Game (Japan).sfc",
+            "platform_id": 57,
+            "igdb_id": 100,
+            "sibling_roms": [{"id": 1}],
+        }
+
+        _assert_success(_run(event_loop, service.switch_version(_APP_ID, 3, False)), rom_id=3, installed=False)
+
+        with uow as u:
+            assert u.roms.get(3).platform_fs_slug == "snes-hacks"
