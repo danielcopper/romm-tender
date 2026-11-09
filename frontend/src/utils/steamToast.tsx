@@ -18,8 +18,8 @@ import type { ToastData } from "../api/host";
 import type { ToastClasses } from "./deckyUiInternals";
 
 /**
- * Where Steam is drawing the notification. Source: `library.js`, function `Bn`
- * (reached as `ey3`), in the Steam client build on disk.
+ * Where Steam is drawing the notification. Where Steam's values are read:
+ * `docs/architecture/frontend-bundles.md`, "Talking to the backend".
  */
 export const TOAST_LOCATION_BIG_PICTURE_POPUP = 1;
 export const TOAST_LOCATION_DESKTOP_POPUP = 2;
