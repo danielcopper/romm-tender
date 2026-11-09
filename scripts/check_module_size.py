@@ -2,16 +2,10 @@
 """Hold the line on module size: no new god classes, no growth in the old ones.
 
 The invariant register (``docs/architecture/invariants/code-structure.md``)
-sets a decomposition threshold for every first-party backend tree —
-``services/``, ``bootstrap/``, ``adapters/``, ``domain/``, ``lib/`` and
-``models/``. It lived in prose, and prose drifted: ``sync_orchestrator.py`` was
-901 lines when #999 wrote it down and kept growing. Nothing failed in between,
-because nothing was watching.
-
-This gate watches. Every in-scope module above the threshold carries a ceiling
-in ``ALLOWLIST`` — the size it had when it was recorded, movable only under the
-narrow condition stated at that list. That buys the property the prose rule
-never had:
+sets a decomposition threshold for every tree in ``SCOPE_DIRS``. Every in-scope
+module above the threshold carries a ceiling in ``ALLOWLIST`` — the size it had
+when it was recorded, movable only under the narrow condition stated at that
+list. So:
 
 * a **new** module cannot cross the threshold at all, because it is not listed;
 * a **listed** module cannot grow past its ceiling, and that ceiling goes up

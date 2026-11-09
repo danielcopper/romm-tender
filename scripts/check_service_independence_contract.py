@@ -18,7 +18,7 @@ Derivation rule (a "service" = one independence entry):
 
 A sub-package (e.g. ``services.saves``, ``services.library``) counts as ONE entry,
 not one-per-file: the sub-services inside a bounded context may import each other
-concretely (the documented carve-out in CLAUDE.md); independence is enforced
+concretely (the carve-out in ``.claude/rules/services.md``); independence is enforced
 between the top-level entries, so the contract lists the package, not its
 internals. ``services.protocols`` is not a service — it is the Protocol namespace
 services depend on — so it is excluded.

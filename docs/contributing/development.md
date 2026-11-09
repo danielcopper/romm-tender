@@ -468,13 +468,14 @@ literal appears anywhere except its owning adapter (`adapters/persistence.py`); 
 keeps all settings writes in the single crash-safe owner.
 
 `mise run lint` (and CI) also runs `scripts/check_module_size.py`, the decomposition-threshold gate: no module in
-`services/`, `bootstrap/`, `adapters/`, `domain/`, `lib/` or `models/` may cross the ~1000-LOC threshold. The modules
-that were already over it when the gate landed were pinned at their size in the script's `ALLOWLIST`; none is left, and
-nothing is ever added to it — a module that crosses the threshold is split, never listed. What the gate does not walk is
-listed at `SCOPE_DIRS` with the reason for each: `main.py` grows with the endpoint surface by design, `_vendor/` holds
-checksum-pinned upstream copies, a large file under `tests/` is the one-file-per-source-module rule working, `scripts/`
-never ships, and `frontend/src/` needs a per-scope glob before it can be added. There is deliberately no `--update` flag
-— re-baselining should be a reviewable diff, never a command someone runs to get back to green.
+`services/`, `bootstrap/`, `adapters/`, `domain/`, `host/`, `lib/` or `models/` may cross the ~1000-LOC threshold. The
+modules that were already over it when the gate landed were pinned at their size in the script's `ALLOWLIST`; none is
+left, and nothing is ever added to it — a module that crosses the threshold is split, never listed. What the gate does
+not walk is listed at `SCOPE_DIRS` with the reason for each: `main.py` grows with the endpoint surface by design,
+`_vendor/` holds checksum-pinned upstream copies, a large file under `tests/` is the one-file-per-source-module rule
+working, `scripts/` never ships, and `frontend/src/` needs a per-scope glob before it can be added. There is
+deliberately no `--update` flag — re-baselining should be a reviewable diff, never a command someone runs to get back to
+green.
 
 `mise run lint` (and CI) also runs `scripts/check_invariant_register.py`, which holds the invariant register to its
 size: the register section of `CLAUDE.md` at most 6,000 characters, an entry's bold headline at most 300, one area file

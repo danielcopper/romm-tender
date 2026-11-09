@@ -137,7 +137,7 @@ reads and binds, and the other areas: [the register's index](index.md).
   both
 - **Services never call clocks / sleep / uuid / random directly (inject the Protocol)** — check —
   `scripts/check_cosmic_call_bans.sh`
-- **No module in `services/`, `bootstrap/`, `adapters/`, `domain/`, `lib/` or `models/` crosses the ~1000-LOC
+- **No module in `services/`, `bootstrap/`, `adapters/`, `domain/`, `host/`, `lib/` or `models/` crosses the ~1000-LOC
   decomposition threshold** — check — `scripts/check_module_size.py` (no module is grandfathered any more: every one
   that predated the gate has dropped back under the threshold and left its `ALLOWLIST`, to which nothing is ever added.
   `main.py`, `_vendor/`, `tests/`, `scripts/` and `frontend/src/` are out of scope, each for a reason recorded at
