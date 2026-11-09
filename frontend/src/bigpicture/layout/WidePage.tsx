@@ -354,9 +354,8 @@ export const WidePage: FC<WidePageProps> = ({ title, onBack, tabs, activeTab, on
   // Steam's `sp.js`), so it is passed only where the frame would place focus
   // itself — on a page opened by a swap. It is also what makes Steam draw the
   // L1/R1 glyphs: its tab row shows them only while gamepad focus is within the
-  // tabbed page, and the Back row above the tabs is outside it
-  // (`steamui/sp.js`: the `GamepadTabbedPage`'s `onFocusWithin` drives its tab
-  // row's `showGlyphs`).
+  // tabbed page (`docs/architecture/qam-panel.md`, "Tabs"), and the Back row
+  // above the tabs is outside it.
   const steamPlacesFocus = Boolean(tabs && Tabs);
 
   useEffect(() => {

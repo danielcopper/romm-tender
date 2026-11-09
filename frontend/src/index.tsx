@@ -203,9 +203,8 @@ const QAMPanel: FC = () => {
     // would undo it: the first stop of a wide page is the Back chip, which sits
     // above the body — and above the tabs of a tabbed one, therefore outside
     // Steam's tabbed page, whose tab row draws the L1/R1 glyphs only while
-    // gamepad focus is within it (`steamui/sp.js`: the `GamepadTabbedPage`'s
-    // `onFocusWithin` drives its tab row's `showGlyphs`). Landing here would
-    // leave such a page with no visible way to switch tabs.
+    // gamepad focus is within it (`docs/architecture/qam-panel.md`, "Tabs").
+    // Landing here would leave such a page with no visible way to switch tabs.
     //
     // Only after a swap: on the page the panel appears with, entry is Steam's,
     // by the `preferredFocus` the page marks where it marks one

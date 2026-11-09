@@ -542,9 +542,10 @@ glyphs overlap the labels. In the panel only Library has tabs; outside it, Tende
 component (§ The game page's tabs).
 
 On a page opened by a swap, entry focus lands in the content — the active tab's, so the list of a list-and-detail page —
-and the bumper glyphs follow, because Steam draws them only while gamepad focus is within the tabbed page. Entering a
-tabbed page the panel appeared with lands on the active tab instead ("Pages"), which is within the tabbed page too. Back
-stays reachable by moving up.
+and the bumper glyphs follow, because Steam draws them only while gamepad focus is within the tabbed page
+(`steamui/sp.js`: the `GamepadTabbedPage`'s `onFocusWithin` drives its tab row's `showGlyphs`). Entering a tabbed page
+the panel appeared with lands on the active tab instead ("Pages"), which is within the tabbed page too. Back stays
+reachable by moving up.
 
 **Entry focus belongs to the frame, on every wide page opened by a swap.** `WidePage` marks its root as placing its own,
 so the panel's router leaves the page alone rather than placing focus of its own, which would land on the Back chip
