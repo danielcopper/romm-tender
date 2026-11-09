@@ -119,9 +119,12 @@ backup-or-confirm rule, whose statement stands in `CLAUDE.md`. How the code is l
 - **The invariant register stays within its size limits, and every entry stands in one place** — check —
   `scripts/check_invariant_register.py`, over the register section of `CLAUDE.md` and every file in this folder; the
   limits are in `docs/contributing/development.md`, and what it reads is its docstring. It also fails a second register
-  section in `CLAUDE.md`, an entry with a tier anywhere outside that section, and an area headline that stands anywhere
-  in `CLAUDE.md`. Unseen by it: a rule set as a paragraph or a heading rather than a `- **` list item, an area headline
-  copied into `CLAUDE.md` in other words, and two headlines that state one rule in different words
+  section in `CLAUDE.md`, an entry-shaped item anywhere outside that section — a bold list item at the left margin,
+  under any marker, whose headline is followed by `—` or `(…) —` and one of its tier words `check`, `test` and
+  `prompt-only` — and an area headline that stands anywhere in `CLAUDE.md`. Unseen by it: a rule set as a paragraph, a
+  heading or an indented list item rather than a `- **` item at the left margin; a tier spelled other than with its tier
+  words (`— Check —`, `— checked by …`, an en dash, a bold tier); an area headline copied into `CLAUDE.md` in other
+  words; and two headlines that state one rule in different words
 - **Every tree under `backend/_vendor/`, and the resolver's recorded machines under `tests/adapters/atlas_vectors/`, is
   pinned by the `<pkg>.SHA256SUMS` beside it: every manifest entry under `<pkg>/` matches the vendored file's digest** —
   check

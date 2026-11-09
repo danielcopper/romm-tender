@@ -479,8 +479,10 @@ green.
 
 `mise run lint` (and CI) also runs `scripts/check_invariant_register.py`, which holds the invariant register to its
 size: the register section of `CLAUDE.md` at most 6,000 characters, an entry's bold headline at most 300, one area file
-under `docs/architecture/invariants/` at most 40,000, and no headline standing in two places. What it reads and what it
-misses is its docstring; its tests are `tests/scripts/test_check_invariant_register.py`.
+under `docs/architecture/invariants/` at most 40,000, and no headline standing in two places. What it reads is its
+docstring, and what it misses is its entry in the invariant register
+([Cross-cutting](../architecture/invariants/cross-cutting.md)); its tests are
+`tests/scripts/test_check_invariant_register.py`.
 
 `mise run lint` (and CI) also runs `scripts/check_generated_installer_logo.py`, which holds `install.sh`'s greeter to
 the mark. The installer draws the logo before it does anything, and it cannot render an image, so the art is text

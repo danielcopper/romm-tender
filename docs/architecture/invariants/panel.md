@@ -2,8 +2,9 @@
 
 Tender's Quick Access entry, its section on Steam's game page, the stranded panel, per-ROM detail state, focusable rows,
 list-and-detail entry focus and focus-group values. The BIOS tables and platform pages under `frontend/src/bigpicture/`
-are also bound by the entries of [firmware](firmware.md), and the Sync page by those of [library sync](library-sync.md).
-How an entry reads and binds, and the other areas: [the register's index](index.md).
+are also bound by the entries of [firmware](firmware.md), and the Sync page by those of [library sync](library-sync.md);
+the Steam internals and `@decky/ui` names the panel reaches are entries of [the start-up check](startup.md). How an
+entry reads and binds, and the other areas: [the register's index](index.md).
 
 - **Tender's Quick Access entry composes with Decky's rather than going through it, and everything it binds to the Quick
   Access window is bound from inside that window's React tree** — test + prompt-only —
@@ -54,12 +55,12 @@ How an entry reads and binds, and the other areas: [the register's index](index.
   module state of the window the panel's code runs in, and subscribes to them from the tree through
   `useSyncExternalStore`. (`utils/styleInjector.ts` writes into `findSP()`'s document, which is the game page's and not
   the menu's.) One added at module scope would work perfectly until the first Gaming-Mode-to-Desktop switch and then do
-  nothing, silently. Detail: `docs/architecture/qam-panel.md` → The entry. Prompt-only: marker and key are `tender`,
-  never `decky`; nothing writes `window.__TABS_HOOK_INSTANCE` or calls its `add()`, and neither it nor a `decky`-marked
-  entry is read as a sign Decky is present — a `decky`-marked entry is read only to place Tender's entry; no tab array
-  held, no unpatch added; on every render pass the handler places the entry by the stored `qam_entry_position` (before
-  the first `decky`-marked entry under `"above_decky"`, the default; last under `"below_decky"` or with no such entry);
-  nothing binds to the Quick Access window at module scope.
+  nothing, silently. Prompt-only: marker and key are `tender`, never `decky`; nothing writes
+  `window.__TABS_HOOK_INSTANCE` or calls its `add()`, and neither it nor a `decky`-marked entry is read as a sign Decky
+  is present — a `decky`-marked entry is read only to place Tender's entry; no tab array held, no unpatch added; on
+  every render pass the handler places the entry by the stored `qam_entry_position` (before the first `decky`-marked
+  entry under `"above_decky"`, the default; last under `"below_decky"` or with no such entry); nothing binds to the
+  Quick Access window at module scope. Detail: `docs/architecture/qam-panel.md` → The entry
 - **Tender's section reaches Steam's game page through the ROUTE component's `renderFunc`, and never through the page
   component's own `type`** — test + prompt-only — `frontend/src/bigpicture/patches/gamePageSeam.test.ts` pins the half
   that is decidable without Steam: the factory predicate in both directions, that two matching factories answer as no
@@ -81,10 +82,10 @@ How an entry reads and binds, and the other areas: [the register's index](index.
   export the handler finds no `renderFunc` to wrap), and the start-up check's `AppDetailsRoute` entry costs a `feature`
   beside `appDetailsClasses`, which costs one for the same reason — every read of it is in that same patch. Moving
   either to `panel` takes the whole interface off the air for a section outside it; moving a panel name to `feature`
-  beside them renders a hole. Detail: `docs/architecture/frontend-bundles.md` → Tender's section on Steam's game page.
-  Prompt-only: the install patches every memo export whose `type` is a function, and the start-up check's
-  `AppDetailsRoute` and `appDetailsClasses` cost `feature`, never `panel`, and no panel name moves to `feature` beside
-  them (that renders a hole).
+  beside them renders a hole. Prompt-only: the install patches every memo export whose `type` is a function, and the
+  start-up check's `AppDetailsRoute` and `appDetailsClasses` cost `feature`, never `panel`, and no panel name moves to
+  `feature` beside them (that renders a hole). Detail: `docs/architecture/frontend-bundles.md` → Tender's section on
+  Steam's game page
 - **While the panel is stranded it offers no press that cannot work: the stranded card stands in place of Tender's whole
   Quick Access panel and of a game page's section, the play row keeps only Resume for its game while that game runs,
   Steam's own Play on a RomM shortcut that is not running is refused** — test + prompt-only
@@ -219,12 +220,12 @@ How an entry reads and binds, and the other areas: [the register's index](index.
   searches for it. That holds on an untabbed page only: on a tabbed one Steam marks its own active tab the same way, at
   a shallower depth, and entry lands there. The mark holds only until focus first enters the panel, because Steam's
   search for it runs ahead of the child it remembers and would otherwise pull every later entry onto the row. Nothing
-  joins that mark to `ENTRY_STOP_ATTR` either, and whether Steam honours either is device-only. Detail:
-  `docs/architecture/qam-panel.md`, "Pages". Prompt-only: `bigpicture/layout/WidePage.tsx` places entry focus through
-  `pageEntryStop` (`utils/entryFocus.ts`), never `firstBodyStop`; `bigpicture/layout/ListDetail.tsx` puts the
-  `ENTRY_STOP_ATTR` mark on the `display: contents` wrapper around the selected row, never on the row; and a wide page
-  that opens on a non-first row without `ListDetail` places the mark itself, the same way, and gives that row
-  `preferredFocus` too, only while `EntryPreferenceContext` holds.
+  joins that mark to `ENTRY_STOP_ATTR` either, and whether Steam honours either is device-only. Prompt-only:
+  `bigpicture/layout/WidePage.tsx` places entry focus through `pageEntryStop` (`utils/entryFocus.ts`), never
+  `firstBodyStop`; `bigpicture/layout/ListDetail.tsx` puts the `ENTRY_STOP_ATTR` mark on the `display: contents` wrapper
+  around the selected row, never on the row; and a wide page that opens on a non-first row without `ListDetail` places
+  the mark itself, the same way, and gives that row `preferredFocus` too, only while `EntryPreferenceContext` holds.
+  Detail: `docs/architecture/qam-panel.md`, "Pages"
 - **Every `flow-children` in a `.ts` or `.tsx` file under `frontend/src/` is one of the values Steam's parser knows
   (`docs/architecture/qam-panel.md`, "Focus groups"), written as a string literal** — check — Steam's parser drops any
   other value, and the group then takes its direction from its CSS each time it is asked, so a value such as

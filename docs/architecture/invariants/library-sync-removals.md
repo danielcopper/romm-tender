@@ -233,7 +233,7 @@ other areas: [the register's index](index.md).
   the preview hands that diff every stale row `settle_stale_rows` neither removes nor keeps; the preview and the apply
   both pick the rebuilt rows they file as kept through `domain/sync_diff.py::rebuilt_rows_filed_as_kept`; and both
   converge a game a collection brings in through `services/library/_convergence.py::converge_collection_deliveries`,
-  over the ROMs the collection units fetched and never a skipped collection's rebuilt rows.
+  over the ROMs the collection units fetched and never a skipped collection's rebuilt rows
 - **What the user hid in RomM is read off one request, `GET /api/roms?statuses=hidden`
   (`RommApiAdapter.list_hidden_roms`), read only through `RommApiAdapter.read_hidden_rom_ids`, which parses it with
   `domain/hidden_roms.py::hidden_rom_ids` and logs an answer it cannot read** — test + prompt-only
@@ -267,4 +267,4 @@ other areas: [the register's index](index.md).
   reader takes `rom_user.hidden` off an exact-id answer or a list item for what is hidden (`hidden_rom_ids` reads the
   first item's only to tell which list came back); within a run the set is read only off
   `LibrarySyncStateBox.run_hidden_rom_ids`; no module but `adapters/romm/romm_api.py` calls `list_hidden_roms`, and a
-  new reader of what is hidden goes through `read_hidden_rom_ids`.
+  new reader of what is hidden goes through `read_hidden_rom_ids`

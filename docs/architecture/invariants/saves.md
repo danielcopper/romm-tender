@@ -160,14 +160,13 @@ and binds, and the other areas: [the register's index](index.md).
   pin both directions, the real resolver's included. Unchecked: such a refusal keeps the directory the resolver named,
   because the rename on adoption carries a game's saves there, so anything that moves files by `SaveAnswer.directory`
   has to check the state itself, as `services/saves/save_directory.py::_followable_directory` does — a new mover that
-  does not carries files into a place the emulator's settings never named, and nothing would say so. Detail:
-  `docs/architecture/save-sync-coverage.md`, GLOSSARY.md → Save state / Save scope. Prompt-only: every per-ROM entry
-  point refuses through `sync_engine/_shape_refusal.py` and every sync path crosses the `MatrixExecutor.sync_rom_saves`
-  backstop; the five write paths (`slots/switching.py`, `copies.py`, `versions.py`, `slots/setup.py`,
-  `sync_engine/rollback.py`) each refuse on the answer's `sync_directory` (the slot choice through `refuse_unsyncable`,
-  which reads the same), never on `saves_dir` — `test_save_shape_gate.py` pins those five, not the list, and
-  `tests/services/saves/test_slots.py::TestAGameWhoseSavesCannotSync` the slot choice's plain path; the sync, write,
-  delete, count and status paths that `docs/architecture/save-file-sync-architecture.md` lists call
+  does not carries files into a place the emulator's settings never named, and nothing would say so. Prompt-only: every
+  per-ROM entry point refuses through `sync_engine/_shape_refusal.py` and every sync path crosses the
+  `MatrixExecutor.sync_rom_saves` backstop; the five write paths (`slots/switching.py`, `copies.py`, `versions.py`,
+  `slots/setup.py`, `sync_engine/rollback.py`) each refuse on the answer's `sync_directory` (the slot choice through
+  `refuse_unsyncable`, which reads the same), never on `saves_dir` — `test_save_shape_gate.py` pins those five, not the
+  list, and `tests/services/saves/test_slots.py::TestAGameWhoseSavesCannotSync` the slot choice's plain path; the sync,
+  write, delete, count and status paths that `docs/architecture/save-file-sync-architecture.md` lists call
   `SyncEngine.follow_save_directory` before they look at local files; configuration-role files are held back through
   `SaveAnswer.synced_files` by the denial `CONFIGURATION_ROLES`, never an allow-list, a directory move carries
   `owned_files`, and nothing reads `components` directly; a rendering reads `unestablished`'s shape and
@@ -175,7 +174,8 @@ and binds, and the other areas: [the register's index](index.md).
   decided only at `RomInfoService._installed_answer`, `._uninstalled_answer` and `services/rom_adoption/renamer.py`;
   nothing caches an answer; a refusal for a place not read keeps the resolver's directory for the rename on adoption, so
   anything else that moves files by `SaveAnswer.directory` checks the state first, as
-  `services/saves/save_directory.py::_followable_directory` does.
+  `services/saves/save_directory.py::_followable_directory` does. Detail: `docs/architecture/save-sync-coverage.md`,
+  GLOSSARY.md → Save state / Save scope
 - **A save place whose directory still holds a resolver template (`<cwd>`, `<region>`, `<save_id>`) is never followed,
   recorded, renamed into or used as a save-state place** — test + prompt-only — the resolver answers a place it cannot
   complete as a template and lists the holes in `needs`: a RetroArch save folder set as a relative path answers

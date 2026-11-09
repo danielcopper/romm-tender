@@ -170,7 +170,7 @@ what the start-up check asks, logs and shows. How an entry reads and binds, and 
   is the only reading of `absenceCost` that decides anything — the log line and the notice read the cost and the losses
   only to word a miss; what the toaster can do (`utils/notificationsHealth.ts`) is recorded from `notificationsMissing`
   over `NOTIFICATION_LOOKUPS` names, never from a `feature` cost; a name leaves `panel` only once its every consumer is
-  read.
+  read
 - **Every start-up check that misses something writes ONE warning to the backend log — which check, then every missing
   name with its cost and losses — whether the panel mounts or the fallback page stands in its place; every miss the
   panel survives reaches the one notice on Main** — check + test + prompt-only

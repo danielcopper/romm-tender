@@ -46,7 +46,7 @@ travel on the wire. How an entry reads and binds, and the other areas: [the regi
   upgrade is answered with. A frontend that spelled one differently would go green, and the divergence would surface
   only to whoever eventually matched on it — for a close code, on a device, as a stranded panel that keeps reconnecting.
   Prompt-only: the Python and TypeScript spellings of `connection_lost` and `stranded_panel`, and of the stranded-panel
-  close codes 4001 and 4002, must agree — nothing holds them equal.
+  close codes 4001 and 4002, must agree — nothing holds them equal
 - **No sentinel objects on the wire — explicit JSON-representable tagged values only** — prompt-only — no sentinel
   survives on the wire today (`NO_MIGRATION` retired with #1004, legacy `slot:null` confirmation with #1276), so the
   rule now guards reintroduction; nothing mechanical detects a new one

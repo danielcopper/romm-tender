@@ -181,7 +181,7 @@ groups, the emulator a set of answers is about, and when it is asked. Files, lin
   every surface words the states through `frontend/src/utils/biosSummary.ts`, sole holder of their order; the play-row
   badge (`frontend/src/utils/playSection.ts::extractBiosInfo`) rises on `bios_level` `missing` alone; a new wording, or
   one in a `.ts` helper (`frontend/src/bigpicture/panelState.ts`), escapes the wording locks
-  (`frontend/src/utils/biosSummary.test.ts` over `frontend/src/test-utils/componentSources.ts`).
+  (`frontend/src/utils/biosSummary.test.ts` over `frontend/src/test-utils/componentSources.ts`)
 - **A one-of group is ONE requirement, judged by the regions its options serve — and an option never makes its row
   required** — test + prompt-only — `tests/domain/test_firmware_groups.py` pins the verdict (every state, a region
   nobody checked keeping a covered group off `met`, a stated uncovered region staying missing beside an unchecked one,

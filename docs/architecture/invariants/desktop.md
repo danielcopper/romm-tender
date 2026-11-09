@@ -1,8 +1,9 @@
 # Invariants: The desktop surface
 
 The desktop client's surface in the dev build: its restoration ledgers and its selectors. The desktop Play button's
-stranded-panel gate and the per-ROM detail state it reads are entries of [the panel](panel.md). How an entry reads and
-binds, and the other areas: [the register's index](index.md).
+stranded-panel gate and the per-ROM detail state it reads are entries of [the panel](panel.md); the Steam internals and
+`@decky/ui` names the surface reaches are entries of [the start-up check](startup.md). How an entry reads and binds, and
+the other areas: [the register's index](index.md).
 
 - **Every change the desktop surface makes to Steam's desktop window goes through a restoration ledger and is given
   back: the navigation watcher's on leaving the page whenever the ledger holds anything — a pass that threw partway
@@ -29,7 +30,7 @@ binds, and the other areas: [the register's index](index.md).
   prompt-only. The rule's home is `.claude/rules/desktop-dom.md`, and the mechanism
   `docs/architecture/desktop-dom-architecture.md`, "The restoration ledger". Prompt-only: beside the navigation watcher,
   a write to anything but `style` — a class, another attribute, a node moved — and a change to an element its test's
-  page does not hold; beside a launch question, any change but its container and its window's listeners.
+  page does not hold; beside a launch question, any change but its container and its window's listeners
 - **No code under `frontend/src/desktop/` names one of Steam's minified class hashes** (dev build only) — check — a
   class hash is webpack's, and a Steam update may change it, so a selector that names one finds nothing after that
   update and the surface goes inert without an error. The finders resolve through the selector ladder instead
