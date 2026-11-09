@@ -11,7 +11,8 @@ pinned method by method, the receiver-shaped narrowing that keeps unrelated
 two-deep calls out, and the documented blind spots — including the asymmetric
 one: a write NAMED like a read passes in silence, which the gate's own texts
 have to say out loud. A gate whose advertised reach outruns its real one is
-worse than none, because the register quotes the advert.
+worse than none, because the register
+(``docs/architecture/invariants/library-sync.md``) quotes the advert.
 """
 
 from __future__ import annotations
@@ -279,7 +280,7 @@ class TestTables:
 
 
 class TestReadShapedWriteBlindSpot:
-    """The asymmetry the docstring and the register entry both state.
+    """The asymmetry the docstring and the register entry (library-sync.md) both state.
 
     A read named outside the shapes fails loud (safe); a WRITE named like a read
     passes in silence. These two pin the direction so the texts cannot claim the

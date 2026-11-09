@@ -2871,8 +2871,9 @@ describe("Library › Platforms", () => {
     });
 
     it("never reads a folder's presence as its verdict, even with no verdict at all", async () => {
-      // The register's rule: a folder's verdict is what it HOLDS. A payload
-      // carrying none leaves the row unestablished rather than falling back to
+      // The register's rule (docs/architecture/invariants/firmware.md): a
+      // folder's verdict is what it HOLDS. A payload carrying none leaves the
+      // row unestablished rather than falling back to
       // `downloaded`, which for the linked pcsx2/bios is always true.
       mockFirmware([
         firmwarePlatform({
@@ -4238,8 +4239,9 @@ describe("Library › Platforms", () => {
     });
 
     it("keeps a row with no button reachable, which is what lets the table scroll", async () => {
-      // The register's rule: a region scrolls only by moving focus, so a row
-      // nobody can focus is a row nobody can scroll past. A row with neither
+      // The register's rule (docs/architecture/invariants/panel.md): a region
+      // scrolls only by moving focus, so a row nobody can focus is a row nobody
+      // can scroll past. A row with neither
       // button needs the Focusable wrapper, and the wrapper was lost once
       // because the prop it keys on became an always-truthy element. happy-dom
       // has no nav tree, but the `Focusable` mock renders a testid AND surfaces

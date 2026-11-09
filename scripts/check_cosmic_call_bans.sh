@@ -161,7 +161,7 @@ check_patterns "Cosmic Python" "${CLOCK_RANDOM_SLEEP_PATTERNS[@]}"
 check_patterns "filesystem/network" "${FILESYSTEM_PATTERNS[@]}"
 
 if [[ $found_any -ne 0 ]]; then
-    echo "ERROR: services must inject Protocol-typed adapters for I/O,"
+    echo "ERROR: services must inject Protocol-typed adapters for I/O (.claude/rules/adapters-domain.md),"
     echo "       and Clock / UuidGen / Sleeper for time / IDs / sleeps"
     echo "       (docs/architecture/invariants/code-structure.md)."
     exit 1

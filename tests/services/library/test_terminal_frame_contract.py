@@ -24,9 +24,10 @@ three of which exist today:
   ERROR frames use because they build the snapshot themselves;
 * a frame handed straight to the emit primitive as ``_emit("sync_progress", {…})``.
 
-Where the enforcement ends, stated plainly because the invariant register cites
-this file: the scan reads call sites and dict literals, so a frame assembled by
-a helper it cannot follow, or emitted through an aliased callable, is outside it.
+Where the enforcement ends, stated plainly because the invariant register
+(``docs/architecture/invariants/library-sync.md``) cites this file: the scan
+reads call sites and dict literals, so a frame assembled by a helper it cannot
+follow, or emitted through an aliased callable, is outside it.
 Two such indirections exist today and both are inert rather than holes:
 
 * the parameterized snapshot inside ``emit_progress`` itself (its ``running``
