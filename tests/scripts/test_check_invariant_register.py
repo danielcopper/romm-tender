@@ -19,10 +19,10 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pytest
+
 if TYPE_CHECKING:
     from types import ModuleType
-
-    import pytest
 
 _SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "check_invariant_register.py"
 
@@ -87,7 +87,8 @@ class TestTheSectionLimit:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
         claude = self._claude_of_length(check.SECTION_LIMIT)
-        assert len(check.register_section(claude) or "") == check.SECTION_LIMIT
+        ((_, section),) = check.register_sections(claude)
+        assert len(section) == check.SECTION_LIMIT
         _tree(tmp_path, claude, {"a.md": _entry("An area rule")}, monkeypatch)
         code, out = _run(capsys)
         assert code == 0, out
@@ -99,12 +100,12 @@ class TestTheSectionLimit:
         code, out = _run(capsys)
         assert code == 1
         assert "the register section is 6,001 characters" in out
-        assert "loses user data for good" in out
+        assert "meets the criterion CLAUDE.md's register section states" in out
 
     def test_the_section_ends_at_the_next_level_two_heading(self) -> None:
         text = _claude_md("Body.\n\n### A subheading stays inside\n\nMore.\n\n")
-        section = check.register_section(text)
-        assert section is not None
+        ((line, section),) = check.register_sections(text)
+        assert line == 7
         assert section.startswith(_SECTION_HEAD)
         assert "A subheading stays inside" in section
         assert "## Security" not in section
@@ -140,8 +141,7 @@ class TestTheHeadlineLimit:
         _tree(tmp_path, _claude_md(_entry("h" * 301)), {"a.md": _entry("An area rule")}, monkeypatch)
         code, out = _run(capsys)
         assert code == 1
-        assert "CLAUDE.md:" in out
-        assert "a bold headline of 301 characters" in out
+        assert "CLAUDE.md:9: a bold headline of 301 characters" in out
 
     def test_a_wrapped_headline_is_measured_with_one_space_per_wrap(self) -> None:
         text = "- **" + "a" * 150 + "\n  " + "b" * 149 + "** — check — `x`\n"
@@ -215,10 +215,44 @@ class TestTheAreaFileLimit:
     def test_an_area_folder_with_no_entries_fails(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        _tree(tmp_path, _claude_md(), {"index.md": "# Index\n\n- [A](a.md)\n"}, monkeypatch)
+        _tree(tmp_path, _claude_md(_entry("A rule kept here")), {"index.md": "# Index\n\n- [A](a.md)\n"}, monkeypatch)
         code, out = _run(capsys)
         assert code == 1
         assert "no register entries found" in out
+
+    def test_a_missing_area_folder_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        (tmp_path / "CLAUDE.md").write_text(_claude_md(_entry("A rule kept here")), encoding="utf-8")
+        monkeypatch.setattr(check, "ROOT", tmp_path)
+        code, out = _run(capsys)
+        assert code == 1
+        assert f"{check.AREA_DIR}/: no such folder" in out
+
+    def test_a_file_in_a_subfolder_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        _tree(tmp_path, _claude_md(), {"a.md": _entry("An area rule")}, monkeypatch)
+        sub = tmp_path / check.AREA_DIR / "sub"
+        sub.mkdir()
+        (sub / "b.md").write_text(_entry("A rule out of sight") + "z" * 50_000 + "\n", encoding="utf-8")
+        code, out = _run(capsys)
+        assert code == 1
+        assert f"{check.AREA_DIR}/sub: the area folder holds only .md files, directly in it." in out
+        assert f"{check.AREA_DIR}/sub/b.md: the area folder holds only .md files" in out
+
+    def test_a_file_that_is_not_markdown_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        _tree(
+            tmp_path,
+            _claude_md(),
+            {"a.md": _entry("An area rule"), "b.txt": _entry("A rule out of sight")},
+            monkeypatch,
+        )
+        code, out = _run(capsys)
+        assert code == 1
+        assert f"{check.AREA_DIR}/b.txt: the area folder holds only .md files" in out
 
 
 class TestOneHomePerEntry:
@@ -236,7 +270,7 @@ class TestOneHomePerEntry:
         _tree(tmp_path, _claude_md(_entry("The same rule")), {"a.md": _entry("The same rule")}, monkeypatch)
         code, out = _run(capsys)
         assert code == 1
-        assert "this headline also stands at CLAUDE.md:" in out
+        assert f"{check.AREA_DIR}/a.md:1: this headline also stands at CLAUDE.md:9" in out
 
     def test_a_headline_wrapped_differently_is_still_the_same_one(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
@@ -253,3 +287,96 @@ class TestOneHomePerEntry:
         _tree(tmp_path, _claude_md(), {"a.md": _entry("One rule"), "b.md": _entry("Another rule")}, monkeypatch)
         code, out = _run(capsys)
         assert code == 0, out
+
+
+class TestTheHeadlineClose:
+    def test_a_bold_word_before_a_parenthesis_does_not_close_the_headline(self) -> None:
+        text = "- **x **and** (" + "z" * 400 + ")** — check — `x`\n"
+        (found,), malformed = check.entries(text, "a.md")
+        assert malformed == []
+        assert found.headline == "x **and** (" + "z" * 400 + ")"
+
+    def test_a_bold_word_before_a_dash_does_not_close_the_headline(self) -> None:
+        text = "- **x **and** — " + "z" * 400 + "** — check — `x`\n"
+        (found,), _ = check.entries(text, "a.md")
+        assert found.headline == "x **and** — " + "z" * 400
+
+    def test_a_headline_left_with_an_open_bold_word_is_malformed(self) -> None:
+        found, malformed = check.entries("- **x **and — check — `x`\n", "a.md")
+        assert found == []
+        assert malformed == ["a.md:1: an entry whose bold headline never closes"]
+
+    def test_a_headline_alone_on_its_line_closes_at_the_end(self) -> None:
+        (found,), malformed = check.entries("- **A headline**\n", "a.md")
+        assert malformed == []
+        assert found.headline == "A headline"
+
+    @pytest.mark.parametrize("marker", ["* ", "+ ", "1. ", "2) "])
+    def test_a_bold_item_under_another_marker_is_malformed(self, marker: str) -> None:
+        found, malformed = check.entries(f"{marker}**A rule** — check — `x`\n", "a.md")
+        assert found == []
+        assert malformed == ["a.md:1: a bold list item under another marker than '- ' — an entry is a '- ' item."]
+
+    def test_a_fenced_code_block_is_not_read(self) -> None:
+        text = "```markdown\n- **An example** — check — `x`\n- **Unclosed\n```\n" + _entry("A rule")
+        (found,), malformed = check.entries(text, "a.md")
+        assert malformed == []
+        assert (found.line, found.headline) == (5, "A rule")
+
+    def test_an_unclosed_headline_in_the_claude_md_section_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        _tree(tmp_path, _claude_md("- **Rule**: kept here\n\n"), {"a.md": _entry("An area rule")}, monkeypatch)
+        code, out = _run(capsys)
+        assert code == 1
+        assert "CLAUDE.md:9: an entry whose bold headline never closes" in out
+
+
+class TestOneRegisterSectionInClaudeMd:
+    def test_a_second_section_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        claude = _claude_md() + "\n## Invariant register, continued\n\n" + _entry("x" * 400)
+        _tree(tmp_path, claude, {"a.md": _entry("An area rule")}, monkeypatch)
+        code, out = _run(capsys)
+        assert code == 1
+        assert "CLAUDE.md:15: a second register section" in out
+
+    def test_a_heading_in_a_code_block_is_no_section(self) -> None:
+        text = _claude_md() + "```\n## Invariant register\n```\n"
+        assert len(check.register_sections(text)) == 1
+
+    def test_an_entry_outside_the_section_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        claude = _claude_md() + "\n## Save rules\n\n" + _entry("A rule out of sight", "test + prompt-only — `t`")
+        _tree(tmp_path, claude, {"a.md": _entry("An area rule")}, monkeypatch)
+        code, out = _run(capsys)
+        assert code == 1
+        assert "CLAUDE.md:17: a register entry outside the register section" in out
+
+    def test_an_entry_with_a_suffix_outside_the_section_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        claude = "## Traps\n\n- **A rule** (dev build only) — check — `x`\n\n" + _claude_md()
+        _tree(tmp_path, claude, {"a.md": _entry("An area rule")}, monkeypatch)
+        code, out = _run(capsys)
+        assert code == 1
+        assert "CLAUDE.md:3: a register entry outside the register section" in out
+
+    def test_a_trap_is_no_entry(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        traps = "## Traps\n\n- **Shortcuts**: use the API — check it twice.\n- **A note** — not a tier word.\n\n"
+        _tree(tmp_path, traps + _claude_md(), {"a.md": _entry("An area rule")}, monkeypatch)
+        code, out = _run(capsys)
+        assert code == 0, out
+
+    def test_an_area_headline_anywhere_in_claude_md_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        claude = _claude_md() + "\n## Save rules\n\nRemember: Every save\noperation sends the live id.\n"
+        _tree(tmp_path, claude, {"saves.md": _entry("Every save operation sends the live id")}, monkeypatch)
+        code, out = _run(capsys)
+        assert code == 1
+        assert f"{check.AREA_DIR}/saves.md:1: this headline also stands in CLAUDE.md" in out
