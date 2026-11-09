@@ -195,7 +195,7 @@ def main(argv: list[str]) -> int:
         print(
             "ERROR: a library-sync seam is held outside its owner module — reach it through the "
             "sub-service that owns it instead of injecting it a second time "
-            "(CLAUDE.md → Invariant register, #1777)."
+            "(docs/architecture/invariants/library-sync.md, #1777)."
         )
         return 1
     print(f"OK: all {len(SEAM_OWNERS)} confined seams are held only by their owners (services/library/).")

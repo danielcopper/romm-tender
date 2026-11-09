@@ -7,8 +7,8 @@ paths:
 
 **Dev build only.** This surface reaches Steam only through `pnpm -C frontend build:desktop`; no shipped bundle carries
 it (`docs/architecture/frontend-bundles.md`, "The desktop dev build"). Why each rule below holds is
-`docs/architecture/desktop-dom-architecture.md`'s, in the section named beside it. Rules 1 and 2 are in `CLAUDE.md`'s
-invariant register with what checks them; the others have no mechanical check.
+`docs/architecture/desktop-dom-architecture.md`'s, in the section named beside it. Rules 1 and 2 are in the invariant
+register's `docs/architecture/invariants/desktop.md` with what checks them; the others have no mechanical check.
 
 1. **No hashed class names.** A selector never names a webpack-hashed class; it resolves through
    `watcher/elementSelectors.ts` ("The selector ladder"). ESLint fails a string or regex literal under

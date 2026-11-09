@@ -10,7 +10,9 @@ elsewhere, or what the library currently offers.
 
 A row's Delete and the platform-wide Delete share the ONE removal below, and
 differ only in which names they select: a second copy of the loop is what the
-register's BIOS-delete rule warns about, since the copies would drift silently.
+register's BIOS-delete rule warns about
+(``docs/architecture/invariants/firmware-files.md``), since the copies would
+drift silently.
 
 A Delete is never refused because a place cannot be reached. A link under a
 root the resolver only assumed — or under none it could judge — stays where it

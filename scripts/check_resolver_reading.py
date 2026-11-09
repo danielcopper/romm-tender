@@ -703,7 +703,7 @@ def main(argv: list[str]) -> int:
         print()
         print(
             "ERROR: the resolver's answer is read outside its reading module "
-            "(CLAUDE.md → Invariant register; docs/architecture/invariants.md)."
+            "(docs/architecture/invariants/resolver.md)."
         )
         return 1
     print(

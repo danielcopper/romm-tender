@@ -142,7 +142,8 @@ offending line:
 saves[index].id = save_id  # pragma: no aggregate-check
 ```
 
-What it does not see, and what stays prompt-only, is the register entry's (`CLAUDE.md` → Invariant register).
+What it does not see, and what stays prompt-only, is the register entry's
+([Code structure](invariants/code-structure.md)).
 
 ### 3. import-linter — domain is stdlib + self only
 
@@ -464,10 +465,10 @@ one.
   never starts on an empty `romm-tender.db` beside a library it could not move.
 - Only the exact name moves; a copy made by hand such as `romm_sync.db.backup-<date>` stays where it is.
 
-The step stays in every later release, as every one-time step does ([invariants](invariants.md)): with no old file it
-does nothing, so keeping it costs nothing, and someone going from 0.33 straight to a later version still gets it. The
-pre-install check builds on a copy taken under whichever name a start would open, so it renames the copy as a start
-would ([Running an installed one](../contributing/development.md#running-an-installed-one)).
+The step stays in every later release, as every one-time step does ([invariants](invariants/install-update.md)): with no
+old file it does nothing, so keeping it costs nothing, and someone going from 0.33 straight to a later version still
+gets it. The pre-install check builds on a copy taken under whichever name a start would open, so it renames the copy as
+a start would ([Running an installed one](../contributing/development.md#running-an-installed-one)).
 
 ### Adding a migration past v1
 

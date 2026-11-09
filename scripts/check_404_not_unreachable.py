@@ -352,7 +352,7 @@ def _print_violations(findings: list[Finding]) -> None:
         "must reach the frontend as 'not_found'. Let the RomM error reach the entrypoint, route "
         "it through classify_error() (lib/errors.py), or peel the 404 off with a sibling "
         "'except RommNotFoundError' clause when the verdict is a status or a partial-success "
-        "flag rather than a refusal's reason (CLAUDE.md → invariant register)."
+        "flag rather than a refusal's reason (docs/architecture/invariants/romm-http.md)."
     )
 
 

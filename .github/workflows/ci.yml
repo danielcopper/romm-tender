@@ -292,6 +292,9 @@ jobs:
       - name: Check local markdown links resolve (file + anchor)
         run: python scripts/check_markdown_links.py
 
+      - name: Check the invariant register's sizes and one home per entry
+        run: python scripts/check_invariant_register.py
+
       - name: Check stated RomM minimum matches the enforced one
         run: python scripts/check_romm_min_version.py
 

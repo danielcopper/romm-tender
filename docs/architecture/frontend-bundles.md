@@ -370,7 +370,8 @@ Three things are not on it, because each has a home of its own:
 
 - Steam's React tree and DOM: the desktop surface's fiber reads
   ([Fiber, read-only](desktop-dom-architecture.md#fiber-read-only-frontendsrcdesktopwatcherfiberinspectorts)), its
-  selectors and the game page's `renderFunc`, which the invariant register covers in entries of their own.
+  selectors and the game page's `renderFunc`, which the invariant register covers in entries of their own
+  ([desktop](invariants/desktop.md), [panel](invariants/panel.md)).
 - Every search into Steam's module registry, `@decky/ui`'s and Tender's own: the start-up check's lists classify them —
   `STEAM_LOOKUPS` asks after each it can answer for, the Quick Access entry's search for `QuickAccessMenuBrowserView`
   (`utils/deckyUiInternals.ts`) and, in the desktop dev build, the desktop surface's `ReactClient`
@@ -437,8 +438,9 @@ module-level constant an entry names; each such constant must spell its entries;
 entry's or one of its own JavaScript names. The `steam://` URL's path is taken from `domain/controller_focus.py` rather
 than spelled, because that module is the one place it may be spelled.
 
-What neither half can see is listed in the invariant register's entry, and neither checks what an internal does: a name
-Steam keeps while it changes what the name answers is found on the device.
+What neither half can see is listed in the invariant register's entry
+([Bundles and the start-up check](invariants/startup.md)), and neither checks what an internal does: a name Steam keeps
+while it changes what the name answers is found on the device.
 
 ### What the start-up check asks of them
 

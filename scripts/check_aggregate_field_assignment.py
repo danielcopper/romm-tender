@@ -33,7 +33,8 @@ flagged line::
     saves[index].id = save_id  # pragma: no aggregate-check
 
 What it does not see is listed in the invariant register's entry for this
-rule (``CLAUDE.md``), the one home of that list.
+rule (``docs/architecture/invariants/code-structure.md``), the one home of that
+list.
 
 Exit 0 on no findings, exit 1 if any findings (one line per finding).
 """
@@ -288,7 +289,7 @@ def main(argv: list[str]) -> int:
         print()
         print(
             "ERROR: aggregate roots change state only through their own verb-named methods "
-            "(CLAUDE.md → Invariant register). A value that only shares a field name takes "
+            "(docs/architecture/invariants/code-structure.md). A value that only shares a field name takes "
             f"'# {ESCAPE_HATCH}' on the flagged line."
         )
         return 1

@@ -173,8 +173,9 @@ function diskMark(file: BiosTableRow): { glyph: string; color: string; title: st
  * The row's verdict, as the payload states it or as its silence leaves it.
  *
  * A folder's verdict is what it HOLDS, never that the folder is there — the
- * register's rule — so a payload carrying no verdict for one leaves the row
- * unestablished rather than falling back to presence. A payload from before
+ * register's rule (docs/architecture/invariants/firmware.md) — so a payload
+ * carrying no verdict for one leaves the row unestablished rather than falling
+ * back to presence. A payload from before
  * `satisfied` existed falls back to `downloaded` for a declared file.
  */
 function rowVerdict(file: BiosTableRow): boolean | null {

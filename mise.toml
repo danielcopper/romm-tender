@@ -98,6 +98,7 @@ run = [
     "python scripts/check_coverage_exclusions.py",
     "python scripts/check_lock_sync.py",
     "python scripts/check_markdown_links.py",
+    "python scripts/check_invariant_register.py",
     "python scripts/check_romm_min_version.py",
     "python scripts/check_third_party_notices.py",
     "cd backend/native && sha256sum -c libgavel-x86_64-linux.so.sha256",

@@ -2,7 +2,7 @@
 """Third-party notice gate.
 
 Why the notices are held against the package budgets is this gate's entry in
-``docs/architecture/invariants.md``.
+``docs/architecture/invariants/startup.md``.
 
 It asserts that every package any bundle in :data:`BUDGETS` names has a heading
 of its own in :data:`NOTICES`, spelled ``## <package>`` exactly. A package named

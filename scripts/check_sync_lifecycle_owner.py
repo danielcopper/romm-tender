@@ -107,7 +107,7 @@ def main(argv: list[str]) -> int:
             "ERROR: the run-lifecycle pair (sync_state / current_sync_id) must be mutated only "
             "through LibrarySyncStateBox's verb methods (try_begin_run / request_cancel / "
             "finish_run) in services/library/_state.py — route writes through a verb method "
-            "instead of assigning the field directly (CLAUDE.md → Invariant register, #1202)."
+            "instead of assigning the field directly (docs/architecture/invariants/library-sync.md, #1202)."
         )
         return 1
     print("OK: sync_state / current_sync_id are written only by their owner (services/library/_state.py).")
