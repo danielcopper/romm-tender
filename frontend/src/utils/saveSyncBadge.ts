@@ -61,18 +61,30 @@ function offlineLabel({ status, label, saveStatus }: SaveSyncBadgeInput): string
   return ago === null ? NOT_SYNCED_LABEL : syncedLabel(ago);
 }
 
+function offlineBadge(input: SaveSyncBadgeInput): SaveSyncBadge {
+  const { installed } = input;
+  if (holdsLocalSave(input)) return { tone: "attention", label: offlineLabel(input) };
+  return { tone: installed ? "unavailable" : "off", label: ROMM_UNAVAILABLE_LABEL };
+}
+
+function reachableBadge({ installed, status, label, saveStatus }: SaveSyncBadgeInput): SaveSyncBadge {
+  if (status === "synced") {
+    return { tone: label === NOT_SYNCED_LABEL ? "attention" : "ok", label: syncedLabel(label) };
+  }
+  if (status === "pending") return { tone: "attention", label };
+  if (saveStatus?.server_query_failed) return { tone: "attention", label: COULD_NOT_CHECK_LABEL };
+  if (saveStatus?.server_has_saves) return { tone: installed ? "attention" : "ok", label: SAVED_ON_ROMM_LABEL };
+  if (status === null || saveStatus?.savefiles_in_content_dir) return { tone: "off", label: NOT_CHECKED_LABEL };
+  return { tone: "ok", label };
+}
+
 export function saveSyncBadge(input: SaveSyncBadgeInput): SaveSyncBadge {
   const { enabled, offline, installed, status, label, saveStatus, setupInfo, saveSyncAnswer } = input;
   if (!enabled) return { tone: "off", label: SAVE_SYNC_OFF_LABEL };
   if (status === "conflict" || hasAnySaveConflict(saveStatus)) {
     return { tone: "attention", label: SAVE_CONFLICT_LABEL };
   }
-
-  const localSave = holdsLocalSave(input);
-  if (offline) {
-    if (localSave) return { tone: "attention", label: offlineLabel(input) };
-    return { tone: installed ? "unavailable" : "off", label: ROMM_UNAVAILABLE_LABEL };
-  }
+  if (offline) return offlineBadge(input);
 
   // Only `server_unreachable`, or a failure with no reason, is RomM unreachable; a 404 or a refused registration is
   // no outage.
@@ -90,14 +102,7 @@ export function saveSyncBadge(input: SaveSyncBadgeInput): SaveSyncBadge {
 
   const slotToChoose =
     setupInfo !== null && !setupInfo.slot_confirmed && setupInfo.recommended_action === "show_wizard";
-  if (localSave && slotToChoose) return { tone: "attention", label: SLOT_NOT_CONFIRMED_LABEL };
+  if (holdsLocalSave(input) && slotToChoose) return { tone: "attention", label: SLOT_NOT_CONFIRMED_LABEL };
 
-  if (status === "synced") {
-    return { tone: label === NOT_SYNCED_LABEL ? "attention" : "ok", label: syncedLabel(label) };
-  }
-  if (status === "pending") return { tone: "attention", label };
-  if (queryFailed) return { tone: "attention", label: COULD_NOT_CHECK_LABEL };
-  if (saveStatus?.server_has_saves) return { tone: installed ? "attention" : "ok", label: SAVED_ON_ROMM_LABEL };
-  if (status === null || saveStatus?.savefiles_in_content_dir) return { tone: "off", label: NOT_CHECKED_LABEL };
-  return { tone: "ok", label };
+  return reachableBadge(input);
 }

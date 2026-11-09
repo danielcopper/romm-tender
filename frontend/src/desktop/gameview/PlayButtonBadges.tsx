@@ -3,7 +3,7 @@
  * client. What each reads is docs/architecture/desktop-dom-architecture.md's.
  */
 
-import { useEffect, useState, type CSSProperties, type FC, type ReactNode } from "react";
+import { useEffect, useReducer, useState, type CSSProperties, type FC, type ReactNode } from "react";
 import { debugLog, getSaveSetupInfo, getSaveSyncAvailability, isSaveTrackingConfigured } from "../../api/backend";
 import type { SaveSetupInfo, SaveStatus } from "../../types";
 import { BIOS_MISSING_RED } from "../../utils/biosColor";
@@ -156,10 +156,10 @@ async function readSlotSetup(romId: number): Promise<SaveSetupInfo | null> {
 
 /** Re-renders each minute while `active`, so a time-ago stays true on a page left open. */
 function useMinuteTick(active: boolean): void {
-  const [, setTick] = useState(0);
+  const [, tick] = useReducer((n: number) => n + 1, 0);
   useEffect(() => {
     if (!active) return;
-    const timer = setInterval(() => setTick((n) => n + 1), 60_000);
+    const timer = setInterval(tick, 60_000);
     return () => clearInterval(timer);
   }, [active]);
 }
