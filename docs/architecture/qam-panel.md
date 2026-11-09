@@ -330,17 +330,17 @@ px of breathing room off its own measurement, which is why a page ended at y=752
 A QAM panel of Steam's own, measured in the same document, runs its content to its box with a gap of 0, so the constant
 went rather than being set to zero — room under a page belongs to that page's layout, where it can be seen and adjusted,
 not to a number the frame takes off every page's height. The second is Steam's, and it is **cancelled by an override
-rather than absorbed**: a tabbed page's content scroller carries `padding-bottom: 40px` (rule
-`._1X4dtbZ_AMX_DXT-SGiK01`), and that scroller sits inside the box `WidePage` measured and handed the tab as its height
-— so on Library the content stopped at y=712 inside a body of ours that ran to 752, a 40 px reserve taken out of a
-height the frame had already paid for. An untabbed page renders no such scroller and keeps none of it, which is why
-Library read as having a deeper band than Settings and Sync — the difference that was reported and could not be
-explained. The injected sheet zeroes the padding for a wide page of ours (`qamExpansion.ts`, written against the
-readable `_TabContentsScroll` rather than the hashed class, and degrading to Steam's padding if either name goes). With
-both gaps gone, Library's body measured 660 px and its content ran to y=764.0 against a panel box of 764.3,
-`scrollHeight` still equal to `clientHeight`. What the reader gets is 52 px on the tab's own scrolling region — the box
-the rows live in — measured on Library at 161.8 → 712 before and 161.8 → 764 after, a `clientHeight` of 550 against 602
-over the same 1570 px of content.
+rather than absorbed**: a tabbed page's content scroller carries `padding-bottom: 40px` (its `TabContentsScroll` class,
+`steamui/css/sp.css`), and that scroller sits inside the box `WidePage` measured and handed the tab as its height — so
+on Library the content stopped at y=712 inside a body of ours that ran to 752, a 40 px reserve taken out of a height the
+frame had already paid for. An untabbed page renders no such scroller and keeps none of it, which is why Library read as
+having a deeper band than Settings and Sync — the difference that was reported and could not be explained. The injected
+sheet zeroes the padding for a wide page of ours (`qamExpansion.ts`, written against the readable `_TabContentsScroll`
+rather than the hashed class, and degrading to Steam's padding if either name goes). With both gaps gone, Library's body
+measured 660 px and its content ran to y=764.0 against a panel box of 764.3, `scrollHeight` still equal to
+`clientHeight`. What the reader gets is 52 px on the tab's own scrolling region — the box the rows live in — measured on
+Library at 161.8 → 712 before and 161.8 → 764 after, a `clientHeight` of 550 against 602 over the same 1570 px of
+content.
 
 **No test here can see any of that.** happy-dom performs no layout, so `WidePage.test.tsx` pins the arithmetic — the
 height, and that the pull-up equals whatever overhang was measured — and `qamExpansion.test.tsx` pins that the override

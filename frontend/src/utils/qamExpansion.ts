@@ -70,10 +70,9 @@ const TAB_PANEL_SELECTOR = quickAccessMenuClasses?.TabGroupPanel
 // **The third rule overrides Steam's own styling, deliberately. It is not a
 // defect fix, and Steam's rule is not wrong** — it is simply applied to a box
 // that is ours. Steam's tabbed page gives its content scroller a
-// `padding-bottom: 40px` (rule `._1X4dtbZ_AMX_DXT-SGiK01`, read off the live
-// stylesheet in the QAM). That scroller sits INSIDE the body `WidePage` measured
-// and handed the tab as its height, so on a tabbed page 40 px of a height the
-// frame sized to the panel go to a reserve nothing of ours asked for — and the
+// `padding-bottom: 40px` (its `TabContentsScroll` class, `steamui/css/sp.css`).
+// That scroller sits INSIDE the body `WidePage` measured and handed the tab as
+// its height, so on a tabbed page 40 px of a height the frame sized to the panel go to a reserve nothing of ours asked for — and the
 // reader meets a band under Library that Settings and Sync do not have, those
 // being untabbed and rendering no such scroller at all. Measured at the dev
 // window's metrics: our body ran to y=752 inside a panel box ending at 764.3
@@ -90,9 +89,9 @@ const TAB_PANEL_SELECTOR = quickAccessMenuClasses?.TabGroupPanel
 // classes against Steam's one, in a sheet appended after Steam's.
 //
 // **Written against the readable class, not the hashed one.** Steam ships both
-// on that element (`_TabContentsScroll` beside `_1X4dtbZ_AMX_DXT-SGiK01`), and
-// the hashed name is a build artefact that changes with Steam's bundle. Either
-// could go, and the degradation is what makes reaching for someone else's class
+// on that element (`_TabContentsScroll` beside the hashed name the class map
+// gives `TabContentsScroll`), and the hashed name is a build artefact that
+// changes with Steam's bundle. Either could go, and the degradation is what makes reaching for someone else's class
 // safe here: a selector that stops matching leaves Steam's padding standing,
 // which is today's behaviour — the band comes back on tabbed pages and nothing
 // else changes. Taking a padding away can only give room back, so there is no
