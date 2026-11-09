@@ -380,3 +380,69 @@ class TestOneRegisterSectionInClaudeMd:
         code, out = _run(capsys)
         assert code == 1
         assert f"{check.AREA_DIR}/saves.md:1: this headline also stands in CLAUDE.md" in out
+
+
+class TestFences:
+    def test_an_area_file_ending_inside_an_open_fence_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        area = _entry("An area rule") + "```\n" + _entry("x" * 400)
+        _tree(tmp_path, _claude_md(), {"a.md": area}, monkeypatch)
+        code, out = _run(capsys)
+        assert code == 1
+        assert f"{check.AREA_DIR}/a.md:2: a fenced code block that never closes" in out
+
+    def test_claude_md_ending_inside_an_open_fence_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        claude = _claude_md("Body.\n\n~~~\n" + _entry("A rule out of sight", "check — `x`") + "\n")
+        _tree(tmp_path, claude, {"a.md": _entry("An area rule")}, monkeypatch)
+        code, out = _run(capsys)
+        assert code == 1
+        assert out.count("CLAUDE.md:11: a fenced code block that never closes") == 1
+
+    def test_claude_md_ending_inside_an_open_fence_after_the_section_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        claude = _claude_md() + "\n~~~\n" + _entry("A rule out of sight", "check — `x`")
+        _tree(tmp_path, claude, {"a.md": _entry("An area rule")}, monkeypatch)
+        code, out = _run(capsys)
+        assert code == 1
+        assert "CLAUDE.md:15: a fenced code block that never closes" in out
+
+    def test_a_shorter_run_does_not_close_a_longer_fence(self) -> None:
+        text = "````markdown\n```\n- **Inside** — check — `x`\n```\n````\n" + _entry("Outside")
+        (found,), malformed = check.entries(text, "a.md")
+        assert malformed == []
+        assert found.headline == "Outside"
+
+    def test_a_run_with_an_info_string_does_not_close_a_fence(self) -> None:
+        found, malformed = check.entries("```\n- **Inside** — check — `x`\n```python\n", "a.md")
+        assert found == []
+        assert malformed == ["a.md:1: a fenced code block that never closes"]
+
+    def test_a_fenced_level_two_line_does_not_end_the_section(self) -> None:
+        text = _claude_md("Body.\n\n```\n## Not a heading\n```\n\nStill inside.\n\n")
+        ((_, section),) = check.register_sections(text)
+        assert "Still inside." in section
+        assert "## Security" not in section
+
+
+class TestOtherMarkersOutsideTheSection:
+    @pytest.mark.parametrize("marker", ["* ", "+ ", "1. "])
+    def test_an_entry_under_another_marker_outside_the_section_fails(
+        self, marker: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        claude = _claude_md() + "\n## More\n\n" + f"{marker}**{'x' * 400}** — check — `x`\n"
+        _tree(tmp_path, claude, {"a.md": _entry("An area rule")}, monkeypatch)
+        code, out = _run(capsys)
+        assert code == 1
+        assert "CLAUDE.md:17: a register entry outside the register section" in out
+
+    def test_a_word_that_only_starts_with_a_tier_word_is_no_tier(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        claude = "## Traps\n\n- **A trap** — checked by hand, see below.\n\n" + _claude_md()
+        _tree(tmp_path, claude, {"a.md": _entry("An area rule")}, monkeypatch)
+        code, out = _run(capsys)
+        assert code == 0, out
