@@ -165,7 +165,12 @@ what the start-up check asks, logs and shows. How an entry reads and binds, and 
   the notifications are what went missing, and a second spelling of any of the three cannot leave them answering for a
   lookup nobody asked about. Both directions fail quietly: call a real dependency cosmetic and the panel mounts and
   renders a hole, which is the fault the whole check exists to tell apart from a backend that is not running; call a
-  decoration blocking and one missing glyph costs the user their entire interface, which is what this entry removed
+  decoration blocking and one missing glyph costs the user their entire interface, which is what this entry removed.
+  Prompt-only: `checkSteamModules` derives `panelMayMount`, and `index.tsx` gates the fallback page on it; `!== "panel"`
+  is the only reading of `absenceCost` that decides anything — the log line and the notice read the cost and the losses
+  only to word a miss; what the toaster can do (`utils/notificationsHealth.ts`) is recorded from `notificationsMissing`
+  over `NOTIFICATION_LOOKUPS` names, never from a `feature` cost; a name leaves `panel` only once its every consumer is
+  read.
 - **Every start-up check that misses something writes ONE warning to the backend log — which check, then every missing
   name with its cost and losses — whether the panel mounts or the fallback page stands in its place; every miss the
   panel survives reaches the one notice on Main** — check + test + prompt-only

@@ -26,7 +26,9 @@ and the other areas: [the register's index](index.md).
   are removed, and with the root's unmount the dialog's own `keydown` listener, which a component's effect cleanup gives
   back outside the ledger. Beside a launch question, any change but its container and its window's listeners is
   prompt-only. The rule's home is `.claude/rules/desktop-dom.md`, and the mechanism
-  `docs/architecture/desktop-dom-architecture.md`, "The restoration ledger"
+  `docs/architecture/desktop-dom-architecture.md`, "The restoration ledger". Prompt-only: beside the navigation watcher,
+  a write to anything but `style` — a class, another attribute, a node moved — and a change to an element its test's
+  page does not hold; beside a launch question, any change but its container and its window's listeners.
 - **No code under `frontend/src/desktop/` names one of Steam's minified class hashes** (dev build only) — check — a
   class hash is webpack's, and a Steam update may change it, so a selector that names one finds nothing after that
   update and the surface goes inert without an error. The finders resolve through the selector ladder instead

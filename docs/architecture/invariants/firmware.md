@@ -173,7 +173,15 @@ groups, the emulator a set of answers is about, and when it is asked. Files, lin
   component inventing a NEW wording for one of these states**: only a copied phrase is searchable. Two limits of the
   sweep, both deliberate: it is `.tsx` only, so a wording helper extracted into a `.ts` beside its component is
   unsearched (`frontend/src/bigpicture/panelState.ts` is such a file and quotes BIOS prose today), and
-  `frontend/src/utils` is out of scope because that is where the phrases legitimately live
+  `frontend/src/utils` is out of scope because that is where the phrases legitimately live. Prompt-only: no surface
+  computes a colour — `domain/bios_status.py::compute_bios_level` is the one place a level is made, and `region_decides`
+  counts nothing of its own; the console's need for an image reaches a surface only as words under a red verdict
+  (`console_needs_image`, from the resolver's `system_firmware` and its world-knowledge mark), whether its image is
+  shown absent only from the resolver's `system_firmware_met`, and which image is in place only from the row verdicts;
+  every surface words the states through `frontend/src/utils/biosSummary.ts`, sole holder of their order; the play-row
+  badge (`frontend/src/utils/playSection.ts::extractBiosInfo`) rises on `bios_level` `missing` alone; a new wording, or
+  one in a `.ts` helper (`frontend/src/bigpicture/panelState.ts`), escapes the wording locks
+  (`frontend/src/utils/biosSummary.test.ts` over `frontend/src/test-utils/componentSources.ts`).
 - **A one-of group is ONE requirement, judged by the regions its options serve — and an option never makes its row
   required** — test + prompt-only — `tests/domain/test_firmware_groups.py` pins the verdict (every state, a region
   nobody checked keeping a covered group off `met`, a stated uncovered region staying missing beside an unchecked one,

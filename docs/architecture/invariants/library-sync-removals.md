@@ -220,7 +220,20 @@ other areas: [the register's index](index.md).
   brings in keeps every shortcut it holds, for good; and a row unbound before its shortcut was gone leaves that shortcut
   in Steam with no row, for good; a game the user hid keeps its shortcut on a platform read whole while the cleanup
   offers it on every scan and refuses it, and through a standard collection goes only once that collection is fetched
-  for another reason
+  for another reason. Prompt-only: the panel reports from the `sync_stale` tail's `finally`, and only what Steam no
+  longer lists; a new collapse caller on a complete view hands the collapse the convergence's losers (`converged=`); the
+  collection records are read before the run's first unit (`do_read_collection_listed_rom_ids`); the platform listing is
+  the run's own (`LibrarySyncStateBox.run_listed_platform_slugs`) and never the kept ids; the chunk dispatcher names the
+  unit's kind on every commit; the preview and the apply both sort through
+  `services/library/_stale_rows.py::settle_stale_rows` with the group keys `domain/sync_diff.py::group_keys_of` reads
+  for the run's synced ROMs; the preview names every platform collection its diff counts by the name the names
+  `services/library/_stale_rows.py::with_kept_platform_names` answers hold for its slug, else the slug — an emitted
+  entry's and a row left bound's through `domain/sync_diff.py::platform_collection_name`, a kept row's by the same
+  lookup in `compute_platform_collection_diff` — which must agree with `RunFinalizer._names_with_bound_platforms_kept`;
+  the preview hands that diff every stale row `settle_stale_rows` neither removes nor keeps; the preview and the apply
+  both pick the rebuilt rows they file as kept through `domain/sync_diff.py::rebuilt_rows_filed_as_kept`; and both
+  converge a game a collection brings in through `services/library/_convergence.py::converge_collection_deliveries`,
+  over the ROMs the collection units fetched and never a skipped collection's rebuilt rows.
 - **What the user hid in RomM is read off one request, `GET /api/roms?statuses=hidden`
   (`RommApiAdapter.list_hidden_roms`), read only through `RommApiAdapter.read_hidden_rom_ids`, which parses it with
   `domain/hidden_roms.py::hidden_rom_ids` and logs an answer it cannot read** — test + prompt-only
@@ -250,4 +263,8 @@ other areas: [the register's index](index.md).
   for what is hidden (`hidden_rom_ids` reads the first item's only to tell which list came back); that within a run the
   set is read only off `LibrarySyncStateBox.run_hidden_rom_ids`; that no module but `adapters/romm/romm_api.py` calls
   `list_hidden_roms`, and that a new reader of what is hidden goes through `read_hidden_rom_ids`; and the guard's blind
-  spot: a RomM that ignored `statuses` passes it when the first ROM in its order is one the user hid
+  spot: a RomM that ignored `statuses` passes it when the first ROM in its order is one the user hid. Prompt-only: no
+  reader takes `rom_user.hidden` off an exact-id answer or a list item for what is hidden (`hidden_rom_ids` reads the
+  first item's only to tell which list came back); within a run the set is read only off
+  `LibrarySyncStateBox.run_hidden_rom_ids`; no module but `adapters/romm/romm_api.py` calls `list_hidden_roms`, and a
+  new reader of what is hidden goes through `read_hidden_rom_ids`.

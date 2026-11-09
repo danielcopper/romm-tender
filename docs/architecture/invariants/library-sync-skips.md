@@ -44,7 +44,9 @@ When a platform or collection is skipped, and what its completion stamp records.
   calling `platform_sync_state.get` raw passes every test above, because each test pins one existing call site; the
   recovery snapshot's raw read has no test, so moving it behind the helper would drop a revoked stamp from a sealed
   bundle unnoticed; and `has_any`'s `WHERE skip_revoked = 0` and `stamp_for_skip` state the one rule twice — each is
-  pinned alone and nothing holds them equal
+  pinned alone and nothing holds them equal. Prompt-only: a new skip-side reader calling `platform_sync_state.get` raw,
+  the recovery snapshot's raw read (no test pins it), and `has_any`'s query agreeing with `stamp_for_skip` — the query
+  and the helper are each pinned alone and nothing joins them.
 - **A platform's completion stamp records what the skip compares RomM's answer with, and the gate and the preview's
   re-stamp count read it through one comparison** — test + prompt-only
 
@@ -77,7 +79,9 @@ When a platform or collection is skipped, and what its completion stamp records.
   Apply that leaves the next sync fetching in full, or offers none to a platform the gate will keep refusing. **What
   nothing checks**: the test clock does not move across the skip request, so a clock read after it passes every test
   above; and `TestProbeVerdict` and `TestRestampDue` in `tests/domain/test_platform_skip.py` pin each decider alone, so
-  nothing holds them to one comparison
+  nothing holds them to one comparison. Prompt-only: the clock read before the skip request rather than after it (the
+  test clock does not move across the request), and the two deciders sharing `_compare` — `TestProbeVerdict` and
+  `TestRestampDue` in `tests/domain/test_platform_skip.py` pin each alone and nothing joins them.
 - **A collection's completion stamp records what the collection skip compares RomM's answers with, and the preview's
   re-stamp count is that skip's own refusal** — test + prompt-only
 
@@ -132,4 +136,5 @@ When a platform or collection is skipped, and what its completion stamp records.
   never asked for, and a writer stricter than the count leaves the Apply offered with nothing written, so the offer
   comes back on every sync. **What nothing checks**: the count reading the gate's `restamp_settles` answer from the
   preview's own fetch rather than judging the stamp a second time — nothing but review keeps the count on the gate's own
-  answer
+  answer. Prompt-only: the count reading the gate's `restamp_settles` answer from the preview's own fetch rather than
+  judging the stamp a second time.
