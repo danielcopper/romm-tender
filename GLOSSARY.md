@@ -369,8 +369,8 @@ key.
 
 Residents (per [ADR-0003](docs/adr/0003-json-sqlite-persistence-boundary.md)): the RetroDECK home path marker
 (`retrodeck_home_path` + its pending-migration `_previous`), `device_id` (server-issued identity), `platform_names`
-(platform_slug → name cache), `platform_ids` (each listed platform's record, keyed by its folder in RomM (`fs_slug`) —
-see [core-emulator-selection.md](docs/architecture/core-emulator-selection.md#a-platforms-system)),
+(`fs_slug` → name cache), `platform_ids` (each listed platform's record, keyed by its folder in RomM (`fs_slug`) — see
+[core-emulator-selection.md](docs/architecture/core-emulator-selection.md#a-platforms-system)),
 `save_directories_recorded`, the marker that the one-time pass recording the installed ROMs'
 [answered save directories](#answered-save-directory) has finished over a detected emulator installation with no ROM
 failing, `update_check_last_seen`, what the release checks last established (see _Available release_ below),
@@ -381,7 +381,8 @@ stopped attempt whose toasts were raised (see _Failed-update toast_ below). The 
 key — it lives in `PRAGMA user_version`.
 
 A platform's name in `platform_names` is the `name` RomM's platform listing gives it, never its `custom_name` nor RomM's
-`display_name`.
+`display_name`; a platform whose `fs_slug` is not its slug, and whose name another listed platform carries too, is named
+`<name> (<fs_slug>)` (#2452 D2).
 
 **Not** a dumping ground: anything with its own lifecycle, invariants, or repeat-row potential gets its own aggregate.
 `kv_config` is for the truly small, the truly singleton, and the truly miscellaneous.
@@ -635,8 +636,10 @@ speculatively.
 
 The folder RomM keeps a platform's games and firmware in, its `fs_slug` (e.g. `gc`, `gamecube`). Unlike the
 **platform_slug** it names one platform, so what Tender keeps per platform rather than per console is keyed by it: the
-**firmware store**'s folders and records (`platform_folder`), and the folder a game's platform is in
-(`roms.platform_fs_slug`). It is never replaced by the slug where it is not known (#2223 D45). _Avoid_: calling a
+**firmware store**'s folders and records (`platform_folder`), the folder a game's platform is in
+(`roms.platform_fs_slug`), the per-platform sync stamp (`platform_sync_state.platform_folder`), the platforms a sync run
+lists, reads and processes, and the `platform_names` cache (#2452 D1). It is never replaced by the slug where it is not
+known (#2223 D45): a game with none recorded counts as on a platform the run did not read (#2452 D5). _Avoid_: calling a
 system's ROM folder on this machine the platform folder; that folder is the resolver's answer.
 
 ### Platform system

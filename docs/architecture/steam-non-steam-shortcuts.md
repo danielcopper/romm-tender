@@ -535,11 +535,15 @@ platform/collection name is absent from those maps.
 
 `<platform>` is the `name` RomM's platform listing gives the platform, never the `custom_name` a user set in RomM, for
 every platform the run's listing names, its sync on in Tender or not: the fetcher records each listed platform's name
-beside its slug (`LibrarySyncStateBox.run_listed_platform_names`, through
+beside its `fs_slug` (`LibrarySyncStateBox.run_listed_platform_names`, through
 `domain/platform_names.py::listed_platform_names`) ([#2564](https://github.com/danielcopper/romm-tender/issues/2564) D1,
-D2). A platform RomM no longer lists keeps the name the `platform_names` cache holds for it, else its slug
-([Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "The stale removal keeps
-a game gone from RomM").
+D2). Two listed platforms can share a name — two folders RomM files under one slug, a version folder beside its
+console's — so a platform whose `fs_slug` is not its slug, and whose name another listed platform carries too, is named
+`<name> (<fs_slug>)`, and each keeps a collection of its own
+([#2452](https://github.com/danielcopper/romm-tender/issues/2452) D2). A platform RomM no longer lists keeps the name
+the `platform_names` cache holds for its `fs_slug`, else its `fs_slug`; a game with no `fs_slug` recorded is filed under
+no platform's collection ([Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary),
+"The stale removal keeps a game gone from RomM").
 
 The cleanup is **gated on a completed (non-cancelled) sync** (`!data.cancelled`). On a cancelled run the maps are
 **partial** — they list only the platforms the run reached before the cancel (empty if the cancel fired before the first
