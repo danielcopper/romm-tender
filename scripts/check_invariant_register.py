@@ -149,7 +149,7 @@ def _items(text: str, place: str, first_line: int) -> tuple[list[tuple[Entry | N
 
 
 def entries(text: str, place: str, first_line: int = 1) -> tuple[list[Entry], list[str]]:
-    """Every entry in ``text`` with its headline, and every item that looks like one but is not well formed."""
+    """Every entry in ``text`` with its headline, and every finding about a malformed item or an unclosed fence."""
     items, malformed = _items(text, place, first_line)
     found: list[Entry] = []
     for entry, marker, number in items:

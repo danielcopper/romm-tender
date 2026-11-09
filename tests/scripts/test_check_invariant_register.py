@@ -439,7 +439,17 @@ class TestOtherMarkersOutsideTheSection:
         assert code == 1
         assert "CLAUDE.md:17: a register entry outside the register section" in out
 
-    def test_a_word_that_only_starts_with_a_tier_word_is_no_tier(
+    @pytest.mark.parametrize("tier", ["check", "test", "prompt-only", "test + prompt-only"])
+    def test_an_entry_with_any_tier_outside_the_section_fails(
+        self, tier: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        claude = _claude_md() + "\n## More\n\n" + _entry("A rule out of sight", f"{tier} — `x`")
+        _tree(tmp_path, claude, {"a.md": _entry("An area rule")}, monkeypatch)
+        code, out = _run(capsys)
+        assert code == 1
+        assert "CLAUDE.md:17: a register entry outside the register section" in out
+
+    def test_a_tier_word_followed_by_letters_is_no_tier(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
         claude = "## Traps\n\n- **A trap** — checked by hand, see below.\n\n" + _claude_md()
