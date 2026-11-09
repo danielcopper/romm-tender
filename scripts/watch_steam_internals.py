@@ -16,7 +16,8 @@ exits 1 and reports nothing; a finding never fails the run.
 
 How a name is looked for, and what that cannot see, is
 ``docs/architecture/frontend-bundles.md``'s, "Every Steam internal Tender
-reaches", and the invariant register's entry for the list.
+reaches", and the invariant register's entry for the list in
+``docs/architecture/invariants/startup.md``.
 """
 
 from __future__ import annotations

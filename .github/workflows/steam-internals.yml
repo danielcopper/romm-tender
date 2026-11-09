@@ -2,7 +2,7 @@ name: Steam internals watch
 
 # What it looks for and where it reports: docs/architecture/frontend-bundles.md,
 # "Every Steam internal Tender reaches"; and, for what it cannot see, the
-# invariant register's entry for the list.
+# invariant register's entry for the list in docs/architecture/invariants/startup.md.
 
 on:
   schedule:
