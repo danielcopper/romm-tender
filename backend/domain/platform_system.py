@@ -92,11 +92,6 @@ def platform_ids_of(platform: Mapping[str, Any]) -> PlatformIds:
     )
 
 
-def platform_ids_by_slug(platforms: Iterable[Mapping[str, Any]]) -> dict[str, PlatformIds]:
-    """Every listed platform's ids, keyed by its RomM slug; a platform without a slug is left out."""
-    return {slug: platform_ids_of(p) for p in platforms if (slug := _text(p.get("slug"))) is not None}
-
-
 @dataclass(frozen=True, slots=True)
 class KeptPlatform:
     """What is kept of one platform RomM lists, under its folder in RomM (``fs_slug``).

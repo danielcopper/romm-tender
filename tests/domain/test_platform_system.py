@@ -27,7 +27,6 @@ from domain.platform_system import (
     kept_platform_of,
     kept_platforms,
     pick_system,
-    platform_ids_by_slug,
     platform_ids_of,
 )
 from domain.retrodeck_folders import GAME_DOWNLOAD, EveryFolderRefused, FolderRefused
@@ -101,11 +100,6 @@ class TestPlatformIds:
     @pytest.mark.parametrize("value", [None, True, "", "  ", 4, [19]])
     def test_a_name_of_the_wrong_kind_counts_as_none(self, value):
         assert platform_ids_of({"libretro_slug": value}) == PlatformIds()
-
-    def test_every_listed_platform_is_keyed_by_its_slug(self):
-        listing = [{"slug": "snes", "igdb_id": 19}, {"slug": "", "igdb_id": 7}, {"igdb_id": 4}, {"slug": "psx"}]
-
-        assert platform_ids_by_slug(listing) == {"snes": PlatformIds(igdb_id=19), "psx": PlatformIds()}
 
     def test_the_kept_value_reads_back_as_it_was_kept(self):
         kept = {
