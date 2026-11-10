@@ -24,6 +24,7 @@ import {
 } from "../../api/backend";
 import type { BiosDeleteResult } from "../../api/backend";
 import type { BiosLinkFailure, EndpointFailure, FirmwareDownloadResult } from "../../types";
+import type { RommDataChangedDetail } from "../../types/events";
 import type { RowAttempt } from "../../utils/biosPlaceWords";
 import { backupLines, keptLines, placedSentence } from "../../utils/biosPlaceWords";
 import { detach } from "../../utils/detach";
@@ -44,17 +45,25 @@ export interface BiosStatusLine {
 }
 
 /**
- * Every action names its platform by *folder*, the folder RomM keeps it in
- * (`""` where a game page does not know it), because two listed platforms can
- * share a slug and the Platforms tab shows each as a row of its own (#2452).
+ * The platform an action is for: its slug, which finds its system, and the
+ * folder RomM keeps it in (`""` where a game page does not know it), which
+ * names it — two listed platforms can share a slug, and the Platforms tab shows
+ * each as a row of its own (#2452). Every press passes both (`api/backend.ts`).
  */
+export interface PlatformKey {
+  slug: string;
+  folder: string;
+}
+
+/** Every action names its platform by its {@link PlatformKey}; the page's busy
+ *  key, its line and its row attempts are the folder. */
 export interface BiosActionsConfig {
   /** Hold the page's actions for *folder*'s press, or let them go (`null`). */
   setBusy: (folder: string | null) => void;
   /** Put a line under the BIOS buttons, or take the page's line away (`null`). */
   setStatus: (line: BiosStatusLine | null) => void;
-  /** Read *folder*'s BIOS answer again; the press's spinner ends once it has. */
-  reread: (folder: string) => Promise<void>;
+  /** Read *platform*'s BIOS answer again; the press's spinner ends once it has. */
+  reread: (platform: PlatformKey) => Promise<void>;
   /** Tell the other pages that the firmware of *slug*'s platform kept in
    *  *folder* changed, once the press's own read is in. Defaults to
    *  {@link announceBiosChange}. */
@@ -63,9 +72,6 @@ export interface BiosActionsConfig {
    *  one its rows were read for and its links placed for — or `null` for the
    *  platform's own system. */
   romId: number | null;
-  /** The slug of *folder*'s platform, which every press passes beside the
-   *  folder (`api/backend.ts`). */
-  slugOf: (folder: string) => string;
 }
 
 export interface BiosActions {
@@ -90,13 +96,13 @@ export interface BiosActions {
    */
   downloadFailed: string | null;
   /** The shown emulator's required files, where that emulator opens them. */
-  downloadRequired: (folder: string, emulator: string | null) => void;
-  downloadAll: (folder: string) => void;
+  downloadRequired: (platform: PlatformKey, emulator: string | null) => void;
+  downloadAll: (platform: PlatformKey) => void;
   /** One library file, by its name in RomM and the id of the one the row shows,
    *  into the platform's store folder and linked. */
-  downloadOne: (folder: string, fileName: string, firmwareId: number | null) => void;
+  downloadOne: (platform: PlatformKey, fileName: string, firmwareId: number | null) => void;
   /** "Replace…" on the row whose place is *place*, once the user confirmed it. */
-  replaceBios: (folder: string, place: string) => void;
+  replaceBios: (platform: PlatformKey, place: string) => void;
   /**
    * What the latest attempt on this page did to one row — a link that could
    * not be placed at *place*, the file replaced there, a download of *fileName*
@@ -105,8 +111,8 @@ export interface BiosActions {
   attemptFor: (folder: string, place: string | null, fileName: string | null) => RowAttempt;
   /** Keep the links the latest attempt on *folder* could not place, replacing what an earlier one said. */
   noteLinkFailures: (folder: string, failures: readonly BiosLinkFailure[] | undefined) => void;
-  deleteBios: (folder: string) => void;
-  deleteBiosFile: (folder: string, fileName: string) => void;
+  deleteBios: (platform: PlatformKey) => void;
+  deleteBiosFile: (platform: PlatformKey, fileName: string) => void;
 }
 
 /**
@@ -122,11 +128,19 @@ export interface BiosActions {
  * must stay silent rather than send an event no panel can act on.
  */
 export function announceBiosChange(platformSlug: string, platformFolder: string): void {
-  globalThis.dispatchEvent(
-    new CustomEvent("romm_data_changed", {
-      detail: { type: "bios", platform_slug: platformSlug, platform_fs_slug: platformFolder },
-    }),
-  );
+  const detail: RommDataChangedDetail = { type: "bios", platform_slug: platformSlug, platform_fs_slug: platformFolder };
+  globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail }));
+}
+
+/**
+ * Tell the open game pages that the emulator of the platform kept in
+ * *platformFolder* changed, so that platform's pages read their core again
+ * (#2452 D16). `null` is a game RomM gives no fs_slug, whose pages match one
+ * another.
+ */
+export function announceCoreChange(platformFolder: string | null): void {
+  const detail: RommDataChangedDetail = { type: "core_changed", platform_fs_slug: platformFolder };
+  globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail }));
 }
 
 export function useBiosActions({
@@ -135,7 +149,6 @@ export function useBiosActions({
   reread,
   announce = announceBiosChange,
   romId,
-  slugOf,
 }: BiosActionsConfig): BiosActions {
   const [downloadPending, setDownloadPending] = useState<string | null>(null);
   const [downloadFailed, setDownloadFailed] = useState<string | null>(null);
@@ -189,7 +202,8 @@ export function useBiosActions({
   );
 
   const runDownload = useCallback(
-    (folder: string, pending: string, work: () => Promise<FirmwareDownloadResult | EndpointFailure>) => {
+    (platform: PlatformKey, pending: string, work: () => Promise<FirmwareDownloadResult | EndpointFailure>) => {
+      const { slug, folder } = platform;
       setBusy(folder);
       setDownloadPending(pending);
       // Cleared up front, so a previous failure does not stand under a run that
@@ -205,8 +219,8 @@ export function useBiosActions({
             // answer's `success` says.
             if (result.success) {
               noteLinkFailures(folder, result.link_failures);
-              await reread(folder);
-              if (result.downloaded > 0 || (result.placed ?? 0) > 0) announce(slugOf(folder), folder);
+              await reread(platform);
+              if (result.downloaded > 0 || (result.placed ?? 0) > 0) announce(slug, folder);
               const failed = result.failed ?? [];
               const lines = [
                 failed.length > 0 ? result.message : null,
@@ -237,42 +251,46 @@ export function useBiosActions({
         })(),
       );
     },
-    [announce, slugOf, noteLinkFailures, reread, reportFailure, setBusy, setStatus],
+    [announce, noteLinkFailures, reread, reportFailure, setBusy, setStatus],
   );
 
   const downloadRequired = useCallback(
-    (folder: string, emulator: string | null) =>
-      runDownload(folder, "required", () => downloadRequiredFirmware(slugOf(folder), folder, emulator, romId)),
-    [slugOf, romId, runDownload],
+    (platform: PlatformKey, emulator: string | null) =>
+      runDownload(platform, "required", () =>
+        downloadRequiredFirmware(platform.slug, platform.folder, emulator, romId),
+      ),
+    [romId, runDownload],
   );
   const downloadAll = useCallback(
-    (folder: string) => runDownload(folder, "all", () => downloadAllFirmware(slugOf(folder), folder, romId)),
-    [slugOf, romId, runDownload],
+    (platform: PlatformKey) =>
+      runDownload(platform, "all", () => downloadAllFirmware(platform.slug, platform.folder, romId)),
+    [romId, runDownload],
   );
   const downloadOne = useCallback(
-    (folder: string, fileName: string, firmwareId: number | null) => {
+    (platform: PlatformKey, fileName: string, firmwareId: number | null) => {
       setAttempts((prev) => {
-        const key = `${folder}|file:${fileName}`;
+        const key = `${platform.folder}|file:${fileName}`;
         if (!(key in prev)) return prev;
         const next = { ...prev };
         delete next[key];
         return next;
       });
-      runDownload(folder, fileName, () =>
-        downloadPlatformFirmwareFile(slugOf(folder), folder, fileName, firmwareId, romId),
+      runDownload(platform, fileName, () =>
+        downloadPlatformFirmwareFile(platform.slug, platform.folder, fileName, firmwareId, romId),
       );
     },
-    [slugOf, romId, runDownload],
+    [romId, runDownload],
   );
 
   const replaceBios = useCallback(
-    (folder: string, place: string) => {
+    (platform: PlatformKey, place: string) => {
+      const { slug, folder } = platform;
       setBusy(folder);
       setStatus(null);
       detach(
         (async () => {
           try {
-            const result = await replaceBiosFile(slugOf(folder), folder, place, romId);
+            const result = await replaceBiosFile(slug, folder, place, romId);
             if (!result.success) {
               setStatus({ folder, scope: "bios", text: `Failed to replace the file: ${result.message}` });
               return;
@@ -284,8 +302,8 @@ export function useBiosActions({
             }));
             const placed = placedSentence(result);
             if (placed !== null) setStatus({ folder, scope: "bios", text: placed });
-            await reread(folder);
-            announce(slugOf(folder), folder);
+            await reread(platform);
+            announce(slug, folder);
           } catch (e) {
             setStatus({ folder, scope: "bios", text: `Failed to replace the file: ${e}` });
           } finally {
@@ -294,7 +312,7 @@ export function useBiosActions({
         })(),
       );
     },
-    [announce, slugOf, noteLinkFailures, reread, romId, setBusy, setStatus],
+    [announce, noteLinkFailures, reread, romId, setBusy, setStatus],
   );
 
   const attemptFor = useCallback(
@@ -306,20 +324,21 @@ export function useBiosActions({
   );
 
   const deleteBios = useCallback(
-    (folder: string) => {
+    (platform: PlatformKey) => {
+      const { slug, folder } = platform;
       setBusy(folder);
       detach(
         (async () => {
           try {
-            const result = await deletePlatformBios(slugOf(folder), folder);
+            const result = await deletePlatformBios(slug, folder);
             const kept = result.success ? keptLines(result.kept) : [];
             setStatus({ folder, scope: "bios", text: [result.message, ...kept].join("\n") });
             // A `delete_incomplete` may have removed files or dropped records
             // before the file it stopped on, so the rows are re-read as after a
             // success.
             if (result.success || result.reason === "delete_incomplete") {
-              await reread(folder);
-              if ((result.deleted_count ?? 0) > 0) announce(slugOf(folder), folder);
+              await reread(platform);
+              if ((result.deleted_count ?? 0) > 0) announce(slug, folder);
             }
           } catch (e) {
             setStatus({ folder, scope: "bios", text: `Failed to delete BIOS files: ${e}` });
@@ -329,14 +348,15 @@ export function useBiosActions({
         })(),
       );
     },
-    [announce, slugOf, reread, setBusy, setStatus],
+    [announce, reread, setBusy, setStatus],
   );
 
   /** One row's Delete. A success is said by the rows coming back re-read; only
    *  a failure gets a line, and a `delete_incomplete` gets both, because it may
    *  have removed files or dropped records before the file it stopped on. */
   const runRowDelete = useCallback(
-    (folder: string, work: () => Promise<BiosDeleteResult>, what: string) => {
+    (platform: PlatformKey, work: () => Promise<BiosDeleteResult>, what: string) => {
+      const { slug, folder } = platform;
       setBusy(folder);
       setStatus(null);
       detach(
@@ -347,8 +367,8 @@ export function useBiosActions({
             if (!result.success) setStatus({ folder, scope: "bios", text: result.message });
             else if (kept.length > 0) setStatus({ folder, scope: "bios", text: kept.join("\n") });
             if (result.success || result.reason === "delete_incomplete") {
-              await reread(folder);
-              if ((result.deleted_count ?? 0) > 0) announce(slugOf(folder), folder);
+              await reread(platform);
+              if ((result.deleted_count ?? 0) > 0) announce(slug, folder);
             }
           } catch (e) {
             setStatus({ folder, scope: "bios", text: `Failed to delete ${what}: ${e}` });
@@ -358,14 +378,14 @@ export function useBiosActions({
         })(),
       );
     },
-    [announce, slugOf, reread, setBusy, setStatus],
+    [announce, reread, setBusy, setStatus],
   );
 
   const deleteBiosFile = useCallback(
-    (folder: string, fileName: string) => {
-      runRowDelete(folder, () => deleteBiosFileCall(slugOf(folder), folder, fileName), fileName);
+    (platform: PlatformKey, fileName: string) => {
+      runRowDelete(platform, () => deleteBiosFileCall(platform.slug, platform.folder, fileName), fileName);
     },
-    [slugOf, runRowDelete],
+    [runRowDelete],
   );
 
   return {

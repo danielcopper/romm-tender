@@ -52,8 +52,8 @@ export interface PanelEventContext {
   readonly appId: number;
   readonly cancelled: () => boolean;
   readonly romIdRef: MutableRefObject<number | null>;
-  /** The panel's own platform, so the broadcast `bios` handler can reject events
-   *  for other platforms. bios events fan out to every mounted panel (#1082). */
+  /** The panel's own platform's slug, so the broadcast `bios` handler can reject
+   *  events for other slugs. bios events fan out to every mounted panel (#1082). */
   readonly platformSlugRef: MutableRefObject<string>;
   /** The folder RomM keeps the panel's platform in, so the broadcast
    *  `core_changed` handler can reject events for other platforms (#2452 D16). */
@@ -154,10 +154,11 @@ async function handleBiosChange(
   ctx: PanelEventContext,
   detail: Extract<RommDataChangedDetail, { type: "bios" }>,
 ): Promise<void> {
-  // bios events fan out to every mounted panel — ignore platforms other
-  // than this panel's own, both to avoid cross-platform BIOS-list bleed
-  // and to skip the wasted re-read (#1082). Read via ref to avoid a stale
-  // closure.
+  // bios events fan out to every mounted panel — ignore slugs other than
+  // this panel's own, both to avoid cross-platform BIOS-list bleed and to
+  // skip the wasted re-read (#1082); platforms that share a slug share their
+  // emulator's places, so a sibling's change is this panel's too (#2452 D16).
+  // Read via ref to avoid a stale closure.
   if (!detail.platform_slug || detail.platform_slug !== ctx.platformSlugRef.current) return;
   if (ctx.announcingOwnBiosChange.current) return;
   await rereadBiosAnswer(ctx);
@@ -199,7 +200,7 @@ async function handleCoreChange(
   ctx: PanelEventContext,
   detail: Extract<RommDataChangedDetail, { type: "core_changed" }>,
 ): Promise<void> {
-  if (detail.platform_fs_slug !== ctx.platformFolderRef.current) return;
+  if (detail.platform_fs_slug !== (ctx.platformFolderRef.current || null)) return;
   await rereadCoreAnswer(ctx);
 }
 

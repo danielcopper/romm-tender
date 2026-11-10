@@ -240,6 +240,7 @@ import { useStrandedAnswer } from "../utils/strandedPanelStore";
 import { detach } from "../utils/detach";
 import type { WireReason } from "../types/reasons";
 import { announceSaveSync } from "../utils/saveSyncEvents";
+import { announceCoreChange } from "./bios/useBiosActions";
 
 // S3776 is raised on the declaration line, so its NOSONAR must stay there. prettier-ignore stops
 // Prettier from relocating the trailing comment into the body (which would break the suppression).
@@ -657,17 +658,15 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
 
   /** Refresh the core badge + BIOS state from their dedicated paths and notify
    *  sibling components after a successful override pin/clear. */
-  const refreshCoreDisplay = async (platformFolder: string) => {
+  const refreshCoreDisplay = async (platformFolder: string | null) => {
     await refreshCoreAndBios(appId);
-    globalThis.dispatchEvent(
-      new CustomEvent("romm_data_changed", { detail: { type: "core_changed", platform_fs_slug: platformFolder } }),
-    );
+    announceCoreChange(platformFolder);
   };
 
   const handleChangeGameCore = async (coreLabel: string) => {
     const romId = detail.romId;
     if (!romId || !detail.platformSlug) return;
-    const platformFolder = detail.platformFolder ?? "";
+    const platformFolder = detail.platformFolder || null;
     await executeGameCoreChange({
       romId,
       coreLabel,
@@ -681,7 +680,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   const handleResetGameCore = async () => {
     const romId = detail.romId;
     if (!romId || !detail.platformSlug) return;
-    const platformFolder = detail.platformFolder ?? "";
+    const platformFolder = detail.platformFolder || null;
     await executeGameCoreChange({
       romId,
       coreLabel: null,

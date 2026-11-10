@@ -85,9 +85,9 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
     languages: [],
   });
   const romIdRef = useRef<number | null>(null);
-  // Tracks the panel's own platform so the broadcast `bios` data-changed
-  // handler can reject events for other platforms without a stale closure
-  // (mirrors romIdRef). bios events fan out to every mounted panel (#1082).
+  // Tracks the panel's own platform's slug so the broadcast `bios` data-changed
+  // handler can reject events for other slugs without a stale closure (mirrors
+  // romIdRef). bios events fan out to every mounted panel (#1082).
   const platformSlugRef = useRef<string>("");
   // The folder RomM keeps that platform in, for the `core_changed` handler.
   const platformFolderRef = useRef<string>("");

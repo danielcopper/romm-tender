@@ -282,7 +282,7 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   firmware,
 }) => {
   const part = useBiosFiles({
-    folder: row.folder,
+    platform: row,
     platformName: row.name,
     answer: firmware,
     busyFolder: state.busyFolder,
@@ -504,7 +504,7 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
                 // Null on purpose: this pane IS the platform level, so marking
                 // an entry "(system)" would restate where the reader already is.
                 platformCoreLabel: null,
-                onPick: (label) => state.changeCore(row.folder, label),
+                onPick: (label) => state.changeCore(row, label),
               }),
               getEventTarget(e),
             );

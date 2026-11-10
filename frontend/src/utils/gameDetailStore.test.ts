@@ -760,6 +760,38 @@ describe("gameDetailStore", () => {
       expect(vi.mocked(backend.getPlatformCoreInfo)).not.toHaveBeenCalled();
     });
 
+    it("re-reads the page of a game RomM gives no folder on a change announced for no folder", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ platform_fs_slug: null }));
+      subscribe(nextAppId);
+      await flush();
+      vi.mocked(backend.getPlatformCoreInfo).mockClear();
+
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", { detail: { type: "core_changed", platform_fs_slug: null } }),
+        );
+        await Promise.resolve();
+      });
+      await flush();
+
+      expect(vi.mocked(backend.getPlatformCoreInfo)).toHaveBeenCalledWith(42);
+    });
+
+    it("leaves the page of a game RomM gives no folder on a change announced for a platform", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ platform_fs_slug: null }));
+      subscribe(nextAppId);
+      await flush();
+      vi.mocked(backend.getPlatformCoreInfo).mockClear();
+
+      await act(async () => {
+        dispatchCoreChangedFor("snes");
+        await Promise.resolve();
+      });
+      await flush();
+
+      expect(vi.mocked(backend.getPlatformCoreInfo)).not.toHaveBeenCalled();
+    });
+
     it("re-reads core info and BIOS keyed on the rom_id", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found());
       subscribe(nextAppId);

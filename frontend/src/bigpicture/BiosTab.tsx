@@ -23,7 +23,7 @@
  * styleInjector.
  */
 
-import { FC, useCallback, useState, type FocusEvent, type ReactElement } from "react";
+import { FC, useMemo, useState, type FocusEvent, type ReactElement } from "react";
 import { Focusable } from "@decky/ui";
 import type { BiosLevel, BiosStatus, CoreInfo } from "../types";
 import { biosColorForLevel } from "../utils/biosColor";
@@ -114,17 +114,16 @@ export function useBiosTab({
 }: BiosTabStateInput): BiosTabState {
   const [busyFolder, setBusyFolder] = useState<string | null>(null);
   const [status, setStatus] = useState<BiosStatusLine | null>(null);
-  const slugOf = useCallback(() => platformSlug, [platformSlug]);
+  const platform = useMemo(() => ({ slug: platformSlug, folder: platformFolder }), [platformSlug, platformFolder]);
   const actions = useBiosActions({
     setBusy: setBusyFolder,
     setStatus,
     reread: onReread,
     announce: onAnnounce,
     romId,
-    slugOf,
   });
   const part = useBiosFiles({
-    folder: platformFolder,
+    platform,
     platformName: platformName || platformSlug,
     answer: biosStatus ?? {},
     busyFolder,

@@ -6293,4 +6293,93 @@ describe("Library › Platforms › two platforms sharing a slug", () => {
 
     expect(vi.mocked(backend.countPlatformSaves)).toHaveBeenCalledWith("snes-hacks");
   });
+
+  /** Each row's own BIOS answer, by the folder it was asked for. */
+  function answerByFolder(): void {
+    vi.mocked(backend.getPlatformFirmwareStatus).mockImplementation(async (slug: string, folder: string) => ({
+      success: true,
+      platform: firmwarePlatform({
+        platform_slug: slug,
+        files: [firmwareFile({ file_name: `${folder}_bios.bin`, local_path: `/bios/${folder}_bios.bin` })],
+      }),
+    }));
+  }
+
+  it("deletes one row's saves by its platform alone", async () => {
+    vi.mocked(backend.countPlatformSaves).mockResolvedValue({ count: 4 });
+    vi.mocked(backend.deletePlatformSaves).mockResolvedValue({
+      success: true,
+      deleted_count: 4,
+      message: "Deleted 4 save files",
+    });
+    const { container } = render(<LibraryPage onBack={vi.fn()} />);
+    await flushAsync();
+    await focusRow(container, "Super Nintendo (snes-hacks)");
+
+    await act(async () => {
+      fireEvent.click(buttonByText(container, "Delete 4 save files")!);
+      await Promise.resolve();
+    });
+    await confirmLastModal();
+    await flushAsync();
+
+    expect(vi.mocked(backend.deletePlatformSaves).mock.calls).toEqual([["snes-hacks"]]);
+  });
+
+  it("keeps each row's own sync toggle", async () => {
+    vi.mocked(backend.savePlatformSync).mockResolvedValue({ success: true, message: "" });
+    const { container } = render(<LibraryPage onBack={vi.fn()} />);
+    await flushAsync();
+
+    await press(rowToggle(container, "Super Nintendo (snes-hacks)"));
+
+    expect(vi.mocked(backend.savePlatformSync)).toHaveBeenCalledWith(2, false);
+    expect(rowToggle(container, "Super Nintendo (snes-hacks)").checked).toBe(false);
+    expect(rowToggle(container, "Super Nintendo").checked).toBe(true);
+  });
+
+  it("asks each row's BIOS answer for its own platform and shows it on that row alone", async () => {
+    answerByFolder();
+    const { container } = render(<LibraryPage onBack={vi.fn()} />);
+    await flushAsync();
+
+    expect(vi.mocked(backend.getPlatformFirmwareStatus)).toHaveBeenCalledWith("snes", "snes");
+    expect(vi.mocked(backend.getPlatformFirmwareStatus)).toHaveBeenCalledWith("snes", "snes-hacks");
+    await focusRow(container, "Super Nintendo (snes-hacks)");
+    expect(container.textContent).toContain("snes-hacks_bios.bin");
+    expect(container.textContent).not.toContain("snes_bios.bin");
+  });
+
+  it("runs a BIOS press for its own row, tells the game pages which platform changed, and leaves the other row's line", async () => {
+    answerByFolder();
+    vi.mocked(backend.downloadAllFirmware).mockResolvedValue({
+      success: true,
+      message: "Downloaded 1 firmware file",
+      downloaded: 1,
+      failed: ["x.bin"],
+    });
+    const events: CustomEvent[] = [];
+    const listener = ((e: Event) => events.push(e as CustomEvent)) as EventListener;
+    globalThis.addEventListener("romm_data_changed", listener);
+    try {
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      await focusRow(container, "Super Nintendo (snes-hacks)");
+      await act(async () => {
+        fireEvent.click(buttonByText(container, "Download all")!);
+        for (let i = 0; i < 8; i++) await Promise.resolve();
+      });
+      await flushAsync();
+
+      expect(vi.mocked(backend.downloadAllFirmware).mock.calls).toEqual([["snes", "snes-hacks", null]]);
+      expect(events.filter((e) => e.detail.type === "bios").map((e) => e.detail)).toEqual([
+        { type: "bios", platform_slug: "snes", platform_fs_slug: "snes-hacks" },
+      ]);
+      expect(within(container).getByTestId("status-bios").textContent).toContain("Downloaded 1 firmware file");
+      await focusRow(container, "Super Nintendo");
+      expect(within(container).queryByTestId("status-bios")).toBeNull();
+    } finally {
+      globalThis.removeEventListener("romm_data_changed", listener);
+    }
+  });
 });

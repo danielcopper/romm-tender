@@ -58,7 +58,13 @@ import {
 import { biosAnswerStale, biosReadState, type BiosReadState } from "../../utils/biosReadState";
 import { removeShortcutsPaced } from "../../utils/shortcutRemoval";
 import { withTimeout } from "../../utils/withTimeout";
-import { announceBiosChange, useBiosActions, type BiosActions } from "../bios/useBiosActions";
+import {
+  announceBiosChange,
+  announceCoreChange,
+  useBiosActions,
+  type BiosActions,
+  type PlatformKey,
+} from "../bios/useBiosActions";
 import { useLatestWrites, useLineWrites } from "./latestWrites";
 import { SYNC_WRITE_FAILED } from "./syncWriteFailed";
 
@@ -208,7 +214,7 @@ export interface PlatformsPageState extends BiosActions {
   removalProgress: { folder: string; removed: number; total: number } | null;
   toggleSync: (row: PlatformRow, enabled: boolean) => void;
   setAllSync: (enabled: boolean) => void;
-  changeCore: (folder: string, pickedLabel: string) => void;
+  changeCore: (row: PlatformKey, pickedLabel: string) => void;
   removeShortcuts: (row: PlatformRow) => void;
   deleteSaves: (row: PlatformRow) => void;
 }
@@ -281,11 +287,16 @@ export function usePlatformsPage(): PlatformsPageState {
   // see. It answers ordering only; the folder itself is what binds an answer to
   // its platform.
   const readSeq = useRef<Map<string, number>>(new Map());
-  // Each listed platform's slug, by the folder RomM keeps it in, which every
-  // firmware and core call passes beside the folder (`api/backend.ts`). A ref,
-  // filled with the list, so the reads issued from it see it.
-  const slugs = useRef<Map<string, string>>(new Map());
-  const slugOf = useCallback((folder: string) => slugs.current.get(folder) ?? "", []);
+  // Each listed platform's slug and folder, by its folder, for the reads the page
+  // issues by folder alone — the walk, a selection, the links of the pane shown.
+  // A ref, filled with the list in the same answer the groups come from, so a
+  // folder missing from it is a defect, and it throws rather than ask with "".
+  const listed = useRef<Map<string, PlatformKey>>(new Map());
+  const platformOf = useCallback((folder: string): PlatformKey => {
+    const platform = listed.current.get(folder);
+    if (platform === undefined) throw new Error(`${folder} is not a listed platform's folder`);
+    return platform;
+  }, []);
   // Which platforms the walk has issued a read for. A ref, not state: the walk
   // picks the next platform between awaits and must see its own progress
   // immediately, before any answer has landed.
@@ -296,12 +307,13 @@ export function usePlatformsPage(): PlatformsPageState {
   const accept = useCallback((folder: string, seq: number) => alive.current && readSeq.current.get(folder) === seq, []);
 
   const readPlatform = useCallback(
-    async (folder: string) => {
+    async (platform: PlatformKey) => {
+      const { folder } = platform;
       asked.current.add(folder);
       const seq = (readSeq.current.get(folder) ?? 0) + 1;
       readSeq.current.set(folder, seq);
       try {
-        const result = await getPlatformFirmwareStatus(slugOf(folder), folder);
+        const result = await getPlatformFirmwareStatus(platform.slug, folder);
         if (!accept(folder, seq)) return;
         if (!result.success) {
           // Unreachable today — the endpoint always answers success — but a
@@ -327,9 +339,9 @@ export function usePlatformsPage(): PlatformsPageState {
         setReadFailed((prev) => ({ ...prev, [folder]: true }));
       }
     },
-    [accept, slugOf],
+    [accept],
   );
-  const bios = useBiosActions({ setBusy: setBusyFolder, setStatus, reread: readPlatform, romId: null, slugOf });
+  const bios = useBiosActions({ setBusy: setBusyFolder, setStatus, reread: readPlatform, romId: null });
   const { noteLinkFailures } = bios;
 
   // What a failure here leaves offered: `docs/architecture/qam-panel.md`,
@@ -393,28 +405,26 @@ export function usePlatformsPage(): PlatformsPageState {
     };
     const walk = async () => {
       for (let folder = next(); folder !== null && walking && alive.current; folder = next()) {
-        await readPlatform(folder);
+        await readPlatform(platformOf(folder));
       }
     };
     detach(walk());
     return () => {
       walking = false;
     };
-  }, [groups, readPlatform]);
+  }, [groups, platformOf, readPlatform]);
 
-  const loadCore = useCallback(
-    (folder: string) => {
-      if (coreRequested.current.has(folder)) return;
-      coreRequested.current.add(folder);
-      getSystemCoreInfo(slugOf(folder), folder)
-        .then((info) => setCores((prev) => ({ ...prev, [folder]: info })))
-        .catch((e) => {
-          logWarn(`Failed to read the core for ${folder}: ${e}`);
-          setCores((prev) => ({ ...prev, [folder]: null }));
-        });
-    },
-    [slugOf],
-  );
+  const loadCore = useCallback((platform: PlatformKey) => {
+    const { folder } = platform;
+    if (coreRequested.current.has(folder)) return;
+    coreRequested.current.add(folder);
+    getSystemCoreInfo(platform.slug, folder)
+      .then((info) => setCores((prev) => ({ ...prev, [folder]: info })))
+      .catch((e) => {
+        logWarn(`Failed to read the core for ${folder}: ${e}`);
+        setCores((prev) => ({ ...prev, [folder]: null }));
+      });
+  }, []);
 
   const loadSaveCount = useCallback((folder: string) => {
     if (saveCountRequested.current.has(folder)) return;
@@ -454,14 +464,14 @@ export function usePlatformsPage(): PlatformsPageState {
   );
 
   const reloadCore = useCallback(
-    (folder: string) => {
-      coreRequested.current.delete(folder);
+    (platform: PlatformKey) => {
+      coreRequested.current.delete(platform.folder);
       setCores((prev) => {
         const next = { ...prev };
-        delete next[folder];
+        delete next[platform.folder];
         return next;
       });
-      loadCore(folder);
+      loadCore(platform);
     },
     [loadCore],
   );
@@ -475,14 +485,14 @@ export function usePlatformsPage(): PlatformsPageState {
           return;
         }
         syncWrites.seed(result.platforms.map((p) => [p.fs_slug, p.sync_enabled]));
-        slugs.current = new Map(result.platforms.map((p) => [p.fs_slug, p.slug]));
+        listed.current = new Map(result.platforms.map((p) => [p.fs_slug, { slug: p.slug, folder: p.fs_slug }]));
         setPlatforms(result.platforms);
         const frozen = freezeGroups(result.platforms);
         setGroups(frozen);
         const first = frozen.synced[0] ?? frozen.available[0] ?? null;
         setSelectedFolder(first);
         if (first) {
-          loadCore(first);
+          loadCore(platformOf(first));
           loadSaveCount(first);
         }
       })
@@ -498,7 +508,7 @@ export function usePlatformsPage(): PlatformsPageState {
     return () => {
       detach(releasePruneLeasesByOwner(LEASE_OWNER));
     };
-  }, [loadCore, loadSaveCount, readOverview, refreshShortcutCounts, syncWrites]);
+  }, [loadCore, loadSaveCount, platformOf, readOverview, refreshShortcutCounts, syncWrites]);
 
   const rows = new Map<string, PlatformRow>(
     platforms.map((p) => [
@@ -522,14 +532,15 @@ export function usePlatformsPage(): PlatformsPageState {
   const select = useCallback(
     (folder: string) => {
       setSelectedFolder(folder);
-      loadCore(folder);
+      const platform = platformOf(folder);
+      loadCore(platform);
       loadSaveCount(folder);
       // A read that did not come back is retried by picking the platform again
       // — the same recovery the save count offers, and the only one there is:
       // the walk asks each platform once, so nothing else would ever ask again.
-      if (readFailed[folder]) detach(readPlatform(folder));
+      if (readFailed[folder]) detach(readPlatform(platform));
     },
-    [loadCore, loadSaveCount, readFailed, readPlatform],
+    [loadCore, loadSaveCount, platformOf, readFailed, readPlatform],
   );
 
   const coreFor = useCallback((folder: string): CoreAnswer => cores[folder], [cores]);
@@ -617,28 +628,29 @@ export function usePlatformsPage(): PlatformsPageState {
   }, []);
 
   /**
-   * Bring *folder*'s links up to date, and read the platform again where that
+   * Bring *platform*'s links up to date, and read the platform again where that
    * changed anything. Downloads nothing. A refusal — Tender's folder that
    * cannot be reached, a conflict — is left to the notice that already says
    * so; this runs on its own, without a press.
    */
   const updateLinks = useCallback(
-    async (folder: string) => {
+    async (platform: PlatformKey) => {
+      const { slug, folder } = platform;
       try {
-        const result = await updateBiosLinks(slugOf(folder), folder, null);
+        const result = await updateBiosLinks(slug, folder, null);
         if (!alive.current || !result.success) return;
         noteLinkFailures(folder, result.link_failures);
         const said = placedSentence(result);
         if (said !== null) setStatus({ folder, scope: "bios", text: said });
         if (result.placed + result.removed > 0) {
-          await readPlatform(folder);
-          announceBiosChange(slugOf(folder), folder);
+          await readPlatform(platform);
+          announceBiosChange(slug, folder);
         }
       } catch (e) {
         logWarn(`Failed to bring the BIOS links for ${folder} up to date: ${e}`);
       }
     },
-    [noteLinkFailures, readPlatform, slugOf],
+    [noteLinkFailures, readPlatform],
   );
 
   // A platform's links are brought up to date the first time its pane is shown
@@ -646,11 +658,12 @@ export function usePlatformsPage(): PlatformsPageState {
   useEffect(() => {
     if (selectedFolder === null || !(selectedFolder in firmware) || linksUpdated.current.has(selectedFolder)) return;
     linksUpdated.current.add(selectedFolder);
-    detach(updateLinks(selectedFolder));
-  }, [firmware, selectedFolder, updateLinks]);
+    detach(updateLinks(platformOf(selectedFolder)));
+  }, [firmware, platformOf, selectedFolder, updateLinks]);
 
   const changeCore = useCallback(
-    (folder: string, pickedLabel: string) => {
+    (platform: PlatformKey, pickedLabel: string) => {
+      const { slug, folder } = platform;
       const answer = cores[folder];
       // Picking the default-marked emulator clears the per-platform override
       // (empty label → follow the default); any other pins it.
@@ -665,7 +678,7 @@ export function usePlatformsPage(): PlatformsPageState {
       detach(
         (async () => {
           try {
-            const result = await setSystemCore(slugOf(folder), folder, label);
+            const result = await setSystemCore(slug, folder, label);
             detach(debugLog(`setSystemCore: result success=${result.success}`));
             if (!result.success) {
               // Report the failure rather than leaving the detail looking as
@@ -674,15 +687,13 @@ export function usePlatformsPage(): PlatformsPageState {
               return;
             }
             clearCoreLine(folder);
-            reloadCore(folder);
+            reloadCore(platform);
             // A different core wants different BIOS files, at other places: its
             // links are placed from the store, nothing is downloaded, and the
             // table below the picker is stale until this platform is read again.
-            await updateLinks(folder);
-            await readPlatform(folder);
-            globalThis.dispatchEvent(
-              new CustomEvent("romm_data_changed", { detail: { type: "core_changed", platform_fs_slug: folder } }),
-            );
+            await updateLinks(platform);
+            await readPlatform(platform);
+            announceCoreChange(folder);
           } catch (e) {
             // Leaving the page cancels the continuation, which is teardown
             // rather than a failure: the switch either committed or never ran
@@ -701,7 +712,7 @@ export function usePlatformsPage(): PlatformsPageState {
         })(),
       );
     },
-    [clearCoreLine, cores, readPlatform, reloadCore, slugOf, updateLinks],
+    [clearCoreLine, cores, readPlatform, reloadCore, updateLinks],
   );
 
   const removeShortcuts = useCallback(

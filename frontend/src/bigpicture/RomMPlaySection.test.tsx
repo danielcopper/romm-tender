@@ -3813,6 +3813,35 @@ describe("RomMPlaySection", () => {
       }
     });
 
+    async function coreChangedFor(platformFsSlug: string | null): Promise<unknown> {
+      await setupCoreAction();
+      const cached = await cachedStore.getCachedGameDetail(testAppId);
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ ...cached, platform_fs_slug: platformFsSlug });
+      vi.mocked(backend.setGameCore).mockResolvedValue({ success: true });
+      vi.mocked(backend.getBiosStatus).mockResolvedValue({ bios_status: null, bios_level: null, bios_label: null });
+      render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+      const coreItems = await openCoreMenuAndGetItems(testAppId);
+      const listener = vi.fn();
+      globalThis.addEventListener("romm_data_changed", listener);
+      try {
+        await act(async () => {
+          await coreItems[BLASTEM_IDX]!.props.onClick?.();
+        });
+        return listener.mock.calls.map((c) => (c[0] as CustomEvent).detail).filter((d) => d.type === "core_changed");
+      } finally {
+        globalThis.removeEventListener("romm_data_changed", listener);
+      }
+    }
+
+    it("names the platform's folder, not its slug, in the core change it announces (#2452 D16)", async () => {
+      expect(await coreChangedFor("snes-hacks")).toEqual([{ type: "core_changed", platform_fs_slug: "snes-hacks" }]);
+    });
+
+    it("announces a core change of a game RomM gives no folder as null, not as an empty folder", async () => {
+      expect(await coreChangedFor(null)).toEqual([{ type: "core_changed", platform_fs_slug: null }]);
+    });
+
     // Setting a core writes nothing to Steam: the next start asks with the new
     // entry (#2221 D10). The backend persists the pin and the toast names it.
     it("uninstalled/unbound: success without launch_options/app_id → success toast, no confirm-set", async () => {

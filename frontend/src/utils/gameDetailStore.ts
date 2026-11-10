@@ -863,9 +863,8 @@ function attachListeners(appId: number, entry: Entry): () => void {
               await handleSaveSyncSettingsChange(appId, entry, detail);
               break;
             case "core_changed":
-              // A pick is stored for one RomM platform, so only that platform's
-              // pages read again (#2452 D16).
-              if (detail.platform_fs_slug === (entry.state.platformFolder ?? "")) await handleCoreChange(entry);
+              // The panel's filter (`handleCoreChange` in `bigpicture/panelEvents.ts`).
+              if (detail.platform_fs_slug === (entry.state.platformFolder || null)) await handleCoreChange(entry);
               break;
             case "emulator_sources":
               await handleEmulatorSourcesChange(appId, entry);

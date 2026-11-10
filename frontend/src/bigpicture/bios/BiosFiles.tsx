@@ -47,7 +47,7 @@ import {
   type TableRegister,
 } from "../layout/pane";
 import { useBiosFocus, type BiosFocus } from "./useBiosFocus";
-import type { BiosActions } from "./useBiosActions";
+import type { BiosActions, PlatformKey } from "./useBiosActions";
 
 /**
  * The second mark: your RomM library does not hold this file.
@@ -512,8 +512,8 @@ const BiosFileRow: FC<{
  * platform that is busy, which is what it always did.
  */
 function downloadState(part: BiosPart, id: string): "spinner" | "failed" | null {
-  const { busyFolder, folder, actions } = part.input;
-  if (busyFolder !== folder) return null;
+  const { busyFolder, platform, actions } = part.input;
+  if (busyFolder !== platform.folder) return null;
   if (actions.downloadPending === id) return "spinner";
   return actions.downloadFailed === id ? "failed" : null;
 }
@@ -554,7 +554,7 @@ function downloadLabel(part: BiosPart, id: string, label: string, size: number, 
  * and links, so this button cannot widen what it removes.
  */
 function rowAction(part: BiosPart, file: BiosTableRow, fetchable: Set<string>, key: string): ReactNode | null {
-  const { folder, busyFolder, serverOffline, actions } = part.input;
+  const { platform, busyFolder, serverOffline, actions } = part.input;
   const { focus } = part;
   const busy = busyFolder !== null;
   // The pressed row's own button stays enabled while its work runs, and every
@@ -572,7 +572,7 @@ function rowAction(part: BiosPart, file: BiosTableRow, fetchable: Set<string>, k
         onClick={() => {
           if (busy) return;
           focus.mark(key);
-          actions.downloadOne(folder, name, file.library?.firmware_id ?? null);
+          actions.downloadOne(platform, name, file.library?.firmware_id ?? null);
         }}
       >
         {downloadLabel(part, name, "Download", 11, disabled)}
@@ -592,7 +592,7 @@ function rowAction(part: BiosPart, file: BiosTableRow, fetchable: Set<string>, k
           strCancelButtonText="Cancel"
           onOK={() => {
             focus.mark(key);
-            actions.replaceBios(folder, place);
+            actions.replaceBios(platform, place);
             focus.refocus(key);
           }}
           onCancel={() => focus.refocus(key)}
@@ -619,7 +619,7 @@ function rowAction(part: BiosPart, file: BiosTableRow, fetchable: Set<string>, k
         strCancelButtonText="Cancel"
         onOK={() => {
           focus.mark(key);
-          actions.deleteBiosFile(folder, name);
+          actions.deleteBiosFile(platform, name);
           focus.refocus(key);
         }}
         onCancel={() => focus.refocus(key)}
@@ -656,8 +656,8 @@ export interface BiosAnswerFields {
 }
 
 export interface BiosPartInput {
-  /** The folder RomM keeps the platform the files are for in, and what its page calls the platform. */
-  folder: string;
+  /** The platform the files are for, and what its page calls it. */
+  platform: PlatformKey;
   platformName: string;
   answer: BiosAnswerFields;
   /** The page's busy key: every press waits while any action of the page runs. */
@@ -747,7 +747,7 @@ export const BiosShownTable: FC<{ part: BiosPart }> = ({ part }) => {
             placeLines={biosPlaceLines(
               file,
               emulator,
-              input.actions.attemptFor(input.folder, file.local_path, downloadName(file)),
+              input.actions.attemptFor(input.platform.folder, file.local_path, downloadName(file)),
             )}
             stop={input.stop}
           />
@@ -795,7 +795,7 @@ export const BiosShownTable: FC<{ part: BiosPart }> = ({ part }) => {
  */
 export const BiosButtons: FC<{ part: BiosPart; status: ScopedStatus | null }> = ({ part, status }) => {
   const { input, tab, shownRows, focus } = part;
-  const { folder, platformName, answer, busyFolder, serverOffline, actions } = input;
+  const { platform, platformName, answer, busyFolder, serverOffline, actions } = input;
   const files = answer.files ?? [];
   const busy = busyFolder !== null;
   const otherTab = tab !== null && !tab.launching;
@@ -831,7 +831,7 @@ export const BiosButtons: FC<{ part: BiosPart; status: ScopedStatus | null }> = 
         strCancelButtonText="Cancel"
         onOK={() => {
           focus.mark(BULK_DELETE);
-          actions.deleteBios(folder);
+          actions.deleteBios(platform);
           focus.refocus(BULK_DELETE);
         }}
         onCancel={() => focus.refocus(BULK_DELETE)}
@@ -853,7 +853,7 @@ export const BiosButtons: FC<{ part: BiosPart; status: ScopedStatus | null }> = 
             <DialogButton
               style={BULK_BUTTON}
               disabled={bulkDisabled(BULK_REQUIRED, showRequired)}
-              onClick={pressBulk(BULK_REQUIRED, () => actions.downloadRequired(folder, shownEmulator))}
+              onClick={pressBulk(BULK_REQUIRED, () => actions.downloadRequired(platform, shownEmulator))}
             >
               {downloadLabel(
                 part,
@@ -878,7 +878,7 @@ export const BiosButtons: FC<{ part: BiosPart; status: ScopedStatus | null }> = 
           <DialogButton
             style={BULK_BUTTON}
             disabled={bulkDisabled(BULK_ALL, showAll)}
-            onClick={pressBulk(BULK_ALL, () => actions.downloadAll(folder))}
+            onClick={pressBulk(BULK_ALL, () => actions.downloadAll(platform))}
           >
             {downloadLabel(part, "all", "Download all", 12, bulkDisabled(BULK_ALL, showAll))}
           </DialogButton>
@@ -897,7 +897,7 @@ export const BiosButtons: FC<{ part: BiosPart; status: ScopedStatus | null }> = 
           </DialogButton>
         </div>
       </ButtonRow>
-      <GroupStatus status={status} forKey={folder} scope="bios" />
+      <GroupStatus status={status} forKey={platform.folder} scope="bios" />
     </>
   );
 };
@@ -919,7 +919,9 @@ export const BiosLibraryTable: FC<{ part: BiosPart }> = ({ part }) => {
             emulator={input.answer.active_core_label ?? null}
             placeLines={[
               ...libraryRowLines(file, file.library ? identifications.answers[file.library.md5] : undefined),
-              ...(input.actions.attemptFor(input.folder, null, downloadName(file)).damaged ? [DOWNLOAD_DAMAGED] : []),
+              ...(input.actions.attemptFor(input.platform.folder, null, downloadName(file)).damaged
+                ? [DOWNLOAD_DAMAGED]
+                : []),
             ]}
             busyLine={file.library && identifications.asking === file.library.md5 ? IDENTIFYING : null}
             stop={input.stop}

@@ -100,6 +100,15 @@ describe("which game pages a platform's change reaches", () => {
     page.unwire();
   });
 
+  it("re-reads the core of a page of a game RomM gives no folder on a change announced for no folder", async () => {
+    const page = pageOn("snes", "");
+
+    await dataChanged({ type: "core_changed", platform_fs_slug: null });
+
+    expect(vi.mocked(backend.getPlatformCoreInfo)).toHaveBeenCalledWith(ROM_ID);
+    page.unwire();
+  });
+
   it("keeps the folder the game's platform is kept in once the page has loaded", async () => {
     const folderRef = { current: "" };
     vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
