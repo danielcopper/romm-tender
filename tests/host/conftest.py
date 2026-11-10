@@ -145,6 +145,9 @@ async def close_listener(server: asyncio.Server) -> None:
     holds no connection by then: its handler is :func:`close_at_once`, or it closes
     its own connections first, as ``FakeDebugger.stop`` does.
     """
+    loop = asyncio.get_running_loop()
+    for listening in server.sockets:
+        loop.remove_reader(listening.fileno())
     await asyncio.sleep(0)
     server.close()
     if sys.version_info >= (3, 13):
