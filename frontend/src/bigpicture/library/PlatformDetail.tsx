@@ -167,10 +167,10 @@ function noDefaultOffer(core: SystemCoreInfo): CoreOffer {
   return { kind: "blocked", reason: sentence, notice: sentence };
 }
 
-function coreOffer(core: CoreAnswer): CoreOffer {
+function coreOffer(core: CoreAnswer, readRefusal: string | undefined): CoreOffer {
   if (core === undefined) return { kind: "blocked", reason: "Reading the emulators for this platform…" };
   if (core === null) {
-    const failed = "Could not read the emulators for this platform. Reopen the page to try again.";
+    const failed = readRefusal ?? "Could not read the emulators for this platform. Reopen the page to try again.";
     return { kind: "blocked", reason: failed, notice: failed };
   }
   if (!core.emulator_data_available) {
@@ -434,7 +434,7 @@ const RemoveSection: FC<{ row: PlatformRow; state: PlatformsPageState }> = ({ ro
 export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }> = ({ row, state }) => {
   const core = state.coreFor(row.folder);
   const firmware = row.firmware;
-  const offer = coreOffer(core);
+  const offer = coreOffer(core, state.coreRefusalFor(row.folder));
   // The core clause is absent while this platform's core read is in flight, and
   // stays absent if it failed — the read is issued per selection, so walking the
   // list shows each newly focused platform's header without a core until its own

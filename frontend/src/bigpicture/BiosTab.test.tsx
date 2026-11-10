@@ -2135,6 +2135,30 @@ describe("BiosTab", () => {
       expect(getByTestId("status-bios").textContent).toBe("Deleted 2 BIOS files");
     });
 
+    it("names the game's platform by its slug and the folder RomM keeps it in, where the two differ", async () => {
+      vi.mocked(showModal).mockClear();
+      vi.mocked(backend.deletePlatformBios).mockResolvedValue({
+        success: true,
+        message: "Deleted 2 BIOS files",
+        deleted_count: 2,
+      } as Awaited<ReturnType<typeof backend.deletePlatformBios>>);
+      const { container } = render(
+        <BiosTabWithState
+          biosStatus={psx()}
+          biosLevel="missing"
+          coreInfo={coreInfo}
+          platformName="PlayStation"
+          platformSlug="psx"
+          platformFolder="ps"
+          romId={42}
+        />,
+      );
+      fireEvent.click(button(container, "Delete downloads (2)") as HTMLElement);
+      await confirm();
+
+      expect(backend.deletePlatformBios).toHaveBeenCalledWith("psx", "ps");
+    });
+
     it("withdraws the downloads while RomM's listing could not be read, and keeps the deletes", () => {
       const { container } = renderPsx(psx({ server_offline: true }));
       expect(button(container, "Download")).toBeUndefined();

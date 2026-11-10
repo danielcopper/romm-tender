@@ -109,6 +109,24 @@ describe("which game pages a platform's change reaches", () => {
     page.unwire();
   });
 
+  it("leaves the core of a page of a game RomM gives no folder on a change announced for a platform", async () => {
+    const page = pageOn("snes", "");
+
+    await dataChanged({ type: "core_changed", platform_fs_slug: "snes" });
+
+    expect(vi.mocked(backend.getPlatformCoreInfo)).not.toHaveBeenCalled();
+    page.unwire();
+  });
+
+  it("leaves the core of a page on a platform on a change announced for no folder", async () => {
+    const page = pageOn("snes", "snes-hacks");
+
+    await dataChanged({ type: "core_changed", platform_fs_slug: null });
+
+    expect(vi.mocked(backend.getPlatformCoreInfo)).not.toHaveBeenCalled();
+    page.unwire();
+  });
+
   it("keeps the folder the game's platform is kept in once the page has loaded", async () => {
     const folderRef = { current: "" };
     vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({

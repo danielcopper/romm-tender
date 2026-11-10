@@ -6350,6 +6350,76 @@ describe("Library › Platforms › two platforms sharing a slug", () => {
     expect(container.textContent).not.toContain("snes_bios.bin");
   });
 
+  /** Every row's BIOS answer, with one file of its own on disk that Tender can delete. */
+  function oneDeletableFileEach(): void {
+    vi.mocked(backend.getPlatformFirmwareStatus).mockImplementation(async (slug: string, folder: string) => ({
+      success: true,
+      platform: firmwarePlatform({
+        platform_slug: slug,
+        deletable_count: 1,
+        files: [
+          firmwareFile({
+            file_name: `${folder}_bios.bin`,
+            local_path: `/bios/${folder}_bios.bin`,
+            downloaded: true,
+            satisfied: true,
+            deletable_count: 1,
+          }),
+        ],
+      }),
+    }));
+  }
+
+  it("deletes one row's BIOS downloads by its own platform", async () => {
+    oneDeletableFileEach();
+    vi.mocked(backend.deletePlatformBios).mockResolvedValue({ success: true, deleted_count: 1, message: "Deleted" });
+    const { container } = render(<LibraryPage onBack={vi.fn()} />);
+    await flushAsync();
+    await focusRow(container, "Super Nintendo (snes-hacks)");
+
+    await act(async () => {
+      fireEvent.click(buttonByText(container, "Delete downloads (1)")!);
+      await Promise.resolve();
+    });
+    await confirmLastModal();
+    await flushAsync();
+
+    expect(vi.mocked(backend.deletePlatformBios).mock.calls).toEqual([["snes", "snes-hacks"]]);
+  });
+
+  it("deletes one file of a row by its own platform", async () => {
+    oneDeletableFileEach();
+    vi.mocked(backend.deleteBiosFile).mockResolvedValue({ success: true, deleted_count: 1, message: "Deleted" });
+    const { container } = render(<LibraryPage onBack={vi.fn()} />);
+    await flushAsync();
+    await focusRow(container, "Super Nintendo (snes-hacks)");
+
+    const rowDelete = [...container.querySelectorAll<HTMLElement>('[data-testid="disk-mark"]')]
+      .map((mark) => mark.parentElement?.parentElement as HTMLElement)
+      .find((grid) => grid.firstElementChild?.getAttribute("title") === "snes-hacks_bios.bin")
+      ?.querySelector("button") as HTMLButtonElement;
+    await act(async () => {
+      fireEvent.click(rowDelete);
+    });
+    await confirmLastModal();
+    await flushAsync();
+
+    expect(vi.mocked(backend.deleteBiosFile).mock.calls).toEqual([["snes", "snes-hacks", "snes-hacks_bios.bin"]]);
+  });
+
+  it("says why the core read of a row was refused, in place of the generic sentence", async () => {
+    vi.mocked(backend.getSystemCoreInfo).mockResolvedValue({
+      success: false,
+      reason: "invalid_value",
+      message: "'' is not a RomM platform slug",
+    });
+    const { container } = render(<LibraryPage onBack={vi.fn()} />);
+    await flushAsync();
+
+    expect(container.textContent).toContain("'' is not a RomM platform slug");
+    expect(container.textContent).not.toContain("Could not read the emulators for this platform");
+  });
+
   it("runs a BIOS press for its own row, tells the game pages which platform changed, and leaves the other row's line", async () => {
     answerByFolder();
     vi.mocked(backend.downloadAllFirmware).mockResolvedValue({

@@ -25,6 +25,7 @@ import {
 import type { CoreInfo, RomMetadata, SaveStatus, SyncConflict, DownloadCompleteEvent } from "../types";
 import type { RommDataChangedDetail } from "../types/events";
 import { detach } from "../utils/detach";
+import { coreChangeIsFor } from "../utils/coreChangedEvent";
 import { announceBiosChange } from "./bios/useBiosActions";
 import {
   bindRom,
@@ -156,9 +157,9 @@ async function handleBiosChange(
 ): Promise<void> {
   // bios events fan out to every mounted panel — ignore slugs other than
   // this panel's own, both to avoid cross-platform BIOS-list bleed and to
-  // skip the wasted re-read (#1082); platforms that share a slug share their
-  // emulator's places, so a sibling's change is this panel's too (#2452 D16).
-  // Read via ref to avoid a stale closure.
+  // skip the wasted re-read (#1082); why the slug and not the folder is
+  // docs/architecture/qam-panel.md, § Library. Read via ref to avoid a stale
+  // closure.
   if (!detail.platform_slug || detail.platform_slug !== ctx.platformSlugRef.current) return;
   if (ctx.announcingOwnBiosChange.current) return;
   await rereadBiosAnswer(ctx);
@@ -194,13 +195,14 @@ export async function rereadBiosAnswer(ctx: PanelEventContext): Promise<void> {
   foldBiosRead(binding, answer);
 }
 
-/** A pick is stored for one RomM platform, so only that platform's pages read
- *  again (#2452 D16). */
+/** Only the pages of the platform whose emulator choice changed read again — and
+ *  a change for no platform reaches only the pages of games with none recorded
+ *  (`coreChangeIsFor`, #2452 D16). */
 async function handleCoreChange(
   ctx: PanelEventContext,
   detail: Extract<RommDataChangedDetail, { type: "core_changed" }>,
 ): Promise<void> {
-  if (detail.platform_fs_slug !== (ctx.platformFolderRef.current || null)) return;
+  if (!coreChangeIsFor(detail, ctx.platformFolderRef.current)) return;
   await rereadCoreAnswer(ctx);
 }
 

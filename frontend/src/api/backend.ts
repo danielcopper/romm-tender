@@ -905,7 +905,7 @@ export const getEmulatorLaunches = endpoint<[number], GameLaunch[]>("get_emulato
 // once per selected platform. Distinct from getPlatformCoreInfo, which layers a
 // ROM's own pin on top and so cannot answer for a platform with no synced ROM.
 // Asked with the slug and the fs_slug, as setSystemCore is.
-export const getSystemCoreInfo = endpoint<[string, string], SystemCoreInfo>("get_system_core_info");
+export const getSystemCoreInfo = endpoint<[string, string], SystemCoreInfo | EndpointFailure>("get_system_core_info");
 
 /** Every detected emulator source, in the user's order, with its health and its switch. */
 export const getEmulatorSources = endpoint<[], EmulatorSourcesListing>("get_emulator_sources");

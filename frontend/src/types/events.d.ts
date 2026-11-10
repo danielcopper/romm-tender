@@ -16,8 +16,7 @@ export type RommDataChangedDetail =
   | { type: "save_sync_settings"; save_sync_enabled: boolean }
   | { type: "metadata"; rom_id: number }
   // `platform_fs_slug` names the platform whose firmware changed, and no page
-  // reads it: pages match on the slug, because platforms that share a slug share
-  // the emulators' BIOS places (#2452 D16).
+  // reads it: pages match on the slug (docs/architecture/qam-panel.md, § Library).
   | { type: "bios"; platform_slug: string; platform_fs_slug: string }
   // `null` where the game whose emulator changed has no fs_slug from RomM.
   | { type: "core_changed"; platform_fs_slug: string | null }

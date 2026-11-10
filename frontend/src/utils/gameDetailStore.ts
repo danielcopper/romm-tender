@@ -40,6 +40,7 @@ import {
 import { getRomMetadataShared } from "../api/sharedReads";
 import type { CoreInfo, DownloadCompleteEvent, SaveStatus, SaveSyncDisplay } from "../types";
 import type { RommDataChangedDetail } from "../types/events";
+import { coreChangeIsFor } from "./coreChangedEvent";
 import { detach } from "./detach";
 import { gameStartRefusal } from "./emulatorStart";
 import { startCheckFailureSentence } from "./gameLaunch";
@@ -864,7 +865,7 @@ function attachListeners(appId: number, entry: Entry): () => void {
               break;
             case "core_changed":
               // The panel's filter (`handleCoreChange` in `bigpicture/panelEvents.ts`).
-              if (detail.platform_fs_slug === (entry.state.platformFolder || null)) await handleCoreChange(entry);
+              if (coreChangeIsFor(detail, entry.state.platformFolder)) await handleCoreChange(entry);
               break;
             case "emulator_sources":
               await handleEmulatorSourcesChange(appId, entry);

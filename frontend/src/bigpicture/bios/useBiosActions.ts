@@ -132,17 +132,6 @@ export function announceBiosChange(platformSlug: string, platformFolder: string)
   globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail }));
 }
 
-/**
- * Tell the open game pages that the emulator of the platform kept in
- * *platformFolder* changed, so that platform's pages read their core again
- * (#2452 D16). `null` is a game RomM gives no fs_slug, whose pages match one
- * another.
- */
-export function announceCoreChange(platformFolder: string | null): void {
-  const detail: RommDataChangedDetail = { type: "core_changed", platform_fs_slug: platformFolder };
-  globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail }));
-}
-
 export function useBiosActions({
   setBusy,
   setStatus,
