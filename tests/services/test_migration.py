@@ -164,7 +164,7 @@ def _seed_bios(uow, *, platform_slug, file_name, file_path, firmware_id=None):
     with uow:
         uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug=platform_slug,
+                platform_folder=platform_slug,
                 file_name=file_name,
                 file_path=file_path,
                 downloaded_at="2025-01-01T00:00:00",

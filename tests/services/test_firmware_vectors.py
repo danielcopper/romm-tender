@@ -62,11 +62,11 @@ from _vendor.atlas.contract import firmware_contract
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, standalone_option
 from fakes.fake_firmware_file_store import FakeFirmwareFileStore
+from fakes.fake_listing_refiler import FakeListingRefiler
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_platform_systems import FakePlatformSystems
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_romm_api import FakeRommApi
-from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock
@@ -359,8 +359,7 @@ def _service(
             active_core=FakeActiveCoreResolver(),
             uow_factory=uows,
             conflict_rules=_make_conflict_rules(),
-            settings={},
-            settings_persister=FakeSettingsPersister(),
+            refiling=FakeListingRefiler(),
         )
     )
 

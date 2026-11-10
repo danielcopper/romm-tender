@@ -85,6 +85,7 @@ function panelFor(romId: number, coreInfo: CoreInfo | null) {
     cancelled: () => false,
     romIdRef: { current: romId },
     platformSlugRef: { current: "snes" },
+    platformFolderRef: { current: "snes" },
     slotsLoadedRef: { current: false },
     readSeqs: { current: { detail: 0, saveStatus: 0, slots: 0, slotTracking: 0, saveSync: 0, localSaves: 0, bios: 0 } },
     setState: (update: SetStateAction<PanelState>) => {
@@ -136,6 +137,7 @@ describe("the panel's core info", () => {
       () => false,
       { current: null },
       { current: "" },
+      { current: "" },
       { current: { detail: 0, saveStatus: 0, slots: 0, slotTracking: 0, saveSync: 0, localSaves: 0, bios: 0 } },
       (update) => {
         state = typeof update === "function" ? update(state) : update;
@@ -153,7 +155,7 @@ describe("the panel's core info", () => {
     vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1));
     vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(coreInfoNamed("bsnes"));
 
-    await dataChanged({ type: "core_changed", platform_slug: "snes" });
+    await dataChanged({ type: "core_changed", platform_fs_slug: "snes" });
 
     expect(panel.coreInfo?.active_core_label).toBe("bsnes");
     panel.unwire();
@@ -206,7 +208,7 @@ describe("the panel's core info", () => {
     const panel = panelFor(1, null);
     // A core change for the first version, its core read held open.
     vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1));
-    await dataChanged({ type: "core_changed", platform_slug: "snes" });
+    await dataChanged({ type: "core_changed", platform_fs_slug: "snes" });
 
     await switchTo(2);
     expect(panel.coreInfo?.active_core_label).toBe("bsnes");

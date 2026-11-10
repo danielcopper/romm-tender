@@ -15,6 +15,7 @@ from unittest.mock import MagicMock
 import pytest
 from _factories import _make_conflict_rules, _make_prune_conflicts
 from fakes.fake_core_info_provider import FakeCoreInfoProvider
+from fakes.fake_listing_refiler import FakeListingRefiler
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_platform_systems import FakePlatformSystems
 from fakes.fake_renderer_gc import FakeRendererGc
@@ -202,6 +203,7 @@ async def make_library(tmp_path, emit, logger, home) -> MakeLibrary:
                 conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
                 artwork_job=artwork_job,
                 running_rom_ids=running_games,
+                refiling=FakeListingRefiler(),
             ),
         )
 

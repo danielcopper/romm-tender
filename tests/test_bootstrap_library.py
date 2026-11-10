@@ -7,6 +7,7 @@ import logging
 import pytest
 from _factories import _make_conflict_rules
 from fakes.fake_event_sink import FakeEventSink
+from fakes.fake_listing_refiler import FakeListingRefiler
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_romm_api import FakeRommApi
@@ -47,6 +48,7 @@ def parts(home) -> LibraryParts:
             conflict_rules=_make_conflict_rules(),
             artwork_job=FakeShortcutArtworkJob(),
             running_rom_ids=FakeRunningRomIds(),
+            refiling=FakeListingRefiler(),
         )
     )
 

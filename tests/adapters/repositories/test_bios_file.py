@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 def _bios(platform: str, file_name: str, *, firmware_id: int | None = None) -> BiosFile:
     return BiosFile(
-        platform_slug=platform,
+        platform_folder=platform,
         file_name=file_name,
         file_path=f"/bios/{platform}/{file_name}",
         downloaded_at="2026-01-01T00:00:00Z",
@@ -71,16 +71,8 @@ class TestIteration:
         uow.bios_files.save(_bios("psx", "a.bin"))
         uow.bios_files.save(_bios("saturn", "b.bin"))
 
-        keys = {(b.platform_slug, b.file_name) for b in uow.bios_files.iter_all()}
+        keys = {(b.platform_folder, b.file_name) for b in uow.bios_files.iter_all()}
         assert keys == {("psx", "a.bin"), ("saturn", "b.bin")}
-
-    def test_iter_by_platform_returns_subset(self, uow: SqliteUnitOfWork):
-        uow.bios_files.save(_bios("psx", "a.bin"))
-        uow.bios_files.save(_bios("psx", "b.bin"))
-        uow.bios_files.save(_bios("saturn", "c.bin"))
-
-        names = {b.file_name for b in uow.bios_files.iter_by_platform("psx")}
-        assert names == {"a.bin", "b.bin"}
 
 
 class TestUpsert:

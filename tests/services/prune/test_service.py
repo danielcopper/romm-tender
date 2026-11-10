@@ -2711,7 +2711,7 @@ async def test_inline_purge_keeps_the_platform_stamp_and_still_denies_the_increm
     assert stamp is not None
     assert (stamp.fetch_id, stamp.rom_count) == ("new", 2)
     # Scoped to the stamped platform, because that is what the stamp describes.
-    remaining = list(harness.uow.roms.iter_by_platform("dc"))
+    remaining = list(harness.uow.roms.iter_by_platform_folder("dc"))
     # The purge removed a row carrying the stamp's generation, so the fetcher's
     # own conditions must still deny the skip: the stamped server count no longer
     # matches the count the server now reports (1), which forces the full fetch.

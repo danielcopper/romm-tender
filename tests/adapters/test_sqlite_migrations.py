@@ -93,8 +93,9 @@ def _set_user_version(db_path: str, version: int) -> None:
 # + 039_add_rom_emulator_override_source + 040_drop_rom_install_launchable
 # + 041_replace_applied_launch_options_with_shortcut_applied
 # + 042_add_rom_install_fetched_size + 043_key_firmware_store_by_platform_folder
-# + 044_key_platform_sync_state_by_platform_folder).
-_SHIPPED_VERSION = 44
+# + 044_key_platform_sync_state_by_platform_folder
+# + 045_key_downloaded_bios_by_platform_folder).
+_SHIPPED_VERSION = 45
 
 # Tables after every shipped migration: the v1 set plus 006's play-session outbox,
 # 012's per-platform completion stamp, 019's per-collection completion stamp,

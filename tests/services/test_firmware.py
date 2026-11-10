@@ -20,6 +20,7 @@ from fakes.fake_core_info_provider import (
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_firmware_file_store import FakeFirmwareFileStore
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
+from fakes.fake_listing_refiler import FakeListingRefiler
 from fakes.fake_path_exists_reader import FakePathExistsReader
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
@@ -77,6 +78,7 @@ def _seed_rom(uow: FakeUnitOfWork, *, rom_id: int, platform_slug: str, app_id: i
         Rom(
             rom_id=rom_id,
             platform_slug=platform_slug,
+            platform_fs_slug=platform_slug,
             name=f"rom-{rom_id}",
             fs_name=f"rom-{rom_id}.zip",
             shortcut_app_id=app_id,
@@ -232,8 +234,7 @@ def _make_firmware_service(
             active_core=active_core if active_core is not None else FakeActiveCoreResolver(),
             uow_factory=uows,
             conflict_rules=conflict_rules if conflict_rules is not None else _make_conflict_rules(),
-            settings={},
-            settings_persister=FakeSettingsPersister(),
+            refiling=FakeListingRefiler(),
         ),
     )
 
@@ -728,7 +729,7 @@ class TestWhileRetroDeckIsSwitchedOff:
         bios.write_bytes(b"\x00")
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="dc",
+                platform_folder="dc",
                 file_name="dc_boot.bin",
                 file_path=str(bios),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -753,7 +754,7 @@ class TestWhileRetroDeckIsSwitchedOff:
         bios.write_bytes(b"\x00")
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="dc",
+                platform_folder="dc",
                 file_name="dc_boot.bin",
                 file_path=str(bios),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -787,7 +788,7 @@ class TestWhileRetroDeckIsSwitchedOff:
     def _older_download(self, firmware, path):
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="dc",
+                platform_folder="dc",
                 file_name="dc_boot.bin",
                 file_path=str(path),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -1026,7 +1027,7 @@ class TestAFileInAFolderCountsItsOwnDelete:
         for name, path in (("scph39001.bin", inside), ("scph5501.bin", elsewhere)):
             firmware.uow.bios_files.save(
                 BiosFile.mark_downloaded(
-                    platform_slug="dc",
+                    platform_folder="dc",
                     file_name=name,
                     file_path=path,
                     downloaded_at="2026-01-01T00:00:00+00:00",
@@ -1067,7 +1068,7 @@ class TestAFileInAFolderCountsItsOwnDelete:
         for slug in ("psx", "ps"):
             firmware.uow.bios_files.save(
                 BiosFile.mark_downloaded(
-                    platform_slug=slug,
+                    platform_folder=slug,
                     file_name="scph39001.bin",
                     file_path=inside,
                     downloaded_at="2026-01-01T00:00:00+00:00",
@@ -2536,7 +2537,7 @@ class TestGetFirmwareStatusDeletableCount:
         _declare(fw, ("IPL.bin", "GameCube IPL", True))
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="gc",
+                platform_folder="gc",
                 file_name="retired.bin",
                 file_path=retired,
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -2546,7 +2547,7 @@ class TestGetFirmwareStatusDeletableCount:
         # Ours, and still offered by the library, so it has a row of its own.
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="gc",
+                platform_folder="gc",
                 file_name="ours.bin",
                 file_path=ours,
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -2623,7 +2624,7 @@ class TestGetFirmwareStatusDeletableCount:
         _declare(fw, ("IPL.bin", "GameCube IPL", True))
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="gc",
+                platform_folder="gc",
                 file_name="gone.bin",
                 file_path=os.path.join(str(bios_dir), "gone.bin"),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -2670,7 +2671,7 @@ class TestTheGamePageAnswerCarriesWhatItsButtonsStandOn:
         _declare(fw, ("IPL.bin", "GameCube IPL", True))
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="gc",
+                platform_folder="gc",
                 file_name="ours.bin",
                 file_path=os.path.join(bios_dir, "ours.bin"),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -2730,7 +2731,7 @@ class TestTheGamePageAnswerCarriesWhatItsButtonsStandOn:
         _inline_executor(fw)
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="n64",
+                platform_folder="n64",
                 file_name="ours.bin",
                 file_path=os.path.join(bios_dir, "ours.bin"),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -4581,7 +4582,7 @@ class TestDeleteOneBiosFile:
         ours.write_bytes(b"\x00" * 512)
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="gc",
+                platform_folder="gc",
                 file_name="gc-pal-12.bin",
                 file_path=str(ours),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -4610,7 +4611,7 @@ class TestDeleteOneBiosFile:
             path.write_bytes(b"\x00" * 32)
             firmware.uow.bios_files.save(
                 BiosFile.mark_downloaded(
-                    platform_slug="gc",
+                    platform_folder="gc",
                     file_name=name,
                     file_path=str(path),
                     downloaded_at="2026-01-01T00:00:00+00:00",
@@ -4641,7 +4642,7 @@ class TestDeleteOneBiosFile:
         theirs.write_bytes(b"\x01" * 128)
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="ps2",
+                platform_folder="ps2",
                 file_name="scph39001.bin",
                 file_path=str(ours),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -4694,7 +4695,7 @@ class TestDeleteOneBiosFile:
         elsewhere.write_bytes(b"\x03" * 16)
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="dc",
+                platform_folder="dc",
                 file_name="dc_boot.bin",
                 file_path=str(written),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -4727,7 +4728,7 @@ class TestDeletePlatformBios:
         # Pre-populate the BIOS registry via the Unit of Work
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="psx",
+                platform_folder="psx",
                 file_name="scph5501.bin",
                 file_path=str(bios_file),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -4799,7 +4800,7 @@ class TestDeletePlatformBios:
         # The downloaded file has a BiosFile record to prune (filed under "psx").
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="psx",
+                platform_folder="psx",
                 file_name="scph5501.bin",
                 file_path=str(bios_dir / "scph5501.bin"),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -4892,7 +4893,7 @@ class TestDeletePlatformBios:
     def _record_download(firmware, file_name: str, file_path: str) -> None:
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="gc",
+                platform_folder="gc",
                 file_name=file_name,
                 file_path=file_path,
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -5038,50 +5039,6 @@ class TestDeletePlatformBios:
         assert firmware.uow.bios_files.get("gc", "IPL.bin") is None
         assert shipped in store.files
 
-    @pytest.mark.asyncio
-    async def test_a_record_under_the_platform_s_old_folder_name_is_deleted_once_with_it(self, firmware, tmp_path):
-        """A record filed under the server folder ``ps`` names the file ``psx`` records too.
-
-        The first read of the listing drops it as the duplicate it is, so the
-        platform's delete takes the file once and leaves no record behind under
-        either name.
-        """
-        bios_dir = tmp_path / "bios"
-        path = os.path.join(str(bios_dir), "scph5501.bin")
-        store = FakeFirmwareFileStore({path: b"\x00" * 8})
-        fw = _make_firmware_service(
-            romm_api=firmware.romm_api,
-            uow_factory=FakeUnitOfWorkFactory(firmware.uow),
-            firmware_file_store=store,
-            retrodeck_folders=FakeRetroDeckFolders(bios=str(bios_dir)),
-            core_info=_test_core_info(),
-        )
-        _set_loop(fw, asyncio.get_running_loop())
-        for slug in ("psx", "ps"):
-            firmware.uow.bios_files.save(
-                BiosFile.mark_downloaded(
-                    platform_slug=slug,
-                    file_name="scph5501.bin",
-                    file_path=path,
-                    downloaded_at="2026-01-01T00:00:00+00:00",
-                    firmware_id=1,
-                )
-            )
-
-        listing = _platforms([{"id": 1, "file_name": "scph5501.bin", "platform_slug": "psx"}], folders={"psx": "ps"})
-        with patch.object(firmware.romm_api, "list_platforms", return_value=listing):
-            await fw.get_platform_firmware_status("psx", "psx")
-            result = await fw.delete_platform_bios("psx", "psx")
-
-        assert isinstance(result, dict)
-        assert result["success"] is True
-        assert result["deleted_count"] == 1
-        assert path not in store.files
-        assert firmware.uow.bios_files.get("psx", "scph5501.bin") is None
-        assert firmware.uow.bios_files.get("ps", "scph5501.bin") is None
-
-
-class TestCheckPlatformBiosRequired:
     @pytest.mark.asyncio
     async def test_required_counts(self, fw, tmp_path):
         """check_platform_bios includes required_count/required_downloaded."""
@@ -6596,7 +6553,7 @@ class TestThePlatformRommStatesForAFile:
         _set_loop(fw, asyncio.get_running_loop())
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="ps",
+                platform_folder="ps",
                 file_name="scph5501.bin",
                 file_path=str(bios_dir / "scph5501.bin"),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -6617,50 +6574,39 @@ class TestThePlatformRommStatesForAFile:
 
 
 class TestTheListingMovesOlderEntries:
-    """A fresh read of the listing moves Tender's older entries; a cached read and a failed move cost nothing."""
+    """A fresh read of the listing is handed to the refiling; a cached read and a failed move cost nothing."""
 
-    def _service(self, uow: FakeUnitOfWork) -> FirmwareService:
+    _LISTING = _platforms([{"id": 1, "file_name": "scph5501.bin", "platform_slug": "psx"}], folders={"psx": "ps"})
+
+    def _service(self, refiling: FakeListingRefiler) -> FirmwareService:
         api = MagicMock()
-        api.list_platforms.return_value = _platforms(
-            [{"id": 1, "file_name": "scph5501.bin", "platform_slug": "psx"}], folders={"psx": "ps"}
-        )
-        uow.bios_files.save(
-            BiosFile.mark_downloaded(
-                platform_slug="ps",
-                file_name="scph5501.bin",
-                file_path="/bios/scph5501.bin",
-                downloaded_at="2026-01-01T00:00:00+00:00",
-                firmware_id=1,
-            )
-        )
-        return _make_firmware_service(romm_api=api, uow_factory=FakeUnitOfWorkFactory(uow))
+        api.list_platforms.return_value = self._LISTING
+        fw = _make_firmware_service(romm_api=api, uow_factory=FakeUnitOfWorkFactory(FakeUnitOfWork()))
+        fw._listing._refiling = refiling
+        return fw
 
-    def test_a_fresh_read_moves_a_record_to_its_platform(self):
-        uow = FakeUnitOfWork()
-        fw = self._service(uow)
+    def test_a_fresh_read_hands_the_listing_to_the_refiling(self):
+        refiling = FakeListingRefiler()
+        fw = self._service(refiling)
 
         fw._listing.get_firmware_list()
 
-        assert [(r.platform_slug, r.file_name) for r in uow.bios_files.iter_all()] == [("psx", "scph5501.bin")]
+        assert refiling.listings == [self._LISTING]
 
-    def test_a_cached_read_moves_nothing(self):
-        uow = FakeUnitOfWork()
-        fw = self._service(uow)
+    def test_a_cached_read_hands_nothing_over(self):
+        refiling = FakeListingRefiler()
+        fw = self._service(refiling)
         fw._listing._firmware_cache = []
         fw._listing._firmware_cache_epoch = fw._config.clock.time()
 
         fw._listing.get_firmware_list()
 
-        assert [(r.platform_slug, r.file_name) for r in uow.bios_files.iter_all()] == [("ps", "scph5501.bin")]
+        assert refiling.listings == []
 
     def test_a_move_that_fails_costs_nothing_of_the_listing(self, caplog):
-        uow = FakeUnitOfWork()
-        fw = self._service(uow)
+        fw = self._service(FakeListingRefiler(error=OSError("db locked")))
 
-        with (
-            patch.object(uow.bios_files, "iter_all", side_effect=OSError("db locked")),
-            caplog.at_level(logging.WARNING),
-        ):
+        with caplog.at_level(logging.WARNING):
             result = fw._listing.get_firmware_list()
 
         assert [row["file_name"] for row in result] == ["scph5501.bin"]
@@ -6972,7 +6918,7 @@ class TestDeletePlatformBiosIOLogsWarnings:
         for name in ("scph5501.bin", "scph5502.bin"):
             firmware.uow.bios_files.save(
                 BiosFile.mark_downloaded(
-                    platform_slug="psx",
+                    platform_folder="psx",
                     file_name=name,
                     file_path=f"/fake/bios/{name}",
                     downloaded_at="2026-01-01T00:00:00+00:00",
@@ -7001,7 +6947,7 @@ class TestAPartialBiosDeleteIsIncomplete:
     def _record(firmware, name: str, path: str) -> None:
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="ps2",
+                platform_folder="ps2",
                 file_name=name,
                 file_path=path,
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -7601,7 +7547,7 @@ class TestOneEntryPerEmulator:
         uow = FakeUnitOfWork()
         uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="saturn",
+                platform_folder="saturn",
                 file_name="saturn_bios.bin",
                 file_path=str(tmp_path / "bios" / "kronos" / "saturn_bios.bin"),
                 downloaded_at="2026-01-01T00:00:00+00:00",

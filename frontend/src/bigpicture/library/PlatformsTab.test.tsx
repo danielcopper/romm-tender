@@ -436,7 +436,7 @@ describe("Library › Platforms", () => {
     vi.mocked(backend.getPlatforms).mockResolvedValue({ success: true, platforms: [platform()] });
     mockFirmware([firmwarePlatform()]);
     vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
-      platforms: [{ slug: "gba", name: "GBA", count: 9, reachable_count: 9 }],
+      platforms: [{ slug: "gba", fs_slug: "gba", name: "GBA", count: 9, reachable_count: 9 }],
     });
     vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(coreInfo());
     vi.mocked(backend.countPlatformSaves).mockResolvedValue({ count: 3 });
@@ -1135,7 +1135,7 @@ describe("Library › Platforms", () => {
       await flushAsync();
 
       expect(vi.mocked(backend.getSystemCoreInfo)).toHaveBeenCalledTimes(1);
-      expect(vi.mocked(backend.getSystemCoreInfo)).toHaveBeenCalledWith("gba");
+      expect(vi.mocked(backend.getSystemCoreInfo)).toHaveBeenCalledWith("gba", "gba");
     });
 
     it("reads a platform's core once however often it is selected", async () => {
@@ -1204,8 +1204,8 @@ describe("Library › Platforms", () => {
       mockFirmware([firmwarePlatform(), firmwarePlatform({ platform_slug: "n64" })]);
       vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
         platforms: [
-          { slug: "gba", name: "GBA", count: 9, reachable_count: 9 },
-          { slug: "n64", name: "N64", count: 4, reachable_count: 4 },
+          { slug: "gba", fs_slug: "gba", name: "GBA", count: 9, reachable_count: 9 },
+          { slug: "n64", fs_slug: "n64", name: "N64", count: 4, reachable_count: 4 },
         ],
       });
       let finish: (v: { success: true; message: string; downloaded: number }) => void = () => {};
@@ -1414,7 +1414,7 @@ describe("Library › Platforms", () => {
       // header is about ROMs and reads 12; the button is about Steam entries
       // and still reads 9.
       vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
-        platforms: [{ slug: "gba", name: "GBA", count: 9, reachable_count: 12 }],
+        platforms: [{ slug: "gba", fs_slug: "gba", name: "GBA", count: 9, reachable_count: 12 }],
       });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
@@ -1427,7 +1427,7 @@ describe("Library › Platforms", () => {
       // One applied game of four, and the three unapplied ones are behind no
       // shortcut by any route — so the difference is real and must show.
       vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
-        platforms: [{ slug: "gba", name: "GBA", count: 1, reachable_count: 3 }],
+        platforms: [{ slug: "gba", fs_slug: "gba", name: "GBA", count: 1, reachable_count: 3 }],
       });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
@@ -1438,7 +1438,7 @@ describe("Library › Platforms", () => {
     it("counts a single version in the singular", async () => {
       vi.mocked(backend.getPlatforms).mockResolvedValue({ success: true, platforms: [platform({ rom_count: 1 })] });
       vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
-        platforms: [{ slug: "gba", name: "GBA", count: 1, reachable_count: 1 }],
+        platforms: [{ slug: "gba", fs_slug: "gba", name: "GBA", count: 1, reachable_count: 1 }],
       });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
@@ -1448,7 +1448,7 @@ describe("Library › Platforms", () => {
 
     it("counts a single version in Steam in the singular beside many on RomM", async () => {
       vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
-        platforms: [{ slug: "gba", name: "GBA", count: 1, reachable_count: 1 }],
+        platforms: [{ slug: "gba", fs_slug: "gba", name: "GBA", count: 1, reachable_count: 1 }],
       });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
@@ -2280,7 +2280,7 @@ describe("Library › Platforms", () => {
       await openCoreMenu(container);
       await pickFromCoreMenu("PCSX2");
 
-      expect(backend.setSystemCore).toHaveBeenCalledWith("gba", "PCSX2");
+      expect(backend.setSystemCore).toHaveBeenCalledWith("gba", "gba", "PCSX2");
       expect(within(container).getByTestId("status-core").textContent).toBe("Switching to PCSX2…");
       await act(async () => {
         finish({ success: true });
@@ -2329,7 +2329,7 @@ describe("Library › Platforms", () => {
       await openCoreMenu(container);
       await pickFromCoreMenu("VBA Next");
 
-      expect(vi.mocked(backend.setSystemCore)).toHaveBeenCalledWith("gba", "VBA Next");
+      expect(vi.mocked(backend.setSystemCore)).toHaveBeenCalledWith("gba", "gba", "VBA Next");
     });
 
     it("offers the core picker for a platform with no shortcuts in Steam, and pins the pick", async () => {
@@ -2345,7 +2345,7 @@ describe("Library › Platforms", () => {
       await openCoreMenu(container);
       await pickFromCoreMenu("VBA Next");
 
-      expect(vi.mocked(backend.setSystemCore)).toHaveBeenCalledWith("gba", "VBA Next");
+      expect(vi.mocked(backend.setSystemCore)).toHaveBeenCalledWith("gba", "gba", "VBA Next");
     });
 
     it("clears the override when the default-marked emulator is picked", async () => {
@@ -2354,7 +2354,7 @@ describe("Library › Platforms", () => {
       await openCoreMenu(container);
       await pickFromCoreMenu("mGBA");
 
-      expect(vi.mocked(backend.setSystemCore)).toHaveBeenCalledWith("gba", "");
+      expect(vi.mocked(backend.setSystemCore)).toHaveBeenCalledWith("gba", "gba", "");
     });
 
     it("re-reads the core and the BIOS state, writes nothing to a shortcut, and tells the game page", async () => {
@@ -2423,8 +2423,8 @@ describe("Library › Platforms", () => {
       // on a platform with nothing in Steam for a reason of its own.
       vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
         platforms: [
-          { slug: "gba", name: "GBA", count: 9, reachable_count: 9 },
-          { slug: "n64", name: "N64", count: 4, reachable_count: 4 },
+          { slug: "gba", fs_slug: "gba", name: "GBA", count: 9, reachable_count: 9 },
+          { slug: "n64", fs_slug: "n64", name: "N64", count: 4, reachable_count: 4 },
         ],
       });
       let finish: (v: { success: true }) => void = () => {};
@@ -4818,8 +4818,8 @@ describe("Library › Platforms", () => {
       mockFirmware([firmwarePlatform(), firmwarePlatform({ platform_slug: "n64" })]);
       vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
         platforms: [
-          { slug: "gba", name: "GBA", count: 9, reachable_count: 9 },
-          { slug: "n64", name: "N64", count: 4, reachable_count: 4 },
+          { slug: "gba", fs_slug: "gba", name: "GBA", count: 9, reachable_count: 9 },
+          { slug: "n64", fs_slug: "n64", name: "N64", count: 4, reachable_count: 4 },
         ],
       });
       let finish: (v: { success: true; message: string; downloaded: number }) => void = () => {};
@@ -5170,7 +5170,7 @@ describe("Library › Platforms", () => {
           .mock.calls.map(([slug]) => slug)
           .slice(readsBefore);
         expect(since).toEqual(["gba"]);
-        expect(events.map((e) => e.detail)).toEqual([{ type: "bios", platform_slug: "gba" }]);
+        expect(events.map((e) => e.detail)).toEqual([{ type: "bios", platform_slug: "gba", platform_fs_slug: "gba" }]);
       } finally {
         globalThis.removeEventListener("romm_data_changed", listener);
       }

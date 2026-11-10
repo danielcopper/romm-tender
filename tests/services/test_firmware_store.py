@@ -24,10 +24,10 @@ from _factories import _make_conflict_rules
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, libretro_option, standalone_option
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
+from fakes.fake_listing_refiler import FakeListingRefiler
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_platform_systems import FakePlatformSystems
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
-from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock
@@ -195,8 +195,7 @@ def machine(tmp_path) -> _Machine:
             active_core=FakeActiveCoreResolver(),
             uow_factory=uows,
             conflict_rules=_make_conflict_rules(),
-            settings={},
-            settings_persister=FakeSettingsPersister(),
+            refiling=FakeListingRefiler(),
         )
     )
     return _Machine(service, store, resolver, romm, uow, core_info, platform_systems, bios, tender, data)
@@ -1162,7 +1161,7 @@ class TestDeleting:
         older.write_bytes(_SATURN)
         machine.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="saturn",
+                platform_folder="saturn",
                 file_name="sega_101.bin",
                 file_path=str(older),
                 downloaded_at="2026-01-01T00:00:00",

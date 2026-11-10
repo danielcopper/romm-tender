@@ -65,10 +65,11 @@ if TYPE_CHECKING:
     )
 
 
-def _rom(rom_id: int, *, platform: str = "snes") -> Rom:
+def _rom(rom_id: int, *, platform: str = "snes", folder: str | None = None) -> Rom:
     return Rom(
         rom_id=rom_id,
         platform_slug=platform,
+        platform_fs_slug=folder,
         name=f"Game {rom_id}",
         fs_name=f"game_{rom_id}.sfc",
         shortcut_app_id=1000 + rom_id,
@@ -125,8 +126,6 @@ class TestFakeRomRepository:
         assert repo.get_by_app_id(1002) is not None
         assert repo.get_by_app_id(9999) is None
         assert {r.rom_id for r in repo.iter_all()} == {1, 2}
-        assert {r.rom_id for r in repo.iter_by_platform("snes")} == {1, 2}
-        assert list(repo.iter_by_platform("gba")) == []
         assert repo.count() == 2
         assert repo.save_count == 2
         repo.delete(1)
@@ -182,14 +181,21 @@ class TestFakeRomRepository:
         assert loaded is not None
         assert loaded.artwork_checked_at == 1700000000.5
 
-    def test_bound_platform_slugs_leave_out_unbound_and_empty_slug_rows(self):
+    def test_bound_platform_folders_leave_out_unbound_rows_and_rows_with_no_folder(self):
         repo = FakeRomRepository()
-        unbound = _rom(3, platform="psx")
+        unbound = _rom(3, platform="psx", folder="psx")
         unbound.unbind_shortcut()
-        for rom in (_rom(1), _rom(2), unbound, _rom(4, platform=""), _rom(5, platform="gba")):
+        rows = (
+            _rom(1, folder="snes"),
+            _rom(2, folder="snes-hacks"),
+            unbound,
+            _rom(4, folder=None),
+            _rom(5, platform="gba", folder="gba"),
+        )
+        for rom in rows:
             repo.save(rom)
 
-        assert repo.get_bound_platform_slugs() == {"snes", "gba"}
+        assert repo.get_bound_platform_folders() == {"snes", "snes-hacks", "gba"}
 
 
 class TestFakeRomInstallRepository:
@@ -331,7 +337,7 @@ class TestFakeBiosFileRepository:
     def test_round_trip_composite_key_iter_delete(self):
         repo = FakeBiosFileRepository()
         bios = BiosFile(
-            platform_slug="psx",
+            platform_folder="psx",
             file_name="b.bin",
             file_path="/b",
             downloaded_at="2026-01-01T00:00:00Z",
@@ -340,8 +346,6 @@ class TestFakeBiosFileRepository:
         assert repo.get("psx", "b.bin") == bios
         assert repo.get("psx", "missing.bin") is None
         assert [b.file_name for b in repo.iter_all()] == ["b.bin"]
-        assert [b.file_name for b in repo.iter_by_platform("psx")] == ["b.bin"]
-        assert list(repo.iter_by_platform("saturn")) == []
         repo.delete("psx", "b.bin")
         assert repo.get("psx", "b.bin") is None
 
@@ -691,7 +695,7 @@ class TestFakeUnitOfWorkRomIdForeignKey:
         uow = FakeUnitOfWork()
         with uow:
             uow.bios_files.save(
-                BiosFile(platform_slug="psx", file_name="b.bin", file_path="/b", downloaded_at="2026-01-01T00:00:00Z")
+                BiosFile(platform_folder="psx", file_name="b.bin", file_path="/b", downloaded_at="2026-01-01T00:00:00Z")
             )
             uow.firmware_cache.replace_all(
                 [

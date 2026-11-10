@@ -2528,6 +2528,7 @@ describe("RomMPlaySection", () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 60,
+        platform_fs_slug: "snes",
       });
       render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
@@ -2583,7 +2584,7 @@ describe("RomMPlaySection", () => {
       await act(async () => {
         globalThis.dispatchEvent(
           new CustomEvent("romm_data_changed", {
-            detail: { type: "core_changed", platform_slug: "snes" },
+            detail: { type: "core_changed", platform_fs_slug: "snes" },
           }),
         );
         await Promise.resolve();
@@ -2602,6 +2603,7 @@ describe("RomMPlaySection", () => {
         found: true,
         rom_id: 60,
         platform_slug: "snes",
+        platform_fs_slug: "snes",
       });
       const { container } = render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
@@ -2663,7 +2665,7 @@ describe("RomMPlaySection", () => {
       await act(async () => {
         globalThis.dispatchEvent(
           new CustomEvent("romm_data_changed", {
-            detail: { type: "core_changed", platform_slug: "snes" },
+            detail: { type: "core_changed", platform_fs_slug: "snes" },
           }),
         );
         await Promise.resolve();
@@ -2684,6 +2686,7 @@ describe("RomMPlaySection", () => {
         found: true,
         rom_id: 61,
         platform_slug: "psvita",
+        platform_fs_slug: "psvita",
       });
       const { container } = render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
@@ -2711,7 +2714,7 @@ describe("RomMPlaySection", () => {
       await act(async () => {
         globalThis.dispatchEvent(
           new CustomEvent("romm_data_changed", {
-            detail: { type: "core_changed", platform_slug: "psvita" },
+            detail: { type: "core_changed", platform_fs_slug: "psvita" },
           }),
         );
         await Promise.resolve();
@@ -2731,7 +2734,7 @@ describe("RomMPlaySection", () => {
       await act(async () => {
         globalThis.dispatchEvent(
           new CustomEvent("romm_data_changed", {
-            detail: { type: "core_changed", platform_slug: "snes" },
+            detail: { type: "core_changed", platform_fs_slug: "snes" },
           }),
         );
         await Promise.resolve();
@@ -2901,6 +2904,7 @@ describe("RomMPlaySection", () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 33,
+        platform_fs_slug: "snes",
       });
       render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
@@ -2909,7 +2913,7 @@ describe("RomMPlaySection", () => {
       await act(async () => {
         globalThis.dispatchEvent(
           new CustomEvent("romm_data_changed", {
-            detail: { type: "core_changed", platform_slug: "snes" },
+            detail: { type: "core_changed", platform_fs_slug: "snes" },
           }),
         );
         await Promise.resolve();
@@ -3677,6 +3681,7 @@ describe("RomMPlaySection", () => {
         found: true,
         rom_id: 42,
         platform_slug: "snes",
+        platform_fs_slug: "snes",
         rom_file: "mario.sfc",
         bios_status: {
           platform_slug: "snes",
@@ -3801,7 +3806,7 @@ describe("RomMPlaySection", () => {
         const ev = listener.mock.calls.map((c) => c[0] as CustomEvent).find((e) => e.detail.type === "core_changed");
         expect(ev?.detail).toMatchObject({
           type: "core_changed",
-          platform_slug: "snes",
+          platform_fs_slug: "snes",
         });
       } finally {
         globalThis.removeEventListener("romm_data_changed", listener);
@@ -3949,6 +3954,7 @@ describe("RomMPlaySection", () => {
         found: true,
         rom_id: 42,
         platform_slug: "snes",
+        platform_fs_slug: "snes",
         rom_file: "mario.sfc",
         bios_status: {
           platform_slug: "snes",
@@ -4074,7 +4080,7 @@ describe("RomMPlaySection", () => {
         expect(vi.mocked(backend.getPlatformCoreInfo)).toHaveBeenCalledWith(42);
         expect(vi.mocked(cachedStore.invalidateCachedGameDetail)).toHaveBeenCalledWith(testAppId);
         const ev = listener.mock.calls.map((c) => c[0] as CustomEvent).find((e) => e.detail.type === "core_changed");
-        expect(ev?.detail).toMatchObject({ type: "core_changed", platform_slug: "snes" });
+        expect(ev?.detail).toMatchObject({ type: "core_changed", platform_fs_slug: "snes" });
       } finally {
         globalThis.removeEventListener("romm_data_changed", listener);
       }

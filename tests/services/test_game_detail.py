@@ -10,11 +10,11 @@ from _factories import _make_conflict_rules
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_core_info_provider import FakeCoreInfoProvider
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
+from fakes.fake_listing_refiler import FakeListingRefiler
 from fakes.fake_path_exists_reader import FakePathExistsReader
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
-from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock
@@ -135,8 +135,7 @@ def game_detail(clock, active_core_resolver, path_probe) -> GameDetailHarness:
             active_core=FakeActiveCoreResolver(),
             uow_factory=FakeUnitOfWorkFactory(),
             conflict_rules=_make_conflict_rules(),
-            settings={},
-            settings_persister=FakeSettingsPersister(),
+            refiling=FakeListingRefiler(),
         ),
     )
 

@@ -722,7 +722,7 @@ describe("gameDetailStore", () => {
   describe("core_changed notifications", () => {
     const dispatchCoreChanged = () =>
       globalThis.dispatchEvent(
-        new CustomEvent("romm_data_changed", { detail: { type: "core_changed", platform_slug: "snes" } }),
+        new CustomEvent("romm_data_changed", { detail: { type: "core_changed", platform_fs_slug: "snes" } }),
       );
 
     const dispatchCoreChangedFor = (folder: string) =>

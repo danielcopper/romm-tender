@@ -35,20 +35,20 @@ if TYPE_CHECKING:
 
 
 class FakePlatformCoreReader:
-    """In-memory ``PlatformCoreReader`` mapping platform slugs to core labels.
+    """In-memory ``PlatformCoreReader`` mapping a platform's ``fs_slug`` to its core label.
 
-    Returns the configured label for a slug as RetroDECK's pick, or ``None`` when absent. Records
-    each queried slug so a test can assert the per-platform layer was consulted
+    Returns the configured label as RetroDECK's pick, or ``None`` when absent. Records
+    each queried ``fs_slug`` so a test can assert the per-platform layer was consulted
     (or skipped when a per-game override already resolved).
     """
 
     def __init__(self, mapping: dict[str, str] | None = None) -> None:
         self.mapping = mapping if mapping is not None else {}
-        self.calls: list[str] = []
+        self.calls: list[str | None] = []
 
-    def get_platform_core(self, platform_slug: str) -> StoredPick | None:
-        self.calls.append(platform_slug)
-        label = self.mapping.get(platform_slug)
+    def get_platform_core(self, platform_folder: str | None) -> StoredPick | None:
+        self.calls.append(platform_folder)
+        label = self.mapping.get(platform_folder) if platform_folder is not None else None
         return StoredPick(label=label, source="retrodeck") if label is not None else None
 
 
@@ -64,6 +64,7 @@ def _seed_rom(
         Rom(
             rom_id=rom_id,
             platform_slug=platform_slug,
+            platform_fs_slug=platform_slug,
             name=f"rom-{rom_id}",
             fs_name=f"rom-{rom_id}.gba",
             shortcut_app_id=rom_id,

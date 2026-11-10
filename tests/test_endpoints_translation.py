@@ -44,6 +44,7 @@ from fakes.fake_firmware_file_store import FakeFirmwareFileStore
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_game_process_control import DEFAULT_APP_ID, FakeGameProcessControlAdapter
 from fakes.fake_journal import FakeJournal
+from fakes.fake_listing_refiler import FakeListingRefiler
 from fakes.fake_migration_file_store import FakeMigrationFileStore
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_platform_systems import FakePlatformSystems
@@ -1267,6 +1268,7 @@ def _dispatcher_over_library(romm_api: FakeRommApi, events: FakeEventSink, home:
             renderer_gc=FakeRendererGc(),
             conflict_rules=_make_conflict_rules(),
             running_rom_ids=FakeRunningRomIds(),
+            refiling=FakeListingRefiler(),
         ),
     ).service
     endpoints = Endpoints(_make_application(_make_services_bundle(sync_service=service)), HostStatus())
@@ -1458,8 +1460,7 @@ def _dispatcher_over_firmware(
             active_core=FakeActiveCoreResolver(),
             uow_factory=FakeUnitOfWorkFactory(uow),
             conflict_rules=_make_conflict_rules(),
-            settings={},
-            settings_persister=FakeSettingsPersister(),
+            refiling=FakeListingRefiler(),
         )
     )
     endpoints = Endpoints(_make_application(_make_services_bundle(firmware_service=service)), HostStatus())
@@ -1479,7 +1480,7 @@ class TestTheFirmwareAnswersOnTheWire:
             with uow:
                 uow.bios_files.save(
                     BiosFile.mark_downloaded(
-                        platform_slug="dc",
+                        platform_folder="dc",
                         file_name=name,
                         file_path=f"/retrodeck/bios/{name}",
                         downloaded_at="2026-01-01T00:00:00+00:00",
@@ -1857,7 +1858,7 @@ class TestThePlatformCoreSwitchOnTheWire:
         persister.save_settings = refuse
         dispatcher = _dispatcher_over_cores(settings, persister)
 
-        raw = await dispatcher.dispatch(1, "set_system_core", ["snes", "Snes9x"])
+        raw = await dispatcher.dispatch(1, "set_system_core", ["snes", "snes", "Snes9x"])
 
         message = json.loads(raw)
         assert message["type"] == TYPE_REPLY
