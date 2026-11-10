@@ -14,7 +14,7 @@ Every method blocks: it reads the database, and may read RomM and the resolver.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from domain.platform_names import PLATFORM_NAMES_KEY, decode_platform_names
 from domain.platform_system import (
@@ -36,7 +36,13 @@ if TYPE_CHECKING:
 
     from domain.emulator_sources import SourcesReading
     from domain.rom_install import RomInstall
-    from services.protocols import DebugLogger, RommPlatformReader, SourcePlatformSystems, UnitOfWorkFactory
+    from services.protocols import (
+        DebugLogger,
+        ListingRefiler,
+        RommPlatformReader,
+        SourcePlatformSystems,
+        UnitOfWorkFactory,
+    )
 
 
 @dataclass(frozen=True)
@@ -45,12 +51,14 @@ class PlatformSystemServiceConfig:
 
     Carries the Unit-of-Work factory the kept ids and names are read and
     written through, the RomM platform listing they are read from where none
-    are kept, the seam that asks a source, the logger a failed listing read is
-    logged with, and the debug logger.
+    are kept, the refiling that listing is handed to once read, the seam that
+    asks a source, the logger a failed listing read is logged with, and the
+    debug logger.
     """
 
     uow_factory: UnitOfWorkFactory
     romm_api: RommPlatformReader
+    refiling: ListingRefiler
     source_platform_systems: SourcePlatformSystems
     logger: logging.Logger
     log_debug: DebugLogger
@@ -62,6 +70,7 @@ class PlatformSystemService:
     def __init__(self, *, config: PlatformSystemServiceConfig) -> None:
         self._uow_factory = config.uow_factory
         self._romm_api = config.romm_api
+        self._refiling = config.refiling
         self._source_platform_systems = config.source_platform_systems
         self._logger = config.logger
         self._log_debug = config.log_debug
@@ -147,7 +156,9 @@ class PlatformSystemService:
 
         How the two are merged: ``docs/architecture/core-emulator-selection.md#a-platforms-system``.
         """
-        listed = kept_platforms(self._romm_api.list_platforms(), self._romm_api.get_version())
+        platforms = self._romm_api.list_platforms()
+        self._refile(platforms)
+        listed = kept_platforms(platforms, self._romm_api.get_version())
         entry = kept_by_slug(listed, platform_slug)
         self._log_debug(f"[platforms] no ids kept for {platform_slug}; read {len(listed)} from RomM")
         listed_slugs = {kept.slug for kept in listed.values()}
@@ -157,3 +168,10 @@ class PlatformSystemService:
             before = {key: kept for key, kept in current.items() if kept.slug not in listed_slugs}
             uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids({**before, **unlisted, **listed}))
         return entry
+
+    def _refile(self, platforms: list[dict[str, Any]]) -> None:
+        """Hand the listing just read to the refiling (#2452 D6, D7); a refiling that fails costs that move only."""
+        try:
+            self._refiling.do_refile(platforms)
+        except Exception as e:
+            self._logger.warning(f"Failed to move older per-platform entries to their platforms: {e}")

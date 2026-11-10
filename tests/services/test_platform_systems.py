@@ -7,6 +7,7 @@ import logging
 from unittest.mock import MagicMock
 
 import pytest
+from fakes.fake_listing_refiler import FakeListingRefiler
 from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_source_platform_systems import RETRODECK_SOURCE, FakeSourcePlatformSystems
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
@@ -57,11 +58,17 @@ def sources() -> FakeSourcePlatformSystems:
 
 
 @pytest.fixture
-def service(uow_factory, romm, sources) -> PlatformSystemService:
+def refiling() -> FakeListingRefiler:
+    return FakeListingRefiler()
+
+
+@pytest.fixture
+def service(uow_factory, romm, sources, refiling) -> PlatformSystemService:
     return PlatformSystemService(
         config=PlatformSystemServiceConfig(
             uow_factory=uow_factory,
             romm_api=romm,
+            refiling=refiling,
             source_platform_systems=sources,
             logger=logging.getLogger("test_platform_systems"),
             log_debug=MagicMock(),
@@ -318,3 +325,37 @@ class TestAPlatformJustReadIsNamedByItsFolder:
         uow_factory.uow.kv_config.set("platform_names", json.dumps({"ps": "Sony PlayStation"}))
 
         assert service.platform_system("psx").platform_name == "Sony PlayStation"
+
+
+class TestAListingReadHereIsRefiled:
+    """Every read of RomM's platform listing hands it to the refiling (#2452 D6, D7)."""
+
+    def test_the_listing_read_for_a_platform_with_no_ids_is_handed_over(self, service, romm, refiling):
+        service.platform_system("snes")
+
+        assert refiling.listings == [romm.platforms]
+
+    def test_kept_ids_read_no_listing_and_hand_nothing_over(self, service, uow_factory, refiling):
+        _keep(uow_factory, json.dumps({"snes": {"igdb_id": 19}}))
+
+        service.platform_system("snes")
+
+        assert refiling.listings == []
+
+    def test_a_refiling_that_fails_costs_nothing_of_the_answer(self, uow_factory, romm, sources, caplog):
+        service = PlatformSystemService(
+            config=PlatformSystemServiceConfig(
+                uow_factory=uow_factory,
+                romm_api=romm,
+                refiling=FakeListingRefiler(error=OSError("disk full")),
+                source_platform_systems=sources,
+                logger=logging.getLogger("test_platform_systems"),
+                log_debug=MagicMock(),
+            )
+        )
+
+        with caplog.at_level(logging.WARNING):
+            service.platform_system("snes")
+
+        assert sources.asked[0][0] == PlatformIds(igdb_id=19, ss_id=4, name="Super Nintendo")
+        assert "Failed to move older per-platform entries to their platforms: disk full" in caplog.text

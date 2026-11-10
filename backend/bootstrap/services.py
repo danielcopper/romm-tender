@@ -233,6 +233,16 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         sync_in_flight=sync_in_flight_binding.get,
     )
 
+    # Every reader of RomM's platform listing hands what it read here (#2452 D6, D7).
+    platform_refiling = PlatformRefiling(
+        config=PlatformRefilingConfig(
+            uow_factory=cfg.callbacks.uow_factory,
+            settings=cfg.stores.settings,
+            settings_persister=cfg.callbacks.settings_persister,
+            logger=cfg.runtime.logger,
+        )
+    )
+
     # The system a RomM platform is in an emulator source, which every reader of
     # a platform's system asks — the download, the emulator choice, the BIOS
     # answers and the saves — so they all ask the same question.
@@ -240,6 +250,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         config=PlatformSystemServiceConfig(
             uow_factory=cfg.callbacks.uow_factory,
             romm_api=cfg.adapters.romm_api,
+            refiling=platform_refiling,
             source_platform_systems=cfg.adapters.source_platform_systems,
             logger=cfg.runtime.logger,
             log_debug=cfg.callbacks.log_debug,
@@ -483,15 +494,6 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     )
     removal_in_flight_binding.set(shortcut_removal_service.is_removal_in_flight)
 
-    # Every reader of RomM's platform listing hands what it read here (#2452 D6, D7).
-    platform_refiling = PlatformRefiling(
-        config=PlatformRefilingConfig(
-            uow_factory=cfg.callbacks.uow_factory,
-            settings=cfg.stores.settings,
-            settings_persister=cfg.callbacks.settings_persister,
-            logger=cfg.runtime.logger,
-        )
-    )
     sync_service = wire_library(
         LibraryWiring(
             romm_api=cfg.adapters.romm_api,

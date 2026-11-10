@@ -34,6 +34,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from _factories import _make_application, _make_services_bundle
 from _spawns import record_spawns
+from fakes.fake_listing_refiler import FakeListingRefiler
 from fakes.fake_source_platform_systems import FakeSourcePlatformSystems
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 
@@ -6360,6 +6361,7 @@ class TestPlatformTurnedOffAndBackOn:
             config=PlatformSystemServiceConfig(
                 uow_factory=FakeUnitOfWorkFactory(uow=library.uow),
                 romm_api=fake_romm_api,
+                refiling=FakeListingRefiler(),
                 source_platform_systems=FakeSourcePlatformSystems(),
                 logger=logging.getLogger("test_sync_orchestrator"),
                 log_debug=MagicMock(),
