@@ -363,6 +363,21 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
   Such a file is named on stdout and its index entry left alone, which means the commit can carry unformatted content —
   loudly, and CI says so, where the other direction was silent.
 
+## Pipeline
+
+- **Gate**: as "Development", "Gate", says (`mise run gate`).
+- **Review checks**: `ruff check <files>`, `basedpyright <files>`, `pnpm -C frontend exec eslint <files>` (paths
+  relative to `frontend/`)
+- **Worktree task**: `mise run worktree-new`
+- **Agent rules**:
+  - Scratch files never go inside the worktree: `lint:md` globs `**/*.md` without honouring `.gitignore`, and Vitest
+    includes `src/**`, so a stray probe breaks the gate or a parallel typecheck. Use your scratchpad.
+  - Run `mise run gate` once, in the foreground, with a timeout of 1500 s (it takes about 4–6 minutes).
+  - Before writing code in an area, read the `.claude/rules/*.md` file whose `paths:` covers it; "Path-scoped rules"
+    above lists them.
+  - Backend tests run under pytest-xdist: a new test shares no file, port or global state with another test.
+  - Never raise a frontend bundle size budget; report the overrun instead.
+
 ## Code Quality
 
 CI runs SonarCloud (Quality Gate: 80% coverage on new code, 0 bugs, 0 vulnerabilities), Ruff, basedpyright,
