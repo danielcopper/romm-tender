@@ -299,8 +299,8 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
   in one process, for debugging); frontend — `mise run test:frontend` (Vitest + happy-dom)
 - **Coverage**: backend — `python -m pytest tests/ -q -n auto --cov=backend --cov-report=term --cov-branch`; frontend —
   `mise run test:frontend:coverage`
-- **Lint**: `mise run lint` (import-linter, the `scripts/check_*` gates, markdownlint). Of the mise tasks, only
-  `mise run gate` runs Ruff and basedpyright.
+- **Lint**: `mise run lint` (import-linter, the `scripts/check_*` gates, markdownlint). No mise task but `mise run gate`
+  (through its hidden `gate:python-static` step) runs Ruff and basedpyright.
 - **Gate**: `mise run gate` (the CI battery in one command; which PR checks it does not run:
   `docs/contributing/development.md`, "Full CI gate"; slow. Run before pushing.)
 - **Setup**: `mise run setup` (installs JS + Python dependencies)
@@ -373,8 +373,8 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
   - Scratch files never go inside the worktree: `lint:md` globs `**/*.md` without honouring `.gitignore`, and `tsc`
     checks all of `frontend/src` (Vitest runs any `*.test.ts` there), so a stray probe breaks the gate or a parallel
     typecheck. Use your scratchpad.
-  - Run `mise run gate` once; it takes 8–15 minutes, longer under load. The Bash tool stops waiting after 600 s and
-    leaves the run in the background: wait for that run (`tail --pid=<pid> -f /dev/null`) instead of starting another.
+  - Run `mise run gate` once; it takes 8–15 minutes, longer under load. Never start a second run while one is still
+    going.
   - Before writing code in an area, read every `.claude/rules/*.md` file whose `paths:` covers it; "Path-scoped rules"
     above lists them.
   - Backend tests run under pytest-xdist: a new test shares no file, port or global state with another test.
