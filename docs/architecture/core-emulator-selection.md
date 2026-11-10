@@ -63,10 +63,10 @@ An emulator program has **no** libretro `.so`, so the read-path projection repor
 Tender owns two **deviations** from the RetroDECK default core. Each stores only the deviation as a core LABEL; absence
 means "follow the default."
 
-| Scope            | Stored where                                                                                   | Applies to              | Written by                                                                                                         |
-| ---------------- | ---------------------------------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| **Per-game**     | Tender's database — `roms.emulator_override` (nullable LABEL), `roms.emulator_override_source` | one ROM (by `rom_id`)   | Tender (`pin`/`clear`)                                                                                             |
-| **Per-platform** | `settings.json` — `platform_cores` map (`{fs_slug: {"label", "source"}}`)                      | every ROM on a platform | Tender (`set_system_core`; the refiling of every listing read moves a pick kept under another key to its platform) |
+| Scope            | Stored where                                                                                   | Applies to              | Written by                                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Per-game**     | Tender's database — `roms.emulator_override` (nullable LABEL), `roms.emulator_override_source` | one ROM (by `rom_id`)   | Tender (`pin`/`clear`)                                                                                |
+| **Per-platform** | `settings.json` — `platform_cores` map (`{fs_slug: {"label", "source"}}`)                      | every ROM on a platform | Tender (`set_system_core`; the refiling moves a pick kept under a slug to the platforms of that slug) |
 
 Both overrides are Tender's own state and live in Tender's own stores. Neither is written into ES-DE's `gamelist.xml` —
 Tender **never writes that file**. It still **reads** the RetroDECK/ES-DE configuration it does not own (the live
@@ -142,8 +142,8 @@ resolve_rom(rom_id):
   system = rom_system(rom.platform_slug, install)          ── the install's system, else the platform's (below)
   if system is None: return None                           ── no switched-on system: no entry
   options = get_emulator_options(system)["options"]        ── every es_systems entry, in the resolver's order
-  choice = choose_emulator(options, game=pin, platform=platform_cores[fs_slug])
-                                                           ── none for a game with no fs_slug recorded (#2452 D15)
+  choice = choose_emulator(options, game=pin, platform=game_platform_pick(fs_slug, slug, …))
+                                                           ── the fs_slug's pick; without one, the slug's (#2452 D15)
                                                            ── a stored label stands while it names an entry, whatever
                                                            ── its state; a label that is gone gives way, named
   return choice, options
@@ -685,16 +685,24 @@ so every entry renders and is chosen as on a game's page (#1210) — calls
    firmware read cannot add a second way to report a stored switch as failed. The platform detail re-reads the platform
    once the switch is done, and that read answers for the new core's firmware.
 
-`platform_cores` has one more writer: the refiling (`services/platform_refiling.py`), handed every read of RomM's
-platform listing — the Platforms tab's, a sync's, the firmware listing's and the platform system's own. A pick under a
-key that is no listed `fs_slug` — a slug, as picks were kept before, or a server folder name — is copied to every listed
-`fs_slug` with that slug that has no pick of its own, and the old key goes; a pick under a key that is a listed
-`fs_slug` stays, so a sibling platform with the same slug starts at its default
-([#2452](https://github.com/danielcopper/romm-tender/issues/2452) D7, D18). The move happens in the same live dict and
-is given back when `settings.json` cannot be written; there is no settings rung for it.
+`platform_cores` has one more writer: the refiling (`services/platform_refiling.py`), handed each read of RomM's
+platform listing that keeps or uses it — the Platforms tab's, a sync's, the firmware listing's and the platform system's
+own; the connection test's probe, which discards the listing, is not one. A pick under a key that is no listed `fs_slug`
+but a listed platform's slug — as picks were kept before — is copied to every listed `fs_slug` with that slug that has
+no pick of its own, and the old key goes; a pick under a key that is a listed `fs_slug` stays, so a sibling platform
+with the same slug starts at its default, and so does one under a key that is neither, such as a server folder name
+([#2452](https://github.com/danielcopper/romm-tender/issues/2452) D7, D18). The move happens in the same live dict,
+under the lock `set_system_core`'s write holds too, and is given back when `settings.json` cannot be written; there is
+no settings rung for it. A move that fails is logged by the refiling and costs the reader nothing.
 
-A game with no `fs_slug` recorded takes no per-platform pick: its own pick applies, else the platform's default, and the
-slug is not used to find one ([#2452](https://github.com/danielcopper/romm-tender/issues/2452) D15).
+A game with no `fs_slug` recorded — every game, until the first sync after an update from 0.33.0 records it — takes, in
+this order, its own pick; the pick still kept under its slug; once the refiling has moved that key, the pick of the one
+platform Tender keeps for that slug from RomM's listing (`platform_ids`); else the platform's default, which is also
+what it takes where several platforms share the slug (`domain/emulator_pick.py::game_platform_pick`). A game with its
+`fs_slug` takes that platform's pick and nothing else ([#2452](https://github.com/danielcopper/romm-tender/issues/2452)
+D15). The slug key is not kept beside the moved picks for those games: a reset of one platform to its default would then
+come back from it at the next listing read. The Platforms tab and the BIOS answers are asked for a listed platform,
+which always has its `fs_slug`, so they read that platform's pick alone.
 
 A per-platform core change applies from the next start of every game on the platform that has no per-game pin — no sync
 and no Steam write required. Because the `PlatformCoreReaderAdapter` holds the live settings dict, the next start

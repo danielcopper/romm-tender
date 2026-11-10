@@ -624,9 +624,9 @@ and no edit distance or token scoring is involved.
 ### platform_slug (denormalized)
 
 RomM's slug for a platform's console (e.g. `gba`, `psx`), carried as a plain string on the rows that need it (`roms`,
-`rom_installs`, `downloaded_bios`, `firmware_store`, `firmware_cache`). Two RomM platforms can share one — RomM's
-built-in `gc` and `gamecube` are both `ngc` — so a slug does not name one platform; the **platform folder** does. There
-is **no local `Platform` aggregate** — that was proposed in ADR-0001 and **dropped by
+`rom_installs`, `firmware_store`, `firmware_cache`). Two RomM platforms can share one — RomM's built-in `gc` and
+`gamecube` are both `ngc` — so a slug does not name one platform; the **platform folder** does. There is **no local
+`Platform` aggregate** — that was proposed in ADR-0001 and **dropped by
 [ADR-0003](docs/adr/0003-json-sqlite-persistence-boundary.md)** on YAGNI grounds. Platform display names resolve live
 from RomM; sync exclusion is the user-intent `enabled_platforms` config in `settings.json`, not per-platform local
 state. A `Platform` aggregate is reintroduced only when a concrete need lands (the standalone-emulator roadmap), not
@@ -639,10 +639,12 @@ The folder RomM keeps a platform's games and firmware in, its `fs_slug` (e.g. `g
 **firmware store**'s folders and records (`platform_folder`), the folder a game's platform is in
 (`roms.platform_fs_slug`), the per-platform sync stamp (`platform_sync_state.platform_folder`), the platforms a sync run
 lists, reads and processes, the `platform_names` cache, the rows of the Platforms tab, the per-platform emulator pick
-(`platform_cores`) and the older BIOS download records (`downloaded_bios.platform_folder`) (#2452 D1, D6, D7). It is
-never replaced by the slug where it is not known (#2223 D45): a game with none recorded counts as on a platform the run
-did not read (#2452 D5). _Avoid_: calling a system's ROM folder on this machine the platform folder; that folder is the
-resolver's answer.
+(`platform_cores`) and the older BIOS download records (`downloaded_bios.platform_folder`) (#2452 D1, D6, D7). A row's
+sync switch is not among them yet: `enabled_platforms` holds RomM's platform ids until #2798. It is never replaced by
+the slug where it is not known (#2223 D45): a game with none recorded counts as on a platform the run did not read
+(#2452 D5). One older download record is the exception: kept under a slug several listed platforms share, it stays
+there, because the refiling cannot tell whose it is, and each of their pages offers it (#2452 D6). _Avoid_: calling a
+system's ROM folder on this machine the platform folder; that folder is the resolver's answer.
 
 ### Platform system
 

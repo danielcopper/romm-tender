@@ -6,8 +6,9 @@
 --
 --   * downloaded_bios — `platform_slug` renamed `platform_folder`, values kept:
 --     each record is read as filed under the fs_slug it holds. A record whose
---     value is no listed fs_slug is moved at the next read of RomM's platform
---     listing (services/platform_refiling.py).
+--     value is no listed fs_slug is moved where a later read of RomM's
+--     platform listing places it, and stays where it places it nowhere
+--     (services/platform_refiling.py).
 --
 -- Transaction-safe DDL only — the runner (adapters/sqlite_migrations.py) wraps
 -- BEGIN/COMMIT and stamps PRAGMA user_version = 45.

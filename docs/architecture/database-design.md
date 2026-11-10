@@ -803,10 +803,8 @@ chosen before the migration. How each is read is [Game page artwork](steam-non-s
 `platform_slug`, a folder name read out of a file's path — the segment after `bios/`, or the path's first segment
 otherwise — and a firmware file's platform is now the one RomM states for it (`platform_id`). With the table empty, the
 first listing read after the upgrade asks the server, where a cache row would have answered for up to the cache's hour,
-and after that whenever the server could not be read. The first read that reaches the server also moves
-`downloaded_bios` rows and per-platform emulator overrides filed under a folder name to their platform
-(`services/platform_refiling.py`, [Backend Architecture](backend-architecture.md)); until then those rows stay where
-they are, and a platform's delete does not reach them.
+and after that whenever the server could not be read. What becomes of a `downloaded_bios` row filed under a folder name
+is 045's, below.
 
 `035_add_artwork_slot_handovers.sql` (`user_version = 35`) creates `artwork_slot_handovers` — one row per ROM and slot,
 for the wide grid, the logo, the hero and the cover (the icon is judged by its path), with the SteamGridDB image id and
@@ -897,10 +895,11 @@ renamed.
 `platform_folder` and keeps every value ([#2797](https://github.com/danielcopper/romm-tender/issues/2797);
 [#2452](https://github.com/danielcopper/romm-tender/issues/2452) D6): a record is read as filed under the `fs_slug` it
 holds, and the composite key follows the rename. A record whose value is no listed `fs_slug` — a slug, as records were
-kept before, or a server folder name — is moved at the next read of RomM's platform listing
+kept before, or a server folder name — is moved by the next read of RomM's platform listing that keeps or uses it
 (`services/platform_refiling.py`): to the platform of the library file its `firmware_id` names, while that file still
 carries its name, else to the one listed `fs_slug` with that slug. Where several share the slug it stays where it is,
-and each of their platform pages offers it for deletion.
+and each of their platform pages offers it for deletion; one that nothing places, such as a folder name no file of the
+library names, stays where it is and no page offers it.
 
 ## The runtime Unit of Work
 

@@ -92,7 +92,7 @@ class RomRepository(Protocol):
     def iter_by_platform_folder(self, platform_folder: str) -> Iterator[Rom]:
         """Iterate ROMs whose platform's ``fs_slug`` is *platform_folder*; a row with none recorded is never one.
 
-        (library/fetcher.py, library/local_library_reader.py)
+        (library/fetcher.py, library/local_library_reader.py, saves/service.py, shortcut_removal.py)
         """
         ...
 
@@ -389,15 +389,15 @@ class BiosFileRepository(Protocol):
     """
 
     def get(self, platform_folder: str, file_name: str) -> BiosFile | None:
-        """Return the BIOS record for the composite key, or ``None``. (no consumer today)"""
+        """Return the BIOS record for the composite key, or ``None``. (platform_refiling.py)"""
         ...
 
     def save(self, bios_file: BiosFile) -> None:
-        """Upsert *bios_file*. (firmware/downloads.py, the only writer of a download record)"""
+        """Upsert *bios_file*. (migration/service.py, platform_refiling.py)"""
         ...
 
     def delete(self, platform_folder: str, file_name: str) -> None:
-        """Remove the BIOS record for the composite key. Idempotent. (firmware/deletion.py prune)"""
+        """Remove the BIOS record for the composite key. Idempotent. (firmware/deletion.py, platform_refiling.py)"""
         ...
 
     def iter_all(self) -> Iterator[BiosFile]:
