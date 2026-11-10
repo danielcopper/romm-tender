@@ -5039,6 +5039,8 @@ class TestDeletePlatformBios:
         assert firmware.uow.bios_files.get("gc", "IPL.bin") is None
         assert shipped in store.files
 
+
+class TestCheckPlatformBiosRequired:
     @pytest.mark.asyncio
     async def test_required_counts(self, fw, tmp_path):
         """check_platform_bios includes required_count/required_downloaded."""
