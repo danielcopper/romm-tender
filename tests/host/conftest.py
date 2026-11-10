@@ -155,6 +155,13 @@ async def close_listener(server: asyncio.Server) -> None:
     await server.wait_closed()
 
 
+async def wait_until(predicate, *, timeout: float = 5.0) -> None:
+    """Wait for *predicate*, or fail the test saying it never came true."""
+    async with asyncio.timeout(timeout):
+        while not predicate():
+            await asyncio.sleep(0.01)
+
+
 @contextlib.asynccontextmanager
 async def nothing_left_for_the_collector() -> AsyncGenerator[None]:
     """Fail the test if what its body leaves behind reaches the collector as an unraisable or a warning.

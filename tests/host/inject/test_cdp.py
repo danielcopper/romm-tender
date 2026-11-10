@@ -21,7 +21,7 @@ from host.inject.cdp import (
     split_ws_url,
     unnamed_targets,
 )
-from tests.host.conftest import free_port
+from tests.host.conftest import free_port, wait_until
 from tests.host.inject.fake_debugger import FakeDebugger, FakeTarget, never_answer, refuse
 
 LOGGER = logging.getLogger("test_cdp")
@@ -382,9 +382,7 @@ class TestTheSizeCap:
         try:
             with pytest.raises(CdpConnectionLost):
                 await ask(connection, "Page.enable")
-            async with asyncio.timeout(HANG_UP_BOUND_SECONDS):
-                while debugger.connections:
-                    await asyncio.sleep(0.01)
+            await wait_until(lambda: not debugger.connections, timeout=HANG_UP_BOUND_SECONDS)
         finally:
             await connection.close()
 
