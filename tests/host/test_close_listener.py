@@ -13,12 +13,12 @@ from tests.host.conftest import close_at_once, close_listener
 
 class TestCloseListener:
     async def test_a_connection_accepted_as_it_closes_leaves_nothing_for_the_collector(self, monkeypatch):
-        """Rests on the scheduling order ``HostServer.stop()`` states at its yield, which ``close_listener`` shares.
+        """Rests on the scheduling order :func:`host.server.stop_accepting` states, which ``close_listener`` calls.
 
         One yield after the connect, and no other count, queues the accept for the
         turn the close begins in; one after the close lets an abandoned accept task
         let go of its transport, so the collector reaches it here. The half-made
-        transport that ``stop()``'s comment describes fails either assertion.
+        transport that ``stop_accepting`` describes fails either assertion.
         """
         # What an earlier test left for the collector goes now, outside the recording.
         gc.collect()

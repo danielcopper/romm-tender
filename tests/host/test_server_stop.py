@@ -47,7 +47,7 @@ class TestStop:
     async def test_a_connection_accepted_in_the_tick_before_the_stop_is_closed_rather_than_abandoned(
         self, tmp_path, monkeypatch
     ):
-        """Rests on the scheduling order ``HostServer.stop()`` states at its yield.
+        """Rests on the scheduling order :func:`host.server.stop_accepting` states, which ``stop()`` calls.
 
         Two yields after the connect land the accept in the tick before the stop,
         and one after it lets an abandoned accept task let go of its transport, so
@@ -76,7 +76,7 @@ class TestStop:
         """Rests on the same scheduling order, with one yield before the stop rather than two.
 
         That queues the accept for the turn the stop begins in, and the half-made
-        transport that ``stop()``'s comment describes fails either assertion.
+        transport that ``stop_accepting`` describes fails either assertion.
         """
         # What an earlier test left for the collector goes now, outside the recording.
         gc.collect()

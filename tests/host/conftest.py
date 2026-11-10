@@ -24,7 +24,7 @@ import pytest
 from host.dispatch import CallDispatcher
 from host.events import EventSink
 from host.route import route
-from host.server import HostServer
+from host.server import HostServer, stop_accepting
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -140,15 +140,12 @@ def close_at_once(_reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -
 async def close_listener(server: asyncio.Server) -> None:
     """Close a server something may still be connecting to, and every connection it holds.
 
-    The same order as :meth:`host.server.HostServer.stop`, for the reasons stated there.
+    The same order as :meth:`host.server.HostServer.stop`.
     Below 3.13 ``asyncio.Server`` has no ``close_clients()``, so a listener closed here
     holds no connection by then: its handler is :func:`close_at_once`, or it closes
     its own connections first, as ``FakeDebugger.stop`` does.
     """
-    loop = asyncio.get_running_loop()
-    for listening in server.sockets:
-        loop.remove_reader(listening.fileno())
-    await asyncio.sleep(0)
+    await stop_accepting(server)
     server.close()
     if sys.version_info >= (3, 13):
         server.close_clients()
