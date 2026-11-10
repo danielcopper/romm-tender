@@ -2971,3 +2971,27 @@ class TestRegistryPlatformsBySlug:
         platforms = library.sync.get_registry_platforms()["platforms"]
 
         assert [(p["name"], p["slug"], p["count"]) for p in platforms] == [("GameCube (gc-a)", "ngc", 2)]
+
+    @pytest.mark.asyncio
+    async def test_the_fs_slug_that_is_the_slug_names_the_entry(self, library):
+        from domain.rom import Rom
+
+        uow = library.uow
+        for rom_id, fs_slug in ((10, "gamecube"), (20, "ngc")):
+            with uow:
+                uow.roms.save(
+                    Rom(
+                        rom_id=rom_id,
+                        platform_slug="ngc",
+                        platform_fs_slug=fs_slug,
+                        name=f"G{rom_id}",
+                        fs_name=f"g{rom_id}.iso",
+                        shortcut_app_id=1000 + rom_id,
+                        last_synced_at="2025-01-01T00:00:00",
+                    )
+                )
+        _seed_platform_names(uow, {"gamecube": "Nintendo GameCube (gamecube)", "ngc": "Nintendo GameCube"})
+
+        platforms = library.sync.get_registry_platforms()["platforms"]
+
+        assert [(p["name"], p["slug"], p["count"]) for p in platforms] == [("Nintendo GameCube", "ngc", 2)]

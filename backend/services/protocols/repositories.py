@@ -538,8 +538,8 @@ class SyncRunRepository(Protocol):
 class PlatformSyncStateRepository(Protocol):
     """Persistence seam for the ``PlatformSyncState`` aggregate (per-platform completion stamp).
 
-    Identity is the ``platform_folder``, the platform's ``fs_slug``
-    (``fs_slug``). Backs the incremental-skip gate's honoring of durable
+    Identity is the ``platform_folder``, the platform's ``fs_slug``.
+    Backs the incremental-skip gate's honoring of durable
     per-platform progress a cancelled/crashed run leaves behind (ADR-0023).
     """
 

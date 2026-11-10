@@ -10,8 +10,8 @@ from zero. This stamp is the per-platform checkpoint that survives that
 cancellation: the skip compares RomM's answer with the completing fetch's
 ``fetch_started_at`` and ``rom_id_checksum`` (``domain/platform_skip.py``).
 
-Keyed by ``platform_folder``, the platform's ``fs_slug``
-(``fs_slug``), which two platforms never share. A thin record built whole and
+Keyed by ``platform_folder``, the platform's ``fs_slug``,
+which two platforms never share. A thin record built whole and
 upserted — never a partial field mutation — so it carries a single ``stamp`` constructor and no
 verb-named mutators. The contract is *a stamp may authorise a skip ⟺ the
 platform's most recent apply attempt ran to completion, and neither a local
