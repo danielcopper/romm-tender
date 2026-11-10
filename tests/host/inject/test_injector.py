@@ -22,7 +22,7 @@ from host.inject.recovery import RUNNING_APPS_EXPRESSION, ListedApp
 from host.inject.reload_limit import RELOAD_LIMIT_FILENAME, RELOAD_WINDOW_SECONDS
 from host.inject.watchdog import INJECT_FORCE, INJECT_OFF, WATCHDOG_FILENAME, CrashWatchdog, Fingerprint
 from host.protocol import ReloadOutlook
-from tests.host.conftest import close_at_once, close_listener, free_port
+from tests.host.conftest import close_at_once, close_listener, free_port, wait_until
 from tests.host.inject.fake_debugger import FakeDebugger, FakePage, FakeTarget, refuse
 
 LOGGER = logging.getLogger("test_injector")
@@ -49,13 +49,6 @@ def a_page(*, decky_is_serving: bool = False) -> FakePage:
         marker_expression=marker_present_expression(MARKER),
         ready_expression=choose_bundles(decky_is_serving=decky_is_serving).ready_when,
     )
-
-
-async def wait_until(predicate, *, timeout: float = 5.0) -> None:
-    """Wait for *predicate*, or fail the test saying it never came true."""
-    async with asyncio.timeout(timeout):
-        while not predicate():
-            await asyncio.sleep(0.01)
 
 
 class FakePanel:

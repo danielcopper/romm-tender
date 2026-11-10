@@ -14,9 +14,12 @@ somebody had run the bundler.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import gc
 import logging
 import socket
 import sys
+import warnings
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -24,10 +27,10 @@ import pytest
 from host.dispatch import CallDispatcher
 from host.events import EventSink
 from host.route import route
-from host.server import HostServer
+from host.server import HostServer, close_without_abandoning
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncGenerator, AsyncIterator
 
 SERVER_IDENTITY = "romm-tender/0.0.0-test"
 
@@ -140,16 +143,50 @@ def close_at_once(_reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -
 async def close_listener(server: asyncio.Server) -> None:
     """Close a server something may still be connecting to, and every connection it holds.
 
-    The same order as :meth:`host.server.HostServer.stop`, for the reasons stated there.
+    The same order as :meth:`host.server.HostServer.stop`.
     Below 3.13 ``asyncio.Server`` has no ``close_clients()``, so a listener closed here
     holds no connection by then: its handler is :func:`close_at_once`, or it closes
     its own connections first, as ``FakeDebugger.stop`` does.
     """
-    await asyncio.sleep(0)
-    server.close()
+    await close_without_abandoning(server)
     if sys.version_info >= (3, 13):
         server.close_clients()
     await server.wait_closed()
+
+
+async def wait_until(predicate, *, timeout: float = 5.0) -> None:
+    """Wait for *predicate*, or fail the test saying it never came true."""
+    async with asyncio.timeout(timeout):
+        while not predicate():
+            await asyncio.sleep(0.01)
+
+
+@contextlib.asynccontextmanager
+async def nothing_left_for_the_collector() -> AsyncGenerator[None]:
+    """Fail the test if what its body leaves behind reaches the collector as an unraisable or a warning.
+
+    After the body, one yield lets an abandoned accept task let go of its
+    transport, and the collection that follows reaches it here, so it is
+    reported under this test's name rather than at the end of the session. The
+    half-made transport :func:`host.server.close_without_abandoning` describes fails one
+    assertion or both.
+    """
+    # What an earlier test left for the collector goes now, outside the recording.
+    gc.collect()
+    unraisable: list[sys.UnraisableHookArgs] = []
+    previous_hook = sys.unraisablehook
+    sys.unraisablehook = unraisable.append
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            yield
+            await asyncio.sleep(0)
+            gc.collect()
+    finally:
+        sys.unraisablehook = previous_hook
+
+    assert [repr(entry.exc_value) for entry in unraisable] == []
+    assert [f"{entry.category.__name__}: {entry.message}" for entry in caught] == []
 
 
 async def close_all(servers: list[asyncio.Server]) -> None:
