@@ -638,9 +638,11 @@ The folder RomM keeps a platform's games and firmware in, its `fs_slug` (e.g. `g
 **platform_slug** it names one platform, so what Tender keeps per platform rather than per console is keyed by it: the
 **firmware store**'s folders and records (`platform_folder`), the folder a game's platform is in
 (`roms.platform_fs_slug`), the per-platform sync stamp (`platform_sync_state.platform_folder`), the platforms a sync run
-lists, reads and processes, and the `platform_names` cache (#2452 D1). It is never replaced by the slug where it is not
-known (#2223 D45): a game with none recorded counts as on a platform the run did not read (#2452 D5). _Avoid_: calling a
-system's ROM folder on this machine the platform folder; that folder is the resolver's answer.
+lists, reads and processes, the `platform_names` cache, the rows of the Platforms tab, the per-platform emulator pick
+(`platform_cores`) and the older BIOS download records (`downloaded_bios.platform_folder`) (#2452 D1, D6, D7). It is
+never replaced by the slug where it is not known (#2223 D45): a game with none recorded counts as on a platform the run
+did not read (#2452 D5). _Avoid_: calling a system's ROM folder on this machine the platform folder; that folder is the
+resolver's answer.
 
 ### Platform system
 

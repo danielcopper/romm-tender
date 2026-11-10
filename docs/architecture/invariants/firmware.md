@@ -227,7 +227,8 @@ groups, the emulator a set of answers is about, and when it is asked. Files, lin
   for a third resolution that diverges on some other configuration;
   `::TestDownloadRequiredFirmware::test_it_fetches_what_the_platforms_own_pick_calls_required` holds the download button
   to the same pick. The pick is `domain/emulator_commands.py::resolve_firmware_option`, through which every platform
-  BIOS site resolves — the per-platform override (`settings.json` `platform_cores`), passed through
+  BIOS site resolves — the per-platform override (`settings.json` `platform_cores`, under the platform's `fs_slug`,
+  [#2452](https://github.com/danielcopper/romm-tender/issues/2452) D7), passed through
   `domain/emulator_pick.py::pick_for`, while its label still names an entry, whatever that entry's state, else the entry
   the source ships first, whatever its state, since an emulator that cannot start still declares the firmware it would
   need ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D7, D23) — and it is the read-path precedence
@@ -301,7 +302,7 @@ groups, the emulator a set of answers is about, and when it is asked. Files, lin
   answers `get_firmware_status` (whether RomM's firmware listing could be read, and nothing about any platform) and
   `get_platform_firmware_status` (one platform's whole entry, for every platform it is asked about, which pays a live
   per-system reading — measured in [qam-panel.md, "Library"](../qam-panel.md#library)); `usePlatformsPage` owns the
-  walk, the per-slug ordering counter and the three-valued `firmwareState`; `PlatformsTab` draws the dot;
+  walk, the per-platform ordering counter and the three-valued `firmwareState`; `PlatformsTab` draws the dot;
   `PlatformDetail` words the pane. Every failure here is silent and looks like an answer. A platform-bearing field
   creeping back onto the overview payload gets rendered over a platform nobody has asked about yet. A fifth rendering
   path reading `firmware === null` instead of the state says "nothing could be established" about most of the list for
