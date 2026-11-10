@@ -281,7 +281,7 @@ class HostServer:
 
         ``asyncio.Server.close_clients()`` is new in 3.13. Without it this server
         reaches only the sockets its handler has begun to serve, and one
-        accepted in the tick before the stop is attached to the listener before
+        accepted in the turn before the stop is attached to the listener before
         its handler runs — so that handler closes its socket on arrival.
         """
         self._closing_clients_by_hand = True

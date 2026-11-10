@@ -34,7 +34,7 @@ class TestStop:
         await server.start()
         client = socket.create_connection(("127.0.0.1", server.port))
         try:
-            # Many loop iterations, where the accept takes two: the connection is
+            # Many loop turns, where the accept takes two: the connection is
             # attached and its handler is waiting for a request head.
             await asyncio.sleep(0.1)
             await asyncio.wait_for(server.stop(), STOP_BOUND_SECONDS)
@@ -44,7 +44,7 @@ class TestStop:
     async def test_a_connection_accepted_in_the_tick_before_the_stop_is_closed_rather_than_abandoned(self, tmp_path):
         """Rests on the scheduling order :func:`host.server.stop_accepting` states, which ``stop()`` calls.
 
-        Two yields after the connect land the accept in the tick before the stop.
+        Two yields after the connect land the accept in the turn before the stop.
         """
         server = _server(str(tmp_path))
         await server.start()
