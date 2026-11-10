@@ -150,6 +150,16 @@ export interface FrozenGroups {
  */
 export type CoreAnswer = SystemCoreInfo | null | undefined;
 
+/** A core read that did not answer: the endpoint's refusal, where it gave one, else `null`. */
+interface CoreReadFailed {
+  refusal: string | null;
+}
+
+/** The core read's answer as the detail takes it: a failed read, refused or not, is `null`. */
+function coreInfoOf(answer: SystemCoreInfo | CoreReadFailed | undefined): CoreAnswer {
+  return answer !== undefined && "refusal" in answer ? null : answer;
+}
+
 /**
  * How many save files a platform holds. `undefined` is "not read yet" and
  * `null` is "the read failed" — the same three-way answer the core read gives,
@@ -249,8 +259,7 @@ export function usePlatformsPage(): PlatformsPageState {
   const [shortcutCounts, setShortcutCounts] = useState<Record<string, { bound: number; reachable: number }>>({});
   const [shortcutCountsFailed, setShortcutCountsFailed] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
-  const [cores, setCores] = useState<Record<string, SystemCoreInfo | null>>({});
-  const [coreRefusals, setCoreRefusals] = useState<Record<string, string>>({});
+  const [cores, setCores] = useState<Record<string, SystemCoreInfo | CoreReadFailed>>({});
   const [saveCounts, setSaveCounts] = useState<Record<string, number | null>>({});
   const [status, setStatus] = useState<DetailStatus | null>(null);
   const [listStatus, setListStatus] = useState<string | null>(null);
@@ -290,8 +299,8 @@ export function usePlatformsPage(): PlatformsPageState {
   // Each listed platform's slug and folder, by its folder, for the reads the page
   // issues by folder alone — the walk, a selection, the links of the pane shown.
   // A ref, filled with the list in the same answer the groups come from, so a
-  // folder missing from it is a defect: it is logged and that folder skipped,
-  // never asked about with "".
+  // folder missing from it is a defect: it is logged, nothing is asked about it
+  // with "", and its reads are marked failed rather than left pending.
   const listed = useRef<Map<string, PlatformKey>>(new Map());
   const platformOf = useCallback((folder: string): PlatformKey | null => {
     const platform = listed.current.get(folder);
@@ -410,8 +419,12 @@ export function usePlatformsPage(): PlatformsPageState {
     const walk = async () => {
       for (let folder = next(); folder !== null && walking && alive.current; folder = next()) {
         const platform = platformOf(folder);
-        if (platform === null) asked.current.add(folder);
-        else await readPlatform(platform);
+        if (platform !== null) {
+          await readPlatform(platform);
+          continue;
+        }
+        asked.current.add(folder);
+        setReadFailed((prev) => ({ ...prev, [folder]: true }));
       }
     };
     detach(walk());
@@ -428,16 +441,20 @@ export function usePlatformsPage(): PlatformsPageState {
       .then((info) => {
         if (isEndpointFailure(info)) {
           logWarn(`The core read for ${folder} was refused: ${info.message}`);
-          setCoreRefusals((prev) => ({ ...prev, [folder]: info.message }));
-          setCores((prev) => ({ ...prev, [folder]: null }));
+          setCores((prev) => ({ ...prev, [folder]: { refusal: info.message } }));
           return;
         }
         setCores((prev) => ({ ...prev, [folder]: info }));
       })
       .catch((e) => {
         logWarn(`Failed to read the core for ${folder}: ${e}`);
-        setCores((prev) => ({ ...prev, [folder]: null }));
+        setCores((prev) => ({ ...prev, [folder]: { refusal: null } }));
       });
+  }, []);
+
+  /** A folder no listed platform has: its core read is failed on the spot, as nothing can be asked. */
+  const coreUnasked = useCallback((folder: string) => {
+    setCores((prev) => ({ ...prev, [folder]: { refusal: null } }));
   }, []);
 
   const loadSaveCount = useCallback((folder: string) => {
@@ -480,12 +497,6 @@ export function usePlatformsPage(): PlatformsPageState {
   const reloadCore = useCallback(
     (platform: PlatformKey) => {
       coreRequested.current.delete(platform.folder);
-      setCoreRefusals((prev) => {
-        if (!(platform.folder in prev)) return prev;
-        const next = { ...prev };
-        delete next[platform.folder];
-        return next;
-      });
       setCores((prev) => {
         const next = { ...prev };
         delete next[platform.folder];
@@ -513,8 +524,12 @@ export function usePlatformsPage(): PlatformsPageState {
         setSelectedFolder(first);
         if (first) {
           const platform = platformOf(first);
-          if (platform !== null) loadCore(platform);
-          loadSaveCount(first);
+          if (platform === null) {
+            coreUnasked(first);
+          } else {
+            loadCore(platform);
+            loadSaveCount(first);
+          }
         }
       })
       .catch(() => setFailed(true))
@@ -529,7 +544,7 @@ export function usePlatformsPage(): PlatformsPageState {
     return () => {
       detach(releasePruneLeasesByOwner(LEASE_OWNER));
     };
-  }, [loadCore, loadSaveCount, platformOf, readOverview, refreshShortcutCounts, syncWrites]);
+  }, [coreUnasked, loadCore, loadSaveCount, platformOf, readOverview, refreshShortcutCounts, syncWrites]);
 
   const rows = new Map<string, PlatformRow>(
     platforms.map((p) => [
@@ -553,20 +568,29 @@ export function usePlatformsPage(): PlatformsPageState {
   const select = useCallback(
     (folder: string) => {
       setSelectedFolder(folder);
-      loadSaveCount(folder);
       const platform = platformOf(folder);
-      if (platform === null) return;
+      if (platform === null) {
+        coreUnasked(folder);
+        return;
+      }
+      loadSaveCount(folder);
       loadCore(platform);
       // A read that did not come back is retried by picking the platform again
       // — the same recovery the save count offers, and the only one there is:
       // the walk asks each platform once, so nothing else would ever ask again.
       if (readFailed[folder]) detach(readPlatform(platform));
     },
-    [loadCore, loadSaveCount, platformOf, readFailed, readPlatform],
+    [coreUnasked, loadCore, loadSaveCount, platformOf, readFailed, readPlatform],
   );
 
-  const coreFor = useCallback((folder: string): CoreAnswer => cores[folder], [cores]);
-  const coreRefusalFor = useCallback((folder: string): string | undefined => coreRefusals[folder], [coreRefusals]);
+  const coreFor = useCallback((folder: string): CoreAnswer => coreInfoOf(cores[folder]), [cores]);
+  const coreRefusalFor = useCallback(
+    (folder: string): string | undefined => {
+      const answer = cores[folder];
+      return answer !== undefined && "refusal" in answer ? (answer.refusal ?? undefined) : undefined;
+    },
+    [cores],
+  );
   const saveCountFor = useCallback((folder: string): SaveCountAnswer => saveCounts[folder], [saveCounts]);
 
   const listLine = useCallback(() => {
@@ -690,7 +714,7 @@ export function usePlatformsPage(): PlatformsPageState {
   const changeCore = useCallback(
     (platform: PlatformKey, pickedLabel: string) => {
       const { slug, folder } = platform;
-      const answer = cores[folder];
+      const answer = coreInfoOf(cores[folder]);
       // Picking the default-marked emulator clears the per-platform override
       // (empty label → follow the default); any other pins it.
       const defaultLabel = answer?.emulators.find((e) => e.is_default)?.label;

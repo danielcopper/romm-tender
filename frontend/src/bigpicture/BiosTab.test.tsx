@@ -2072,6 +2072,44 @@ describe("BiosTab", () => {
       expect(backend.downloadPlatformFirmwareFile).toHaveBeenCalledWith("psx", "ps", "scph5501.bin", null, 42);
     });
 
+    const renderPsxInPs = () =>
+      render(
+        <BiosTabWithState
+          biosStatus={psx()}
+          biosLevel="missing"
+          coreInfo={coreInfo}
+          platformName="PlayStation"
+          platformSlug="psx"
+          platformFolder="ps"
+          romId={42}
+        />,
+      );
+
+    it("downloads the required files by the folder RomM keeps the game's platform in, beside its slug", async () => {
+      vi.mocked(backend.downloadRequiredFirmware).mockResolvedValue({ success: true, message: "", downloaded: 1 });
+      const { container } = renderPsxInPs();
+      await act(async () => {
+        fireEvent.click(button(container, "Download required for DuckStation (1)") as HTMLElement);
+      });
+      expect(backend.downloadRequiredFirmware).toHaveBeenCalledWith("psx", "ps", "duckstation", 42);
+    });
+
+    it("replaces a file by the folder RomM keeps the game's platform in, beside its slug", async () => {
+      vi.mocked(showModal).mockClear();
+      vi.mocked(backend.replaceBiosFile).mockResolvedValue({
+        success: true,
+        placed: 1,
+        left_in_place: 0,
+        removed: 0,
+        link_failures: [],
+        backup_path: "/data/backups/bios/x/scph5500.bin",
+      });
+      const { container } = renderPsxInPs();
+      fireEvent.click(button(container, "Replace…") as HTMLElement);
+      await confirm();
+      expect(backend.replaceBiosFile).toHaveBeenCalledWith("psx", "ps", "/bios/scph5500.bin", 42);
+    });
+
     it("sends the game's ROM id with a row's Download and with Replace…", async () => {
       vi.mocked(showModal).mockClear();
       vi.mocked(backend.downloadPlatformFirmwareFile).mockResolvedValue({ success: true, message: "", downloaded: 1 });

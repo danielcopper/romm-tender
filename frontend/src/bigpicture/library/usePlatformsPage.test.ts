@@ -34,6 +34,9 @@ describe("usePlatformsPage › a folder the listing does not hold", () => {
 
     expect(logError).toHaveBeenCalledWith(expect.stringContaining("ghost"));
     expect(vi.mocked(backend.getSystemCoreInfo)).not.toHaveBeenCalled();
+    expect(vi.mocked(backend.countPlatformSaves)).not.toHaveBeenCalledWith("ghost");
     expect(result.current.selectedFolder).toBe("ghost");
+    // Failed on the spot rather than left "not read yet", which the pane shows as a read still under way.
+    expect(result.current.coreFor("ghost")).toBeNull();
   });
 });

@@ -864,7 +864,6 @@ function attachListeners(appId: number, entry: Entry): () => void {
               await handleSaveSyncSettingsChange(appId, entry, detail);
               break;
             case "core_changed":
-              // The panel's filter (`handleCoreChange` in `bigpicture/panelEvents.ts`).
               if (coreChangeIsFor(detail, entry.state.platformFolder)) await handleCoreChange(entry);
               break;
             case "emulator_sources":

@@ -6348,6 +6348,7 @@ describe("Library › Platforms › two platforms sharing a slug", () => {
     await focusRow(container, "Super Nintendo (snes-hacks)");
     expect(container.textContent).toContain("snes-hacks_bios.bin");
     expect(container.textContent).not.toContain("snes_bios.bin");
+    expect(vi.mocked(backend.updateBiosLinks)).toHaveBeenCalledWith("snes", "snes-hacks", null);
   });
 
   /** Every row's BIOS answer, with one file of its own on disk that Tender can delete. */
