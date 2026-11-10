@@ -110,6 +110,7 @@ describe("which game pages a platform's change reaches", () => {
   });
 
   it("leaves the core of a page of a game RomM gives no folder on a change announced for a platform", async () => {
+    // #2452 D20: also where that platform is the one kept for the game's slug.
     const page = pageOn("snes", "");
 
     await dataChanged({ type: "core_changed", platform_fs_slug: "snes" });

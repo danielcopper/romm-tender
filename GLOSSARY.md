@@ -642,11 +642,11 @@ lists, reads and processes, the `platform_names` cache, the rows of the Platform
 (`platform_cores`) and the older BIOS download records (`downloaded_bios.platform_folder`) (#2452 D1, D6, D7). A row's
 sync switch is not among them yet: `enabled_platforms` holds RomM's platform ids until #2798. It is never replaced by
 the slug where it is not known (#2223 D45): a game with none recorded counts as on a platform the run did not read
-(#2452 D5), and its per-platform pick is read, in turn, under its slug and from the one platform kept for that slug
-(#2452 D15). One older download record is an exception too: kept under a slug that is no listed platform's own folder,
-it stays there while nothing places it — several platforms share the slug, or its place records another file of that
-name — and each page of that slug offers it (#2452 D6). _Avoid_: calling a system's ROM folder on this machine the
-platform folder; that folder is the resolver's answer.
+(#2452 D5). Such a game's per-platform pick is the exception: it is read, in turn, under its slug and from the one
+platform kept for that slug (#2452 D15). One older download record is an exception too: kept under a slug that is no
+listed platform's own folder, it stays there while nothing places it — several platforms share the slug, or its place
+records another file of that name — and each page of that slug offers it (#2452 D6). _Avoid_: calling a system's ROM
+folder on this machine the platform folder; that folder is the resolver's answer.
 
 ### Platform system
 

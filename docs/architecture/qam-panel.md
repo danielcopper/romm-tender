@@ -1638,7 +1638,9 @@ it, for the focused platform:
   committed or never ran and there is no pane left to report to either way. The pick is the row's own: it is stored
   under the platform's `fs_slug`, so of two platforms that share a slug, a pick on one leaves the other's choice as it
   is, and the `core_changed` event it sends reaches only the game pages of that platform
-  ([#2452](https://github.com/danielcopper/romm-tender/issues/2452) D7, D16).
+  ([#2452](https://github.com/danielcopper/romm-tender/issues/2452) D7, D16). An open page of a game with no `fs_slug`
+  recorded is not read again when the pick of the one platform kept for its slug changes: it shows that pick once it is
+  reopened, and its next start uses it either way (D20).
 
 - **BIOS files** — the summary, which this pane words nowhere: `frontend/src/utils/biosSummary.ts` holds every state and
   a one-of group's, and answers each in two lengths, and the pane takes both — the short `status` as the section's

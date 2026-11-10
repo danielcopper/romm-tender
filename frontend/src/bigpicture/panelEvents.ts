@@ -197,7 +197,7 @@ export async function rereadBiosAnswer(ctx: PanelEventContext): Promise<void> {
 
 /** Only the pages of the platform whose emulator choice changed read again — and
  *  a change for no platform reaches only the pages of games with none recorded
- *  (`coreChangeIsFor`, #2452 D16). */
+ *  (`coreChangeIsFor`, #2452 D16, D20). */
 async function handleCoreChange(
   ctx: PanelEventContext,
   detail: Extract<RommDataChangedDetail, { type: "core_changed" }>,
