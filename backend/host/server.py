@@ -121,8 +121,8 @@ async def close_without_abandoning(server: asyncio.Server) -> None:
     (python/cpython#109564, fixed by python/cpython#160851). Removing the reader
     cancels every accept not yet begun, one already queued for this turn
     included; the yield lets a transport already being built attach, so the
-    close reaches it. Closing the clients and waiting for the close are left to
-    the caller.
+    caller's closing of the clients reaches it. Closing the clients and waiting
+    for the close are left to the caller.
     """
     loop = asyncio.get_running_loop()
     for listening in server.sockets:
