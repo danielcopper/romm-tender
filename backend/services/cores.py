@@ -7,7 +7,7 @@ by slug, or for a ROM with its per-game pin layered on top — toggling the
 per-platform default and pinning/clearing a per-game core all live here.
 
 Neither selection is written to the retired ES-DE gamelist: the per-platform core
-lands in ``settings.json`` via the injected ``SettingsPersister`` and the per-game
+lands in ``settings.json`` through the injected picks writer and the per-game
 pin lands on the ``Rom`` aggregate via the Unit-of-Work. Neither touches a Steam
 shortcut: the shortcut carries its appId, and the start asks the shared
 ``ActiveCoreReader`` for the entry in effect, so a changed selection takes effect
@@ -43,7 +43,7 @@ from lib.errors import Refused
 if TYPE_CHECKING:
     import asyncio
     import logging
-    from contextlib import AbstractContextManager
+    from collections.abc import Mapping
 
     from domain.emulator_choice import ResolvedEmulator
     from domain.platform_system import PlatformSystem
@@ -56,8 +56,8 @@ if TYPE_CHECKING:
         CoreInfoProvider,
         DiscResolver,
         PlatformCoreReader,
+        PlatformPicksWriter,
         PlatformSystems,
-        SettingsPersister,
         StartCommandReader,
         UnitOfWorkFactory,
     )
@@ -69,13 +69,11 @@ class CoreServiceConfig:
 
     Carries the runtime infrastructure (event loop, logger), the ES-DE
     core-info read seam, the platform's system in the answering source and the
-    folders Tender keeps for a slug, the live
-    ``settings`` dict + its persister (where the per-platform core lands), the
-    reader of the stored per-platform picks, the lock every writer of those
-    picks holds while it changes and saves them, the
-    SQLite Unit-of-Work factory (to read the ROM + its install and the platform
-    names, and write the per-game pin), the shared per-ROM active-core resolver (the menu's active
-    marker), the shared per-ROM disc resolver (so a question about the start is
+    folders Tender keeps for a slug, the writer of the per-platform picks
+    (where the per-platform core lands) and their reader, the SQLite
+    Unit-of-Work factory (to read the ROM + its install and the platform
+    names, and write the per-game pin), the shared per-ROM active-core
+    resolver (the menu's active marker), the shared per-ROM disc resolver (so a question about the start is
     asked with the ROM's pinned disc), the resolver's launch command for one
     game (what the game page and the emulator menu say of a start, #2221 D20),
     and the ``ConflictRules`` the three writes check at their entry.
@@ -86,10 +84,8 @@ class CoreServiceConfig:
     logger: logging.Logger
     core_info: CoreInfoProvider
     platform_systems: PlatformSystems
-    settings: dict[str, Any]
-    settings_persister: SettingsPersister
+    platform_picks: PlatformPicksWriter
     platform_core_reader: PlatformCoreReader
-    picks_lock: AbstractContextManager[object]
     uow_factory: UnitOfWorkFactory
     active_core: ActiveCoreReader
     disc_resolver: DiscResolver
@@ -110,10 +106,8 @@ class CoreService:
         self._logger = config.logger
         self._core_info = config.core_info
         self._platform_systems = config.platform_systems
-        self._settings = config.settings
-        self._settings_persister = config.settings_persister
+        self._platform_picks = config.platform_picks
         self._platform_core_reader = config.platform_core_reader
-        self._picks_lock = config.picks_lock
         self._uow_factory = config.uow_factory
         self._active_core = config.active_core
         self._disc_resolver = config.disc_resolver
@@ -449,10 +443,10 @@ class CoreService:
         self._store_platform_pick(platform_slug, platform_folder, core_label)
 
     def _store_platform_pick(self, platform_slug: str, platform_folder: str, core_label: str) -> None:
-        """Store *core_label* as the platform's pick, or drop the pick when blank, and persist it.
+        """Store *core_label* as the platform's pick, or drop the pick when blank, through the picks writer.
 
-        Why the picks are replaced whole, under the lock their writers share:
-        ``docs/architecture/core-emulator-selection.md``, "Per-platform".
+        A ``settings.json`` that cannot be written refuses with ``save_failed``;
+        the writer has already put the previous picks back.
         """
         value = None
         if core_label:
@@ -460,21 +454,16 @@ class CoreService:
             if source is None:
                 raise Refused("core_unavailable", f"No emulator source answers for {platform_slug}")
             value = platform_pick_value(core_label, source)
-        with self._picks_lock:
-            previous = self._settings["platform_cores"]
-            changed = {key: pick for key, pick in previous.items() if key != platform_folder}
-            if value is not None:
-                changed[platform_folder] = value
-            self._settings["platform_cores"] = changed
-            try:
-                self._settings_persister.save_settings()
-            except OSError as e:
-                self._settings["platform_cores"] = previous
-                self._logger.error(f"Failed to set system core: {e}")
-                raise Refused("save_failed", f"Save failed: {e}") from e
-            except BaseException:
-                self._settings["platform_cores"] = previous
-                raise
+
+        def changed(picks: Mapping[str, Any]) -> dict[str, Any]:
+            kept = {key: pick for key, pick in picks.items() if key != platform_folder}
+            return kept if value is None else {**kept, platform_folder: value}
+
+        try:
+            self._platform_picks.replace(changed)
+        except OSError as e:
+            self._logger.error(f"Failed to set the system core of {platform_folder}: {e}")
+            raise Refused("save_failed", f"Save failed: {e}") from e
 
     async def set_system_core(self, platform_slug: str, platform_folder: str, core_label: str) -> dict[str, Any]:
         """Set or clear the per-platform core selection for a platform.

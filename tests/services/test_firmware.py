@@ -63,6 +63,7 @@ from services.firmware.emulator_answers import EmulatorAnswer, emulator_fields
 from services.firmware.status import FirmwareStatusReader
 from services.firmware.store import FetchOutcome, FirmwareStore, FirmwareStoreConfig
 from services.game_detail import GameDetailService, GameDetailServiceConfig
+from services.platform_picks import PlatformPicks, PlatformPicksConfig
 
 
 def _make_clock() -> FakeClock:
@@ -3881,10 +3882,12 @@ def _rom_scoped_surfaces(
             logger=logger,
             core_info=core_info,
             platform_systems=platform_systems,
-            settings=(live := {}),
-            settings_persister=FakeSettingsPersister(),
+            platform_picks=PlatformPicks(
+                config=PlatformPicksConfig(
+                    settings=(live := {}), settings_persister=FakeSettingsPersister(), lock=threading.Lock()
+                )
+            ),
             platform_core_reader=PlatformCoreReaderAdapter(live),
-            picks_lock=threading.Lock(),
             uow_factory=uow_factory,
             active_core=active_core,
             disc_resolver=FakeDiscResolver(),

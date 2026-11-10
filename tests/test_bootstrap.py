@@ -98,7 +98,6 @@ from services.version_switch import VersionSwitchService
 
 if TYPE_CHECKING:
     from lib.conflict_rules import ConflictRuleSet
-    from services.platform_picks import PlatformPicks
     from services.platform_refiling import PlatformRefiling
     from services.platform_systems import PlatformSystemService
 
@@ -319,7 +318,7 @@ class TestTheCacheRootAndTheDataRootStayApart:
         finally:
             loop.close()
 
-    def test_the_refiling_and_the_core_service_hold_one_picks_lock_and_the_refiling_keeps_through_the_platform_system(
+    def test_both_pick_writers_share_one_picks_writer_and_the_refiling_keeps_through_the_platform_system(
         self, tmp_path
     ):
         """Both write the per-platform picks from threads of their own; one lock keeps them apart (#2452 D7)."""
@@ -353,8 +352,7 @@ class TestTheCacheRootAndTheDataRootStayApart:
         try:
             platform_systems = cast("PlatformSystemService", services.core_service._platform_systems)
             refiling = cast("PlatformRefiling", platform_systems._refiling)
-            picks = cast("PlatformPicks", refiling._platform_picks)
-            assert services.core_service._picks_lock is picks._lock
+            assert services.core_service._platform_picks is refiling._platform_picks
             assert refiling._listing_keeper() is platform_systems
         finally:
             loop.close()

@@ -7,7 +7,7 @@ import dataclasses
 import json
 import logging
 import threading
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 import pytest
 from _factories import (
@@ -49,6 +49,7 @@ from domain.start_command import (
 )
 from lib.errors import Refused
 from services.cores import CoreService, CoreServiceConfig
+from services.platform_picks import PlatformPicks, PlatformPicksConfig
 
 
 def _seed_rom(
@@ -191,10 +192,12 @@ def service(
             logger=logger,
             core_info=core_info,
             platform_systems=platform_systems,
-            settings=settings,
-            settings_persister=settings_persister,
+            platform_picks=PlatformPicks(
+                config=PlatformPicksConfig(
+                    settings=settings, settings_persister=settings_persister, lock=threading.Lock()
+                )
+            ),
             platform_core_reader=PlatformCoreReaderAdapter(settings),
-            picks_lock=threading.Lock(),
             uow_factory=uow_factory,
             active_core=active_core,
             disc_resolver=disc_resolver,
@@ -920,10 +923,14 @@ def _service_over(
             logger=logging.getLogger("test_cores"),
             core_info=core_info,
             platform_systems=FakePlatformSystems(),
-            settings=(live := settings if settings is not None else {"platform_cores": {}}),
-            settings_persister=FakeSettingsPersister(),
+            platform_picks=PlatformPicks(
+                config=PlatformPicksConfig(
+                    settings=(live := settings if settings is not None else {"platform_cores": {}}),
+                    settings_persister=FakeSettingsPersister(),
+                    lock=threading.Lock(),
+                )
+            ),
             platform_core_reader=PlatformCoreReaderAdapter(live),
-            picks_lock=threading.Lock(),
             uow_factory=FakeUnitOfWorkFactory(uow=FakeUnitOfWork()),
             active_core=FakeActiveCoreResolver(),
             disc_resolver=FakeDiscResolver(),
@@ -1491,8 +1498,7 @@ class TestAPlatformsPickIsKeptByItsFolder:
 
     def test_a_pick_waits_for_a_writer_that_holds_the_picks_lock(self, service, settings):
         """The refiling and this write change the same picks from threads of their own."""
-        lock = service._picks_lock
-        with lock:
+        with cast("PlatformPicks", service._platform_picks)._lock:
             worker = threading.Thread(target=service._set_system_core_io, args=("snes", "snes-hacks", "bsnes"))
             worker.start()
             worker.join(timeout=0.2)
@@ -1513,6 +1519,16 @@ class TestAPlatformsPickIsKeptByItsFolder:
             service._set_system_core_io("snes", "snes", "bsnes")
 
         assert settings["platform_cores"] == {"snes": {"label": "Snes9x", "source": "retrodeck"}}
+
+    def test_a_failed_save_is_logged_with_the_platform_it_was_for(self, service, settings_persister, caplog):
+        def refuse() -> None:
+            raise OSError("read-only file system")
+
+        settings_persister.save_settings = refuse
+        with caplog.at_level(logging.ERROR), pytest.raises(Refused):
+            service._set_system_core_io("snes", "snes-hacks", "bsnes")
+
+        assert "Failed to set the system core of snes-hacks: read-only file system" in caplog.text
 
     def test_a_save_of_the_whole_settings_iterating_them_meanwhile_does_not_fail(self, service, settings):
         """A save on another thread may be walking the settings while a pick is stored."""

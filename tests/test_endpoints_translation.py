@@ -121,6 +121,7 @@ from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.firmware.store import FirmwareStore, FirmwareStoreConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
 from services.migration import MigrationService, MigrationServiceConfig
+from services.platform_picks import PlatformPicks, PlatformPicksConfig
 from services.playtime import PlaytimeService, PlaytimeServiceConfig
 from services.prune import PruneService, PruneServiceConfig
 from services.rom_adoption import RomAdoptionService, RomAdoptionServiceConfig
@@ -1834,10 +1835,10 @@ def _dispatcher_over_cores(settings: dict[str, Any], persister: FakeSettingsPers
             logger=LOGGER,
             core_info=FakeCoreInfoProvider(),
             platform_systems=FakePlatformSystems(),
-            settings=settings,
-            settings_persister=persister,
+            platform_picks=PlatformPicks(
+                config=PlatformPicksConfig(settings=settings, settings_persister=persister, lock=threading.Lock())
+            ),
             platform_core_reader=PlatformCoreReaderAdapter(settings),
-            picks_lock=threading.Lock(),
             uow_factory=FakeUnitOfWorkFactory(FakeUnitOfWork()),
             active_core=FakeActiveCoreResolver(),
             disc_resolver=FakeDiscResolver(),
