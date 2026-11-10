@@ -63,15 +63,15 @@ import {
 import type { CoreAnswer, DetailStatus, PlatformRow, PlatformsPageState, StatusScope } from "./usePlatformsPage";
 
 /** The page's status line as the pane primitives read it: on this page the key
- *  a line is bound to is the platform slug. The scope type travels with it, so
+ *  a line is bound to is the platform's folder. The scope type travels with it, so
  *  the literal each `GroupStatus` names is checked against the page's groups. */
 const scopedStatus = (status: DetailStatus | null): ScopedStatus<StatusScope> | null =>
-  status && { key: status.slug, scope: status.scope, text: status.text, busy: status.busy ?? false };
+  status && { key: status.folder, scope: status.scope, text: status.text, busy: status.busy ?? false };
 
-/** The remove group's line, which gives its throbber to the removal's count line while *slug*'s is shown. */
-const removeGroupStatus = (state: PlatformsPageState, slug: string): ScopedStatus<StatusScope> | null => {
+/** The remove group's line, which gives its throbber to the removal's count line while *folder*'s is shown. */
+const removeGroupStatus = (state: PlatformsPageState, folder: string): ScopedStatus<StatusScope> | null => {
   const status = scopedStatus(state.status);
-  return status && state.removalProgress?.slug === slug ? { ...status, busy: false } : status;
+  return status && state.removalProgress?.folder === folder ? { ...status, busy: false } : status;
 };
 
 /**
@@ -230,7 +230,7 @@ const CoreNotice: FC<{ row: PlatformRow; state: PlatformsPageState; offer: CoreO
     {core?.vanished_pick && <Muted>{vanishedPickSentence(core.vanished_pick)}</Muted>}
     {offer.notice !== undefined && <Muted>{offer.notice}</Muted>}
     {core && !core.default_elsewhere && <ActiveEmulatorNote core={core} />}
-    <GroupStatus status={scopedStatus(state.status)} forKey={row.slug} scope="core" />
+    <GroupStatus status={scopedStatus(state.status)} forKey={row.folder} scope="core" />
   </>
 );
 
@@ -282,10 +282,10 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   firmware,
 }) => {
   const part = useBiosFiles({
-    slug: row.slug,
+    folder: row.folder,
     platformName: row.name,
     answer: firmware,
-    busySlug: state.busySlug,
+    busyFolder: state.busyFolder,
     serverOffline: state.serverOffline,
     actions: state,
     launching: "pick",
@@ -358,7 +358,7 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
  */
 const RemoveSection: FC<{ row: PlatformRow; state: PlatformsPageState }> = ({ row, state }) => {
   const syncRunning = useSyncRunning();
-  const saveCount = state.saveCountFor(row.slug);
+  const saveCount = state.saveCountFor(row.folder);
   const confirmDeleteSaves = () =>
     showModal(
       <ConfirmModal
@@ -387,7 +387,7 @@ const RemoveSection: FC<{ row: PlatformRow; state: PlatformsPageState }> = ({ ro
       <ButtonRow padding="6px 16px 4px">
         <DialogButton
           style={FLAT_BUTTON}
-          disabled={state.busySlug !== null || syncRunning || row.shortcutCount === 0}
+          disabled={state.busyFolder !== null || syncRunning || row.shortcutCount === 0}
           onClick={confirmRemoveShortcuts}
         >
           <span style={{ color: RED }}>
@@ -401,7 +401,7 @@ const RemoveSection: FC<{ row: PlatformRow; state: PlatformsPageState }> = ({ ro
             established. A failed read is the third case and says so below. */}
         <DialogButton
           style={FLAT_BUTTON}
-          disabled={state.busySlug !== null || saveCount === undefined || saveCount === 0}
+          disabled={state.busyFolder !== null || saveCount === undefined || saveCount === 0}
           onClick={confirmDeleteSaves}
         >
           <span style={{ color: RED, display: "inline-flex", alignItems: "center", gap: "6px" }}>
@@ -426,13 +426,13 @@ const RemoveSection: FC<{ row: PlatformRow; state: PlatformsPageState }> = ({ ro
           what a sync blocks, and widening it to make a line true would be the
           tail wagging the dog. */}
       {syncRunning && <Muted>{`Removing shortcuts: ${SYNC_RUNNING_HINT}`}</Muted>}
-      <GroupStatus status={removeGroupStatus(state, row.slug)} forKey={row.slug} scope="remove" />
+      <GroupStatus status={removeGroupStatus(state, row.folder)} forKey={row.folder} scope="remove" />
     </>
   );
 };
 
 export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }> = ({ row, state }) => {
-  const core = state.coreFor(row.slug);
+  const core = state.coreFor(row.folder);
   const firmware = row.firmware;
   const offer = coreOffer(core);
   // The core clause is absent while this platform's core read is in flight, and
@@ -488,7 +488,7 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
         <DialogButton
           style={CORE_BUTTON}
           title={offer.kind === "pick" ? "Emulator Core" : offer.reason}
-          disabled={offer.kind !== "pick" || state.busySlug !== null}
+          disabled={offer.kind !== "pick" || state.busyFolder !== null}
           onClick={(e: MouseEvent) => {
             if (offer.kind !== "pick") return;
             showContextMenu(
@@ -504,7 +504,7 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
                 // Null on purpose: this pane IS the platform level, so marking
                 // an entry "(system)" would restate where the reader already is.
                 platformCoreLabel: null,
-                onPick: (label) => state.changeCore(row.slug, label),
+                onPick: (label) => state.changeCore(row.folder, label),
               }),
               getEventTarget(e),
             );
@@ -530,7 +530,7 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
         ]}
       />
       {/* The count is what failed, not the removal: taking the platform's games
-          out of Steam needs only the slug. So the line says the number is
+          out of Steam needs only the platform's folder. So the line says the number is
           missing and stops there — the buttons below stay live. */}
       {state.shortcutCountsFailed && (
         <Muted>
@@ -538,7 +538,7 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
           Reopen the page to try again.
         </Muted>
       )}
-      {state.removalProgress?.slug === row.slug && (
+      {state.removalProgress?.folder === row.folder && (
         <Muted>
           <ThrobberLabel
             busy
@@ -546,9 +546,9 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
         </Muted>
       )}
       <BusyElsewhere
-        busyKey={state.busySlug}
-        ownKey={row.slug}
-        busyName={state.rows.get(state.busySlug ?? "")?.name ?? "another platform"}
+        busyKey={state.busyFolder}
+        ownKey={row.folder}
+        busyName={state.rows.get(state.busyFolder ?? "")?.name ?? "another platform"}
       />
       <CoreNotice row={row} state={state} offer={offer} core={core} />
       {/* A failed RE-read keeps the answer it could not replace, so what is
@@ -562,7 +562,7 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
         </Muted>
       )}
       {firmware ? (
-        <BiosSection key={row.slug} row={row} state={state} firmware={firmware} />
+        <BiosSection key={row.folder} row={row} state={state} firmware={firmware} />
       ) : (
         <>
           <SectionTitle title="BIOS files" />

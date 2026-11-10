@@ -725,6 +725,41 @@ describe("gameDetailStore", () => {
         new CustomEvent("romm_data_changed", { detail: { type: "core_changed", platform_slug: "snes" } }),
       );
 
+    const dispatchCoreChangedFor = (folder: string) =>
+      globalThis.dispatchEvent(
+        new CustomEvent("romm_data_changed", { detail: { type: "core_changed", platform_fs_slug: folder } }),
+      );
+
+    it("re-reads the page of a game on the platform whose pick changed (#2452 D16)", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ platform_fs_slug: "snes-hacks" }));
+      subscribe(nextAppId);
+      await flush();
+      vi.mocked(backend.getPlatformCoreInfo).mockClear();
+
+      await act(async () => {
+        dispatchCoreChangedFor("snes-hacks");
+        await Promise.resolve();
+      });
+      await flush();
+
+      expect(vi.mocked(backend.getPlatformCoreInfo)).toHaveBeenCalledWith(42);
+    });
+
+    it("leaves the page of a game on another platform of the same slug (#2452 D16)", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ platform_fs_slug: "snes" }));
+      subscribe(nextAppId);
+      await flush();
+      vi.mocked(backend.getPlatformCoreInfo).mockClear();
+
+      await act(async () => {
+        dispatchCoreChangedFor("snes-hacks");
+        await Promise.resolve();
+      });
+      await flush();
+
+      expect(vi.mocked(backend.getPlatformCoreInfo)).not.toHaveBeenCalled();
+    });
+
     it("re-reads core info and BIOS keyed on the rom_id", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found());
       subscribe(nextAppId);

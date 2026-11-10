@@ -487,6 +487,7 @@ export async function loadData(
   cancelled: () => boolean,
   romIdRef: MutableRefObject<number | null>,
   platformSlugRef: MutableRefObject<string>,
+  platformFolderRef: MutableRefObject<string>,
   readSeqs: MutableRefObject<PanelReadSeqs>,
   setter: Dispatch<SetStateAction<PanelState>>,
   onPlatform: (platformSlug: string) => void,
@@ -509,6 +510,7 @@ export async function loadData(
 
     romIdRef.current = romId;
     platformSlugRef.current = platformSlug;
+    platformFolderRef.current = platformFolder;
     onPlatform(platformSlug);
 
     // Nothing is shown yet on a first render, so a payload carrying no BIOS

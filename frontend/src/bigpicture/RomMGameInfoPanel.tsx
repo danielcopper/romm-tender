@@ -89,6 +89,8 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
   // handler can reject events for other platforms without a stale closure
   // (mirrors romIdRef). bios events fan out to every mounted panel (#1082).
   const platformSlugRef = useRef<string>("");
+  // The folder RomM keeps that platform in, for the `core_changed` handler.
+  const platformFolderRef = useRef<string>("");
   // The same platform for the render, which the BIOS tab acts on.
   const [platformSlug, setPlatformSlug] = useState("");
   // Load-once gate for the lazy SAVES tab data; the rule it enforces is stated
@@ -115,10 +117,10 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
     const ctx = eventContext.current;
     await Promise.all([ctx === null ? undefined : rereadBiosAnswer(ctx), refreshBiosStatus(appId)]);
   }, [appId]);
-  const announceBios = useCallback((slug: string) => {
+  const announceBios = useCallback((slug: string, folder: string) => {
     const ctx = eventContext.current;
-    if (ctx === null) announceBiosChange(slug);
-    else announceOwnBiosChange(ctx, slug);
+    if (ctx === null) announceBiosChange(slug, folder);
+    else announceOwnBiosChange(ctx, slug, folder);
   }, []);
   const migration = useMigrationStatus();
   const settingsReset = useSettingsResetState();
@@ -129,13 +131,25 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
   useEffect(() => {
     let cancelled = false;
 
-    detach(loadData(appId, () => cancelled, romIdRef, platformSlugRef, readSeqs, setState, setPlatformSlug));
+    detach(
+      loadData(
+        appId,
+        () => cancelled,
+        romIdRef,
+        platformSlugRef,
+        platformFolderRef,
+        readSeqs,
+        setState,
+        setPlatformSlug,
+      ),
+    );
 
     const ctx: PanelEventContext = {
       appId,
       cancelled: () => cancelled,
       romIdRef,
       platformSlugRef,
+      platformFolderRef,
       slotsLoadedRef,
       readSeqs,
       setState,
