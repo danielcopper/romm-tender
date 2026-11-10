@@ -79,8 +79,8 @@ class RunFinalizer:
         Platform collections are grouped from the full ``roms`` table
         (every bound ROM, including ones an incremental sync skipped —
         they remain rows), keyed by the platform's display name
-        resolved by its folder from *platform_names*, falling back to the
-        folder when absent; a row with no folder recorded is filed under none.
+        resolved by its ``fs_slug`` from *platform_names*, falling back to the
+        ``fs_slug`` when absent; a row with no ``fs_slug`` recorded is filed under none.
 
         RomM collections keep the per-run membership accumulator (keyed by a
         collision-free ``(collection_kind, collection_id)`` identity, name in the
@@ -124,7 +124,7 @@ class RunFinalizer:
         casing kept for display): Steam collapses collection names by a
         case-insensitive identity, so two display names differing only in case
         must land in one Steam collection or the second create overwrites the
-        first. Two distinct folders colliding this way is rare, but the union keeps
+        first. Two distinct ``fs_slug`` values colliding this way is rare, but the union keeps
         it lossless and matches the collection-map rule
         (:meth:`_resolve_collection_memberships`).
         """
@@ -286,7 +286,7 @@ class RunFinalizer:
 
     @staticmethod
     def _write_found_folders(uow: UnitOfWork, found_folders: Mapping[int, str]) -> None:
-        """Record on each row the platform folder RomM answered its exact id with (#2452 D5)."""
+        """Record on each row the ``fs_slug`` RomM answered its exact id with (#2452 D5)."""
         for rom_id, folder in found_folders.items():
             rom = uow.roms.get(rom_id)
             if rom is None or rom.platform_fs_slug == folder:
@@ -317,7 +317,7 @@ class RunFinalizer:
 
         A platform RomM no longer lists keeps its games, and its Steam collection
         is found by this name: written over with the listed names alone, the
-        next run would key that collection by the folder, and the frontend would
+        next run would key that collection by the ``fs_slug``, and the frontend would
         remove the old one. This runs on every finalize, a stopped run's included,
         since each of them rewrites the cache.
         """
@@ -359,7 +359,7 @@ class RunFinalizer:
         platform the run's listing named, synced or not, cached for the offline
         ``roms``-derived queries.
 
-        ``processed_platform_folders`` names the folders of the platform units this run
+        ``processed_platform_folders`` names the ``fs_slug`` values of the platform units this run
         processed, skipped and fetched alike. A stale removal on any other
         platform — one whose sync is turned off, or one RomM no longer lists —
         revokes that platform's skip; a processed platform keeps its skip. A
@@ -372,7 +372,7 @@ class RunFinalizer:
         still serves it (:meth:`domain.sync_diff.StaleSort.gone_from_romm_marks`), written
         in the same UoW. Who may pass it is docs/architecture/backend-architecture.md,
         "The stale removal keeps a game gone from RomM". ``found_folders`` is
-        the platform folder RomM answered each asked row's exact id with
+        the ``fs_slug`` RomM answered each asked row's exact id with
         (:class:`~services.library._stale_rows.StaleVerdict`), written there too.
 
         Returns the ``(platform_app_ids, romm_collection_app_ids)`` maps the caller

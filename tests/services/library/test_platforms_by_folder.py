@@ -16,58 +16,46 @@ from unittest.mock import AsyncMock
 import pytest
 
 from domain.platform_skip import rom_id_checksum
-from domain.rom import Rom
 from domain.sync_state import SyncState
 from lib.errors import RommNotFoundError
+from tests.services.library._helpers import _fake_wait_set_event, _seed_platform, _seed_rom_row
 
 _OLD_UPDATED_AT = "2024-06-01T00:00:00+00:00"
 _NEW_UPDATED_AT = "2030-01-01T00:00:00+00:00"
 
 
 def _seed_folder(fake_romm_api, *, platform_id: int, folder: str, roms: list[int]) -> None:
-    """Seed one RomM platform kept in *folder*, of the console ``snes``, with *roms*."""
-    fake_romm_api.platforms.append(
-        {"id": platform_id, "name": "Super Nintendo", "slug": "snes", "fs_slug": folder, "rom_count": len(roms)}
+    """Seed one RomM platform kept under the ``fs_slug`` *folder*, of the console ``snes``, with *roms*."""
+    _seed_platform(
+        fake_romm_api,
+        platform_id=platform_id,
+        name="Super Nintendo",
+        slug="snes",
+        fs_slug=folder,
+        roms=[
+            {"id": rom_id, "name": f"G{rom_id}", "fs_name": f"g{rom_id}.sfc", "updated_at": _OLD_UPDATED_AT}
+            for rom_id in roms
+        ],
     )
-    for rom_id in roms:
-        fake_romm_api.roms[rom_id] = {
-            "id": rom_id,
-            "name": f"G{rom_id}",
-            "fs_name": f"g{rom_id}.sfc",
-            "platform_id": platform_id,
-            "platform_name": "Super Nintendo",
-            "platform_slug": "snes",
-            "platform_fs_slug": folder,
-            "updated_at": _OLD_UPDATED_AT,
-        }
 
 
-def _seed_bound_row(library, rom_id: int, *, folder: str | None, slug: str = "snes") -> None:
-    """A bound ``roms`` row whose platform RomM keeps in *folder*; ``None`` is a row no sync gave its folder."""
-    with library.uow:
-        library.uow.roms.save(
-            Rom(
-                rom_id=rom_id,
-                platform_slug=slug,
-                platform_fs_slug=folder,
-                name=f"G{rom_id}",
-                fs_name=f"g{rom_id}.sfc",
-                shortcut_app_id=5000 + rom_id,
-                last_synced_at="2025-01-01T00:00:00",
-                sibling_group_key=f"romm:seed:{rom_id}",
-            )
-        )
-        library.uow.roms.set_shortcut_applied(rom_id, True)
-
-
-async def _bind_nothing(_unit, event):
-    event.set()
-    return {}
+def _seed_bound_row(library, rom_id: int, *, folder: str | None) -> None:
+    """A bound ``roms`` row on the ``fs_slug`` *folder*; ``None`` is a row no sync recorded one for."""
+    _seed_rom_row(
+        library,
+        rom_id,
+        app_id=5000 + rom_id,
+        platform_slug="snes",
+        fs_slug=folder,
+        name=f"G{rom_id}",
+        fs_name=f"g{rom_id}.sfc",
+        sibling_group_key=f"romm:seed:{rom_id}",
+    )
 
 
 async def _run(library, run_id: str) -> None:
     box = library.sync._box
-    library.chunk_dispatcher._wait_for_unit_complete = _bind_nothing
+    library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
     box.sync_state = SyncState.RUNNING
     box.current_sync_id = run_id
     await library.sync._orchestrator._do_sync_per_unit()
@@ -192,3 +180,6 @@ class TestAGameWithoutARecordedFolder:
         summary = (await library.sync.sync_preview())["summary"]
 
         assert summary["remove_count"] == 1
+        breakdown = summary["platform_breakdown"]
+        removing = [(row["fs_slug"], row["remove_count"]) for row in breakdown if row["remove_count"]]
+        assert removing == [("snes", 1)], "counted under the fs_slug RomM answered, as the apply records it"

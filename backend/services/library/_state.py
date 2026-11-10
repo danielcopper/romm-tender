@@ -241,13 +241,13 @@ class LibrarySyncStateBox:
     # reuses an old appId (CRC32 of unchanged exe+name) can't wipe the shortcut
     # the run just bound (#1036). Reset at the start of each run.
     committed_app_ids: set[int] = field(default_factory=set)
-    # The folder (``fs_slug``) of every platform the run's own platform listing
+    # The ``fs_slug`` of every platform the run's own platform listing
     # named, on in Tender or not; ``None`` until the run has listed. The stale
     # removal reads this rather than the kept platforms under ``platform_ids``,
     # which a game page's read can widen mid-run (``PlatformSystemService``).
     # Reset by ``try_begin_run``.
     run_listed_platform_folders: frozenset[str] | None = None
-    # Every listed platform's name from that same listing, by folder
+    # Every listed platform's name from that same listing, by ``fs_slug``
     # (``domain.platform_names.listed_platform_names``): what the run names a
     # platform by — in its Steam collections, the name cache and the preview —
     # whether its sync is on or not. Empty until the run has listed. Reset by
@@ -259,7 +259,7 @@ class LibrarySyncStateBox:
     # read, which takes nothing for hidden. Reset by ``try_begin_run``.
     run_hidden_rom_ids: frozenset[int] | None = None
     # Every bound row a skipped unit of the apply rebuilt from its stored row,
-    # by ``rom_id`` to its platform folder, for the finalize's
+    # by ``rom_id`` to its ``fs_slug``, for the finalize's
     # ``domain.sync_diff.rebuilt_rows_filed_as_kept``. Reset by ``try_begin_run``.
     run_skip_rebuilt_rows: dict[int, str | None] = field(default_factory=dict)
     # Every bound row the apply converged (``domain.sync_diff.converge_bound_groups``)

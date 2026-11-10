@@ -67,7 +67,7 @@ def preview_group_keys(
 class StaleVerdict(NamedTuple):
     """What the stale removal makes of a run's stale rows: :func:`settle_stale_rows`'s answer.
 
-    ``found_folders`` is the platform folder RomM answered each asked row with,
+    ``found_folders`` is the ``fs_slug`` RomM answered each asked row with,
     where it is not the one the row records (#2452 D5); only the apply writes it.
     """
 
@@ -88,7 +88,7 @@ async def settle_stale_rows(
     synced_group_keys: Collection[str],
     hidden_rom_ids: Collection[int] | None = None,
 ) -> StaleVerdict:
-    """The rows to remove, the rows kept in their platform's collections, the marks and the folders found.
+    """The rows to remove, the rows kept in their platform's collections, the marks and the ``fs_slug`` values found.
 
     Sorts them by :func:`sort_stale_rows`, asks RomM once about the ones it
     cannot decide, settles those by :func:`settle_asked_rows` and
@@ -102,7 +102,7 @@ async def settle_stale_rows(
     RomM is asked about it where it would be asked about any other row. A row
     the user hid (*hidden_rom_ids*, the run's hidden set, ``None`` where RomM's
     answer could not be read) whose game the run did not sync is removed
-    unasked. A row with no platform folder recorded is placed by the folder
+    unasked. A row with no ``fs_slug`` recorded is placed by the ``fs_slug``
     RomM answers its exact id with (#2452 D5).
     """
     sort = sort_stale_rows(
@@ -123,14 +123,15 @@ async def settle_stale_rows(
         read_platform_folders=read_platform_folders,
         listed_platform_folders=listed_platform_folders,
     )
-    if sort.keep or asked_keep:
+    kept = sort.keep + placed.keep
+    if kept or asked_keep:
         logger.info(
-            f"Stale removal: keeping {len(sort.keep)} bound version(s) gone from RomM in their platform's "
+            f"Stale removal: keeping {len(kept)} bound version(s) gone from RomM in their platform's "
             f"collection and {len(asked_keep)} reached through a collection RomM did not confirm present"
         )
     return StaleVerdict(
         remove=sort.remove + asked_remove + placed.remove,
-        kept=sort.keep + placed.keep,
+        kept=kept,
         gone_marks={
             **sort.gone_from_romm_marks(exact.answers, read_platform_folders),
             **placed.gone_from_romm_marks(exact.answers, read_platform_folders),
@@ -148,7 +149,7 @@ async def with_kept_platform_names(
 ) -> dict[str, str]:
     """*listed*, plus the cached name of each of *platform_folders* outside it the cache holds one for, for the preview.
 
-    *listed* is every listed platform's name by its folder, from the run's own listing.
+    *listed* is every listed platform's name by its ``fs_slug``, from the run's own listing.
 
     *platform_folders* must cover every platform the preview's
     platform-collection diff and per-platform table name. Must answer, for

@@ -295,7 +295,7 @@ class SyncPreview:
                 hidden_rom_ids=box.run_hidden_rom_ids,
             )
             removals, kept = verdict.remove, verdict.kept
-            # A row RomM answered with its folder is counted under it, as the apply records it.
+            # A row RomM answered with its fs_slug is counted under it, as the apply records it.
             registry = {
                 rid: {**reg, "platform_fs_slug": verdict.found_folders[int(rid)]}
                 if int(rid) in verdict.found_folders
@@ -304,11 +304,10 @@ class SyncPreview:
             }
             removed_ids = {row.rom_id for row in removals} | converged_ids
             kept_ids = {row.rom_id for row in kept}
-            left_bound = [
-                row._replace(platform_folder=verdict.found_folders.get(row.rom_id, row.platform_folder))
-                for row in stale_rows
-                if row.rom_id not in removed_ids and row.rom_id not in kept_ids
-            ]
+            left_bound = stale_rows_of(
+                (row.rom_id for row in stale_rows if row.rom_id not in removed_ids and row.rom_id not in kept_ids),
+                registry,
+            )
             stale = [rid for rid in stale if rid in removed_ids]
             rebuilt = {rom["id"]: rom.get("platform_fs_slug") for rom in all_roms if rom["id"] in classify_skipped}
             kept += stale_rows_of(rebuilt_rows_filed_as_kept(rebuilt, set(folder_to_name), platform_rom_ids), registry)
@@ -469,7 +468,7 @@ class SyncPreview:
         (#1503). ``all_roms`` is extended in both cases, and ``skipped_rom_ids``
         too with the ROMs of a unit the fetcher reports as skipped, platform or
         collection alike — the units the apply will skip. A platform unit the
-        fetcher did not skip lands in ``full_fetched_platforms`` under its folder,
+        fetcher did not skip lands in ``full_fetched_platforms`` under its ``fs_slug``,
         so the restamp count can judge its stamp against what the fetch returned.
         A collection unit lands in ``restamp_collections`` under its membership
         key when the fetcher reports its skip refused for a reason a fresh stamp

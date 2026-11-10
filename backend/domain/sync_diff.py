@@ -60,7 +60,7 @@ def classify_roms(
     name while its binding moves to the target, which is work the apply does
     and the preview has to offer),
     unchanged_ids (otherwise), stale (in registry but not in the current
-    fetch), and the count of stale ROMs whose stored platform folder no longer
+    fetch), and the count of stale ROMs whose stored ``fs_slug`` no longer
     appears in *fetched_platform_folders*.
 
     ``shortcut_applied`` records that the sync's commit applied the ROM's
@@ -90,7 +90,7 @@ def classify_roms(
 
     ``platform_name`` is deliberately excluded from the changed comparison:
     it is a derived display field, never persisted on the ``roms`` row. The
-    registry side resolves it from the enabled-platforms-only folder→name map
+    registry side resolves it from the enabled-platforms-only ``fs_slug``→name map
     (falling back to the bare slug for a disabled platform), while an entry
     carries RomM's display name, so a divergence between the two can never be
     healed by an apply (the upsert writes only platform_slug/name/fs_name) —
@@ -125,9 +125,9 @@ def classify_roms(
 def count_disabled_platform_removals(
     stale: Iterable[int], registry: dict[str, Any], fetched_platform_folders: set[str]
 ) -> int:
-    """How many of the *stale* rom ids sit on a platform whose folder is not in *fetched_platform_folders*.
+    """How many of the *stale* rom ids sit on a platform whose ``fs_slug`` is not in *fetched_platform_folders*.
 
-    A row with no folder recorded counts: no fetched platform is its own.
+    A row with no ``fs_slug`` recorded counts: no fetched platform is its own.
     """
     return sum(1 for rid in stale if registry.get(str(rid), {}).get("platform_fs_slug") not in fetched_platform_folders)
 
@@ -155,14 +155,16 @@ def platform_breakdown(
     each carrying ``platform_fs_slug``; *stale* are its stale rom ids, whose
     platform is read off their *registry* entry. *registry* is the
     ``do_read_preview_baseline`` projection keyed by ``str(rom_id)``.
-    *synced_platforms* are the folders of the run's platform units, so
-    membership in it is what ``synced`` reports. A row with no folder recorded
-    counts under ``""``.
+    *synced_platforms* are the ``fs_slug`` values of the run's platform units, so
+    membership in it is what ``synced`` reports. A row with no ``fs_slug``
+    recorded counts under ``""``, which is named by the slugs of the rows it
+    counts, as :func:`domain.platform_names.platform_display_name` names such
+    a game.
 
     Returns one row per platform holding at least one of the three counts —
     ``{"fs_slug", "name", "synced", "new_count", "changed_count", "remove_count"}``
-    — ordered by name (case-insensitively, the folder breaking a tie). The name
-    is the one *platform_names* holds for the folder, else the folder: the names
+    — ordered by name (case-insensitively, the ``fs_slug`` breaking a tie). The name
+    is the one *platform_names* holds for the ``fs_slug``, else the ``fs_slug``: the names
     the preview's platform-collection diff files by, so a row carries the name
     the apply gives the platform's Steam collection, synced or not.
     The ``platform_name`` an entry or the registry carries is not read.
@@ -179,14 +181,23 @@ def platform_breakdown(
     column's sum is that total.
     """
     counts: dict[str, dict[str, int]] = {}
+    unplaced_slugs: set[str] = set()
+
+    def count(entry: Mapping[str, Any], column: str) -> None:
+        folder = entry.get("platform_fs_slug") or ""
+        if not folder and (slug := entry.get("platform_slug")):
+            unplaced_slugs.add(slug)
+        counts.setdefault(folder, _zero_counts())[column] += 1
+
     for column, entries in (("new_count", new), ("changed_count", changed)):
         for sd in entries:
-            counts.setdefault(sd.get("platform_fs_slug") or "", _zero_counts())[column] += 1
+            count(sd, column)
     for rom_id in stale:
-        folder = registry.get(str(rom_id), {}).get("platform_fs_slug") or ""
-        counts.setdefault(folder, _zero_counts())["remove_count"] += 1
+        count(registry.get(str(rom_id), {}), "remove_count")
 
-    names = {folder: platform_names.get(folder, folder) for folder in counts}
+    names = {folder: platform_names.get(folder, folder) for folder in counts if folder}
+    if "" in counts:
+        names[""] = ", ".join(sorted(unplaced_slugs))
     return [
         {
             "fs_slug": folder,
@@ -738,7 +749,7 @@ def select_stale_removals(
 class StaleRow(NamedTuple):
     """A bound row no unit of the run returned: its id, its appId, its platform, how it last arrived, and its group.
 
-    ``platform_folder`` is the folder RomM keeps the row's platform in
+    ``platform_folder`` is the row's platform's ``fs_slug``
     (``roms.platform_fs_slug``), ``None`` where no sync has recorded it.
     """
 
@@ -760,7 +771,7 @@ RomAnswer = Literal["gone", "present", "unknown"]
 
 
 class ExactAnswers(NamedTuple):
-    """RomM's answers to exact-id questions: each ROM's :data:`RomAnswer`, and the folder each one it returned names.
+    """RomM's answers to exact-id questions: each ROM's :data:`RomAnswer`, and the ``fs_slug`` each returned one names.
 
     ``folders`` holds the ROM's ``platform_fs_slug`` for a ``present`` answer
     that carried one.
@@ -775,7 +786,7 @@ class StaleSort(NamedTuple):
 
     :attr:`ask_only` holds the rows RomM is asked about for their mark alone:
     their game was synced, so they stay bound whatever RomM answers.
-    :attr:`unplaced` holds the rows with no platform folder recorded, which RomM
+    :attr:`unplaced` holds the rows with no ``fs_slug`` recorded, which RomM
     is asked about so its answer places them (:func:`settle_unplaced_rows`).
     :attr:`hidden` holds the rows of :attr:`remove` that go because the user
     hid them in RomM.
@@ -828,7 +839,7 @@ def sort_stale_rows(
 ) -> StaleSort:
     """Split the stale rows into the ones to remove, to keep, and to ask RomM about.
 
-    *read_platform_folders* are the folders of the platforms the run read whole,
+    *read_platform_folders* are the ``fs_slug`` values of the platforms the run read whole,
     skipped or fetched; *listed_platform_folders* those of every platform RomM's
     listing named this run, on in Tender or not (``None`` where that is not known, which reads as
     every platform listed); *collection_listed_rom_ids* the members every
@@ -854,7 +865,7 @@ def sort_stale_rows(
       delivered through a collection, or, with no route recorded, a
       collection's last completed apply listed it. Only RomM's answer to its
       exact id tells "gone" from "left the collection".
-    * **unplaced** — any other row with no platform folder recorded: it counts
+    * **unplaced** — any other row with no ``fs_slug`` recorded: it counts
       as on a platform the run did not read, never as on one RomM no longer
       lists, and RomM's answer to its exact id places it (#2452 D5).
     * **ask_only** — a row the rules above ask about whose game the run
@@ -902,11 +913,11 @@ def settle_unplaced_rows(
 ) -> StaleSort:
     """The verdict on the :attr:`StaleSort.unplaced` rows, once RomM answered their exact ids (#2452 D5).
 
-    *folders* holds the platform folder RomM answered each ROM with. A row RomM
-    returned with its folder is sorted as :func:`sort_stale_rows` sorts a row on
-    that folder: removed on a platform RomM lists and the run did not read, kept
+    *folders* holds the ``fs_slug`` RomM answered each ROM with. A row RomM
+    returned with its ``fs_slug`` is sorted as :func:`sort_stale_rows` sorts a row on
+    that ``fs_slug``: removed on a platform RomM lists and the run did not read, kept
     otherwise. Every other row — a proven 404, an answer that established
-    nothing, a ROM answered without a folder — stays bound, in
+    nothing, a ROM answered without an ``fs_slug`` — stays bound, in
     :attr:`StaleSort.ask_only`, so its mark follows RomM's answer.
     """
     rows = list(unplaced)
@@ -938,7 +949,7 @@ def rebuilt_rows_filed_as_kept(
     """The rows of *rebuilt* the run files in their platform's Steam collection as it files a kept stale row.
 
     *rebuilt* maps each bound row a skipped unit rebuilt from its stored row to
-    its platform folder, *read_platform_folders* and *platform_rom_ids* are what
+    its ``fs_slug``, *read_platform_folders* and *platform_rom_ids* are what
     :func:`sort_stale_rows` and the platform-collection filing take as the
     platforms the run read whole and the rows they returned. A rebuilt row
     whose platform the run read whole without returning it is filed: no unit
@@ -1045,9 +1056,9 @@ def platform_collection_name(
     """The platform name *rom_id* is filed under, or ``None`` where it is filed under none.
 
     The name is the platform's display name — the one *platform_names* holds for
-    *platform_folder*, else the folder — not the Steam collection's full name; it
+    *platform_folder*, else the ``fs_slug`` — not the Steam collection's full name; it
     is filed under none where :func:`should_include_in_platform_collection` leaves
-    the ROM out, and where no platform folder is recorded for it.
+    the ROM out, and where no ``fs_slug`` is recorded for it.
     """
     if platform_folder is None:
         return None
@@ -1085,7 +1096,7 @@ def compute_platform_collection_diff(
     apply path, which reads the post-commit bound rows, never had this bug. Its
     name, unlike its membership, comes from its own ``platform_fs_slug``, the
     bound version's, which is the target's: a sibling group is scoped by
-    platform id, and RomM keeps one platform in one folder.
+    platform id, and RomM gives one platform one ``fs_slug``.
 
     *kept_platform_folders* are the platforms of the stale removal's kept rows — a
     version gone from RomM, fetched by nothing — whose collections the apply

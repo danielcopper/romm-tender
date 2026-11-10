@@ -9,7 +9,7 @@ keyed off the fetch start less the platform skip's margin to answer no ROM. What
 RomM does with a hidden member is docs/architecture/backend-architecture.md,
 "Incremental skip". A collection holding a game that still has more than one
 bound shortcut on a platform the sync leaves off is not skipped either (#2661),
-and neither is one holding a game whose platform folder no sync has recorded yet
+and neither is one holding a game whose ``fs_slug`` no sync has recorded yet
 (#2452 D5).
 """
 
@@ -155,10 +155,10 @@ def holds_a_game_to_converge(
 
 
 def holds_a_game_without_its_platform_folder(rows: Iterable[Rom], member_rom_ids: Collection[int]) -> bool:
-    """Whether a stored row among *member_rom_ids* records no platform folder (``platform_fs_slug``).
+    """Whether a stored row among *member_rom_ids* records no ``fs_slug`` (``platform_fs_slug``).
 
     Such a collection is fetched rather than skipped, so the fetch's payload
-    records the folder (#2452 D5); a skip would rebuild the row as it stands.
+    records the ``fs_slug`` (#2452 D5); a skip would rebuild the row as it stands.
     """
     members = set(member_rom_ids)
     return any(row.platform_fs_slug is None for row in rows if row.rom_id in members)

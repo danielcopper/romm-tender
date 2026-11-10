@@ -1711,7 +1711,7 @@ class TestTheTargetsSteamGridDbCover:
 
 
 class TestAServerOnlyTargetKeepsItsPlatformFolder:
-    """A detail that names no platform folder takes the bound row's: versions share one platform (#2452 Q9)."""
+    """A detail that names no ``fs_slug`` takes the bound row's: versions share one platform (#2452 D1)."""
 
     def test_the_bound_row_s_folder_stands_in(self, event_loop, service, uow, romm):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID, group_key=_GROUP)

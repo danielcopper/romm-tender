@@ -11,6 +11,7 @@ from domain.fetch_generation import (
     gone_from_romm_ids,
     hidden_without_a_listed_version,
     prune_candidate_ids,
+    rows_with_their_stamp,
 )
 from domain.platform_sync_state import PlatformSyncState
 from domain.rom import Rom
@@ -213,3 +214,38 @@ class TestHiddenWithoutAListedVersion:
 
     def test_an_unbound_hidden_row_is_not_named(self):
         assert hidden_without_a_listed_version([_game_row(1, key="g", fetch_id="old")], {1}, "new") == set()
+
+
+class TestRowsWithTheirStamp:
+    """Each platform's rows go with that platform's stamp, asked by its ``fs_slug`` (#2452 D1)."""
+
+    def test_two_fs_slugs_sharing_a_slug_each_go_with_their_own_stamp(self):
+        stamps = {
+            fs_slug: PlatformSyncState.stamp(platform_folder=fs_slug, at="2026-07-20T06:27:12", rom_count=1)
+            for fs_slug in ("dc", "dc-hacks")
+        }
+        rows = [_row(1, None), _row(2, None), _row(3, None)]
+        rows[1].record_platform_folder("dc-hacks")
+
+        groups = rows_with_their_stamp(rows, stamps.get)
+
+        assert [([r.rom_id for r in group], stamp) for group, stamp in groups] == [
+            ([1, 3], stamps["dc"]),
+            ([2], stamps["dc-hacks"]),
+        ]
+
+    def test_rows_with_no_fs_slug_are_one_group_with_no_stamp_and_none_is_asked(self):
+        row = Rom.synced(
+            rom_id=4,
+            platform_slug="dc",
+            platform_fs_slug=None,
+            name="rom-4",
+            fs_name="rom-4.gdi",
+            shortcut_app_id=None,
+            synced_at="2026-07-20T06:27:12",
+        )
+        asked: list[str] = []
+
+        groups = rows_with_their_stamp([row], lambda fs_slug: asked.append(fs_slug))
+
+        assert (groups, asked) == ([([row], None)], [])

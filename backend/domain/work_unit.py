@@ -30,7 +30,7 @@ class WorkUnit:
     name: str
     slug: str
     rom_count: int
-    # Platform-only: the folder RomM keeps the platform in (``fs_slug``), by
+    # Platform-only: the platform's ``fs_slug``, by
     # which the sync knows the platform (#2452 D1); the slug stays the console.
     # ``""`` for a collection.
     platform_folder: str = ""
@@ -59,7 +59,7 @@ class WorkUnit:
     # this run (a skipped platform has one). They are the ``platform_ids`` a
     # collection's narrowed walk asks for.
     unwalked_platform_ids: tuple[int, ...] = ()
-    # Collection-only, off the wire: the folders of those platforms, whose rows
+    # Collection-only, off the wire: the ``fs_slug`` values of those platforms, whose rows
     # a collection's convergence and its skip gate read (#2661).
     unwalked_platform_folders: tuple[str, ...] = ()
     # Collection-only: whether the collection is the signed-in user's own

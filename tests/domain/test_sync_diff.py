@@ -498,6 +498,10 @@ class TestPlatformCollectionName:
     def test_no_platform_tracking_files_every_rom(self):
         assert platform_collection_name(30, "n64", None, {"n64": "Nintendo 64"}, False) == "Nintendo 64"
 
+    def test_a_row_with_no_fs_slug_recorded_is_filed_under_no_platform(self):
+        """Even with platform groups on, it has no platform to be filed under (#2452 D5)."""
+        assert platform_collection_name(30, None, None, {"n64": "Nintendo 64"}, True) is None
+
 
 _NAMES = {"gba": "Game Boy Advance", "n64": "Nintendo 64", "psx": "PlayStation"}
 
@@ -1569,6 +1573,25 @@ def _column_sums(rows: list[dict[str, Any]]) -> tuple[int, int, int]:
         sum(row["changed_count"] for row in rows),
         sum(row["remove_count"] for row in rows),
     )
+
+
+class TestABreakdownRowWithoutAnFsSlug:
+    """A row with no ``fs_slug`` recorded counts under ``""`` and is shown under its slug (#2452 D5)."""
+
+    def test_it_is_keyed_by_nothing_and_named_by_its_slug(self):
+        registry = {"7": {**_reg(platform_slug="gg"), "platform_fs_slug": None}}
+        rows = platform_breakdown([], [], [7], registry, {"gg"}, {"gg": "Game Gear"})
+        assert rows == [
+            {"fs_slug": "", "name": "gg", "synced": False, "new_count": 0, "changed_count": 0, "remove_count": 1}
+        ]
+
+    def test_several_slugs_without_an_fs_slug_share_the_row_and_its_name_lists_each(self):
+        registry = {
+            "7": {**_reg(platform_slug="gg"), "platform_fs_slug": None},
+            "8": {**_reg(platform_slug="sms"), "platform_fs_slug": None},
+        }
+        rows = platform_breakdown([], [], [8, 7], registry, set(), {})
+        assert [(row["fs_slug"], row["name"], row["remove_count"]) for row in rows] == [("", "gg, sms", 2)]
 
 
 class TestPlatformBreakdownConservesTheClassification:

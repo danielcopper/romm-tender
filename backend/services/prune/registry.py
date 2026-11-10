@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from domain.fetch_generation import current_generation_ids
+from domain.fetch_generation import current_generation_ids, rows_with_their_stamp
 from domain.sibling_resolution import group_rows
 
 if TYPE_CHECKING:
@@ -58,9 +58,8 @@ class PruneRegistry:
         with self._uow_factory() as uow:
             rows = list(uow.roms.iter_all())
             served: set[int] = set()
-            for folder in sorted({row.platform_fs_slug for row in rows if row.platform_fs_slug is not None}):
-                platform_rows = [row for row in rows if row.platform_fs_slug == folder]
-                served |= current_generation_ids(platform_rows, uow.platform_sync_state.get(folder))
+            for platform_rows, stamp in rows_with_their_stamp(rows, uow.platform_sync_state.get):
+                served |= current_generation_ids(platform_rows, stamp)
         marked = {row.rom_id for row in rows if row.gone_from_romm is not None}
         return sorted(served - marked - exclude)[:limit]
 

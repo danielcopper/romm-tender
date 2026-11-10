@@ -6,6 +6,7 @@ import pytest
 
 from domain.platform_names import (
     decode_platform_names,
+    listed_fs_slug,
     listed_platform_folders,
     listed_platform_names,
     platform_display_name,
@@ -109,6 +110,12 @@ class TestTwoPlatformsSharingAName:
     def test_a_folder_that_is_not_its_slug_keeps_the_plain_name_while_no_other_platform_shares_it(self):
         listed = [{"slug": "ngc", "fs_slug": "gc", "name": "Nintendo GameCube"}]
         assert listed_platform_names(listed) == {"gc": "Nintendo GameCube"}
+
+
+class TestListedFsSlug:
+    def test_a_listed_fs_slug_and_none_for_a_missing_blank_or_foreign_one(self):
+        assert listed_fs_slug({"fs_slug": "gc"}) == "gc"
+        assert [listed_fs_slug(p) for p in ({}, {"fs_slug": "  "}, {"fs_slug": 7})] == [None, None, None]
 
 
 class TestListedPlatformFolders:

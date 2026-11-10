@@ -173,7 +173,7 @@ class FirmwareStatusReader:
         )
 
     def _platform_names(self) -> dict[str, str]:
-        """The names the library sync last recorded for RomM's platforms, by folder (``fs_slug``). Blocking."""
+        """The names the library sync last recorded for RomM's platforms, by ``fs_slug``. Blocking."""
         with self._uow_factory() as uow:
             return decode_platform_names(uow.kv_config.get(PLATFORM_NAMES_KEY))
 
@@ -628,7 +628,7 @@ class FirmwareStatusReader:
 def _named(rows: list[BiosFileEntry], names: dict[str, str]) -> list[BiosFileEntry]:
     """*rows* with the name of the platform a link of Tender's serves them for, its folder where none is recorded.
 
-    ``linked_for`` is the platform's folder, which the recorded names are kept under.
+    ``linked_for`` is the platform's ``fs_slug``, which the recorded names are kept under.
     """
     return [
         replace(row, linked_for_name=names.get(row.linked_for, row.linked_for)) if row.linked_for else row

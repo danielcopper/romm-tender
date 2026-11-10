@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
-from domain.fetch_generation import gone_from_romm_ids
+from domain.fetch_generation import gone_from_romm_ids, rows_with_their_stamp
 from domain.retrodeck_folders import FolderRefused, folder_of
 from domain.sibling_resolution import fs_name_stem, group_rows
 from lib.url_host import romm_namespace
@@ -44,16 +44,12 @@ def _gone_from_romm_ids(uow: UnitOfWork, rows: list[Rom], hidden_rom_ids: frozen
     """Every row absent from its own platform's last completed fetch, and every row carrying a gone-from-RomM mark.
 
     A row the user hid in RomM (*hidden_rom_ids*) is absent from every fetch
-    and still on RomM, so it is not gone (#2502 D5). A row with no platform
-    folder recorded has no platform stamp to be absent from.
+    and still on RomM, so it is not gone (#2502 D5). A row with no ``fs_slug``
+    recorded has no platform stamp to be absent from.
     """
-    platform_rows: dict[str | None, list[Rom]] = {}
-    for row in rows:
-        platform_rows.setdefault(row.platform_fs_slug, []).append(row)
     gone_ids: set[int] = set()
-    for folder, platform in platform_rows.items():
-        stamp = uow.platform_sync_state.get(folder) if folder is not None else None
-        gone_ids.update(gone_from_romm_ids(platform, stamp))
+    for platform_rows, stamp in rows_with_their_stamp(rows, uow.platform_sync_state.get):
+        gone_ids.update(gone_from_romm_ids(platform_rows, stamp))
     return gone_ids - hidden_rom_ids
 
 

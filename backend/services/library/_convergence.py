@@ -90,7 +90,7 @@ async def converge_collection_deliveries(
 
     *delivered* is the built entry of every ROM the run's collection units
     fetched, *sibling_stubs* each one's ``sibling_roms``, *registry* every bound
-    row, and *platform_folders* the folders of the platforms the sync leaves off. A brought-in
+    row, and *platform_folders* the ``fs_slug`` values of the platforms the sync leaves off. A brought-in
     row no collection delivered is ranked by its stored version fields
     (:func:`~domain.sync_diff.stored_version`), unless the user hid it
     (*hidden_rom_ids*, the run's hidden set or ``None``): RomM still lists

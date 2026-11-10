@@ -25,7 +25,7 @@ from domain.fetch_generation import (
     count_rows_for_skip,
     hidden_without_a_listed_version,
 )
-from domain.platform_names import listed_platform_folders, listed_platform_names
+from domain.platform_names import listed_fs_slug, listed_platform_folders, listed_platform_names
 from domain.platform_prefs import materialize_enabled_platforms, resolve_sync_enabled
 from domain.platform_skip import probe_verdict, stamp_can_match
 from domain.platform_sync_state import stamp_for_skip
@@ -339,7 +339,7 @@ class LibraryFetcher:
 
         Answers ``(enabled, unwalked_ids)``: the platforms this run syncs, and
         the id of every listed platform it does not. Every listed platform's
-        slug and name are held on the run's box.
+        ``fs_slug`` and name are held on the run's box.
         """
         listed = await self._loop.run_in_executor(None, self._romm_api.list_platforms)
         self._sync_state.run_listed_platform_folders = listed_platform_folders(listed)
@@ -397,7 +397,7 @@ class LibraryFetcher:
                 name=platform.get("name", platform.get("display_name", "Unknown")),
                 slug=platform.get("slug", ""),
                 rom_count=int(platform.get("rom_count", 0)),
-                platform_folder=platform.get("fs_slug") or "",
+                platform_folder=listed_fs_slug(platform) or "",
             )
             for platform in platforms
         ]
@@ -607,7 +607,7 @@ class LibraryFetcher:
     def _read_plan_estimates(self, units: list[WorkUnit]) -> dict[str, _PlanEstimate]:
         """Read the plan-time estimate baseline for platform units (#1382).
 
-        Per unit folder: replay the wholesale-skip gate's LOCAL conditions
+        Per unit ``fs_slug``: replay the wholesale-skip gate's LOCAL conditions
         (``predict_unit_skip`` — a stamp present and not revoked
         (``stamp_for_skip``) that records what the gate compares RomM's answer
         with, rows carrying the stamp's fetch generation, bound rows, no
@@ -685,7 +685,7 @@ class LibraryFetcher:
         return estimates
 
     def _read_incremental_baseline(self, platform_folder: str) -> _SkipBaseline:
-        """Read the incremental-skip baseline for the platform RomM keeps in *platform_folder* from SQLite.
+        """Read the incremental-skip baseline for the platform whose ``fs_slug`` is *platform_folder* from SQLite.
 
         * ``stamp`` — the platform's completion stamp (``PlatformSyncState``),
           or ``None`` when there is no stamp or its skip was revoked

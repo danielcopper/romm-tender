@@ -104,7 +104,7 @@ class UnitApplier:
         self._running_rom_ids = config.running_rom_ids
 
     def _clear_platform_stamp_io(self, platform_folder: str) -> None:
-        """Delete the completion stamp of the platform in *platform_folder* in one short write UoW.
+        """Delete the completion stamp of the platform whose ``fs_slug`` is *platform_folder* in one short write UoW.
 
         Called at a platform unit's apply start (ADR-0023 / #1025): the stamp
         asserts "this platform's last apply completed", so a fresh apply must

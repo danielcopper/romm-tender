@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.fetch_generation import gone_from_romm_ids
+from domain.fetch_generation import gone_from_romm_ids, rows_with_their_stamp
 from domain.platform_names import PLATFORM_NAMES_KEY, platform_display_name
 from domain.sibling_resolution import reachable_rom_ids
 
@@ -61,18 +61,18 @@ class LibraryViews:
     def get_registry_platforms(self):
         """Return synced platforms from ``uow.roms`` (works offline, no RomM API call).
 
-        One entry per platform folder in RomM (``fs_slug``), carrying the folder
-        and the slug beside the counts; rows with no folder recorded are an
-        entry of their slug's, with ``fs_slug`` ``None``. Two counts per
+        One entry per slug, its counts summed over every ``fs_slug`` its rows
+        carry and over the rows with none recorded, until the Platforms tab
+        knows a platform by its ``fs_slug`` (#2452 D3). Two counts per
         platform, and they answer different questions.
         ``count`` is bound ROMs — how many Steam shortcuts exist, which is
         what the Remove group acts on. ``reachable_count`` is how many of
         the platform's ROMs are reachable through one of those shortcuts,
         less the ones RomM no longer serves (:func:`_reachable_row_count`),
         which is what the header line states beside RomM's own total.
-        Display names come from the ``platform_names`` cache refreshed each
-        sync, degrading to the slug when a name is absent (RomM never seen
-        for that folder).
+        The display name is the one the ``platform_names`` cache holds for
+        the ``fs_slug`` that is the slug, else for the first of the slug's
+        ``fs_slug`` values, else the slug.
 
         A platform with no bound row is omitted entirely, as it always has
         been. Nothing is lost with it: no group there holds a binding, so
@@ -84,33 +84,31 @@ class LibraryViews:
     def _read_registry_platforms_io(self):
         with self._uow_factory() as uow:
             raw_names = uow.kv_config.get(PLATFORM_NAMES_KEY)
-            rows: dict[tuple[str | None, str], list[Rom]] = {}
-            for rom in uow.roms.iter_all():
-                key = (rom.platform_fs_slug, rom.platform_slug if rom.platform_fs_slug is None else "")
-                rows.setdefault(key, []).append(rom)
+            all_rows = list(uow.roms.iter_all())
             dropped = {
                 rom_id
-                for (folder, _slug), platform_rows in rows.items()
-                for rom_id in gone_from_romm_ids(
-                    platform_rows, uow.platform_sync_state.get(folder) if folder is not None else None
-                )
+                for platform_rows, stamp in rows_with_their_stamp(all_rows, uow.platform_sync_state.get)
+                for rom_id in gone_from_romm_ids(platform_rows, stamp)
             }
+        by_slug: dict[str, list[Rom]] = {}
+        for rom in all_rows:
+            by_slug.setdefault(rom.platform_slug, []).append(rom)
         entries = []
-        for (folder, _slug), platform_rows in rows.items():
-            count = sum(1 for rom in platform_rows if rom.shortcut_app_id is not None)
+        for slug, slug_rows in by_slug.items():
+            count = sum(1 for rom in slug_rows if rom.shortcut_app_id is not None)
             if not count:
                 continue
-            slug = platform_rows[0].platform_slug
+            fs_slugs = sorted({rom.platform_fs_slug for rom in slug_rows if rom.platform_fs_slug is not None})
+            named_by = slug if slug in fs_slugs else next(iter(fs_slugs), None)
             entries.append(
                 {
-                    "name": platform_display_name(raw_names, folder, slug),
+                    "name": platform_display_name(raw_names, named_by, slug),
                     "slug": slug,
-                    "fs_slug": folder,
                     "count": count,
-                    "reachable_count": _reachable_row_count(platform_rows, dropped),
+                    "reachable_count": _reachable_row_count(slug_rows, dropped),
                 }
             )
-        return {"platforms": sorted(entries, key=lambda entry: (entry["name"], entry["fs_slug"] or ""))}
+        return {"platforms": sorted(entries, key=lambda entry: (entry["name"], entry["slug"]))}
 
     # ── Stats / run history ──────────────────────────────────────
 

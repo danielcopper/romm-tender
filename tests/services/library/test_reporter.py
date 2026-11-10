@@ -2917,21 +2917,25 @@ class TestTheCoverRecordOfAVersionTheCommitBinds:
         assert self._record(library) is not None
 
 
-class TestRegistryPlatformsByFolder:
-    """Two platforms sharing a slug are an entry each, named by their folder's name (#2452 D1, D2)."""
+class TestRegistryPlatformsBySlug:
+    """One entry per slug until the Platforms tab knows a platform by its fs_slug (#2452 D3).
+
+    Its counts are summed over every fs_slug the slug's rows carry and over
+    the rows with none recorded.
+    """
 
     @pytest.mark.asyncio
-    async def test_two_folders_sharing_a_slug_are_two_entries(self, library):
+    async def test_two_fs_slugs_sharing_a_slug_are_one_entry_with_the_counts_summed(self, library):
         from domain.rom import Rom
 
         uow = library.uow
-        for rom_id, folder in ((10, "snes"), (20, "snes-hacks"), (21, "snes-hacks")):
+        for rom_id, fs_slug in ((10, "snes"), (20, "snes-hacks"), (21, "snes-hacks"), (30, None)):
             with uow:
                 uow.roms.save(
                     Rom(
                         rom_id=rom_id,
                         platform_slug="snes",
-                        platform_fs_slug=folder,
+                        platform_fs_slug=fs_slug,
                         name=f"G{rom_id}",
                         fs_name=f"g{rom_id}.sfc",
                         shortcut_app_id=1000 + rom_id,
@@ -2942,7 +2946,28 @@ class TestRegistryPlatformsByFolder:
 
         platforms = library.sync.get_registry_platforms()["platforms"]
 
-        assert [(p["name"], p["slug"], p["fs_slug"], p["count"]) for p in platforms] == [
-            ("Super Nintendo", "snes", "snes", 1),
-            ("Super Nintendo (snes-hacks)", "snes", "snes-hacks", 2),
-        ]
+        assert platforms == [{"name": "Super Nintendo", "slug": "snes", "count": 4, "reachable_count": 4}]
+
+    @pytest.mark.asyncio
+    async def test_a_slug_none_of_whose_fs_slugs_is_the_slug_takes_the_first_one_s_name(self, library):
+        from domain.rom import Rom
+
+        uow = library.uow
+        for rom_id, fs_slug in ((10, "gc-b"), (20, "gc-a")):
+            with uow:
+                uow.roms.save(
+                    Rom(
+                        rom_id=rom_id,
+                        platform_slug="ngc",
+                        platform_fs_slug=fs_slug,
+                        name=f"G{rom_id}",
+                        fs_name=f"g{rom_id}.iso",
+                        shortcut_app_id=1000 + rom_id,
+                        last_synced_at="2025-01-01T00:00:00",
+                    )
+                )
+        _seed_platform_names(uow, {"gc-a": "GameCube (gc-a)", "gc-b": "GameCube (gc-b)"})
+
+        platforms = library.sync.get_registry_platforms()["platforms"]
+
+        assert [(p["name"], p["slug"], p["count"]) for p in platforms] == [("GameCube (gc-a)", "ngc", 2)]

@@ -107,7 +107,7 @@ class LocalLibraryReader:
         Returns ``(registry, last_synced_platforms, last_synced_collections)``
         where ``registry`` is the ``classify_roms``-shaped dict (keyed by
         ``str(rom_id)``) reconstructed from the bound ``roms`` rows, with
-        the platform display name resolved by its folder from *folder_to_name*
+        the platform display name resolved by its ``fs_slug`` from *folder_to_name*
         (the live work-queue) and falling back to the slug. Each entry also carries the
         persisted ``cover_source`` fingerprint so the preview's cover-work
         count (#1386) compares in memory against the same projection — no
@@ -141,11 +141,11 @@ class LocalLibraryReader:
     ) -> int:
         """Count enabled platforms whose wholesale skip only a fresh ``PlatformSyncState`` stamp can restore.
 
-        *platform_folders* are their folders in RomM, the stamps' key.
+        *platform_folders* are their ``fs_slug`` values, the stamps' key.
 
         A platform lacking a completion stamp, or holding one whose skip was
         revoked (``stamp_for_skip``), has no wholesale-skip authority. One the
-        preview fetched in full (*full_fetched*, folder → the ROMs that fetch
+        preview fetched in full (*full_fetched*, ``fs_slug`` → the ROMs that fetch
         returned) counts too when its stamp does not match that fetch
         (``domain/platform_skip.restamp_due``): no checksum or fetch start, other
         ids, or a ROM updated after its reference. Either way
@@ -180,8 +180,7 @@ class LocalLibraryReader:
         not a shortcut the collapse can grandfather or rebind. Each entry also
         carries the persisted ``cover_source`` fingerprint, so the cover-cache
         invalidation pass (#1386) scans against this same projection instead of
-        per-ROM DB lookups. The apply path did not read the registry before
-        group-aware sync (ADR-0021).
+        per-ROM DB lookups.
         """
         with self._uow_factory() as uow:
             rows = (

@@ -168,7 +168,7 @@ class ShortcutRemovalService:
     def _remove_platform_shortcuts_io(self, platform_slug: str) -> dict[str, Any]:
         with self._uow_factory() as uow:
             roms = list(uow.roms.iter_by_platform(platform_slug))
-            # The names cache is keyed by folder; the panel asks by slug until it knows the folder.
+            # The names cache is keyed by fs_slug; this endpoint is asked by slug.
             folder = next((rom.platform_fs_slug for rom in roms if rom.platform_fs_slug is not None), None)
             platform_name = platform_display_name(uow.kv_config.get(PLATFORM_NAMES_KEY), folder, platform_slug)
         app_ids = [rom.shortcut_app_id for rom in roms if rom.shortcut_app_id is not None]
@@ -206,9 +206,9 @@ class ShortcutRemovalService:
         # removed shortcuts (the #1025 silent-gap class). Both bulk flows — Data
         # Management's remove-all and the per-platform removal on the Library
         # page's Platforms tab — funnel their unbind here, so revoking per touched
-        # platform folder covers each: remove-all reports every ROM (every platform
+        # platform fs_slug covers each: remove-all reports every ROM (every platform
         # revoked), a per-platform removal reports only that platform's ROMs (only
-        # its folder revoked). A row with no folder recorded has no stamp of its
+        # its fs_slug revoked). A row with no fs_slug recorded has no stamp of its
         # own to revoke. Same write UoW as the unbind.
         removed_ids: set[int] = set()
         with self._uow_factory() as uow:

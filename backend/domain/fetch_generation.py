@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 from domain.sync_diff import groups_to_converge
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Sequence
+    from collections.abc import Callable, Collection, Iterable, Sequence
 
     from domain.platform_sync_state import PlatformSyncState
     from domain.rom import Rom
@@ -113,6 +113,22 @@ def prune_candidate_ids(rows: Sequence[Rom], stamp: PlatformSyncState | None) ->
     if stamp is None or not stamp.fetch_id or stamp.rom_count <= 0:
         return set()
     return {row.rom_id for row in rows if row.last_fetch_id != stamp.fetch_id}
+
+
+def rows_with_their_stamp(
+    rows: Iterable[Rom], stamp_of: Callable[[str], PlatformSyncState | None]
+) -> list[tuple[list[Rom], PlatformSyncState | None]]:
+    """*rows* grouped by their platform's ``fs_slug``, each group with that platform's stamp.
+
+    *stamp_of* answers an ``fs_slug``'s stamp. The rows with no ``fs_slug``
+    recorded are one group with no stamp, since no platform stamp names them.
+    """
+    groups: dict[str | None, list[Rom]] = {}
+    for row in rows:
+        groups.setdefault(row.platform_fs_slug, []).append(row)
+    return [
+        (platform_rows, stamp_of(fs_slug) if fs_slug is not None else None) for fs_slug, platform_rows in groups.items()
+    ]
 
 
 def gone_from_romm_ids(rows: Sequence[Rom], stamp: PlatformSyncState | None) -> set[int]:

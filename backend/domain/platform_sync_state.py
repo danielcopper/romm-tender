@@ -10,7 +10,7 @@ from zero. This stamp is the per-platform checkpoint that survives that
 cancellation: the skip compares RomM's answer with the completing fetch's
 ``fetch_started_at`` and ``rom_id_checksum`` (``domain/platform_skip.py``).
 
-Keyed by ``platform_folder``, the folder RomM keeps the platform in
+Keyed by ``platform_folder``, the platform's ``fs_slug``
 (``fs_slug``), which two platforms never share. A thin record built whole and
 upserted — never a partial field mutation — so it carries a single ``stamp`` constructor and no
 verb-named mutators. The contract is *a stamp may authorise a skip ⟺ the
@@ -35,7 +35,7 @@ from domain._aggregate import cosmic_aggregate
 
 @cosmic_aggregate
 class PlatformSyncState:
-    """One platform's last fully-completed sync, keyed by its folder in RomM (``platform_folder``)."""
+    """One platform's last fully-completed sync, keyed by its ``fs_slug`` (``platform_folder``)."""
 
     platform_folder: str
     completed_at: str
@@ -56,7 +56,7 @@ class PlatformSyncState:
         fetch_started_at: str | None = None,
         rom_id_checksum: str | None = None,
     ) -> PlatformSyncState:
-        """Record that the platform in ``platform_folder`` fully synced at ISO timestamp ``at``.
+        """Record that the platform whose ``fs_slug`` is ``platform_folder`` fully synced at ISO timestamp ``at``.
 
         ``rom_count`` is the server's platform ROM count the completing run
         planned with. The skip does not read it; removed-game discovery reads

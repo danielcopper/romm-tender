@@ -164,10 +164,9 @@ class Rom:
         self.gone_from_romm = None
 
     def record_platform_folder(self, platform_folder: str) -> None:
-        """Record *platform_folder*, the folder RomM answered this ROM's exact id with (``platform_fs_slug``).
+        """Record the ``fs_slug`` RomM answered this ROM's exact id with (#2452 D5).
 
-        For a row no sync has given its folder yet (#2452 D5). An empty folder
-        names none and raises ``ValueError``.
+        An empty one names no platform and raises ``ValueError``.
         """
         if not platform_folder:
             raise ValueError("platform_folder must not be empty")

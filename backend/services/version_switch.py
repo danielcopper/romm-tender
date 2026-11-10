@@ -859,7 +859,7 @@ class VersionSwitchService:
         app_id: int,
         fallback_platform: str,
         bound_group_key: str | None,
-        fallback_folder: str | None = None,
+        fallback_folder: str | None,
     ) -> dict[str, Any]:
         """Persist a server-only target (server-derived facts) and bind it.
 
@@ -869,7 +869,7 @@ class VersionSwitchService:
         server-only target has no ``rom_installs`` row, so it is never installed —
         ``target_installed`` is ``False``. Siblings share a platform, so the bound group's
         ``platform_slug`` backstops a detail that omits it (``Rom.synced`` requires
-        a non-empty slug), and its platform folder (*fallback_folder*) one that
+        a non-empty slug), and its ``fs_slug`` (*fallback_folder*) one that
         omits ``platform_fs_slug``. A detail that the aggregate rejects (bad id, no
         resolvable slug) fails ``invalid_target`` — the target is a sibling, but
         its server payload can't become a local row.

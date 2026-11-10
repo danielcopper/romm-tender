@@ -97,7 +97,7 @@ class RomRepository(Protocol):
         ...
 
     def iter_by_platform_folder(self, platform_folder: str) -> Iterator[Rom]:
-        """Iterate ROMs whose platform RomM keeps in *platform_folder*; a row with no folder recorded is never one.
+        """Iterate ROMs whose platform's ``fs_slug`` is *platform_folder*; a row with none recorded is never one.
 
         (library/fetcher.py, library/local_library_reader.py)
         """
@@ -538,7 +538,7 @@ class SyncRunRepository(Protocol):
 class PlatformSyncStateRepository(Protocol):
     """Persistence seam for the ``PlatformSyncState`` aggregate (per-platform completion stamp).
 
-    Identity is the ``platform_folder``, the platform's folder in RomM
+    Identity is the ``platform_folder``, the platform's ``fs_slug``
     (``fs_slug``). Backs the incremental-skip gate's honoring of durable
     per-platform progress a cancelled/crashed run leaves behind (ADR-0023).
     """
@@ -563,7 +563,7 @@ class PlatformSyncStateRepository(Protocol):
     def revoke_skip(self, platform_folder: str) -> None:
         """Keep *platform_folder*'s stamp but take away its skip authority.
 
-        A no-op when no stamp exists; the next ``save`` for the folder clears it.
+        A no-op when no stamp exists; the next ``save`` for the ``fs_slug`` clears it.
         Called by the end-of-run stale removal on a platform the run did not
         process (library/run_finalizer.py) and by the local destructive flows
         (services/shortcut_removal.py). ``get`` still returns the stamp, flagged

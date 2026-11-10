@@ -1198,7 +1198,7 @@ class TestAMemberWithoutAPlatformFolderRefusesTheSkip:
 
         assert (skip.member_rom_ids, skip.restamp_settles) == (None, False)
         assert _probes(fake_romm_api) == []
-        assert "Per-unit fetch Faves: a game it holds has no platform folder recorded — fetch" in caplog.text
+        assert "Per-unit fetch Faves: a game it holds has no fs_slug recorded — fetch" in caplog.text
 
     @pytest.mark.asyncio
     async def test_a_member_whose_folder_is_recorded_skips(self, make_library, fake_romm_api):
@@ -1209,7 +1209,7 @@ class TestAMemberWithoutAPlatformFolderRefusesTheSkip:
 
 
 class TestAWalkedMemberKeepsItsOwnSlug:
-    """A walked member without a ``platform_slug`` is not given its folder for one (#2452 Q13)."""
+    """A walked member without a ``platform_slug`` is not given its ``fs_slug`` for one (#2452 D1)."""
 
     @pytest.mark.asyncio
     async def test_the_folder_never_stands_in_for_the_slug(self, make_library, fake_romm_api):

@@ -91,6 +91,25 @@ class TestFetchEnabledPlatforms:
         assert not isinstance(exc_info.value, RommNotFoundError)
 
 
+class TestAPlatformUnitCarriesItsFsSlug:
+    """A platform unit carries the listing's ``fs_slug``, and none where the listing gives a blank one (#2452 D1)."""
+
+    @pytest.mark.asyncio
+    async def test_each_unit_carries_its_own_fs_slug_and_a_blank_one_counts_as_none(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.platforms = [
+            {"id": 1, "name": "SNES", "slug": "snes", "fs_slug": "snes"},
+            {"id": 2, "name": "SNES", "slug": "snes", "fs_slug": "snes-hacks"},
+            {"id": 3, "name": "GBA", "slug": "gba", "fs_slug": "   "},
+        ]
+        library.settings["enabled_platforms"] = {}
+        library.settings["enabled_collections"] = {"standard": {}, "smart": {}, "virtual": {}}
+
+        units = await library.sync._fetcher.build_work_queue()
+
+        assert {u.id: u.platform_folder for u in units} == {1: "snes", 2: "snes-hacks", 3: ""}
+
+
 class TestGetPlatformsMaterialization:
     """Tests for get_platforms() — the #1007 empty-map → full-map self-heal."""
 
