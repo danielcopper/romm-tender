@@ -29,6 +29,7 @@ def _seed_rom(uow, rom_id, *, app_id, platform_slug="n64", name="Game", cover_pa
     rom = Rom(
         rom_id=rom_id,
         platform_slug=platform_slug,
+        platform_fs_slug=platform_slug,
         name=name,
         fs_name=f"{name}.z64",
         shortcut_app_id=app_id,
@@ -49,7 +50,7 @@ def _seed_stamp(uow, slug, *, at="2025-01-01T00:00:00", rom_count=100):
     from domain.platform_sync_state import PlatformSyncState
 
     with uow:
-        uow.platform_sync_state.save(PlatformSyncState.stamp(platform_slug=slug, at=at, rom_count=rom_count))
+        uow.platform_sync_state.save(PlatformSyncState.stamp(platform_folder=slug, at=at, rom_count=rom_count))
 
 
 def _skip_revoked(uow, slug):

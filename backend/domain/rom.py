@@ -163,6 +163,15 @@ class Rom:
         """Drop the mark once RomM answered this ROM's exact id with the ROM itself."""
         self.gone_from_romm = None
 
+    def record_platform_folder(self, platform_folder: str) -> None:
+        """Record the ``fs_slug`` RomM answered this ROM's exact id with (#2452 D5).
+
+        An empty one names no platform and raises ``ValueError``.
+        """
+        if not platform_folder:
+            raise ValueError("platform_folder must not be empty")
+        self.platform_fs_slug = platform_folder
+
     def follow_group(self, sibling_group_key: str) -> None:
         """Take *sibling_group_key*, the key of the group this ROM follows while a sync does not fetch it.
 

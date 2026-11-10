@@ -1426,22 +1426,23 @@ unchanged and removed counts, the platform and collection counts, and more), the
 added and removed collection names (`collection_diff`), each the name-part of a Steam collection — the key the run
 finalizer builds ([Collection naming mode](steam-non-steam-shortcuts.md#collection-naming-mode-merge-vs-by_label-1539)).
 The same counts split per platform ride the summary as `platform_breakdown` — one row per platform holding at least one
-non-zero count, ordered by name, each carrying `synced` for whether the platform is in the run's platform list. A
-`synced: false` row is a platform outside it: its toggle went off, RomM stopped listing it, or the only route to it is
-an enabled collection, which is not filtered by platform enablement. The causes compose, so one row can carry removals
-for the ROMs the run no longer fetches and new or changed counts for the ROMs a collection still reaches. Its name is
-the one the preview's platform-collection diff files the platform by, so the row carries the name the apply gives the
-platform's Steam collection: RomM's listed name for every platform the run's listing names, synced or not, else the name
-the backend recorded, and the bare slug where neither answers (#2564). A name carried on a fetched entry is not read.
-There is no collections row there: `collection_diff` on the same summary already carries the added and removed
-collection names. The Steam collections kept one per platform are a third field, `platform_collection_diff` —
-`has_changes` and an added and a removed count, no names, which is why the page's row for them states counts where the
-collections row states names. `get_sync_runs` answers the ten newest `sync_runs` rows of any status, newest first, each
-verbatim from the `SyncRun` aggregate (id, started, finished, status, planned counts, completed platforms and
-collections, error) — a field a run never recorded stays null, and the status is what says why. Skip preview is a
-user-intent setting in `settings.json` written by its owner (`adapters/persistence.py`) and reported by `get_settings`.
-No backend sync path consults it: the choice between asking for a preview and starting the run is made on the frontend,
-by this page's own start button.
+non-zero count, keyed by the platform's `fs_slug` ([#2452](https://github.com/danielcopper/romm-tender/issues/2452) D1),
+ordered by name, each carrying `synced` for whether the platform is in the run's platform list. A `synced: false` row is
+a platform outside it: its toggle went off, RomM stopped listing it, or the only route to it is an enabled collection,
+which is not filtered by platform enablement. The causes compose, so one row can carry removals for the ROMs the run no
+longer fetches and new or changed counts for the ROMs a collection still reaches. Its name is the one the preview's
+platform-collection diff files the platform by, so the row carries the name the apply gives the platform's Steam
+collection: RomM's listed name for every platform the run's listing names, synced or not, else the name the backend
+recorded, and the bare `fs_slug` where neither answers (#2564). A name carried on a fetched entry is not read. There is
+no collections row there: `collection_diff` on the same summary already carries the added and removed collection names.
+The Steam collections kept one per platform are a third field, `platform_collection_diff` — `has_changes` and an added
+and a removed count, no names, which is why the page's row for them states counts where the collections row states
+names. `get_sync_runs` answers the ten newest `sync_runs` rows of any status, newest first, each verbatim from the
+`SyncRun` aggregate (id, started, finished, status, planned counts, completed platforms and collections, error) — a
+field a run never recorded stays null, and the status is what says why. Skip preview is a user-intent setting in
+`settings.json` written by its owner (`adapters/persistence.py`) and reported by `get_settings`. No backend sync path
+consults it: the choice between asking for a preview and starting the run is made on the frontend, by this page's own
+start button.
 
 ## Library
 
@@ -2107,12 +2108,14 @@ it, for the focused platform:
 Six reads feed the tab. Three run once per page mount: `get_platforms` (RomM's platforms with ROMs, the list itself),
 `get_firmware_status` (whether RomM's firmware listing could be read, which the BIOS downloads stand on, and nothing
 about any platform) and `get_registry_platforms` (ROMs bound to a Steam shortcut per platform — the shortcut counts, and
-what "has synced games" means here). Only the first gates the list; the other two fill in beside it. A failed
-`get_firmware_status` leaves the downloads offered, as they are while it is in flight, and a download the server cannot
-serve says so itself. A failed `get_registry_platforms` **says so on the pane**, because a failure and an answer arrive
-the same way — as an absence: read as zero shortcuts would print `0 versions in Steam` in the header and disable the
-removal, two claims about a platform nothing was learned about; the counts go to `null` instead, which is not zero, and
-a line under the header says the number is missing while the removal stays live (it needs only the slug).
+what "has synced games" means here; one entry per slug, summed over every `fs_slug` its games carry, until the tab knows
+a platform by its `fs_slug`, [#2452](https://github.com/danielcopper/romm-tender/issues/2452) D3). Only the first gates
+the list; the other two fill in beside it. A failed `get_firmware_status` leaves the downloads offered, as they are
+while it is in flight, and a download the server cannot serve says so itself. A failed `get_registry_platforms` **says
+so on the pane**, because a failure and an answer arrive the same way — as an absence: read as zero shortcuts would
+print `0 versions in Steam` in the header and disable the removal, two claims about a platform nothing was learned
+about; the counts go to `null` instead, which is not zero, and a line under the header says the number is missing while
+the removal stays live (it needs only the slug).
 
 The fourth is `get_platform_firmware_status`, and it is asked **once per platform** rather than once per page — for
 **every platform the list shows**, whether or not the RomM library holds firmware for it or any of its games is synced

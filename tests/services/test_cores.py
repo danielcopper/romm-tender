@@ -58,6 +58,7 @@ def _seed_rom(
         Rom(
             rom_id=rom_id,
             platform_slug=platform_slug,
+            platform_fs_slug=platform_slug,
             name=f"rom-{rom_id}",
             fs_name=f"rom-{rom_id}.sfc",
             shortcut_app_id=shortcut_app_id,

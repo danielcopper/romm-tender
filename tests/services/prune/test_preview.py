@@ -34,6 +34,7 @@ def _rom(rom_id: int, *, name: str, group: str, fetch_id: str | None, main: bool
     row = Rom.synced(
         rom_id=rom_id,
         platform_slug="dc",
+        platform_fs_slug="dc",
         name=name,
         fs_name=f"{name}.chd",
         shortcut_app_id=None,
@@ -65,7 +66,7 @@ def _two_groups() -> FakeUnitOfWork:
         uow.roms.save(_rom(4376, name="Game B", group="igdb:1218:53", fetch_id="old"))
         uow.roms.save(_rom(25136, name="Game B", group="igdb:1218:53", fetch_id="current"))
         uow.platform_sync_state.save(
-            PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=2, fetch_id="current")
+            PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=2, fetch_id="current")
         )
     return uow
 
@@ -138,6 +139,7 @@ def test_a_row_carries_its_text_whole_and_no_truncation_flag() -> None:
         row = Rom.synced(
             rom_id=1,
             platform_slug="dc",
+            platform_fs_slug="dc",
             name="n" * long,
             fs_name="f" * long,
             shortcut_app_id=None,
@@ -157,7 +159,7 @@ def test_a_row_carries_its_text_whole_and_no_truncation_flag() -> None:
             )
         )
         uow.platform_sync_state.save(
-            PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id="current")
+            PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=1, fetch_id="current")
         )
 
     class _UnmeasurableRecovery(_Recovery):
@@ -193,7 +195,7 @@ def test_a_row_says_whether_a_shortcut_is_on_that_version() -> None:
         uow.roms.save(bound)
         uow.roms.save(_rom(25135, name="Game A", group="igdb:1217:53", fetch_id="current"))
         uow.platform_sync_state.save(
-            PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id="current")
+            PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=1, fetch_id="current")
         )
     builder = _builder(uow)
 
@@ -228,7 +230,7 @@ def test_the_trash_icons_preview_says_which_of_the_games_other_versions_are_gone
         uow.roms.save(_rom(4377, name="Game A (Europe)", group="igdb:1217:53", fetch_id="old"))
         uow.roms.save(_rom(25135, name="Game A (Japan)", group="igdb:1217:53", fetch_id="current"))
         uow.platform_sync_state.save(
-            PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id="current")
+            PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=1, fetch_id="current")
         )
     builder = _builder(uow)
 
@@ -248,7 +250,7 @@ def test_the_trash_icon_offers_the_whole_game_where_every_version_of_it_is_gone(
         uow.roms.save(_rom(4377, name="Game A (Europe)", group="igdb:1217:53", fetch_id="old"))
         uow.roms.save(_rom(25136, name="Game B", group="igdb:1218:53", fetch_id="current"))
         uow.platform_sync_state.save(
-            PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id="current")
+            PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=1, fetch_id="current")
         )
     builder = _builder(uow)
 
@@ -279,7 +281,7 @@ def test_a_row_says_whether_it_is_its_groups_main_sibling() -> None:
         uow.roms.save(_rom(4375, name="Game A (Japan)", group="igdb:1217:53", fetch_id="old"))
         uow.roms.save(_rom(25135, name="Game A (USA)", group="igdb:1217:53", fetch_id="current", main=True))
         uow.platform_sync_state.save(
-            PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id="current")
+            PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=1, fetch_id="current")
         )
     builder = _builder(uow)
 
@@ -295,7 +297,7 @@ def test_the_trash_icon_offers_its_version_as_gone_while_its_platforms_last_fetc
         uow.roms.save(_rom(4375, name="Game A (USA)", group="igdb:1217:53", fetch_id="current"))
         uow.roms.save(_rom(25135, name="Game A (Japan)", group="igdb:1217:53", fetch_id="current"))
         uow.platform_sync_state.save(
-            PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=2, fetch_id="current")
+            PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=2, fetch_id="current")
         )
     builder = _builder(uow)
 
@@ -314,7 +316,7 @@ def test_the_trash_icon_offers_the_whole_game_where_its_version_was_the_last_one
         uow.roms.save(_rom(4375, name="Game A (USA)", group="igdb:1217:53", fetch_id="current"))
         uow.roms.save(_rom(4377, name="Game A (Europe)", group="igdb:1217:53", fetch_id="old"))
         uow.platform_sync_state.save(
-            PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id="current")
+            PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=1, fetch_id="current")
         )
     builder = _builder(uow)
 

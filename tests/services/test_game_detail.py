@@ -227,6 +227,7 @@ def _seed_metadata(game_detail, rom_id, *, cached_at, summary="", genres=(), app
     rom = Rom(
         rom_id=rom_id,
         platform_slug=platform_slug,
+        platform_fs_slug=platform_slug,
         name=f"Game {rom_id}",
         fs_name=f"game_{rom_id}.sfc",
         shortcut_app_id=app_id if app_id is not None else 1000 + rom_id,
@@ -684,6 +685,7 @@ class TestTargetPathOccupied:
                 Rom(
                     rom_id=10,
                     platform_slug="snes",
+                    platform_fs_slug="snes",
                     name="Game",
                     fs_name="",
                     shortcut_app_id=50000,
@@ -1380,3 +1382,29 @@ class TestTheBiosCheckIsAskedByThePlatformsFolder:
             "bios_label": None,
             "bios_status_unknown": True,
         }
+
+
+class TestTheGamePageNamesThePlatformByItsFolder:
+    """The game page takes its platform's name from the names cache by the game's folder (#2452 D10)."""
+
+    @pytest.mark.asyncio
+    async def test_a_game_in_a_second_folder_is_named_by_that_folder(self, game_detail):
+        from domain.rom import Rom
+
+        with game_detail.uow:
+            game_detail.uow.roms.save(
+                Rom(
+                    rom_id=10,
+                    platform_slug="snes",
+                    platform_fs_slug="snes-hacks",
+                    name="Hack",
+                    fs_name="hack.sfc",
+                    shortcut_app_id=50000,
+                    last_synced_at="2025-01-01T00:00:00",
+                )
+            )
+        _seed_platform_names(game_detail, {"snes": "Super Nintendo", "snes-hacks": "Super Nintendo (snes-hacks)"})
+
+        result = await game_detail.service.get_cached_game_detail(50000)
+
+        assert result["platform_name"] == "Super Nintendo (snes-hacks)"

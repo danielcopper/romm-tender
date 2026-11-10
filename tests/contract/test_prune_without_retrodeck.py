@@ -27,6 +27,7 @@ def _seed_removed_game(harness) -> None:
     removed = Rom.synced(
         rom_id=_ROM_ID,
         platform_slug="gba",
+        platform_fs_slug="gba",
         name="Removed Game",
         fs_name="Removed Game.gba",
         shortcut_app_id=None,
@@ -36,6 +37,7 @@ def _seed_removed_game(harness) -> None:
     control = Rom.synced(
         rom_id=_CONTROL_ROM_ID,
         platform_slug="snes",
+        platform_fs_slug="snes",
         name="Kept Game",
         fs_name="Kept Game.sfc",
         shortcut_app_id=None,
@@ -47,7 +49,7 @@ def _seed_removed_game(harness) -> None:
         uow.roms.save(control)
         for slug, fetch_id in (("gba", "completed-fetch"), ("snes", "snes-fetch")):
             uow.platform_sync_state.save(
-                PlatformSyncState.stamp(platform_slug=slug, at="2026-01-02T00:00:00", rom_count=1, fetch_id=fetch_id)
+                PlatformSyncState.stamp(platform_folder=slug, at="2026-01-02T00:00:00", rom_count=1, fetch_id=fetch_id)
             )
     harness.romm.get_rom_once_side_effect_by_id[_ROM_ID] = RommNotFoundError("gone")
 

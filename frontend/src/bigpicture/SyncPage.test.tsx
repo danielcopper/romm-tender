@@ -414,9 +414,9 @@ describe("SyncPage", () => {
   // ===========================================================================
   describe("the preview table", () => {
     const breakdown = [
-      { slug: "psx", name: "PlayStation", synced: true, new_count: 4, changed_count: 1, remove_count: 0 },
-      { slug: "snes", name: "SNES", synced: true, new_count: 8, changed_count: 2, remove_count: 0 },
-      { slug: "saturn", name: "Sega Saturn", synced: false, new_count: 1, changed_count: 0, remove_count: 6 },
+      { fs_slug: "psx", name: "PlayStation", synced: true, new_count: 4, changed_count: 1, remove_count: 0 },
+      { fs_slug: "snes", name: "SNES", synced: true, new_count: 8, changed_count: 2, remove_count: 0 },
+      { fs_slug: "saturn", name: "Sega Saturn", synced: false, new_count: 1, changed_count: 0, remove_count: 6 },
     ];
 
     it("draws one row per platform, and a total from the SUMMARY rather than from the rows", async () => {
@@ -598,7 +598,14 @@ describe("SyncPage", () => {
           summary: summary({
             remove_count: 6,
             platform_breakdown: [
-              { slug: "gba", name: "Game Boy Advance", synced: false, new_count: 0, changed_count: 0, remove_count: 6 },
+              {
+                fs_slug: "gba",
+                name: "Game Boy Advance",
+                synced: false,
+                new_count: 0,
+                changed_count: 0,
+                remove_count: 6,
+              },
             ],
           }),
         }),
@@ -1402,7 +1409,7 @@ describe("SyncPage", () => {
           summary: summary({
             new_count: 4,
             platform_breakdown: [
-              { slug: "psx", name: "PlayStation", synced: true, new_count: 4, changed_count: 0, remove_count: 0 },
+              { fs_slug: "psx", name: "PlayStation", synced: true, new_count: 4, changed_count: 0, remove_count: 0 },
             ],
           }),
         }),
@@ -2412,7 +2419,7 @@ describe("SyncPage", () => {
           summary: summary({
             new_count: 4,
             platform_breakdown: [
-              { slug: "psx", name: "PlayStation", synced: true, new_count: 4, changed_count: 0, remove_count: 0 },
+              { fs_slug: "psx", name: "PlayStation", synced: true, new_count: 4, changed_count: 0, remove_count: 0 },
             ],
           }),
         }),

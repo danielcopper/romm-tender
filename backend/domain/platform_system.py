@@ -24,6 +24,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from domain.emulator_sources import ALL_SOURCES_SWITCHED_OFF, NO_SOURCE_DETECTED, ArrangedSource
+from domain.platform_names import listed_fs_slug
 from domain.retrodeck_folders import FolderRefused, not_installed, switched_off, unanswered_refusal
 
 if TYPE_CHECKING:
@@ -120,7 +121,7 @@ def kept_platform_of(platform: Mapping[str, Any], romm_version: str | None) -> K
     identified = platform.get("is_identified")
     return KeptPlatform(
         slug=_text(platform.get("slug")),
-        fs_slug=_text(platform.get("fs_slug")),
+        fs_slug=listed_fs_slug(platform),
         platform_id=_number(platform.get("id")),
         name=_listed_name(platform),
         is_identified=identified if isinstance(identified, bool) else None,

@@ -92,7 +92,14 @@ class RomRepository(Protocol):
     def iter_by_platform(self, platform_slug: str) -> Iterator[Rom]:
         """Iterate ROMs on *platform_slug*.
 
-        (cores.py, shortcut_removal.py, library/fetcher.py, library/local_library_reader.py)
+        (shortcut_removal.py)
+        """
+        ...
+
+    def iter_by_platform_folder(self, platform_folder: str) -> Iterator[Rom]:
+        """Iterate ROMs whose platform's ``fs_slug`` is *platform_folder*; a row with none recorded is never one.
+
+        (library/fetcher.py, library/local_library_reader.py)
         """
         ...
 
@@ -531,21 +538,21 @@ class SyncRunRepository(Protocol):
 class PlatformSyncStateRepository(Protocol):
     """Persistence seam for the ``PlatformSyncState`` aggregate (per-platform completion stamp).
 
-    Identity is the ``platform_slug``. Backs the incremental-skip gate's honoring
-    of durable per-platform progress a cancelled/crashed run leaves behind
-    (ADR-0023).
+    Identity is the ``platform_folder``, the platform's ``fs_slug``.
+    Backs the incremental-skip gate's honoring of durable
+    per-platform progress a cancelled/crashed run leaves behind (ADR-0023).
     """
 
-    def get(self, platform_slug: str) -> PlatformSyncState | None:
-        """Return the completion stamp for *platform_slug*, or ``None``. (library/fetcher.py skip gate)"""
+    def get(self, platform_folder: str) -> PlatformSyncState | None:
+        """Return the completion stamp for *platform_folder*, or ``None``. (library/fetcher.py skip gate)"""
         ...
 
     def save(self, state: PlatformSyncState) -> None:
         """Upsert the completion stamp. (library/reporter.py final-chunk commit)"""
         ...
 
-    def delete(self, platform_slug: str) -> None:
-        """Drop *platform_slug*'s stamp so that one platform full-fetches next run.
+    def delete(self, platform_folder: str) -> None:
+        """Drop *platform_folder*'s stamp so that one platform full-fetches next run.
 
         A no-op when no stamp exists. Called at a platform unit's apply start
         (library/unit_apply.py) so an interrupted re-apply leaves no stale
@@ -553,10 +560,10 @@ class PlatformSyncStateRepository(Protocol):
         """
         ...
 
-    def revoke_skip(self, platform_slug: str) -> None:
-        """Keep *platform_slug*'s stamp but take away its skip authority.
+    def revoke_skip(self, platform_folder: str) -> None:
+        """Keep *platform_folder*'s stamp but take away its skip authority.
 
-        A no-op when no stamp exists; the next ``save`` for the slug clears it.
+        A no-op when no stamp exists; the next ``save`` for the ``fs_slug`` clears it.
         Called by the end-of-run stale removal on a platform the run did not
         process (library/run_finalizer.py) and by the local destructive flows
         (services/shortcut_removal.py). ``get`` still returns the stamp, flagged

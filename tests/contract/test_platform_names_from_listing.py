@@ -97,6 +97,7 @@ def _an_older_version_filed_20_under_the_slug(harness) -> None:
             Rom.synced(
                 rom_id=_GAME,
                 platform_slug="n64",
+                platform_fs_slug="n64",
                 name="Golf",
                 fs_name="Golf.z64",
                 shortcut_app_id=_APP_ID,

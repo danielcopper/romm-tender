@@ -127,7 +127,7 @@ def seed_platform_stamp(
     """
     with harness.uow_factory() as uow:
         uow.platform_sync_state.save(
-            PlatformSyncState.stamp(platform_slug=platform_slug, at=completed_at, rom_count=rom_count)
+            PlatformSyncState.stamp(platform_folder=platform_slug, at=completed_at, rom_count=rom_count)
         )
 
 
@@ -188,6 +188,7 @@ def seed_group_member(
             Rom.synced(
                 rom_id=rom_id,
                 platform_slug=platform_slug,
+                platform_fs_slug=platform_slug,
                 name=name or f"rom-{rom_id}",
                 fs_name=name or f"rom-{rom_id}",
                 shortcut_app_id=shortcut_app_id,

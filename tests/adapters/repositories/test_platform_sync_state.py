@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 
 def _stamp(slug: str, *, at: str = "2026-01-01T00:00:00+00:00", rom_count: int = 100) -> PlatformSyncState:
-    return PlatformSyncState.stamp(platform_slug=slug, at=at, rom_count=rom_count)
+    return PlatformSyncState.stamp(platform_folder=slug, at=at, rom_count=rom_count)
 
 
 class TestRoundTrip:
@@ -28,7 +28,7 @@ class TestRoundTrip:
 
     def test_the_fetch_start_and_the_checksum_read_back(self, uow: SqliteUnitOfWork):
         stamp = PlatformSyncState.stamp(
-            platform_slug="n64",
+            platform_folder="n64",
             at="2026-10-19T12:30:00+00:00",
             rom_count=3,
             fetch_id="run-1",
@@ -97,7 +97,9 @@ class TestDelete:
 class TestRevokeSkip:
     def test_revoke_flags_only_the_named_slug_and_keeps_the_stamp(self, uow: SqliteUnitOfWork):
         uow.platform_sync_state.save(
-            PlatformSyncState.stamp(platform_slug="n64", at="2026-01-01T00:00:00+00:00", rom_count=3, fetch_id="run-1")
+            PlatformSyncState.stamp(
+                platform_folder="n64", at="2026-01-01T00:00:00+00:00", rom_count=3, fetch_id="run-1"
+            )
         )
         uow.platform_sync_state.save(_stamp("snes"))
 

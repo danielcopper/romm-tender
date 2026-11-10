@@ -236,6 +236,7 @@ def _seed_marked_row(harness, rom_id: int, *, slug: str, evidence: GoneEvidence,
     rom = Rom.synced(
         rom_id=rom_id,
         platform_slug=slug,
+        platform_fs_slug=slug,
         name=f"Game {rom_id}",
         fs_name=f"Game {rom_id}.rom",
         shortcut_app_id=None,
@@ -253,6 +254,7 @@ def _seed_control(harness, rom_id: int = 900041) -> None:
     rom = Rom.synced(
         rom_id=rom_id,
         platform_slug="snes",
+        platform_fs_slug="snes",
         name="Kept Game",
         fs_name="Kept Game.sfc",
         shortcut_app_id=None,
@@ -262,7 +264,9 @@ def _seed_control(harness, rom_id: int = 900041) -> None:
     with harness.uow_factory() as uow:
         uow.roms.save(rom)
         uow.platform_sync_state.save(
-            PlatformSyncState.stamp(platform_slug="snes", at="2026-01-02T00:00:00", rom_count=1, fetch_id="snes-fetch")
+            PlatformSyncState.stamp(
+                platform_folder="snes", at="2026-01-02T00:00:00", rom_count=1, fetch_id="snes-fetch"
+            )
         )
 
 
@@ -317,7 +321,7 @@ async def test_a_gone_game_on_a_delisted_platform_is_removed_though_the_lowest_s
     """Three N64 games RomM no longer lists keep their stamp's generation; none of them may vouch for a 404."""
     with harness.uow_factory() as uow:
         uow.platform_sync_state.save(
-            PlatformSyncState.stamp(platform_slug="n64", at="2026-01-02T00:00:00", rom_count=3, fetch_id="n64-fetch")
+            PlatformSyncState.stamp(platform_folder="n64", at="2026-01-02T00:00:00", rom_count=3, fetch_id="n64-fetch")
         )
     for rom_id in (1, 2, 3):
         _seed_marked_row(harness, rom_id, slug="n64", evidence="delisted", fetch_id="n64-fetch")
@@ -359,6 +363,7 @@ def _seed_group_member(
     rom = Rom.synced(
         rom_id=rom_id,
         platform_slug="gba",
+        platform_fs_slug="gba",
         name="Madagascar",
         fs_name=f"Madagascar ({rom_id}).gba",
         shortcut_app_id=app_id,
@@ -415,7 +420,7 @@ async def test_a_kept_candidate_the_run_proves_gone_carries_the_mark(harness):
             row.record_fetch_generation(fetch_id)
             uow.roms.save(row)
         uow.platform_sync_state.save(
-            PlatformSyncState.stamp(platform_slug="gba", at="2026-01-02T00:00:00", rom_count=1, fetch_id="gba-fetch")
+            PlatformSyncState.stamp(platform_folder="gba", at="2026-01-02T00:00:00", rom_count=1, fetch_id="gba-fetch")
         )
     harness.romm.get_rom_once_side_effect_by_id[40] = RommNotFoundError("Rom with id 40 not found")
     assert await _listed(harness) == {40}
@@ -465,7 +470,7 @@ async def test_a_version_that_answers_both_ways_in_one_run_gains_no_mark(harness
             row.record_fetch_generation("gba-fetch")
             uow.roms.save(row)
         uow.platform_sync_state.save(
-            PlatformSyncState.stamp(platform_slug="gba", at="2026-01-02T00:00:00", rom_count=2, fetch_id="gba-fetch")
+            PlatformSyncState.stamp(platform_folder="gba", at="2026-01-02T00:00:00", rom_count=2, fetch_id="gba-fetch")
         )
     assert await _listed(harness) == {30}
     _answer_in_turn(

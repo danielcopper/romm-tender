@@ -9,6 +9,7 @@ import pytest
 from domain.collection_skip import (
     apply_stamps,
     holds_a_game_to_converge,
+    holds_a_game_without_its_platform_folder,
     membership_verdict,
     probe_verdict,
     recorded_updated_at,
@@ -215,6 +216,7 @@ def _row(rom_id: int, *, app_id: int | None, key: str | None = "igdb:300:2", slu
     return Rom(
         rom_id=rom_id,
         platform_slug=slug,
+        platform_fs_slug=slug,
         name=f"rom-{rom_id}",
         fs_name=f"rom-{rom_id}.zip",
         shortcut_app_id=app_id,
@@ -230,26 +232,50 @@ class TestHoldsAGameToConverge:
 
     def test_a_member_whose_game_holds_two_bound_shortcuts_refuses_the_skip(self):
         rows = [_row(30, app_id=6030), _row(31, app_id=6031)]
-        assert holds_a_game_to_converge(rows, [30], platform_slugs=self._OFF) is True
+        assert holds_a_game_to_converge(rows, [30], platform_folders=self._OFF) is True
 
     def test_an_unbound_member_of_such_a_game_refuses_it_too(self):
         rows = [_row(30, app_id=6030), _row(31, app_id=6031), _row(32, app_id=None)]
-        assert holds_a_game_to_converge(rows, [32], platform_slugs=self._OFF) is True
+        assert holds_a_game_to_converge(rows, [32], platform_folders=self._OFF) is True
 
     def test_a_game_with_one_bound_shortcut_does_not(self):
         rows = [_row(30, app_id=6030), _row(31, app_id=None)]
-        assert holds_a_game_to_converge(rows, [30, 31], platform_slugs=self._OFF) is False
+        assert holds_a_game_to_converge(rows, [30, 31], platform_folders=self._OFF) is False
 
     def test_a_member_of_another_game_does_not(self):
         rows = [_row(30, app_id=6030), _row(31, app_id=6031), _row(40, app_id=6040, key="igdb:400:2")]
-        assert holds_a_game_to_converge(rows, [40], platform_slugs=self._OFF) is False
+        assert holds_a_game_to_converge(rows, [40], platform_folders=self._OFF) is False
 
     def test_a_game_on_a_platform_the_sync_does_not_leave_off_does_not(self):
         # A platform with a unit of its own converges it; a platform RomM no
         # longer lists is walked by no collection.
         rows = [_row(30, app_id=6030), _row(31, app_id=6031)]
-        assert holds_a_game_to_converge(rows, [30], platform_slugs=frozenset({"n64"})) is False
+        assert holds_a_game_to_converge(rows, [30], platform_folders=frozenset({"n64"})) is False
 
     def test_a_null_key_is_never_a_game(self):
         rows = [_row(30, app_id=6030, key=None), _row(31, app_id=6031, key=None)]
-        assert holds_a_game_to_converge(rows, [30], platform_slugs=self._OFF) is False
+        assert holds_a_game_to_converge(rows, [30], platform_folders=self._OFF) is False
+
+
+class TestAMemberWithoutAPlatformFolder:
+    """#2452 D5: a collection holding a game no sync gave its platform folder is fetched rather than skipped."""
+
+    @staticmethod
+    def _row(rom_id: int, folder: str | None) -> Rom:
+        return Rom(
+            rom_id=rom_id,
+            platform_slug="snes",
+            platform_fs_slug=folder,
+            name=f"G{rom_id}",
+            fs_name=f"g{rom_id}.sfc",
+            shortcut_app_id=None,
+            last_synced_at="2026-01-01T00:00:00",
+        )
+
+    def test_a_member_without_a_folder_refuses_the_skip(self):
+        rows = [self._row(10, "snes"), self._row(11, None)]
+        assert holds_a_game_without_its_platform_folder(rows, (10, 11)) is True
+
+    def test_a_row_outside_the_members_does_not(self):
+        rows = [self._row(10, "snes"), self._row(12, None)]
+        assert holds_a_game_without_its_platform_folder(rows, (10, 11)) is False

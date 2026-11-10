@@ -11,26 +11,26 @@ if TYPE_CHECKING:
 
 
 class FakePlatformSyncStateRepository:
-    """Dict-backed ``PlatformSyncStateRepository`` keyed by ``platform_slug``."""
+    """Dict-backed ``PlatformSyncStateRepository`` keyed by ``platform_folder``."""
 
     def __init__(self) -> None:
         self._stamps: dict[str, PlatformSyncState] = {}
         self.save_count = 0
 
-    def get(self, platform_slug: str) -> PlatformSyncState | None:
-        return copy.deepcopy(self._stamps.get(platform_slug))
+    def get(self, platform_folder: str) -> PlatformSyncState | None:
+        return copy.deepcopy(self._stamps.get(platform_folder))
 
     def save(self, state: PlatformSyncState) -> None:
         self.save_count += 1
-        self._stamps[state.platform_slug] = copy.deepcopy(state)
+        self._stamps[state.platform_folder] = copy.deepcopy(state)
 
-    def delete(self, platform_slug: str) -> None:
-        self._stamps.pop(platform_slug, None)
+    def delete(self, platform_folder: str) -> None:
+        self._stamps.pop(platform_folder, None)
 
-    def revoke_skip(self, platform_slug: str) -> None:
-        stamp = self._stamps.get(platform_slug)
+    def revoke_skip(self, platform_folder: str) -> None:
+        stamp = self._stamps.get(platform_folder)
         if stamp is not None:
-            self._stamps[platform_slug] = replace(stamp, skip_revoked=True)
+            self._stamps[platform_folder] = replace(stamp, skip_revoked=True)
 
     def has_any(self) -> bool:
         return any(not stamp.skip_revoked for stamp in self._stamps.values())

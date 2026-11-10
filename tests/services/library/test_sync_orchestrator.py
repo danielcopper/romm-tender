@@ -146,7 +146,7 @@ def _seed_platform_stamp(library, slug, *, at, rom_count, fetch_id=None, rom_ids
     with library.uow:
         library.uow.platform_sync_state.save(
             PlatformSyncState.stamp(
-                platform_slug=slug,
+                platform_folder=slug,
                 at=at,
                 rom_count=rom_count,
                 fetch_id=fetch_id,
@@ -275,7 +275,7 @@ class TestSyncPreview:
         # buckets in the order the domain function takes them.
         assert summary["platform_breakdown"] == [
             {
-                "slug": "n64",
+                "fs_slug": "n64",
                 "name": "N64",
                 "synced": True,
                 "new_count": 1,
@@ -1879,7 +1879,7 @@ class TestFetchPlatformUnit:
             roms=[{"id": 10, "name": "A"}, {"id": 11, "name": "B"}],
         )
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=2)
         roms, skipped = await library.sync._fetcher.fetch_platform_unit(unit)
         assert skipped is False
         assert [r["id"] for r in roms] == [10, 11]
@@ -1890,7 +1890,7 @@ class TestFetchPlatformUnit:
         library = make_library(romm_api=fake_romm_api)
         # No ROMs seeded on the fake; the platform's listing reports zero
         # updates after the completion stamp so the incremental-skip path fires.
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=2)
         _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00Z", rom_count=2)
         _seed_rom_row(
             library, 10, app_id=1010, platform_slug="n64", name="A", fs_name="a.z64", sibling_group_key="romm:10:1"
@@ -1917,7 +1917,7 @@ class TestFetchPlatformUnit:
             slug="n64",
             roms=[{"id": 10, "name": "A"}, {"id": 11, "name": "B"}],
         )
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=2)
         _seed_completed_run(library, at="2025-01-01T00:00:00Z")
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="A", fs_name="a.z64", sibling_group_key=None)
         _seed_rom_row(
@@ -1941,7 +1941,7 @@ class TestFetchPlatformUnit:
             slug="n64",
             roms=[{"id": 10, "name": "A"}, {"id": 11, "name": "B"}, {"id": 12, "name": "C"}],
         )
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=3)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=3)
         _seed_completed_run(library, at="2025-01-01T00:00:00Z")
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="A")
 
@@ -4399,7 +4399,7 @@ class TestApplyUnitCollectionAndCancel:
 
         library.sync._box.sync_state = SyncState.RUNNING
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
         applied = await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -4432,7 +4432,7 @@ class TestApplyUnitCollectionAndCancel:
         library.cover_preparer._download_artwork = cancel_during_artwork
         library.sync._box.sync_state = SyncState.RUNNING
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
         applied = await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -4472,7 +4472,7 @@ class TestApplyUnitCollectionAndCancel:
         library.cover_preparer._download_artwork = cancel_during_artwork
         library.sync._box.sync_state = SyncState.RUNNING
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=2)
         processed = await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -4508,7 +4508,7 @@ class TestApplyUnitCollectionAndCancel:
         library.cover_preparer.refresh_changed_covers = cancel_during_cover_refresh
         library.sync._box.sync_state = SyncState.RUNNING
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
         processed = await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -4549,7 +4549,7 @@ class TestApplyUnitCollectionAndCancel:
         library.chunk_dispatcher._wait_for_unit_complete = wait_user_cancel
         library.sync._box.sync_state = SyncState.RUNNING
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
         applied = await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -4596,7 +4596,7 @@ class TestApplyUnitCollectionAndCancel:
         library.chunk_dispatcher._wait_for_unit_complete = wait_timeout
         library.sync._box.sync_state = SyncState.RUNNING
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
         applied = await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -4660,7 +4660,7 @@ class TestPerUnitMetadataStamping:
         library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
         await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -4707,7 +4707,7 @@ class TestPerUnitMetadataStamping:
         library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
         await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -4760,7 +4760,7 @@ class TestPerUnitMetadataStamping:
         library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=5)
         await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -4810,7 +4810,7 @@ class TestPlatformCompletionStamp:
         library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=2)
         await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -4856,7 +4856,7 @@ class TestPlatformCompletionStamp:
         library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=5)
         await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -4871,7 +4871,7 @@ class TestPlatformCompletionStamp:
         assert stamps[0] is None
         assert stamps[1] is None
         assert stamps[2] is not None
-        assert stamps[2].platform_slug == "n64"
+        assert stamps[2].platform_folder == "n64"
         assert stamps[2].rom_count == 5
 
     @pytest.mark.asyncio
@@ -4904,7 +4904,7 @@ class TestPlatformCompletionStamp:
         library.chunk_dispatcher._wait_for_unit_complete = wait
         box.sync_state = SyncState.RUNNING
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=5)
         await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -4939,7 +4939,7 @@ class TestPlatformCompletionStamp:
         library.chunk_dispatcher._wait_for_unit_complete = timeout_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=2)
         await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -5037,7 +5037,7 @@ class TestPlatformCompletionStamp:
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-abc"
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=5)
         await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -5148,7 +5148,7 @@ class TestPlatformCompletionStamp:
         library.chunk_dispatcher._wait_for_unit_complete = wait
         box.sync_state = SyncState.RUNNING
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=5)
         await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -5185,7 +5185,7 @@ class TestPlatformCompletionStamp:
         library.chunk_dispatcher._wait_for_unit_complete = timeout_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=2)
         await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -5222,7 +5222,7 @@ class TestPlatformCompletionStamp:
         library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=2)
         await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -5253,7 +5253,7 @@ class TestPlatformCompletionStamp:
         library.sync._reporter.commit_unit_results = AsyncMock()  # type: ignore[method-assign]
         library.sync._box.sync_state = SyncState.RUNNING
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
         applied = await library.unit_applier.apply_unit(
             unit,
             unit_index=0,
@@ -5286,7 +5286,7 @@ class TestPlatformCompletionStamp:
         library.unit_applier._sync_platform_unit = boom
         library.sync._box.sync_state = SyncState.RUNNING
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=5)
         synced_rom_ids: set[int] = set()
         platform_rom_ids: set[int] = set()
         with pytest.raises(RuntimeError, match="fetch exploded"):
@@ -5860,7 +5860,7 @@ class TestOnlyAFreshStampRestoresTheSkip:
         with library.uow as uow:
             uow.platform_sync_state.save(
                 PlatformSyncState.stamp(
-                    platform_slug="n64", at="2025-01-01T00:00:00+00:00", rom_count=2, fetch_id="run-0"
+                    platform_folder="n64", at="2025-01-01T00:00:00+00:00", rom_count=2, fetch_id="run-0"
                 )
             )
 
@@ -7623,7 +7623,7 @@ class TestThePerPlatformTableLabelsAPlatformAsTheApplyNamesIt:
         assert platform_app_ids == {"Nintendo 64": [6020]}
         assert summary["platform_breakdown"] == [
             {
-                "slug": "n64",
+                "fs_slug": "n64",
                 "name": "Nintendo 64",
                 "synced": False,
                 "new_count": 0,
@@ -7646,7 +7646,7 @@ class TestThePerPlatformTableLabelsAPlatformAsTheApplyNamesIt:
 
         assert summary["platform_breakdown"] == [
             {
-                "slug": "n64",
+                "fs_slug": "n64",
                 "name": "Nintendo 64",
                 "synced": False,
                 "new_count": 0,
@@ -8461,7 +8461,7 @@ class TestAGameWithSeveralShortcutsConverges:
         _sent, removed = await self._apply(library, emit, "run-2")
 
         assert summary["remove_count"] == 1
-        assert [(row["slug"], row["remove_count"]) for row in summary["platform_breakdown"]] == [("gba", 1)]
+        assert [(row["fs_slug"], row["remove_count"]) for row in summary["platform_breakdown"]] == [("gba", 1)]
         assert removed == [{"rom_id": gone, "app_id": 6000 + gone, "kept_rom_id": kept, "kept_app_id": 6000 + kept}]
         assert self._bindings(library) == {kept: 6000 + kept, gone: None}
         assert self._per_rom_data(library) == before
@@ -8730,7 +8730,7 @@ class TestAGameWithSeveralShortcutsConverges:
             synced_rom_ids={30, 31},
             collection_memberships={},
             platform_rom_ids={30, 31},
-            processed_platform_slugs=frozenset({"gba"}),
+            processed_platform_folders=frozenset({"gba"}),
             cancelled=False,
         )
 
@@ -9351,7 +9351,7 @@ class TestSessionBudgetGate:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
-            processed_platform_slugs=frozenset(),
+            processed_platform_folders=frozenset(),
             cancelled=False,
         )
 
@@ -9371,7 +9371,7 @@ class TestSessionBudgetGate:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
-            processed_platform_slugs=frozenset(),
+            processed_platform_folders=frozenset(),
             cancelled=False,
         )
 
@@ -9397,7 +9397,7 @@ class TestSessionBudgetGate:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
-            processed_platform_slugs=frozenset(),
+            processed_platform_folders=frozenset(),
             cancelled=True,  # a stopped (paused) run
         )
 

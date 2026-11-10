@@ -134,8 +134,11 @@ class TestSeededReads:
 
     def test_list_platforms_returns_seeded(self) -> None:
         api = FakeRommApi()
-        api.platforms = [{"id": 1, "slug": "snes"}, {"id": 2, "slug": "psx"}]
-        assert api.list_platforms() == [{"id": 1, "slug": "snes"}, {"id": 2, "slug": "psx"}]
+        api.platforms = [{"id": 1, "slug": "snes"}, {"id": 2, "slug": "psx", "fs_slug": "playstation"}]
+        assert api.list_platforms() == [
+            {"id": 1, "slug": "snes", "fs_slug": "snes"},
+            {"id": 2, "slug": "psx", "fs_slug": "playstation"},
+        ]
 
     def test_list_roms_filters_by_platform_and_paginates(self) -> None:
         api = FakeRommApi()

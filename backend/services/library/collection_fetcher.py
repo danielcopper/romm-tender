@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 from domain.collection_skip import (
     CollectionSkip,
     holds_a_game_to_converge,
+    holds_a_game_without_its_platform_folder,
     membership_verdict,
     probe_verdict,
     recorded_updated_at,
@@ -108,12 +109,19 @@ class CollectionFetcher:
         with self._uow_factory() as uow:
             return uow.collection_sync_state.get(collection_id, collection_kind)
 
-    def _read_holds_a_game_to_converge(self, unit: WorkUnit, member_rom_ids: Collection[int]) -> bool:
-        """:func:`~domain.collection_skip.holds_a_game_to_converge` over the stored rows, in one short read UoW."""
+    def _read_stored_rows_refusal(self, unit: WorkUnit, member_rom_ids: Collection[int]) -> str | None:
+        """Why the stored rows refuse *unit*'s skip, or ``None``, from one short read UoW.
+
+        :func:`~domain.collection_skip.holds_a_game_to_converge` first, then
+        :func:`~domain.collection_skip.holds_a_game_without_its_platform_folder`.
+        """
         with self._uow_factory() as uow:
-            return holds_a_game_to_converge(
-                uow.roms.iter_all(), member_rom_ids, platform_slugs=set(unit.unwalked_platform_slugs)
-            )
+            rows = list(uow.roms.iter_all())
+        if holds_a_game_to_converge(rows, member_rom_ids, platform_folders=set(unit.unwalked_platform_folders)):
+            return "a game it holds has more than one shortcut"
+        if holds_a_game_without_its_platform_folder(rows, member_rom_ids):
+            return "a game it holds has no fs_slug recorded"
+        return None
 
     def _reconstruct_collection_members(
         self, member_rom_ids: list[int], already_synced: set[int]
@@ -145,6 +153,7 @@ class CollectionFetcher:
                         "name": rom.name,
                         "fs_name": rom.fs_name,
                         "platform_slug": rom.platform_slug,
+                        "platform_fs_slug": rom.platform_fs_slug,
                         "platform_name": rom.platform_slug,
                         "igdb_id": rom.igdb_id,
                         "sgdb_id": rom.sgdb_id,
@@ -200,8 +209,9 @@ class CollectionFetcher:
             self._logger.info(f"Per-unit fetch {unit.name}: {listing.reason} — fetch")
             return CollectionSkip(None, restamp_settles=listing.restamp_settles)
 
-        if await self._loop.run_in_executor(None, self._read_holds_a_game_to_converge, unit, stamp.member_rom_ids):
-            self._logger.info(f"Per-unit fetch {unit.name}: a game it holds has more than one shortcut — fetch")
+        refusal = await self._loop.run_in_executor(None, self._read_stored_rows_refusal, unit, stamp.member_rom_ids)
+        if refusal is not None:
+            self._logger.info(f"Per-unit fetch {unit.name}: {refusal} — fetch")
             return CollectionSkip(None)
         try:
             delta_resp: object = await self._loop.run_in_executor(
@@ -464,7 +474,7 @@ class CollectionFetcher:
                     continue
                 synced_rom_ids.add(rid)
                 rom["platform_name"] = rom.get("platform_name", rom.get("platform_display_name", "Unknown"))
-                rom["platform_slug"] = rom.get("platform_slug", rom.get("platform_fs_slug", ""))
+                rom.setdefault("platform_slug", "")
                 rom.pop("files", None)
                 new_roms.append(rom)
 

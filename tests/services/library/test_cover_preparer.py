@@ -77,7 +77,7 @@ class TestAttachUnitCoverPaths:
     to it and how its answer is distributed, not what it fetches.
     """
 
-    _UNIT = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=3)
+    _UNIT = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=3)
 
     @staticmethod
     def _preparer(library, cover_paths):

@@ -99,6 +99,15 @@ class TestTheKeptIds:
 
         assert service.platform_system("snes").platform_name == "Super Nintendo"
 
+    def test_the_name_is_the_one_kept_for_the_kept_platform_s_fs_slug(self, service, uow_factory):
+        """The names cache is keyed by ``fs_slug``; the platform is asked by its slug (#2452 D10)."""
+        kept = KeptPlatform(slug="ngc", fs_slug="gamecube", name="Nintendo GameCube", ids={"igdb_id": 21})
+        _keep(uow_factory, encode_platform_ids({"gamecube": kept}))
+        names = {"gamecube": "Nintendo GameCube (gamecube)", "ngc": "Another platform whose fs_slug is ngc"}
+        uow_factory.uow.kv_config.set("platform_names", json.dumps(names))
+
+        assert service.platform_system("ngc").platform_name == "Nintendo GameCube (gamecube)"
+
     def test_a_platform_no_sync_named_is_named_by_the_name_kept_with_its_ids(self, service, uow_factory):
         _keep(uow_factory, json.dumps({"snes": {"igdb_id": 19, "name": "Super Famicom"}}))
 
