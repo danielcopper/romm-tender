@@ -1636,8 +1636,8 @@ it, for the focused platform:
   `Switching to <emulator>…` in the same status line the outcome lands in — a success takes that line back, a refusal
   replaces it, and a continuation cancelled by leaving the page takes it back too, because such a switch either
   committed or never ran and there is no pane left to report to either way. The pick is the row's own: it is stored
-  under the platform's `fs_slug`, so of two platforms that share a slug, a pick on one leaves the other at its default,
-  and the `core_changed` event it sends reaches only the game pages of that platform
+  under the platform's `fs_slug`, so of two platforms that share a slug, a pick on one leaves the other's choice as it
+  is, and the `core_changed` event it sends reaches only the game pages of that platform
   ([#2452](https://github.com/danielcopper/romm-tender/issues/2452) D7, D16).
 
 - **BIOS files** — the summary, which this pane words nowhere: `frontend/src/utils/biosSummary.ts` holds every state and

@@ -929,10 +929,16 @@ Every name RetroDECK lists is an entry of its own, as in ES-DE: RetroDECK lists 
 from.
 
 Two RomM platforms can be the same console — RomM keeps a GameCube library in `gc` or in `gamecube`, and a server can
-hold both. Each is a row of its own here, and each keeps its own pick: picking an emulator on one leaves the other at
-its default. A pick you made before Tender kept one per platform goes to every platform of that console that has none of
-its own — unless it was already kept under one platform's folder name; then it is that platform's alone, and the other
-starts at its default.
+hold both. Each is a row of its own here, and each keeps its own pick: picking an emulator on one leaves the other's
+choice as it is. A pick you made before Tender kept one per platform goes to every platform of that console that has
+none of its own — unless it was already kept under one platform's folder name; then it is that platform's alone, and the
+other starts at its default.
+
+Until the first library sync after an update from 0.33.0 has recorded each game's platform, a game takes the pick you
+made for its console before the update, and once Tender has moved that pick to the console's platforms, the pick of the
+one platform it knows for that console. Where the console has several platforms, such a game takes the pick of the one
+kept under the console's own name — `snes` beside `snes-hacks` — and otherwise starts with the default emulator, until
+the sync has recorded which platform it is on.
 
 **The default is the emulator RetroDECK ships as its default** for the platform, whatever state it is in — Tender never
 passes it over for a later one by itself. An emulator you chose for the system inside ES-DE is marked **(chosen in
