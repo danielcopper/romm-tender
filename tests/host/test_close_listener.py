@@ -10,11 +10,11 @@ from tests.host.conftest import close_at_once, close_listener, nothing_left_for_
 
 class TestCloseListener:
     async def test_a_connection_accepted_as_it_closes_leaves_nothing_for_the_collector(self):
-        """Rests on the scheduling order :func:`host.server.stop_accepting` states, which ``close_listener`` calls.
+        """Rests on the scheduling order :func:`host.server.close_without_abandoning` states.
 
         One yield after the connect, and no other count, has the listener's accept
         queued in the turn ``close_listener`` is entered in. Without
-        ``stop_accepting`` that accept then runs, and ``close()`` follows a turn
+        ``close_without_abandoning`` that accept then runs, and ``close()`` follows a turn
         later, ahead of the task building the accepted connection's transport.
         """
         server = await asyncio.start_server(close_at_once, host="127.0.0.1", port=0)

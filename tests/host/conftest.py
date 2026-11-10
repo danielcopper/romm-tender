@@ -27,7 +27,7 @@ import pytest
 from host.dispatch import CallDispatcher
 from host.events import EventSink
 from host.route import route
-from host.server import HostServer, stop_accepting
+from host.server import HostServer, close_without_abandoning
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterator
@@ -148,8 +148,7 @@ async def close_listener(server: asyncio.Server) -> None:
     holds no connection by then: its handler is :func:`close_at_once`, or it closes
     its own connections first, as ``FakeDebugger.stop`` does.
     """
-    await stop_accepting(server)
-    server.close()
+    await close_without_abandoning(server)
     if sys.version_info >= (3, 13):
         server.close_clients()
     await server.wait_closed()
@@ -169,7 +168,7 @@ async def nothing_left_for_the_collector() -> AsyncGenerator[None]:
     After the body, one yield lets an abandoned accept task let go of its
     transport, and the collection that follows reaches it here, so it is
     reported under this test's name rather than at the end of the session. The
-    half-made transport :func:`host.server.stop_accepting` describes fails one
+    half-made transport :func:`host.server.close_without_abandoning` describes fails one
     assertion or both.
     """
     # What an earlier test left for the collector goes now, outside the recording.

@@ -42,7 +42,7 @@ class TestStop:
             client.close()
 
     async def test_a_connection_accepted_in_the_tick_before_the_stop_is_closed_rather_than_abandoned(self, tmp_path):
-        """Rests on the scheduling order :func:`host.server.stop_accepting` states, which ``stop()`` calls.
+        """Rests on the scheduling order :func:`host.server.close_without_abandoning` states, which ``stop()`` calls.
 
         Two yields after the connect land the accept in the turn before the stop.
         """

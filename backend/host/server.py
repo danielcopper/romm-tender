@@ -111,8 +111,8 @@ _STRANDED_LOG_WORDING = {
 }
 
 
-async def stop_accepting(server: asyncio.Server) -> None:
-    """Stop *server* accepting, so that a ``close()`` right after it abandons no connection.
+async def close_without_abandoning(server: asyncio.Server) -> None:
+    """Close *server* without abandoning a connection it has begun to accept.
 
     An accepted connection becomes a transport only on a later loop turn, and a
     ``Server.close()`` in between abandons it half-made: outside the server's
@@ -121,12 +121,14 @@ async def stop_accepting(server: asyncio.Server) -> None:
     (python/cpython#109564, fixed by python/cpython#160851). Removing the reader
     cancels every accept not yet begun, one already queued for this turn
     included; the yield lets a transport already being built attach, so the
-    close reaches it.
+    close reaches it. Closing the clients and waiting for the close are left to
+    the caller.
     """
     loop = asyncio.get_running_loop()
     for listening in server.sockets:
         loop.remove_reader(listening.fileno())
     await asyncio.sleep(0)
+    server.close()
 
 
 class HostServer:
@@ -265,8 +267,7 @@ class HostServer:
             self._connection = None
             self._panel_present.clear()
         if self._server is not None:
-            await stop_accepting(self._server)
-            self._server.close()
+            await close_without_abandoning(self._server)
             # From 3.12.1 ``wait_closed`` waits for every client, so an accepted
             # connection that never sends its request head would hold it open.
             if sys.version_info >= (3, 13):
