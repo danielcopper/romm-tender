@@ -21,6 +21,8 @@ class TestCloseListener:
         3.14 report such a transport as an unraisable ``TypeError``, and every
         version warns about it as unclosed.
         """
+        # What an earlier test left for the collector goes now, outside the recording.
+        gc.collect()
         unraisable: list[sys.UnraisableHookArgs] = []
         monkeypatch.setattr(sys, "unraisablehook", unraisable.append)
         server = await asyncio.start_server(close_at_once, host="127.0.0.1", port=0)

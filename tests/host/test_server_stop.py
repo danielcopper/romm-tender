@@ -79,6 +79,8 @@ class TestStop:
         3.13 and 3.14 report a transport abandoned there as an unraisable
         ``TypeError``, and every version warns about it as unclosed.
         """
+        # What an earlier test left for the collector goes now, outside the recording.
+        gc.collect()
         unraisable: list[sys.UnraisableHookArgs] = []
         monkeypatch.setattr(sys, "unraisablehook", unraisable.append)
         server = _server(str(tmp_path))
