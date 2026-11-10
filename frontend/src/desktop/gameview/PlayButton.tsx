@@ -62,7 +62,7 @@ import { DiscSelector } from "./DiscSelector";
 import { DownloadingButton } from "./DownloadingButton";
 import { PlayStateButton } from "./PlayStateButton";
 import { SvgThrobber } from "./SvgThrobber";
-import { usePlayLaunch, type ActionState, type HeldState, type PressState } from "./usePlayLaunch";
+import { usePlayLaunch, type HeldState, type PressState } from "./usePlayLaunch";
 
 interface PlayButtonProps {
   appId: number;
@@ -90,8 +90,16 @@ interface CachedAnswers extends DownloadAnswers {
 const NO_ANSWERS: CachedAnswers = { romId: null, ...NO_DOWNLOAD_ANSWERS };
 
 /**
- * What a download press, a download's completion or an uninstall put on the
- * button, and the ROM it is for; another ROM's reads as none.
+ * What the button reads for one ROM's download, ended by an event of its own
+ * rather than by the shared detail: a download this button started, until the
+ * download's first frame, its end or a switch to another version; the moment a
+ * download completed, for `READY_FLASH_MS`.
+ */
+type ActionState = "downloading" | "dl_complete";
+
+/**
+ * What a download press or a download's completion put on the button, and the
+ * ROM it is for; another ROM's reads as none.
  */
 interface PressedAction {
   state: ActionState;
@@ -399,7 +407,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
     startCheckFailed || detail.emulatorStart === null
       ? null
       : startRefusal(detail.emulatorStart, detail.gameLaunch ?? null, false);
-  const { handlePlayClick, handleResolveConflictClick, handleStopClick, handleUninstallClick, uninstallUnderWay } =
+  const { handlePlayClick, handleResolveConflictClick, handleStopClick, handleUninstallClick, uninstallingRomId } =
     usePlayLaunch({
       appId,
       romId,
@@ -409,8 +417,6 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
       ask,
       leaseOwner,
       setPressState,
-      startAction,
-      endAction,
       clearSessionRunning: () => {
         if (romId !== null) setSessionSeen({ romId, running: false });
       },
@@ -571,7 +577,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
       );
     }
 
-    if (actionState === "uninstalling") {
+    if (uninstallingRomId === romId) {
       return placeholder(uninstallingLabel(uninstallProgress, romId), undefined, UNINSTALLING_BUTTON_STYLE, true);
     }
     if (actionState === "dl_complete") return placeholder("READY!", undefined, READY_BUTTON_STYLE);
@@ -618,7 +624,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
         refusal={playRefusal}
         checkFailed={startCheckFailed}
         switching={switching}
-        uninstallUnderWay={uninstallUnderWay}
+        uninstallUnderWay={uninstallingRomId !== null}
         onPlay={() => detach(handlePlayClick())}
         onUninstall={uninstall}
       />

@@ -32,15 +32,6 @@ const TAG = "DesktopPlayButton";
 /** What a press puts the button on until it settles. */
 export type PressState = "checking" | "syncing" | "launching";
 
-/**
- * What the button reads for one ROM, each ended by an event of its own rather
- * than by the shared detail: a download this button started, until the
- * download's first frame, its end or a switch to another version; the moment a
- * download completed, for `READY_FLASH_MS`; an uninstall, until the removal
- * answers.
- */
-export type ActionState = "downloading" | "dl_complete" | "uninstalling";
-
 /** A verdict the button holds until the shared detail moves on; `"download"` is a game just uninstalled. */
 export type HeldState = "play" | "conflict" | "download";
 
@@ -54,9 +45,6 @@ interface UsePlayLaunchOptions {
   ask: AskDialog;
   leaseOwner: string;
   setPressState: Dispatch<SetStateAction<PressState | null>>;
-  /** Put `state` on the button for the ROM a press was made for, and take it off again. */
-  startAction: (state: ActionState, romId: number) => void;
-  endAction: (state: ActionState, romId: number) => void;
   /** Bring the running state down when the game turns out not to be running. */
   clearSessionRunning: () => void;
   /** Hold a verdict reached for `forRomId`, only while the page still shows that ROM. */
@@ -69,8 +57,8 @@ interface UsePlayLaunchResult {
   handleResolveConflictClick: () => Promise<void>;
   handleStopClick: () => Promise<void>;
   handleUninstallClick: () => Promise<void>;
-  /** Whether a removal the page started is still running, whichever version it was pressed for. */
-  uninstallUnderWay: boolean;
+  /** The ROM a removal the page started is still running for, whichever version the page now shows. */
+  uninstallingRomId: number | null;
 }
 
 export function usePlayLaunch({
@@ -82,8 +70,6 @@ export function usePlayLaunch({
   ask,
   leaseOwner,
   setPressState,
-  startAction,
-  endAction,
   clearSessionRunning,
   holdVerdict,
   setStopPending,
@@ -91,7 +77,7 @@ export function usePlayLaunch({
   const stopInFlightRef = useRef(false);
   // The ref refuses a second press in the same turn; the state is what the button draws from.
   const uninstallInFlightRef = useRef(false);
-  const [uninstallUnderWay, setUninstallUnderWay] = useState(false);
+  const [uninstallingRomId, setUninstallingRomId] = useState<number | null>(null);
 
   // Every start is prepared first; without the hand-over nothing starts, so a
   // preparation that does not come about refuses the start with its sentence
@@ -209,18 +195,16 @@ export function usePlayLaunch({
     if (romId === null || uninstallInFlightRef.current) return;
     const rid = romId;
     uninstallInFlightRef.current = true;
-    setUninstallUnderWay(true);
-    startAction("uninstalling", rid);
+    setUninstallingRomId(rid);
     detach(debugLog(`${TAG}: uninstalling romId=${rid}`));
     try {
       const removed = await executeRomUninstall({ romId: rid, romName, leaseOwner, tag: TAG });
       if (removed) holdVerdict("download", rid);
     } finally {
       uninstallInFlightRef.current = false;
-      setUninstallUnderWay(false);
-      endAction("uninstalling", rid);
+      setUninstallingRomId(null);
     }
   };
 
-  return { handlePlayClick, handleResolveConflictClick, handleStopClick, handleUninstallClick, uninstallUnderWay };
+  return { handlePlayClick, handleResolveConflictClick, handleStopClick, handleUninstallClick, uninstallingRomId };
 }
