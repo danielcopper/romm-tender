@@ -236,14 +236,14 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         sync_in_flight=sync_in_flight_binding.get,
     )
 
-    # Both writers of the per-platform picks run in executor threads, so one
-    # lock, not a conflict rule, keeps a refile and a stored pick apart.
-    picks_lock = threading.Lock()
+    # The one writer of the per-platform picks, which the refiling and the core
+    # service both write through from executor threads of their own: its lock,
+    # not a conflict rule, keeps a refile and a stored pick apart.
     platform_picks = PlatformPicks(
         config=PlatformPicksConfig(
             settings=cfg.stores.settings,
             settings_persister=cfg.callbacks.settings_persister,
-            lock=picks_lock,
+            lock=threading.Lock(),
         )
     )
 

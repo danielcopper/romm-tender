@@ -687,9 +687,10 @@ so every entry renders and is chosen as on a game's page (#1210) — calls
    platform detail re-reads the platform once the switch is done, and that read answers for the new core's firmware.
 
 Both writers of `platform_cores` — this one and the refiling below — go through `PlatformPicks`
-(`services/platform_picks.py`), which builds a new map under one lock and puts it in place in one step, never changing
-the map in place: the whole settings are saved by writers on other threads, and a map that changed size under such a
-save's walk would fail it. Where `settings.json` cannot be written, the old map is put back, so memory and file agree.
+(`services/platform_picks.py`), which under one lock hands the writer's `build` the picks as they stand and puts the map
+it answers in place in one step, never changing the map in place: the whole settings are saved by writers on other
+threads, and a map that changed size under such a save's walk would fail it. Where `settings.json` cannot be written,
+the old map is put back, so memory and file agree.
 
 `platform_cores` has one more writer: the refiling (`services/platform_refiling.py`), handed each read of RomM's
 platform listing that keeps or uses it — the Platforms tab's, a sync's, the firmware listing's and the platform system's

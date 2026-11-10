@@ -159,7 +159,7 @@ class PlatformRefiling:
             uow.bios_files.save(record.refiled_under(target))
 
     def _refile_picks(self, listed: ListedPlatforms) -> None:
-        """Hand the picks writer the picks with each one under another key moved to its platforms."""
+        """Hand the picks writer the picks with the ones ``pick_moves`` names moved to their platforms, or dropped."""
         moves: dict[str, tuple[str, ...]] = {}
 
         def moved_picks(picks: Mapping[str, Any]) -> dict[str, Any] | None:

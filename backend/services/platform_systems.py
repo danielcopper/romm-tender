@@ -189,9 +189,12 @@ class PlatformSystemService:
         return ids, names.get(named_by) or ids.name or platform_slug
 
     def _read_and_keep(self, platform_slug: str) -> KeptPlatform | None:
-        """*platform_slug*'s platform from RomM's listing, kept with every listed platform beside those kept before.
+        """*platform_slug*'s platform from RomM's listing; the listing is kept by the refiling's keep step.
 
-        How the two are merged: ``docs/architecture/core-emulator-selection.md#a-platforms-system``.
+        The listing is handed to the refiling, which has it kept
+        (:meth:`keep_listing`); this adds only the placeholder for a slug the
+        listing does not name. How the two are merged:
+        ``docs/architecture/core-emulator-selection.md#a-platforms-system``.
         """
         platforms = self._romm_api.list_platforms()
         self._refiling.do_refile(platforms)
