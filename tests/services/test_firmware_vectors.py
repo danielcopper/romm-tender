@@ -347,6 +347,7 @@ def _service(
             romm_api=romm_api,
             loop=running_loop(),
             logger=log,
+            log_debug=lambda msg: None,
             clock=clock,
             firmware_file_store=files,
             platform_firmware_resolver=resolver,

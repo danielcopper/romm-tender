@@ -183,6 +183,7 @@ def machine(tmp_path) -> _Machine:
             romm_api=romm,
             loop=running_loop(),
             logger=logger,
+            log_debug=lambda msg: None,
             clock=clock,
             firmware_file_store=files,
             platform_firmware_resolver=resolver,

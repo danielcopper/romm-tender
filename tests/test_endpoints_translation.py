@@ -1441,6 +1441,7 @@ def _dispatcher_over_firmware(
             romm_api=romm_api,
             loop=asyncio.get_running_loop(),
             logger=LOGGER,
+            log_debug=lambda msg: None,
             clock=FakeClock(),
             firmware_file_store=store,
             platform_firmware_resolver=resolver,

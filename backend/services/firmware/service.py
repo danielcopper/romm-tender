@@ -39,6 +39,7 @@ if TYPE_CHECKING:
         Clock,
         ConflictRules,
         CoreInfoProvider,
+        DebugLogger,
         FirmwareFileStore,
         FirmwareIdentityProvider,
         FirmwarePlatformResolver,
@@ -67,6 +68,7 @@ class FirmwareServiceConfig:
     romm_api: RommFirmwareApi
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
+    log_debug: DebugLogger
     clock: Clock
     firmware_file_store: FirmwareFileStore
     platform_firmware_resolver: FirmwarePlatformResolver
@@ -133,6 +135,7 @@ class FirmwareService:
                 refiling=config.refiling,
                 loop=config.loop,
                 logger=config.logger,
+                log_debug=config.log_debug,
             )
         )
 
@@ -172,6 +175,7 @@ class FirmwareService:
                 refiling=config.refiling,
                 loop=config.loop,
                 logger=config.logger,
+                log_debug=config.log_debug,
             )
         )
 

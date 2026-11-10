@@ -72,6 +72,7 @@ if TYPE_CHECKING:
     from services.firmware.store import FirmwareStore
     from services.protocols import (
         CoreInfoProvider,
+        DebugLogger,
         FirmwareFileStore,
         ListingRefiler,
         PlatformCoreReader,
@@ -89,7 +90,8 @@ class FirmwareStatusReaderConfig:
     ES-DE core reads, the slug/system mapping, the per-platform emulator
     override, the file store every place is looked at through, the
     Unit-of-Work factory, the refiling whose last listing says which slugs are
-    no platform's own folder, and runtime infrastructure.
+    no platform's own folder, and runtime infrastructure (the debug logger
+    included).
     """
 
     demand: FirmwareDemand
@@ -103,6 +105,7 @@ class FirmwareStatusReaderConfig:
     refiling: ListingRefiler
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
+    log_debug: DebugLogger
 
 
 class FirmwareStatusReader:
@@ -120,6 +123,7 @@ class FirmwareStatusReader:
         self._refiling = config.refiling
         self._loop = config.loop
         self._logger = config.logger
+        self._log_debug = config.log_debug
 
     # ── Rows and aggregates ──────────────────────────────────
 
@@ -523,7 +527,7 @@ class FirmwareStatusReader:
         resolved system name and must not run inside a UoW at all
         (:meth:`_platform_demand`).
         """
-        records = platform_records(self._uow_factory, self._refiling, self._logger, platform_folder, platform_slug)
+        records = platform_records(self._uow_factory, self._refiling, self._log_debug, platform_folder, platform_slug)
         return self._read_synced_folders(), records
 
     # ── The per-game check ───────────────────────────────────
@@ -620,7 +624,7 @@ class FirmwareStatusReader:
         # records to their platform, and the count must see them where they now are.
         payload["store_files"] = await self._loop.run_in_executor(None, self._store_files, platform_folder)
         records = await self._loop.run_in_executor(
-            None, platform_records, self._uow_factory, self._refiling, self._logger, platform_folder, platform_slug
+            None, platform_records, self._uow_factory, self._refiling, self._log_debug, platform_folder, platform_slug
         )
         self._stamp_deletable(payload, records)
         return payload

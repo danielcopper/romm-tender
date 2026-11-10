@@ -47,7 +47,13 @@ if TYPE_CHECKING:
     from domain.bios_file import BiosFile
     from services.firmware.listing import FirmwareListing
     from services.firmware.store import FirmwareStore
-    from services.protocols import FirmwareFileStore, ListingRefiler, RetroDeckFolders, UnitOfWorkFactory
+    from services.protocols import (
+        DebugLogger,
+        FirmwareFileStore,
+        ListingRefiler,
+        RetroDeckFolders,
+        UnitOfWorkFactory,
+    )
 
 
 KEPT_SETTINGS_UNREADABLE = "settings_unreadable"
@@ -86,7 +92,8 @@ class PlatformBiosDeleterConfig:
     is removed through, RetroDECK's folders, whose BIOS folder bounds the
     removal of an older download, the Unit-of-Work factory the older records
     are read and pruned through, the refiling whose last listing says which
-    slugs are no platform's own folder, and runtime infrastructure.
+    slugs are no platform's own folder, and runtime infrastructure (the debug
+    logger included).
     """
 
     listing: FirmwareListing
@@ -97,6 +104,7 @@ class PlatformBiosDeleterConfig:
     refiling: ListingRefiler
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
+    log_debug: DebugLogger
 
 
 @dataclass(frozen=True)
@@ -118,6 +126,7 @@ class PlatformBiosDeleter:
         self._refiling = config.refiling
         self._loop = config.loop
         self._logger = config.logger
+        self._log_debug = config.log_debug
 
     def _delete_io(
         self, platform_slug: str, platform_folder: str, names: frozenset[str] | None
@@ -144,7 +153,9 @@ class PlatformBiosDeleter:
         deleted, kept, errors = outcome.deleted, list(outcome.kept), list(outcome.errors)
         bound = self._retrodeck_folders.bios_folder()
         pruned: list[tuple[str, str]] = []
-        for record in platform_records(self._uow_factory, self._refiling, self._logger, platform_folder, platform_slug):
+        for record in platform_records(
+            self._uow_factory, self._refiling, self._log_debug, platform_folder, platform_slug
+        ):
             if names is not None and record.file_name not in names:
                 continue
             removed, drop = self._settle_older(record, bound, kept, errors)

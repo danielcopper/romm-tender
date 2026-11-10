@@ -225,6 +225,7 @@ def _make_firmware_service(
             romm_api=api,
             loop=running_loop(),
             logger=log,
+            log_debug=lambda msg: None,
             clock=clock,
             firmware_file_store=store,
             platform_firmware_resolver=resolver,

@@ -655,6 +655,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             romm_api=cfg.adapters.romm_api,
             loop=cfg.runtime.loop,
             logger=cfg.runtime.logger,
+            log_debug=cfg.callbacks.log_debug,
             clock=cfg.runtime.clock,
             firmware_file_store=cfg.adapters.firmware_file_store,
             platform_firmware_resolver=cfg.adapters.platform_firmware_resolver,

@@ -111,6 +111,7 @@ def game_detail(clock, active_core_resolver, path_probe) -> GameDetailHarness:
             romm_api=MagicMock(),
             loop=running_loop(),
             logger=logging.getLogger("test"),
+            log_debug=lambda msg: None,
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             firmware_file_store=FirmwareFileAdapter(),
             platform_firmware_resolver=firmware_resolver,
