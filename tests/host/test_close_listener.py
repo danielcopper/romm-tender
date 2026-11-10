@@ -13,9 +13,10 @@ class TestCloseListener:
         """Rests on the scheduling order :func:`host.server.close_without_abandoning` states.
 
         One yield after the connect, and no other count, has the listener's accept
-        queued in the turn ``close_listener`` is entered in. Without
-        ``close_without_abandoning`` that accept then runs, and ``close()`` follows a turn
-        later, ahead of the task building the accepted connection's transport.
+        queued in the turn ``close_listener`` is entered in. With only a yield in
+        place of ``close_without_abandoning``'s removal of the reader, that accept
+        runs during the yield, and ``close()`` follows a turn later, ahead of the
+        task building the accepted connection's transport.
         """
         server = await asyncio.start_server(close_at_once, host="127.0.0.1", port=0)
         port = server.sockets[0].getsockname()[1]
