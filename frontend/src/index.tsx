@@ -196,8 +196,7 @@ const QAMPanel: FC = () => {
     // `el` is the panel's own content and nothing above it: the entry's heading
     // and whatever the menu draws around the panel sit outside this div, so the
     // search cannot reach them, and the first stop it finds is a row of the
-    // page. (Measured under Decky, whose title sat 34 px above the box it
-    // wrapped a plugin's content in — `WidePage`'s `ancestorOverhang`.)
+    // page.
     //
     // A page carrying the marker places entry focus itself, and this focus
     // would undo it: the first stop of a wide page is the Back chip, which sits
