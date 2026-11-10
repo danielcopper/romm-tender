@@ -377,6 +377,10 @@ class CdpConnection:
             self._logger.info(f"inject: the debugger connection ended ({type(exc).__name__}: {exc})")
         finally:
             self._closed = True
+            # ``close()`` returns at once once ``_closed`` is set, so a connection
+            # the debugger ended has its socket closed here or not at all.
+            with contextlib.suppress(OSError, RuntimeError):
+                self._writer.close()
             self._release_waiters()
 
     async def _next_frame(self):
