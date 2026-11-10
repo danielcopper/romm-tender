@@ -412,7 +412,7 @@ class MigrationService:
                 continue
             new_path = remap_under_current(file_path, base, new_home)
             source = self._resolve_move_source(file_path, base, pending_homes, new_path)
-            key = (bios_file.platform_slug, bios_file.file_name)
+            key = (bios_file.platform_folder, bios_file.file_name)
             items.append(
                 (
                     bios_file.file_name,
@@ -633,7 +633,7 @@ class MigrationService:
         deleted in the same transaction.
         """
         by_id = {install.rom_id: install for install in installs}
-        by_key = {(bf.platform_slug, bf.file_name): bf for bf in bios_files}
+        by_key = {(bf.platform_folder, bf.file_name): bf for bf in bios_files}
         with self._uow_factory() as uow:
             for rom_id, moved in relocations.items():
                 install = by_id.get(rom_id)

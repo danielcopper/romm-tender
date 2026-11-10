@@ -2943,3 +2943,40 @@ class Test044KeyPlatformSyncStateByPlatformFolder:
                 )
         finally:
             conn.close()
+
+
+class Test045KeyDownloadedBiosByPlatformFolder:
+    """045 — an older BIOS download record is kept per RomM platform folder, its value kept (#2797, #2452 D6)."""
+
+    def test_a_record_keeps_its_value_under_the_folder_and_the_key_follows(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 44)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute(
+                "INSERT INTO downloaded_bios (platform_slug, file_name, file_path, downloaded_at, firmware_id) "
+                "VALUES ('psx', 'scph5501.bin', '/bios/scph5501.bin', 'now', 7)"
+            )
+        finally:
+            conn.close()
+
+        assert apply_migrations(db_path, str(_only_migrations_through(tmp_path, 45))) == 45
+
+        assert "platform_slug" not in _columns(db_path, "downloaded_bios")
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            rows = conn.execute(
+                "SELECT platform_folder, file_name, file_path, downloaded_at, firmware_id FROM downloaded_bios"
+            ).fetchall()
+            assert rows == [("psx", "scph5501.bin", "/bios/scph5501.bin", "now", 7)]
+            conn.execute(
+                "INSERT INTO downloaded_bios (platform_folder, file_name, file_path, downloaded_at) "
+                "VALUES ('ps', 'scph5501.bin', '/bios/ps/scph5501.bin', 'now')"
+            )
+            with pytest.raises(sqlite3.IntegrityError):
+                conn.execute(
+                    "INSERT INTO downloaded_bios (platform_folder, file_name, file_path, downloaded_at) "
+                    "VALUES ('psx', 'scph5501.bin', '/bios/other.bin', 'now')"
+                )
+        finally:
+            conn.close()

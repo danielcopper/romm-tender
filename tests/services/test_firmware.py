@@ -8189,3 +8189,105 @@ class TestTwoPlatformsThatShareASlug:
         assert names == {"gc": ["image.bin"], "gamecube": []}
         assert (await fw.download_required_firmware("ngc", "gamecube"))["downloaded"] == 0
         firmware.romm_api.download_firmware.assert_not_called()
+
+
+# Two RomM platforms that share the slug ``gamecube``.
+_SHARED_SLUG_LISTING = (
+    {"id": 1, "slug": "gamecube", "fs_slug": "gc", "firmware": []},
+    {"id": 2, "slug": "gamecube", "fs_slug": "ngc", "firmware": []},
+)
+
+
+class TestEachPlatformOfASlugIsAPageOfItsOwn:
+    """Two RomM platforms share the slug ``gamecube``: each is its own page (#2452 D6, D17)."""
+
+    @staticmethod
+    def _keep_both(uow) -> None:
+        from domain.platform_system import PLATFORM_IDS_KEY, KeptPlatform, encode_platform_ids
+
+        kept = {
+            folder: KeptPlatform(slug="gamecube", fs_slug=folder, platform_id=platform_id, name="GameCube")
+            for platform_id, folder in ((1, "gc"), (2, "ngc"))
+        }
+        uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids(kept))
+
+    def _service(self, firmware, tmp_path, path: str) -> FirmwareService:
+        fw = _make_firmware_service(
+            romm_api=firmware.romm_api,
+            uow_factory=FakeUnitOfWorkFactory(firmware.uow),
+            firmware_file_store=FakeFirmwareFileStore({path: b"\x00" * 8}),
+            retrodeck_folders=FakeRetroDeckFolders(bios=str(tmp_path / "bios")),
+            core_info=_test_core_info(),
+        )
+        _set_loop(fw, asyncio.get_running_loop())
+        return fw
+
+    @staticmethod
+    def _record(uow, key: str, path: str) -> None:
+        uow.bios_files.save(
+            BiosFile.mark_downloaded(
+                platform_folder=key, file_name="IPL.bin", file_path=path, downloaded_at="2026-01-01T00:00:00+00:00"
+            )
+        )
+
+    @pytest.mark.asyncio
+    async def test_has_games_is_the_platform_s_own(self, firmware, tmp_path):
+        firmware.uow.roms.save(
+            Rom(
+                rom_id=1,
+                platform_slug="gamecube",
+                platform_fs_slug="gc",
+                name="rom-1",
+                fs_name="rom-1.iso",
+                shortcut_app_id=1,
+                last_synced_at="2026-01-01T00:00:00+00:00",
+            )
+        )
+        fw = self._service(firmware, tmp_path, str(tmp_path / "bios" / "IPL.bin"))
+
+        with patch.object(firmware.romm_api, "list_platforms", return_value=list(_SHARED_SLUG_LISTING)):
+            gc = await fw.get_platform_firmware_status("gamecube", "gc")
+            ngc = await fw.get_platform_firmware_status("gamecube", "ngc")
+
+        assert gc["platform"]["has_games"] is True
+        assert ngc["platform"]["has_games"] is False
+
+    @pytest.mark.asyncio
+    async def test_a_record_under_the_shared_slug_is_offered_on_each_page(self, firmware, tmp_path):
+        path = str(tmp_path / "bios" / "IPL.bin")
+        fw = self._service(firmware, tmp_path, path)
+        self._keep_both(firmware.uow)
+        self._record(firmware.uow, "gamecube", path)
+
+        with patch.object(firmware.romm_api, "list_platforms", return_value=list(_SHARED_SLUG_LISTING)):
+            gc = await fw.get_platform_firmware_status("gamecube", "gc")
+            ngc = await fw.get_platform_firmware_status("gamecube", "ngc")
+
+        assert gc["platform"]["deletable_count"] == 1
+        assert ngc["platform"]["deletable_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_a_record_of_the_other_platform_is_not_offered(self, firmware, tmp_path):
+        path = str(tmp_path / "bios" / "IPL.bin")
+        fw = self._service(firmware, tmp_path, path)
+        self._keep_both(firmware.uow)
+        self._record(firmware.uow, "ngc", path)
+
+        with patch.object(firmware.romm_api, "list_platforms", return_value=list(_SHARED_SLUG_LISTING)):
+            gc = await fw.get_platform_firmware_status("gamecube", "gc")
+
+        assert gc["platform"]["deletable_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_either_page_s_delete_takes_the_shared_record(self, firmware, tmp_path):
+        path = str(tmp_path / "bios" / "IPL.bin")
+        fw = self._service(firmware, tmp_path, path)
+        self._keep_both(firmware.uow)
+        self._record(firmware.uow, "gamecube", path)
+
+        with patch.object(firmware.romm_api, "list_platforms", return_value=list(_SHARED_SLUG_LISTING)):
+            result = await fw.delete_platform_bios("gamecube", "ngc")
+
+        assert isinstance(result, dict)
+        assert result["deleted_count"] == 1
+        assert firmware.uow.bios_files.get("gamecube", "IPL.bin") is None

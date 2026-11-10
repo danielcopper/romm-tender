@@ -133,7 +133,8 @@ class PlatformSystemService:
         if entry is not None:
             ids = entry.question_ids()
         elif ask_romm:
-            ids = self._read_and_keep(platform_slug)
+            entry = self._read_and_keep(platform_slug)
+            ids = entry.question_ids() if entry is not None else PlatformIds()
         else:
             ids = PlatformIds()
         # The names cache is keyed by fs_slug; an entry kept before it recorded
@@ -141,8 +142,8 @@ class PlatformSystemService:
         named_by = entry.fs_slug if entry is not None and entry.fs_slug else platform_slug
         return ids, names.get(named_by) or ids.name or platform_slug
 
-    def _read_and_keep(self, platform_slug: str) -> PlatformIds:
-        """*platform_slug*'s ids from RomM's listing, kept with every listed platform beside those kept before.
+    def _read_and_keep(self, platform_slug: str) -> KeptPlatform | None:
+        """*platform_slug*'s platform from RomM's listing, kept with every listed platform beside those kept before.
 
         How the two are merged: ``docs/architecture/core-emulator-selection.md#a-platforms-system``.
         """
@@ -155,4 +156,4 @@ class PlatformSystemService:
             current = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY)) or {}
             before = {key: kept for key, kept in current.items() if kept.slug not in listed_slugs}
             uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids({**before, **unlisted, **listed}))
-        return entry.question_ids() if entry is not None else PlatformIds()
+        return entry

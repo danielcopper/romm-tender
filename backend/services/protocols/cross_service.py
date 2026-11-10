@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping, Sequence
     from contextlib import AbstractAsyncContextManager
 
     from domain.artwork_slot import ArtworkSlot
@@ -29,6 +29,17 @@ if TYPE_CHECKING:
     from models.shortcut_artwork import SlotAnswer, WrittenIcon
     from models.state import ShortcutRegistryEntry
     from models.sync import ClientSaveState
+
+
+class ListingRefiler(Protocol):
+    """Moves Tender's older per-platform entries to the platforms a read of RomM's listing names.
+
+    Every reader of RomM's platform listing hands what it read here, so the
+    download records and the per-platform picks follow the user's current
+    RomM (#2452 D6, D7). Blocking.
+    """
+
+    def do_refile(self, platforms: Sequence[Mapping[str, Any]]) -> None: ...
 
 
 class RomInstallRecorder(Protocol):

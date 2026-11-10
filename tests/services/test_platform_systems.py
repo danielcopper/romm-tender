@@ -307,3 +307,14 @@ class TestTheListedPlatforms:
     def test_without_any_kept_there_is_no_answer(self, service, romm):
         assert service.listed_platforms() is None
         assert _listing_reads(romm) == 0
+
+
+class TestAPlatformJustReadIsNamedByItsFolder:
+    def test_a_platform_read_from_the_listing_is_named_by_the_name_kept_for_its_fs_slug(
+        self, service, uow_factory, romm
+    ):
+        """The names cache is keyed by ``fs_slug`` (#2452 D10), also for a platform no ids were kept for."""
+        romm.platforms = [{"id": 7, "slug": "psx", "fs_slug": "ps", "name": "PlayStation", "igdb_id": 7}]
+        uow_factory.uow.kv_config.set("platform_names", json.dumps({"ps": "Sony PlayStation"}))
+
+        assert service.platform_system("psx").platform_name == "Sony PlayStation"

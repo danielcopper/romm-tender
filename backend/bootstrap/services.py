@@ -48,6 +48,7 @@ from services.game_start import START_FOLDER, GameStartService, GameStartService
 from services.leftover_tmp_cleanup import LeftoverTmpCleanupService, LeftoverTmpCleanupServiceConfig
 from services.metadata import MetadataService, MetadataServiceConfig
 from services.migration import MigrationService, MigrationServiceConfig
+from services.platform_refiling import PlatformRefiling, PlatformRefilingConfig
 from services.platform_systems import PlatformSystemService, PlatformSystemServiceConfig
 from services.playtime import PlaytimeService, PlaytimeServiceConfig
 from services.prune import PruneService, PruneServiceConfig
@@ -482,6 +483,15 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     )
     removal_in_flight_binding.set(shortcut_removal_service.is_removal_in_flight)
 
+    # Every reader of RomM's platform listing hands what it read here (#2452 D6, D7).
+    platform_refiling = PlatformRefiling(
+        config=PlatformRefilingConfig(
+            uow_factory=cfg.callbacks.uow_factory,
+            settings=cfg.stores.settings,
+            settings_persister=cfg.callbacks.settings_persister,
+            logger=cfg.runtime.logger,
+        )
+    )
     sync_service = wire_library(
         LibraryWiring(
             romm_api=cfg.adapters.romm_api,
@@ -503,6 +513,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             conflict_rules=conflict_rules,
             artwork_job=shortcut_artwork_service,
             running_rom_ids=running_games.running_rom_ids,
+            refiling=platform_refiling,
         ),
     ).service
     pending_sync_binding.set(lambda: sync_service.pending_sync)
@@ -634,8 +645,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             active_core=active_core_resolver,
             uow_factory=cfg.callbacks.uow_factory,
             conflict_rules=conflict_rules,
-            settings=cfg.stores.settings,
-            settings_persister=cfg.callbacks.settings_persister,
+            refiling=platform_refiling,
         ),
     )
 

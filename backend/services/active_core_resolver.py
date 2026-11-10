@@ -118,7 +118,7 @@ class ActiveCoreResolver:
         platform = (
             None
             if game is not None and option_for_label(options, game.label) is not None
-            else pick_for(self._platform_core_reader.get_platform_core(rom.platform_slug), starting)
+            else pick_for(self._platform_core_reader.get_platform_core(rom.platform_fs_slug), starting)
         )
         choice = choose_emulator(options, game=game, platform=platform)
         self._warn_vanished(game, platform, options, rom, system)

@@ -394,12 +394,12 @@ class StartCommandReader(Protocol):
 class PlatformCoreReader(Protocol):
     """Read seam for Tender's own per-platform core selection.
 
-    Exposes the ``settings.json`` ``platform_cores`` map (RomM platform
-    slug → the stored pick) so the resolver can layer a user-chosen
+    Exposes the ``settings.json`` ``platform_cores`` map (a platform's
+    ``fs_slug`` → the stored pick) so the resolver can layer a user-chosen
     platform-wide core over the default without reading the retired ES-DE
-    gamelist. Returns the stored pick for a slug — its label and the kind of
-    the source it was chosen from — or ``None`` when the platform has no
-    selection of Tender's own.
+    gamelist. Returns the stored pick for an ``fs_slug`` — its label and the
+    kind of the source it was chosen from — or ``None`` when the platform has
+    no selection of Tender's own, or no ``fs_slug`` is known (#2452 D15).
     """
 
-    def get_platform_core(self, platform_slug: str) -> StoredPick | None: ...
+    def get_platform_core(self, platform_folder: str | None) -> StoredPick | None: ...

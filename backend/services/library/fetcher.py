@@ -55,6 +55,7 @@ if TYPE_CHECKING:
     from services.library.local_library_reader import LocalLibraryReader
     from services.protocols import (
         DebugLogger,
+        ListingRefiler,
         RommLibraryApi,
         SettingsPersister,
         UnitOfWorkFactory,
@@ -128,7 +129,8 @@ class LibraryFetcherConfig:
     cancel signal), an ``_emit_progress`` callback the fetcher uses
     to surface long paginated fetches to the frontend, and the
     ``LocalLibraryReader`` peer the collections listing asks which ROMs
-    the sync's collection filing resolves to a shortcut.
+    the sync's collection filing resolves to a shortcut, and the refiling
+    every read of RomM's platform listing is handed to.
     """
 
     romm_api: RommLibraryApi
@@ -141,6 +143,7 @@ class LibraryFetcherConfig:
     sync_state_box: LibrarySyncStateBox
     emit_progress: EmitProgressFn
     local_library_reader: LocalLibraryReader
+    refiling: ListingRefiler
 
 
 class LibraryFetcher:
@@ -157,11 +160,24 @@ class LibraryFetcher:
         self._sync_state = config.sync_state_box
         self._emit_progress = config.emit_progress
         self._local_library_reader = config.local_library_reader
+        self._refiling = config.refiling
 
     # ── Platform metadata use cases ──────────────────────────────
 
-    async def get_platforms(self):
+    async def _read_listing(self) -> list[dict[str, Any]]:
+        """RomM's platform listing, handed to the refiling once read (#2452 D6, D7).
+
+        A refiling that fails costs that move, never the listing.
+        """
         platforms = await self._loop.run_in_executor(None, self._romm_api.list_platforms)
+        try:
+            await self._loop.run_in_executor(None, self._refiling.do_refile, platforms)
+        except Exception as e:
+            self._logger.warning(f"Failed to move older per-platform entries to their platforms: {e}")
+        return platforms
+
+    async def get_platforms(self):
+        platforms = await self._read_listing()
 
         # Only platforms with ROMs are shown (and thus toggleable), so the
         # materialized map covers exactly the set the user can act on.
@@ -179,17 +195,20 @@ class LibraryFetcher:
             self._settings_persister.save_settings()
             enabled = materialized
 
+        # One row per platform, by its fs_slug, named as its Steam collection is (#2452 D1, D2).
+        names = listed_platform_names(platforms)
         result = []
         for p in platforms:
             rom_count = p.get("rom_count", 0)
-            if rom_count == 0:
+            fs_slug = listed_fs_slug(p)
+            if rom_count == 0 or fs_slug is None:
                 continue
             pid = str(p["id"])
             entry = {
                 "id": p["id"],
-                "name": p.get("name", ""),
+                "name": names.get(fs_slug, p.get("name", "")),
                 "slug": p.get("slug", ""),
-                "fs_slug": p.get("fs_slug", ""),
+                "fs_slug": fs_slug,
                 "rom_count": rom_count,
                 "sync_enabled": resolve_sync_enabled(enabled, pid),
             }
@@ -204,7 +223,7 @@ class LibraryFetcher:
 
     async def set_all_platforms_sync(self, enabled):
         enabled = bool(enabled)
-        platforms = await self._loop.run_in_executor(None, self._romm_api.list_platforms)
+        platforms = await self._read_listing()
 
         ep = {}
         for p in platforms:
@@ -341,7 +360,7 @@ class LibraryFetcher:
         the id of every listed platform it does not. Every listed platform's
         ``fs_slug`` and name are held on the run's box.
         """
-        listed = await self._loop.run_in_executor(None, self._romm_api.list_platforms)
+        listed = await self._read_listing()
         self._sync_state.run_listed_platform_folders = listed_platform_folders(listed)
         self._sync_state.run_listed_platform_names = listed_platform_names(listed)
         await self._loop.run_in_executor(

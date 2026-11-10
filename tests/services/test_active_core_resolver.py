@@ -652,3 +652,49 @@ def test_the_resolution_carries_the_source_that_answered() -> None:
 
     assert resolved is not None
     assert resolved.source == {"kind": "emudeck", "starts_games": False}
+
+
+# --- the per-platform pick is the one of the game's own folder (#2452 D7, D15) --
+
+
+def _seed_rom_on_folder(uow: FakeUnitOfWork, *, rom_id: int, folder: str | None) -> None:
+    """An un-pinned ``snes`` game on the platform RomM keeps in *folder*; ``None`` is one no sync recorded it for."""
+    uow.roms.save(
+        Rom(
+            rom_id=rom_id,
+            platform_slug="snes",
+            platform_fs_slug=folder,
+            name=f"rom-{rom_id}",
+            fs_name=f"rom-{rom_id}.sfc",
+            shortcut_app_id=rom_id,
+            last_synced_at="2026-01-01T00:00:00+00:00",
+        )
+    )
+
+
+_SNES_CORES = FakeCoreInfoProvider(
+    available_cores=[
+        {"core_so": "snes9x_libretro", "label": "Snes9x", "is_default": True},
+        {"core_so": "bsnes_libretro", "label": "bsnes", "is_default": False},
+    ],
+    active_core=("snes9x_libretro", "Snes9x"),
+)
+
+
+def test_a_game_takes_the_pick_of_its_own_folder_not_its_slug() -> None:
+    uow = FakeUnitOfWork()
+    _seed_rom_on_folder(uow, rom_id=70, folder="snes-hacks")
+    reader = FakePlatformCoreReader(mapping={"snes": "Snes9x", "snes-hacks": "bsnes"})
+    resolver, _ = _make_resolver(uow=uow, core_info=_SNES_CORES, platform_core_reader=reader)
+
+    assert resolver.active_core_for_rom(70) == ("bsnes_libretro", "bsnes")
+
+
+def test_a_game_without_a_folder_takes_no_platform_pick() -> None:
+    """D15: its own pick applies, else the platform's default; the slug finds no pick."""
+    uow = FakeUnitOfWork()
+    _seed_rom_on_folder(uow, rom_id=71, folder=None)
+    reader = FakePlatformCoreReader(mapping={"snes": "bsnes"})
+    resolver, _ = _make_resolver(uow=uow, core_info=_SNES_CORES, platform_core_reader=reader)
+
+    assert resolver.active_core_for_rom(71) == ("snes9x_libretro", "Snes9x")

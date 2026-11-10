@@ -169,6 +169,7 @@ modules =
     services.library
     services.metadata
     services.migration
+    services.platform_refiling
     services.platform_systems
     services.playtime
     services.prune

@@ -1402,3 +1402,56 @@ class TestWhatTheResolversCommandSaysOfTheStart:
 
         assert result["start"]["state"] == "starts"
         assert start_commands.asked == []
+
+
+class TestAPlatformsPickIsKeptByItsFolder:
+    """A per-platform pick is stored under the platform's ``fs_slug`` (#2452 D7, D11, D15)."""
+
+    def test_a_pick_on_one_folder_leaves_the_other_of_its_slug(self, event_loop, service, settings):
+        """Done when: a pick on one of two platforms sharing a slug leaves the other at its default."""
+        event_loop.run_until_complete(service.set_system_core("snes", "snes-hacks", "bsnes"))
+
+        hacks = event_loop.run_until_complete(service.get_system_core_info("snes", "snes-hacks"))
+        snes = event_loop.run_until_complete(service.get_system_core_info("snes", "snes"))
+
+        assert settings["platform_cores"] == {"snes-hacks": {"label": "bsnes", "source": "retrodeck"}}
+        assert hacks["active_core_label"] == "bsnes"
+        assert snes["active_core_label"] == "Snes9x"
+
+    def test_a_game_reads_the_pick_of_its_own_folder(self, event_loop, service, settings, uow):
+        settings["platform_cores"]["snes-hacks"] = {"label": "bsnes", "source": "retrodeck"}
+        settings["platform_cores"]["snes"] = {"label": "Snes9x", "source": "retrodeck"}
+        uow.roms.save(
+            Rom(
+                rom_id=7,
+                platform_slug="snes",
+                platform_fs_slug="snes-hacks",
+                name="rom-7",
+                fs_name="rom-7.sfc",
+                shortcut_app_id=None,
+                last_synced_at="2026-01-01T00:00:00+00:00",
+            )
+        )
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(7))
+
+        assert result["platform_core_label"] == "bsnes"
+
+    def test_a_game_without_a_folder_takes_no_platform_pick(self, event_loop, service, settings, uow):
+        """D15: the slug is not used to find a pick."""
+        settings["platform_cores"]["snes"] = {"label": "bsnes", "source": "retrodeck"}
+        uow.roms.save(
+            Rom(
+                rom_id=8,
+                platform_slug="snes",
+                platform_fs_slug=None,
+                name="rom-8",
+                fs_name="rom-8.sfc",
+                shortcut_app_id=None,
+                last_synced_at="2026-01-01T00:00:00+00:00",
+            )
+        )
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(8))
+
+        assert result["platform_core_label"] is None

@@ -35,6 +35,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.emulator_sources import RETRODECK
+from domain.firmware_platforms import records_of_platform
+from domain.platform_system import PLATFORM_IDS_KEY, kept_folders
 from domain.retrodeck_folders import NO_BIOS_ROOT, FolderRefused
 from lib.partial_failure import PartialFailure
 from lib.path_safety import is_inside_folder
@@ -121,8 +123,9 @@ class PlatformBiosDeleter:
         """Remove a platform's store files and older downloads named in *names* — every one for ``None``.
 
         The store files are the ones kept in the platform's folder in RomM,
-        *platform_folder*; the older downloads are recorded under its slug,
-        *platform_slug*.
+        *platform_folder*; the older downloads are the ones its page offers
+        (:func:`~domain.firmware_platforms.records_of_platform`), recorded under
+        its ``fs_slug`` or, shared, under its slug *platform_slug*.
 
         The one removal, deliberately: both buttons reach it, and they differ
         only in which names they select. Runs in an executor: the store's files
@@ -139,17 +142,17 @@ class PlatformBiosDeleter:
         deleted, kept, errors = outcome.deleted, list(outcome.kept), list(outcome.errors)
         bound = self._retrodeck_folders.bios_folder()
         pruned: list[tuple[str, str]] = []
-        for record in self._older_downloads(platform_slug):
+        for record in self._older_downloads(platform_folder, platform_slug):
             if names is not None and record.file_name not in names:
                 continue
             removed, drop = self._settle_older(record, bound, kept, errors)
             deleted += removed
             if drop:
-                pruned.append((record.platform_slug, record.file_name))
+                pruned.append((record.platform_folder, record.file_name))
         if pruned:
             with self._uow_factory() as uow:
-                for slug, file_name in pruned:
-                    uow.bios_files.delete(slug, file_name)
+                for key, file_name in pruned:
+                    uow.bios_files.delete(key, file_name)
         return deleted, kept, errors
 
     def _settle_older(
@@ -178,10 +181,12 @@ class PlatformBiosDeleter:
             return False, False
         return True, True
 
-    def _older_downloads(self, platform_slug: str) -> list[BiosFile]:
-        """The download records of files Tender wrote into a source's folder before the store, for *platform_slug*."""
+    def _older_downloads(self, platform_folder: str, platform_slug: str) -> list[BiosFile]:
+        """The download records of files Tender wrote into a source's folder before the store, for this platform."""
         with self._uow_factory() as uow:
-            return list(uow.bios_files.iter_by_platform(platform_slug))
+            records = list(uow.bios_files.iter_all())
+            known = kept_folders(uow.kv_config.get(PLATFORM_IDS_KEY))
+        return records_of_platform(records, platform_folder, platform_slug, known)
 
     async def delete_bios_file(
         self, platform_slug, platform_folder, file_name
