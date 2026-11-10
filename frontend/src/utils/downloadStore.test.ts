@@ -11,6 +11,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import {
   getDownloadState,
+  isDownloadUnderWay,
   onDownloadsChange,
   removeDownload,
   removeTerminalDownloads,
@@ -172,6 +173,20 @@ describe("downloadStore", () => {
       removeTerminalDownloads();
       expect(listener).not.toHaveBeenCalled();
       unsub();
+    });
+  });
+
+  describe("isDownloadUnderWay", () => {
+    it.each(["queued", "downloading", "paused", "extracting"] as const)("is true for a %s download", (status) => {
+      expect(isDownloadUnderWay(makeItem({ status }))).toBe(true);
+    });
+
+    it.each(["completed", "failed", "cancelled"] as const)("is false for a %s one", (status) => {
+      expect(isDownloadUnderWay(makeItem({ status }))).toBe(false);
+    });
+
+    it("is false for no download at all", () => {
+      expect(isDownloadUnderWay(undefined)).toBe(false);
     });
   });
 

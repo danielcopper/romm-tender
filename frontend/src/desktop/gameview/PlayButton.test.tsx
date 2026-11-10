@@ -57,13 +57,13 @@ vi.mock("./DiscSelector", async () => {
   };
 });
 
-vi.mock("../../utils/downloadStore", () => ({
+vi.mock("../../utils/downloadStore", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../utils/downloadStore")>()),
   useDownloads: vi.fn(),
   removeDownload: vi.fn(),
 }));
 
-vi.mock("../../utils/downloadRehydrate", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../utils/downloadRehydrate")>()),
+vi.mock("../../utils/downloadRehydrate", () => ({
   seedDownloadFromQueue: vi.fn(async () => {}),
 }));
 
