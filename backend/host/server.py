@@ -247,11 +247,17 @@ class HostServer:
             self._connection = None
             self._panel_present.clear()
         if self._server is not None:
-            # A connection accepted in the previous tick is still a pending task
-            # building its transport; the yield lets it attach, so the close below
-            # reaches it. One whose accept lands in this same iteration can still
-            # be abandoned half-made, and CPython 3.13 then raises one harmless
-            # unraisable ``TypeError`` when the collector reaches that transport.
+            # An accepted connection becomes a transport only on a later loop turn,
+            # and a ``Server.close()`` in between abandons it half-made: outside
+            # the server's clients, so nothing closes it, and on 3.13 and 3.14 the
+            # collector reaching it raises an unraisable ``TypeError``
+            # (python/cpython#109564, fixed in no release). Removing the reader
+            # cancels every accept not yet begun, one already queued for this turn
+            # included; the yield lets a transport already being built attach, so
+            # the close below reaches it.
+            loop = asyncio.get_running_loop()
+            for listening in self._server.sockets:
+                loop.remove_reader(listening.fileno())
             await asyncio.sleep(0)
             self._server.close()
             # From 3.12.1 ``wait_closed`` waits for every client, so an accepted

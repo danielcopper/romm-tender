@@ -7,6 +7,7 @@ import gc
 import logging
 import socket
 import sys
+import warnings
 
 from host.dispatch import CallDispatcher
 from host.events import EventSink
@@ -68,6 +69,33 @@ class TestStop:
         gc.collect()
 
         assert [repr(entry.exc_value) for entry in unraisable] == []
+
+    async def test_a_connection_accepted_as_the_stop_closes_leaves_nothing_for_the_collector(
+        self, tmp_path, monkeypatch
+    ):
+        """Rests on the same scheduling order, with one yield before the stop rather than two.
+
+        That queues the accept for the turn the stop begins in. Python
+        3.13 and 3.14 report a transport abandoned there as an unraisable
+        ``TypeError``, and every version warns about it as unclosed.
+        """
+        unraisable: list[sys.UnraisableHookArgs] = []
+        monkeypatch.setattr(sys, "unraisablehook", unraisable.append)
+        server = _server(str(tmp_path))
+        await server.start()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            client = socket.create_connection(("127.0.0.1", server.port))
+            try:
+                await asyncio.sleep(0)
+                await asyncio.wait_for(server.stop(), STOP_BOUND_SECONDS)
+            finally:
+                client.close()
+            await asyncio.sleep(0)
+            gc.collect()
+
+        assert [repr(entry.exc_value) for entry in unraisable] == []
+        assert [f"{entry.category.__name__}: {entry.message}" for entry in caught] == []
 
 
 class TestClosingByHand:
