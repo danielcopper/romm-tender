@@ -24,10 +24,10 @@ import {
   type BackendResult,
 } from "../../api/backend";
 import { useGameDetail, type GameDetailState } from "../../utils/gameDetailStore";
-import { removeDownload, useDownloads } from "../../utils/downloadStore";
+import { isDownloadUnderWay, removeDownload, useDownloads } from "../../utils/downloadStore";
 import { READY_FLASH_MS } from "../../utils/downloadProgress";
 import { PLAY_GRADIENT } from "../../utils/playGradient";
-import { isDownloadUnderWay, seedDownloadFromQueue } from "../../utils/downloadRehydrate";
+import { seedDownloadFromQueue } from "../../utils/downloadRehydrate";
 import {
   NO_DOWNLOAD_ANSWERS,
   downloadAnswers,

@@ -83,6 +83,19 @@ export function getDownloadState(): readonly DownloadItem[] {
   return _downloads;
 }
 
+/** Whether a download is under way: queued, downloading, paused or unpacking. */
+export function isDownloadUnderWay(
+  download: DownloadItem | undefined,
+): download is DownloadItem & { status: "queued" | "downloading" | "paused" | "extracting" } {
+  return (
+    download !== undefined &&
+    (download.status === "queued" ||
+      download.status === "downloading" ||
+      download.status === "paused" ||
+      download.status === "extracting")
+  );
+}
+
 // Drop every terminal (completed/failed/cancelled) entry from the store,
 // mirroring the backend's "Clear Completed" eviction (#149). Active, queued,
 // paused, and extracting entries stay. Called after clear_completed_downloads

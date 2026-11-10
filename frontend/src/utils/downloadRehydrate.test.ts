@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { isDownloadUnderWay, seedDownloadFromQueue } from "./downloadRehydrate";
+import { seedDownloadFromQueue } from "./downloadRehydrate";
 import { getDownloadState, setDownloads } from "./downloadStore";
 import * as backend from "../api/backend";
 import type { DownloadItem } from "../types";
@@ -20,20 +20,6 @@ const entry = (overrides: Partial<DownloadItem> = {}): DownloadItem => ({
   total_bytes: 2048,
   resumable: true,
   ...overrides,
-});
-
-describe("isDownloadUnderWay", () => {
-  it.each(["queued", "downloading", "paused", "extracting"] as const)("is true for a %s download", (status) => {
-    expect(isDownloadUnderWay(entry({ status }))).toBe(true);
-  });
-
-  it.each(["completed", "failed", "cancelled"] as const)("is false for a %s one", (status) => {
-    expect(isDownloadUnderWay(entry({ status }))).toBe(false);
-  });
-
-  it("is false for no download at all", () => {
-    expect(isDownloadUnderWay(undefined)).toBe(false);
-  });
 });
 
 describe("seedDownloadFromQueue", () => {

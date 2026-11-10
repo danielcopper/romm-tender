@@ -52,7 +52,7 @@ import { getEventTarget } from "../utils/events";
 import { handleButtonDownloadFailure } from "../utils/downloadFailure";
 import { runDownloadWithAdoption } from "../utils/adoptFlow";
 import { executeDownloadResume } from "../utils/downloadResume";
-import { isDownloadUnderWay } from "../utils/downloadRehydrate";
+import { isDownloadUnderWay } from "../utils/downloadStore";
 import { downloadAnswers, downloadTakesNoPress } from "../utils/downloadPress";
 import {
   DOWNLOAD_AGAIN_LABEL,

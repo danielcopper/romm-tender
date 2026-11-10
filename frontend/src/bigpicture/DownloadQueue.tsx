@@ -8,7 +8,7 @@ import {
   resumeDownload,
   clearCompletedDownloads,
 } from "../api/backend";
-import { setDownloads, removeTerminalDownloads, useDownloads } from "../utils/downloadStore";
+import { isDownloadUnderWay, setDownloads, removeTerminalDownloads, useDownloads } from "../utils/downloadStore";
 import { formatBytes } from "../utils/formatters";
 import { scrollToTop } from "../utils/scrollHelpers";
 import { detach } from "../utils/detach";
@@ -90,9 +90,7 @@ export const DownloadQueue: FC<DownloadQueueProps> = ({ onBack }) => {
   // Paused and extracting downloads stay in the active section — they're not
   // finished. Paused holds the partial transfer for resume; extracting is the
   // post-transfer ZIP unpack (not cancellable, no pause/resume offered).
-  const active = downloads.filter(
-    (d) => d.status === "queued" || d.status === "downloading" || d.status === "paused" || d.status === "extracting",
-  );
+  const active = downloads.filter(isDownloadUnderWay);
   const finished = downloads.filter(
     (d) => d.status === "completed" || d.status === "failed" || d.status === "cancelled",
   );
