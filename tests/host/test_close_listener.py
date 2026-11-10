@@ -17,9 +17,8 @@ class TestCloseListener:
 
         One yield after the connect, and no other count, queues the accept for the
         turn the close begins in; one after the close lets an abandoned accept task
-        let go of its transport, so the collector reaches it here. Python 3.13 and
-        3.14 report such a transport as an unraisable ``TypeError``, and every
-        version warns about it as unclosed.
+        let go of its transport, so the collector reaches it here. The half-made
+        transport that ``stop()``'s comment describes fails either assertion.
         """
         # What an earlier test left for the collector goes now, outside the recording.
         gc.collect()

@@ -75,9 +75,8 @@ class TestStop:
     ):
         """Rests on the same scheduling order, with one yield before the stop rather than two.
 
-        That queues the accept for the turn the stop begins in. Python
-        3.13 and 3.14 report a transport abandoned there as an unraisable
-        ``TypeError``, and every version warns about it as unclosed.
+        That queues the accept for the turn the stop begins in, and the half-made
+        transport that ``stop()``'s comment describes fails either assertion.
         """
         # What an earlier test left for the collector goes now, outside the recording.
         gc.collect()

@@ -249,12 +249,12 @@ class HostServer:
         if self._server is not None:
             # An accepted connection becomes a transport only on a later loop turn,
             # and a ``Server.close()`` in between abandons it half-made: outside
-            # the server's clients, so nothing closes it, and from 3.13 on the
-            # collector reaching it raises an unraisable ``TypeError``
-            # (python/cpython#109564, fixed by GH-160851). Removing the reader
-            # cancels every accept not yet begun, one already queued for this turn
-            # included; the yield lets a transport already being built attach, so
-            # the close below reaches it.
+            # the server's clients, so nothing closes it. The collector reaching it
+            # warns about it as unclosed, and from 3.13 on also raises an
+            # unraisable ``TypeError`` (python/cpython#109564, fixed by
+            # GH-160851). Removing the reader cancels every accept not yet begun,
+            # one already queued for this turn included; the yield lets a
+            # transport already being built attach, so the close below reaches it.
             loop = asyncio.get_running_loop()
             for listening in self._server.sockets:
                 loop.remove_reader(listening.fileno())
