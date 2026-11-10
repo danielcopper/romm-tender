@@ -464,9 +464,11 @@ export function usePlatformsPage(): PlatformsPageState {
       });
   }, []);
 
-  /** A folder no listed platform has: its core read is failed on the spot, as nothing can be asked. */
-  const coreUnasked = useCallback((folder: string) => {
+  /** A folder no listed platform has: its core read and its save count are failed on the spot, as nothing
+   *  can be asked. */
+  const unasked = useCallback((folder: string) => {
     setCores((prev) => ({ ...prev, [folder]: { refusal: null } }));
+    setSaveCounts((prev) => ({ ...prev, [folder]: null }));
   }, []);
 
   const loadSaveCount = useCallback((folder: string) => {
@@ -537,7 +539,7 @@ export function usePlatformsPage(): PlatformsPageState {
         if (first) {
           const platform = platformOf(first);
           if (platform === null) {
-            coreUnasked(first);
+            unasked(first);
           } else {
             loadCore(platform);
             loadSaveCount(first);
@@ -556,7 +558,7 @@ export function usePlatformsPage(): PlatformsPageState {
     return () => {
       detach(releasePruneLeasesByOwner(LEASE_OWNER));
     };
-  }, [coreUnasked, loadCore, loadSaveCount, platformOf, readOverview, refreshShortcutCounts, syncWrites]);
+  }, [unasked, loadCore, loadSaveCount, platformOf, readOverview, refreshShortcutCounts, syncWrites]);
 
   const rows = new Map<string, PlatformRow>(
     platforms.map((p) => [
@@ -582,7 +584,7 @@ export function usePlatformsPage(): PlatformsPageState {
       setSelectedFolder(folder);
       const platform = platformOf(folder);
       if (platform === null) {
-        coreUnasked(folder);
+        unasked(folder);
         return;
       }
       loadSaveCount(folder);
@@ -592,7 +594,7 @@ export function usePlatformsPage(): PlatformsPageState {
       // the walk asks each platform once, so nothing else would ever ask again.
       if (readFailed[folder]) detach(readPlatform(platform));
     },
-    [coreUnasked, loadCore, loadSaveCount, platformOf, readFailed, readPlatform],
+    [unasked, loadCore, loadSaveCount, platformOf, readFailed, readPlatform],
   );
 
   const coreFor = useCallback((folder: string): CoreAnswer => coreInfoOf(cores[folder]), [cores]);

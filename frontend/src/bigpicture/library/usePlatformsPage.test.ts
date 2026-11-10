@@ -38,5 +38,6 @@ describe("usePlatformsPage › a folder the listing does not hold", () => {
     expect(result.current.selectedFolder).toBe("ghost");
     // Failed on the spot rather than left "not read yet", which the pane shows as a read still under way.
     expect(result.current.coreFor("ghost")).toBeNull();
+    expect(result.current.saveCountFor("ghost")).toBeNull();
   });
 });
