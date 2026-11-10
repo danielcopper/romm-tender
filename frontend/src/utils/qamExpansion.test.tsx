@@ -309,8 +309,8 @@ describe("useWideQamPanel", () => {
     // A deliberate override of Steam's own styling: its tabbed page reserves
     // 40 px under the content scroller, and that scroller sits inside the box
     // WidePage measured and gave the tab as its height — so the reserve comes
-    // out of our page. Scoped to our root, and written against the readable
-    // class rather than the hashed one, which changes with Steam's bundle.
+    // out of our page. Scoped to our root, and against the readable class (the
+    // reason is on `WIDE_PANEL_CSS`).
     expect(css).toContain(`.${mod.WIDE_ROOT_CLASS} ._TabContentsScroll`);
     expect(css).toContain("padding-bottom: 0");
   });
