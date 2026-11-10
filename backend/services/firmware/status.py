@@ -43,10 +43,8 @@ from domain.bios_status import (
 from domain.emulator_commands import options_to_payload, resolve_firmware_option
 from domain.emulator_pick import pick_for, source_kind
 from domain.firmware_groups import console_regions_of, judge_groups
-from domain.firmware_platforms import records_of_platform
 from domain.firmware_rows import leaves_its_folder, library_file
 from domain.platform_names import PLATFORM_NAMES_KEY, decode_platform_names
-from domain.platform_system import PLATFORM_IDS_KEY, kept_folders
 from services.firmware.emulator_answers import (
     EMULATOR_FIELDS,
     EmulatorAnswer,
@@ -55,6 +53,7 @@ from services.firmware.emulator_answers import (
     emulator_tabs,
     row_payload,
 )
+from services.firmware.older_records import platform_records
 from services.firmware.rows import RowInputs, library_rows, requirement_rows
 
 if TYPE_CHECKING:
@@ -74,6 +73,7 @@ if TYPE_CHECKING:
     from services.protocols import (
         CoreInfoProvider,
         FirmwareFileStore,
+        ListingRefiler,
         PlatformCoreReader,
         PlatformSystems,
         UnitOfWorkFactory,
@@ -88,7 +88,8 @@ class FirmwareStatusReaderConfig:
     platform's demand, the RomM listing and the firmware store — plus the
     ES-DE core reads, the slug/system mapping, the per-platform emulator
     override, the file store every place is looked at through, the
-    Unit-of-Work factory, and runtime infrastructure.
+    Unit-of-Work factory, the refiling whose last listing says which slugs are
+    no platform's own folder, and runtime infrastructure.
     """
 
     demand: FirmwareDemand
@@ -99,6 +100,7 @@ class FirmwareStatusReaderConfig:
     platform_core_reader: PlatformCoreReader
     firmware_file_store: FirmwareFileStore
     uow_factory: UnitOfWorkFactory
+    refiling: ListingRefiler
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
 
@@ -115,6 +117,7 @@ class FirmwareStatusReader:
         self._platform_core_reader = config.platform_core_reader
         self._firmware_file_store = config.firmware_file_store
         self._uow_factory = config.uow_factory
+        self._refiling = config.refiling
         self._loop = config.loop
         self._logger = config.logger
 
@@ -358,7 +361,7 @@ class FirmwareStatusReader:
         ``delete_name``. The platform count is the distinct paths of both kinds
         still on disk. Nothing here is ``downloaded``: that is the resolver's
         presence at the row's place, equally true of a file the user placed.
-        *records* are the platform's own download records
+        *records* are the download records the platform's page offers
         (:meth:`_read_platform_records`).
         """
         present = [record for record in records if self._firmware_file_store.exists(record.file_path)]
@@ -384,8 +387,9 @@ class FirmwareStatusReader:
 
         The core read seams key by the resolved RetroDECK ``system`` (ADR-0010
         §2), so each entry's RomM platform slug is normalized before the
-        ``get_emulator_options`` call; ``has_games``, the emulator pick and the
-        older download records are the platform's own, by *folder*; the
+        ``get_emulator_options`` call; ``has_games`` and the emulator pick are the
+        platform's own, by *folder*, and so are the older download records but
+        for one its slug shares (:meth:`_read_platform_records`); the
         library's files are the ones RomM lists under *folder*. ``active_core`` and ``active_core_label`` are the two
         projections of ONE pick (:meth:`_platform_emulator`), so the pane cannot
         name one emulator and judge by another; ``active_core`` is ``None`` only where the pick could
@@ -522,15 +526,12 @@ class FirmwareStatusReader:
         return self._read_synced_folders(), self._read_platform_records(platform_folder, platform_slug)
 
     def _read_platform_records(self, platform_folder: str, platform_slug: str) -> list[BiosFile]:
-        """The download records the platform's page offers (:func:`~domain.firmware_platforms.records_of_platform`).
+        """The download records the platform's page offers (:func:`~services.firmware.older_records.platform_records`).
 
-        One short read UoW, closed before the file probes :meth:`_stamp_deletable`
+        Its read UoW is closed before the file probes :meth:`_stamp_deletable`
         runs.
         """
-        with self._uow_factory() as uow:
-            records = list(uow.bios_files.iter_all())
-            known = kept_folders(uow.kv_config.get(PLATFORM_IDS_KEY))
-        return records_of_platform(records, platform_folder, platform_slug, known)
+        return platform_records(self._uow_factory, self._refiling, platform_folder, platform_slug)
 
     # ── The per-game check ───────────────────────────────────
 

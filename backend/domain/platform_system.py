@@ -147,10 +147,10 @@ def kept_by_slug(kept: Mapping[str, KeptPlatform], slug: str) -> KeptPlatform | 
     return next((entry for entry in reversed(list(kept.values())) if entry.slug == slug), None)
 
 
-def kept_folders(raw: str | None) -> frozenset[str]:
-    """The ``fs_slug`` of every platform kept under :data:`PLATFORM_IDS_KEY` in *raw*; none where nothing is kept."""
+def kept_folders_of_slug(raw: str | None, slug: str) -> frozenset[str]:
+    """The ``fs_slug`` of every platform of *slug* kept under :data:`PLATFORM_IDS_KEY` in *raw*."""
     kept = decode_platform_ids(raw) or {}
-    return frozenset(entry.fs_slug for entry in kept.values() if entry.fs_slug is not None)
+    return frozenset(entry.fs_slug for entry in kept.values() if entry.slug == slug and entry.fs_slug)
 
 
 def encode_platform_ids(kept: Mapping[str, KeptPlatform]) -> str:

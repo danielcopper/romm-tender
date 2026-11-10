@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import hashlib
 import inspect
 import logging
@@ -32,6 +33,7 @@ from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock
 
 from adapters.firmware_file import FirmwareFileAdapter
+from adapters.persistence import PlatformCoreReaderAdapter
 from domain.bios_file import BiosFile
 from domain.bios_status import BiosFileEntry
 from domain.emulator_commands import PROGRAM, EmulatorOption
@@ -3879,8 +3881,10 @@ def _rom_scoped_surfaces(
             logger=logger,
             core_info=core_info,
             platform_systems=platform_systems,
-            settings={},
+            settings=(live := {}),
             settings_persister=FakeSettingsPersister(),
+            platform_core_reader=PlatformCoreReaderAdapter(live),
+            picks_lock=threading.Lock(),
             uow_factory=uow_factory,
             active_core=active_core,
             disc_resolver=FakeDiscResolver(),
@@ -6576,7 +6580,7 @@ class TestThePlatformRommStatesForAFile:
 
 
 class TestTheListingMovesOlderEntries:
-    """A fresh read of the listing is handed to the refiling; a cached read and a failed move cost nothing."""
+    """A fresh read of the listing is handed to the refiling; a cached read is not."""
 
     _LISTING = _platforms([{"id": 1, "file_name": "scph5501.bin", "platform_slug": "psx"}], folders={"psx": "ps"})
 
@@ -6604,15 +6608,6 @@ class TestTheListingMovesOlderEntries:
         fw._listing.get_firmware_list()
 
         assert refiling.listings == []
-
-    def test_a_move_that_fails_costs_nothing_of_the_listing(self, caplog):
-        fw = self._service(FakeListingRefiler(error=OSError("db locked")))
-
-        with caplog.at_level(logging.WARNING):
-            result = fw._listing.get_firmware_list()
-
-        assert [row["file_name"] for row in result] == ["scph5501.bin"]
-        assert "Failed to move older BIOS records and per-platform emulator overrides to their platforms" in caplog.text
 
 
 class TestFirmwareListCache:
@@ -8146,18 +8141,56 @@ _SHARED_SLUG_LISTING = (
 )
 
 
+class TestEachPlatformReadsThePickOfItsOwnFolder:
+    """``psp`` and ``psp-homebrew`` share the slug ``psp``; only the second has a pick (#2452 D7, D11)."""
+
+    def _service(self) -> tuple[FirmwareService, FakePlatformCoreReader]:
+        from tests.fakes.fake_core_info_provider import libretro_option, standalone_option
+
+        reader = FakePlatformCoreReader({"psp-homebrew": "PPSSPP"})
+        fw = _make_firmware_service(
+            core_info=FakeCoreInfoProvider(
+                active_core=("ppsspp_libretro", "PPSSPP"),
+                options=[standalone_option("PPSSPP (Standalone)"), libretro_option("ppsspp_libretro", "PPSSPP")],
+            ),
+            platform_core_reader=reader,
+        )
+        _stub_listing(fw, [])
+        _inline_executor(fw)
+        return fw, reader
+
+    @pytest.mark.asyncio
+    async def test_the_status_of_each_platform_shows_its_own_pick(self):
+        fw, _ = self._service()
+
+        homebrew = await fw.get_platform_firmware_status("psp", "psp-homebrew")
+        psp = await fw.get_platform_firmware_status("psp", "psp")
+
+        assert homebrew["platform"]["active_core_label"] == "PPSSPP"
+        assert psp["platform"]["active_core_label"] == "PPSSPP (Standalone)"
+
+    @pytest.mark.asyncio
+    async def test_the_per_game_check_reads_the_pick_of_its_own_folder(self):
+        fw, reader = self._service()
+
+        await fw.check_platform_bios("psp", "psp-homebrew")
+
+        assert reader.calls
+        assert set(reader.calls) == {"psp-homebrew"}
+
+    @pytest.mark.asyncio
+    async def test_download_required_reads_the_pick_of_its_own_folder(self):
+        fw, reader = self._service()
+
+        with contextlib.suppress(Refused):
+            await fw.download_required_firmware("psp", "psp-homebrew")
+
+        assert reader.calls
+        assert set(reader.calls) == {"psp-homebrew"}
+
+
 class TestEachPlatformOfASlugIsAPageOfItsOwn:
     """Two RomM platforms share the slug ``gamecube``: each is its own page (#2452 D6, D17)."""
-
-    @staticmethod
-    def _keep_both(uow) -> None:
-        from domain.platform_system import PLATFORM_IDS_KEY, KeptPlatform, encode_platform_ids
-
-        kept = {
-            folder: KeptPlatform(slug="gamecube", fs_slug=folder, platform_id=platform_id, name="GameCube")
-            for platform_id, folder in ((1, "gc"), (2, "ngc"))
-        }
-        uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids(kept))
 
     def _service(self, firmware, tmp_path, path: str) -> FirmwareService:
         fw = _make_firmware_service(
@@ -8204,7 +8237,6 @@ class TestEachPlatformOfASlugIsAPageOfItsOwn:
     async def test_a_record_under_the_shared_slug_is_offered_on_each_page(self, firmware, tmp_path):
         path = str(tmp_path / "bios" / "IPL.bin")
         fw = self._service(firmware, tmp_path, path)
-        self._keep_both(firmware.uow)
         self._record(firmware.uow, "gamecube", path)
 
         with patch.object(firmware.romm_api, "list_platforms", return_value=list(_SHARED_SLUG_LISTING)):
@@ -8218,7 +8250,6 @@ class TestEachPlatformOfASlugIsAPageOfItsOwn:
     async def test_a_record_of_the_other_platform_is_not_offered(self, firmware, tmp_path):
         path = str(tmp_path / "bios" / "IPL.bin")
         fw = self._service(firmware, tmp_path, path)
-        self._keep_both(firmware.uow)
         self._record(firmware.uow, "ngc", path)
 
         with patch.object(firmware.romm_api, "list_platforms", return_value=list(_SHARED_SLUG_LISTING)):
@@ -8230,12 +8261,32 @@ class TestEachPlatformOfASlugIsAPageOfItsOwn:
     async def test_either_page_s_delete_takes_the_shared_record(self, firmware, tmp_path):
         path = str(tmp_path / "bios" / "IPL.bin")
         fw = self._service(firmware, tmp_path, path)
-        self._keep_both(firmware.uow)
         self._record(firmware.uow, "gamecube", path)
+        # The Platforms tab reads the listing before any page of it is shown.
+        fw._config.refiling.do_refile(list(_SHARED_SLUG_LISTING))
 
-        with patch.object(firmware.romm_api, "list_platforms", return_value=list(_SHARED_SLUG_LISTING)):
-            result = await fw.delete_platform_bios("gamecube", "ngc")
+        result = await fw.delete_platform_bios("gamecube", "ngc")
 
         assert isinstance(result, dict)
         assert result["deleted_count"] == 1
         assert firmware.uow.bios_files.get("gamecube", "IPL.bin") is None
+
+    @pytest.mark.asyncio
+    async def test_a_record_under_a_slug_that_is_a_listed_folder_is_that_platform_s_alone(self, firmware, tmp_path):
+        """``snes`` is a slug and a listed folder at once, and no platform is kept yet."""
+        path = str(tmp_path / "bios" / "IPL.bin")
+        fw = self._service(firmware, tmp_path, path)
+        self._record(firmware.uow, "snes", path)
+        listing = [
+            {"id": 3, "slug": "snes", "fs_slug": "snes", "firmware": []},
+            {"id": 4, "slug": "snes", "fs_slug": "snes-hacks", "firmware": []},
+        ]
+
+        with patch.object(firmware.romm_api, "list_platforms", return_value=listing):
+            hacks = await fw.get_platform_firmware_status("snes", "snes-hacks")
+            result = await fw.delete_platform_bios("snes", "snes-hacks")
+
+        assert hacks["platform"]["deletable_count"] == 0
+        assert isinstance(result, dict)
+        assert result["deleted_count"] == 0
+        assert firmware.uow.bios_files.get("snes", "IPL.bin") is not None

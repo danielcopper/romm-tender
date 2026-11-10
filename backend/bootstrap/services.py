@@ -11,6 +11,7 @@ threaded through a ``*ServiceConfig`` here, or deferred through a
 from __future__ import annotations
 
 import os
+import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -233,12 +234,17 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         sync_in_flight=sync_in_flight_binding.get,
     )
 
-    # Every reader of RomM's platform listing hands what it read here (#2452 D6, D7).
+    # Both writers of the per-platform picks run in executor threads, so one
+    # lock, not a conflict rule, keeps a refile and a stored pick apart.
+    picks_lock = threading.Lock()
+
+    # Every reader that keeps or uses RomM's platform listing hands what it read here (#2452 D6, D7).
     platform_refiling = PlatformRefiling(
         config=PlatformRefilingConfig(
             uow_factory=cfg.callbacks.uow_factory,
             settings=cfg.stores.settings,
             settings_persister=cfg.callbacks.settings_persister,
+            picks_lock=picks_lock,
             logger=cfg.runtime.logger,
         )
     )
@@ -698,6 +704,8 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             platform_systems=platform_systems,
             settings=cfg.stores.settings,
             settings_persister=cfg.callbacks.settings_persister,
+            platform_core_reader=cfg.callbacks.platform_core_reader,
+            picks_lock=picks_lock,
             uow_factory=cfg.callbacks.uow_factory,
             active_core=active_core_resolver,
             disc_resolver=disc_launch_resolver,

@@ -130,6 +130,7 @@ class FirmwareService:
                 platform_core_reader=config.platform_core_reader,
                 firmware_file_store=config.firmware_file_store,
                 uow_factory=config.uow_factory,
+                refiling=config.refiling,
                 loop=config.loop,
                 logger=config.logger,
             )
@@ -168,6 +169,7 @@ class FirmwareService:
                 firmware_file_store=config.firmware_file_store,
                 retrodeck_folders=config.retrodeck_folders,
                 uow_factory=config.uow_factory,
+                refiling=config.refiling,
                 loop=config.loop,
                 logger=config.logger,
             )

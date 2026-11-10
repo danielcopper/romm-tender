@@ -11,7 +11,10 @@ Pure compute — no I/O.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,6 +23,30 @@ class StoredPick:
 
     label: str
     source: str
+
+
+def game_platform_pick(
+    platform_fs_slug: str | None,
+    platform_slug: str,
+    pick_under: Callable[[str], StoredPick | None],
+    kept_folders: Callable[[], frozenset[str]],
+) -> StoredPick | None:
+    """The per-platform pick a game takes, or ``None`` where the platform's default applies (#2452 D15).
+
+    A game with its ``fs_slug`` takes that platform's pick and nothing else. A
+    game with none recorded — every game until the first sync after an update
+    from 0.33.0 records it — takes the pick still kept under its slug; once
+    the refiling has moved that key to the platforms of the slug, the pick of
+    the one platform kept for the slug (*kept_folders*, read only then); where
+    several share the slug, or none is kept, no pick.
+    """
+    if platform_fs_slug:
+        return pick_under(platform_fs_slug)
+    stored = pick_under(platform_slug)
+    if stored is not None:
+        return stored
+    folders = kept_folders()
+    return pick_under(next(iter(folders))) if len(folders) == 1 else None
 
 
 def platform_pick(value: object) -> StoredPick | None:

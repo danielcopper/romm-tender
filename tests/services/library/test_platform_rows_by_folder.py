@@ -105,16 +105,6 @@ class TestEveryListingReadIsRefiled:
 
         assert refiling.listings == [api.platforms]
 
-    @pytest.mark.asyncio
-    async def test_a_refiling_that_fails_costs_nothing_of_the_listing(self, caplog):
-        api = _api(_platform(1, "Super Nintendo", "snes", "snes"))
-
-        with caplog.at_level(logging.WARNING):
-            result = await _fetcher(api, FakeListingRefiler(error=OSError("disk full"))).get_platforms()
-
-        assert [row["fs_slug"] for row in result["platforms"]] == ["snes"]
-        assert "Failed to move older per-platform entries to their platforms: disk full" in caplog.text
-
 
 def _seed_bound(uow, rom_id: int, folder: str | None, *, slug: str = "snes") -> None:
     """A game bound to a Steam shortcut on the ``fs_slug`` *folder*; ``None`` is one no sync recorded a folder for."""
@@ -138,7 +128,7 @@ def _seed_names(uow, names: dict[str, str]) -> None:
 
 
 class TestTheShortcutCountsArePerFolder:
-    """The counts the Platforms tab shows beside each row, one entry per ``fs_slug`` (#2452 D3, D17)."""
+    """The counts the Platforms tab shows beside each row, one entry per ``fs_slug`` (#2452 D1, D17)."""
 
     @pytest.mark.asyncio
     async def test_two_folders_sharing_a_slug_are_two_entries_each_with_its_own_count(self, library):

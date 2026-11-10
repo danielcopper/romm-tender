@@ -341,21 +341,3 @@ class TestAListingReadHereIsRefiled:
         service.platform_system("snes")
 
         assert refiling.listings == []
-
-    def test_a_refiling_that_fails_costs_nothing_of_the_answer(self, uow_factory, romm, sources, caplog):
-        service = PlatformSystemService(
-            config=PlatformSystemServiceConfig(
-                uow_factory=uow_factory,
-                romm_api=romm,
-                refiling=FakeListingRefiler(error=OSError("disk full")),
-                source_platform_systems=sources,
-                logger=logging.getLogger("test_platform_systems"),
-                log_debug=MagicMock(),
-            )
-        )
-
-        with caplog.at_level(logging.WARNING):
-            service.platform_system("snes")
-
-        assert sources.asked[0][0] == PlatformIds(igdb_id=19, ss_id=4, name="Super Nintendo")
-        assert "Failed to move older per-platform entries to their platforms: disk full" in caplog.text

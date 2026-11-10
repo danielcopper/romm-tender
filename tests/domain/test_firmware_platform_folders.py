@@ -5,17 +5,22 @@ from __future__ import annotations
 from typing import Any
 
 from domain.bios_file import BiosFile
-from domain.firmware_platforms import folders_by_slug, pick_moves, records_of_platform, refiled_record_folder
-from domain.platform_system import KeptPlatform, encode_platform_ids, kept_folders
+from domain.firmware_platforms import (
+    folders_by_slug,
+    listed_platforms,
+    pick_moves,
+    records_of_platform,
+    refiled_record_folder,
+)
 
 
-def _platform(platform_id: int, slug: str, fs_slug: str | None) -> dict[str, Any]:
-    return {"id": platform_id, "slug": slug, "fs_slug": fs_slug, "firmware": []}
+def _platform(platform_id: int, slug: str | None, fs_slug: str | None, *firmware: dict[str, Any]) -> dict[str, Any]:
+    return {"id": platform_id, "slug": slug, "fs_slug": fs_slug, "firmware": list(firmware)}
 
 
 # Two RomM platforms share the slug ``gamecube``; ``psx`` is kept in a folder of another name.
 _PLATFORMS = (
-    _platform(1, "psx", "ps"),
+    _platform(1, "psx", "ps", {"id": 10, "file_name": "scph5501.bin", "platform_id": 1}),
     _platform(2, "gamecube", "gc"),
     _platform(3, "gamecube", "ngc"),
     _platform(4, "snes", "snes"),
@@ -36,11 +41,22 @@ class TestFoldersBySlug:
         assert folders_by_slug(platforms) == {}
 
 
-class TestRefiledRecordFolder:
-    _ROWS = ({"id": 10, "file_name": "scph5501.bin", "platform_folder": "ps"},)
+class TestListedPlatforms:
+    def test_a_platform_listed_without_a_slug_still_counts_its_folder(self):
+        listed = listed_platforms([*_PLATFORMS, _platform(9, None, "arcade")])
 
+        assert listed.folders == frozenset({"ps", "gc", "ngc", "snes", "arcade"})
+        assert "arcade" not in {folder for folders in listed.by_slug.values() for folder in folders}
+
+    def test_the_library_firmware_comes_with_it(self):
+        listed = listed_platforms(_PLATFORMS)
+
+        assert [(row["id"], row["platform_folder"]) for row in listed.firmware] == [(10, "ps")]
+
+
+class TestRefiledRecordFolder:
     def _target(self, key: str, file_name: str, firmware_id: int | None) -> str | None:
-        return refiled_record_folder(key, file_name, firmware_id, self._ROWS, _PLATFORMS)
+        return refiled_record_folder(key, file_name, firmware_id, listed_platforms(_PLATFORMS))
 
     def test_a_record_under_a_slug_moves_to_the_one_folder_with_that_slug(self):
         assert self._target("psx", "scph5501.bin", None) == "ps"
@@ -60,18 +76,25 @@ class TestRefiledRecordFolder:
     def test_a_record_nothing_places_stays(self):
         assert self._target("bios_from_user", "gone.bin", None) is None
 
+    def test_a_record_under_the_folder_of_a_platform_without_a_slug_stays(self):
+        listed = listed_platforms([*_PLATFORMS, _platform(9, None, "psx")])
+
+        assert refiled_record_folder("psx", "scph5501.bin", None, listed) is None
+
 
 class TestPickMoves:
     def test_a_pick_under_a_slug_goes_to_every_folder_of_that_slug(self):
-        assert pick_moves({"gamecube": {"core": "Dolphin"}}, _PLATFORMS) == {"gamecube": ("gc", "ngc")}
+        assert pick_moves({"gamecube": {"core": "Dolphin"}}, listed_platforms(_PLATFORMS)) == {
+            "gamecube": ("gc", "ngc")
+        }
 
     def test_a_folder_with_a_pick_of_its_own_keeps_it(self):
-        moves = pick_moves({"gamecube": {"core": "Dolphin"}, "ngc": {"core": "Other"}}, _PLATFORMS)
+        moves = pick_moves({"gamecube": {"core": "Dolphin"}, "ngc": {"core": "Other"}}, listed_platforms(_PLATFORMS))
 
         assert moves == {"gamecube": ("gc",)}
 
     def test_a_pick_whose_folders_all_have_their_own_goes_to_none_and_the_key_goes(self):
-        moves = pick_moves({"gamecube": {}, "gc": {}, "ngc": {}}, _PLATFORMS)
+        moves = pick_moves({"gamecube": {}, "gc": {}, "ngc": {}}, listed_platforms(_PLATFORMS))
 
         assert moves == {"gamecube": ()}
 
@@ -79,10 +102,10 @@ class TestPickMoves:
         """D18: ``snes`` is both a slug and a listed folder; the pick stays where it is."""
         platforms = (*_PLATFORMS, _platform(5, "snes", "snes-hacks"))
 
-        assert pick_moves({"snes": {"core": "Snes9x"}}, platforms) == {}
+        assert pick_moves({"snes": {"core": "Snes9x"}}, listed_platforms(platforms)) == {}
 
     def test_a_pick_under_a_key_no_listed_platform_has_as_slug_stays(self):
-        assert pick_moves({"bios_from_user": {}}, _PLATFORMS) == {}
+        assert pick_moves({"bios_from_user": {}}, listed_platforms(_PLATFORMS)) == {}
 
 
 def _record(folder: str, file_name: str = "IPL.bin") -> BiosFile:
@@ -99,28 +122,21 @@ class TestRecordsOfPlatform:
 
     def test_a_record_under_a_shared_slug_is_offered_on_each_of_its_platforms(self):
         records = [_record("gamecube")]
-        known = frozenset({"gc", "ngc"})
+        listed = frozenset({"gc", "ngc"})
 
-        assert records_of_platform(records, "gc", "gamecube", known) == records
-        assert records_of_platform(records, "ngc", "gamecube", known) == records
+        assert records_of_platform(records, "gc", "gamecube", listed) == records
+        assert records_of_platform(records, "ngc", "gamecube", listed) == records
 
-    def test_a_slug_that_is_also_a_known_folder_is_that_platform_s_alone(self):
+    def test_a_slug_that_is_also_a_listed_folder_is_that_platform_s_alone(self):
         records = [_record("snes")]
-        known = frozenset({"snes", "snes-hacks"})
+        listed = frozenset({"snes", "snes-hacks"})
 
-        assert records_of_platform(records, "snes-hacks", "snes", known) == []
-        assert records_of_platform(records, "snes", "snes", known) == records
+        assert records_of_platform(records, "snes-hacks", "snes", listed) == []
+        assert records_of_platform(records, "snes", "snes", listed) == records
 
+    def test_before_any_listing_a_record_under_a_slug_is_no_page_s_but_its_own_folder_s(self):
+        records = [_record("snes"), _record("gamecube")]
 
-class TestKeptFolders:
-    def test_every_kept_platform_s_folder(self):
-        kept = {
-            "gc": KeptPlatform(slug="gamecube", fs_slug="gc", platform_id=2, name="GameCube"),
-            "ngc": KeptPlatform(slug="gamecube", fs_slug="ngc", platform_id=3, name="GameCube"),
-        }
-
-        assert kept_folders(encode_platform_ids(kept)) == frozenset({"gc", "ngc"})
-
-    def test_nothing_kept_is_no_folder(self):
-        assert kept_folders(None) == frozenset()
-        assert kept_folders("not json") == frozenset()
+        assert records_of_platform(records, "snes-hacks", "snes", None) == []
+        assert records_of_platform(records, "gc", "gamecube", None) == []
+        assert records_of_platform(records, "snes", "snes", None) == [records[0]]

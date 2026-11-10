@@ -14,7 +14,7 @@ Every method blocks: it reads the database, and may read RomM and the resolver.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from domain.platform_names import PLATFORM_NAMES_KEY, decode_platform_names
 from domain.platform_system import (
@@ -86,7 +86,9 @@ class PlatformSystemService:
         """The system *platform_slug* is in *source*, the answering source where it is ``None``.
 
         Where no ids are kept for the platform they are read from RomM's
-        listing and kept; with *ask_romm* false they count as none instead. A
+        listing and kept, and the listing is handed to the refiling, so this
+        read may move Tender's older entries; with *ask_romm* false they count
+        as none instead. A
         read that fails answers :data:`~domain.platform_system.UNASKED` with the
         reason every RomM read is classified by, and keeps nothing. It is logged
         here, at the level the entrypoint logs a RomM error at, because what
@@ -157,7 +159,7 @@ class PlatformSystemService:
         How the two are merged: ``docs/architecture/core-emulator-selection.md#a-platforms-system``.
         """
         platforms = self._romm_api.list_platforms()
-        self._refile(platforms)
+        self._refiling.do_refile(platforms)
         listed = kept_platforms(platforms, self._romm_api.get_version())
         entry = kept_by_slug(listed, platform_slug)
         self._log_debug(f"[platforms] no ids kept for {platform_slug}; read {len(listed)} from RomM")
@@ -168,10 +170,3 @@ class PlatformSystemService:
             before = {key: kept for key, kept in current.items() if kept.slug not in listed_slugs}
             uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids({**before, **unlisted, **listed}))
         return entry
-
-    def _refile(self, platforms: list[dict[str, Any]]) -> None:
-        """Hand the listing just read to the refiling (#2452 D6, D7); a refiling that fails costs that move only."""
-        try:
-            self._refiling.do_refile(platforms)
-        except Exception as e:
-            self._logger.warning(f"Failed to move older per-platform entries to their platforms: {e}")

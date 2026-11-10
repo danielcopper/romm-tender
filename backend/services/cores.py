@@ -34,8 +34,9 @@ from domain.emulator_commands import (
     options_to_payload,
     shipped_default,
 )
-from domain.emulator_pick import pick_for, platform_pick, platform_pick_value, source_kind
+from domain.emulator_pick import game_platform_pick, pick_for, platform_pick_value, source_kind
 from domain.platform_names import PLATFORM_NAMES_KEY, platform_display_name
+from domain.platform_system import PLATFORM_IDS_KEY, kept_folders_of_slug
 from domain.rom_files import asked_path
 from domain.start_command import source_refusal, start_verdict
 from lib.errors import Refused
@@ -43,9 +44,9 @@ from lib.errors import Refused
 if TYPE_CHECKING:
     import asyncio
     import logging
+    import threading
 
     from domain.emulator_choice import ResolvedEmulator
-    from domain.emulator_pick import StoredPick
     from domain.platform_system import PlatformSystem
     from domain.rom import Rom
     from domain.rom_install import RomInstall
@@ -55,6 +56,7 @@ if TYPE_CHECKING:
         ConflictRules,
         CoreInfoProvider,
         DiscResolver,
+        PlatformCoreReader,
         PlatformSystems,
         SettingsPersister,
         StartCommandReader,
@@ -69,6 +71,8 @@ class CoreServiceConfig:
     Carries the runtime infrastructure (event loop, logger), the ES-DE
     core-info read seam, the platform's system in the answering source, the live
     ``settings`` dict + its persister (where the per-platform core lands), the
+    reader of the stored per-platform picks, the lock every writer of those
+    picks holds while it changes and saves them, the
     SQLite Unit-of-Work factory (to read the ROM + its install and write the
     per-game pin), the shared per-ROM active-core resolver (the menu's active
     marker), the shared per-ROM disc resolver (so a question about the start is
@@ -84,6 +88,8 @@ class CoreServiceConfig:
     platform_systems: PlatformSystems
     settings: dict[str, Any]
     settings_persister: SettingsPersister
+    platform_core_reader: PlatformCoreReader
+    picks_lock: threading.Lock
     uow_factory: UnitOfWorkFactory
     active_core: ActiveCoreReader
     disc_resolver: DiscResolver
@@ -106,6 +112,8 @@ class CoreService:
         self._platform_systems = config.platform_systems
         self._settings = config.settings
         self._settings_persister = config.settings_persister
+        self._platform_core_reader = config.platform_core_reader
+        self._picks_lock = config.picks_lock
         self._uow_factory = config.uow_factory
         self._active_core = config.active_core
         self._disc_resolver = config.disc_resolver
@@ -183,7 +191,15 @@ class CoreService:
         resolved = self._active_core.resolve_rom(rom_id)
         choice = resolved.choice if resolved is not None else _NO_CHOICE
         option = choice.option
-        stored = pick_for(self._stored_platform_pick(rom.platform_fs_slug), source_kind(options))
+        stored = pick_for(
+            game_platform_pick(
+                rom.platform_fs_slug,
+                rom.platform_slug,
+                self._platform_core_reader.get_platform_core,
+                lambda: self._kept_folders_of(rom.platform_slug),
+            ),
+            source_kind(options),
+        )
         return {
             "emulators": options_to_payload(options["options"]),
             "emulator_data_available": options["available"],
@@ -331,18 +347,17 @@ class CoreService:
         a platform-keyed caller has no ROM to layer and must be answerable for a
         platform holding no synced ROM at all.
         """
+        _require_platform(platform_slug, platform_folder)
         return await self._loop.run_in_executor(None, self._system_core_info_io, platform_slug, platform_folder)
 
-    def _stored_platform_pick(self, platform_folder: str | None) -> StoredPick | None:
-        """The pick stored for the platform *platform_folder*; none for a game with no ``fs_slug`` (#2452 D15)."""
-        if platform_folder is None:
-            return None
-        return platform_pick(self._settings.get("platform_cores", {}).get(platform_folder))
+    def _kept_folders_of(self, platform_slug: str) -> frozenset[str]:
+        with self._uow_factory() as uow:
+            return kept_folders_of_slug(uow.kv_config.get(PLATFORM_IDS_KEY), platform_slug)
 
     def _system_core_info_io(self, platform_slug: str, platform_folder: str) -> dict[str, Any]:
         platform = self._platform_systems.platform_system(platform_slug)
         options = self._emulator_options(platform)
-        stored = pick_for(self._stored_platform_pick(platform_folder), source_kind(options))
+        stored = pick_for(self._platform_core_reader.get_platform_core(platform_folder), source_kind(options))
         choice = choose_emulator(options["options"], game=None, platform=stored)
         source_defaults = self._source_defaults(platform_slug, answered=(platform, options))
         tender_default = next(
@@ -443,24 +458,28 @@ class CoreService:
 
         The previous value is put back where the save fails.
         """
-        platform_cores = self._settings["platform_cores"]
-        previous = platform_cores.get(platform_folder)
+        value = None
         if core_label:
             source = source_kind(self._emulator_options(self._platform_systems.platform_system(platform_slug)))
             if source is None:
                 raise Refused("core_unavailable", f"No emulator source answers for {platform_slug}")
-            platform_cores[platform_folder] = platform_pick_value(core_label, source)
-        else:
-            platform_cores.pop(platform_folder, None)
-        try:
-            self._settings_persister.save_settings()
-        except OSError as e:
-            if previous is None:
-                platform_cores.pop(platform_folder, None)
+            value = platform_pick_value(core_label, source)
+        with self._picks_lock:
+            platform_cores = self._settings["platform_cores"]
+            previous = platform_cores.get(platform_folder)
+            if value is not None:
+                platform_cores[platform_folder] = value
             else:
-                platform_cores[platform_folder] = previous
-            self._logger.error(f"Failed to set system core: {e}")
-            raise Refused("save_failed", f"Save failed: {e}") from e
+                platform_cores.pop(platform_folder, None)
+            try:
+                self._settings_persister.save_settings()
+            except OSError as e:
+                if previous is None:
+                    platform_cores.pop(platform_folder, None)
+                else:
+                    platform_cores[platform_folder] = previous
+                self._logger.error(f"Failed to set system core: {e}")
+                raise Refused("save_failed", f"Save failed: {e}") from e
 
     async def set_system_core(self, platform_slug: str, platform_folder: str, core_label: str) -> dict[str, Any]:
         """Set or clear the per-platform core selection for a platform.
@@ -472,6 +491,7 @@ class CoreService:
         file that cannot be written refuses with ``save_failed`` and leaves the
         previous selection in effect.
         """
+        _require_platform(platform_slug, platform_folder)
         async with self._rules.hold("set_system_core", update=True, migration=True, prune=True):
             await self._loop.run_in_executor(None, self._set_system_core_io, platform_slug, platform_folder, core_label)
             return {"success": True}
@@ -574,6 +594,18 @@ class CoreService:
         if content_path is None:
             return self._core_info.get_emulator_options(platform.taken)
         return self._core_info.get_emulator_options(platform.taken, content_path=content_path)
+
+
+def _require_platform(platform_slug: object, platform_folder: object) -> None:
+    """Refuse ``invalid_value`` for a platform asked without a slug or without the ``fs_slug`` its pick is kept under.
+
+    The system is found by the slug and the pick by the ``fs_slug`` (#2452
+    D11), so neither is taken in the other's place.
+    """
+    if not isinstance(platform_slug, str) or not platform_slug:
+        raise Refused("invalid_value", f"{platform_slug!r} is not a RomM platform slug")
+    if not isinstance(platform_folder, str) or not platform_folder:
+        raise Refused("invalid_value", f"{platform_folder!r} is not a RomM platform folder")
 
 
 def _asked_path(install: RomInstall, rom: Rom, disc_resolver: DiscResolver) -> str:

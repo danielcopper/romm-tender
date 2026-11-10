@@ -26,7 +26,8 @@ from typing import TYPE_CHECKING
 
 from domain.emulator_choice import ResolvedEmulator, choose_emulator
 from domain.emulator_commands import option_for_label
-from domain.emulator_pick import StoredPick, pick_for, source_kind
+from domain.emulator_pick import StoredPick, game_platform_pick, pick_for, source_kind
+from domain.platform_system import PLATFORM_IDS_KEY, kept_folders_of_slug
 
 if TYPE_CHECKING:
     import logging
@@ -118,7 +119,15 @@ class ActiveCoreResolver:
         platform = (
             None
             if game is not None and option_for_label(options, game.label) is not None
-            else pick_for(self._platform_core_reader.get_platform_core(rom.platform_fs_slug), starting)
+            else pick_for(
+                game_platform_pick(
+                    rom.platform_fs_slug,
+                    rom.platform_slug,
+                    self._platform_core_reader.get_platform_core,
+                    lambda: self._kept_folders_of(rom.platform_slug),
+                ),
+                starting,
+            )
         )
         choice = choose_emulator(options, game=game, platform=platform)
         self._warn_vanished(game, platform, options, rom, system)
@@ -163,6 +172,10 @@ class ActiveCoreResolver:
         if emulator is None:
             return (None, None)
         return (emulator.core_so, emulator.label)
+
+    def _kept_folders_of(self, platform_slug: str) -> frozenset[str]:
+        with self._uow_factory() as uow:
+            return kept_folders_of_slug(uow.kv_config.get(PLATFORM_IDS_KEY), platform_slug)
 
     def _read_rom_and_install(self, rom_id: int) -> tuple[Rom | None, RomInstall | None]:
         with self._uow_factory() as uow:

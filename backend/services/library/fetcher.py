@@ -130,7 +130,7 @@ class LibraryFetcherConfig:
     to surface long paginated fetches to the frontend, and the
     ``LocalLibraryReader`` peer the collections listing asks which ROMs
     the sync's collection filing resolves to a shortcut, and the refiling
-    every read of RomM's platform listing is handed to.
+    each of its reads of RomM's platform listing is handed to.
     """
 
     romm_api: RommLibraryApi
@@ -165,15 +165,9 @@ class LibraryFetcher:
     # ── Platform metadata use cases ──────────────────────────────
 
     async def _read_listing(self) -> list[dict[str, Any]]:
-        """RomM's platform listing, handed to the refiling once read (#2452 D6, D7).
-
-        A refiling that fails costs that move, never the listing.
-        """
+        """RomM's platform listing, handed to the refiling once read (#2452 D6, D7)."""
         platforms = await self._loop.run_in_executor(None, self._romm_api.list_platforms)
-        try:
-            await self._loop.run_in_executor(None, self._refiling.do_refile, platforms)
-        except Exception as e:
-            self._logger.warning(f"Failed to move older per-platform entries to their platforms: {e}")
+        await self._loop.run_in_executor(None, self._refiling.do_refile, platforms)
         return platforms
 
     async def get_platforms(self):

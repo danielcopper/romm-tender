@@ -35,11 +35,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.emulator_sources import RETRODECK
-from domain.firmware_platforms import records_of_platform
-from domain.platform_system import PLATFORM_IDS_KEY, kept_folders
 from domain.retrodeck_folders import NO_BIOS_ROOT, FolderRefused
 from lib.partial_failure import PartialFailure
 from lib.path_safety import is_inside_folder
+from services.firmware.older_records import platform_records
 
 if TYPE_CHECKING:
     import asyncio
@@ -48,7 +47,7 @@ if TYPE_CHECKING:
     from domain.bios_file import BiosFile
     from services.firmware.listing import FirmwareListing
     from services.firmware.store import FirmwareStore
-    from services.protocols import FirmwareFileStore, RetroDeckFolders, UnitOfWorkFactory
+    from services.protocols import FirmwareFileStore, ListingRefiler, RetroDeckFolders, UnitOfWorkFactory
 
 
 KEPT_SETTINGS_UNREADABLE = "settings_unreadable"
@@ -86,7 +85,8 @@ class PlatformBiosDeleterConfig:
     that removes store files and their links, the file store an older download
     is removed through, RetroDECK's folders, whose BIOS folder bounds the
     removal of an older download, the Unit-of-Work factory the older records
-    are read and pruned through, and runtime infrastructure.
+    are read and pruned through, the refiling whose last listing says which
+    slugs are no platform's own folder, and runtime infrastructure.
     """
 
     listing: FirmwareListing
@@ -94,6 +94,7 @@ class PlatformBiosDeleterConfig:
     firmware_file_store: FirmwareFileStore
     retrodeck_folders: RetroDeckFolders
     uow_factory: UnitOfWorkFactory
+    refiling: ListingRefiler
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
 
@@ -114,6 +115,7 @@ class PlatformBiosDeleter:
         self._files = config.firmware_file_store
         self._retrodeck_folders = config.retrodeck_folders
         self._uow_factory = config.uow_factory
+        self._refiling = config.refiling
         self._loop = config.loop
         self._logger = config.logger
 
@@ -183,10 +185,7 @@ class PlatformBiosDeleter:
 
     def _older_downloads(self, platform_folder: str, platform_slug: str) -> list[BiosFile]:
         """The download records of files Tender wrote into a source's folder before the store, for this platform."""
-        with self._uow_factory() as uow:
-            records = list(uow.bios_files.iter_all())
-            known = kept_folders(uow.kv_config.get(PLATFORM_IDS_KEY))
-        return records_of_platform(records, platform_folder, platform_slug, known)
+        return platform_records(self._uow_factory, self._refiling, platform_folder, platform_slug)
 
     async def delete_bios_file(
         self, platform_slug, platform_folder, file_name

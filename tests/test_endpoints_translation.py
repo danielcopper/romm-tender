@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import socket
+import threading
 import urllib.error
 from pathlib import Path
 from typing import Any, cast
@@ -67,6 +68,7 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.library_peers import FakeArtworkManager
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
+from adapters.persistence import PlatformCoreReaderAdapter
 from adapters.steam_config import SteamConfigAdapter
 from adapters.steamgriddb import SteamGridDbAdapter
 from adapters.update_attempt import UpdateAttemptFileAdapter
@@ -1834,6 +1836,8 @@ def _dispatcher_over_cores(settings: dict[str, Any], persister: FakeSettingsPers
             platform_systems=FakePlatformSystems(),
             settings=settings,
             settings_persister=persister,
+            platform_core_reader=PlatformCoreReaderAdapter(settings),
+            picks_lock=threading.Lock(),
             uow_factory=FakeUnitOfWorkFactory(FakeUnitOfWork()),
             active_core=FakeActiveCoreResolver(),
             disc_resolver=FakeDiscResolver(),

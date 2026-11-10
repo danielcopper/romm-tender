@@ -34,12 +34,17 @@ if TYPE_CHECKING:
 class ListingRefiler(Protocol):
     """Moves Tender's older per-platform entries to the platforms a read of RomM's listing names.
 
-    Every reader of RomM's platform listing hands what it read here, so the
-    download records and the per-platform picks follow the user's current
-    RomM (#2452 D6, D7). Blocking.
+    Every reader that keeps or uses RomM's platform listing hands what it read
+    here, so the download records and the per-platform picks follow the user's
+    current RomM (#2452 D6, D7). ``do_refile`` is blocking and never raises: a
+    failed move is reported by the refiling itself and costs the reader nothing.
     """
 
     def do_refile(self, platforms: Sequence[Mapping[str, Any]]) -> None: ...
+
+    def listed_folders(self) -> frozenset[str] | None:
+        """The ``fs_slug`` of every platform the last listing handed here names; ``None`` before the first."""
+        ...
 
 
 class RomInstallRecorder(Protocol):

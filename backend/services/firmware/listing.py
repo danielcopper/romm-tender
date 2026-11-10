@@ -151,7 +151,7 @@ class FirmwareListing:
             if self._firmware_cache is not None:
                 return self._firmware_cache
             raise
-        self._refile(platforms)
+        self._refiling.do_refile(platforms)
         return result
 
     def get_platform_firmware_list(self, platform_folder: str) -> list[dict[str, Any]]:
@@ -161,15 +161,6 @@ class FirmwareListing:
         and raises the same way.
         """
         return platform_library(self.get_firmware_list(), platform_folder)
-
-    def _refile(self, platforms: list[dict[str, Any]]) -> None:
-        """Move Tender's older entries to their platforms; a failure costs that move, never the listing."""
-        try:
-            self._refiling.do_refile(platforms)
-        except Exception as e:
-            self._logger.warning(
-                f"Failed to move older BIOS records and per-platform emulator overrides to their platforms: {e}"
-            )
 
     def invalidate(self) -> None:
         """Clear cached firmware list so the next call re-fetches."""

@@ -6,6 +6,7 @@ import asyncio
 import dataclasses
 import json
 import logging
+import threading
 from typing import Any, ClassVar
 
 import pytest
@@ -24,13 +25,21 @@ from fakes.fake_start_commands import FakeStartCommands
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.uow_open_probe import record_uow_open
 
+from adapters.persistence import PlatformCoreReaderAdapter
 from domain.disc_selection import Disc
 from domain.emulator_choice import DEFAULT, EmulatorChoice, ResolvedEmulator, VanishedPick
 from domain.emulator_commands import options_to_payload
 from domain.emulator_pick import StoredPick
 from domain.emulator_sources import ArrangedSource
 from domain.launchability import NEEDS_INSTALLING, NOT_THIS_EMULATOR, TAKES_NO_FOLDER, Launchability
-from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
+from domain.platform_system import (
+    NO_SYSTEM,
+    PLATFORM_IDS_KEY,
+    SWITCHED_OFF,
+    KeptPlatform,
+    PlatformSystem,
+    encode_platform_ids,
+)
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.start_command import (
@@ -187,6 +196,8 @@ def service(
             platform_systems=platform_systems,
             settings=settings,
             settings_persister=settings_persister,
+            platform_core_reader=PlatformCoreReaderAdapter(settings),
+            picks_lock=threading.Lock(),
             uow_factory=uow_factory,
             active_core=active_core,
             disc_resolver=disc_resolver,
@@ -912,8 +923,10 @@ def _service_over(
             logger=logging.getLogger("test_cores"),
             core_info=core_info,
             platform_systems=FakePlatformSystems(),
-            settings=settings if settings is not None else {"platform_cores": {}},
+            settings=(live := settings if settings is not None else {"platform_cores": {}}),
             settings_persister=FakeSettingsPersister(),
+            platform_core_reader=PlatformCoreReaderAdapter(live),
+            picks_lock=threading.Lock(),
             uow_factory=FakeUnitOfWorkFactory(uow=FakeUnitOfWork()),
             active_core=FakeActiveCoreResolver(),
             disc_resolver=FakeDiscResolver(),
@@ -1408,6 +1421,9 @@ class TestWhatTheResolversCommandSaysOfTheStart:
         assert start_commands.asked == []
 
 
+_PICK = {"label": "bsnes", "source": "retrodeck"}
+
+
 class TestAPlatformsPickIsKeptByItsFolder:
     """A per-platform pick is stored under the platform's ``fs_slug`` (#2452 D7, D11, D15)."""
 
@@ -1441,14 +1457,33 @@ class TestAPlatformsPickIsKeptByItsFolder:
 
         assert result["platform_core_label"] == "bsnes"
 
-    def test_a_game_without_a_folder_takes_no_platform_pick(self, event_loop, service, settings, uow):
-        """D15: the slug is not used to find a pick."""
-        settings["platform_cores"]["snes"] = {"label": "bsnes", "source": "retrodeck"}
+    @pytest.mark.parametrize(
+        ("folder", "picks", "kept", "label"),
+        [
+            # D15: a game with no fs_slug recorded reads the pick still under its slug ...
+            (None, {"snes": _PICK}, (), "bsnes"),
+            # ... once the refiling moved that key, the pick of the one platform kept for the slug ...
+            (None, {"snes-hacks": _PICK}, ("snes-hacks",), "bsnes"),
+            # ... and the default where several share the slug, or none is kept.
+            (None, {"snes-hacks": _PICK}, ("snes", "snes-hacks"), None),
+            (None, {"snes-hacks": _PICK}, (), None),
+            # A game with its fs_slug reads that platform's pick and nothing else.
+            ("snes-hacks", {"snes": _PICK}, ("snes",), None),
+        ],
+    )
+    def test_a_game_reads_its_folder_s_pick_else_without_one_its_slug_s(
+        self, event_loop, service, settings, uow, folder, picks, kept, label
+    ):
+        settings["platform_cores"].update(picks)
+        if kept:
+            uow.kv_config.set(
+                PLATFORM_IDS_KEY, encode_platform_ids({f: KeptPlatform(slug="snes", fs_slug=f) for f in kept})
+            )
         uow.roms.save(
             Rom(
                 rom_id=8,
                 platform_slug="snes",
-                platform_fs_slug=None,
+                platform_fs_slug=folder,
                 name="rom-8",
                 fs_name="rom-8.sfc",
                 shortcut_app_id=None,
@@ -1458,4 +1493,28 @@ class TestAPlatformsPickIsKeptByItsFolder:
 
         result = event_loop.run_until_complete(service.get_platform_core_info(8))
 
-        assert result["platform_core_label"] is None
+        assert result["platform_core_label"] == label
+
+    def test_a_pick_waits_for_a_writer_that_holds_the_picks_lock(self, service, settings):
+        """The refiling and this write change the same picks from threads of their own."""
+        lock = service._picks_lock
+        with lock:
+            worker = threading.Thread(target=service._set_system_core_io, args=("snes", "snes-hacks", "bsnes"))
+            worker.start()
+            worker.join(timeout=0.2)
+            assert worker.is_alive()
+            assert "snes-hacks" not in settings["platform_cores"]
+        worker.join(timeout=5)
+
+        assert settings["platform_cores"]["snes-hacks"]["label"] == "bsnes"
+
+    @pytest.mark.parametrize(("slug", "folder"), [("", "snes"), ("snes", ""), (None, "snes"), ("snes", None)])
+    def test_a_platform_asked_without_a_slug_or_a_folder_is_refused(self, event_loop, service, settings, slug, folder):
+        for call in (
+            lambda: service.get_system_core_info(slug, folder),
+            lambda: service.set_system_core(slug, folder, "bsnes"),
+        ):
+            with pytest.raises(Refused) as refused:
+                event_loop.run_until_complete(call())
+            assert refused.value.reason == "invalid_value"
+        assert settings["platform_cores"] == {}
