@@ -162,8 +162,8 @@ async def nothing_left_for_the_collector() -> AsyncIterator[None]:
     After the body, one yield lets an abandoned accept task let go of its
     transport, and the collection that follows reaches it here, so it is
     reported under this test's name rather than at the end of the session. The
-    half-made transport :func:`host.server.stop_accepting` describes fails either
-    assertion.
+    half-made transport :func:`host.server.stop_accepting` describes fails one
+    assertion or both.
     """
     # What an earlier test left for the collector goes now, outside the recording.
     gc.collect()
