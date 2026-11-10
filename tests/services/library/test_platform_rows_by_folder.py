@@ -14,6 +14,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from fakes.fake_listing_refiler import FakeListingRefiler
+from fakes.fake_listing_replacer import FakeListingReplacer
 from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
@@ -41,6 +42,7 @@ def _fetcher(api: FakeRommApi, refiling: FakeListingRefiler, settings: dict[str,
             emit_progress=MagicMock(),
             local_library_reader=MagicMock(),
             refiling=refiling,
+            platform_listing=FakeListingReplacer(),
         )
     )
 

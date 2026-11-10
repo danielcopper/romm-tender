@@ -42,7 +42,6 @@ from domain.work_unit import WorkUnit, collection_units
 from lib.errors import Refused, RommNotFoundError
 from lib.romm_paging import LIST_PAGE_SIZE
 from services.library._fetch_pages import emit_fetch_page_progress, raise_if_cancelling
-from services.library._platform_ids import keep_platform_ids
 
 if TYPE_CHECKING:
     import logging
@@ -56,6 +55,7 @@ if TYPE_CHECKING:
     from services.protocols import (
         DebugLogger,
         ListingRefiler,
+        ListingReplacer,
         RommLibraryApi,
         SettingsPersister,
         UnitOfWorkFactory,
@@ -129,8 +129,9 @@ class LibraryFetcherConfig:
     cancel signal), an ``_emit_progress`` callback the fetcher uses
     to surface long paginated fetches to the frontend, and the
     ``LocalLibraryReader`` peer the collections listing asks which ROMs
-    the sync's collection filing resolves to a shortcut, and the refiling
-    each of its reads of RomM's platform listing is handed to.
+    the sync's collection filing resolves to a shortcut, the refiling
+    each of its reads of RomM's platform listing is handed to, and the
+    platform system the sync's listing is kept by.
     """
 
     romm_api: RommLibraryApi
@@ -144,6 +145,7 @@ class LibraryFetcherConfig:
     emit_progress: EmitProgressFn
     local_library_reader: LocalLibraryReader
     refiling: ListingRefiler
+    platform_listing: ListingReplacer
 
 
 class LibraryFetcher:
@@ -161,6 +163,7 @@ class LibraryFetcher:
         self._emit_progress = config.emit_progress
         self._local_library_reader = config.local_library_reader
         self._refiling = config.refiling
+        self._platform_listing = config.platform_listing
 
     # ── Platform metadata use cases ──────────────────────────────
 
@@ -357,9 +360,7 @@ class LibraryFetcher:
         listed = await self._read_listing()
         self._sync_state.run_listed_platform_folders = listed_platform_folders(listed)
         self._sync_state.run_listed_platform_names = listed_platform_names(listed)
-        await self._loop.run_in_executor(
-            None, keep_platform_ids, self._uow_factory, self._logger, listed, self._romm_api.get_version()
-        )
+        await self._loop.run_in_executor(None, self._platform_listing.replace_listing, listed)
 
         # Empty map = "all platforms enabled" (the safety floor for a user who
         # syncs without ever opening the Platforms page). ``get_platforms``

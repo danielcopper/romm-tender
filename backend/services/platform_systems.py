@@ -1,8 +1,9 @@
 """PlatformSystemService — the system a RomM platform is in an emulator source, and the one an installed game keeps.
 
-Owns the kept platforms — the ``kv_config`` value written at every sync
-beside the platform names, keyed by each platform's folder in RomM and read
-here by its slug, kept again from every listing the refiling is handed — and
+Owns the kept platforms — the ``kv_config`` value replaced by every sync's
+listing (``replace_listing``) beside the platform names, keyed by each
+platform's folder in RomM and read here by its slug, kept again from every
+listing the refiling is handed (``keep_listing``) — and
 their one live read from RomM where none is kept for a platform yet. Which
 system the ids give is asked of one source at a time
 (``SourcePlatformSystems``); an installed game keeps the system its install
@@ -146,14 +147,29 @@ class PlatformSystemService:
 
     def keep_listing(self, platforms: Sequence[Mapping[str, Any]]) -> None:
         """Keep every platform *platforms* names, beside each kept one of a slug the listing does not name. Blocking."""
-        self._keep(kept_platforms(platforms, self._romm_api.get_version()), {})
+        self._keep(kept_platforms(platforms, self._romm_api.get_version()))
 
-    def _keep(self, listed: Mapping[str, KeptPlatform], unlisted: Mapping[str, KeptPlatform]) -> None:
-        listed_slugs = {kept.slug for kept in listed.values()}
+    def replace_listing(self, platforms: Sequence[Mapping[str, Any]]) -> None:
+        """Keep exactly the platforms *platforms* names, in place of every one kept before. Blocking.
+
+        A failed write is logged and leaves the caller alone: the platforms
+        kept before still answer, and one with nothing kept is read from RomM
+        when asked.
+        """
+        try:
+            listed = kept_platforms(platforms, self._romm_api.get_version())
+            with self._uow_factory() as uow:
+                uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids(listed))
+        except Exception as exc:
+            self._logger.warning(f"Could not keep the platforms' ids: {exc}")
+
+    def _keep(self, kept: Mapping[str, KeptPlatform]) -> None:
+        """Keep *kept* in place of every platform kept before of the slugs it names."""
+        slugs = {entry.slug for entry in kept.values()}
         with self._uow_factory() as uow:
             current = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY)) or {}
-            before = {key: kept for key, kept in current.items() if kept.slug not in listed_slugs}
-            uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids({**before, **unlisted, **listed}))
+            before = {key: entry for key, entry in current.items() if entry.slug not in slugs}
+            uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids({**before, **kept}))
 
     def _ids_and_name(self, platform_slug: str, *, ask_romm: bool) -> tuple[PlatformIds, str]:
         with self._uow_factory() as uow:
@@ -182,5 +198,17 @@ class PlatformSystemService:
         listed = kept_platforms(platforms, self._romm_api.get_version())
         entry = kept_by_slug(listed, platform_slug)
         self._log_debug(f"[platforms] no ids kept for {platform_slug}; read {len(listed)} from RomM")
-        self._keep(listed, {platform_slug: KeptPlatform(slug=platform_slug)} if entry is None else {})
+        # The refiling has had the listing kept (keep_listing); what is left is
+        # the platform the listing did not name, kept so it is not read again.
+        if entry is None:
+            self._keep_unlisted(platform_slug)
         return entry
+
+    def _keep_unlisted(self, platform_slug: str) -> None:
+        """Keep *platform_slug* with no ids, unless a listed platform is already kept under that key."""
+        with self._uow_factory() as uow:
+            current = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY)) or {}
+            if platform_slug in current:
+                return
+            current[platform_slug] = KeptPlatform(slug=platform_slug)
+            uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids(current))

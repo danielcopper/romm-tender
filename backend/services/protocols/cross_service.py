@@ -58,6 +58,17 @@ class ListingKeeper(Protocol):
     def keep_listing(self, platforms: Sequence[Mapping[str, Any]]) -> None: ...
 
 
+class ListingReplacer(Protocol):
+    """Keeps exactly the platforms a sync's read of RomM's listing names, in place of every one kept before.
+
+    The library sync hands its listing here, so a platform RomM no longer
+    lists is no longer kept. A failed write is logged by the platform system
+    and leaves the run alone. Blocking.
+    """
+
+    def replace_listing(self, platforms: Sequence[Mapping[str, Any]]) -> None: ...
+
+
 class ListingKeeperProvider(Protocol):
     """Deferred access to the :class:`ListingKeeper`, consumed by the refiling.
 

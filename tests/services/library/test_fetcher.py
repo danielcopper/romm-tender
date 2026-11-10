@@ -2458,7 +2458,7 @@ class TestTheSyncKeepsThePlatformsIds:
         def _boom():
             raise RuntimeError("db down")
 
-        library.sync._fetcher._uow_factory = _boom
+        library.platform_systems._uow_factory = _boom
 
         units = await library.sync._fetcher.build_work_queue()
 
