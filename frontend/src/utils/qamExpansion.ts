@@ -76,8 +76,9 @@ const TAB_PANEL_SELECTOR = quickAccessMenuClasses?.TabGroupPanel
 // panel go to a reserve nothing of ours asked for — and the reader meets a band
 // under Library that Settings and Sync do not have, those being untabbed and
 // rendering no such scroller at all. Overriding it gives those 40 px back to
-// every tabbed wide page; what that was measured to give the reader is
-// `docs/architecture/qam-panel.md`, "Two widths".
+// every tabbed wide page; what removing it together with the frame's own 12 px
+// gap was measured to give the reader is `docs/architecture/qam-panel.md`,
+// "Two widths".
 //
 // It is ours to override because the box is ours: the scroller is rendered
 // inside a page of ours at a height of our own measuring, and that measurement
