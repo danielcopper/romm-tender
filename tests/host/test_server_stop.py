@@ -60,7 +60,7 @@ class TestStop:
     async def test_a_connection_accepted_as_the_stop_closes_leaves_nothing_for_the_collector(self, tmp_path):
         """Rests on the same scheduling order, with one yield before the stop rather than two.
 
-        That queues the accept for the turn the stop begins in.
+        That has the listener's accept queued in the turn ``stop()`` is entered in.
         """
         server = _server(str(tmp_path))
         await server.start()
