@@ -118,9 +118,10 @@ async def stop_accepting(server: asyncio.Server) -> None:
     ``Server.close()`` in between abandons it half-made: outside the server's
     clients, so nothing closes it. The collector reaching it warns about it as
     unclosed, and from 3.13 on also raises an unraisable ``TypeError``
-    (python/cpython#109564, fixed by GH-160851). Removing the reader cancels
-    every accept not yet begun, one already queued for this turn included; the
-    yield lets a transport already being built attach, so the close reaches it.
+    (python/cpython#109564, fixed by python/cpython#160851). Removing the reader
+    cancels every accept not yet begun, one already queued for this turn
+    included; the yield lets a transport already being built attach, so the
+    close reaches it.
     """
     loop = asyncio.get_running_loop()
     for listening in server.sockets:
