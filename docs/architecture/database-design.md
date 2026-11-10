@@ -290,9 +290,8 @@ maps 1:1 onto these tables.
 
 `SyncRun` carries its own invariants, so per GLOSSARY.md it gets a typed table rather than untyped `kv_config` rows. The
 full live `kv_config` key set is `device_id` (the server-issued device identity), `platform_names` (the JSON-encoded
-`fs_slug → name` cache, keyed by each platform's `fs_slug` and named as
-[Steam Non-Steam Shortcuts](steam-non-steam-shortcuts.md#collection-management) says), `platform_ids` (each listed
-platform's record, keyed by its folder in RomM (`fs_slug`) — see
+`fs_slug → name` cache, each name as [Steam Non-Steam Shortcuts](steam-non-steam-shortcuts.md#collection-management)
+says), `platform_ids` (each listed platform's record, keyed by its folder in RomM (`fs_slug`) — see
 [core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)), `retrodeck_home_path` (+ its
 pending-migration `_previous`, and — when the home is changed _again_ before the migration runs — a `_hops` JSON array
 of the additional pending homes, oldest→newest, so files under an intermediate home are never stranded,
@@ -373,8 +372,9 @@ removal), so foreign keys are deliberately sparse:
   [ADR-0003](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0003-json-sqlite-persistence-boundary.md)
   dropped the `Platform` aggregate — so it is just a string. The platform's name is not stored on the row: it lives in
   the `kv_config` `platform_names` cache ([One table per aggregate](#one-table-per-aggregate) says what writes and reads
-  it, keyed by `fs_slug`), and a reader with no name cached for a game's `fs_slug`, or a game with none recorded, takes
-  the bare slug; which name the platform system takes is
+  it, keyed by `fs_slug`), and a reader with no name cached takes the slug where it names a game's platform (the game
+  page, a removal's answer, the cores page, a game with no `fs_slug` recorded) and the bare `fs_slug` where it names a
+  Steam collection, a preview row or the platform a BIOS link serves; which name the platform system takes is
   [core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)'s.
 
 The split moved the FK policy from the epic's "one FK only" (written for the mega-table world) to "CASCADE for the
@@ -879,12 +879,11 @@ under that name and nothing on disk moves ([#2219](https://github.com/danielcopp
 release shipped the store); `firmware_store` gains `platform_slug`, filled from the old key. `firmware_cache` is rebuilt
 keyed `(platform_folder, name)` with the slug beside it, so two platforms that share a slug keep a cached file of the
 same name each, and starts empty; the next read from the server fills it. `roms` gains the nullable `platform_fs_slug`,
-which the sync writes — and so does the apply's end-of-run stale removal, for a row without one that it asked RomM for
-by its id (`Rom.record_platform_folder`, [#2452](https://github.com/danielcopper/romm-tender/issues/2452) D5). Every
-platform stamp is revoked, as 025 did (D47): a skipped platform's rows are rebuilt from stored rows, which hold no
-folder yet, so the first sync after the upgrade fetches each enabled platform in full and writes it. Every collection
-stamp is dropped, as Force Full Sync's clear does, for the same reason: a collection's skip rebuilds the members no
-platform unit fetched from stored rows, so a game only a collection delivers would keep no folder.
+which the sync writes. Every platform stamp is revoked, as 025 did (D47): a skipped platform's rows are rebuilt from
+stored rows, which hold no folder yet, so the first sync after the upgrade fetches each enabled platform in full and
+writes it. Every collection stamp is dropped, as Force Full Sync's clear does, for the same reason: a collection's skip
+rebuilds the members no platform unit fetched from stored rows, so a game only a collection delivers would keep no
+folder.
 
 `044_key_platform_sync_state_by_platform_folder.sql` (`user_version = 44`) rebuilds `platform_sync_state` keyed by
 `platform_folder`, the platform's `fs_slug` ([#2796](https://github.com/danielcopper/romm-tender/issues/2796);

@@ -381,8 +381,8 @@ stopped attempt whose toasts were raised (see _Failed-update toast_ below). The 
 key — it lives in `PRAGMA user_version`.
 
 A platform's name in `platform_names` is the `name` RomM's platform listing gives it, never its `custom_name` nor RomM's
-`display_name`; a platform whose `fs_slug` is not its slug, and whose name another listed platform carries too, is named
-`<name> (<fs_slug>)` (#2452 D2).
+`display_name`, with the `fs_slug` beside it where
+[Steam Non-Steam Shortcuts](docs/architecture/steam-non-steam-shortcuts.md#collection-management) says.
 
 **Not** a dumping ground: anything with its own lifecycle, invariants, or repeat-row potential gets its own aggregate.
 `kv_config` is for the truly small, the truly singleton, and the truly miscellaneous.

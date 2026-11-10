@@ -271,12 +271,12 @@ here, the platform has none.
 pages say **"System _system_ is switched off in _source_."**; where no id gives any, **"_source_ has no system for
 _platform_, so Tender cannot download its games."**. _platform_ there, and wherever else the platform's system names the
 platform — the pages that show the system, and a download's queue entry and every frame and event it sends — is the name
-the `platform_names` cache, keyed by `fs_slug`, holds under its slug, else the `name` kept with its ids (below), else
-the slug itself ([#2573](https://github.com/danielcopper/romm-tender/issues/2573) D1). The emulator list's reason is
-then `platform_system_off` or `no_platform_system`, nothing is downloaded, and the platform's BIOS download and an
-adoption's replace are refused the same way. Every other use keeps a state it already has: an uninstalled game's save
-answer is not established, the search for a copy already on disk finds nothing, and the launch falls back to the plain
-one.
+the `platform_names` cache holds for the `fs_slug` of the platform kept for that slug (for an entry kept before it
+recorded one, for the slug), else the `name` kept with its ids (below), else the slug itself
+([#2573](https://github.com/danielcopper/romm-tender/issues/2573) D1). The emulator list's reason is then
+`platform_system_off` or `no_platform_system`, nothing is downloaded, and the platform's BIOS download and an adoption's
+replace are refused the same way. Every other use keeps a state it already has: an uninstalled game's save answer is not
+established, the search for a copy already on disk finds nothing, and the launch falls back to the plain one.
 
 **Each source is asked for itself.** A download, and every question about where one would land — an uninstalled game's
 save answer, whether the target is taken, the search for a copy already there, an adoption's target — asks

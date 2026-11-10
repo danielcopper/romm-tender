@@ -2108,12 +2108,14 @@ it, for the focused platform:
 Six reads feed the tab. Three run once per page mount: `get_platforms` (RomM's platforms with ROMs, the list itself),
 `get_firmware_status` (whether RomM's firmware listing could be read, which the BIOS downloads stand on, and nothing
 about any platform) and `get_registry_platforms` (ROMs bound to a Steam shortcut per platform — the shortcut counts, and
-what "has synced games" means here). Only the first gates the list; the other two fill in beside it. A failed
-`get_firmware_status` leaves the downloads offered, as they are while it is in flight, and a download the server cannot
-serve says so itself. A failed `get_registry_platforms` **says so on the pane**, because a failure and an answer arrive
-the same way — as an absence: read as zero shortcuts would print `0 versions in Steam` in the header and disable the
-removal, two claims about a platform nothing was learned about; the counts go to `null` instead, which is not zero, and
-a line under the header says the number is missing while the removal stays live (it needs only the slug).
+what "has synced games" means here; one entry per slug, summed over every `fs_slug` its games carry, until the tab knows
+a platform by its `fs_slug`, [#2452](https://github.com/danielcopper/romm-tender/issues/2452) D3). Only the first gates
+the list; the other two fill in beside it. A failed `get_firmware_status` leaves the downloads offered, as they are
+while it is in flight, and a download the server cannot serve says so itself. A failed `get_registry_platforms` **says
+so on the pane**, because a failure and an answer arrive the same way — as an absence: read as zero shortcuts would
+print `0 versions in Steam` in the header and disable the removal, two claims about a platform nothing was learned
+about; the counts go to `null` instead, which is not zero, and a line under the header says the number is missing while
+the removal stays live (it needs only the slug).
 
 The fourth is `get_platform_firmware_status`, and it is asked **once per platform** rather than once per page — for
 **every platform the list shows**, whether or not the RomM library holds firmware for it or any of its games is synced
