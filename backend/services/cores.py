@@ -44,7 +44,7 @@ from lib.errors import Refused
 if TYPE_CHECKING:
     import asyncio
     import logging
-    import threading
+    from contextlib import AbstractContextManager
 
     from domain.emulator_choice import ResolvedEmulator
     from domain.platform_system import PlatformSystem
@@ -89,7 +89,7 @@ class CoreServiceConfig:
     settings: dict[str, Any]
     settings_persister: SettingsPersister
     platform_core_reader: PlatformCoreReader
-    picks_lock: threading.Lock
+    picks_lock: AbstractContextManager[object]
     uow_factory: UnitOfWorkFactory
     active_core: ActiveCoreReader
     disc_resolver: DiscResolver

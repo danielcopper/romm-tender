@@ -245,6 +245,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             settings=cfg.stores.settings,
             settings_persister=cfg.callbacks.settings_persister,
             picks_lock=picks_lock,
+            refile_lock=threading.Lock(),
             logger=cfg.runtime.logger,
         )
     )

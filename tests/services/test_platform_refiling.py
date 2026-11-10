@@ -73,6 +73,7 @@ class _Harness:
                 settings=self.settings,
                 settings_persister=self.persister,
                 picks_lock=self.picks_lock,
+                refile_lock=threading.Lock(),
                 logger=logging.getLogger("test"),
             )
         )

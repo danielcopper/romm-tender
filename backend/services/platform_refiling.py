@@ -16,7 +16,6 @@ listing ever sees one.
 from __future__ import annotations
 
 import copy
-import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -25,6 +24,7 @@ from domain.firmware_platforms import ListedPlatforms, listed_platforms, pick_mo
 if TYPE_CHECKING:
     import logging
     from collections.abc import Callable, Mapping, Sequence
+    from contextlib import AbstractContextManager
 
     from domain.bios_file import BiosFile
     from services.protocols import SettingsPersister, UnitOfWork, UnitOfWorkFactory
@@ -40,13 +40,15 @@ class PlatformRefilingConfig:
     Holds the Unit-of-Work factory the download records are read and moved
     through, the live settings dict the per-platform picks sit in, its
     persister, the lock every writer of those picks holds while it changes and
-    saves them, and the logger.
+    saves them, the lock one refile at a time holds — the readers of the
+    listing run in executor threads of their own — and the logger.
     """
 
     uow_factory: UnitOfWorkFactory
     settings: dict[str, Any]
     settings_persister: SettingsPersister
-    picks_lock: threading.Lock
+    picks_lock: AbstractContextManager[object]
+    refile_lock: AbstractContextManager[object]
     logger: logging.Logger
 
 
@@ -59,8 +61,7 @@ class PlatformRefiling:
         self._settings_persister = config.settings_persister
         self._picks_lock = config.picks_lock
         self._logger = config.logger
-        # One refile at a time: the readers of the listing run in executor threads of their own.
-        self._lock = threading.Lock()
+        self._lock = config.refile_lock
         self._listed_folders: frozenset[str] | None = None
         self._conflicts_told: set[tuple[str, str, str]] = set()
 
