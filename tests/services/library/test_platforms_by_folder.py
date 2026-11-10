@@ -87,8 +87,10 @@ class TestTwoPlatformsSharingASlugKeepAStampEach:
         with library.uow as uow:
             snes = uow.platform_sync_state.get("snes")
             hacks = uow.platform_sync_state.get("snes-hacks")
-        assert snes is not None and snes.rom_id_checksum == rom_id_checksum([1, 2])
-        assert hacks is not None and hacks.rom_id_checksum == rom_id_checksum([3])
+        assert snes is not None
+        assert snes.rom_id_checksum == rom_id_checksum([1, 2])
+        assert hacks is not None
+        assert hacks.rom_id_checksum == rom_id_checksum([3])
 
         fake_romm_api.call_log.clear()
         await _run(library, "run-2")

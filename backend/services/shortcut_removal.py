@@ -198,6 +198,10 @@ class ShortcutRemovalService:
             if rom is not None and grid:
                 self._artwork_remover.remove_artwork_files(grid, rom_id, self._artwork_entry(rom))
 
+        self._unbind_and_revoke_skips(removed_rom_ids)
+
+    def _unbind_and_revoke_skips(self, removed_rom_ids: list[int | str]) -> None:
+        """Unbind the removed ROMs and revoke the skip of every platform they are on, in one write UoW."""
         # Unbind the removed ROMs — clear the Steam link, keep the row (ADR-0007) —
         # and revoke the skip (ADR-0023) of every platform this removal touched.
         # Unbinding keeps the row and changes nothing RomM answers, so a stamp

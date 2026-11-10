@@ -21,14 +21,15 @@ _COLUMNS = "platform_folder, completed_at, rom_count, fetch_id, skip_revoked, fe
 
 
 def _row_to_state(row: sqlite3.Row) -> PlatformSyncState:
+    values = dict(zip(row.keys(), row, strict=True))
     return PlatformSyncState(
-        platform_folder=row["platform_folder"],
-        completed_at=row["completed_at"],
-        rom_count=row["rom_count"],
-        fetch_id=row["fetch_id"],
-        skip_revoked=bool(row["skip_revoked"]),
-        fetch_started_at=row["fetch_started_at"],
-        rom_id_checksum=row["rom_id_checksum"],
+        platform_folder=values["platform_folder"],
+        completed_at=values["completed_at"],
+        rom_count=values["rom_count"],
+        fetch_id=values["fetch_id"],
+        skip_revoked=bool(values["skip_revoked"]),
+        fetch_started_at=values["fetch_started_at"],
+        rom_id_checksum=values["rom_id_checksum"],
     )
 
 

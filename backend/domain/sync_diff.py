@@ -879,28 +879,60 @@ def sort_stale_rows(
       Tender, no collection reached it, and no unit delivered its game.
     """
     listed = None if listed_platform_folders is None else set(listed_platform_folders)
-    sort = StaleSort(remove=[], keep=[], ask=[])
-    ask_only: list[StaleRow] = []
-    hidden: list[StaleRow] = []
-    unplaced: list[StaleRow] = []
+    buckets: dict[str, list[StaleRow]] = {
+        name: [] for name in ("remove", "keep", "ask", "ask_only", "hidden", "unplaced")
+    }
     for row in rows:
         game_synced = row.sibling_group_key in synced_group_keys
         if row.rom_id in hidden_rom_ids and not game_synced:
-            sort.remove.append(row)
-            hidden.append(row)
-        elif row.platform_folder is not None and row.platform_folder in read_platform_folders:
-            sort.keep.append(row)
-        elif _reached_through_a_collection(row, collection_listed_rom_ids):
-            (ask_only if game_synced else sort.ask).append(row)
-        elif row.platform_folder is None:
-            (ask_only if game_synced else unplaced).append(row)
-        elif game_synced:
+            buckets["remove"].append(row)
+            buckets["hidden"].append(row)
             continue
-        elif listed is not None and row.platform_folder not in listed:
-            sort.keep.append(row)
-        else:
-            sort.remove.append(row)
-    return sort._replace(ask_only=tuple(ask_only), hidden=tuple(hidden), unplaced=tuple(unplaced))
+        bucket = _stale_bucket(
+            row,
+            game_synced=game_synced,
+            read_platform_folders=read_platform_folders,
+            listed=listed,
+            collection_listed_rom_ids=collection_listed_rom_ids,
+        )
+        if bucket is not None:
+            buckets[bucket].append(row)
+    return StaleSort(
+        remove=buckets["remove"],
+        keep=buckets["keep"],
+        ask=buckets["ask"],
+        ask_only=tuple(buckets["ask_only"]),
+        hidden=tuple(buckets["hidden"]),
+        unplaced=tuple(buckets["unplaced"]),
+    )
+
+
+_StaleBucket = Literal["keep", "ask", "ask_only", "unplaced", "remove"]
+
+
+def _stale_bucket(
+    row: StaleRow,
+    *,
+    game_synced: bool,
+    read_platform_folders: Collection[str],
+    listed: set[str] | None,
+    collection_listed_rom_ids: Collection[int],
+) -> _StaleBucket | None:
+    """The :class:`StaleSort` list a row the hidden rule passed goes to, or ``None`` for none of them.
+
+    The rules are :func:`sort_stale_rows`'s, in its order.
+    """
+    if row.platform_folder is not None and row.platform_folder in read_platform_folders:
+        return "keep"
+    if _reached_through_a_collection(row, collection_listed_rom_ids):
+        return "ask_only" if game_synced else "ask"
+    if row.platform_folder is None:
+        return "ask_only" if game_synced else "unplaced"
+    if game_synced:
+        return None
+    if listed is not None and row.platform_folder not in listed:
+        return "keep"
+    return "remove"
 
 
 def settle_unplaced_rows(

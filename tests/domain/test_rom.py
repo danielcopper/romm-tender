@@ -406,5 +406,6 @@ class TestRecordPlatformFolder:
         assert rom.platform_fs_slug == "gc"
 
     def test_an_empty_folder_names_none_and_is_refused(self):
+        rom = self._rom()
         with pytest.raises(ValueError, match="platform_folder must not be empty"):
-            self._rom().record_platform_folder("")
+            rom.record_platform_folder("")
