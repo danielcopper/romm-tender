@@ -1617,7 +1617,10 @@ it, for the focused platform:
   the ordinary case. In every other case it is the same chip, disabled, with the reason in its `title` — the ruling the
   Remove group already follows, and what keeps the header's shape constant across panes. A disabled button is still a
   focus stop and the wide page's own sheet gives it Steam's focus outline, so a reader walking the header lands on it
-  and is told why.
+  and is told why. A core read the backend refused says why in place of the generic failure: `invalid_value` can only be
+  the platform's slug, since the page asks with a listed platform's own folder, and reads **"RomM lists this platform
+  without a console slug, so Tender cannot tell which emulators it has. Check the platform in RomM."**; any other
+  refusal reads as the endpoint's own message.
 
   **Which of those cases also keeps a line under the header is a judgement about what it reports, not about the chip.**
   "Nothing to switch" states — the read in flight, one emulator on the menu — say it in the tooltip alone: a sentence

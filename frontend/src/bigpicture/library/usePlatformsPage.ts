@@ -45,7 +45,7 @@ import {
   setSystemCore,
   updateBiosLinks,
 } from "../../api/backend";
-import type { FirmwarePlatformExt, PlatformSyncSetting, SystemCoreInfo } from "../../types";
+import type { EndpointFailure, FirmwarePlatformExt, PlatformSyncSetting, SystemCoreInfo } from "../../types";
 import { placedSentence } from "../../utils/biosPlaceWords";
 import { detach } from "../../utils/detach";
 import { clearPlatformCollection } from "../../utils/collections";
@@ -153,6 +153,18 @@ export type CoreAnswer = SystemCoreInfo | null | undefined;
 /** A core read that did not answer: the endpoint's refusal, where it gave one, else `null`. */
 interface CoreReadFailed {
   refusal: string | null;
+}
+
+/**
+ * What a refused core read says on the pane. The page asks with a listed
+ * platform's own folder, so `invalid_value` can only be the slug: RomM lists
+ * the platform without one, and the endpoint's own message names a parameter.
+ */
+const PLATFORM_WITHOUT_SLUG =
+  "RomM lists this platform without a console slug, so Tender cannot tell which emulators it has. Check the platform in RomM.";
+
+function coreRefusalSentence(refusal: EndpointFailure): string {
+  return refusal.reason === "invalid_value" ? PLATFORM_WITHOUT_SLUG : refusal.message;
 }
 
 /** The core read's answer as the detail takes it: a failed read, refused or not, is `null`. */
@@ -441,7 +453,7 @@ export function usePlatformsPage(): PlatformsPageState {
       .then((info) => {
         if (isEndpointFailure(info)) {
           logWarn(`The core read for ${folder} was refused: ${info.message}`);
-          setCores((prev) => ({ ...prev, [folder]: { refusal: info.message } }));
+          setCores((prev) => ({ ...prev, [folder]: { refusal: coreRefusalSentence(info) } }));
           return;
         }
         setCores((prev) => ({ ...prev, [folder]: info }));

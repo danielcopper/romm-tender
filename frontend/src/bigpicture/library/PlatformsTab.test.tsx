@@ -6417,8 +6417,24 @@ describe("Library › Platforms › two platforms sharing a slug", () => {
     const { container } = render(<LibraryPage onBack={vi.fn()} />);
     await flushAsync();
 
-    expect(container.textContent).toContain("'' is not a RomM platform slug");
+    expect(container.textContent).toContain(
+      "RomM lists this platform without a console slug, so Tender cannot tell which emulators it has. Check the platform in RomM.",
+    );
+    expect(container.textContent).not.toContain("'' is not a RomM platform slug");
     expect(container.textContent).not.toContain("Could not read the emulators for this platform");
+  });
+
+  it("says any other refusal of a row's core read in the refusal's own words", async () => {
+    vi.mocked(backend.getSystemCoreInfo).mockResolvedValue({
+      success: false,
+      reason: "blocked_by_migration",
+      message: "Tender is moving your RetroDECK folder",
+    });
+    const { container } = render(<LibraryPage onBack={vi.fn()} />);
+    await flushAsync();
+
+    expect(container.textContent).toContain("Tender is moving your RetroDECK folder");
+    expect(container.textContent).not.toContain("without a console slug");
   });
 
   it("runs a BIOS press for its own row, tells the game pages which platform changed, and leaves the other row's line", async () => {
