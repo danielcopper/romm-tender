@@ -201,13 +201,12 @@ class ShortcutRemovalService:
         self._unbind_and_revoke_skips(removed_rom_ids)
 
     def _unbind_and_revoke_skips(self, removed_rom_ids: list[int | str]) -> None:
-        """Unbind the removed ROMs and revoke the skip of every platform they are on, in one write UoW."""
         # Unbind the removed ROMs — clear the Steam link, keep the row (ADR-0007) —
         # and revoke the skip (ADR-0023) of every platform this removal touched.
         # Unbinding keeps the row and changes nothing RomM answers, so a stamp
         # that may still skip would let the next sync's
         # incremental-skip gate skip the platform wholesale and never recreate the
-        # removed shortcuts (the #1025 silent-gap class). Both bulk flows — Data
+        # removed shortcuts. Both bulk flows — Data
         # Management's remove-all and the per-platform removal on the Library
         # page's Platforms tab — funnel their unbind here, so revoking per touched
         # platform fs_slug covers each: remove-all reports every ROM (every platform
