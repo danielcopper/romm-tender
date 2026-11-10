@@ -14,9 +14,12 @@ somebody had run the bundler.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import gc
 import logging
 import socket
 import sys
+import warnings
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -150,6 +153,34 @@ async def close_listener(server: asyncio.Server) -> None:
     if sys.version_info >= (3, 13):
         server.close_clients()
     await server.wait_closed()
+
+
+@contextlib.asynccontextmanager
+async def nothing_left_for_the_collector() -> AsyncIterator[None]:
+    """Fail the test if what its body leaves behind reaches the collector as an unraisable or a warning.
+
+    After the body, one yield lets an abandoned accept task let go of its
+    transport, and the collection that follows reaches it here, so it is
+    reported under this test's name rather than at the end of the session. The
+    half-made transport :func:`host.server.stop_accepting` describes fails either
+    assertion.
+    """
+    # What an earlier test left for the collector goes now, outside the recording.
+    gc.collect()
+    unraisable: list[sys.UnraisableHookArgs] = []
+    previous_hook = sys.unraisablehook
+    sys.unraisablehook = unraisable.append
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            yield
+            await asyncio.sleep(0)
+            gc.collect()
+    finally:
+        sys.unraisablehook = previous_hook
+
+    assert [repr(entry.exc_value) for entry in unraisable] == []
+    assert [f"{entry.category.__name__}: {entry.message}" for entry in caught] == []
 
 
 async def close_all(servers: list[asyncio.Server]) -> None:

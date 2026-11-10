@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import gc
 import logging
 import socket
-import sys
-import warnings
 
 from host.dispatch import CallDispatcher
 from host.events import EventSink
 from host.server import HostServer
-from tests.host.conftest import SERVER_IDENTITY, FakeEndpoints, free_port
+from tests.host.conftest import SERVER_IDENTITY, FakeEndpoints, free_port, nothing_left_for_the_collector
 
 LOGGER = logging.getLogger("test_server_stop")
 
@@ -44,59 +41,36 @@ class TestStop:
         finally:
             client.close()
 
-    async def test_a_connection_accepted_in_the_tick_before_the_stop_is_closed_rather_than_abandoned(
-        self, tmp_path, monkeypatch
-    ):
+    async def test_a_connection_accepted_in_the_tick_before_the_stop_is_closed_rather_than_abandoned(self, tmp_path):
         """Rests on the scheduling order :func:`host.server.stop_accepting` states, which ``stop()`` calls.
 
-        Two yields after the connect land the accept in the tick before the stop,
-        and one after it lets an abandoned accept task let go of its transport, so
-        the collector reaches it here and the recorder reports it under this
-        test's name rather than at the end of the session.
+        Two yields after the connect land the accept in the tick before the stop.
         """
-        unraisable: list[sys.UnraisableHookArgs] = []
-        monkeypatch.setattr(sys, "unraisablehook", unraisable.append)
         server = _server(str(tmp_path))
         await server.start()
-        client = socket.create_connection(("127.0.0.1", server.port))
-        try:
-            await asyncio.sleep(0)
-            await asyncio.sleep(0)
-            await asyncio.wait_for(server.stop(), STOP_BOUND_SECONDS)
-        finally:
-            client.close()
-        await asyncio.sleep(0)
-        gc.collect()
+        async with nothing_left_for_the_collector():
+            client = socket.create_connection(("127.0.0.1", server.port))
+            try:
+                await asyncio.sleep(0)
+                await asyncio.sleep(0)
+                await asyncio.wait_for(server.stop(), STOP_BOUND_SECONDS)
+            finally:
+                client.close()
 
-        assert [repr(entry.exc_value) for entry in unraisable] == []
-
-    async def test_a_connection_accepted_as_the_stop_closes_leaves_nothing_for_the_collector(
-        self, tmp_path, monkeypatch
-    ):
+    async def test_a_connection_accepted_as_the_stop_closes_leaves_nothing_for_the_collector(self, tmp_path):
         """Rests on the same scheduling order, with one yield before the stop rather than two.
 
-        That queues the accept for the turn the stop begins in, and the half-made
-        transport that ``stop_accepting`` describes fails either assertion.
+        That queues the accept for the turn the stop begins in.
         """
-        # What an earlier test left for the collector goes now, outside the recording.
-        gc.collect()
-        unraisable: list[sys.UnraisableHookArgs] = []
-        monkeypatch.setattr(sys, "unraisablehook", unraisable.append)
         server = _server(str(tmp_path))
         await server.start()
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
+        async with nothing_left_for_the_collector():
             client = socket.create_connection(("127.0.0.1", server.port))
             try:
                 await asyncio.sleep(0)
                 await asyncio.wait_for(server.stop(), STOP_BOUND_SECONDS)
             finally:
                 client.close()
-            await asyncio.sleep(0)
-            gc.collect()
-
-        assert [repr(entry.exc_value) for entry in unraisable] == []
-        assert [f"{entry.category.__name__}: {entry.message}" for entry in caught] == []
 
 
 class TestClosingByHand:
