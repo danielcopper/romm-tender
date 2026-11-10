@@ -705,8 +705,8 @@ that root — an absolutely positioned element at the region's top left, which S
 and the size Steam takes for a row's ring (`GetBoundingRectForFocusRing` on its nav node) is the row's own box, which
 there was the column's full width and, for the first row, started at the region's top. Read from Steam's stylesheet
 rather than measured: the ring is the `FocusRing` class of the same module that exports `FocusRingRoot` (in
-`steamui/css/sp.css` under a hashed name that changes between Steam builds; the module's two class names, in
-`steamui/sp.js`, are how to find it), a 2 px outline at a 2 px offset, so it reaches 4 px past every edge of what is
+`steamui/css/sp.css` under a hashed name Steam's build generates and nothing keeps stable; the module's two class names,
+in `steamui/sp.js`, are how to find it), a 2 px outline at a 2 px offset, so it reaches 4 px past every edge of what is
 focused, and the region clips it at its own box. The ring itself could not be observed through CEF — Steam draws it only
 in the active navigation context. So without the room, a row spanning its column loses both side edges of its ring, and
 the first and last rows their top and bottom edges too.
@@ -768,9 +768,10 @@ with the CSS with no sign of it but that assertion in Steam's console.
 
 This is read in `steamui/sp.js`, not measured on the device: the parser is the switch that ends in the
 `Unhandled flow-children` assertion, and the fallback is the navigation node's `GetLayout`, which hands the element to a
-helper that reads its computed style. Module numbers change between Steam builds; the assertion's text and the method's
-name are how to find them again. The ESLint rule `tender/flow-children-value` (`frontend/eslint.config.js`) refuses any
-other value in a `.ts` or `.tsx` file under `frontend/src/`, and a value that is not a string literal.
+helper that reads its computed style. Module numbers are Steam's bundler output and nothing keeps them stable; the
+assertion's text and the method's name are how to find them again. The ESLint rule `tender/flow-children-value`
+(`frontend/eslint.config.js`) refuses any other value in a `.ts` or `.tsx` file under `frontend/src/`, and a value that
+is not a string literal.
 
 ### Columns
 

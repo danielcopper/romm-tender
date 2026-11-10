@@ -87,9 +87,9 @@ const TAB_PANEL_SELECTOR = quickAccessMenuClasses?.TabGroupPanel
 //
 // **Written against the readable class, not the hashed one.** Steam ships both
 // on that element (`_TabContentsScroll` beside the hashed name the class map
-// gives `TabContentsScroll`), and the hashed name is a build artefact that
-// changes with Steam's bundle. Either could go, and the degradation is what
-// makes reaching for someone else's class safe here: a selector that stops
+// gives `TabContentsScroll`), and the hashed name is one Steam's build
+// generates and nothing keeps stable. Either could go, and the degradation is
+// what makes reaching for someone else's class safe here: a selector that stops
 // matching leaves Steam's padding standing, which is today's behaviour — the
 // band comes back on tabbed pages and nothing else changes. Taking a padding
 // away can only give room back, so there is no reading of a missed match that
