@@ -4,9 +4,8 @@ Identified by ``(platform_folder, file_name)`` — a bare filename is unsafe bec
 two platforms can ship same-named BIOS. ``platform_folder`` is the ``fs_slug`` of
 the RomM platform the library files the file on (``domain/firmware_platforms.py``);
 a record written before records were keyed by ``fs_slug`` holds a slug or a server
-folder name there until the refiling can place it, and one under a slug several
-listed platforms share keeps it for good, offered on each of their pages
-(``records_of_platform``). ``firmware_id`` is nullable metadata from
+folder name there until the refiling can place it; while nothing places one
+under a slug, each page of that slug offers it (``records_of_platform``). ``firmware_id`` is nullable metadata from
 RomM, not part of the identity. Tracked so migrations can move the file when
 the RetroDECK home path changes.
 """

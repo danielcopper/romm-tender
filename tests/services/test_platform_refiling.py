@@ -54,6 +54,19 @@ class _FailingPersister(FakeSettingsPersister):
         raise self.error
 
 
+class _Keeper:
+    """Keeps each listing it is handed; raises *error* instead where one is set."""
+
+    def __init__(self) -> None:
+        self.listings: list[list[Any]] = []
+        self.error: Exception | None = None
+
+    def keep_listing(self, platforms: Any) -> None:
+        if self.error is not None:
+            raise self.error
+        self.listings.append(list(platforms))
+
+
 class _Harness:
     def __init__(
         self,
@@ -67,6 +80,7 @@ class _Harness:
         self.settings: dict[str, Any] = {"platform_cores": dict(picks or {})}
         self.persister = persister if persister is not None else FakeSettingsPersister()
         self.picks_lock = threading.Lock()
+        self.keeper = _Keeper()
         self.refiling = PlatformRefiling(
             config=PlatformRefilingConfig(
                 uow_factory=FakeUnitOfWorkFactory(self.uow),
@@ -74,6 +88,7 @@ class _Harness:
                 settings_persister=self.persister,
                 picks_lock=self.picks_lock,
                 refile_lock=threading.Lock(),
+                listing_keeper=lambda: self.keeper,
                 logger=logging.getLogger("test"),
             )
         )
@@ -198,28 +213,27 @@ class TestPerPlatformPicks:
         assert harness.settings["platform_cores"] == {"snes": {"label": "Snes9x"}}
         assert harness.persister.save_count == 0
 
-    def test_the_picks_move_in_the_live_dict_itself(self):
+    def test_the_picks_are_replaced_whole_and_the_dict_in_place_is_left_as_it_was(self):
         harness = _Harness(picks={"psx": {"label": "SwanStation"}})
-        live = harness.settings["platform_cores"]
+        before = harness.settings["platform_cores"]
 
         harness.refile()
 
-        assert harness.settings["platform_cores"] is live
-        assert live == {"ps": {"label": "SwanStation"}}
+        assert harness.settings["platform_cores"] == {"ps": {"label": "SwanStation"}}
+        assert before == {"psx": {"label": "SwanStation"}}
 
-    def test_a_pick_stored_meanwhile_is_kept(self):
-        harness = _Harness(picks={"psx": {"label": "SwanStation"}})
-        live = harness.settings["platform_cores"]
+    def test_a_save_of_the_whole_settings_iterating_them_meanwhile_does_not_fail(self):
+        """A save on another thread may be walking the settings while a refile replaces the picks."""
+        harness = _Harness(picks={"psx": {"label": "SwanStation"}, "gamecube": {"label": "Dolphin"}})
+        walking_settings = iter(harness.settings)
+        walking_picks = iter(harness.settings["platform_cores"])
+        next(walking_settings)
+        next(walking_picks)
 
-        class _StoresOneMeanwhile(FakeSettingsPersister):
-            def save_settings(self) -> None:
-                live["gc"] = {"label": "Dolphin"}
-                super().save_settings()
-
-        harness.refiling._settings_persister = _StoresOneMeanwhile()
         harness.refile()
 
-        assert live == {"ps": {"label": "SwanStation"}, "gc": {"label": "Dolphin"}}
+        assert list(walking_settings) == []
+        assert list(walking_picks) == ["gamecube"]
 
     def test_a_save_that_fails_gives_every_move_back(self):
         picks = {"psx": {"label": "SwanStation"}, "gamecube": {"label": "Dolphin"}, "snes": {"label": "Snes9x"}}
@@ -236,34 +250,6 @@ class TestPerPlatformPicks:
         harness.refile()
 
         assert harness.settings["platform_cores"] == picks
-
-    def test_a_key_gone_before_it_is_taken_out_writes_no_pick(self):
-        """A key ``pick_moves`` named but the dict no longer holds moves nothing, rather than an empty pick."""
-
-        class _Vanished(dict[str, Any]):
-            def __iter__(self):
-                yield from super().__iter__()
-                yield "gamecube"
-
-        harness = _Harness(picks={"psx": {"label": "SwanStation"}})
-        harness.settings["platform_cores"] = _Vanished(harness.settings["platform_cores"])
-
-        harness.refile()
-
-        assert dict(harness.settings["platform_cores"]) == {"ps": {"label": "SwanStation"}}
-
-    def test_the_picks_move_under_the_lock_every_writer_of_them_holds(self):
-        harness = _Harness(picks={"psx": {"label": "SwanStation"}})
-        held: list[bool] = []
-
-        class _Observing(FakeSettingsPersister):
-            def save_settings(self) -> None:
-                held.append(harness.picks_lock.locked())
-
-        harness.refiling._settings_persister = _Observing()
-        harness.refile()
-
-        assert held == [True]
 
     def test_a_pick_waits_for_a_writer_that_holds_the_lock(self):
         harness = _Harness(picks={"psx": {"label": "SwanStation"}})
@@ -354,7 +340,39 @@ class TestFailures:
 
         assert harness.records() == {("psx", "scph5501.bin", "/bios/scph5501.bin")}
         assert harness.refiling.listed_folders() is None
-        assert "Failed to move older entries to their platforms: AttributeError" in caplog.text
+        assert "Failed to read where older entries belong: AttributeError" in caplog.text
+
+    def test_the_same_failure_again_is_logged_without_its_traceback(self, caplog):
+        harness = _Harness(_record("psx"), persister=_FailingPersister())
+        harness.settings["platform_cores"] = {"psx": {"label": "SwanStation"}}
+
+        with caplog.at_level(logging.WARNING):
+            harness.refile()
+            harness.refile()
+
+        failures = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert [bool(r.exc_info) for r in failures] == [True, False]
+
+    def test_a_keeper_that_fails_leaves_the_moves_running(self, caplog):
+        harness = _Harness(_record("psx"), picks={"psx": {"label": "SwanStation"}})
+        harness.keeper.error = OSError("db locked")
+
+        with caplog.at_level(logging.WARNING):
+            harness.refile()
+
+        assert harness.records() == {("ps", "scph5501.bin", "/bios/scph5501.bin")}
+        assert harness.settings["platform_cores"] == {"ps": {"label": "SwanStation"}}
+        assert "Failed to keep the listed platforms: OSError: db locked" in caplog.text
+
+
+class TestListedPlatformsAreKept:
+    def test_every_listing_handed_here_is_kept(self):
+        harness = _Harness()
+
+        harness.refile()
+        harness.refile()
+
+        assert harness.keeper.listings == [_PLATFORMS, _PLATFORMS]
 
 
 class TestWhatItSays:
@@ -365,6 +383,15 @@ class TestWhatItSays:
             harness.refile()
 
         assert "Moved 1 older BIOS download records to their platforms" in caplog.text
+
+    def test_a_dropped_duplicate_is_no_move(self, caplog):
+        harness = _Harness(_record("psx"), _record("ps"))
+
+        with caplog.at_level(logging.INFO):
+            harness.refile()
+
+        assert harness.records() == {("ps", "scph5501.bin", "/bios/scph5501.bin")}
+        assert "Moved" not in caplog.text
 
     def test_moved_picks_name_where_each_went(self, caplog):
         harness = _Harness(picks={"gamecube": {"label": "Dolphin"}, "psx": {"label": "SwanStation"}})
@@ -396,31 +423,35 @@ class TestWhatItSays:
 
 class TestOneRefileAtATime:
     def test_two_readers_refiling_at_once_take_turns(self, monkeypatch):
-        harness = _Harness(_record("psx"))
+        harness = _Harness(_record("psx"), picks={"psx": {"label": "SwanStation"}})
         inside = 0
         most = 0
-        factory = harness.refiling._uow_factory
+        halves: list[str] = []
 
-        class _Counting:
-            def __enter__(self):
+        def _counting(name, step):
+            def run(listed):
                 nonlocal inside, most
                 inside += 1
                 most = max(most, inside)
+                halves.append(name)
                 time.sleep(0.05)
-                return factory().__enter__()
+                try:
+                    return step(listed)
+                finally:
+                    inside -= 1
 
-            def __exit__(self, *exc):
-                nonlocal inside
-                inside -= 1
-                return factory().__exit__(*exc)
+            return run
 
-        monkeypatch.setattr(harness.refiling, "_uow_factory", _Counting)
+        monkeypatch.setattr(harness.refiling, "_refile_records", _counting("records", harness.refiling._refile_records))
+        monkeypatch.setattr(harness.refiling, "_refile_picks", _counting("picks", harness.refiling._refile_picks))
         workers = [threading.Thread(target=harness.refile) for _ in range(2)]
         for worker in workers:
             worker.start()
         for worker in workers:
             worker.join(timeout=5)
 
+        assert not any(worker.is_alive() for worker in workers)
+        assert halves == ["records", "picks", "records", "picks"]
         assert most == 1
 
 

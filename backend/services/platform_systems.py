@@ -2,11 +2,12 @@
 
 Owns the kept platforms — the ``kv_config`` value written at every sync
 beside the platform names, keyed by each platform's folder in RomM and read
-here by its slug — and their one live read from RomM where none is kept for a
-platform yet. Which system the ids give is asked of one source at a
-time (``SourcePlatformSystems``); an installed game keeps the system its
-install record holds, because only a new download follows the resolver's
-current answer.
+here by its slug, kept again from every listing the refiling is handed — and
+their one live read from RomM where none is kept for a platform yet. Which
+system the ids give is asked of one source at a time
+(``SourcePlatformSystems``); an installed game keeps the system its install
+record holds, because only a new download follows the resolver's current
+answer.
 
 Every method blocks: it reads the database, and may read RomM and the resolver.
 """
@@ -14,7 +15,7 @@ Every method blocks: it reads the database, and may read RomM and the resolver.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from domain.platform_names import PLATFORM_NAMES_KEY, decode_platform_names
 from domain.platform_system import (
@@ -27,12 +28,14 @@ from domain.platform_system import (
     decode_platform_ids,
     encode_platform_ids,
     kept_by_slug,
+    kept_folders_of_slug,
     kept_platforms,
 )
 from lib.errors import RommApiError, classify_error, romm_error_log_level
 
 if TYPE_CHECKING:
     import logging
+    from collections.abc import Mapping, Sequence
 
     from domain.emulator_sources import SourcesReading
     from domain.rom_install import RomInstall
@@ -136,6 +139,22 @@ class PlatformSystemService:
             return None
         return frozenset(entry.slug for entry in kept.values() if entry.slug is not None)
 
+    def kept_folders(self, platform_slug: str) -> frozenset[str]:
+        """The ``fs_slug`` of every kept platform of *platform_slug*. Reads nothing from RomM."""
+        with self._uow_factory() as uow:
+            return kept_folders_of_slug(uow.kv_config.get(PLATFORM_IDS_KEY), platform_slug)
+
+    def keep_listing(self, platforms: Sequence[Mapping[str, Any]]) -> None:
+        """Keep every platform *platforms* names, beside each kept one of a slug the listing does not name. Blocking."""
+        self._keep(kept_platforms(platforms, self._romm_api.get_version()), {})
+
+    def _keep(self, listed: Mapping[str, KeptPlatform], unlisted: Mapping[str, KeptPlatform]) -> None:
+        listed_slugs = {kept.slug for kept in listed.values()}
+        with self._uow_factory() as uow:
+            current = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY)) or {}
+            before = {key: kept for key, kept in current.items() if kept.slug not in listed_slugs}
+            uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids({**before, **unlisted, **listed}))
+
     def _ids_and_name(self, platform_slug: str, *, ask_romm: bool) -> tuple[PlatformIds, str]:
         with self._uow_factory() as uow:
             kept = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY))
@@ -163,10 +182,5 @@ class PlatformSystemService:
         listed = kept_platforms(platforms, self._romm_api.get_version())
         entry = kept_by_slug(listed, platform_slug)
         self._log_debug(f"[platforms] no ids kept for {platform_slug}; read {len(listed)} from RomM")
-        listed_slugs = {kept.slug for kept in listed.values()}
-        unlisted = {platform_slug: KeptPlatform(slug=platform_slug)} if entry is None else {}
-        with self._uow_factory() as uow:
-            current = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY)) or {}
-            before = {key: kept for key, kept in current.items() if kept.slug not in listed_slugs}
-            uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids({**before, **unlisted, **listed}))
+        self._keep(listed, {platform_slug: KeptPlatform(slug=platform_slug)} if entry is None else {})
         return entry

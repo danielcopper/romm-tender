@@ -328,7 +328,7 @@ class TestAPlatformJustReadIsNamedByItsFolder:
 
 
 class TestAListingReadHereIsRefiled:
-    """Every read of RomM's platform listing hands it to the refiling (#2452 D6, D7)."""
+    """The listing read here is handed to the refiling (#2452 D6, D7)."""
 
     def test_the_listing_read_for_a_platform_with_no_ids_is_handed_over(self, service, romm, refiling):
         service.platform_system("snes")
@@ -341,3 +341,31 @@ class TestAListingReadHereIsRefiled:
         service.platform_system("snes")
 
         assert refiling.listings == []
+
+
+class TestTheListingTheRefilingIsHandedIsKept:
+    """Every listing handed to the refiling is kept, so a game with no fs_slug finds its slug's platform (#2452 D15)."""
+
+    def test_every_listed_platform_is_kept_beside_those_of_slugs_it_does_not_name(self, service, uow_factory):
+        kept_before = {
+            "gc": KeptPlatform(slug="gamecube", fs_slug="gc"),
+            "ps": KeptPlatform(slug="psx", fs_slug="ps", platform_id=1),
+        }
+        uow_factory.uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids(kept_before))
+
+        service.keep_listing([{"id": 9, "slug": "psx", "fs_slug": "psx-hacks", "name": "PlayStation"}])
+
+        kept = decode_platform_ids(uow_factory.uow.kv_config.get(PLATFORM_IDS_KEY)) or {}
+        assert sorted(kept) == ["gc", "psx-hacks"]
+
+    def test_the_kept_folders_of_a_slug(self, service):
+        service.keep_listing(
+            [
+                {"id": 1, "slug": "snes", "fs_slug": "snes", "name": "SNES"},
+                {"id": 2, "slug": "snes", "fs_slug": "snes-hacks", "name": "SNES"},
+                {"id": 3, "slug": "gba", "fs_slug": "gba", "name": "GBA"},
+            ]
+        )
+
+        assert service.kept_folders("snes") == frozenset({"snes", "snes-hacks"})
+        assert service.kept_folders("n64") == frozenset()

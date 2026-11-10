@@ -144,8 +144,9 @@ def records_of_platform(
     A record under the platform's ``fs_slug`` is its own. A record kept under
     the platform's slug, where that slug is no listed ``fs_slug``
     (*listed_folders*, the folders of the listing the refiling last read), is
-    one the refiling could not place because several platforms share the slug,
-    so each of their pages offers it (#2452 D6). Where no listing has been read
+    one the refiling could not place — several platforms share the slug, or
+    the place it would move to records another file of that name — so each
+    page of that slug offers it (#2452 D6). Where no listing has been read
     yet (``None``), such a record is offered on no page: nothing says whether
     the slug is a platform's own ``fs_slug``.
     """

@@ -98,6 +98,8 @@ from services.version_switch import VersionSwitchService
 
 if TYPE_CHECKING:
     from lib.conflict_rules import ConflictRuleSet
+    from services.platform_refiling import PlatformRefiling
+    from services.platform_systems import PlatformSystemService
 
 _GAVEL = GavelNativeAdapter()
 
@@ -313,6 +315,45 @@ class TestTheCacheRootAndTheDataRootStayApart:
             assert services.artwork_service._cover_cache_dir.startswith(directories.cache_dir)
             roots = {a["safe_root"] for a in result.adapters.prune_artifacts.recovery_artifacts([7])}
             assert roots == {directories.cache_dir}
+        finally:
+            loop.close()
+
+    def test_the_refiling_and_the_core_service_hold_one_picks_lock_and_the_refiling_keeps_through_the_platform_system(
+        self, tmp_path
+    ):
+        """Both write the per-platform picks from threads of their own; one lock keeps them apart (#2452 D7)."""
+        result = _bootstrap_for(tmp_path)
+        loop = asyncio.new_event_loop()
+        services = wire_services(
+            WiringConfig(
+                adapters=result.adapters,
+                stores=result.stores,
+                runtime=RuntimeBundle(
+                    loop=loop,
+                    logger=logging.getLogger("test"),
+                    emit=AsyncMock(),
+                    clock=result.runtime_adapters.clock,
+                    uuid_gen=result.runtime_adapters.uuid_gen,
+                    sleeper=result.runtime_adapters.sleeper,
+                    hostname_provider=result.runtime_adapters.hostname_provider,
+                    machine_id_provider=result.runtime_adapters.machine_id_provider,
+                    steam=FakeSteamInterface(),
+                    panel_connected=lambda: False,
+                ),
+                callbacks=result.callbacks,
+                min_required_version=MIN_ROMM_VERSION,
+                directories=_directories_at(tmp_path),
+                launcher=result.launcher,
+                update_source=_UPDATE_SOURCE,
+                installer_environment=(),
+            )
+        )
+
+        try:
+            platform_systems = cast("PlatformSystemService", services.core_service._platform_systems)
+            refiling = cast("PlatformRefiling", platform_systems._refiling)
+            assert services.core_service._picks_lock is refiling._picks_lock
+            assert refiling._listing_keeper() is platform_systems
         finally:
             loop.close()
 

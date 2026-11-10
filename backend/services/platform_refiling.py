@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from contextlib import AbstractContextManager
 
     from domain.bios_file import BiosFile
-    from services.protocols import SettingsPersister, UnitOfWork, UnitOfWorkFactory
+    from services.protocols import ListingKeeper, SettingsPersister, UnitOfWork, UnitOfWorkFactory
 
 # Where the per-platform emulator picks are stored in ``settings.json``.
 _PICKS_SETTING = "platform_cores"
@@ -41,7 +41,8 @@ class PlatformRefilingConfig:
     through, the live settings dict the per-platform picks sit in, its
     persister, the lock every writer of those picks holds while it changes and
     saves them, the lock one refile at a time holds — the readers of the
-    listing run in executor threads of their own — and the logger.
+    listing run in executor threads of their own — the keeper of the listed
+    platforms (bound late: it hands its own listing reads here), and the logger.
     """
 
     uow_factory: UnitOfWorkFactory
@@ -49,6 +50,7 @@ class PlatformRefilingConfig:
     settings_persister: SettingsPersister
     picks_lock: AbstractContextManager[object]
     refile_lock: AbstractContextManager[object]
+    listing_keeper: Callable[[], ListingKeeper]
     logger: logging.Logger
 
 
@@ -62,8 +64,10 @@ class PlatformRefiling:
         self._picks_lock = config.picks_lock
         self._logger = config.logger
         self._lock = config.refile_lock
+        self._listing_keeper = config.listing_keeper
         self._listed_folders: frozenset[str] | None = None
         self._conflicts_told: set[tuple[str, str, str]] = set()
+        self._failures_told: set[tuple[str, str, str]] = set()
 
     def listed_folders(self) -> frozenset[str] | None:
         """The ``fs_slug`` of every platform the last listing handed here names; ``None`` before the first."""
@@ -72,25 +76,29 @@ class PlatformRefiling:
     def do_refile(self, platforms: Sequence[Mapping[str, Any]]) -> None:
         """Move every entry the read *platforms* place elsewhere. Blocking; never raises.
 
-        The download records and the picks are moved independently: a failure
-        of either is logged and gives back what that half had changed, and the
-        other half still runs.
+        The listed platforms are kept first, then the download records and the
+        picks are moved: each step on its own, so a failure of one is logged,
+        gives back what that step had changed, and the others still run.
         """
         with self._lock:
-            listed = self._run("entries", lambda: listed_platforms(platforms))
+            listed = self._run("Failed to read where older entries belong", lambda: listed_platforms(platforms))
             if listed is None:
                 return
             self._listed_folders = listed.folders
-            self._run("BIOS download records", lambda: self._refile_records(listed))
-            self._run("per-platform picks", lambda: self._refile_picks(listed))
+            self._run("Failed to keep the listed platforms", lambda: self._listing_keeper().keep_listing(platforms))
+            self._run(
+                "Failed to move older BIOS download records to their platforms", lambda: self._refile_records(listed)
+            )
+            self._run("Failed to move older per-platform picks to their platforms", lambda: self._refile_picks(listed))
 
-    def _run[T](self, what: str, step: Callable[[], T]) -> T | None:
+    def _run[T](self, failed: str, step: Callable[[], T]) -> T | None:
+        """*step*'s answer, or ``None`` where it raised; its traceback is logged the first time per process."""
         try:
             return step()
         except Exception as e:
-            self._logger.warning(
-                f"Failed to move older {what} to their platforms: {type(e).__name__}: {e}", exc_info=True
-            )
+            told = (failed, type(e).__name__, str(e))
+            self._logger.warning(f"{failed}: {type(e).__name__}: {e}", exc_info=told not in self._failures_told)
+            self._failures_told.add(told)
             return None
 
     def _refile_records(self, listed: ListedPlatforms) -> None:
@@ -114,7 +122,8 @@ class PlatformRefiling:
                     self._tell_conflict(record, target)
                     continue
                 self._refile(uow, record, target, keep_existing=taken is not None)
-                moved += 1
+                if taken is None:
+                    moved += 1
         if moved:
             self._logger.info(f"Moved {moved} older BIOS download records to their platforms")
 
@@ -135,30 +144,31 @@ class PlatformRefiling:
             uow.bios_files.save(record.refiled_under(target))
 
     def _refile_picks(self, listed: ListedPlatforms) -> None:
-        """Move each pick in the live dict itself, so a choice stored meanwhile for another platform stays.
+        """Replace the picks with a moved copy in one assignment, under the lock every writer of them holds.
 
-        Where anything fails once a pick was taken out, every move is given
-        back, so memory and file agree, and the exception propagates.
+        The dict in place is never changed, so a save of the whole settings
+        that iterates it meanwhile never sees it change size, and where the
+        save fails the old dict is put back whole, so memory and file agree,
+        and the exception propagates.
         """
         with self._picks_lock:
             picks = self._settings.get(_PICKS_SETTING)
             if not isinstance(picks, dict):
                 return
-            # A key named but no longer held moves nothing, rather than an empty pick to every target.
-            moves = {key: folders for key, folders in pick_moves(picks, listed).items() if key in picks}
+            moves = pick_moves(picks, listed)
             if not moves:
                 return
-            moved = {key: picks.pop(key) for key in moves}
+            moved = dict(picks)
+            for key, folders in moves.items():
+                for folder in folders:
+                    moved[folder] = copy.deepcopy(picks[key])
+            for key in moves:
+                del moved[key]
+            self._settings[_PICKS_SETTING] = moved
             try:
-                for key, folders in moves.items():
-                    for folder in folders:
-                        picks[folder] = copy.deepcopy(moved[key])
                 self._settings_persister.save_settings()
             except Exception:
-                for key, folders in moves.items():
-                    for folder in folders:
-                        picks.pop(folder, None)
-                    picks[key] = moved[key]
+                self._settings[_PICKS_SETTING] = picks
                 raise
         self._log_pick_moves(moves)
 

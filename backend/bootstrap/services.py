@@ -87,6 +87,7 @@ if TYPE_CHECKING:
     from services.library import LibraryService
     from services.protocols import (
         InstalledRomRemoverFn,
+        ListingKeeper,
         RendererAboveCeilingFn,
         SaveDirectoriesRecorderFn,
         SiblingSupersedeFn,
@@ -238,7 +239,9 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     # lock, not a conflict rule, keeps a refile and a stored pick apart.
     picks_lock = threading.Lock()
 
-    # Every reader that keeps or uses RomM's platform listing hands what it read here (#2452 D6, D7).
+    # Every reader that keeps or uses RomM's platform listing hands what it read here (#2452 D6, D7),
+    # and the refiling hands it on to the platform system to keep, which itself hands its reads here.
+    listing_keeper_binding: LateBinding[ListingKeeper] = LateBinding("listing_keeper")
     platform_refiling = PlatformRefiling(
         config=PlatformRefilingConfig(
             uow_factory=cfg.callbacks.uow_factory,
@@ -246,6 +249,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             settings_persister=cfg.callbacks.settings_persister,
             picks_lock=picks_lock,
             refile_lock=threading.Lock(),
+            listing_keeper=listing_keeper_binding.get,
             logger=cfg.runtime.logger,
         )
     )
@@ -263,6 +267,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             log_debug=cfg.callbacks.log_debug,
         ),
     )
+    listing_keeper_binding.set(lambda: platform_systems)
 
     # The firmware store records files under Tender's folder, which asks it
     # what is recorded there, while every write into the store goes through

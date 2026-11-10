@@ -144,7 +144,7 @@ class PlatformBiosDeleter:
         deleted, kept, errors = outcome.deleted, list(outcome.kept), list(outcome.errors)
         bound = self._retrodeck_folders.bios_folder()
         pruned: list[tuple[str, str]] = []
-        for record in self._older_downloads(platform_folder, platform_slug):
+        for record in platform_records(self._uow_factory, self._refiling, self._logger, platform_folder, platform_slug):
             if names is not None and record.file_name not in names:
                 continue
             removed, drop = self._settle_older(record, bound, kept, errors)
@@ -182,10 +182,6 @@ class PlatformBiosDeleter:
             errors.append(f"{record.file_name}: {e}")
             return False, False
         return True, True
-
-    def _older_downloads(self, platform_folder: str, platform_slug: str) -> list[BiosFile]:
-        """The download records of files Tender wrote into a source's folder before the store, for this platform."""
-        return platform_records(self._uow_factory, self._refiling, platform_folder, platform_slug)
 
     async def delete_bios_file(
         self, platform_slug, platform_folder, file_name

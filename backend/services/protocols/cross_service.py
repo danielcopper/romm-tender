@@ -47,6 +47,17 @@ class ListingRefiler(Protocol):
         ...
 
 
+class ListingKeeper(Protocol):
+    """Keeps every platform a read of RomM's listing names, beside the platforms kept before.
+
+    The refiling hands each listing it is given here, so a game with no
+    ``fs_slug`` recorded can find the one platform kept for its slug
+    (#2452 D15). Blocking.
+    """
+
+    def keep_listing(self, platforms: Sequence[Mapping[str, Any]]) -> None: ...
+
+
 class RomInstallRecorder(Protocol):
     """The one writer of a ``rom_installs`` row.
 

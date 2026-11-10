@@ -34,11 +34,8 @@ from domain.emulator_sources import ArrangedSource
 from domain.launchability import NEEDS_INSTALLING, NOT_THIS_EMULATOR, TAKES_NO_FOLDER, Launchability
 from domain.platform_system import (
     NO_SYSTEM,
-    PLATFORM_IDS_KEY,
     SWITCHED_OFF,
-    KeptPlatform,
     PlatformSystem,
-    encode_platform_ids,
 )
 from domain.rom import Rom
 from domain.rom_install import RomInstall
@@ -1472,13 +1469,10 @@ class TestAPlatformsPickIsKeptByItsFolder:
         ],
     )
     def test_a_game_reads_its_folder_s_pick_else_without_one_its_slug_s(
-        self, event_loop, service, settings, uow, folder, picks, kept, label
+        self, event_loop, service, settings, uow, platform_systems, folder, picks, kept, label
     ):
         settings["platform_cores"].update(picks)
-        if kept:
-            uow.kv_config.set(
-                PLATFORM_IDS_KEY, encode_platform_ids({f: KeptPlatform(slug="snes", fs_slug=f) for f in kept})
-            )
+        platform_systems.kept = {"snes": frozenset(kept)}
         uow.roms.save(
             Rom(
                 rom_id=8,
@@ -1506,6 +1500,33 @@ class TestAPlatformsPickIsKeptByItsFolder:
             assert "snes-hacks" not in settings["platform_cores"]
         worker.join(timeout=5)
 
+        assert settings["platform_cores"]["snes-hacks"]["label"] == "bsnes"
+
+    def test_any_failure_to_save_gives_the_picks_back(self, service, settings, settings_persister, monkeypatch):
+        settings["platform_cores"]["snes"] = {"label": "Snes9x", "source": "retrodeck"}
+
+        def _fails() -> None:
+            raise RuntimeError("dictionary changed size during iteration")
+
+        monkeypatch.setattr(settings_persister, "save_settings", _fails)
+        with pytest.raises(RuntimeError):
+            service._set_system_core_io("snes", "snes", "bsnes")
+
+        assert settings["platform_cores"] == {"snes": {"label": "Snes9x", "source": "retrodeck"}}
+
+    def test_a_save_of_the_whole_settings_iterating_them_meanwhile_does_not_fail(self, service, settings):
+        """A save on another thread may be walking the settings while a pick is stored."""
+        settings["platform_cores"]["snes"] = {"label": "Snes9x", "source": "retrodeck"}
+        settings["other"] = True
+        walking_settings = iter(settings)
+        walking_picks = iter(settings["platform_cores"])
+        next(walking_settings)
+        next(walking_picks)
+
+        service._set_system_core_io("snes", "snes-hacks", "bsnes")
+
+        assert list(walking_settings) == ["other"]
+        assert list(walking_picks) == []
         assert settings["platform_cores"]["snes-hacks"]["label"] == "bsnes"
 
     @pytest.mark.parametrize(("slug", "folder"), [("", "snes"), ("snes", ""), (None, "snes"), ("snes", None)])

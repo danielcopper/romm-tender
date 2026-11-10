@@ -25,7 +25,7 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from domain.emulator_choice import DEFAULT, GAME_PICK
 from domain.emulator_pick import StoredPick
-from domain.platform_system import NO_SYSTEM, PLATFORM_IDS_KEY, KeptPlatform, PlatformSystem, encode_platform_ids
+from domain.platform_system import NO_SYSTEM, PlatformSystem
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
@@ -710,19 +710,21 @@ def test_a_game_without_a_folder_and_no_pick_under_its_slug_takes_the_default() 
     assert resolver.active_core_for_rom(72) == ("snes9x_libretro", "Snes9x")
 
 
-def _keep(uow: FakeUnitOfWork, *folders: str) -> None:
-    """Keep each of *folders* as a listed platform of the slug ``snes``."""
-    kept = {folder: KeptPlatform(slug="snes", fs_slug=folder) for folder in folders}
-    uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids(kept))
+def _kept(*folders: str) -> FakePlatformSystems:
+    """The platform systems keeping each of *folders* as a listed platform of the slug ``snes``."""
+    systems = FakePlatformSystems()
+    systems.kept = {"snes": frozenset(folders)}
+    return systems
 
 
 def test_a_game_without_a_folder_whose_slug_pick_moved_takes_the_one_kept_platform_s_pick() -> None:
     """D15: the refiling moved the slug's pick to the one platform kept for the slug."""
     uow = FakeUnitOfWork()
     _seed_rom_on_folder(uow, rom_id=74, folder=None)
-    _keep(uow, "snes-hacks")
     reader = FakePlatformCoreReader(mapping={"snes-hacks": "bsnes"})
-    resolver, _ = _make_resolver(uow=uow, core_info=_SNES_CORES, platform_core_reader=reader)
+    resolver, _ = _make_resolver(
+        uow=uow, core_info=_SNES_CORES, platform_core_reader=reader, platform_systems=_kept("snes-hacks")
+    )
 
     assert resolver.active_core_for_rom(74) == ("bsnes_libretro", "bsnes")
 
@@ -730,23 +732,33 @@ def test_a_game_without_a_folder_whose_slug_pick_moved_takes_the_one_kept_platfo
 def test_a_game_without_a_folder_whose_slug_several_platforms_share_takes_the_default() -> None:
     uow = FakeUnitOfWork()
     _seed_rom_on_folder(uow, rom_id=75, folder=None)
-    _keep(uow, "snes", "snes-hacks")
     reader = FakePlatformCoreReader(mapping={"snes-hacks": "bsnes"})
-    resolver, _ = _make_resolver(uow=uow, core_info=_SNES_CORES, platform_core_reader=reader)
+    resolver, _ = _make_resolver(
+        uow=uow, core_info=_SNES_CORES, platform_core_reader=reader, platform_systems=_kept("snes", "snes-hacks")
+    )
 
     assert resolver.active_core_for_rom(75) == ("snes9x_libretro", "Snes9x")
+
+
+def test_a_game_without_a_folder_takes_the_pick_under_its_slug_though_that_is_a_platform_s_own() -> None:
+    """D15 meets D18: ``snes`` is the slug and a listed platform's folder, so its pick is read for the game."""
+    uow = FakeUnitOfWork()
+    _seed_rom_on_folder(uow, rom_id=76, folder=None)
+    reader = FakePlatformCoreReader(mapping={"snes": "bsnes", "snes-hacks": "Snes9x"})
+    resolver, _ = _make_resolver(
+        uow=uow, core_info=_SNES_CORES, platform_core_reader=reader, platform_systems=_kept("snes", "snes-hacks")
+    )
+
+    assert resolver.active_core_for_rom(76) == ("bsnes_libretro", "bsnes")
 
 
 def test_a_game_with_a_folder_never_reads_the_pick_under_its_slug_or_the_kept_platforms() -> None:
     uow = FakeUnitOfWork()
     _seed_rom_on_folder(uow, rom_id=73, folder="snes-hacks")
-    _keep(uow, "snes")
     reader = FakePlatformCoreReader(mapping={"snes": "bsnes"})
-    resolver, _ = _make_resolver(uow=uow, core_info=_SNES_CORES, platform_core_reader=reader)
-    read_keys: list[str] = []
-    kv_get = uow.kv_config.get
-    uow.kv_config.get = lambda key: read_keys.append(key) or kv_get(key)  # type: ignore[method-assign]
+    systems = _kept("snes")
+    resolver, _ = _make_resolver(uow=uow, core_info=_SNES_CORES, platform_core_reader=reader, platform_systems=systems)
 
     assert resolver.active_core_for_rom(73) == ("snes9x_libretro", "Snes9x")
     assert reader.calls == ["snes-hacks"]
-    assert PLATFORM_IDS_KEY not in read_keys
+    assert systems.kept_asked == []

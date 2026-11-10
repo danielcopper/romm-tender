@@ -95,6 +95,10 @@ class PlatformSystems(Protocol):
         """
         ...
 
+    def kept_folders(self, platform_slug: str) -> frozenset[str]:
+        """The ``fs_slug`` of every kept platform of *platform_slug*. Reads nothing from RomM."""
+        ...
+
 
 class FirmwareResolver(Protocol):
     """Read what every installed libretro core wants, live off the machine.
