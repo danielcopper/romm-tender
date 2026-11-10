@@ -299,8 +299,8 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
   in one process, for debugging); frontend — `mise run test:frontend` (Vitest + happy-dom)
 - **Coverage**: backend — `python -m pytest tests/ -q -n auto --cov=backend --cov-report=term --cov-branch`; frontend —
   `mise run test:frontend:coverage`
-- **Lint**: `mise run lint` (import-linter, the `scripts/check_*` gates, markdownlint). Ruff and basedpyright run only
-  inside `mise run gate`.
+- **Lint**: `mise run lint` (import-linter, the `scripts/check_*` gates, markdownlint). No other mise task runs Ruff or
+  basedpyright.
 - **Gate**: `mise run gate` (the CI battery in one command; which PR checks it does not run:
   `docs/contributing/development.md`, "Full CI gate"; slow. Run before pushing.)
 - **Setup**: `mise run setup` (installs JS + Python dependencies)
@@ -368,15 +368,18 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
 - **Gate**: as "Development", "Gate", says (`mise run gate`).
 - **Review checks**: `ruff check <files>`, `basedpyright <files>`, `pnpm -C frontend exec eslint <files>` (paths
   relative to `frontend/`)
-- **Worktree task**: `mise run worktree-new`
+- **Worktree task**: `mise run worktree-new` (a global mise task from the owner's dotfiles, not in this repository)
 - **Agent rules**:
-  - Scratch files never go inside the worktree: `lint:md` globs `**/*.md` without honouring `.gitignore`, and Vitest
-    includes `src/**`, so a stray probe breaks the gate or a parallel typecheck. Use your scratchpad.
-  - Run `mise run gate` once, in the foreground, with a timeout of 1500 s (it takes about 4–6 minutes).
-  - Before writing code in an area, read the `.claude/rules/*.md` file whose `paths:` covers it; "Path-scoped rules"
+  - Scratch files never go inside the worktree: `lint:md` globs `**/*.md` without honouring `.gitignore`, and `tsc`
+    checks all of `frontend/src` (Vitest runs any `*.test.ts` there), so a stray probe breaks the gate or a parallel
+    typecheck. Use your scratchpad.
+  - Run `mise run gate` once; it takes 8–15 minutes, longer under load. The Bash tool stops waiting after 600 s and
+    leaves the run in the background: wait for that run (`tail --pid=<pid> -f /dev/null`) instead of starting another.
+  - Before writing code in an area, read every `.claude/rules/*.md` file whose `paths:` covers it; "Path-scoped rules"
     above lists them.
   - Backend tests run under pytest-xdist: a new test shares no file, port or global state with another test.
-  - Never raise a frontend bundle size budget; report the overrun instead.
+  - Never raise a bundle size budget (`frontend/.size-limit.json`, `frontend/package-budgets.json`) to make the gate
+    pass; report the overrun instead.
 
 ## Code Quality
 
