@@ -11,6 +11,7 @@ from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from domain.bios_file import BiosFile
+from services.platform_picks import PlatformPicks, PlatformPicksConfig
 from services.platform_refiling import PlatformRefiling, PlatformRefilingConfig
 
 # RomM keeps PlayStation in ``ps``; two platforms share the slug ``gamecube``;
@@ -60,8 +61,11 @@ class _Keeper:
     def __init__(self) -> None:
         self.listings: list[list[Any]] = []
         self.error: Exception | None = None
+        self.on_keep: Any = None
 
     def keep_listing(self, platforms: Any) -> None:
+        if self.on_keep is not None:
+            self.on_keep()
         if self.error is not None:
             raise self.error
         self.listings.append(list(platforms))
@@ -81,15 +85,19 @@ class _Harness:
         self.persister = persister if persister is not None else FakeSettingsPersister()
         self.picks_lock = threading.Lock()
         self.keeper = _Keeper()
+        self.debug: list[str] = []
         self.refiling = PlatformRefiling(
             config=PlatformRefilingConfig(
                 uow_factory=FakeUnitOfWorkFactory(self.uow),
-                settings=self.settings,
-                settings_persister=self.persister,
-                picks_lock=self.picks_lock,
+                platform_picks=PlatformPicks(
+                    config=PlatformPicksConfig(
+                        settings=self.settings, settings_persister=self.persister, lock=self.picks_lock
+                    )
+                ),
                 refile_lock=threading.Lock(),
                 listing_keeper=lambda: self.keeper,
                 logger=logging.getLogger("test"),
+                log_debug=lambda msg: self.debug.append(msg),
             )
         )
 
@@ -353,6 +361,24 @@ class TestFailures:
         failures = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert [bool(r.exc_info) for r in failures] == [True, False]
 
+    def test_a_failure_with_the_same_words_raised_elsewhere_brings_its_traceback(self, caplog):
+        harness = _Harness(_record("psx"), persister=_FailingPersister())
+        harness.settings["platform_cores"] = {"psx": {"label": "SwanStation"}}
+
+        def _fails_here() -> None:
+            raise OSError("disk full")
+
+        with caplog.at_level(logging.WARNING):
+            harness.refile()
+            harness.persister.save_settings = _fails_here  # type: ignore[method-assign]
+            harness.refile()
+
+        failures = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert [r.getMessage() for r in failures] == [
+            "Failed to move older per-platform picks to their platforms: OSError: disk full"
+        ] * 2
+        assert [bool(r.exc_info) for r in failures] == [True, True]
+
     def test_a_keeper_that_fails_leaves_the_moves_running(self, caplog):
         harness = _Harness(_record("psx"), picks={"psx": {"label": "SwanStation"}})
         harness.keeper.error = OSError("db locked")
@@ -374,6 +400,15 @@ class TestListedPlatformsAreKept:
 
         assert harness.keeper.listings == [_PLATFORMS, _PLATFORMS]
 
+    def test_the_listing_is_kept_before_anything_moves(self):
+        harness = _Harness(_record("psx"), picks={"psx": {"label": "SwanStation"}})
+        seen: list[tuple[set[tuple[str, str, str]], dict[str, Any]]] = []
+        harness.keeper.on_keep = lambda: seen.append((harness.records(), dict(harness.settings["platform_cores"])))
+
+        harness.refile()
+
+        assert seen == [({("psx", "scph5501.bin", "/bios/scph5501.bin")}, {"psx": {"label": "SwanStation"}})]
+
 
 class TestWhatItSays:
     def test_moved_records_are_counted(self, caplog):
@@ -392,6 +427,9 @@ class TestWhatItSays:
 
         assert harness.records() == {("ps", "scph5501.bin", "/bios/scph5501.bin")}
         assert "Moved" not in caplog.text
+        assert "Dropped 1 older BIOS download records their platform already records the same file under" in (
+            caplog.text
+        )
 
     def test_moved_picks_name_where_each_went(self, caplog):
         harness = _Harness(picks={"gamecube": {"label": "Dolphin"}, "psx": {"label": "SwanStation"}})
@@ -410,15 +448,18 @@ class TestWhatItSays:
         assert "Dropped older per-platform picks every platform of their slug has its own of: gamecube" in caplog.text
         assert "Moved older per-platform picks" not in caplog.text
 
-    def test_a_record_kept_for_a_taken_place_is_warned_once_then_logged_at_debug(self, caplog):
+    def test_a_record_kept_for_a_taken_place_is_warned_once_then_said_to_the_debug_log(self, caplog):
         harness = _Harness(_record("psx", path="/bios/old/scph5501.bin"), _record("ps", path="/bios/scph5501.bin"))
 
         with caplog.at_level(logging.DEBUG):
             harness.refile()
             harness.refile()
 
-        told = [r.levelno for r in caplog.records if "already records another file of that name" in r.getMessage()]
-        assert told == [logging.WARNING, logging.DEBUG]
+        warned = [r for r in caplog.records if "already records another file of that name" in r.getMessage()]
+        assert [r.levelno for r in warned] == [logging.WARNING]
+        assert [m for m in harness.debug if "already records another file of that name" in m] == [
+            "Kept the BIOS record scph5501.bin under psx: ps already records another file of that name"
+        ]
 
 
 class TestOneRefileAtATime:

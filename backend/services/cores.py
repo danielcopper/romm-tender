@@ -439,23 +439,20 @@ class CoreService:
     def _set_system_core_io(self, platform_slug: str, platform_folder: str, core_label: str) -> None:
         """Write the per-platform core selection.
 
-        Mutates ``settings["platform_cores"]`` — stores ``{label, source}`` under
-        the platform's ``fs_slug`` *platform_folder* when *core_label* is
-        non-empty, ``source`` the kind of the emulator source answering for the
-        console *platform_slug*, and pops the key when blank (revert to the
-        default) — and persists ``settings.json`` through the injected
-        persister. A label with no source answering for the platform is refused
-        with ``core_unavailable`` and nothing is written.
+        Stores ``{label, source}`` under the platform's ``fs_slug``
+        *platform_folder* when *core_label* is non-empty, ``source`` the kind
+        of the emulator source answering for the console *platform_slug*, and
+        drops that pick when blank (revert to the default); the picks are saved
+        to ``settings.json``. A label with no source answering for the platform
+        is refused with ``core_unavailable`` and nothing is written.
         """
         self._store_platform_pick(platform_slug, platform_folder, core_label)
 
     def _store_platform_pick(self, platform_slug: str, platform_folder: str, core_label: str) -> None:
         """Store *core_label* as the platform's pick, or drop the pick when blank, and persist it.
 
-        The picks are replaced by a changed copy in one assignment, under the
-        lock every writer of them holds, so a save of the whole settings that
-        iterates them meanwhile never sees them change size; where the save
-        fails the old picks are put back whole.
+        Why the picks are replaced whole, under the lock their writers share:
+        ``docs/architecture/core-emulator-selection.md``, "Per-platform".
         """
         value = None
         if core_label:

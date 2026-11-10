@@ -741,7 +741,7 @@ def test_a_game_without_a_folder_whose_slug_several_platforms_share_takes_the_de
 
 
 def test_a_game_without_a_folder_takes_the_pick_under_its_slug_though_that_is_a_platform_s_own() -> None:
-    """D15 meets D18: ``snes`` is the slug and a listed platform's folder, so its pick is read for the game."""
+    """D15 meets D18 (D19): ``snes`` is the slug and a listed platform's folder, so its pick is read for the game."""
     uow = FakeUnitOfWork()
     _seed_rom_on_folder(uow, rom_id=76, folder=None)
     reader = FakePlatformCoreReader(mapping={"snes": "bsnes", "snes-hacks": "Snes9x"})

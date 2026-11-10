@@ -35,7 +35,8 @@ def game_platform_pick(
 
     A game with its ``fs_slug`` takes that platform's pick and nothing else. A
     game with none recorded — every game until the first sync after an update
-    from 0.33.0 records it — takes the pick still kept under its slug; once
+    from 0.33.0 records it — takes the pick still kept under its slug, which
+    is a platform's own where the slug is also its folder (#2452 D18, D19); once
     the refiling has moved that key to the platforms of the slug, the pick of
     the one platform kept for the slug (*kept_folders*, read only then); where
     several share the slug, or none is kept, no pick.

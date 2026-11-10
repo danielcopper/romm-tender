@@ -48,7 +48,7 @@ class ListingRefiler(Protocol):
 
 
 class ListingKeeper(Protocol):
-    """Keeps every platform a read of RomM's listing names, beside the platforms kept before.
+    """Keeps every platform a read of RomM's listing names, in place of those kept before for the slugs it names.
 
     The refiling hands each listing it is given here, so a game with no
     ``fs_slug`` recorded can find the one platform kept for its slug
@@ -56,6 +56,29 @@ class ListingKeeper(Protocol):
     """
 
     def keep_listing(self, platforms: Sequence[Mapping[str, Any]]) -> None: ...
+
+
+class ListingKeeperProvider(Protocol):
+    """Deferred access to the :class:`ListingKeeper`, consumed by the refiling.
+
+    The platform system hands its own listing reads to the refiling, so it is
+    built after it; the composition root binds it once both exist and hands
+    the refiling this getter (a ``LateBinding``).
+    """
+
+    def __call__(self) -> ListingKeeper: ...
+
+
+class PlatformPicksWriter(Protocol):
+    """The one writer of the per-platform emulator picks, consumed by the refiling and the core service.
+
+    *build* is handed the picks as they stand, under the lock every change of
+    them is made under, and answers the whole new map, or ``None`` to change
+    nothing. The new map is saved; where the save raises, the old one is put
+    back and the exception propagates. Answers whether a map was built. Blocking.
+    """
+
+    def replace(self, build: Callable[[Mapping[str, Any]], dict[str, Any] | None]) -> bool: ...
 
 
 class RomInstallRecorder(Protocol):

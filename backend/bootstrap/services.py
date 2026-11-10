@@ -49,6 +49,7 @@ from services.game_start import START_FOLDER, GameStartService, GameStartService
 from services.leftover_tmp_cleanup import LeftoverTmpCleanupService, LeftoverTmpCleanupServiceConfig
 from services.metadata import MetadataService, MetadataServiceConfig
 from services.migration import MigrationService, MigrationServiceConfig
+from services.platform_picks import PlatformPicks, PlatformPicksConfig
 from services.platform_refiling import PlatformRefiling, PlatformRefilingConfig
 from services.platform_systems import PlatformSystemService, PlatformSystemServiceConfig
 from services.playtime import PlaytimeService, PlaytimeServiceConfig
@@ -238,6 +239,13 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     # Both writers of the per-platform picks run in executor threads, so one
     # lock, not a conflict rule, keeps a refile and a stored pick apart.
     picks_lock = threading.Lock()
+    platform_picks = PlatformPicks(
+        config=PlatformPicksConfig(
+            settings=cfg.stores.settings,
+            settings_persister=cfg.callbacks.settings_persister,
+            lock=picks_lock,
+        )
+    )
 
     # Every reader that keeps or uses RomM's platform listing hands what it read here (#2452 D6, D7),
     # and the refiling hands it on to the platform system to keep, which itself hands its reads here.
@@ -245,12 +253,11 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     platform_refiling = PlatformRefiling(
         config=PlatformRefilingConfig(
             uow_factory=cfg.callbacks.uow_factory,
-            settings=cfg.stores.settings,
-            settings_persister=cfg.callbacks.settings_persister,
-            picks_lock=picks_lock,
+            platform_picks=platform_picks,
             refile_lock=threading.Lock(),
             listing_keeper=listing_keeper_binding.get,
             logger=cfg.runtime.logger,
+            log_debug=cfg.callbacks.log_debug,
         )
     )
 

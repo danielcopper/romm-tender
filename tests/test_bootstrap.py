@@ -98,6 +98,7 @@ from services.version_switch import VersionSwitchService
 
 if TYPE_CHECKING:
     from lib.conflict_rules import ConflictRuleSet
+    from services.platform_picks import PlatformPicks
     from services.platform_refiling import PlatformRefiling
     from services.platform_systems import PlatformSystemService
 
@@ -352,7 +353,8 @@ class TestTheCacheRootAndTheDataRootStayApart:
         try:
             platform_systems = cast("PlatformSystemService", services.core_service._platform_systems)
             refiling = cast("PlatformRefiling", platform_systems._refiling)
-            assert services.core_service._picks_lock is refiling._picks_lock
+            picks = cast("PlatformPicks", refiling._platform_picks)
+            assert services.core_service._picks_lock is picks._lock
             assert refiling._listing_keeper() is platform_systems
         finally:
             loop.close()

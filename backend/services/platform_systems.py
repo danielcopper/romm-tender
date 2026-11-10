@@ -130,8 +130,8 @@ class PlatformSystemService:
         """The slug of every kept platform, or ``None`` where no listing was ever kept. Reads nothing from RomM.
 
         That is each platform RomM listed at the last sync, every one a listing
-        read since named (:meth:`_read_and_keep` keeps the whole listing), and
-        a platform asked about since that the listing did not name.
+        read since named (each is handed to :meth:`keep_listing`), and a
+        platform asked about since that the listing did not name.
         """
         with self._uow_factory() as uow:
             kept = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY))
