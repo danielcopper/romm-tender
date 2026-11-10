@@ -299,8 +299,8 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
   in one process, for debugging); frontend — `mise run test:frontend` (Vitest + happy-dom)
 - **Coverage**: backend — `python -m pytest tests/ -q -n auto --cov=backend --cov-report=term --cov-branch`; frontend —
   `mise run test:frontend:coverage`
-- **Lint**: `mise run lint` (import-linter, the `scripts/check_*` gates, markdownlint). No other mise task runs Ruff or
-  basedpyright.
+- **Lint**: `mise run lint` (import-linter, the `scripts/check_*` gates, markdownlint). Of the mise tasks, only
+  `mise run gate` runs Ruff and basedpyright.
 - **Gate**: `mise run gate` (the CI battery in one command; which PR checks it does not run:
   `docs/contributing/development.md`, "Full CI gate"; slow. Run before pushing.)
 - **Setup**: `mise run setup` (installs JS + Python dependencies)
