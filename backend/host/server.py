@@ -249,9 +249,9 @@ class HostServer:
         if self._server is not None:
             # An accepted connection becomes a transport only on a later loop turn,
             # and a ``Server.close()`` in between abandons it half-made: outside
-            # the server's clients, so nothing closes it, and on 3.13 and 3.14 the
+            # the server's clients, so nothing closes it, and from 3.13 on the
             # collector reaching it raises an unraisable ``TypeError``
-            # (python/cpython#109564, fixed in no release). Removing the reader
+            # (python/cpython#109564, fixed by GH-160851). Removing the reader
             # cancels every accept not yet begun, one already queued for this turn
             # included; the yield lets a transport already being built attach, so
             # the close below reaches it.
