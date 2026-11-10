@@ -544,7 +544,7 @@ async def test_get_registry_platforms_counts_bound_roms(harness):
     assert "platforms" in result
     assert len(result["platforms"]) == 1
     entry = result["platforms"][0]
-    assert set(entry.keys()) == {"name", "slug", "fs_slug", "count", "reachable_count"}
+    assert set(entry.keys()) == {"name", "slug", "count", "reachable_count"}
     assert entry["slug"] == "snes"
     assert entry["count"] == 2
     # Each seeded row carries a NULL group key, so each is its own group and
