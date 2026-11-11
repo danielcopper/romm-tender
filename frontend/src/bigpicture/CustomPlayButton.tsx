@@ -267,11 +267,11 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
     };
   }, []);
 
-  // Rehydrate an in-flight or paused download on remount: nothing in the cached
-  // detail says a download is under way, so without this a paused one shows a
-  // plain "Download" button, whose press calls `start_download` rather than
-  // resuming it (#1124). Seeding from the live queue keeps Pause/Resume across
-  // navigating away and back.
+  // Rehydrate an in-flight or paused download: nothing in the cached detail
+  // says a download is under way, so without this a paused one shows a plain
+  // "Download" button, whose press calls `start_download` rather than resuming
+  // it. Seeding from the live queue keeps Pause/Resume across navigating away
+  // and back.
   // The button stays mounted when the page moves to another game, so a read that
   // answers after its init was cleaned up is dropped: it may be the old game's.
   const rehydrateInflightDownload = async (rid: number, stale: () => boolean): Promise<void> => {

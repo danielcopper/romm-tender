@@ -1,9 +1,9 @@
 /**
  * Waiting out work a test cannot see the end of.
  *
- * An `await act(async () => {})` lets only the microtasks already queued run;
- * an answer that lands one timer later passes a test that reads straight after
- * it. A read that asserts something did NOT happen waits for this first.
+ * An `await act(async () => {})` runs microtasks and no timer, so an answer
+ * that lands one timer later passes a test that reads straight after it. A read
+ * that asserts something did NOT happen waits for this first.
  */
 
 import { act } from "@testing-library/react";
