@@ -37,7 +37,6 @@ export function getDownloadFillGradient(
   surface: DownloadSurface = "bigpicture",
 ): string {
   if (surface === "desktop" && (extracting || downloading)) {
-    // The desktop fill ends on the desktop PLAY's own gradient.
     const left = lerpColor(BLUE_LEFT, PLAY_LEFT_STOP, extracting ? 1 : t);
     const right = lerpColor(BLUE_RIGHT, PLAY_RIGHT_STOP, extracting ? 1 : t);
     return `linear-gradient(to right, ${left} 0%, ${right} ${PLAY_RIGHT_STOP_AT})`;

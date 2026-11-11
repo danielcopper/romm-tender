@@ -588,8 +588,8 @@ location in the meantime — Tender says so rather than deleting it, since you w
 download and start again to see the dialog for what is there now.
 
 **Coming soon:** **on the desktop client's game page** a download in progress shows its progress where the Play button
-is, with **Pause** or **Resume** beside it where the download can be resumed, and **Cancel**; while the download is
-unpacked, a spinner stands in their place.
+is, with **Pause** or **Resume** beside it where the download can be resumed, and **Cancel**; during the **Extracting…**
+phase neither shows, and a spinner stands where **Cancel** was.
 
 ### Multi-Disc and Multi-File Games
 
