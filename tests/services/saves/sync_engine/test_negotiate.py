@@ -1,9 +1,14 @@
 """Tests for NegotiateEnvelope — RomM's negotiate session around a sync, and the inventory it sends."""
 
 import hashlib
+import logging
 import os
 
+import pytest
+from fakes.fake_rom_save_sync_state_repository import FakeRomSaveSyncStateRepository
+
 from domain.iso_time import epoch_to_iso
+from domain.live_device_id import LiveDeviceId
 from domain.rom_save_sync_state import RomSaveSyncState
 from tests.services.saves._helpers import (
     _create_save,
@@ -153,3 +158,25 @@ class TestBuildSaveInventory:
         _seed_save_state(svc, 42, state)
 
         assert svc._sync_engine._negotiate.build_inventory(rom_id=42) == []
+
+
+class TestTheWholeDeviceSession:
+    """``open_device_session`` answers no session where it cannot open one, as ``open_rom_session`` does."""
+
+    @pytest.mark.asyncio
+    async def test_an_inventory_that_cannot_be_built_answers_no_session(self, tmp_path, monkeypatch, caplog):
+        svc, fake = make_service(tmp_path)
+
+        def the_database_is_locked(_self):
+            raise RuntimeError("database is locked")
+
+        monkeypatch.setattr(FakeRomSaveSyncStateRepository, "iter_all", the_database_is_locked)
+
+        with caplog.at_level(logging.WARNING):
+            session_id = await svc._sync_engine._negotiate.open_device_session(LiveDeviceId("device-1"))
+
+        assert session_id is None
+        assert not any(c[0] == "negotiate_sync" for c in fake.call_log)
+        assert [r.getMessage() for r in caplog.records] == [
+            "sync_all_saves: negotiate session open failed (database is locked) — per-ROM sessions"
+        ]

@@ -181,17 +181,17 @@ unconfirmed-slot ROMs), so it ingests through the standalone `/api/play-sessions
 aside of ADR-0016/0017). The server's returned `operations` are **discarded** — detection is the client's
 `compute_sync_action`. The request names the ROMs it is about as `rom_ids` — the one ROM, or the distinct ROMs of the
 whole-device inventory — at most 500; above that the scope is left off and the server evaluates the whole library.
-Opening the session is best-effort: a `negotiate` **transport** failure is non-fatal, the run simply proceeds
-**without** a session (the kernel still syncs). The **one** exception is RomM's per-device `sync_enabled` switch —
-`negotiate` is the only API-mode endpoint that enforces it, answering a 400 with detail
-`"Sync is disabled for this device"` when the user has disabled sync for this device server-side. That specific 400 is
-translated to `RommSyncDisabledError` and **stops** the run with `reason: device_sync_disabled` (a visible policy stop,
-not a silent sessionless degrade); pre-launch treats it like the local save-sync toggle being off and skips silently so
-the launch always proceeds (#1489). Scope limit: legacy/unconfirmed ROMs never open a session, so a library with no
-confirmed named-slot ROM never reaches the switch. Legacy `slot:null` ROMs open no session at all (RomM cannot address
-`slot:null` through the negotiate inventory param) but take the identical kernel path. The `complete` close is likewise
-**non-fatal** — a session the server never hears closed times out and is cancelled by the next `negotiate`, so a failed
-`complete` never fails the run.
+Opening the session is best-effort: a failure to build its inventory or of the `negotiate` **transport** is non-fatal,
+for one ROM's session and the whole-device one alike, and the run simply proceeds **without** a session (the kernel
+still syncs). The **one** exception is RomM's per-device `sync_enabled` switch — `negotiate` is the only API-mode
+endpoint that enforces it, answering a 400 with detail `"Sync is disabled for this device"` when the user has disabled
+sync for this device server-side. That specific 400 is translated to `RommSyncDisabledError` and **stops** the run with
+`reason: device_sync_disabled` (a visible policy stop, not a silent sessionless degrade); pre-launch treats it like the
+local save-sync toggle being off and skips silently so the launch always proceeds (#1489). Scope limit:
+legacy/unconfirmed ROMs never open a session, so a library with no confirmed named-slot ROM never reaches the switch.
+Legacy `slot:null` ROMs open no session at all (RomM cannot address `slot:null` through the negotiate inventory param)
+but take the identical kernel path. The `complete` close is likewise **non-fatal** — a session the server never hears
+closed times out and is cancelled by the next `negotiate`, so a failed `complete` never fails the run.
 
 **Cross-device pulls come from `list_saves`, not an op.** A confirmed ROM with a save on the server but **no local file
 here** is picked up by the matrix directly: `list_saves` returns the server save, it is grouped by its canonical local

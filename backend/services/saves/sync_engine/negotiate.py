@@ -139,11 +139,11 @@ class NegotiateEnvelope:
         """Open the session one confirmed ROM's sync runs in; ``None`` when it could not open.
 
         POSTs the ROM-scoped inventory to ``negotiate``, with that one ROM as its
-        ``rom_ids`` scope, and keeps only the ``session_id``. Any failure
-        degrades to ``None`` — the sync run proceeds without a session envelope
-        rather than aborting — EXCEPT :class:`RommSyncDisabledError`, which is
-        re-raised. An unclosed session lingers harmlessly until this device's
-        next ``negotiate`` cancels it, so a missed close is harmless.
+        ``rom_ids`` scope, and keeps only the ``session_id``. Answers ``None`` on
+        any failure, building the inventory included, EXCEPT
+        :class:`RommSyncDisabledError`, which is re-raised. An unclosed session
+        lingers harmlessly until this device's next ``negotiate`` cancels it, so
+        a missed close is harmless.
 
         *save_answer* is the reading the run already took, handed on so the
         inventory does not take a second one. Without it a ROM whose slot the
@@ -168,16 +168,16 @@ class NegotiateEnvelope:
             return None
 
     async def open_device_session(self, device_id: LiveDeviceId) -> int | None:
-        """Open the one whole-device session a sweep runs in.
+        """Open the one whole-device session a sweep runs in; ``None`` when there is none to open or it could not open.
 
         Builds the full inventory (every confirmed non-legacy ROM with local
         saves) and POSTs ``negotiate`` once, keeping only the ``session_id``.
-        Returns it, or ``None`` on an empty inventory (nothing to negotiate) or
-        any negotiate failure. When ``None``, each confirmed non-legacy ROM
-        opens its own session (:meth:`open_rom_session`) — the sweep degrades,
-        never aborts; only the session envelope (one shared vs. per-ROM)
-        differs. :class:`RommSyncDisabledError` is re-raised, so the whole sweep
-        stops.
+        Answers ``None`` on an empty inventory (nothing to negotiate) and on any
+        failure, building the inventory included, EXCEPT
+        :class:`RommSyncDisabledError`, which is re-raised. When ``None``, each
+        confirmed non-legacy ROM opens its own session
+        (:meth:`open_rom_session`); only the session envelope (one shared vs.
+        per-ROM) differs.
 
         The POST names the inventory's distinct ROM ids, in first-seen order, as
         its ``rom_ids`` scope. Over :data:`NEGOTIATE_ROM_IDS_CAP` of them it goes
@@ -185,17 +185,17 @@ class NegotiateEnvelope:
         because each negotiate cancels this device's prior sessions, the earlier
         parts included.
         """
-        full_inventory = await self._loop.run_in_executor(None, self.build_inventory, None)
-        if not full_inventory:
-            return None
-        rom_ids: list[int] | None = list(dict.fromkeys(save["rom_id"] for save in full_inventory))
-        if len(rom_ids) > NEGOTIATE_ROM_IDS_CAP:
-            self._log_debug(
-                f"sync_all_saves: the inventory names {len(rom_ids)} ROMs, over negotiate's cap of "
-                f"{NEGOTIATE_ROM_IDS_CAP}; negotiating without a rom_ids scope"
-            )
-            rom_ids = None
         try:
+            full_inventory = await self._loop.run_in_executor(None, self.build_inventory, None)
+            if not full_inventory:
+                return None
+            rom_ids: list[int] | None = list(dict.fromkeys(save["rom_id"] for save in full_inventory))
+            if len(rom_ids) > NEGOTIATE_ROM_IDS_CAP:
+                self._log_debug(
+                    f"sync_all_saves: the inventory names {len(rom_ids)} ROMs, over negotiate's cap of "
+                    f"{NEGOTIATE_ROM_IDS_CAP}; negotiating without a rom_ids scope"
+                )
+                rom_ids = None
             response = await self._loop.run_in_executor(
                 None,
                 lambda: self._retry.with_retry(

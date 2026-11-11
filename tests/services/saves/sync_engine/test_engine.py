@@ -9,6 +9,7 @@ conflict rollback in tests/services/saves/sync_engine/test_rollback.py.
 import asyncio
 import hashlib
 import io
+import logging
 import threading
 import time
 import zipfile
@@ -18,6 +19,7 @@ import pytest
 from _factories import _CONFLICT_REFUSAL_MESSAGES
 from _zip_poison import corrupt_central_dir_zip_bytes
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
+from fakes.fake_rom_save_sync_state_repository import FakeRomSaveSyncStateRepository
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.live_device_id import LiveDeviceId
@@ -2661,6 +2663,35 @@ class TestSyncAllSavesNegotiate:
         assert not any(c[0] == "complete_sync_session" for c in fake.call_log)
         assert any(c[0] == "list_saves" for c in fake.call_log)
         assert result["synced"] == 1
+
+
+class TestAWholeDeviceSessionThatCannotOpen:
+    """A sweep whose session inventory cannot be built goes on without a session, as one game's sync does."""
+
+    @pytest.mark.asyncio
+    async def test_the_sweep_syncs_without_a_session_when_the_inventory_cannot_be_built(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        svc, fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "device-1")
+        _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
+        _seed_save_state(svc, 1, RomSaveSyncState(system="gba", slot_confirmed=True, active_slot="default"))
+        _create_save(tmp_path, system="gba", rom_name="game1", content=b"s")
+
+        def the_database_is_locked(_self):
+            raise RuntimeError("database is locked")
+
+        # Only the session inventory walks every ROM's save state on this path.
+        monkeypatch.setattr(FakeRomSaveSyncStateRepository, "iter_all", the_database_is_locked)
+
+        with caplog.at_level(logging.WARNING):
+            result = await svc.sync_all_saves()
+
+        assert isinstance(result, dict)
+        assert (result["success"], result["synced"]) == (True, 1)
+        assert not any(c[0] in ("negotiate_sync", "complete_sync_session") for c in fake.call_log)
+        assert any("negotiate session open failed (database is locked)" in r.getMessage() for r in caplog.records)
 
 
 class TestBulkNegotiateScope:
