@@ -15,14 +15,8 @@ import {
   type MouseEvent,
 } from "react";
 import { addEventListener, removeEventListener } from "../../api/host";
-import {
-  cancelDownload,
-  getCachedGameDetail,
-  logError,
-  logWarn,
-  pauseDownload,
-  type BackendResult,
-} from "../../api/backend";
+import { cancelDownload, getCachedGameDetail, logWarn, pauseDownload, type BackendResult } from "../../api/backend";
+import { logFailure, logRefusal } from "../../utils/backendLog";
 import { useGameDetail, type GameDetailState } from "../../utils/gameDetailStore";
 import { isDownloadUnderWay, removeDownload, useDownloads } from "../../utils/downloadStore";
 import { READY_FLASH_MS } from "../../utils/downloadProgress";
@@ -63,6 +57,8 @@ import { DownloadingButton } from "./DownloadingButton";
 import { PlayStateButton } from "./PlayStateButton";
 import { SvgThrobber } from "./SvgThrobber";
 import { usePlayLaunch, type HeldState, type PressState } from "./usePlayLaunch";
+
+const TAG = "DesktopPlayButton";
 
 interface PlayButtonProps {
   appId: number;
@@ -191,19 +187,6 @@ function answersFor(answers: CachedAnswers, romId: number | null, installed: boo
   return answers.romId !== null && answers.romId === romId && !installed ? answers : NO_ANSWERS;
 }
 
-/** What a press of the bar's Cancel or Pause asked the backend for. */
-type BarPress = "cancel" | "pause";
-
-function logBarRefusal(what: BarPress, romId: number, result: BackendResult): void {
-  logWarn(
-    `DesktopPlayButton: the backend refused to ${what} the download of romId=${romId}: ${result.reason ?? "no reason"}: ${result.message}`,
-  );
-}
-
-function logBarFailure(what: BarPress, romId: number, e: unknown): void {
-  logError(`DesktopPlayButton: could not ${what} the download of romId=${romId}: ${String(e)}`);
-}
-
 function downloadRatio(download: DownloadItem | undefined): number {
   const downloaded = download?.bytes_downloaded ?? 0;
   const total = download?.total_bytes ?? 0;
@@ -309,7 +292,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
         setCachedAnswers({ romId, ...downloadAnswers(cached) });
       })
       .catch((e) => {
-        logWarn(`DesktopPlayButton: could not read what is on disk for romId=${romId}: ${e}`);
+        logWarn(`${TAG}: could not read what is on disk for romId=${romId}: ${e}`);
       });
     return () => {
       cancelled = true;
@@ -317,7 +300,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
   }, [appId, romId, detail.installed]);
 
   useEffect(() => {
-    if (romId) detach(seedDownloadFromQueue(romId, "DesktopPlayButton"));
+    if (romId) detach(seedDownloadFromQueue(romId, TAG));
   }, [romId]);
 
   const saveStatus = saveStatusOf(detail);
@@ -443,7 +426,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
         romId: rid,
         romName: detail.romName,
         pageSawCandidate: candidatePresent,
-        logContext: "DesktopPlayButton",
+        logContext: TAG,
         dialogs: desktopAdoptionDialogs(ask),
         hooks: {
           setBusy: (busy) => {
@@ -472,14 +455,14 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
     const rid = romId;
     const onAnswer = (result: BackendResult) => {
       if (result.success) return;
-      logBarRefusal("cancel", rid, result);
+      logRefusal(TAG, "cancel the download of", rid, result);
       // The backend holds neither a transfer nor a paused entry for the ROM, so no frame will end the bar.
       if (result.reason === "no_active_download") {
         endAction("downloading", rid);
         removeDownload(rid);
       }
     };
-    detach(cancelDownload(rid).then(onAnswer, (err: unknown) => logBarFailure("cancel", rid, err)));
+    detach(cancelDownload(rid).then(onAnswer, (err: unknown) => logFailure(TAG, "cancel the download of", rid, err)));
   };
 
   const handlePauseResumeClick = (e: MouseEvent<HTMLButtonElement>) => {
@@ -487,13 +470,13 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
     if (!romId || !activeDownload) return;
     const rid = romId;
     if (activeDownload.status === "paused") {
-      detach(executeDownloadResume(rid, "DesktopPlayButton"));
+      detach(executeDownloadResume(rid, TAG));
       return;
     }
     const onAnswer = (result: BackendResult) => {
-      if (!result.success) logBarRefusal("pause", rid, result);
+      if (!result.success) logRefusal(TAG, "pause the download of", rid, result);
     };
-    detach(pauseDownload(rid).then(onAnswer, (err: unknown) => logBarFailure("pause", rid, err)));
+    detach(pauseDownload(rid).then(onAnswer, (err: unknown) => logFailure(TAG, "pause the download of", rid, err)));
   };
 
   if (romId === null) return null;
