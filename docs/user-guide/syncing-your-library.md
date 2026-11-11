@@ -351,9 +351,14 @@ Picking a platform shows everything else about it on the right: how many of its 
 Steam, the emulator core it launches with, its BIOS files, and the two ways to take it back out of Steam. See
 [BIOS and Emulator Core Management](bios-management.md#library-platforms).
 
-All platforms are enabled by default until you change a toggle. Turning one platform off affects only that platform —
-every other platform stays enabled and keeps syncing. The turned-off platform's games leave Steam at the next sync,
-apart from any an enabled collection still holds, and turning it back on brings them all back with the sync after that.
+On a fresh setup every platform starts switched off, as collections do: switch on the platforms you want, or use
+**Enable all**, before your first sync. Turning one platform off affects only that platform — every other platform stays
+as it is. The turned-off platform's games leave Steam at the next sync, apart from any an enabled collection still
+holds, and turning it back on brings them all back with the sync after that.
+
+A toggle belongs to the platform's folder in RomM, so two platforms of one console in folders of their own — a
+`snes-hacks` folder beside `snes`, say — are switched separately. Updating Tender switches no platform on or off: an
+installation whose toggles were never touched, where every platform was synced, keeps every platform switched on.
 
 <!-- Screenshot: Library › Platforms with the list on the left and one platform's detail on the right -->
 

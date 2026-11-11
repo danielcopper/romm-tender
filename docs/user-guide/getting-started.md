@@ -123,8 +123,10 @@ token permissions.
 
 <!-- Screenshot: Connection Settings page with URL field, Sign in button, and token status -->
 
-Once connected, you're ready to sync your library. See [Configuration](configuration.md) for additional settings, or
-jump straight to [Syncing Your Library](syncing-your-library.md).
+Once connected, switch on the platforms you want in Steam under **Library › Platforms** — on a fresh setup every
+platform starts switched off ([Per-Platform Toggles](syncing-your-library.md#per-platform-toggles)) — and you're ready
+to sync your library. See [Configuration](configuration.md) for additional settings, or jump straight to
+[Syncing Your Library](syncing-your-library.md).
 
 ---
 
