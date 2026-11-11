@@ -56,12 +56,13 @@ and binds, and the other areas: [the register's index](index.md).
   `getattr`, a function that builds one and is defined inside the entry itself, a `# type: ignore` or
   `# pyright: ignore` that hands a plain `str` to a parameter typed `LiveDeviceId`, or `tests/`, where building one is
   how a test hands an id over. `tests/services/saves/test_device_registry_holder.py` reads every module under
-  `services/saves/` and fails on an annotation naming `DeviceRegistry` anywhere but `SyncEngineConfig` and on a
-  `DeviceRegistry(...)` assigned to an attribute of `self`; an unannotated parameter or attribute holding one, and a
-  registry reached through another object, pass it. What the script and the test miss is listed in their docstrings.
-  Prompt-only: each save operation calls the entry once, before its first request to RomM, and hands the id down; and a
-  new request that names the device takes the id from there — `upload_save`, `download_save_content`, `negotiate_sync`
-  and `confirm_download` take a plain `str`, and are reached today only through code that holds a `LiveDeviceId`
+  `services/saves/` and `bootstrap/saves.py`, which builds the registry, and fails on an annotation naming
+  `DeviceRegistry` anywhere but `SyncEngineConfig` and on a `DeviceRegistry(...)` assigned to an attribute of `self`; an
+  unannotated parameter or attribute holding one, and a registry reached through another object, pass it. What the
+  script and the test miss is listed in their docstrings. Prompt-only: each save operation calls the entry once, before
+  its first request to RomM, and hands the id down; and a new request that names the device takes the id from there —
+  `upload_save`, `download_save_content`, `negotiate_sync` and `confirm_download` take a plain `str`, and are reached
+  today only through code that holds a `LiveDeviceId`
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — test + prompt-only —
   the sync paths, `get_save_status`, the slot list, the three slot mutations, copy to slot, rolling back to a save
   version, the removed-game cleanup, deleting a ROM's or a platform's local saves and counting a platform's, the passes
