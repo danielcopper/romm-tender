@@ -2,7 +2,8 @@
  * Uninstalling a ROM: the backend removal, and saying how it went.
  */
 
-import { removeRom, debugLog, logError, logWarn } from "../api/backend";
+import { removeRom, debugLog } from "../api/backend";
+import { logFailure, logRefusal } from "./backendLog";
 import { capturePruneLeaseAdmission, isPruneLeaseAdmissionCurrent } from "./pruneLease";
 import { showToast } from "./toast";
 import { detach } from "./detach";
@@ -27,7 +28,7 @@ export async function executeRomUninstall(options: RomUninstallOptions): Promise
   const admission = capturePruneLeaseAdmission(leaseOwner);
 
   const result = await removeRom(romId).catch((e: unknown) => {
-    logError(`${tag}: could not remove romId=${romId}: ${String(e)}`);
+    logFailure(tag, "remove", romId, e);
     return null;
   });
   if (!result) {
@@ -35,7 +36,7 @@ export async function executeRomUninstall(options: RomUninstallOptions): Promise
     return false;
   }
   if (!result.success) {
-    logWarn(`${tag}: the backend refused to remove romId=${romId}: ${result.reason ?? "no reason"}: ${result.message}`);
+    logRefusal(tag, "remove", romId, result);
     showToast(result.message || "Uninstall failed");
     return false;
   }

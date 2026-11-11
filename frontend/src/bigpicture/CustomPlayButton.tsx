@@ -50,6 +50,7 @@ import { isBoundVanished, onBoundAvailabilityChange } from "../utils/vanishedBin
 import { scrollToTop } from "../utils/scrollHelpers";
 import { getEventTarget } from "../utils/events";
 import { handleButtonDownloadFailure } from "../utils/downloadFailure";
+import { logFailure, logRefusal } from "../utils/backendLog";
 import { runDownloadWithAdoption } from "../utils/adoptFlow";
 import { executeDownloadResume } from "../utils/downloadResume";
 import { isDownloadUnderWay } from "../utils/downloadStore";
@@ -670,7 +671,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
         onRetry: () => setState("checking"),
       });
     } catch (e) {
-      detach(debugLog(`CustomPlayButton: handlePlay unexpected error — resetting to play: ${e}`));
+      logError(`CustomPlayButton: Play's launch check of romId=${romId} threw — resetting to play: ${e}`);
       if (startCheckFailed) showToast(startFailedSentence(e));
       setState("play");
     }
@@ -780,20 +781,36 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
     });
   };
 
-  // Cancel an in-flight download. Fire-and-forget: the backend emits a
-  // cancelled download_progress frame that the progress listener reacts to
-  // (resets to "download"). The inline .catch keeps the click non-throwing.
+  // Cancel an in-flight download: the backend emits a cancelled
+  // download_progress frame that the progress listener reacts to (resets to
+  // "download").
   const handleCancelDownload = () => {
     if (romId == null) return;
-    detach(cancelDownload(romId).catch(() => {}));
+    const rid = romId;
+    detach(
+      cancelDownload(rid).then(
+        (result) => {
+          if (!result.success) logRefusal("CustomPlayButton", "cancel the download of", rid, result);
+        },
+        (e: unknown) => logFailure("CustomPlayButton", "cancel the download of", rid, e),
+      ),
+    );
   };
 
-  // Pause an in-flight (resumable) download. Fire-and-forget: the backend
-  // freezes the transfer and emits a "paused" download_progress frame the
-  // listener reacts to (sets dlProgress.paused). .catch keeps the click safe.
+  // Pause an in-flight (resumable) download: the backend freezes the transfer
+  // and emits a "paused" download_progress frame the listener reacts to (sets
+  // dlProgress.paused).
   const handlePause = () => {
     if (romId == null) return;
-    detach(pauseDownload(romId).catch(() => {}));
+    const rid = romId;
+    detach(
+      pauseDownload(rid).then(
+        (result) => {
+          if (!result.success) logRefusal("CustomPlayButton", "pause the download of", rid, result);
+        },
+        (e: unknown) => logFailure("CustomPlayButton", "pause the download of", rid, e),
+      ),
+    );
   };
 
   // Resume a paused download; `executeDownloadResume` says why when it is refused.

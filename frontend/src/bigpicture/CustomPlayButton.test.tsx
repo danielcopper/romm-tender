@@ -604,21 +604,52 @@ describe("CustomPlayButton — cancel X on active download (#1049)", () => {
     expect(backend.cancelDownload).toHaveBeenCalledWith(42);
   });
 
-  it("swallows a cancelDownload rejection without crashing the button", async () => {
-    vi.mocked(backend.cancelDownload).mockRejectedValue(new Error("nope"));
+  it("logs a cancelDownload refusal or rejection and keeps the button up", async () => {
     const { findByLabelText } = await renderDownloading(42);
     const cancelX = await findByLabelText("Cancel download");
+    const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+    const logErrorSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+    try {
+      await act(async () => {
+        cancelX.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(logWarnSpy).not.toHaveBeenCalled();
 
-    await act(async () => {
-      cancelX.click();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+      vi.mocked(backend.cancelDownload).mockResolvedValueOnce({
+        success: false,
+        reason: "no_active_download",
+        message: "No active download",
+      });
 
-    // Post-catch state: the X is still rendered (button did not crash); the
-    // backend cancellation frame, not this catch, is what tears the row down.
-    expect(backend.cancelDownload).toHaveBeenCalledWith(42);
-    expect(await findByLabelText("Cancel download")).toBeInTheDocument();
+      await act(async () => {
+        cancelX.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(logWarnSpy).toHaveBeenCalledExactlyOnceWith(
+        "CustomPlayButton: the backend refused to cancel the download of romId=42: no_active_download: No active download",
+      );
+
+      vi.mocked(backend.cancelDownload).mockRejectedValueOnce(new Error("nope"));
+      await act(async () => {
+        cancelX.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // Post-catch state: the X is still rendered (button did not crash); the
+      // backend cancellation frame, not this catch, is what tears the row down.
+      expect(logErrorSpy).toHaveBeenCalledExactlyOnceWith(
+        "CustomPlayButton: could not cancel the download of romId=42: Error: nope",
+      );
+      expect(await findByLabelText("Cancel download")).toBeInTheDocument();
+    } finally {
+      logWarnSpy.mockRestore();
+      logErrorSpy.mockRestore();
+    }
   });
 });
 
@@ -695,6 +726,52 @@ describe("CustomPlayButton — pause/resume on active download (#1124)", () => {
 
     // Non-vacuous: the exact rom_id was paused.
     expect(backend.pauseDownload).toHaveBeenCalledWith(42);
+  });
+
+  it("logs a pauseDownload refusal or rejection", async () => {
+    const { findByLabelText } = await renderActive(42, { status: "downloading", resumable: true });
+    const dropdownBtn = await findByLabelText("Download actions");
+    const { findByText } = openMenu(dropdownBtn);
+    const pauseItem = await findByText("Pause");
+    const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+    const logErrorSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+    try {
+      await act(async () => {
+        pauseItem.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(logWarnSpy).not.toHaveBeenCalled();
+
+      vi.mocked(backend.pauseDownload).mockResolvedValueOnce({
+        success: false,
+        reason: "no_active_download",
+        message: "No active download",
+      });
+      await act(async () => {
+        pauseItem.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(logWarnSpy).toHaveBeenCalledExactlyOnceWith(
+        "CustomPlayButton: the backend refused to pause the download of romId=42: no_active_download: No active download",
+      );
+
+      vi.mocked(backend.pauseDownload).mockRejectedValueOnce(new Error("socket closed"));
+      await act(async () => {
+        pauseItem.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(logErrorSpy).toHaveBeenCalledExactlyOnceWith(
+        "CustomPlayButton: could not pause the download of romId=42: Error: socket closed",
+      );
+    } finally {
+      logWarnSpy.mockRestore();
+      logErrorSpy.mockRestore();
+    }
   });
 
   it("downloading + NOT resumable renders the bare cancel X and no actions dropdown", async () => {
@@ -2975,35 +3052,43 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
     await findByText("Resolve Conflict");
   });
 
-  it("a verdict modal helper that THROWS → resets to play (never frozen on its throbber)", async () => {
+  it("a verdict modal helper that THROWS → logs an error and resets to play (never frozen on its throbber)", async () => {
     // The pre-launch sync answers with a conflict, the gate returns a
     // conflict verdict, then the shared handleConflicts REJECTS at the framework
     // level. Without the outer try/catch the button would stay stuck on its
     // throbber; with it, handlePlay recovers to "play".
-    vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
-    vi.mocked(backend.preLaunchSync).mockResolvedValue({
-      success: false,
-      message: "conflict",
-      synced: 0,
-      conflicts: [conflict()],
-    });
-    vi.mocked(handleConflicts).mockRejectedValue(new Error("modal blew up"));
+    const logErrorSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+    try {
+      vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
+      vi.mocked(backend.preLaunchSync).mockResolvedValue({
+        success: false,
+        message: "conflict",
+        synced: 0,
+        conflicts: [conflict()],
+      });
+      vi.mocked(handleConflicts).mockRejectedValue(new Error("modal blew up"));
 
-    mockCachedDetail();
-    const { findByText } = render(<CustomPlayButton appId={100} />);
-    const playBtn = await findByText("Play");
-    await act(async () => {
-      playBtn.click();
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+      mockCachedDetail();
+      const { findByText } = render(<CustomPlayButton appId={100} />);
+      const playBtn = await findByText("Play");
+      await act(async () => {
+        playBtn.click();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
 
-    // Recovered: the Play label is back (NOT stuck on the throbber) and no
-    // launch happened.
-    expect(await findByText("Play")).toBeInTheDocument();
-    expect(vi.mocked(SteamClient.Apps.RunGame)).not.toHaveBeenCalled();
+      // Recovered: the Play label is back (NOT stuck on the throbber) and no
+      // launch happened.
+      expect(await findByText("Play")).toBeInTheDocument();
+      expect(logErrorSpy).toHaveBeenCalledExactlyOnceWith(
+        "CustomPlayButton: Play's launch check of romId=42 threw — resetting to play: Error: modal blew up",
+      );
+      expect(vi.mocked(SteamClient.Apps.RunGame)).not.toHaveBeenCalled();
+    } finally {
+      logErrorSpy.mockRestore();
+    }
   });
 
   it("migration pending → blocks: no sync, no modal, no launch", async () => {

@@ -10,7 +10,6 @@
 
 import {
   adoptExistingRom,
-  debugLog,
   isCandidateVanished,
   isCandidatesFound,
   isRenameCollisions,
@@ -18,7 +17,7 @@ import {
   isUnusableNamesake,
   startDownload,
 } from "../api/backend";
-import { detach } from "./detach";
+import { logFailure, logRefusal } from "./backendLog";
 import { showToast } from "./toast";
 import {
   ADOPT_REFUSED_TOAST,
@@ -109,7 +108,7 @@ export interface DownloadWithAdoption {
    * when its search finds nothing.
    */
   pageSawCandidate: boolean;
-  /** Prefix for this flow's debug log lines. */
+  /** Prefix for this flow's log lines. */
   logContext: string;
   dialogs: AdoptionDialogs;
   hooks: AdoptionFlowHooks;
@@ -201,12 +200,14 @@ async function download(
       return await resolveVanished(flow, result);
     }
     if (!result.success) {
+      logRefusal(flow.logContext, "start the download of", romId, result);
       showToast(result.message || DOWNLOAD_REFUSED_TOAST);
       hooks.setBusy(false);
       return "failed";
     }
     return "download_started";
-  } catch {
+  } catch (e) {
+    logFailure(flow.logContext, "start the download of", romId, e);
     showToast(DOWNLOAD_THREW_TOAST);
     hooks.setBusy(false);
     return "failed";
@@ -310,7 +311,7 @@ async function adopt(
     showToast(adoptedToast(flow.romName));
     return "adopted";
   } catch (e) {
-    detach(debugLog(`${flow.logContext}: adopt failed: ${e}`));
+    logFailure(flow.logContext, "adopt", romId, e);
     showToast(ADOPT_THREW_TOAST);
     return "failed";
   } finally {
