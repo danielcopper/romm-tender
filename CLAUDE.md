@@ -457,8 +457,8 @@ area files are what that sweep checks against.
   code is written. When you find a problem, explain it and propose options — don't just start fixing.
 - **Use agents** for everything beyond trivial single-file edits — research, exploration, implementation. Keep main
   context on architecture and coordination.
-- **Sequential agent discipline.** Each agent's prompt MUST include: "When done, report back and wait for shutdown. Do
-  NOT pick up other tasks from the task list."
+- **Sequential agent discipline.** Each agent's prompt MUST include: "When done, report back, then end. Do NOT pick up
+  other tasks from the task list."
 - **Preserve context.** Get alignment first, then implement cleanly in one pass.
 - **Sub-issue policy**: epic bodies do **not** carry markdown sub-issue lists — open work is tracked via GitHub's native
   Sub-Issues panel. Link new sub-issues natively; don't add body bullets.
