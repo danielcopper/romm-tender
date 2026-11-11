@@ -13,19 +13,31 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.identity import VERSION
-from services.saves import SaveService, SaveServiceConfig
-from services.saves.copies import SaveCopyService, SaveCopyServiceConfig
-from services.saves.local_saves import LocalSaveFiles, LocalSaveFilesConfig
-from services.saves.prune_support import PruneSaveSupport, PruneSaveSupportConfig
-from services.saves.rom_info import RomInfoService, RomInfoServiceConfig
-from services.saves.save_backup import SaveBackup, SaveBackupConfig
-from services.saves.save_transfer import SaveTransfer, SaveTransferConfig
-from services.saves.slots import SetupWizard, SlotDeleter, SlotListing, SlotSwitcher
-from services.saves.status import StatusService, StatusServiceConfig
-from services.saves.sync_engine import SyncEngine, SyncEngineConfig
-from services.saves.sync_engine.devices import DeviceRegistry
-from services.saves.sync_engine.matrix import MatrixExecutor
-from services.saves.versions import VersionsService, VersionsServiceConfig
+from services.saves import (
+    LocalSaveFiles,
+    LocalSaveFilesConfig,
+    PruneSaveSupport,
+    PruneSaveSupportConfig,
+    RomInfoService,
+    RomInfoServiceConfig,
+    SaveBackup,
+    SaveBackupConfig,
+    SaveCopyService,
+    SaveCopyServiceConfig,
+    SaveService,
+    SaveServiceConfig,
+    SaveTransfer,
+    SaveTransferConfig,
+    SetupWizard,
+    SlotDeleter,
+    SlotListing,
+    SlotSwitcher,
+    StatusService,
+    StatusServiceConfig,
+    VersionsService,
+    VersionsServiceConfig,
+)
+from services.saves.sync_engine import DeviceRegistry, MatrixExecutor, SyncEngine, SyncEngineConfig
 
 if TYPE_CHECKING:
     import asyncio
@@ -115,10 +127,10 @@ class SaveParts:
     prune_support: PruneSaveSupport
 
 
-def wire_saves(wiring: SaveWiring, *, matrix_executor: type[MatrixExecutor] = MatrixExecutor) -> SaveParts:
+def wire_saves(wiring: SaveWiring, *, matrix_executor_type: type[MatrixExecutor] = MatrixExecutor) -> SaveParts:
     """Build every part of the save package, and the façade that holds the ones it calls.
 
-    *matrix_executor* is the class the one matrix executor is built from; a
+    *matrix_executor_type* is the class the one matrix executor is built from; a
     test hands a stand-in for it here, where the engine and its peers are
     built, rather than rebinding a method on a built part.
     """
@@ -151,7 +163,7 @@ def wire_saves(wiring: SaveWiring, *, matrix_executor: type[MatrixExecutor] = Ma
         ),
     )
 
-    matrix = matrix_executor(
+    matrix = matrix_executor_type(
         rom_info=rom_info,
         romm_api=wiring.romm_api,
         retry=wiring.retry,

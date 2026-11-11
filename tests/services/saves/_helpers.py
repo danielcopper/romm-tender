@@ -47,12 +47,12 @@ async def _noop_emit(_event: str, /, *_args: object) -> None:
 
 
 def make_parts(
-    tmp_path, fake_api=None, *, emit=None, matrix_executor: type[MatrixExecutor] = MatrixExecutor, **overrides
+    tmp_path, fake_api=None, *, emit=None, matrix_executor_type: type[MatrixExecutor] = MatrixExecutor, **overrides
 ) -> tuple[SaveParts, FakeSaveApi]:
     """Build the save package through ``wire_saves``, the way ``bootstrap/`` does, over test defaults.
 
     Each keyword in *overrides* replaces one field of the :class:`SaveWiring`;
-    *matrix_executor* is the stand-in executor class handed in where the engine
+    *matrix_executor_type* is the stand-in executor class handed in where the engine
     is built.
     """
     save_file_store = SaveFileAdapter(logger=logging.getLogger("test"))
@@ -95,14 +95,14 @@ def make_parts(
         "uow_factory": FakeUnitOfWorkFactory(),
     }
     wiring_kwargs.update(overrides)
-    parts = wire_saves(SaveWiring(**wiring_kwargs), matrix_executor=matrix_executor)
+    parts = wire_saves(SaveWiring(**wiring_kwargs), matrix_executor_type=matrix_executor_type)
     return parts, fake
 
 
 def executor_answering(sync: Callable[..., RomSyncResult]) -> type[MatrixExecutor]:
     """A stand-in matrix executor whose ``sync_rom_saves`` answers what *sync* answers for the same arguments.
 
-    Handed to :func:`make_parts` or :func:`make_service` as ``matrix_executor``.
+    Handed to :func:`make_parts` or :func:`make_service` as ``matrix_executor_type``.
     """
 
     class _StandIn(MatrixExecutor):

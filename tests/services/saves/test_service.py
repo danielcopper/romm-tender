@@ -531,7 +531,7 @@ class TestRetroDeckMigrationBlocksSaveSync:
         svc, _ = make_service(
             tmp_path,
             conflict_rules=_make_conflict_rules(migration_pending=True),
-            matrix_executor=executor_answering(spy),
+            matrix_executor_type=executor_answering(spy),
         )
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
@@ -1688,7 +1688,7 @@ class TestPerRomLockSerialization:
                 finally:
                     events.append(("exit", time.time()))
 
-        svc, _ = make_service(tmp_path, matrix_executor=_Timed)
+        svc, _ = make_service(tmp_path, matrix_executor_type=_Timed)
         _enable_sync_with_device(svc)
         _install_rom(svc, tmp_path)
         _create_save(tmp_path, content=b"local data")
@@ -1720,7 +1720,7 @@ class TestPerRomLockSerialization:
                 finally:
                     events.append((rom_id, "exit", time.time()))
 
-        svc, _ = make_service(tmp_path, matrix_executor=_Timed)
+        svc, _ = make_service(tmp_path, matrix_executor_type=_Timed)
         _enable_sync_with_device(svc)
         _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
         _install_rom(svc, tmp_path, rom_id=2, system="snes", file_name="game2.sfc")

@@ -138,7 +138,7 @@ class TestSyncRomSaves:
         def stub_sync(rom_id, *args, **kwargs):
             return (0, 0, [], [{"type": "newer_in_slot", "rom_id": rom_id}])
 
-        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(stub_sync))
+        svc, _ = make_service(tmp_path, matrix_executor_type=executor_answering(stub_sync))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
@@ -270,7 +270,7 @@ class TestSyncAllSaves:
         def stub_sync(rom_id, *args, **kwargs):
             return (0, 0, [], [{"type": "newer_in_slot", "rom_id": rom_id}])
 
-        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(stub_sync))
+        svc, _ = make_service(tmp_path, matrix_executor_type=executor_answering(stub_sync))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
@@ -455,7 +455,7 @@ class TestPostExitSync:
         def stub_sync(rom_id, *args, **kwargs):
             return (0, 0, [], [{"type": "newer_in_slot", "rom_id": rom_id}])
 
-        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(stub_sync))
+        svc, _ = make_service(tmp_path, matrix_executor_type=executor_answering(stub_sync))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
@@ -1008,7 +1008,7 @@ class TestSyncUseCaseErrorMessages:
         def stub_sync(rom_id, *args, **kwargs):
             return (0, 0, ["pokemon.srm: bad gateway"], [])
 
-        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(stub_sync))
+        svc, _ = make_service(tmp_path, matrix_executor_type=executor_answering(stub_sync))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
@@ -1024,7 +1024,7 @@ class TestSyncUseCaseErrorMessages:
         def stub_sync(rom_id, *args, **kwargs):
             return (0, 0, ["pokemon.srm: timeout"], [])
 
-        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(stub_sync))
+        svc, _ = make_service(tmp_path, matrix_executor_type=executor_answering(stub_sync))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
@@ -1040,7 +1040,7 @@ class TestSyncUseCaseErrorMessages:
         def stub_sync(rom_id, *args, **kwargs):
             return (2, 0, ["pokemon.srm: timeout"], [])
 
-        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(stub_sync))
+        svc, _ = make_service(tmp_path, matrix_executor_type=executor_answering(stub_sync))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
@@ -1055,7 +1055,7 @@ class TestSyncUseCaseErrorMessages:
         def stub_sync(rom_id, *args, **kwargs):
             return (0, 0, ["a.srm: timeout", "b.srm: timeout", "c.srm: timeout"], [])
 
-        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(stub_sync))
+        svc, _ = make_service(tmp_path, matrix_executor_type=executor_answering(stub_sync))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
@@ -1069,7 +1069,7 @@ class TestSyncUseCaseErrorMessages:
         def stub_sync(rom_id, *args, **kwargs):
             return (0, 0, ["pokemon.srm: 502 bad gateway"], [])
 
-        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(stub_sync))
+        svc, _ = make_service(tmp_path, matrix_executor_type=executor_answering(stub_sync))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
@@ -1092,7 +1092,7 @@ class TestSyncUseCasesSurfaceDirectionCounts:
         def stub_sync(rom_id, *args, **kwargs):
             return (0, 2, [], [])  # two downloads, no upload
 
-        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(stub_sync))
+        svc, _ = make_service(tmp_path, matrix_executor_type=executor_answering(stub_sync))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
@@ -1109,7 +1109,7 @@ class TestSyncUseCasesSurfaceDirectionCounts:
         def stub_sync(rom_id, *args, **kwargs):
             return (3, 0, [], [])  # three uploads, no download
 
-        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(stub_sync))
+        svc, _ = make_service(tmp_path, matrix_executor_type=executor_answering(stub_sync))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
@@ -1126,7 +1126,7 @@ class TestSyncUseCasesSurfaceDirectionCounts:
         def stub_sync(rom_id, *args, **kwargs):
             return (1, 2, [], [])  # one up, two down
 
-        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(stub_sync))
+        svc, _ = make_service(tmp_path, matrix_executor_type=executor_answering(stub_sync))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
@@ -1693,7 +1693,7 @@ class TestSaveSyncDeviceGate:
 
         # Every ROM decides via the local matrix (ADR-0017); the device-gate
         # serialization is the same, so stub the matrix worker.
-        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(slow_sync))
+        svc, _ = make_service(tmp_path, matrix_executor_type=executor_answering(slow_sync))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
