@@ -294,6 +294,12 @@ class TestDownloadSaveContent:
         api.download_save_content(99, "/tmp/save.srm")
         client.download.assert_called_once_with("/api/saves/99/content", "/tmp/save.srm")
 
+    def test_no_metadata_round_trip(self):
+        """download_save_content should NOT call request() to fetch metadata first."""
+        api, client = _make_api()
+        api.download_save_content(5, "/tmp/save.srm")
+        client.request.assert_not_called()
+
     def test_with_device_id_optimistic_true(self):
         api, client = _make_api()
         api.download_save_content(99, "/tmp/save.srm", device_id="abc-123")

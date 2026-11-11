@@ -29,10 +29,8 @@ from domain.rom_install import RomInstall
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from services.saves import SaveService
 from services.saves._save_state import read_save_state_or_new, write_save_state
+from services.saves.sync_engine._sweep_step import RomSyncResult
 from services.saves.sync_engine.matrix import MatrixExecutor
-
-# What a matrix sync of one ROM answers: uploaded, downloaded, errors, conflicts.
-SyncTally = tuple[int, int, list[str], list[dict[str, Any]]]
 
 # One ctypes load for the whole SaveService suite — the adapter is stateless,
 # so every service built here can share the same instance.
@@ -101,14 +99,14 @@ def make_parts(
     return parts, fake
 
 
-def executor_answering(sync: Callable[..., SyncTally]) -> type[MatrixExecutor]:
+def executor_answering(sync: Callable[..., RomSyncResult]) -> type[MatrixExecutor]:
     """A stand-in matrix executor whose ``sync_rom_saves`` answers what *sync* answers for the same arguments.
 
     Handed to :func:`make_parts` or :func:`make_service` as ``matrix_executor``.
     """
 
     class _StandIn(MatrixExecutor):
-        def sync_rom_saves(self, rom_id: int, *args: Any, **kwargs: Any) -> SyncTally:
+        def sync_rom_saves(self, rom_id: int, *args: Any, **kwargs: Any) -> RomSyncResult:
             return sync(rom_id, *args, **kwargs)
 
     return _StandIn

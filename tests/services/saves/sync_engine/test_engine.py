@@ -41,15 +41,13 @@ from lib.errors import (
     classify_error,
 )
 from lib.list_result import ErrorCode
-from models.sync import ClientSaveState
 from services.saves._messages import DEVICE_NOT_REGISTERED, DEVICE_SYNC_DISABLED
 from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported
-from services.saves.sync_engine import PreLaunchSyncStopped, SaveSweepIncomplete
+from services.saves.sync_engine import PreLaunchSyncStopped, SaveSweepIncomplete, negotiate
 from services.saves.sync_engine._gate import GateHolder
 from services.saves.sync_engine._result_message import first_error_reason as _first_error_reason
 from services.saves.sync_engine._result_message import summarize_sync_result as _summarize_sync_result
 from services.saves.sync_engine._shape_refusal import live_save_answer
-from services.saves.sync_engine.negotiate import NEGOTIATE_ROM_IDS_CAP
 from tests.services.saves._helpers import (
     _create_save,
     _do_sync,
@@ -2664,66 +2662,44 @@ class TestBulkNegotiateScope:
         assert [save["rom_id"] for save in negotiations[0][1][1]] == [7, 7, 3]
         assert negotiations[0][2]["rom_ids"] == [7, 3]
 
-    @staticmethod
-    def _hand_the_engine_an_inventory_over(svc, rom_ids):
-        """Make the whole-device inventory one save per ROM in *rom_ids*.
-
-        Seeding this many ROMs through the unit of work grows with the square of
-        their count, because the fake copies every repository on each open and
-        close; the scope is derived from the inventory alone, so the builder
-        seam is where these tests hand it in.
-        """
-        inventory: list[ClientSaveState] = [
-            {
-                "rom_id": rom_id,
-                "file_name": f"game{rom_id}.srm",
-                "updated_at": "2026-01-01T00:00:00Z",
-                "file_size_bytes": 1,
-            }
-            for rom_id in rom_ids
-        ]
-
-        def build_inventory(
-            rom_id: int | None = None, *, save_answer: SaveAnswer | None = None
-        ) -> list[ClientSaveState]:
-            return inventory
-
-        svc._sync_engine._negotiate.build_inventory = build_inventory
-
     @pytest.mark.asyncio
-    async def test_an_inventory_at_the_cap_is_still_scoped(self, tmp_path):
+    async def test_an_inventory_at_the_cap_is_still_scoped(self, tmp_path, monkeypatch):
+        # A cap this low reaches the rule with an inventory small enough to seed.
+        monkeypatch.setattr(negotiate, "NEGOTIATE_ROM_IDS_CAP", 2)
         logged: list[str] = []
         svc, fake = make_service(tmp_path, log_debug=logged.append)
-        rom_ids = list(range(1, NEGOTIATE_ROM_IDS_CAP + 1))
-        self._hand_the_engine_an_inventory_over(svc, rom_ids)
+        self._seed_confirmed_roms(svc, tmp_path, [1, 2])
 
         await svc._sync_engine._negotiate.open_device_session(LiveDeviceId("device-1"))
 
         negotiations = [c for c in fake.call_log if c[0] == "negotiate_sync"]
         assert len(negotiations) == 1
-        assert negotiations[0][2]["rom_ids"] == rom_ids
+        assert negotiations[0][2]["rom_ids"] == [1, 2]
         assert logged == []
 
     @pytest.mark.asyncio
-    async def test_the_cap_counts_roms_not_saves(self, tmp_path):
+    async def test_the_cap_counts_roms_not_saves(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(negotiate, "NEGOTIATE_ROM_IDS_CAP", 2)
         logged: list[str] = []
         svc, fake = make_service(tmp_path, log_debug=logged.append)
-        rom_ids = list(range(1, NEGOTIATE_ROM_IDS_CAP + 1))
+        self._seed_confirmed_roms(svc, tmp_path, [1, 2])
         # One ROM twice: a save more than the cap, over exactly the cap's ROMs.
-        self._hand_the_engine_an_inventory_over(svc, [*rom_ids, rom_ids[0]])
+        _create_save(tmp_path, system="gba", rom_name="game1", content=b"rtc", ext=".rtc")
 
         await svc._sync_engine._negotiate.open_device_session(LiveDeviceId("device-1"))
 
         negotiations = [c for c in fake.call_log if c[0] == "negotiate_sync"]
         assert len(negotiations) == 1
-        assert negotiations[0][2]["rom_ids"] == rom_ids
+        assert len(negotiations[0][1][1]) == 3
+        assert negotiations[0][2]["rom_ids"] == [1, 2]
         assert logged == []
 
     @pytest.mark.asyncio
-    async def test_an_inventory_over_the_cap_negotiates_unscoped_and_says_so(self, tmp_path):
+    async def test_an_inventory_over_the_cap_negotiates_unscoped_and_says_so(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(negotiate, "NEGOTIATE_ROM_IDS_CAP", 1)
         logged: list[str] = []
         svc, fake = make_service(tmp_path, log_debug=logged.append)
-        self._hand_the_engine_an_inventory_over(svc, range(1, NEGOTIATE_ROM_IDS_CAP + 2))
+        self._seed_confirmed_roms(svc, tmp_path, [1, 2])
 
         await svc._sync_engine._negotiate.open_device_session(LiveDeviceId("device-1"))
 
@@ -2731,8 +2707,7 @@ class TestBulkNegotiateScope:
         assert len(negotiations) == 1
         assert negotiations[0][2]["rom_ids"] is None
         assert logged == [
-            f"sync_all_saves: the inventory names {NEGOTIATE_ROM_IDS_CAP + 1} ROMs, over negotiate's cap of "
-            f"{NEGOTIATE_ROM_IDS_CAP}; negotiating without a rom_ids scope"
+            "sync_all_saves: the inventory names 2 ROMs, over negotiate's cap of 1; negotiating without a rom_ids scope"
         ]
 
 

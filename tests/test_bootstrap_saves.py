@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import dataclasses
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from services.saves.save_directory import SaveDirectoryFollower
+from services.saves.sync_engine.negotiate import NegotiateEnvelope
+from services.saves.sync_engine.rollback import RollbackOrchestrator
 from tests.services.saves._helpers import make_parts
 
 if TYPE_CHECKING:
@@ -18,52 +22,41 @@ def parts(tmp_path) -> SaveParts:
     return built
 
 
-# (holder, the attribute it keeps a collaborator in, the part that must be there)
-_HELD = [
-    ("service", "_rom_info", "rom_info"),
-    ("service", "_sync_engine", "sync_engine"),
-    ("service", "_status", "status"),
-    ("service", "_local_saves", "local_saves"),
-    ("service", "_versions", "versions"),
-    ("service", "_copies", "copies"),
-    ("service", "_slot_listing", "slot_listing"),
-    ("service", "_slot_switcher", "slot_switcher"),
-    ("service", "_setup_wizard", "setup_wizard"),
-    ("service", "_slot_deleter", "slot_deleter"),
-    ("save_transfer", "_backup", "save_backup"),
-    ("matrix", "_rom_info", "rom_info"),
-    ("matrix", "_transfer", "save_transfer"),
-    ("sync_engine", "_rom_info", "rom_info"),
-    ("sync_engine", "_matrix", "matrix"),
-    ("status", "_sync_engine", "sync_engine"),
-    ("status", "_matrix", "matrix"),
-    ("status", "_rom_info", "rom_info"),
-    ("status", "_save_transfer", "save_transfer"),
-    ("local_saves", "_sync_engine", "sync_engine"),
-    ("versions", "_sync_engine", "sync_engine"),
-    ("versions", "_matrix", "matrix"),
-    ("versions", "_save_transfer", "save_transfer"),
-    ("copies", "_sync_engine", "sync_engine"),
-    ("copies", "_matrix", "matrix"),
-    ("copies", "_save_transfer", "save_transfer"),
-    ("slot_listing", "_sync_engine", "sync_engine"),
-    ("slot_switcher", "_sync_engine", "sync_engine"),
-    ("slot_switcher", "_status_service", "status"),
-    ("slot_switcher", "_save_backup", "save_backup"),
-    ("slot_switcher", "_save_transfer", "save_transfer"),
-    ("setup_wizard", "_sync_engine", "sync_engine"),
-    ("setup_wizard", "_save_backup", "save_backup"),
-    ("setup_wizard", "_save_transfer", "save_transfer"),
-    ("slot_deleter", "_sync_engine", "sync_engine"),
-    ("prune_support", "_sync_engine", "sync_engine"),
-    ("prune_support", "_save_backup", "save_backup"),
-]
+def _reachable(parts: SaveParts) -> list[Any]:
+    """Every object of the save package reachable from the parts through their attributes, each once."""
+    seen: dict[int, Any] = {}
+    stack = [getattr(parts, field.name) for field in dataclasses.fields(parts)]
+    while stack:
+        obj = stack.pop()
+        if id(obj) in seen:
+            continue
+        seen[id(obj)] = obj
+        stack.extend(
+            value
+            for value in getattr(obj, "__dict__", {}).values()
+            if type(value).__module__.startswith("services.saves")
+        )
+    return list(seen.values())
+
+
+def _strays(parts: SaveParts) -> list[str]:
+    """Each attribute that holds an object of a part's type other than the part ``wire_saves`` built."""
+    built = {type(getattr(parts, field.name)): getattr(parts, field.name) for field in dataclasses.fields(parts)}
+    return [
+        f"{type(holder).__name__}.{name}"
+        for holder in _reachable(parts)
+        for name, value in getattr(holder, "__dict__", {}).items()
+        if type(value) in built and value is not built[type(value)]
+    ]
 
 
 class TestEveryPartIsBuiltOnce:
-    @pytest.mark.parametrize(("holder", "attribute", "part"), _HELD)
-    def test_a_holder_keeps_the_part_wire_saves_built(self, parts, holder, attribute, part):
-        assert getattr(getattr(parts, holder), attribute) is getattr(parts, part)
+    def test_every_holder_keeps_the_part_wire_saves_built(self, parts):
+        assert _strays(parts) == []
+
+    def test_the_walk_reaches_the_engines_own_parts(self, parts):
+        reached = {type(obj) for obj in _reachable(parts)}
+        assert {RollbackOrchestrator, SaveDirectoryFollower, NegotiateEnvelope} <= reached
 
 
 class TestTheEnginesOwnPartsTakeTheLoopOnce:

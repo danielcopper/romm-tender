@@ -30,9 +30,9 @@ from lib.errors import Refused, RommConnectionError, RommNotFoundError, ServerUn
 from services.saves import SaveService
 from services.saves._settings import resolve_default_slot, sanitize_setting
 from services.saves.service import SaveDeletionIncomplete
+from services.saves.sync_engine._sweep_step import RomSyncResult
 from services.saves.sync_engine.matrix import MatrixExecutor
 from tests.services.saves._helpers import (
-    SyncTally,
     _create_save,
     _enable_sync_with_device,
     _get_device_id,
@@ -338,14 +338,17 @@ class TestEnsureDeviceRegistered:
         assert result["server_device_id"] == "server-uuid"
 
     @pytest.mark.asyncio
-    async def test_sets_hostname_as_device_name(self, saves):
+    async def test_sets_hostname_as_device_name(self, tmp_path):
         """Device name is set to the local hostname."""
-        saves.service._sync_engine._devices._hostname_provider = FakeHostnameReader(hostname="steamdeck")
+        settings: dict[str, Any] = {"log_level": "debug", "save_sync_enabled": True}
+        service, _ = make_service(
+            tmp_path, settings=settings, hostname_provider=FakeHostnameReader(hostname="steamdeck")
+        )
 
-        result = await saves.service.ensure_device_registered()
+        result = await service.ensure_device_registered()
 
         assert result["device_name"] == "steamdeck"
-        assert saves.settings["device_name"] == "steamdeck"
+        assert settings["device_name"] == "steamdeck"
 
     @pytest.mark.asyncio
     async def test_generates_unique_ids(self, saves):
@@ -524,7 +527,7 @@ class TestRetroDeckMigrationBlocksSaveSync:
         entry, so the internal matrix sync call path is never reached when
         migration is pending. Protects against the rule being dropped from the
         use case."""
-        spy = MagicMock(name="sync_rom_saves_spy")
+        spy = MagicMock(name="sync_rom_saves_spy", return_value=(0, 0, [], []))
         svc, _ = make_service(
             tmp_path,
             conflict_rules=_make_conflict_rules(migration_pending=True),
@@ -533,6 +536,8 @@ class TestRetroDeckMigrationBlocksSaveSync:
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
+        # A confirmed slot, so the sweep would reach the matrix were the rule not checked first.
+        _seed_save_state(svc, 42, RomSaveSyncState(system="gba", slot_confirmed=True, active_slot="default"))
 
         with _refused_by_conflict_rule("blocked_by_migration", details={"synced": 0, "conflicts": 0}):
             await svc.sync_all_saves()
@@ -1674,7 +1679,7 @@ class TestPerRomLockSerialization:
         events: list[tuple[str, float]] = []
 
         class _Timed(MatrixExecutor):
-            def sync_rom_saves(self, rom_id: int, *args: Any, **kwargs: Any) -> SyncTally:
+            def sync_rom_saves(self, rom_id: int, *args: Any, **kwargs: Any) -> RomSyncResult:
                 events.append(("enter", time.time()))
                 # Sleep to ensure overlap is *possible* if the lock is broken.
                 time.sleep(0.05)
@@ -1707,7 +1712,7 @@ class TestPerRomLockSerialization:
         events: list[tuple[int, str, float]] = []
 
         class _Timed(MatrixExecutor):
-            def sync_rom_saves(self, rom_id: int, *args: Any, **kwargs: Any) -> SyncTally:
+            def sync_rom_saves(self, rom_id: int, *args: Any, **kwargs: Any) -> RomSyncResult:
                 events.append((rom_id, "enter", time.time()))
                 time.sleep(0.05)
                 try:

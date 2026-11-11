@@ -1306,10 +1306,10 @@ class TestConfirmSlotChoice:
 
         orig_download = fake.download_save_content
 
-        def selective_download(save_id, dest_path, **_kwargs):
+        def selective_download(save_id, dest_path, **kwargs):
             if save_id == 2:
                 raise RommConnectionError("offline")
-            return orig_download(save_id, dest_path)
+            return orig_download(save_id, dest_path, **kwargs)
 
         fake.download_save_content = selective_download
         confirming = svc.confirm_slot_choice(42, "default", True, None)

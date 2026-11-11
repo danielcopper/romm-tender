@@ -18,7 +18,7 @@ from tests.services.saves._helpers import (
     _require_save_state,
     _seed_save_state,
     _server_save_with_syncs,
-    make_service,
+    make_parts,
 )
 
 _BYTES = b"identical content"
@@ -30,7 +30,14 @@ def _setup(tmp_path):
     The ROM's state knows no system and no slot yet, and records a core an
     earlier upload ran under; the core resolved today is a different one.
     """
-    svc, fake = make_service(tmp_path, active_core=FakeActiveCoreResolver(default=("snes9x_libretro", "Snes9x")))
+    parts, fake, save_path = _setup_parts(tmp_path)
+    return parts.service, fake, save_path
+
+
+def _setup_parts(tmp_path):
+    """:func:`_setup`, answering the parts the service was built with."""
+    parts, fake = make_parts(tmp_path, active_core=FakeActiveCoreResolver(default=("snes9x_libretro", "Snes9x")))
+    svc = parts.service
     _enable_sync_with_device(svc)
     _install_rom(svc, tmp_path)
     save_path = _create_save(tmp_path, content=_BYTES)
@@ -41,7 +48,7 @@ def _setup(tmp_path):
     earlier = RomSaveSyncState(last_synced_core="mgba_libretro")
     earlier.record_synced_core("mgba_libretro", "retroarch-mgba")
     _seed_save_state(svc, 42, earlier)
-    return svc, fake, save_path
+    return parts, fake, save_path
 
 
 def _uploads(fake) -> list[dict[str, Any]]:
@@ -66,15 +73,16 @@ class TestKeepLocalAdoptsAsTheSyncDoes:
 
     @pytest.mark.asyncio
     async def test_a_file_that_changed_after_the_identity_check_is_uploaded_with_overwrite(self, tmp_path):
-        svc, fake, save_path = _setup(tmp_path)
-        hash_server_copy = svc._sync_engine._rollback._transfer.hash_server_copy
+        parts, fake, save_path = _setup_parts(tmp_path)
+        svc = parts.service
+        hash_server_copy = parts.save_transfer.hash_server_copy
 
         def then_the_game_writes(server_save):
             answered = hash_server_copy(server_save)
             save_path.write_bytes(b"written after the comparison")
             return answered
 
-        svc._sync_engine._rollback._transfer.hash_server_copy = then_the_game_writes
+        parts.save_transfer.hash_server_copy = then_the_game_writes
 
         result = await svc.resolve_sync_conflict(
             rom_id=42, filename="pokemon.srm", server_save_id=100, action="keep_local"

@@ -2148,8 +2148,18 @@ class TestAnAdoptOfTheHead:
     """romm-gavel 2.0.0: a local file identical to the head is adopted, never transferred (#2525)."""
 
     def _setup(self, tmp_path, *, content: bytes = _PROGRESS, current: bool, head_hash: str | None = None, retry=None):
+        parts, fake, save_path = self._setup_parts(
+            tmp_path, content=content, current=current, head_hash=head_hash, retry=retry
+        )
+        return parts.service, fake, save_path
+
+    def _setup_parts(
+        self, tmp_path, *, content: bytes = _PROGRESS, current: bool, head_hash: str | None = None, retry=None
+    ):
+        """:meth:`_setup`, answering the parts the service was built with."""
         overrides = {"retry": retry} if retry is not None else {}
-        svc, fake = make_service(tmp_path, **overrides)
+        parts, fake = make_parts(tmp_path, **overrides)
+        svc = parts.service
         _enable_sync_with_device(svc)
         _install_rom(svc, tmp_path)
         save_path = _create_save(tmp_path, content=content)
@@ -2157,7 +2167,7 @@ class TestAnAdoptOfTheHead:
         if current:
             fake.stage_device_sync(100, "device-1", "2026-02-17T06:00:00Z")
         _seed_save_state(svc, 42, RomSaveSyncState(active_slot=None))
-        return svc, fake, save_path
+        return parts, fake, save_path
 
     def test_a_current_device_without_a_baseline_and_a_differing_local_file_gets_a_conflict(self, tmp_path):
         svc, fake, _path = self._setup(tmp_path, current=True, head_hash="someone-elses-bytes")
@@ -2233,10 +2243,10 @@ class TestAnAdoptOfTheHead:
         assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == 100
 
     def test_a_file_changed_since_the_decision_is_not_recorded_as_the_head(self, tmp_path):
-        svc, fake, save_path = self._setup(tmp_path, current=True)
+        parts, fake, save_path = self._setup_parts(tmp_path, current=True)
         state = RomSaveSyncState()
 
-        recorded = svc._sync_engine._matrix._transfer.record_server_head(
+        recorded = parts.save_transfer.record_server_head(
             state, "pokemon.srm", fake.saves[100], str(save_path), "the-hash-the-decision-saw", system="gba"
         )
 
