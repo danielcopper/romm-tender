@@ -45,7 +45,7 @@ _EXPECTED_READS = frozenset(
         "get",
         "get_all_emulator_overrides",
         "get_all_for_rom",
-        "get_bound_platform_slugs",
+        "get_bound_platform_folders",
         "get_by_app_id",
         "get_cache_epoch",
         "get_folders",
@@ -55,7 +55,6 @@ _EXPECTED_READS = frozenset(
         "has_any",
         "iter_all",
         "iter_by_group_key",
-        "iter_by_platform",
         "iter_by_platform_folder",
         "iter_page",
         "iter_pending_sessions",
@@ -177,7 +176,7 @@ class TestReadsAreNotFlagged:
             "    uow.roms.get_by_app_id(2)\n"
             "    uow.roms.get_all_emulator_overrides()\n"
             "    uow.roms.iter_all()\n"
-            "    uow.roms.iter_by_platform('n64')\n"
+            "    uow.roms.iter_by_platform_folder('n64')\n"
             "    uow.roms.iter_by_group_key('k')\n"
             "    uow.roms.count()\n"
             "    uow.rom_metadata.iter_page(0, 10)\n"

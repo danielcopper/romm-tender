@@ -1469,9 +1469,11 @@ cannot take back a newer refusal's line, and nothing lands on a view entered afr
 `frontend/src/bigpicture/library/latestWrites.ts`, shared by both tabs' hooks.
 
 **Platforms** is list and detail. The list holds every platform RomM reports with at least one ROM — what
-`get_platforms` returns; a platform with nothing to sync is not listed — in two groups, **Synced** (the toggle is on)
-above **Available**, each alphabetical: **a dot, the name, the toggle, and nothing else**. The dot is the row's whole
-BIOS signal, through the shared mapping every platform-level BIOS dot renders through
+`get_platforms` returns; a platform with nothing to sync is not listed — one row per RomM platform, by its `fs_slug`, so
+two platforms that share a slug are two rows, each named as its Steam collection is
+([#2452](https://github.com/danielcopper/romm-tender/issues/2452) D1, D2). The rows stand in two groups, **Synced** (the
+toggle is on) above **Available**, each alphabetical: **a dot, the name, the toggle, and nothing else**. The dot is the
+row's whole BIOS signal, through the shared mapping every platform-level BIOS dot renders through
 (`frontend/src/utils/biosColor.ts`: green met, red not met, grey not established or no level, and amber only where the
 resolver's verdict is open because of the disc's region alone; the per-file rows on the platform detail and the game
 page hard-code the same colours, and never use amber for a row). It is drawn on every row, taking exactly the helper's
@@ -1615,7 +1617,10 @@ it, for the focused platform:
   the ordinary case. In every other case it is the same chip, disabled, with the reason in its `title` — the ruling the
   Remove group already follows, and what keeps the header's shape constant across panes. A disabled button is still a
   focus stop and the wide page's own sheet gives it Steam's focus outline, so a reader walking the header lands on it
-  and is told why.
+  and is told why. A core read the backend refused says why in place of the generic failure: `invalid_value` can only be
+  the platform's slug, since the page asks with a listed platform's own folder, and reads **"RomM lists this platform
+  without a console slug, so Tender cannot tell which emulators it has. Check the platform in RomM."**; any other
+  refusal reads as the endpoint's own message.
 
   **Which of those cases also keeps a line under the header is a judgement about what it reports, not about the chip.**
   "Nothing to switch" states — the read in flight, one emulator on the menu — say it in the tooltip alone: a sentence
@@ -1633,7 +1638,12 @@ it, for the focused platform:
   chip and the pane's buttons disable, another platform's pane says `Working on X`, and the acting pane says
   `Switching to <emulator>…` in the same status line the outcome lands in — a success takes that line back, a refusal
   replaces it, and a continuation cancelled by leaving the page takes it back too, because such a switch either
-  committed or never ran and there is no pane left to report to either way.
+  committed or never ran and there is no pane left to report to either way. The pick is the row's own: it is stored
+  under the platform's `fs_slug`, so of two platforms that share a slug, a pick on one leaves the other's choice as it
+  is, and the `core_changed` event it sends reaches only the game pages of that platform
+  ([#2452](https://github.com/danielcopper/romm-tender/issues/2452) D7, D16). An open page of a game with no `fs_slug`
+  recorded is not read again when the pick of the one platform kept for its slug changes: it shows that pick once it is
+  reopened, and its next start uses it either way (D20).
 
 - **BIOS files** — the summary, which this pane words nowhere: `frontend/src/utils/biosSummary.ts` holds every state and
   a one-of group's, and answers each in two lengths, and the pane takes both — the short `status` as the section's
@@ -1941,9 +1951,11 @@ it, for the focused platform:
   or dropped records before the file it stopped on. The platform-wide one names no file; the rows still offering Delete
   after the re-read are the files that stayed. An open game page is told of a BIOS change (`romm_data_changed`, `bios`)
   only when a run moved a file — a download that fetched one, a delete that removed one — because each page that matches
-  pays a live BIOS read for it. The spinner is keyed on the run's slug as well as the button's identity, so walking to
-  another platform mid-download shows disabled buttons and the "Working on _X_" line rather than a spinner that belongs
-  elsewhere.
+  pays a live BIOS read for it. The event carries the platform's slug and its `fs_slug`, and every open game page whose
+  platform has that slug reads its answer again, because platforms that share a slug share their emulators' places
+  ([#2452](https://github.com/danielcopper/romm-tender/issues/2452) D16). The spinner is keyed on the run's platform as
+  well as the button's identity, so walking to another platform mid-download shows disabled buttons and the "Working on
+  _X_" line rather than a spinner that belongs elsewhere.
 
   **The per-row Delete is authorised by Tender's own records and nothing else** — the row carries `deletable_count` and
   the `delete_name` the delete is asked by, which the backend derives from the same records the platform count comes
@@ -2108,14 +2120,14 @@ it, for the focused platform:
 Six reads feed the tab. Three run once per page mount: `get_platforms` (RomM's platforms with ROMs, the list itself),
 `get_firmware_status` (whether RomM's firmware listing could be read, which the BIOS downloads stand on, and nothing
 about any platform) and `get_registry_platforms` (ROMs bound to a Steam shortcut per platform — the shortcut counts, and
-what "has synced games" means here; one entry per slug, summed over every `fs_slug` its games carry, until the tab knows
-a platform by its `fs_slug`, [#2452](https://github.com/danielcopper/romm-tender/issues/2452) D3). Only the first gates
+what "has synced games" means here; one entry per platform, by its `fs_slug`, and a bound game with no `fs_slug`
+recorded counts on no row, [#2452](https://github.com/danielcopper/romm-tender/issues/2452) D17). Only the first gates
 the list; the other two fill in beside it. A failed `get_firmware_status` leaves the downloads offered, as they are
 while it is in flight, and a download the server cannot serve says so itself. A failed `get_registry_platforms` **says
 so on the pane**, because a failure and an answer arrive the same way — as an absence: read as zero shortcuts would
 print `0 versions in Steam` in the header and disable the removal, two claims about a platform nothing was learned
 about; the counts go to `null` instead, which is not zero, and a line under the header says the number is missing while
-the removal stays live (it needs only the slug).
+the removal stays live (it needs only the platform's `fs_slug`).
 
 The fourth is `get_platform_firmware_status`, and it is asked **once per platform** rather than once per page — for
 **every platform the list shows**, whether or not the RomM library holds firmware for it or any of its games is synced
@@ -2156,19 +2168,21 @@ is a failed **re-read**: an answer already held is not taken back, the pane goes
 may be out of date — and only that platform's pane says so, because only that platform's read failed. Picking the
 platform again retries it, which is what the line says; only that and the save count recover without reopening the page.
 
-The last two are **per-platform-slug reads issued once per selection** and cached for the life of the page.
-`get_system_core_info` exists because neither the list reads nor the BIOS read can answer for the focused platform at
-the moment it is focused: `get_platform_core_info` is keyed by ROM and layers that ROM's own pin on top, and the
-per-platform BIOS answer carries the same emulator fields but arrives whenever the walk reaches that platform — which is
-not when the reader opens its pane. It costs one ES-DE options read and a `settings.json` lookup, and opens no database
-transaction. `count_platform_saves` answers how many save files the platform holds, for the Delete _N_ save files
-button: nothing else knows the number, because the delete finds its files through the platform's installed ROMs and
-counts only what it removed, afterwards. It walks that same path without deleting — and like the delete it first follows
-each ROM's moved save directory, so it can move files, back up a collision and write a ROM's record before it counts.
-**That path is 6N+1 short `BEGIN IMMEDIATE` transactions** for N installed ROMs, not one: 7N+1 where no ROM's directory
-is recorded yet, 4N+1 with save sync off, when nothing is followed. Counting rule: `SqliteUnitOfWork.__enter__` calls
-during one `count_platform_saves` call, over the contract harness's real wiring — the real `ActiveCoreResolver`, no
-per-game pin — with only the save resolver's reading of the machine faked. The platform's id read opens one
+The last two are **per-platform reads issued once per selection** and cached for the life of the page: the core read
+asked by the platform's slug and its `fs_slug`, the save count by its `fs_slug`
+([#2452](https://github.com/danielcopper/romm-tender/issues/2452) D11). `get_system_core_info` exists because neither
+the list reads nor the BIOS read can answer for the focused platform at the moment it is focused:
+`get_platform_core_info` is keyed by ROM and layers that ROM's own pin on top, and the per-platform BIOS answer carries
+the same emulator fields but arrives whenever the walk reaches that platform — which is not when the reader opens its
+pane. It costs one ES-DE options read and a `settings.json` lookup, and opens no database transaction.
+`count_platform_saves` answers how many save files the platform holds, for the Delete _N_ save files button: nothing
+else knows the number, because the delete finds its files through the platform's installed ROMs and counts only what it
+removed, afterwards. It walks that same path without deleting — and like the delete it first follows each ROM's moved
+save directory, so it can move files, back up a collision and write a ROM's record before it counts. **That path is 6N+1
+short `BEGIN IMMEDIATE` transactions** for N installed ROMs, not one: 7N+1 where no ROM's directory is recorded yet,
+4N+1 with save sync off, when nothing is followed. Counting rule: `SqliteUnitOfWork.__enter__` calls during one
+`count_platform_saves` call, over the contract harness's real wiring — the real `ActiveCoreResolver`, no per-game pin —
+with only the save resolver's reading of the machine faked. The platform's id read opens one
 (`SaveService._installed_rom_ids_on_platform`); then, per ROM and under its lock, the live reading opens three —
 `RomInfo.is_content_installed`'s install row, the save answer's own install row, and
 `ActiveCoreResolver.active_emulator_for_rom`'s read of the ROM and its install, after which it resolves through
@@ -2178,9 +2192,9 @@ record's read, plus the record's write at first sight; and `find_save_files` ope
 128-ROM platform that is 769 lock acquisitions. That cost is deliberate and is not the read's to fix: it must walk
 exactly what the delete walks, or the number offered stops being the number taken. What keeps it out of the way is that
 it is offloaded off the event loop and asked once per selection, and that a failure — `SQLITE_BUSY` among them —
-degrades to a line saying the count could not be read rather than to a wrong number — and that failure forgets the slug,
-so re-selecting the platform asks again, which is what the line says and is the only failure on this pane that does not
-need the page reopened. It is asked again after a delete, so the button stops offering saves that are gone.
+degrades to a line saying the count could not be read rather than to a wrong number — and that failure forgets the
+platform, so re-selecting the platform asks again, which is what the line says and is the only failure on this pane that
+does not need the page reopened. It is asked again after a delete, so the button stops offering saves that are gone.
 
 **Collections** is list and detail too, and **the list holds the kinds, not the collections**: kind is where a reader
 already navigates, so it becomes the list, and a collection is a row in its kind's pane. The layout study the shape was

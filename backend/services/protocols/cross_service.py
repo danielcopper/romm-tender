@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping, Sequence
     from contextlib import AbstractAsyncContextManager
 
     from domain.artwork_slot import ArtworkSlot
@@ -29,6 +29,67 @@ if TYPE_CHECKING:
     from models.shortcut_artwork import SlotAnswer, WrittenIcon
     from models.state import ShortcutRegistryEntry
     from models.sync import ClientSaveState
+
+
+class ListingRefiler(Protocol):
+    """Moves Tender's older per-platform entries to the platforms a read of RomM's listing names.
+
+    Every reader that keeps or uses RomM's platform listing hands what it read
+    here, so the download records and the per-platform picks follow the user's
+    current RomM (#2452 D6, D7). ``do_refile`` is blocking and never raises: a
+    failed move is reported by the refiling itself and costs the reader nothing.
+    """
+
+    def do_refile(self, platforms: Sequence[Mapping[str, Any]]) -> None: ...
+
+    def listed_folders(self) -> frozenset[str] | None:
+        """The ``fs_slug`` of every platform the last listing handed here names; ``None`` before the first."""
+        ...
+
+
+class ListingKeeper(Protocol):
+    """Keeps every platform a read of RomM's listing names, in place of those kept before for the slugs it names.
+
+    The refiling hands each listing it is given here, so a game with no
+    ``fs_slug`` recorded can find the one platform kept for its slug
+    (#2452 D15). Blocking.
+    """
+
+    def keep_listing(self, platforms: Sequence[Mapping[str, Any]]) -> None: ...
+
+
+class ListingReplacer(Protocol):
+    """Keeps exactly the platforms a sync's read of RomM's listing names, in place of every one kept before.
+
+    The library sync hands its listing here, so a platform RomM no longer
+    lists is no longer kept. A failed write is logged by the platform system
+    and leaves the run alone. Blocking.
+    """
+
+    def replace_listing(self, platforms: Sequence[Mapping[str, Any]]) -> None: ...
+
+
+class ListingKeeperProvider(Protocol):
+    """Deferred access to the :class:`ListingKeeper`, consumed by the refiling.
+
+    The platform system hands its own listing reads to the refiling, so it is
+    built after it; the composition root binds it once both exist and hands
+    the refiling this getter (a ``LateBinding``).
+    """
+
+    def __call__(self) -> ListingKeeper: ...
+
+
+class PlatformPicksWriter(Protocol):
+    """The one writer of the per-platform emulator picks, consumed by the refiling and the core service.
+
+    *build* is handed the picks as they stand, under the lock every change of
+    them is made under, and answers the whole new map, or ``None`` to change
+    nothing. The new map is saved; where the save raises, the old one is put
+    back and the exception propagates. Answers whether a map was built. Blocking.
+    """
+
+    def replace(self, build: Callable[[Mapping[str, Any]], dict[str, Any] | None]) -> bool: ...
 
 
 class RomInstallRecorder(Protocol):

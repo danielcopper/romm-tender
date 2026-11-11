@@ -7,7 +7,7 @@ by slug, or for a ROM with its per-game pin layered on top — toggling the
 per-platform default and pinning/clearing a per-game core all live here.
 
 Neither selection is written to the retired ES-DE gamelist: the per-platform core
-lands in ``settings.json`` via the injected ``SettingsPersister`` and the per-game
+lands in ``settings.json`` through the injected picks writer and the per-game
 pin lands on the ``Rom`` aggregate via the Unit-of-Work. Neither touches a Steam
 shortcut: the shortcut carries its appId, and the start asks the shared
 ``ActiveCoreReader`` for the entry in effect, so a changed selection takes effect
@@ -34,7 +34,7 @@ from domain.emulator_commands import (
     options_to_payload,
     shipped_default,
 )
-from domain.emulator_pick import pick_for, platform_pick, platform_pick_value, source_kind
+from domain.emulator_pick import game_platform_pick, pick_for, platform_pick_value, source_kind
 from domain.platform_names import PLATFORM_NAMES_KEY, platform_display_name
 from domain.rom_files import asked_path
 from domain.start_command import source_refusal, start_verdict
@@ -43,6 +43,7 @@ from lib.errors import Refused
 if TYPE_CHECKING:
     import asyncio
     import logging
+    from collections.abc import Mapping
 
     from domain.emulator_choice import ResolvedEmulator
     from domain.platform_system import PlatformSystem
@@ -54,8 +55,9 @@ if TYPE_CHECKING:
         ConflictRules,
         CoreInfoProvider,
         DiscResolver,
+        PlatformCoreReader,
+        PlatformPicksWriter,
         PlatformSystems,
-        SettingsPersister,
         StartCommandReader,
         UnitOfWorkFactory,
     )
@@ -66,11 +68,12 @@ class CoreServiceConfig:
     """Frozen wiring bundle handed to ``CoreService.__init__``.
 
     Carries the runtime infrastructure (event loop, logger), the ES-DE
-    core-info read seam, the platform's system in the answering source, the live
-    ``settings`` dict + its persister (where the per-platform core lands), the
-    SQLite Unit-of-Work factory (to read the ROM + its install and write the
-    per-game pin), the shared per-ROM active-core resolver (the menu's active
-    marker), the shared per-ROM disc resolver (so a question about the start is
+    core-info read seam, the platform's system in the answering source and the
+    folders Tender keeps for a slug, the writer of the per-platform picks
+    (where the per-platform core lands) and their reader, the SQLite
+    Unit-of-Work factory (to read the ROM + its install and the platform
+    names, and write the per-game pin), the shared per-ROM active-core
+    resolver (the menu's active marker), the shared per-ROM disc resolver (so a question about the start is
     asked with the ROM's pinned disc), the resolver's launch command for one
     game (what the game page and the emulator menu say of a start, #2221 D20),
     and the ``ConflictRules`` the three writes check at their entry.
@@ -81,8 +84,8 @@ class CoreServiceConfig:
     logger: logging.Logger
     core_info: CoreInfoProvider
     platform_systems: PlatformSystems
-    settings: dict[str, Any]
-    settings_persister: SettingsPersister
+    platform_picks: PlatformPicksWriter
+    platform_core_reader: PlatformCoreReader
     uow_factory: UnitOfWorkFactory
     active_core: ActiveCoreReader
     disc_resolver: DiscResolver
@@ -103,8 +106,8 @@ class CoreService:
         self._logger = config.logger
         self._core_info = config.core_info
         self._platform_systems = config.platform_systems
-        self._settings = config.settings
-        self._settings_persister = config.settings_persister
+        self._platform_picks = config.platform_picks
+        self._platform_core_reader = config.platform_core_reader
         self._uow_factory = config.uow_factory
         self._active_core = config.active_core
         self._disc_resolver = config.disc_resolver
@@ -183,7 +186,13 @@ class CoreService:
         choice = resolved.choice if resolved is not None else _NO_CHOICE
         option = choice.option
         stored = pick_for(
-            platform_pick(self._settings.get("platform_cores", {}).get(rom.platform_slug)), source_kind(options)
+            game_platform_pick(
+                rom.platform_fs_slug,
+                rom.platform_slug,
+                self._platform_core_reader.get_platform_core,
+                lambda: self._platform_systems.kept_folders(rom.platform_slug),
+            ),
+            source_kind(options),
         )
         return {
             "emulators": options_to_payload(options["options"]),
@@ -299,8 +308,11 @@ class CoreService:
             self._platform_name(rom),
         )
 
-    async def get_system_core_info(self, platform_slug: str) -> dict[str, Any]:
-        """Return the emulators available for *platform_slug* + the active one.
+    async def get_system_core_info(self, platform_slug: str, platform_folder: str) -> dict[str, Any]:
+        """Return the emulators available for the console *platform_slug* + the platform *platform_folder*'s active one.
+
+        The system is found by the slug, the pick by the platform's ``fs_slug``
+        (#2452 D11).
 
         The read half of :meth:`set_system_core`, keyed by platform rather than
         by ROM: the Library page's Platforms detail asks it once per selected
@@ -329,14 +341,13 @@ class CoreService:
         a platform-keyed caller has no ROM to layer and must be answerable for a
         platform holding no synced ROM at all.
         """
-        return await self._loop.run_in_executor(None, self._system_core_info_io, platform_slug)
+        _require_platform(platform_slug, platform_folder)
+        return await self._loop.run_in_executor(None, self._system_core_info_io, platform_slug, platform_folder)
 
-    def _system_core_info_io(self, platform_slug: str) -> dict[str, Any]:
+    def _system_core_info_io(self, platform_slug: str, platform_folder: str) -> dict[str, Any]:
         platform = self._platform_systems.platform_system(platform_slug)
         options = self._emulator_options(platform)
-        stored = pick_for(
-            platform_pick(self._settings.get("platform_cores", {}).get(platform_slug)), source_kind(options)
-        )
+        stored = pick_for(self._platform_core_reader.get_platform_core(platform_folder), source_kind(options))
         choice = choose_emulator(options["options"], game=None, platform=stored)
         source_defaults = self._source_defaults(platform_slug, answered=(platform, options))
         tender_default = next(
@@ -419,43 +430,42 @@ class CoreService:
             )
         return entries
 
-    def _set_system_core_io(self, platform_slug: str, core_label: str) -> None:
+    def _set_system_core_io(self, platform_slug: str, platform_folder: str, core_label: str) -> None:
         """Write the per-platform core selection.
 
-        Mutates ``settings["platform_cores"]`` — stores ``{label, source}`` under
-        *platform_slug* when *core_label* is non-empty, ``source`` the kind of
-        the emulator source answering for the platform, and pops the slug when
-        blank (revert to the default) — and persists ``settings.json`` through
-        the injected persister. A label with no source answering for the
-        platform is refused with ``core_unavailable`` and nothing is written.
+        Stores ``{label, source}`` under the platform's ``fs_slug``
+        *platform_folder* when *core_label* is non-empty, ``source`` the kind
+        of the emulator source answering for the console *platform_slug*, and
+        drops that pick when blank (revert to the default); the picks are saved
+        to ``settings.json``. A label with no source answering for the platform
+        is refused with ``core_unavailable`` and nothing is written.
         """
-        self._store_platform_pick(platform_slug, core_label)
+        self._store_platform_pick(platform_slug, platform_folder, core_label)
 
-    def _store_platform_pick(self, platform_slug: str, core_label: str) -> None:
-        """Store *core_label* as the platform's pick, or drop the pick when blank, and persist it.
+    def _store_platform_pick(self, platform_slug: str, platform_folder: str, core_label: str) -> None:
+        """Store *core_label* as the platform's pick, or drop the pick when blank, through the picks writer.
 
-        The previous value is put back where the save fails.
+        A ``settings.json`` that cannot be written refuses with ``save_failed``;
+        the writer has already put the previous picks back.
         """
-        platform_cores = self._settings["platform_cores"]
-        previous = platform_cores.get(platform_slug)
+        value = None
         if core_label:
             source = source_kind(self._emulator_options(self._platform_systems.platform_system(platform_slug)))
             if source is None:
                 raise Refused("core_unavailable", f"No emulator source answers for {platform_slug}")
-            platform_cores[platform_slug] = platform_pick_value(core_label, source)
-        else:
-            platform_cores.pop(platform_slug, None)
+            value = platform_pick_value(core_label, source)
+
+        def changed(picks: Mapping[str, Any]) -> dict[str, Any]:
+            kept = {key: pick for key, pick in picks.items() if key != platform_folder}
+            return kept if value is None else {**kept, platform_folder: value}
+
         try:
-            self._settings_persister.save_settings()
+            self._platform_picks.replace(changed)
         except OSError as e:
-            if previous is None:
-                platform_cores.pop(platform_slug, None)
-            else:
-                platform_cores[platform_slug] = previous
-            self._logger.error(f"Failed to set system core: {e}")
+            self._logger.error(f"Failed to set the system core of {platform_folder}: {e}")
             raise Refused("save_failed", f"Save failed: {e}") from e
 
-    async def set_system_core(self, platform_slug: str, core_label: str) -> dict[str, Any]:
+    async def set_system_core(self, platform_slug: str, platform_folder: str, core_label: str) -> dict[str, Any]:
         """Set or clear the per-platform core selection for a platform.
 
         Empty ``core_label`` clears the selection (reverts to the es_systems
@@ -465,8 +475,9 @@ class CoreService:
         file that cannot be written refuses with ``save_failed`` and leaves the
         previous selection in effect.
         """
+        _require_platform(platform_slug, platform_folder)
         async with self._rules.hold("set_system_core", update=True, migration=True, prune=True):
-            await self._loop.run_in_executor(None, self._set_system_core_io, platform_slug, core_label)
+            await self._loop.run_in_executor(None, self._set_system_core_io, platform_slug, platform_folder, core_label)
             return {"success": True}
 
     async def set_game_core(self, rom_id: int, label: str) -> dict[str, Any]:
@@ -567,6 +578,18 @@ class CoreService:
         if content_path is None:
             return self._core_info.get_emulator_options(platform.taken)
         return self._core_info.get_emulator_options(platform.taken, content_path=content_path)
+
+
+def _require_platform(platform_slug: object, platform_folder: object) -> None:
+    """Refuse ``invalid_value`` for a platform asked without a slug or without the ``fs_slug`` its pick is kept under.
+
+    The system is found by the slug and the pick by the ``fs_slug`` (#2452
+    D11), so neither is taken in the other's place.
+    """
+    if not isinstance(platform_slug, str) or not platform_slug:
+        raise Refused("invalid_value", f"{platform_slug!r} is not a RomM platform slug")
+    if not isinstance(platform_folder, str) or not platform_folder:
+        raise Refused("invalid_value", f"{platform_folder!r} is not a RomM platform folder")
 
 
 def _asked_path(install: RomInstall, rom: Rom, disc_resolver: DiscResolver) -> str:

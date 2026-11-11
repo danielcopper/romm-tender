@@ -34,6 +34,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from _factories import _make_application, _make_services_bundle
 from _spawns import record_spawns
+from fakes.fake_listing_refiler import FakeListingRefiler
 from fakes.fake_source_platform_systems import FakeSourcePlatformSystems
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 
@@ -6356,15 +6357,18 @@ class TestPlatformTurnedOffAndBackOn:
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
         library.settings["enabled_platforms"] = {"1": True, "2": True}
+        refiling = FakeListingRefiler()
         platform_systems = PlatformSystemService(
             config=PlatformSystemServiceConfig(
                 uow_factory=FakeUnitOfWorkFactory(uow=library.uow),
                 romm_api=fake_romm_api,
+                refiling=refiling,
                 source_platform_systems=FakeSourcePlatformSystems(),
                 logger=logging.getLogger("test_sync_orchestrator"),
                 log_debug=MagicMock(),
             )
         )
+        refiling.keeper = platform_systems
 
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box

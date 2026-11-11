@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import hashlib
 import inspect
 import logging
@@ -20,6 +21,7 @@ from fakes.fake_core_info_provider import (
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_firmware_file_store import FakeFirmwareFileStore
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
+from fakes.fake_listing_refiler import FakeListingRefiler
 from fakes.fake_path_exists_reader import FakePathExistsReader
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
@@ -31,6 +33,7 @@ from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock
 
 from adapters.firmware_file import FirmwareFileAdapter
+from adapters.persistence import PlatformCoreReaderAdapter
 from domain.bios_file import BiosFile
 from domain.bios_status import BiosFileEntry
 from domain.emulator_commands import PROGRAM, EmulatorOption
@@ -60,6 +63,7 @@ from services.firmware.emulator_answers import EmulatorAnswer, emulator_fields
 from services.firmware.status import FirmwareStatusReader
 from services.firmware.store import FetchOutcome, FirmwareStore, FirmwareStoreConfig
 from services.game_detail import GameDetailService, GameDetailServiceConfig
+from services.platform_picks import PlatformPicks, PlatformPicksConfig
 
 
 def _make_clock() -> FakeClock:
@@ -77,6 +81,7 @@ def _seed_rom(uow: FakeUnitOfWork, *, rom_id: int, platform_slug: str, app_id: i
         Rom(
             rom_id=rom_id,
             platform_slug=platform_slug,
+            platform_fs_slug=platform_slug,
             name=f"rom-{rom_id}",
             fs_name=f"rom-{rom_id}.zip",
             shortcut_app_id=app_id,
@@ -220,6 +225,7 @@ def _make_firmware_service(
             romm_api=api,
             loop=running_loop(),
             logger=log,
+            log_debug=lambda msg: None,
             clock=clock,
             firmware_file_store=store,
             platform_firmware_resolver=resolver,
@@ -232,8 +238,7 @@ def _make_firmware_service(
             active_core=active_core if active_core is not None else FakeActiveCoreResolver(),
             uow_factory=uows,
             conflict_rules=conflict_rules if conflict_rules is not None else _make_conflict_rules(),
-            settings={},
-            settings_persister=FakeSettingsPersister(),
+            refiling=FakeListingRefiler(),
         ),
     )
 
@@ -728,7 +733,7 @@ class TestWhileRetroDeckIsSwitchedOff:
         bios.write_bytes(b"\x00")
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="dc",
+                platform_folder="dc",
                 file_name="dc_boot.bin",
                 file_path=str(bios),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -753,7 +758,7 @@ class TestWhileRetroDeckIsSwitchedOff:
         bios.write_bytes(b"\x00")
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="dc",
+                platform_folder="dc",
                 file_name="dc_boot.bin",
                 file_path=str(bios),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -787,7 +792,7 @@ class TestWhileRetroDeckIsSwitchedOff:
     def _older_download(self, firmware, path):
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="dc",
+                platform_folder="dc",
                 file_name="dc_boot.bin",
                 file_path=str(path),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -1026,7 +1031,7 @@ class TestAFileInAFolderCountsItsOwnDelete:
         for name, path in (("scph39001.bin", inside), ("scph5501.bin", elsewhere)):
             firmware.uow.bios_files.save(
                 BiosFile.mark_downloaded(
-                    platform_slug="dc",
+                    platform_folder="dc",
                     file_name=name,
                     file_path=path,
                     downloaded_at="2026-01-01T00:00:00+00:00",
@@ -1067,7 +1072,7 @@ class TestAFileInAFolderCountsItsOwnDelete:
         for slug in ("psx", "ps"):
             firmware.uow.bios_files.save(
                 BiosFile.mark_downloaded(
-                    platform_slug=slug,
+                    platform_folder=slug,
                     file_name="scph39001.bin",
                     file_path=inside,
                     downloaded_at="2026-01-01T00:00:00+00:00",
@@ -2536,7 +2541,7 @@ class TestGetFirmwareStatusDeletableCount:
         _declare(fw, ("IPL.bin", "GameCube IPL", True))
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="gc",
+                platform_folder="gc",
                 file_name="retired.bin",
                 file_path=retired,
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -2546,7 +2551,7 @@ class TestGetFirmwareStatusDeletableCount:
         # Ours, and still offered by the library, so it has a row of its own.
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="gc",
+                platform_folder="gc",
                 file_name="ours.bin",
                 file_path=ours,
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -2623,7 +2628,7 @@ class TestGetFirmwareStatusDeletableCount:
         _declare(fw, ("IPL.bin", "GameCube IPL", True))
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="gc",
+                platform_folder="gc",
                 file_name="gone.bin",
                 file_path=os.path.join(str(bios_dir), "gone.bin"),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -2670,7 +2675,7 @@ class TestTheGamePageAnswerCarriesWhatItsButtonsStandOn:
         _declare(fw, ("IPL.bin", "GameCube IPL", True))
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="gc",
+                platform_folder="gc",
                 file_name="ours.bin",
                 file_path=os.path.join(bios_dir, "ours.bin"),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -2730,7 +2735,7 @@ class TestTheGamePageAnswerCarriesWhatItsButtonsStandOn:
         _inline_executor(fw)
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="n64",
+                platform_folder="n64",
                 file_name="ours.bin",
                 file_path=os.path.join(bios_dir, "ours.bin"),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -3878,8 +3883,12 @@ def _rom_scoped_surfaces(
             logger=logger,
             core_info=core_info,
             platform_systems=platform_systems,
-            settings={},
-            settings_persister=FakeSettingsPersister(),
+            platform_picks=PlatformPicks(
+                config=PlatformPicksConfig(
+                    settings=(live := {}), settings_persister=FakeSettingsPersister(), lock=threading.Lock()
+                )
+            ),
+            platform_core_reader=PlatformCoreReaderAdapter(live),
             uow_factory=uow_factory,
             active_core=active_core,
             disc_resolver=FakeDiscResolver(),
@@ -4581,7 +4590,7 @@ class TestDeleteOneBiosFile:
         ours.write_bytes(b"\x00" * 512)
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="gc",
+                platform_folder="gc",
                 file_name="gc-pal-12.bin",
                 file_path=str(ours),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -4610,7 +4619,7 @@ class TestDeleteOneBiosFile:
             path.write_bytes(b"\x00" * 32)
             firmware.uow.bios_files.save(
                 BiosFile.mark_downloaded(
-                    platform_slug="gc",
+                    platform_folder="gc",
                     file_name=name,
                     file_path=str(path),
                     downloaded_at="2026-01-01T00:00:00+00:00",
@@ -4641,7 +4650,7 @@ class TestDeleteOneBiosFile:
         theirs.write_bytes(b"\x01" * 128)
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="ps2",
+                platform_folder="ps2",
                 file_name="scph39001.bin",
                 file_path=str(ours),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -4694,7 +4703,7 @@ class TestDeleteOneBiosFile:
         elsewhere.write_bytes(b"\x03" * 16)
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="dc",
+                platform_folder="dc",
                 file_name="dc_boot.bin",
                 file_path=str(written),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -4727,7 +4736,7 @@ class TestDeletePlatformBios:
         # Pre-populate the BIOS registry via the Unit of Work
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="psx",
+                platform_folder="psx",
                 file_name="scph5501.bin",
                 file_path=str(bios_file),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -4799,7 +4808,7 @@ class TestDeletePlatformBios:
         # The downloaded file has a BiosFile record to prune (filed under "psx").
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="psx",
+                platform_folder="psx",
                 file_name="scph5501.bin",
                 file_path=str(bios_dir / "scph5501.bin"),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -4892,7 +4901,7 @@ class TestDeletePlatformBios:
     def _record_download(firmware, file_name: str, file_path: str) -> None:
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="gc",
+                platform_folder="gc",
                 file_name=file_name,
                 file_path=file_path,
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -5037,48 +5046,6 @@ class TestDeletePlatformBios:
         assert result["deleted_count"] == 0
         assert firmware.uow.bios_files.get("gc", "IPL.bin") is None
         assert shipped in store.files
-
-    @pytest.mark.asyncio
-    async def test_a_record_under_the_platform_s_old_folder_name_is_deleted_once_with_it(self, firmware, tmp_path):
-        """A record filed under the server folder ``ps`` names the file ``psx`` records too.
-
-        The first read of the listing drops it as the duplicate it is, so the
-        platform's delete takes the file once and leaves no record behind under
-        either name.
-        """
-        bios_dir = tmp_path / "bios"
-        path = os.path.join(str(bios_dir), "scph5501.bin")
-        store = FakeFirmwareFileStore({path: b"\x00" * 8})
-        fw = _make_firmware_service(
-            romm_api=firmware.romm_api,
-            uow_factory=FakeUnitOfWorkFactory(firmware.uow),
-            firmware_file_store=store,
-            retrodeck_folders=FakeRetroDeckFolders(bios=str(bios_dir)),
-            core_info=_test_core_info(),
-        )
-        _set_loop(fw, asyncio.get_running_loop())
-        for slug in ("psx", "ps"):
-            firmware.uow.bios_files.save(
-                BiosFile.mark_downloaded(
-                    platform_slug=slug,
-                    file_name="scph5501.bin",
-                    file_path=path,
-                    downloaded_at="2026-01-01T00:00:00+00:00",
-                    firmware_id=1,
-                )
-            )
-
-        listing = _platforms([{"id": 1, "file_name": "scph5501.bin", "platform_slug": "psx"}], folders={"psx": "ps"})
-        with patch.object(firmware.romm_api, "list_platforms", return_value=listing):
-            await fw.get_platform_firmware_status("psx", "psx")
-            result = await fw.delete_platform_bios("psx", "psx")
-
-        assert isinstance(result, dict)
-        assert result["success"] is True
-        assert result["deleted_count"] == 1
-        assert path not in store.files
-        assert firmware.uow.bios_files.get("psx", "scph5501.bin") is None
-        assert firmware.uow.bios_files.get("ps", "scph5501.bin") is None
 
 
 class TestCheckPlatformBiosRequired:
@@ -6596,7 +6563,7 @@ class TestThePlatformRommStatesForAFile:
         _set_loop(fw, asyncio.get_running_loop())
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="ps",
+                platform_folder="ps",
                 file_name="scph5501.bin",
                 file_path=str(bios_dir / "scph5501.bin"),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -6617,54 +6584,34 @@ class TestThePlatformRommStatesForAFile:
 
 
 class TestTheListingMovesOlderEntries:
-    """A fresh read of the listing moves Tender's older entries; a cached read and a failed move cost nothing."""
+    """A fresh read of the listing is handed to the refiling; a cached read is not."""
 
-    def _service(self, uow: FakeUnitOfWork) -> FirmwareService:
+    _LISTING = _platforms([{"id": 1, "file_name": "scph5501.bin", "platform_slug": "psx"}], folders={"psx": "ps"})
+
+    def _service(self, refiling: FakeListingRefiler) -> FirmwareService:
         api = MagicMock()
-        api.list_platforms.return_value = _platforms(
-            [{"id": 1, "file_name": "scph5501.bin", "platform_slug": "psx"}], folders={"psx": "ps"}
-        )
-        uow.bios_files.save(
-            BiosFile.mark_downloaded(
-                platform_slug="ps",
-                file_name="scph5501.bin",
-                file_path="/bios/scph5501.bin",
-                downloaded_at="2026-01-01T00:00:00+00:00",
-                firmware_id=1,
-            )
-        )
-        return _make_firmware_service(romm_api=api, uow_factory=FakeUnitOfWorkFactory(uow))
+        api.list_platforms.return_value = self._LISTING
+        fw = _make_firmware_service(romm_api=api, uow_factory=FakeUnitOfWorkFactory(FakeUnitOfWork()))
+        fw._listing._refiling = refiling
+        return fw
 
-    def test_a_fresh_read_moves_a_record_to_its_platform(self):
-        uow = FakeUnitOfWork()
-        fw = self._service(uow)
+    def test_a_fresh_read_hands_the_listing_to_the_refiling(self):
+        refiling = FakeListingRefiler()
+        fw = self._service(refiling)
 
         fw._listing.get_firmware_list()
 
-        assert [(r.platform_slug, r.file_name) for r in uow.bios_files.iter_all()] == [("psx", "scph5501.bin")]
+        assert refiling.listings == [self._LISTING]
 
-    def test_a_cached_read_moves_nothing(self):
-        uow = FakeUnitOfWork()
-        fw = self._service(uow)
+    def test_a_cached_read_hands_nothing_over(self):
+        refiling = FakeListingRefiler()
+        fw = self._service(refiling)
         fw._listing._firmware_cache = []
         fw._listing._firmware_cache_epoch = fw._config.clock.time()
 
         fw._listing.get_firmware_list()
 
-        assert [(r.platform_slug, r.file_name) for r in uow.bios_files.iter_all()] == [("ps", "scph5501.bin")]
-
-    def test_a_move_that_fails_costs_nothing_of_the_listing(self, caplog):
-        uow = FakeUnitOfWork()
-        fw = self._service(uow)
-
-        with (
-            patch.object(uow.bios_files, "iter_all", side_effect=OSError("db locked")),
-            caplog.at_level(logging.WARNING),
-        ):
-            result = fw._listing.get_firmware_list()
-
-        assert [row["file_name"] for row in result] == ["scph5501.bin"]
-        assert "Failed to move older BIOS records and per-platform emulator overrides to their platforms" in caplog.text
+        assert refiling.listings == []
 
 
 class TestFirmwareListCache:
@@ -6972,7 +6919,7 @@ class TestDeletePlatformBiosIOLogsWarnings:
         for name in ("scph5501.bin", "scph5502.bin"):
             firmware.uow.bios_files.save(
                 BiosFile.mark_downloaded(
-                    platform_slug="psx",
+                    platform_folder="psx",
                     file_name=name,
                     file_path=f"/fake/bios/{name}",
                     downloaded_at="2026-01-01T00:00:00+00:00",
@@ -7001,7 +6948,7 @@ class TestAPartialBiosDeleteIsIncomplete:
     def _record(firmware, name: str, path: str) -> None:
         firmware.uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="ps2",
+                platform_folder="ps2",
                 file_name=name,
                 file_path=path,
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -7601,7 +7548,7 @@ class TestOneEntryPerEmulator:
         uow = FakeUnitOfWork()
         uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="saturn",
+                platform_folder="saturn",
                 file_name="saturn_bios.bin",
                 file_path=str(tmp_path / "bios" / "kronos" / "saturn_bios.bin"),
                 downloaded_at="2026-01-01T00:00:00+00:00",
@@ -8189,3 +8136,161 @@ class TestTwoPlatformsThatShareASlug:
         assert names == {"gc": ["image.bin"], "gamecube": []}
         assert (await fw.download_required_firmware("ngc", "gamecube"))["downloaded"] == 0
         firmware.romm_api.download_firmware.assert_not_called()
+
+
+# Two RomM platforms that share the slug ``gamecube``.
+_SHARED_SLUG_LISTING = (
+    {"id": 1, "slug": "gamecube", "fs_slug": "gc", "firmware": []},
+    {"id": 2, "slug": "gamecube", "fs_slug": "ngc", "firmware": []},
+)
+
+
+class TestEachPlatformReadsThePickOfItsOwnFolder:
+    """``psp`` and ``psp-homebrew`` share the slug ``psp``; only the second has a pick (#2452 D7, D11)."""
+
+    def _service(self) -> tuple[FirmwareService, FakePlatformCoreReader]:
+        from tests.fakes.fake_core_info_provider import libretro_option, standalone_option
+
+        reader = FakePlatformCoreReader({"psp-homebrew": "PPSSPP"})
+        fw = _make_firmware_service(
+            core_info=FakeCoreInfoProvider(
+                active_core=("ppsspp_libretro", "PPSSPP"),
+                options=[standalone_option("PPSSPP (Standalone)"), libretro_option("ppsspp_libretro", "PPSSPP")],
+            ),
+            platform_core_reader=reader,
+        )
+        _stub_listing(fw, [])
+        _inline_executor(fw)
+        return fw, reader
+
+    @pytest.mark.asyncio
+    async def test_the_status_of_each_platform_shows_its_own_pick(self):
+        fw, _ = self._service()
+
+        homebrew = await fw.get_platform_firmware_status("psp", "psp-homebrew")
+        psp = await fw.get_platform_firmware_status("psp", "psp")
+
+        assert homebrew["platform"]["active_core_label"] == "PPSSPP"
+        assert psp["platform"]["active_core_label"] == "PPSSPP (Standalone)"
+
+    @pytest.mark.asyncio
+    async def test_the_per_game_check_reads_the_pick_of_its_own_folder(self):
+        fw, reader = self._service()
+
+        await fw.check_platform_bios("psp", "psp-homebrew")
+
+        assert reader.calls
+        assert set(reader.calls) == {"psp-homebrew"}
+
+    @pytest.mark.asyncio
+    async def test_download_required_reads_the_pick_of_its_own_folder(self):
+        fw, reader = self._service()
+
+        with contextlib.suppress(Refused):
+            await fw.download_required_firmware("psp", "psp-homebrew")
+
+        assert reader.calls
+        assert set(reader.calls) == {"psp-homebrew"}
+
+
+class TestEachPlatformOfASlugIsAPageOfItsOwn:
+    """Two RomM platforms share the slug ``gamecube``: each is its own page (#2452 D6, D17)."""
+
+    def _service(self, firmware, tmp_path, path: str) -> FirmwareService:
+        fw = _make_firmware_service(
+            romm_api=firmware.romm_api,
+            uow_factory=FakeUnitOfWorkFactory(firmware.uow),
+            firmware_file_store=FakeFirmwareFileStore({path: b"\x00" * 8}),
+            retrodeck_folders=FakeRetroDeckFolders(bios=str(tmp_path / "bios")),
+            core_info=_test_core_info(),
+        )
+        _set_loop(fw, asyncio.get_running_loop())
+        return fw
+
+    @staticmethod
+    def _record(uow, key: str, path: str) -> None:
+        uow.bios_files.save(
+            BiosFile.mark_downloaded(
+                platform_folder=key, file_name="IPL.bin", file_path=path, downloaded_at="2026-01-01T00:00:00+00:00"
+            )
+        )
+
+    @pytest.mark.asyncio
+    async def test_has_games_is_the_platform_s_own(self, firmware, tmp_path):
+        firmware.uow.roms.save(
+            Rom(
+                rom_id=1,
+                platform_slug="gamecube",
+                platform_fs_slug="gc",
+                name="rom-1",
+                fs_name="rom-1.iso",
+                shortcut_app_id=1,
+                last_synced_at="2026-01-01T00:00:00+00:00",
+            )
+        )
+        fw = self._service(firmware, tmp_path, str(tmp_path / "bios" / "IPL.bin"))
+
+        with patch.object(firmware.romm_api, "list_platforms", return_value=list(_SHARED_SLUG_LISTING)):
+            gc = await fw.get_platform_firmware_status("gamecube", "gc")
+            ngc = await fw.get_platform_firmware_status("gamecube", "ngc")
+
+        assert gc["platform"]["has_games"] is True
+        assert ngc["platform"]["has_games"] is False
+
+    @pytest.mark.asyncio
+    async def test_a_record_under_the_shared_slug_is_offered_on_each_page(self, firmware, tmp_path):
+        path = str(tmp_path / "bios" / "IPL.bin")
+        fw = self._service(firmware, tmp_path, path)
+        self._record(firmware.uow, "gamecube", path)
+
+        with patch.object(firmware.romm_api, "list_platforms", return_value=list(_SHARED_SLUG_LISTING)):
+            gc = await fw.get_platform_firmware_status("gamecube", "gc")
+            ngc = await fw.get_platform_firmware_status("gamecube", "ngc")
+
+        assert gc["platform"]["deletable_count"] == 1
+        assert ngc["platform"]["deletable_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_a_record_of_the_other_platform_is_not_offered(self, firmware, tmp_path):
+        path = str(tmp_path / "bios" / "IPL.bin")
+        fw = self._service(firmware, tmp_path, path)
+        self._record(firmware.uow, "ngc", path)
+
+        with patch.object(firmware.romm_api, "list_platforms", return_value=list(_SHARED_SLUG_LISTING)):
+            gc = await fw.get_platform_firmware_status("gamecube", "gc")
+
+        assert gc["platform"]["deletable_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_either_page_s_delete_takes_the_shared_record(self, firmware, tmp_path):
+        path = str(tmp_path / "bios" / "IPL.bin")
+        fw = self._service(firmware, tmp_path, path)
+        self._record(firmware.uow, "gamecube", path)
+        # The Platforms tab reads the listing before any page of it is shown.
+        fw._config.refiling.do_refile(list(_SHARED_SLUG_LISTING))
+
+        result = await fw.delete_platform_bios("gamecube", "ngc")
+
+        assert isinstance(result, dict)
+        assert result["deleted_count"] == 1
+        assert firmware.uow.bios_files.get("gamecube", "IPL.bin") is None
+
+    @pytest.mark.asyncio
+    async def test_a_record_under_a_slug_that_is_a_listed_folder_is_that_platform_s_alone(self, firmware, tmp_path):
+        """``snes`` is a slug and a listed folder at once, and no platform is kept yet."""
+        path = str(tmp_path / "bios" / "IPL.bin")
+        fw = self._service(firmware, tmp_path, path)
+        self._record(firmware.uow, "snes", path)
+        listing = [
+            {"id": 3, "slug": "snes", "fs_slug": "snes", "firmware": []},
+            {"id": 4, "slug": "snes", "fs_slug": "snes-hacks", "firmware": []},
+        ]
+
+        with patch.object(firmware.romm_api, "list_platforms", return_value=listing):
+            hacks = await fw.get_platform_firmware_status("snes", "snes-hacks")
+            result = await fw.delete_platform_bios("snes", "snes-hacks")
+
+        assert hacks["platform"]["deletable_count"] == 0
+        assert isinstance(result, dict)
+        assert result["deleted_count"] == 0
+        assert firmware.uow.bios_files.get("snes", "IPL.bin") is not None

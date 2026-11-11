@@ -47,7 +47,7 @@ import {
   type TableRegister,
 } from "../layout/pane";
 import { useBiosFocus, type BiosFocus } from "./useBiosFocus";
-import type { BiosActions } from "./useBiosActions";
+import type { BiosActions, PlatformKey } from "./useBiosActions";
 
 /**
  * The second mark: your RomM library does not hold this file.
@@ -505,15 +505,15 @@ const BiosFileRow: FC<{
  * What a download button shows instead of its label: a spinner while its own run
  * is going, a red `Failed` for the moment after one fails, or nothing.
  *
- * Both are keyed on the run's slug as well as the button's identity, because
+ * Both are keyed on the run's platform as well as the button's identity, because
  * `downloadPending` and `downloadFailed` name the button and every pane reads
- * the same state — without the slug a spinner would appear on the pane the
+ * the same state — without the platform a spinner would appear on the pane the
  * reader walked to. That pane shows disabled buttons and the line naming the
  * platform that is busy, which is what it always did.
  */
 function downloadState(part: BiosPart, id: string): "spinner" | "failed" | null {
-  const { busySlug, slug, actions } = part.input;
-  if (busySlug !== slug) return null;
+  const { busyFolder, platform, actions } = part.input;
+  if (busyFolder !== platform.folder) return null;
   if (actions.downloadPending === id) return "spinner";
   return actions.downloadFailed === id ? "failed" : null;
 }
@@ -554,9 +554,9 @@ function downloadLabel(part: BiosPart, id: string, label: string, size: number, 
  * and links, so this button cannot widen what it removes.
  */
 function rowAction(part: BiosPart, file: BiosTableRow, fetchable: Set<string>, key: string): ReactNode | null {
-  const { slug, busySlug, serverOffline, actions } = part.input;
+  const { platform, busyFolder, serverOffline, actions } = part.input;
   const { focus } = part;
-  const busy = busySlug !== null;
+  const busy = busyFolder !== null;
   // The pressed row's own button stays enabled while its work runs, and every
   // other one waits greyed — still a focus stop, since Steam's
   // `DialogButton` never disables its element, as its shipped client code
@@ -572,7 +572,7 @@ function rowAction(part: BiosPart, file: BiosTableRow, fetchable: Set<string>, k
         onClick={() => {
           if (busy) return;
           focus.mark(key);
-          actions.downloadOne(slug, name, file.library?.firmware_id ?? null);
+          actions.downloadOne(platform, name, file.library?.firmware_id ?? null);
         }}
       >
         {downloadLabel(part, name, "Download", 11, disabled)}
@@ -592,7 +592,7 @@ function rowAction(part: BiosPart, file: BiosTableRow, fetchable: Set<string>, k
           strCancelButtonText="Cancel"
           onOK={() => {
             focus.mark(key);
-            actions.replaceBios(slug, place);
+            actions.replaceBios(platform, place);
             focus.refocus(key);
           }}
           onCancel={() => focus.refocus(key)}
@@ -619,7 +619,7 @@ function rowAction(part: BiosPart, file: BiosTableRow, fetchable: Set<string>, k
         strCancelButtonText="Cancel"
         onOK={() => {
           focus.mark(key);
-          actions.deleteBiosFile(slug, name);
+          actions.deleteBiosFile(platform, name);
           focus.refocus(key);
         }}
         onCancel={() => focus.refocus(key)}
@@ -657,11 +657,11 @@ export interface BiosAnswerFields {
 
 export interface BiosPartInput {
   /** The platform the files are for, and what its page calls it. */
-  slug: string;
+  platform: PlatformKey;
   platformName: string;
   answer: BiosAnswerFields;
   /** The page's busy key: every press waits while any action of the page runs. */
-  busySlug: string | null;
+  busyFolder: string | null;
   /** RomM is unreachable: the downloads are withdrawn, the deletes stand. */
   serverOffline: boolean;
   actions: BiosActions;
@@ -699,7 +699,7 @@ export function useBiosFiles(input: BiosPartInput): BiosPart {
   const tab = selectedTab(tabs, tabKey);
   const shownRows = tabRows(files, tabs, tab);
   const focus = useBiosFocus(
-    input.busySlug !== null,
+    input.busyFolder !== null,
     shownRows.map((file) => tableKey(file.file_name)),
   );
   const libraryRows = files.filter(isUnclaimedLibraryRow);
@@ -747,7 +747,7 @@ export const BiosShownTable: FC<{ part: BiosPart }> = ({ part }) => {
             placeLines={biosPlaceLines(
               file,
               emulator,
-              input.actions.attemptFor(input.slug, file.local_path, downloadName(file)),
+              input.actions.attemptFor(input.platform.folder, file.local_path, downloadName(file)),
             )}
             stop={input.stop}
           />
@@ -795,9 +795,9 @@ export const BiosShownTable: FC<{ part: BiosPart }> = ({ part }) => {
  */
 export const BiosButtons: FC<{ part: BiosPart; status: ScopedStatus | null }> = ({ part, status }) => {
   const { input, tab, shownRows, focus } = part;
-  const { slug, platformName, answer, busySlug, serverOffline, actions } = input;
+  const { platform, platformName, answer, busyFolder, serverOffline, actions } = input;
   const files = answer.files ?? [];
-  const busy = busySlug !== null;
+  const busy = busyFolder !== null;
   const otherTab = tab !== null && !tab.launching;
   // The emulator a download from this table is for: the shown one's identity on
   // another emulator's view; on the launching one's, the platform's own pick
@@ -831,7 +831,7 @@ export const BiosButtons: FC<{ part: BiosPart; status: ScopedStatus | null }> = 
         strCancelButtonText="Cancel"
         onOK={() => {
           focus.mark(BULK_DELETE);
-          actions.deleteBios(slug);
+          actions.deleteBios(platform);
           focus.refocus(BULK_DELETE);
         }}
         onCancel={() => focus.refocus(BULK_DELETE)}
@@ -853,7 +853,7 @@ export const BiosButtons: FC<{ part: BiosPart; status: ScopedStatus | null }> = 
             <DialogButton
               style={BULK_BUTTON}
               disabled={bulkDisabled(BULK_REQUIRED, showRequired)}
-              onClick={pressBulk(BULK_REQUIRED, () => actions.downloadRequired(slug, shownEmulator))}
+              onClick={pressBulk(BULK_REQUIRED, () => actions.downloadRequired(platform, shownEmulator))}
             >
               {downloadLabel(
                 part,
@@ -878,7 +878,7 @@ export const BiosButtons: FC<{ part: BiosPart; status: ScopedStatus | null }> = 
           <DialogButton
             style={BULK_BUTTON}
             disabled={bulkDisabled(BULK_ALL, showAll)}
-            onClick={pressBulk(BULK_ALL, () => actions.downloadAll(slug))}
+            onClick={pressBulk(BULK_ALL, () => actions.downloadAll(platform))}
           >
             {downloadLabel(part, "all", "Download all", 12, bulkDisabled(BULK_ALL, showAll))}
           </DialogButton>
@@ -897,7 +897,7 @@ export const BiosButtons: FC<{ part: BiosPart; status: ScopedStatus | null }> = 
           </DialogButton>
         </div>
       </ButtonRow>
-      <GroupStatus status={status} forKey={slug} scope="bios" />
+      <GroupStatus status={status} forKey={platform.folder} scope="bios" />
     </>
   );
 };
@@ -919,7 +919,9 @@ export const BiosLibraryTable: FC<{ part: BiosPart }> = ({ part }) => {
             emulator={input.answer.active_core_label ?? null}
             placeLines={[
               ...libraryRowLines(file, file.library ? identifications.answers[file.library.md5] : undefined),
-              ...(input.actions.attemptFor(input.slug, null, downloadName(file)).damaged ? [DOWNLOAD_DAMAGED] : []),
+              ...(input.actions.attemptFor(input.platform.folder, null, downloadName(file)).damaged
+                ? [DOWNLOAD_DAMAGED]
+                : []),
             ]}
             busyLine={file.library && identifications.asking === file.library.md5 ? IDENTIFYING : null}
             stop={input.stop}

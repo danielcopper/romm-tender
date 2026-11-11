@@ -111,6 +111,7 @@ def _seed_rom(svc, rom_id: int, *, platform_slug: str = "gba", fs_name: str | No
             Rom.synced(
                 rom_id=rom_id,
                 platform_slug=platform_slug,
+                platform_fs_slug=platform_slug,
                 name=f"rom-{rom_id}",
                 fs_name=fs_name if fs_name is not None else f"rom-{rom_id}",
                 shortcut_app_id=rom_id,

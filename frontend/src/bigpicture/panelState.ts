@@ -479,14 +479,20 @@ export function openingTab(appId: number): string {
   return keptArtworkSlot(appId) === null ? "info" : "artwork";
 }
 
+/** The refs the panel's first load fills with the game it found: its ROM, its platform's slug and its folder. */
+export interface LoadedGameRefs {
+  romId: MutableRefObject<number | null>;
+  platformSlug: MutableRefObject<string>;
+  platformFolder: MutableRefObject<string>;
+}
+
 /** Cache-first initial render. Resolves the cached game detail for this appId,
  *  pushes it into PanelState and the game's platform to *onPlatform*, and fires
  *  the background refresh tasks whose results are merged in later. */
 export async function loadData(
   appId: number,
   cancelled: () => boolean,
-  romIdRef: MutableRefObject<number | null>,
-  platformSlugRef: MutableRefObject<string>,
+  refs: LoadedGameRefs,
   readSeqs: MutableRefObject<PanelReadSeqs>,
   setter: Dispatch<SetStateAction<PanelState>>,
   onPlatform: (platformSlug: string) => void,
@@ -507,8 +513,9 @@ export async function loadData(
     const platformSlug = cached.platform_slug || "";
     const platformFolder = cached.platform_fs_slug || "";
 
-    romIdRef.current = romId;
-    platformSlugRef.current = platformSlug;
+    refs.romId.current = romId;
+    refs.platformSlug.current = platformSlug;
+    refs.platformFolder.current = platformFolder;
     onPlatform(platformSlug);
 
     // Nothing is shown yet on a first render, so a payload carrying no BIOS
@@ -555,7 +562,7 @@ export async function loadData(
       languages: cached.languages ?? [],
     });
 
-    const binding = bindRom(romId, romIdRef, cancelled, setter);
+    const binding = bindRom(romId, refs.romId, cancelled, setter);
 
     if (cached.save_sync_enabled) {
       refreshSlotState(binding, readSeqs);

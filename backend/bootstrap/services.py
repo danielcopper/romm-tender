@@ -11,6 +11,7 @@ threaded through a ``*ServiceConfig`` here, or deferred through a
 from __future__ import annotations
 
 import os
+import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -48,6 +49,8 @@ from services.game_start import START_FOLDER, GameStartService, GameStartService
 from services.leftover_tmp_cleanup import LeftoverTmpCleanupService, LeftoverTmpCleanupServiceConfig
 from services.metadata import MetadataService, MetadataServiceConfig
 from services.migration import MigrationService, MigrationServiceConfig
+from services.platform_picks import PlatformPicks, PlatformPicksConfig
+from services.platform_refiling import PlatformRefiling, PlatformRefilingConfig
 from services.platform_systems import PlatformSystemService, PlatformSystemServiceConfig
 from services.playtime import PlaytimeService, PlaytimeServiceConfig
 from services.prune import PruneService, PruneServiceConfig
@@ -85,6 +88,7 @@ if TYPE_CHECKING:
     from services.library import LibraryService
     from services.protocols import (
         InstalledRomRemoverFn,
+        ListingKeeper,
         RendererAboveCeilingFn,
         SaveDirectoriesRecorderFn,
         SiblingSupersedeFn,
@@ -232,6 +236,31 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         sync_in_flight=sync_in_flight_binding.get,
     )
 
+    # The one writer of the per-platform picks, which the refiling and the core
+    # service both write through from executor threads of their own: its lock,
+    # not a conflict rule, keeps a refile and a stored pick apart.
+    platform_picks = PlatformPicks(
+        config=PlatformPicksConfig(
+            settings=cfg.stores.settings,
+            settings_persister=cfg.callbacks.settings_persister,
+            lock=threading.Lock(),
+        )
+    )
+
+    # Every reader that keeps or uses RomM's platform listing hands what it read here (#2452 D6, D7),
+    # and the refiling hands it on to the platform system to keep, which itself hands its reads here.
+    listing_keeper_binding: LateBinding[ListingKeeper] = LateBinding("listing_keeper")
+    platform_refiling = PlatformRefiling(
+        config=PlatformRefilingConfig(
+            uow_factory=cfg.callbacks.uow_factory,
+            platform_picks=platform_picks,
+            refile_lock=threading.Lock(),
+            listing_keeper=listing_keeper_binding.get,
+            logger=cfg.runtime.logger,
+            log_debug=cfg.callbacks.log_debug,
+        )
+    )
+
     # The system a RomM platform is in an emulator source, which every reader of
     # a platform's system asks — the download, the emulator choice, the BIOS
     # answers and the saves — so they all ask the same question.
@@ -239,11 +268,13 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         config=PlatformSystemServiceConfig(
             uow_factory=cfg.callbacks.uow_factory,
             romm_api=cfg.adapters.romm_api,
+            refiling=platform_refiling,
             source_platform_systems=cfg.adapters.source_platform_systems,
             logger=cfg.runtime.logger,
             log_debug=cfg.callbacks.log_debug,
         ),
     )
+    listing_keeper_binding.set(lambda: platform_systems)
 
     # The firmware store records files under Tender's folder, which asks it
     # what is recorded there, while every write into the store goes through
@@ -503,6 +534,8 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             conflict_rules=conflict_rules,
             artwork_job=shortcut_artwork_service,
             running_rom_ids=running_games.running_rom_ids,
+            refiling=platform_refiling,
+            platform_listing=platform_systems,
         ),
     ).service
     pending_sync_binding.set(lambda: sync_service.pending_sync)
@@ -622,6 +655,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             romm_api=cfg.adapters.romm_api,
             loop=cfg.runtime.loop,
             logger=cfg.runtime.logger,
+            log_debug=cfg.callbacks.log_debug,
             clock=cfg.runtime.clock,
             firmware_file_store=cfg.adapters.firmware_file_store,
             platform_firmware_resolver=cfg.adapters.platform_firmware_resolver,
@@ -634,8 +668,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             active_core=active_core_resolver,
             uow_factory=cfg.callbacks.uow_factory,
             conflict_rules=conflict_rules,
-            settings=cfg.stores.settings,
-            settings_persister=cfg.callbacks.settings_persister,
+            refiling=platform_refiling,
         ),
     )
 
@@ -684,8 +717,8 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             logger=cfg.runtime.logger,
             core_info=cfg.adapters.core_info_provider,
             platform_systems=platform_systems,
-            settings=cfg.stores.settings,
-            settings_persister=cfg.callbacks.settings_persister,
+            platform_picks=platform_picks,
+            platform_core_reader=cfg.callbacks.platform_core_reader,
             uow_factory=cfg.callbacks.uow_factory,
             active_core=active_core_resolver,
             disc_resolver=disc_launch_resolver,

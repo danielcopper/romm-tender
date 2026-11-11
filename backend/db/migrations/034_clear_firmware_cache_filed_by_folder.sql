@@ -10,9 +10,7 @@
 --     (domain/firmware_platforms.py). A row of the old kind would answer for
 --     the wrong platform until the cache's hour ran out, and after that too
 --     whenever the server could not be read. With the table empty,
---     the first listing read asks the server, and the first read that reaches
---     it also moves Tender's older download records and per-platform emulator
---     overrides (services/firmware/refiling.py).
+--     the first listing read asks the server.
 --
 -- The table is a cache: the next read from the server fills it again.
 --

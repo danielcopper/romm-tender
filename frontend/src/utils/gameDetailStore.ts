@@ -40,6 +40,7 @@ import {
 import { getRomMetadataShared } from "../api/sharedReads";
 import type { CoreInfo, DownloadCompleteEvent, SaveStatus, SaveSyncDisplay } from "../types";
 import type { RommDataChangedDetail } from "../types/events";
+import { coreChangeIsFor } from "./coreChangedEvent";
 import { detach } from "./detach";
 import { gameStartRefusal } from "./emulatorStart";
 import { startCheckFailureSentence } from "./gameLaunch";
@@ -863,7 +864,7 @@ function attachListeners(appId: number, entry: Entry): () => void {
               await handleSaveSyncSettingsChange(appId, entry, detail);
               break;
             case "core_changed":
-              await handleCoreChange(entry);
+              if (coreChangeIsFor(detail, entry.state.platformFolder)) await handleCoreChange(entry);
               break;
             case "emulator_sources":
               await handleEmulatorSourcesChange(appId, entry);

@@ -15,6 +15,7 @@ from unittest.mock import MagicMock
 import pytest
 from _factories import _make_conflict_rules, _make_prune_conflicts
 from fakes.fake_core_info_provider import FakeCoreInfoProvider
+from fakes.fake_listing_refiler import FakeListingRefiler
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_platform_systems import FakePlatformSystems
 from fakes.fake_renderer_gc import FakeRendererGc
@@ -23,6 +24,7 @@ from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_running_rom_ids import FakeRunningRomIds
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_shortcut_artwork_job import FakeShortcutArtworkJob
+from fakes.fake_source_platform_systems import FakeSourcePlatformSystems
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
@@ -43,6 +45,7 @@ from services.library import (
     UnitApplier,
 )
 from services.metadata import MetadataService, MetadataServiceConfig
+from services.platform_systems import PlatformSystemService, PlatformSystemServiceConfig
 from services.shortcut_removal import ShortcutRemovalService, ShortcutRemovalServiceConfig
 
 
@@ -80,6 +83,7 @@ class LibraryHarness:
     settings: dict[str, Any]
     artwork_job: FakeShortcutArtworkJob
     running_games: FakeRunningRomIds
+    platform_systems: PlatformSystemService
 
 
 class MakeLibrary(Protocol):
@@ -176,6 +180,17 @@ async def make_library(tmp_path, emit, logger, home) -> MakeLibrary:
         # no-op GC, so the gate is inert in the shared fixture; gate-specific tests
         # reassign ``library.renderer_rss.rss_kb`` / ``library.renderer_gc.result``
         # to drive a pause.
+        # The platform system the sync's listing is kept by, over the same database.
+        platform_systems = PlatformSystemService(
+            config=PlatformSystemServiceConfig(
+                uow_factory=FakeUnitOfWorkFactory(uow=uow),
+                romm_api=api,
+                refiling=FakeListingRefiler(),
+                source_platform_systems=FakeSourcePlatformSystems(),
+                logger=logger,
+                log_debug=lambda msg: None,
+            )
+        )
         rss = FakeRendererRss() if renderer_rss is None else renderer_rss
         renderer_gc = FakeRendererGc()
         artwork_job = FakeShortcutArtworkJob()
@@ -202,6 +217,8 @@ async def make_library(tmp_path, emit, logger, home) -> MakeLibrary:
                 conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
                 artwork_job=artwork_job,
                 running_rom_ids=running_games,
+                refiling=FakeListingRefiler(),
+                platform_listing=platform_systems,
             ),
         )
 
@@ -242,6 +259,7 @@ async def make_library(tmp_path, emit, logger, home) -> MakeLibrary:
             settings=settings,
             artwork_job=artwork_job,
             running_games=running_games,
+            platform_systems=platform_systems,
         )
 
     return build

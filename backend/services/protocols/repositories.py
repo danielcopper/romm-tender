@@ -89,17 +89,10 @@ class RomRepository(Protocol):
         """
         ...
 
-    def iter_by_platform(self, platform_slug: str) -> Iterator[Rom]:
-        """Iterate ROMs on *platform_slug*.
-
-        (shortcut_removal.py)
-        """
-        ...
-
     def iter_by_platform_folder(self, platform_folder: str) -> Iterator[Rom]:
         """Iterate ROMs whose platform's ``fs_slug`` is *platform_folder*; a row with none recorded is never one.
 
-        (library/fetcher.py, library/local_library_reader.py)
+        (library/fetcher.py, library/local_library_reader.py, saves/service.py, shortcut_removal.py)
         """
         ...
 
@@ -119,8 +112,10 @@ class RomRepository(Protocol):
         """Return the number of ROMs that carry a Steam-shortcut binding. (library/run_finalizer.py sync totals)"""
         ...
 
-    def get_bound_platform_slugs(self) -> set[str]:
-        """Return the platform slugs with at least one ROM bound to a Steam shortcut, an empty slug left out.
+    def get_bound_platform_folders(self) -> set[str]:
+        """Return the platforms' ``fs_slug`` values with at least one ROM bound to a Steam shortcut.
+
+        A ROM with no ``fs_slug`` recorded is on none (#2452 D17).
 
         (firmware/status.py synced platforms)
         """
@@ -390,27 +385,23 @@ class ArtworkSlotHandoverRepository(Protocol):
 class BiosFileRepository(Protocol):
     """Persistence seam for the ``BiosFile`` aggregate (downloaded BIOS records).
 
-    Identity is the composite ``(platform_slug, file_name)``.
+    Identity is the composite ``(platform_folder, file_name)``.
     """
 
-    def get(self, platform_slug: str, file_name: str) -> BiosFile | None:
-        """Return the BIOS record for the composite key, or ``None``. (no consumer today)"""
+    def get(self, platform_folder: str, file_name: str) -> BiosFile | None:
+        """Return the BIOS record for the composite key, or ``None``. (platform_refiling.py)"""
         ...
 
     def save(self, bios_file: BiosFile) -> None:
-        """Upsert *bios_file*. (firmware/downloads.py, the only writer of a download record)"""
+        """Upsert *bios_file*. (migration/service.py, platform_refiling.py)"""
         ...
 
-    def delete(self, platform_slug: str, file_name: str) -> None:
-        """Remove the BIOS record for the composite key. Idempotent. (firmware/deletion.py prune)"""
+    def delete(self, platform_folder: str, file_name: str) -> None:
+        """Remove the BIOS record for the composite key. Idempotent. (firmware/deletion.py, platform_refiling.py)"""
         ...
 
     def iter_all(self) -> Iterator[BiosFile]:
-        """Iterate every downloaded BIOS record. (migration/service.py sweep, firmware/status.py delete count)"""
-        ...
-
-    def iter_by_platform(self, platform_slug: str) -> Iterator[BiosFile]:
-        """Iterate BIOS records on *platform_slug*. (firmware/deletion.py delete platform BIOS)"""
+        """Iterate every downloaded BIOS record. (migration sweep, firmware status count and delete, refiling)"""
         ...
 
 

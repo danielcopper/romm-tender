@@ -15,8 +15,11 @@ export type RommDataChangedDetail =
   | { type: "save_sync"; rom_id?: number; save_status?: SaveStatus; has_conflict?: boolean }
   | { type: "save_sync_settings"; save_sync_enabled: boolean }
   | { type: "metadata"; rom_id: number }
-  | { type: "bios"; platform_slug: string }
-  | { type: "core_changed"; platform_slug: string }
+  // `platform_fs_slug` names the platform whose firmware changed, and no page
+  // reads it: pages match on the slug (docs/architecture/qam-panel.md, § Library).
+  | { type: "bios"; platform_slug: string; platform_fs_slug: string }
+  // `null` where the game whose emulator changed has no fs_slug from RomM.
+  | { type: "core_changed"; platform_fs_slug: string | null }
   | { type: "emulator_sources" }
   | { type: "cover_refreshed"; rom_id: number }
   | { type: "rom_adopted"; rom_id: number }

@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import socket
+import threading
 import urllib.error
 from pathlib import Path
 from typing import Any, cast
@@ -44,6 +45,8 @@ from fakes.fake_firmware_file_store import FakeFirmwareFileStore
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_game_process_control import DEFAULT_APP_ID, FakeGameProcessControlAdapter
 from fakes.fake_journal import FakeJournal
+from fakes.fake_listing_refiler import FakeListingRefiler
+from fakes.fake_listing_replacer import FakeListingReplacer
 from fakes.fake_migration_file_store import FakeMigrationFileStore
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_platform_systems import FakePlatformSystems
@@ -66,6 +69,7 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.library_peers import FakeArtworkManager
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
+from adapters.persistence import PlatformCoreReaderAdapter
 from adapters.steam_config import SteamConfigAdapter
 from adapters.steamgriddb import SteamGridDbAdapter
 from adapters.update_attempt import UpdateAttemptFileAdapter
@@ -118,6 +122,7 @@ from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.firmware.store import FirmwareStore, FirmwareStoreConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
 from services.migration import MigrationService, MigrationServiceConfig
+from services.platform_picks import PlatformPicks, PlatformPicksConfig
 from services.playtime import PlaytimeService, PlaytimeServiceConfig
 from services.prune import PruneService, PruneServiceConfig
 from services.rom_adoption import RomAdoptionService, RomAdoptionServiceConfig
@@ -1267,6 +1272,8 @@ def _dispatcher_over_library(romm_api: FakeRommApi, events: FakeEventSink, home:
             renderer_gc=FakeRendererGc(),
             conflict_rules=_make_conflict_rules(),
             running_rom_ids=FakeRunningRomIds(),
+            refiling=FakeListingRefiler(),
+            platform_listing=FakeListingReplacer(),
         ),
     ).service
     endpoints = Endpoints(_make_application(_make_services_bundle(sync_service=service)), HostStatus())
@@ -1434,6 +1441,7 @@ def _dispatcher_over_firmware(
             romm_api=romm_api,
             loop=asyncio.get_running_loop(),
             logger=LOGGER,
+            log_debug=lambda msg: None,
             clock=FakeClock(),
             firmware_file_store=store,
             platform_firmware_resolver=resolver,
@@ -1458,8 +1466,7 @@ def _dispatcher_over_firmware(
             active_core=FakeActiveCoreResolver(),
             uow_factory=FakeUnitOfWorkFactory(uow),
             conflict_rules=_make_conflict_rules(),
-            settings={},
-            settings_persister=FakeSettingsPersister(),
+            refiling=FakeListingRefiler(),
         )
     )
     endpoints = Endpoints(_make_application(_make_services_bundle(firmware_service=service)), HostStatus())
@@ -1479,7 +1486,7 @@ class TestTheFirmwareAnswersOnTheWire:
             with uow:
                 uow.bios_files.save(
                     BiosFile.mark_downloaded(
-                        platform_slug="dc",
+                        platform_folder="dc",
                         file_name=name,
                         file_path=f"/retrodeck/bios/{name}",
                         downloaded_at="2026-01-01T00:00:00+00:00",
@@ -1831,8 +1838,10 @@ def _dispatcher_over_cores(settings: dict[str, Any], persister: FakeSettingsPers
             logger=LOGGER,
             core_info=FakeCoreInfoProvider(),
             platform_systems=FakePlatformSystems(),
-            settings=settings,
-            settings_persister=persister,
+            platform_picks=PlatformPicks(
+                config=PlatformPicksConfig(settings=settings, settings_persister=persister, lock=threading.Lock())
+            ),
+            platform_core_reader=PlatformCoreReaderAdapter(settings),
             uow_factory=FakeUnitOfWorkFactory(FakeUnitOfWork()),
             active_core=FakeActiveCoreResolver(),
             disc_resolver=FakeDiscResolver(),
@@ -1857,7 +1866,7 @@ class TestThePlatformCoreSwitchOnTheWire:
         persister.save_settings = refuse
         dispatcher = _dispatcher_over_cores(settings, persister)
 
-        raw = await dispatcher.dispatch(1, "set_system_core", ["snes", "Snes9x"])
+        raw = await dispatcher.dispatch(1, "set_system_core", ["snes", "snes", "Snes9x"])
 
         message = json.loads(raw)
         assert message["type"] == TYPE_REPLY

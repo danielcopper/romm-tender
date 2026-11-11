@@ -293,14 +293,6 @@ class SqliteRomRepository(BaseRepository):
         for row in self._conn.execute(f"SELECT {_SELECT_COLUMNS} FROM roms"):
             yield _row_to_rom(row)
 
-    def iter_by_platform(self, platform_slug: str) -> Iterator[Rom]:
-        cursor = self._conn.execute(
-            f"SELECT {_SELECT_COLUMNS} FROM roms WHERE platform_slug = ?",
-            (platform_slug,),
-        )
-        for row in cursor:
-            yield _row_to_rom(row)
-
     def iter_by_platform_folder(self, platform_folder: str) -> Iterator[Rom]:
         cursor = self._conn.execute(
             f"SELECT {_SELECT_COLUMNS} FROM roms WHERE platform_fs_slug = ?",
@@ -326,8 +318,8 @@ class SqliteRomRepository(BaseRepository):
     def count_bound(self) -> int:
         return int(self._conn.execute("SELECT COUNT(*) FROM roms WHERE shortcut_app_id IS NOT NULL").fetchone()[0])
 
-    def get_bound_platform_slugs(self) -> set[str]:
+    def get_bound_platform_folders(self) -> set[str]:
         cursor = self._conn.execute(
-            "SELECT DISTINCT platform_slug FROM roms WHERE shortcut_app_id IS NOT NULL AND platform_slug != ''"
+            "SELECT DISTINCT platform_fs_slug FROM roms WHERE shortcut_app_id IS NOT NULL AND platform_fs_slug != ''"
         )
-        return {row["platform_slug"] for row in cursor}
+        return {row["platform_fs_slug"] for row in cursor}

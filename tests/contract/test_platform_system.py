@@ -75,7 +75,7 @@ async def test_the_download_the_emulator_choice_and_the_bios_answer_ask_one_syst
     seed_rom(harness, 5, platform_slug=_SLUG)
     harness.platform_systems.answers[_SLUG] = (FOUND, "gba")
 
-    core = await harness.endpoints.get_system_core_info(_SLUG)
+    core = await harness.endpoints.get_system_core_info(_SLUG, _SLUG)
     game_core = await harness.endpoints.get_platform_core_info(5)
     bios = await harness.endpoints.get_platform_firmware_status(_SLUG, _SLUG)
     started = await harness.endpoints.start_download(5)
@@ -103,7 +103,7 @@ async def test_a_platform_with_no_switched_on_system_downloads_nothing_and_says_
     harness.platform_systems.answers[_SLUG] = (state, system)
 
     started = await harness.endpoints.start_download(5)
-    core = await harness.endpoints.get_system_core_info(_SLUG)
+    core = await harness.endpoints.get_system_core_info(_SLUG, _SLUG)
     game_core = await harness.endpoints.get_platform_core_info(5)
 
     assert started == {
@@ -131,8 +131,8 @@ async def test_a_platform_with_no_switched_on_system_downloads_nothing_and_says_
 async def test_where_no_ids_are_kept_they_are_read_once_from_rom_m_and_kept(harness):
     _seed_server(harness)
 
-    await harness.endpoints.get_system_core_info(_SLUG)
-    await harness.endpoints.get_system_core_info(_SLUG)
+    await harness.endpoints.get_system_core_info(_SLUG, _SLUG)
+    await harness.endpoints.get_system_core_info(_SLUG, _SLUG)
 
     assert sum(1 for name, *_ in harness.romm.call_log if name == "list_platforms") == 1
     assert [ids for ids, _slug, _source in harness.platform_systems.asked] == [
@@ -153,7 +153,7 @@ async def test_with_rom_m_unreachable_and_no_ids_kept_the_pages_show_the_offline
     status = await harness.endpoints.get_save_status(5)
     bios = await harness.endpoints.get_bios_status(5)
     game_core = await harness.endpoints.get_platform_core_info(5)
-    core = await harness.endpoints.get_system_core_info(_SLUG)
+    core = await harness.endpoints.get_system_core_info(_SLUG, _SLUG)
     started = await harness.endpoints.start_download(5)
 
     assert status["server_query_failed"] is True
@@ -177,10 +177,10 @@ async def test_with_rom_m_unreachable_and_no_ids_kept_the_pages_show_the_offline
 async def test_the_next_read_with_rom_m_reachable_keeps_the_ids(harness):
     _seed_server(harness)
     harness.romm.list_platforms_side_effect = RommConnectionError("connection refused")
-    await harness.endpoints.get_system_core_info(_SLUG)
+    await harness.endpoints.get_system_core_info(_SLUG, _SLUG)
     harness.romm.list_platforms_side_effect = None
 
-    core = await harness.endpoints.get_system_core_info(_SLUG)
+    core = await harness.endpoints.get_system_core_info(_SLUG, _SLUG)
 
     assert core["platform_system"]["state"] == "found"
     with harness.uow_factory() as uow:
@@ -192,7 +192,7 @@ async def test_with_rom_m_refusing_the_read_the_pages_name_its_reason(harness):
     _seed_server(harness)
     harness.romm.list_platforms_side_effect = RommAuthError("401")
 
-    core = await harness.endpoints.get_system_core_info(_SLUG)
+    core = await harness.endpoints.get_system_core_info(_SLUG, _SLUG)
 
     assert core["emulator_data_available"] is False
     assert core["emulator_data_reason"] == "auth_failed"

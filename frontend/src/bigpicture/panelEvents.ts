@@ -3,8 +3,8 @@
  * subscribes for the ROM it currently shows, and the per-event-type handlers
  * behind the `romm_data_changed` dispatch.
  *
- * Every handler reads the panel's live identity (`romIdRef` / `platformSlugRef`)
- * rather than a value captured at wiring time — these listeners outlive many
+ * Every handler reads the panel's live identity (`romIdRef`, `platformSlugRef`,
+ * `platformFolderRef`) rather than a value captured at wiring time — these listeners outlive many
  * answers, and a version switch re-points the identity without re-subscribing
  * them.
  */
@@ -25,6 +25,7 @@ import {
 import type { CoreInfo, RomMetadata, SaveStatus, SyncConflict, DownloadCompleteEvent } from "../types";
 import type { RommDataChangedDetail } from "../types/events";
 import { detach } from "../utils/detach";
+import { coreChangeIsFor } from "../utils/coreChangedEvent";
 import { announceBiosChange } from "./bios/useBiosActions";
 import {
   bindRom,
@@ -52,9 +53,12 @@ export interface PanelEventContext {
   readonly appId: number;
   readonly cancelled: () => boolean;
   readonly romIdRef: MutableRefObject<number | null>;
-  /** The panel's own platform, so the broadcast `bios` handler can reject events
-   *  for other platforms. bios events fan out to every mounted panel (#1082). */
+  /** The panel's own platform's slug, so the broadcast `bios` handler can reject
+   *  events for other slugs. bios events fan out to every mounted panel (#1082). */
   readonly platformSlugRef: MutableRefObject<string>;
+  /** The folder RomM keeps the panel's platform in, so the broadcast
+   *  `core_changed` handler can reject events for other platforms (#2452 D16). */
+  readonly platformFolderRef: MutableRefObject<string>;
   /** Load-once gate for the lazy SAVES tab data — a version switch releases it. */
   readonly slotsLoadedRef: MutableRefObject<boolean>;
   /** Orders two answers about the same ROM, which the rom binding admits — see
@@ -151,9 +155,10 @@ async function handleBiosChange(
   ctx: PanelEventContext,
   detail: Extract<RommDataChangedDetail, { type: "bios" }>,
 ): Promise<void> {
-  // bios events fan out to every mounted panel — ignore platforms other
-  // than this panel's own, both to avoid cross-platform BIOS-list bleed
-  // and to skip the wasted re-read (#1082). Read via ref to avoid a stale
+  // bios events fan out to every mounted panel — ignore slugs other than
+  // this panel's own, both to avoid cross-platform BIOS-list bleed and to
+  // skip the wasted re-read (#1082); why the slug and not the folder is
+  // docs/architecture/qam-panel.md, § Library. Read via ref to avoid a stale
   // closure.
   if (!detail.platform_slug || detail.platform_slug !== ctx.platformSlugRef.current) return;
   if (ctx.announcingOwnBiosChange.current) return;
@@ -164,10 +169,10 @@ async function handleBiosChange(
  *  panel's own BIOS tab. The press has already read this panel's answer
  *  ({@link rereadBiosAnswer}), so the event costs no second read here; it is
  *  dispatched synchronously, which is what lets the flag cover exactly it. */
-export function announceOwnBiosChange(ctx: PanelEventContext, slug: string): void {
+export function announceOwnBiosChange(ctx: PanelEventContext, slug: string, folder: string): void {
   ctx.announcingOwnBiosChange.current = true;
   try {
-    announceBiosChange(slug);
+    announceBiosChange(slug, folder);
   } finally {
     ctx.announcingOwnBiosChange.current = false;
   }
@@ -190,7 +195,18 @@ export async function rereadBiosAnswer(ctx: PanelEventContext): Promise<void> {
   foldBiosRead(binding, answer);
 }
 
-async function handleCoreChange(ctx: PanelEventContext): Promise<void> {
+/** Only the pages of the platform whose emulator choice changed read again — and
+ *  a change for no platform reaches only the pages of games with none recorded
+ *  (`coreChangeIsFor`, #2452 D16, D20). */
+async function handleCoreChange(
+  ctx: PanelEventContext,
+  detail: Extract<RommDataChangedDetail, { type: "core_changed" }>,
+): Promise<void> {
+  if (!coreChangeIsFor(detail, ctx.platformFolderRef.current)) return;
+  await rereadCoreAnswer(ctx);
+}
+
+async function rereadCoreAnswer(ctx: PanelEventContext): Promise<void> {
   // Re-fetch cached game detail to pick up the new core-aware BIOS status.
   invalidateCachedGameDetail(ctx.appId);
   const rid = ctx.romIdRef.current;
@@ -230,13 +246,13 @@ async function handleCoreChange(ctx: PanelEventContext): Promise<void> {
 }
 
 /** A switch or a move of an emulator source can change which source answers for
- *  this game, and with it everything `handleCoreChange` re-reads and the save's
+ *  this game, and with it everything `rereadCoreAnswer` re-reads and the save's
  *  shape. The save details are read only while save sync is on, as the cached
- *  detail says; `handleCoreChange` has invalidated it and asked for it again
+ *  detail says; `rereadCoreAnswer` has invalidated it and asked for it again
  *  before its first await, so this joins that read rather than opening a
  *  second one. */
 async function handleEmulatorSourcesChange(ctx: PanelEventContext): Promise<void> {
-  const core = handleCoreChange(ctx);
+  const core = rereadCoreAnswer(ctx);
   const saves = getCachedGameDetail(ctx.appId).then(
     (cached) => (cached.found && cached.save_sync_enabled ? refreshSaveDetails(ctx, undefined) : undefined),
     () => undefined,
@@ -389,7 +405,7 @@ function dispatchDataChanged(ctx: PanelEventContext, detail: RommDataChangedDeta
     case "bios":
       return handleBiosChange(ctx, detail);
     case "core_changed":
-      return handleCoreChange(ctx);
+      return handleCoreChange(ctx, detail);
     case "emulator_sources":
       return handleEmulatorSourcesChange(ctx);
     case "metadata":

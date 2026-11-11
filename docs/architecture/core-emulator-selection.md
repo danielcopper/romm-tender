@@ -63,10 +63,10 @@ An emulator program has **no** libretro `.so`, so the read-path projection repor
 Tender owns two **deviations** from the RetroDECK default core. Each stores only the deviation as a core LABEL; absence
 means "follow the default."
 
-| Scope            | Stored where                                                                                   | Applies to              | Written by                                                                                                                     |
-| ---------------- | ---------------------------------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| **Per-game**     | Tender's database — `roms.emulator_override` (nullable LABEL), `roms.emulator_override_source` | one ROM (by `rom_id`)   | Tender (`pin`/`clear`)                                                                                                         |
-| **Per-platform** | `settings.json` — `platform_cores` map (`{slug: {"label", "source"}}`)                         | every ROM on a platform | Tender (`set_system_core`; the firmware listing's refiling moves an override filed under a server folder name to its platform) |
+| Scope            | Stored where                                                                                   | Applies to              | Written by                                                                                                                                                         |
+| ---------------- | ---------------------------------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Per-game**     | Tender's database — `roms.emulator_override` (nullable LABEL), `roms.emulator_override_source` | one ROM (by `rom_id`)   | Tender (`pin`/`clear`)                                                                                                                                             |
+| **Per-platform** | `settings.json` — `platform_cores` map (`{fs_slug: {"label", "source"}}`)                      | every ROM on a platform | Tender (`set_system_core`; the refiling moves a pick kept under a slug that is no listed platform's folder to the platforms of that slug without one of their own) |
 
 Both overrides are Tender's own state and live in Tender's own stores. Neither is written into ES-DE's `gamelist.xml` —
 Tender **never writes that file**. It still **reads** the RetroDECK/ES-DE configuration it does not own (the live
@@ -99,12 +99,13 @@ not only a core (#1210).
 
 ## Storage: the per-platform core is a LABEL in `settings.json`
 
-The per-platform core lives in a `platform_cores` map in `settings.json` — `{platform_slug: {"label", "source"}}`, an
-empty map by default (`DEFAULT_SETTINGS` in `adapters/persistence.py`). It holds the same kind of value as the per-game
-pin: the core **LABEL**, never a resolved `.so`, with the kind of the source it was chosen from
-(`domain/emulator_pick.py`). Settings version 14 turned each bare label of an older file into that shape with
-`"source": "retrodeck"`, as migration `039` did for the database; a value of any other shape is no pick. An **absent
-key** means "no per-platform deviation — follow the default for this platform."
+The per-platform core lives in a `platform_cores` map in `settings.json` — `{fs_slug: {"label", "source"}}`, keyed by
+the folder RomM keeps the platform in ([#2452](https://github.com/danielcopper/romm-tender/issues/2452) D7), an empty
+map by default (`DEFAULT_SETTINGS` in `adapters/persistence.py`). It holds the same kind of value as the per-game pin:
+the core **LABEL**, never a resolved `.so`, with the kind of the source it was chosen from (`domain/emulator_pick.py`).
+Settings version 14 turned each bare label of an older file into that shape with `"source": "retrodeck"`, as migration
+`039` did for the database; a value of any other shape is no pick. An **absent key** means "no per-platform deviation —
+follow the default for this platform."
 
 It is an
 [ADR-0003](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0003-json-sqlite-persistence-boundary.md)
@@ -141,7 +142,9 @@ resolve_rom(rom_id):
   system = rom_system(rom.platform_slug, install)          ── the install's system, else the platform's (below)
   if system is None: return None                           ── no switched-on system: no entry
   options = get_emulator_options(system)["options"]        ── every es_systems entry, in the resolver's order
-  choice = choose_emulator(options, game=pin, platform=platform_cores[slug])
+  choice = choose_emulator(options, game=pin, platform=game_platform_pick(fs_slug, slug, …))
+                                                           ── the fs_slug's pick; without one, the slug's, else the
+                                                           ── one kept platform's of that slug (#2452 D15)
                                                            ── a stored label stands while it names an entry, whatever
                                                            ── its state; a label that is gone gives way, named
   return choice, options
@@ -293,23 +296,25 @@ detected when the listing was read (none where Tender had detected no version), 
 platform whose name ends in `_id` or `_slug`, as RomM sent it. Tender reads only the four ids the question above is
 asked with; the rest are kept for the resolver's platform table, so an id RomM adds is kept at the next sync with no
 change in Tender. A listed platform without a folder is not kept. The value is replaced at the start of every sync from
-RomM's listing (a failed write is logged and leaves the run alone); one kept before it was keyed by folder is read as it
-stands — each key as the slug it was kept under, the new fields empty — until that sync replaces it. A platform is found
-in it by its slug, the console's identity the question is put by; where several folders share a slug, the last listed
-answers (`domain/platform_system.py::kept_by_slug` says why that changes no question). Where none is kept for a platform
-— the first start after an update — `PlatformSystemService` reads the listing once and keeps it beside what was kept: an
-entry for a slug the listing names gives way to the listing's, and a slug the listing does not name is kept with nothing
-but that slug, so it is not read again — unless a listed platform's folder bears that same name, which then takes the
-key and leaves the slug to be read from the listing at each ask. Where that read fails, the question answers the reason
-`classify_error` gives it — `server_unreachable` while RomM is offline — as every other read that needs RomM does, and
-keeps nothing; the next read with RomM reachable keeps the ids. A game not downloaded then shows the offline state on
-its page (its save status, its BIOS tab reading unknown), and its emulator menu, its BIOS tab and the platform page say
-**"RomM cannot be reached, so Tender does not know this platform's system yet."**; where RomM answered but refused the
-read for any other reason (`auth_failed`, `not_found`, `config_error`, …), they say **"RomM did not give this platform's
-ids, so Tender does not know its system yet."**, and the cause itself shows where Tender's connection state shows it; a
-downloaded game keeps its recorded system and is not affected. The game page's two looks at the disk — whether a
-download's target is already taken, and whether the game is there under another name — must reach no network, so they
-never read the listing: for them a platform with no kept ids has no system, and they go quiet.
+RomM's listing (`PlatformSystemService.replace_listing`, the value's one owner; a failed write is logged and leaves the
+run alone); one kept before it was keyed by folder is read as it stands — each key as the slug it was kept under, the
+new fields empty — until that sync replaces it. A platform is found in it by its slug, the console's identity the
+question is put by; where several folders share a slug, the last listed answers
+(`domain/platform_system.py::kept_by_slug` says why that changes no question). Where none is kept for a platform — the
+first start after an update — `PlatformSystemService` reads the listing once and hands it to the refiling, which has it
+kept beside what was kept (`keep_listing`): an entry for a slug the listing names gives way to the listing's. A slug the
+listing does not name is then kept with nothing but that slug, so it is not read again — unless a listed platform's
+folder bears that same name, which keeps the key and leaves the slug to be read from the listing at each ask. Where that
+read fails, the question answers the reason `classify_error` gives it — `server_unreachable` while RomM is offline — as
+every other read that needs RomM does, and keeps nothing; the next read with RomM reachable keeps the ids. A game not
+downloaded then shows the offline state on its page (its save status, its BIOS tab reading unknown), and its emulator
+menu, its BIOS tab and the platform page say **"RomM cannot be reached, so Tender does not know this platform's system
+yet."**; where RomM answered but refused the read for any other reason (`auth_failed`, `not_found`, `config_error`, …),
+they say **"RomM did not give this platform's ids, so Tender does not know its system yet."**, and the cause itself
+shows where Tender's connection state shows it; a downloaded game keeps its recorded system and is not affected. The
+game page's two looks at the disk — whether a download's target is already taken, and whether the game is there under
+another name — must reach no network, so they never read the listing: for them a platform with no kept ids has no
+system, and they go quiet.
 
 The platform page names the system taken with its source in its header line ([qam-panel.md](qam-panel.md#library)).
 
@@ -672,30 +677,53 @@ while its label is resolved, and with `core_unavailable` when its platform chang
 
 The platform detail's **Change core** button — a `ButtonItem` opening the same context menu as the game-detail picker,
 so every entry renders and is chosen as on a game's page (#1210) — calls
-**`set_system_core(platform_slug, core_label)`**:
+**`set_system_core(platform_slug, platform_folder, core_label)`**:
 
-1. It writes the choice into `settings["platform_cores"]` — storing the LABEL with the kind of the answering source
-   under the slug (a platform no source answers for refuses with `core_unavailable` and writes nothing), or popping the
-   slug when the label is empty (revert to the default) — and persists `settings.json` through the injected
-   `SettingsPersister`.
-2. It returns `{success: true}`. A `settings.json` that cannot be written gives the previous choice back to the live
-   settings, so memory and file agree, and refuses with `save_failed` ("Save failed: …"). The write checks no BIOS, so a
-   firmware read cannot add a second way to report a stored switch as failed. The platform detail re-reads the platform
-   once the switch is done, and that read answers for the new core's firmware.
+1. It writes the choice into `settings["platform_cores"]` — the LABEL with the kind of the source answering for the
+   slug, under the platform's `fs_slug` (a platform no source answers for refuses with `core_unavailable` and writes
+   nothing), or no entry for that `fs_slug` when the label is empty (revert to the default) — and saves `settings.json`.
+2. It returns `{success: true}`. A `settings.json` that cannot be written refuses with `save_failed` ("Save failed: …").
+   The write checks no BIOS, so a firmware read cannot add a second way to report a stored switch as failed. The
+   platform detail re-reads the platform once the switch is done, and that read answers for the new core's firmware.
 
-`platform_cores` has one more writer: the firmware listing's refiling (`services/firmware/refiling.py`) moves an
-override stored under a server folder name, before a firmware file's platform came from RomM's `platform_id`, to its
-platform's slug, in the same live dict, and gives the move back when `settings.json` cannot be written.
+Both writers of `platform_cores` — this one and the refiling below — go through `PlatformPicks`
+(`services/platform_picks.py`), which under one lock hands the writer's `build` the picks as they stand and puts the map
+it answers in place in one step, never changing the map in place: the whole settings are saved by writers on other
+threads, and a map that changed size under such a save's walk would fail it. Where `settings.json` cannot be written,
+the old map is put back, so memory and file agree.
+
+`platform_cores` has one more writer: the refiling (`services/platform_refiling.py`), handed each read of RomM's
+platform listing that keeps or uses it — the Platforms tab's, a sync's, the firmware listing's and the platform system's
+own; the connection test's probe, which discards the listing, is not one. Before it moves anything, the refiling has the
+platform system keep the listed platforms' ids (`platform_ids`), so a reader after any of those reads finds the
+platforms the moved picks went to. A pick under a key that is no listed `fs_slug` but a listed platform's slug — as
+picks were kept before — is copied to every listed `fs_slug` with that slug that has no pick of its own, and the old key
+goes; a pick under a key that is a listed `fs_slug` stays, so a sibling platform with the same slug starts at its
+default, and so does one under a key that is neither, such as a server folder name
+([#2452](https://github.com/danielcopper/romm-tender/issues/2452) D7, D18). There is no settings rung for it. A move
+that fails is logged by the refiling — the traceback of the same failure once per process — and costs the reader
+nothing.
+
+A game with no `fs_slug` recorded — every game, until the first sync after an update from 0.33.0 records it — takes, in
+this order, its own pick; the pick still kept under its slug; once the refiling has moved that key, the pick of the one
+platform Tender keeps for that slug from RomM's listing (`platform_ids`); else the platform's default, which is also
+what it takes where several platforms share the slug (`domain/emulator_pick.py::game_platform_pick`). A game with its
+`fs_slug` takes that platform's pick and nothing else ([#2452](https://github.com/danielcopper/romm-tender/issues/2452)
+D15). A slug that is also a listed platform's `fs_slug` keeps its pick there (D18), so a game without a folder of
+`snes-hacks`, slug `snes`, takes the pick of the platform `snes` at the second step (D19). The slug key is not kept
+beside the moved picks for those games: a reset of one platform to its default would then come back from it at the next
+listing read. The Platforms tab and the BIOS answers are asked for a listed platform, which always has its `fs_slug`, so
+they read that platform's pick alone.
 
 A per-platform core change applies from the next start of every game on the platform that has no per-game pin — no sync
 and no Steam write required. Because the `PlatformCoreReaderAdapter` holds the live settings dict, the next start
 resolves the value just written rather than a stale snapshot.
 
-The Library page's platform detail reads its core through **`get_system_core_info(platform_slug)`**, a read of its own
-rather than a slice of another payload: `get_platform_core_info` is keyed by ROM and layers that ROM's own pin on top,
-and `get_platform_firmware_status` answers whenever the page's walk reaches that platform — which is not when the reader
-focuses it. It costs one ES-DE options read and a `settings.json` lookup, opens no Unit of Work, and is issued once per
-selection.
+The Library page's platform detail reads its core through **`get_system_core_info(platform_slug, platform_folder)`** —
+the system asked by the slug, the pick read by the `fs_slug` — a read of its own rather than a slice of another payload:
+`get_platform_core_info` is keyed by ROM and layers that ROM's own pin on top, and `get_platform_firmware_status`
+answers whenever the page's walk reaches that platform — which is not when the reader focuses it. It costs one ES-DE
+options read and a `settings.json` lookup, opens no Unit of Work, and is issued once per selection.
 
 Its **`active_core_label`** names the per-platform pick while its label still names an entry, whatever its state, else
 **Tender's default** ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D4): the default of the first

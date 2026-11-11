@@ -128,12 +128,13 @@ class ShortcutRemovalService:
             self._ask_for_the_artwork_job_unless_leased(result)
         return result
 
-    async def remove_platform_shortcuts(self, platform_slug: str) -> dict[str, Any]:
+    async def remove_platform_shortcuts(self, platform_folder: str) -> dict[str, Any]:
         """Return app_ids and rom_ids for a platform for the frontend to remove via SteamClient.
 
-        Filters ``uow.roms`` by ``platform_slug`` directly; the display name in
-        the response is resolved from the offline ``kv_config`` cache, falling
-        back to the slug when RomM has never been seen for it. When there is a
+        Filters ``uow.roms`` by the platform's ``fs_slug``, so a game with none
+        recorded is left (#2452 D17); the display name in the response is
+        resolved from the offline ``kv_config`` cache, falling back to the slug
+        when RomM has never been seen for it. When there is a
         shortcut to remove, the answer carries a ``shortcut_removal`` lease in
         ``prune_lease_token`` for the frontend's Steam writes.
         """
@@ -143,7 +144,7 @@ class ShortcutRemovalService:
                 "remove_platform_shortcuts", update=True, migration=True, sync=True, prune=True
             ):
                 await self._artwork_job.stop_for_removal()
-                found = await self._loop.run_in_executor(None, self._remove_platform_shortcuts_io, platform_slug)
+                found = await self._loop.run_in_executor(None, self._remove_platform_shortcuts_io, platform_folder)
                 result = await self._with_removal_lease(found)
         finally:
             self._ask_for_the_artwork_job_unless_leased(result)
@@ -165,12 +166,11 @@ class ShortcutRemovalService:
         if "prune_lease_token" not in result:
             self._artwork_job.request_run()
 
-    def _remove_platform_shortcuts_io(self, platform_slug: str) -> dict[str, Any]:
+    def _remove_platform_shortcuts_io(self, platform_folder: str) -> dict[str, Any]:
         with self._uow_factory() as uow:
-            roms = list(uow.roms.iter_by_platform(platform_slug))
-            # The names cache is keyed by fs_slug; this endpoint is asked by slug.
-            folder = next((rom.platform_fs_slug for rom in roms if rom.platform_fs_slug is not None), None)
-            platform_name = platform_display_name(uow.kv_config.get(PLATFORM_NAMES_KEY), folder, platform_slug)
+            roms = list(uow.roms.iter_by_platform_folder(platform_folder))
+            slug = roms[0].platform_slug if roms else None
+            platform_name = platform_display_name(uow.kv_config.get(PLATFORM_NAMES_KEY), platform_folder, slug)
         app_ids = [rom.shortcut_app_id for rom in roms if rom.shortcut_app_id is not None]
         rom_ids = [str(rom.rom_id) for rom in roms]
         return {"success": True, "app_ids": app_ids, "rom_ids": rom_ids, "platform_name": platform_name}
