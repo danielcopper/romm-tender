@@ -105,7 +105,7 @@ class TestGetPlatforms:
         assert result["platforms"][1]["sync_enabled"] is False
 
     @pytest.mark.asyncio
-    async def test_default_sync_enabled_when_no_prefs(self, make_library):
+    async def test_no_platform_is_synced_while_no_toggle_is_stored(self, make_library):
         from unittest.mock import AsyncMock, MagicMock
 
         mock_loop = MagicMock()
@@ -116,7 +116,7 @@ class TestGetPlatforms:
         library.settings["enabled_platforms"] = {}
 
         result = await library.sync.get_platforms()
-        assert result["platforms"][0]["sync_enabled"] is True
+        assert result["platforms"][0]["sync_enabled"] is False
 
     @pytest.mark.asyncio
     async def test_http_error(self, make_library):

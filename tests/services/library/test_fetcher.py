@@ -67,18 +67,6 @@ class TestFetchEnabledPlatforms:
         assert "SNES" not in names
 
     @pytest.mark.asyncio
-    async def test_all_enabled_when_no_prefs(self, make_library, fake_romm_api):
-        library = make_library(romm_api=fake_romm_api)
-        fake_romm_api.platforms = [
-            {"id": 1, "name": "N64", "slug": "n64"},
-            {"id": 2, "name": "SNES", "slug": "snes"},
-        ]
-        library.settings["enabled_platforms"] = {}
-
-        result, _unwalked = await library.sync._fetcher._fetch_enabled_platforms()
-        assert len(result) == 2
-
-    @pytest.mark.asyncio
     async def test_a_listing_that_is_not_a_list_raises(self, make_library):
         """A non-list answer raises instead of reading as no platforms, and never as a 404 verdict."""
         from adapters.romm.romm_api import RommApiAdapter
@@ -162,124 +150,43 @@ class TestTheTogglesAreKeptByFolder:
         assert library.settings["enabled_platforms"] == {}
         assert library.settings_persister.save_count == 0
 
-
-class TestAPlatformUnitCarriesItsFsSlug:
-    """A platform unit carries the listing's ``fs_slug``, and none where the listing gives a blank one (#2452 D1)."""
-
     @pytest.mark.asyncio
-    async def test_each_unit_carries_its_own_fs_slug_and_a_blank_one_counts_as_none(self, make_library, fake_romm_api):
-        library = make_library(romm_api=fake_romm_api)
-        fake_romm_api.platforms = [
-            {"id": 1, "name": "SNES", "slug": "snes", "fs_slug": "snes"},
-            {"id": 2, "name": "SNES", "slug": "snes", "fs_slug": "snes-hacks"},
-            {"id": 3, "name": "GBA", "slug": "gba", "fs_slug": "   "},
-        ]
-        library.settings["enabled_platforms"] = {}
-        library.settings["enabled_collections"] = {"standard": {}, "smart": {}, "virtual": {}}
-
-        units = await library.sync._fetcher.build_work_queue()
-
-        assert {u.id: u.platform_folder for u in units} == {1: "snes", 2: "snes-hacks", 3: ""}
-
-
-class TestGetPlatformsMaterialization:
-    """Tests for get_platforms() — the #1007 empty-map → full-map self-heal."""
-
-    @pytest.mark.asyncio
-    async def test_materializes_full_all_true_map_when_empty(self, make_library, fake_romm_api):
-        """Empty map + shown platforms → persisted full all-True map (one save)."""
-        library = make_library(romm_api=fake_romm_api)
-        fake_romm_api.platforms = [
-            {"id": 1, "name": "N64", "slug": "n64", "rom_count": 3},
-            {"id": 2, "name": "SNES", "slug": "snes", "rom_count": 5},
-        ]
-        library.settings["enabled_platforms"] = {}
-
-        result = await library.sync._fetcher.get_platforms()
-
-        assert result["success"] is True
-        assert library.settings["enabled_platforms"] == {"1": True, "2": True}
-        assert library.settings_persister.save_count == 1
-        assert all(p["sync_enabled"] is True for p in result["platforms"])
-
-    @pytest.mark.asyncio
-    async def test_excludes_zero_rom_platforms_from_materialized_map(self, make_library, fake_romm_api):
-        """A rom_count==0 platform is neither shown nor materialized."""
-        library = make_library(romm_api=fake_romm_api)
-        fake_romm_api.platforms = [
-            {"id": 1, "name": "N64", "slug": "n64", "rom_count": 3},
-            {"id": 2, "name": "Empty", "slug": "empty", "rom_count": 0},
-        ]
-        library.settings["enabled_platforms"] = {}
-
-        result = await library.sync._fetcher.get_platforms()
-
-        assert library.settings["enabled_platforms"] == {"1": True}
-        assert [p["slug"] for p in result["platforms"]] == ["n64"]
-
-    @pytest.mark.asyncio
-    async def test_does_not_re_materialize_when_map_non_empty(self, make_library, fake_romm_api):
-        """A non-empty stored map is read literally — no re-write, no save."""
-        library = make_library(romm_api=fake_romm_api)
-        fake_romm_api.platforms = [
-            {"id": 1, "name": "N64", "slug": "n64", "rom_count": 3},
-            {"id": 2, "name": "SNES", "slug": "snes", "rom_count": 5},
-        ]
-        library.settings["enabled_platforms"] = {"1": False}
-
-        result = await library.sync._fetcher.get_platforms()
-
-        assert library.settings["enabled_platforms"] == {"1": False}
-        assert library.settings_persister.save_count == 0
-        by_id = {p["id"]: p["sync_enabled"] for p in result["platforms"]}
-        # Absent id 2 resolves False once any pref exists (the literal-map read).
-        assert by_id == {1: False, 2: False}
-
-    @pytest.mark.asyncio
-    async def test_does_not_persist_when_no_shown_platforms(self, make_library, fake_romm_api):
-        """Empty map + zero shown platforms → sentinel survives, no save."""
-        library = make_library(romm_api=fake_romm_api)
-        fake_romm_api.platforms = [
-            {"id": 1, "name": "Empty", "slug": "empty", "rom_count": 0},
-        ]
-        library.settings["enabled_platforms"] = {}
-
-        result = await library.sync._fetcher.get_platforms()
-
-        assert result["success"] is True
-        assert result["platforms"] == []
-        assert library.settings["enabled_platforms"] == {}
-        assert library.settings_persister.save_count == 0
-
-    @pytest.mark.asyncio
-    async def test_one_off_toggle_after_materialization_keeps_others_enabled(self, make_library, fake_romm_api):
-        """#1007 regression: get_platforms → save one OFF → other platforms still sync.
-
-        Reproduces the data-loss path end-to-end at the fetcher seam: open the
-        Platforms page (materialize), un-toggle exactly ONE platform, then run
-        the sync-time filter and assert every OTHER platform survives.
-        """
+    async def test_switching_one_off_after_enable_all_keeps_the_others_on(self, make_library, fake_romm_api):
+        """#1007: switching exactly ONE platform off leaves every other platform synced."""
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [
             {"id": 1, "name": "N64", "slug": "n64", "rom_count": 3},
             {"id": 2, "name": "SNES", "slug": "snes", "rom_count": 5},
             {"id": 3, "name": "GBA", "slug": "gba", "rom_count": 7},
         ]
-        library.settings["enabled_platforms"] = {}
+        await library.sync._fetcher.set_all_platforms_sync(True)
 
-        # 1. Platforms page mount materializes the full all-True map.
-        await library.sync._fetcher.get_platforms()
-        assert library.settings["enabled_platforms"] == {"1": True, "2": True, "3": True}
-
-        # 2. Un-toggle exactly one platform (single-key write).
-        library.sync._fetcher.save_platform_sync(2, False)
-
-        # 3. Sync-time filter: every OTHER platform must survive (pre-fix this
-        #    returned only the never-touched platforms, dropping the rest).
+        library.sync._fetcher.save_platform_sync("snes", False)
         filtered, _unwalked = await library.sync._fetcher._fetch_enabled_platforms()
-        kept = {p["name"] for p in filtered}
-        assert kept == {"N64", "GBA"}
-        assert "SNES" not in kept
+
+        assert {p["name"] for p in filtered} == {"N64", "GBA"}
+
+
+class TestAPlatformUnitCarriesItsFsSlug:
+    """A platform unit carries the listing's ``fs_slug``, and a platform whose fs_slug is blank builds none
+    (#2452 D1, D26)."""
+
+    @pytest.mark.asyncio
+    async def test_each_unit_carries_its_own_fs_slug_and_a_platform_without_one_builds_no_unit(
+        self, make_library, fake_romm_api
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.platforms = [
+            {"id": 1, "name": "SNES", "slug": "snes", "fs_slug": "snes"},
+            {"id": 2, "name": "SNES", "slug": "snes", "fs_slug": "snes-hacks"},
+            {"id": 3, "name": "GBA", "slug": "gba", "fs_slug": "   "},
+        ]
+        library.settings["enabled_platforms"] = {"snes": True, "snes-hacks": True}
+        library.settings["enabled_collections"] = {"standard": {}, "smart": {}, "virtual": {}}
+
+        units = await library.sync._fetcher.build_work_queue()
+
+        assert {u.id: u.platform_folder for u in units} == {1: "snes", 2: "snes-hacks"}
 
 
 class TestBuildWorkQueueErrorPaths:
