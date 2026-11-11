@@ -354,8 +354,8 @@ export const WidePage: FC<WidePageProps> = ({ title, onBack, tabs, activeTab, on
   // Steam's `sp.js`), so it is passed only where the frame would place focus
   // itself — on a page opened by a swap. It is also what makes Steam draw the
   // L1/R1 glyphs: its tab row shows them only while gamepad focus is within the
-  // tabbed page, and the Back row above the tabs is outside it
-  // (`chunk~2dcc5aaf7.js`, the tab row's `showGlyphs`).
+  // tabbed page (`docs/architecture/qam-panel.md`, "Tabs"), and the Back row
+  // above the tabs is outside it.
   const steamPlacesFocus = Boolean(tabs && Tabs);
 
   useEffect(() => {
@@ -384,8 +384,8 @@ export const WidePage: FC<WidePageProps> = ({ title, onBack, tabs, activeTab, on
   // The frame's region is for a body of rows in one column, and nothing else
   // gets one. Steam's tabbed page already wraps each tab's content in this same
   // plain scroll panel (`ScrollingTab<id>`, `scrollDirection: "y"`, in
-  // `chunk~2dcc5aaf7.js`), so a region from the frame would nest a second
-  // scroller inside it; and a page whose content is side-by-side regions —
+  // `steamui/sp.js`), so a region from the frame would nest a second scroller
+  // inside it; and a page whose content is side-by-side regions —
   // `ownRegions` — would get one wrapped around both of them. Either way any
   // region the body needs is the page's to build with `ScrollRegion`.
   let body: ReactNode = ownRegions ? children : <ScrollRegion>{children}</ScrollRegion>;

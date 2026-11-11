@@ -11,6 +11,7 @@ from, and the fake-RomM seeders the orchestrator and chunk-dispatcher suites
 drive their end-to-end runs through.
 """
 
+from types import EllipsisType
 from unittest.mock import AsyncMock, MagicMock
 
 from services.library.fetcher import _SUPPORTED_VIRTUAL_TYPES
@@ -59,6 +60,7 @@ def _make_rom(rom_id, name, platform_name, platform_slug="gba"):
         "fs_name": f"{name}.zip",
         "platform_name": platform_name,
         "platform_slug": platform_slug,
+        "platform_fs_slug": platform_slug,
     }
 
 
@@ -74,6 +76,7 @@ def _make_registry_entry(name, platform_name, app_id, platform_slug="gba", short
         "fs_name": f"{name}.zip",
         "platform_name": platform_name,
         "platform_slug": platform_slug,
+        "platform_fs_slug": platform_slug,
         "cover_path": "",
         "shortcut_applied": shortcut_applied,
     }
@@ -94,6 +97,7 @@ def _seed_install(library, rom_id, *, file_path, platform_slug="n64"):
             Rom(
                 rom_id=rom_id,
                 platform_slug=platform_slug,
+                platform_fs_slug=platform_slug,
                 name=f"Game {rom_id}",
                 fs_name=f"game_{rom_id}.z64",
                 shortcut_app_id=None,
@@ -123,8 +127,12 @@ def _seed_rom_row(
     sibling_group_key: str | None = "romm:seed:1",
     shortcut_applied: bool = True,
     cover_source: str | None = None,
+    fs_slug: str | None | EllipsisType = ...,
 ):
     """Insert a bound (or unbound when app_id is None) ROM into the shared fake UoW.
+
+    ``fs_slug`` defaults to *platform_slug*; ``None`` seeds a row no sync has
+    recorded an ``fs_slug`` for.
 
     ``sibling_group_key`` defaults to a non-null value so the incremental-skip
     path treats the registry as already backfilled (#1295); pass ``None`` to
@@ -142,6 +150,7 @@ def _seed_rom_row(
     rom = Rom(
         rom_id=rom_id,
         platform_slug=platform_slug,
+        platform_fs_slug=platform_slug if fs_slug is ... else fs_slug,
         name=name,
         fs_name=fs_name if fs_name is not None else f"{name}.z64",
         shortcut_app_id=app_id,
@@ -154,20 +163,25 @@ def _seed_rom_row(
         library.uow.roms.set_shortcut_applied(rom_id, shortcut_applied)
 
 
-def _seed_platform(fake_romm_api, *, platform_id, name, slug, roms):
+def _seed_platform(fake_romm_api, *, platform_id, name, slug, roms, fs_slug=None):
     """Seed a platform plus its ROMs on the fake.
 
     ROMs are dicts with at least ``id``/``name``; ``platform_id`` and
-    ``platform_slug``/``platform_name`` are stamped automatically so the
-    fetcher's enrichment loop sees consistent data.
+    ``platform_slug``/``platform_name``/``platform_fs_slug`` are stamped
+    automatically so the fetcher's enrichment loop sees consistent data.
+    ``fs_slug`` defaults to *slug*.
     """
-    fake_romm_api.platforms.append({"id": platform_id, "name": name, "slug": slug, "rom_count": len(roms)})
+    fs_slug = fs_slug or slug
+    fake_romm_api.platforms.append(
+        {"id": platform_id, "name": name, "slug": slug, "fs_slug": fs_slug, "rom_count": len(roms)}
+    )
     for rom in roms:
         rom_id = rom["id"]
         full_rom = {
             "platform_id": platform_id,
             "platform_name": name,
             "platform_slug": slug,
+            "platform_fs_slug": fs_slug,
             **rom,
         }
         fake_romm_api.roms[rom_id] = full_rom
@@ -204,6 +218,7 @@ def _seed_persisted_rom(uow, rom_id, *, app_id, group_key, platform_slug="n64", 
             Rom(
                 rom_id=rom_id,
                 platform_slug=platform_slug,
+                platform_fs_slug=platform_slug,
                 name=f"G{rom_id}",
                 fs_name=f"g{rom_id}.z64",
                 shortcut_app_id=app_id,

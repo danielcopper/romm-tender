@@ -136,7 +136,10 @@ class PlatformSystemService:
             ids = self._read_and_keep(platform_slug)
         else:
             ids = PlatformIds()
-        return ids, names.get(platform_slug) or ids.name or platform_slug
+        # The names cache is keyed by fs_slug; an entry kept before it recorded
+        # one was kept under its slug.
+        named_by = entry.fs_slug if entry is not None and entry.fs_slug else platform_slug
+        return ids, names.get(named_by) or ids.name or platform_slug
 
     def _read_and_keep(self, platform_slug: str) -> PlatformIds:
         """*platform_slug*'s ids from RomM's listing, kept with every listed platform beside those kept before.

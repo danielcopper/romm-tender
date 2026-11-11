@@ -13,7 +13,7 @@
  * toast showed for its full duration.
  *
  * So a toast waits for three things, all read off Steam's own globals (the
- * spellings are in `steamui/chunk~*.js`):
+ * spellings are in `steamui/sp.js`):
  *
  * - **Steam's services are initialised** — `App.WaitForServicesInitialized()`,
  *   which resolves once `InitAfterLogin` finished, where it exists, and

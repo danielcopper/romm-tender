@@ -166,15 +166,14 @@ class FirmwareStatusReader:
             if other != emulator
         }
         names = self._platform_names()
-        slugs = {stored.platform_folder: stored.platform_slug for stored in records.stored}
         return (
             catalogue,
-            _named(rows, names, slugs),
-            {other: _named(other_rows, names, slugs) for other, other_rows in others.items()},
+            _named(rows, names),
+            {other: _named(other_rows, names) for other, other_rows in others.items()},
         )
 
     def _platform_names(self) -> dict[str, str]:
-        """The names the library sync last recorded for RomM's platforms, by slug. Blocking."""
+        """The names the library sync last recorded for RomM's platforms, by ``fs_slug``. Blocking."""
         with self._uow_factory() as uow:
             return decode_platform_names(uow.kv_config.get(PLATFORM_NAMES_KEY))
 
@@ -626,16 +625,13 @@ class FirmwareStatusReader:
         return payload
 
 
-def _named(rows: list[BiosFileEntry], names: dict[str, str], slugs: dict[str, str]) -> list[BiosFileEntry]:
+def _named(rows: list[BiosFileEntry], names: dict[str, str]) -> list[BiosFileEntry]:
     """*rows* with the name of the platform a link of Tender's serves them for, its folder where none is recorded.
 
-    ``linked_for`` is the platform's folder; *slugs* gives each store folder's
-    slug, which the recorded names are kept under.
+    ``linked_for`` is the platform's ``fs_slug``, which the recorded names are kept under.
     """
     return [
-        replace(row, linked_for_name=names.get(slugs.get(row.linked_for, row.linked_for), row.linked_for))
-        if row.linked_for
-        else row
+        replace(row, linked_for_name=names.get(row.linked_for, row.linked_for)) if row.linked_for else row
         for row in rows
     ]
 

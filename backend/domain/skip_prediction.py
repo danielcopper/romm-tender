@@ -20,7 +20,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from domain.collection_skip import holds_a_game_to_converge, membership_verdict, recorded_updated_at
+from domain.collection_skip import (
+    holds_a_game_to_converge,
+    holds_a_game_without_its_platform_folder,
+    membership_verdict,
+    recorded_updated_at,
+)
 from domain.platform_skip import skip_reference, stamp_can_match
 
 if TYPE_CHECKING:
@@ -95,7 +100,10 @@ def predict_collection_skip(*, unit: WorkUnit, stamp: CollectionSyncState | None
     )
     if not listing.unchanged or skip_reference(stamp) is None:
         return False
-    return not holds_a_game_to_converge(rows, stamp.member_rom_ids, platform_slugs=set(unit.unwalked_platform_slugs))
+    stored = list(rows)
+    return not holds_a_game_to_converge(
+        stored, stamp.member_rom_ids, platform_folders=set(unit.unwalked_platform_folders)
+    ) and not holds_a_game_without_its_platform_folder(stored, stamp.member_rom_ids)
 
 
 def collapsed_shortcut_count(rows: Iterable[tuple[str | None, bool]]) -> int:

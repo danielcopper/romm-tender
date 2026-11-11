@@ -56,6 +56,7 @@ _EXPECTED_READS = frozenset(
         "iter_all",
         "iter_by_group_key",
         "iter_by_platform",
+        "iter_by_platform_folder",
         "iter_page",
         "iter_pending_sessions",
         "iter_recent",

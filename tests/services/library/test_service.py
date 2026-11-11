@@ -24,6 +24,7 @@ def _seed_rom(uow, rom_id, *, app_id, platform_slug, name="Game"):
     rom = Rom(
         rom_id=rom_id,
         platform_slug=platform_slug,
+        platform_fs_slug=platform_slug,
         name=name,
         fs_name=f"{name}.zip",
         shortcut_app_id=app_id,

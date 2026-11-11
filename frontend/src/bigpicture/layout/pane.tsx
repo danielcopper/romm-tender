@@ -72,7 +72,8 @@ export const SELECTION_ACCENT = "#1a9fff";
 
 /** The fill behind a row that holds focus — the colour Steam paints a focused
  *  Field with (`.Field.HighlightOnFocus.gpfocus`, `.gpfocuswithin` in
- *  `steamui/css/chunk~2dcc5aaf7.css`), so a row that draws its own focus looks
+ *  `steamui/css/sp.css`, under the hashed names `Field`'s class map in
+ *  `steamui/sp.js` gives them), so a row that draws its own focus looks
  *  like a focused Field Steam draws. */
 export const FOCUSED_ROW_FILL = "#3d4450";
 
@@ -327,10 +328,9 @@ export const PaneTableRow: FC<{
  * own button component rather than a lookalike of one.
  *
  * They are the same button, and the difference is the row around it. In
- * `chunk~2dcc5aaf7.js` module 12316, the `forwardRef` decky's prop-list regex
- * matches (`highlightOnFocus` then `childrenContainerWidth`) renders a `Field`
- * whose first child is a second `forwardRef`, and that one renders `o.$n`;
- * module 64608 re-exports `$n` from module 44351, where it is the `forwardRef`
+ * `steamui/sp.js`, the `forwardRef` decky's prop-list regex matches
+ * (`highlightOnFocus` then `childrenContainerWidth`) renders a `Field` whose
+ * first child is a second `forwardRef`, and that one renders the `forwardRef`
  * whose className is `"DialogButton","_DialogLayout","Secondary"` — the exact
  * string `@decky/ui` searches for to bind its own `DialogButton`
  * (`@decky/ui/dist/components/Dialog.js`,

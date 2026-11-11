@@ -300,7 +300,7 @@ class FakeRommApi:
         """
         self._log("list_platforms")
         self._check_fail(self.list_platforms_side_effect)
-        return [self._with_firmware(p) for p in self.platforms]
+        return [self._with_firmware({"fs_slug": p.get("slug"), **p}) for p in self.platforms]
 
     def _with_firmware(self, platform: dict[str, Any]) -> dict[str, Any]:
         files = [dict(f) for f in self.firmware_files if f.get("platform_id") == platform.get("id")]
@@ -332,7 +332,7 @@ class FakeRommApi:
         rom = self.roms.get(rom_id)
         if rom is None:
             return {"id": rom_id}
-        answer = dict(rom)
+        answer = self._with_folder(rom)
         if isinstance(answer.get("sibling_roms"), list):
             answer["sibling_roms"] = [
                 stub for stub in answer["sibling_roms"] if stub.get("id") not in self.admin_hidden_rom_ids
@@ -367,7 +367,12 @@ class FakeRommApi:
 
     def _paginate(self, items: list[dict[str, Any]], limit: int, offset: int) -> dict[str, Any]:
         sliced = items[offset : offset + limit]
-        return {"items": [dict(r) for r in sliced], "total": len(items)}
+        return {"items": [self._with_folder(r) for r in sliced], "total": len(items)}
+
+    def _with_folder(self, rom: dict[str, Any]) -> dict[str, Any]:
+        platform = next((p for p in self.platforms if p.get("id") == rom.get("platform_id")), None)
+        folder = (platform or {}).get("fs_slug") or (platform or {}).get("slug") or rom.get("platform_slug")
+        return {"platform_fs_slug": folder, **rom} if folder else dict(rom)
 
     def list_roms(self, platform_id: int, limit: int = LIST_PAGE_SIZE, offset: int = 0) -> dict[str, Any]:
         self._log("list_roms", (platform_id,), {"limit": limit, "offset": offset})

@@ -21,10 +21,13 @@ from host.inject.cdp import (
     split_ws_url,
     unnamed_targets,
 )
-from tests.host.conftest import free_port
+from tests.host.conftest import free_port, wait_until
 from tests.host.inject.fake_debugger import FakeDebugger, FakeTarget, never_answer, refuse
 
 LOGGER = logging.getLogger("test_cdp")
+
+# Far above what a hang-up over loopback takes, far below what the suite should wait.
+HANG_UP_BOUND_SECONDS = 2.0
 
 
 @pytest.fixture
@@ -367,6 +370,19 @@ class TestTheSizeCap:
         try:
             with pytest.raises(CdpConnectionLost):
                 await ask(connection, "Page.enable")
+        finally:
+            await connection.close()
+
+    async def test_the_client_hangs_up_on_a_connection_the_cap_ended(self, debugger, monkeypatch):
+        import host.inject.cdp as cdp
+
+        monkeypatch.setattr(cdp, "MAX_MESSAGE_BYTES", 256)
+        debugger.handlers["Page.enable"] = lambda _params: {"blob": "x" * 4096}
+        connection = await connect_to(debugger)
+        try:
+            with pytest.raises(CdpConnectionLost):
+                await ask(connection, "Page.enable")
+            await wait_until(lambda: not debugger.connections, timeout=HANG_UP_BOUND_SECONDS)
         finally:
             await connection.close()
 

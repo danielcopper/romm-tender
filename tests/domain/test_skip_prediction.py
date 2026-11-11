@@ -19,7 +19,7 @@ from domain.work_unit import WorkUnit
 
 def _stamp(*, started: str | None = "2025-01-01T00:00:00+00:00", checksum: str | None = "c" * 64) -> PlatformSyncState:
     return PlatformSyncState.stamp(
-        platform_slug="n64",
+        platform_folder="n64",
         at="2025-01-01T00:30:00+00:00",
         rom_count=3,
         fetch_id="run-1",
@@ -100,7 +100,7 @@ def _collection_unit(**overrides) -> WorkUnit:
         "collection_kind": "standard",
         "collection_updated_at": _COLLECTION_UPDATED_AT,
         "member_rom_ids": (11, 10),
-        "unwalked_platform_slugs": ("gba",),
+        "unwalked_platform_folders": ("gba",),
     }
     kwargs.update(overrides)
     return WorkUnit(**kwargs)
@@ -110,6 +110,7 @@ def _row(rom_id: int, *, app_id: int | None, slug: str = "gba") -> Rom:
     return Rom(
         rom_id=rom_id,
         platform_slug=slug,
+        platform_fs_slug=slug,
         name=f"rom-{rom_id}",
         fs_name=f"rom-{rom_id}.zip",
         shortcut_app_id=app_id,
@@ -278,3 +279,11 @@ class TestNewShortcutCount:
         rows = [("g:a", True), ("g:a", False), ("g:b", False), ("g:b", False), (None, True), (None, False)]
         bound_rows = sum(1 for _key, is_bound in rows if is_bound)
         assert new_shortcut_count(rows, unit_rom_count=len(rows)) + bound_rows == collapsed_shortcut_count(rows)
+
+
+class TestAMemberWithoutAPlatformFolderPredictsAFetch:
+    """The plan replays the gate's refusal for a member no sync gave its platform folder (#2452 D5)."""
+
+    def test_a_member_without_a_folder_predicts_a_fetch(self):
+        row = replace(_row(10, app_id=6010), platform_fs_slug=None)
+        assert predict_collection_skip(unit=_collection_unit(), stamp=_collection_stamp(), rows=[row]) is False

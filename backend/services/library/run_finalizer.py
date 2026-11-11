@@ -79,8 +79,8 @@ class RunFinalizer:
         Platform collections are grouped from the full ``roms`` table
         (every bound ROM, including ones an incremental sync skipped —
         they remain rows), keyed by the platform's display name
-        resolved from *platform_names*, falling back to the slug when
-        absent.
+        resolved by its ``fs_slug`` from *platform_names*, falling back to the
+        ``fs_slug`` when absent; a row with no ``fs_slug`` recorded is filed under none.
 
         RomM collections keep the per-run membership accumulator (keyed by a
         collision-free ``(collection_kind, collection_id)`` identity, name in the
@@ -124,7 +124,7 @@ class RunFinalizer:
         casing kept for display): Steam collapses collection names by a
         case-insensitive identity, so two display names differing only in case
         must land in one Steam collection or the second create overwrites the
-        first. Two distinct slugs colliding this way is rare, but the union keeps
+        first. Two distinct ``fs_slug`` values colliding this way is rare, but the union keeps
         it lossless and matches the collection-map rule
         (:meth:`_resolve_collection_memberships`).
         """
@@ -136,7 +136,7 @@ class RunFinalizer:
             if rom.shortcut_app_id is None or rom.rom_id in removed_rom_ids:
                 continue
             display = platform_collection_name(
-                rom.rom_id, rom.platform_slug, pending_platform_rom_ids, platform_names, create_groups
+                rom.rom_id, rom.platform_fs_slug, pending_platform_rom_ids, platform_names, create_groups
             )
             if display is not None:
                 fold = fold_collection_name(display)
@@ -232,8 +232,9 @@ class RunFinalizer:
         pending_platform_rom_ids: set[int] | None,
         platform_names: dict[str, str],
         stale_rom_ids: list[int] | None,
-        processed_platform_slugs: frozenset[str],
+        processed_platform_folders: frozenset[str],
         gone_marks: Mapping[int, GoneEvidence | None],
+        found_folders: Mapping[int, str],
     ) -> tuple[dict[str, list[int]], dict[str, list[int]]]:
         """Settle the removed ROMs' stamps, refresh the name cache, and build collection maps.
 
@@ -243,11 +244,12 @@ class RunFinalizer:
         says to and delete the stamp of every collection whose member set holds
         a ROM whose shortcut the run removes — and (2) and (3) treat such a row as
         unbound — (2) refresh the offline
-        ``platform_slug → name`` cache — the run's listed names plus
+        ``fs_slug → name`` cache — the run's listed names plus
         each bound platform's kept name
         (:meth:`_names_with_bound_platforms_kept`) — and
-        (3) build the cross-unit collection mappings. Before (2) it writes
-        *gone_marks* onto their rows: a mark where one is given, a clear for
+        (3) build the cross-unit collection mappings. First it writes
+        *found_folders* onto their rows (#2452 D5), and before (2) it writes
+        *gone_marks* onto theirs: a mark where one is given, a clear for
         ``None``. The last-sync timestamp
         and the synced platform/collection lists live on the ``SyncRun``
         record :class:`SyncRunRecorder` writes — they are not persisted here.
@@ -256,17 +258,18 @@ class RunFinalizer:
         deletions, the cache refresh and the reads commit atomically.
         """
         with self._uow_factory() as uow:
+            self._write_found_folders(uow, found_folders)
             removed_rom_ids: set[int] = set()
-            unprocessed_slugs_removed: set[str] = set()
+            unprocessed_folders_removed: set[str] = set()
             for rid in stale_rom_ids or []:
                 rom = uow.roms.get(rid)
                 if rom is None:
                     continue
                 removed_rom_ids.add(rom.rom_id)
-                if rom.platform_slug not in processed_platform_slugs:
-                    unprocessed_slugs_removed.add(rom.platform_slug)
-            for slug in unprocessed_slugs_removed:
-                uow.platform_sync_state.revoke_skip(slug)
+                if rom.platform_fs_slug is not None and rom.platform_fs_slug not in processed_platform_folders:
+                    unprocessed_folders_removed.add(rom.platform_fs_slug)
+            for folder in unprocessed_folders_removed:
+                uow.platform_sync_state.revoke_skip(folder)
             uow.collection_sync_state.delete_intersecting(removed_rom_ids)
             self._write_gone_marks(uow, gone_marks)
 
@@ -280,6 +283,16 @@ class RunFinalizer:
                 names,
                 removed_rom_ids,
             )
+
+    @staticmethod
+    def _write_found_folders(uow: UnitOfWork, found_folders: Mapping[int, str]) -> None:
+        """Record on each row the ``fs_slug`` RomM answered its exact id with (#2452 D5)."""
+        for rom_id, folder in found_folders.items():
+            rom = uow.roms.get(rom_id)
+            if rom is None or rom.platform_fs_slug == folder:
+                continue
+            rom.record_platform_folder(folder)
+            uow.roms.save(rom)
 
     @staticmethod
     def _write_gone_marks(uow: UnitOfWork, gone_marks: Mapping[int, GoneEvidence | None]) -> None:
@@ -304,19 +317,20 @@ class RunFinalizer:
 
         A platform RomM no longer lists keeps its games, and its Steam collection
         is found by this name: written over with the listed names alone, the
-        next run would key that collection by the slug, and the frontend would
+        next run would key that collection by the ``fs_slug``, and the frontend would
         remove the old one. This runs on every finalize, a stopped run's included,
         since each of them rewrites the cache.
         """
         kept = decode_platform_names(uow.kv_config.get(PLATFORM_NAMES_KEY))
         outside = {
-            rom.platform_slug
+            rom.platform_fs_slug
             for rom in uow.roms.iter_all()
             if rom.shortcut_app_id is not None
             and rom.rom_id not in removed_rom_ids
-            and rom.platform_slug not in platform_names
+            and rom.platform_fs_slug is not None
+            and rom.platform_fs_slug not in platform_names
         }
-        return {**{slug: kept[slug] for slug in outside if slug in kept}, **platform_names}
+        return {**{folder: kept[folder] for folder in outside if folder in kept}, **platform_names}
 
     async def finalize_per_unit_run(
         self,
@@ -325,8 +339,9 @@ class RunFinalizer:
         platform_names: dict[str, str] | None = None,
         stale_rom_ids: list[int] | None = None,
         *,
-        processed_platform_slugs: Collection[str],
+        processed_platform_folders: Collection[str],
         gone_marks: Mapping[int, GoneEvidence | None] | None = None,
+        found_folders: Mapping[int, str] | None = None,
     ):
         """Settle the removed ROMs' stamps, rebuild Steam-collection maps, and emit ``sync_collections``.
 
@@ -340,11 +355,11 @@ class RunFinalizer:
         not finish"), and the maps and the name cache built here leave it out as
         though it were unbound. A report can land before this runs, so the stamps
         are settled for every row handed in that still exists.
-        ``platform_names`` is the ``platform_slug → name`` map of every
+        ``platform_names`` is the ``fs_slug → name`` map of every
         platform the run's listing named, synced or not, cached for the offline
         ``roms``-derived queries.
 
-        ``processed_platform_slugs`` names the platform units this run
+        ``processed_platform_folders`` names the ``fs_slug`` values of the platform units this run
         processed, skipped and fetched alike. A stale removal on any other
         platform — one whose sync is turned off, or one RomM no longer lists —
         revokes that platform's skip; a processed platform keeps its skip. A
@@ -356,7 +371,9 @@ class RunFinalizer:
         ``gone_marks`` is the stale removal's verdict per row on whether RomM
         still serves it (:meth:`domain.sync_diff.StaleSort.gone_from_romm_marks`), written
         in the same UoW. Who may pass it is docs/architecture/backend-architecture.md,
-        "The stale removal keeps a game gone from RomM".
+        "The stale removal keeps a game gone from RomM". ``found_folders`` is
+        the ``fs_slug`` RomM answered each asked row's exact id with
+        (:class:`~services.library._stale_rows.StaleVerdict`), written there too.
 
         Returns the ``(platform_app_ids, romm_collection_app_ids)`` maps the caller
         needs for the completed-run ``SyncRun`` write and the terminal emit. The
@@ -374,8 +391,9 @@ class RunFinalizer:
             pending_platform_rom_ids,
             names,
             stale_rom_ids,
-            frozenset(processed_platform_slugs),
+            frozenset(processed_platform_folders),
             gone_marks or {},
+            found_folders or {},
         )
 
         await self._emit(

@@ -215,7 +215,7 @@ class CoreService:
             return None
         path = _asked_path(install, rom, self._disc_resolver)
         verdict = self._core_info.launchability(install.system, path, label=resolved.choice.option.label)
-        return verdict.payload(platform_name=self._platform_name(rom.platform_slug))
+        return verdict.payload(platform_name=self._platform_name(rom))
 
     def _chosen_command(
         self, rom: Rom, install: RomInstall | None, resolved: ResolvedEmulator | None
@@ -296,7 +296,7 @@ class CoreService:
             install.system,
             _asked_path(install, rom, self._disc_resolver),
             resolved,
-            self._platform_name(rom.platform_slug),
+            self._platform_name(rom),
         )
 
     async def get_system_core_info(self, platform_slug: str) -> dict[str, Any]:
@@ -551,10 +551,10 @@ class CoreService:
             uow.roms.set_emulator_override(rom_id, rom.emulator_override, rom.emulator_override_source)
         return {"success": True}
 
-    def _platform_name(self, platform_slug: str | None) -> str:
-        """The name the game page shows *platform_slug* under, which a launch answer's sentences name (#2195 D36)."""
+    def _platform_name(self, rom: Rom) -> str:
+        """The name the game page shows *rom*'s platform under, which a launch answer's sentences name (#2195 D36)."""
         with self._uow_factory() as uow:
-            return platform_display_name(uow.kv_config.get(PLATFORM_NAMES_KEY), platform_slug)
+            return platform_display_name(uow.kv_config.get(PLATFORM_NAMES_KEY), rom.platform_fs_slug, rom.platform_slug)
 
     def _read_rom_and_install(self, rom_id: int) -> tuple[Rom | None, RomInstall | None]:
         with self._uow_factory() as uow:

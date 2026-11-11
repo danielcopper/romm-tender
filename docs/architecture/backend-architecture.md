@@ -493,8 +493,8 @@ removal the panel did not finish"). `sync_stats.roms` is a registry-derived boun
 `shortcut_registry` / `last_sync` / `sync_stats` are gone from this path; all writes go through the `roms` / `sync_runs`
 Repository Protocols behind a narrow Unit of Work (per
 [ADR-0006](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0006-narrow-unit-of-work-scope.md) the UoW
-spans only the DB write, never the up-to-60s frontend ack). The platform `slug → name` map resolves live from RomM each
-sync and is cached in a `kv_config` row for offline reads. Removing a shortcut **unbinds** the ROM
+spans only the DB write, never the up-to-60s frontend ack). The platform `fs_slug → name` map resolves live from RomM
+each sync and is cached in a `kv_config` row for offline reads. Removing a shortcut **unbinds** the ROM
 (`Rom.unbind_shortcut()` NULLs `shortcut_app_id`, keeping the row and its per-ROM children) rather than deleting it, per
 [ADR-0007](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0007-rom-retention-identity-anchor.md). The
 full schema and aggregate model are in [Database Design](database-design.md).
@@ -978,30 +978,42 @@ game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app
   lists that platform, below. A row no commit has recorded a route for since migration `029` falls back to the
   collections' completion stamps, read once before the run's first unit rewrites any of them
   (`do_read_collection_listed_rom_ids`): one a stamp lists is asked, any other removed. **A platform RomM no longer
-  lists is gone from RomM, not turned off**: the fetcher records every slug RomM's platform listing names on the run
-  state (`LibrarySyncStateBox.run_listed_platform_slugs`) when it builds the work queue, preview included, and a row
-  whose platform is not among them keeps its shortcut, with no request, unless it was last delivered through a
-  collection. The kept ids under `kv_config`'s `platform_ids` are not the answer, because a game page that asks for an
-  unknown platform's system during the run writes it back there (`PlatformSystemService`). A listing that fails stops
-  the run, so a run that reaches the stale removal always has its own. Which platforms are on in Tender is keyed by
-  RomM's platform id, which an unlisted platform no longer has, so the route is what says the platform was on: a row
-  last delivered through its platform had it on. A kept row stays in its platform's Steam collection; for a platform
-  RomM no longer lists, that collection keeps the name the `platform_names` cache holds; which name names every other
-  platform is under [Collection management](steam-non-steam-shortcuts.md#collection-management). Every finalize, a
-  stopped run's included, rewrites the cache with the run's listed names and carries forward the name of each platform
-  outside them a bound row is still on (`RunFinalizer._names_with_bound_platforms_kept`), so a cancelled or paused run
-  in between does not rename the collection to the slug. The preview reads the same name (`do_read_kept_platform_names`,
-  through `services/library/_stale_rows.py::with_kept_platform_names`) and counts the collection as kept. A row RomM was
-  asked about and did not return keeps its shortcut without being one of the kept rows `settle_stale_rows` answers, and
-  so does one whose game the run synced on a platform the run did not read: each stays bound, so it is in its platform's
-  Steam collection exactly where platform groups are on, since the apply's end-of-run scan files every bound row through
+  lists is gone from RomM, not turned off**: the fetcher records the `fs_slug` of every platform RomM's listing names on
+  the run state (`LibrarySyncStateBox.run_listed_platform_folders`) when it builds the work queue, preview included, and
+  a row whose platform is not among them keeps its shortcut, with no request, unless it was last delivered through a
+  collection. A platform is known here by its `fs_slug` throughout — the platforms the run read, the ones it listed and
+  the ones it processed — because two platforms RomM files under one slug are two platforms
+  ([#2452](https://github.com/danielcopper/romm-tender/issues/2452) D1). **A row with no `fs_slug` recorded** — a row no
+  sync has written since migration `043`, such as one on a platform switched off or no longer listed — counts as on a
+  platform the run did not read (D5). It is asked for by its exact id; one a collection last delivered is asked and
+  settled as a collection's row. Any other one RomM returns with its `fs_slug` is sorted as a row on that platform —
+  removed on a platform RomM lists and the run did not read, kept otherwise — and the apply records that `fs_slug` on
+  the row (`Rom.record_platform_folder`, in the finalize's write UoW). Any other answer keeps its shortcut and marks it
+  as RomM's answer says; a row whose 404 keeps it stays without an `fs_slug` and is asked again on every later run. A
+  collection holding a member with no `fs_slug` recorded is not skipped
+  (`domain/collection_skip.py::holds_a_game_without_its_platform_folder`), so the fetch brings the member its `fs_slug`.
+  The kept ids under `kv_config`'s `platform_ids` are not the answer, because a game page that asks for an unknown
+  platform's system during the run writes it back there (`PlatformSystemService`). A listing that fails stops the run,
+  so a run that reaches the stale removal always has its own. Which platforms are on in Tender is keyed by RomM's
+  platform id, which an unlisted platform no longer has, so the route is what says the platform was on: a row last
+  delivered through its platform had it on. A kept row stays in its platform's Steam collection; for a platform RomM no
+  longer lists, that collection keeps the name the `platform_names` cache holds; which name names every other platform
+  is under [Collection management](steam-non-steam-shortcuts.md#collection-management). Every finalize, a stopped run's
+  included, rewrites the cache with the run's listed names and carries forward the name of each platform outside them a
+  bound row is still on (`RunFinalizer._names_with_bound_platforms_kept`), so a cancelled or paused run in between does
+  not rename the collection to the `fs_slug`. The preview reads the same name (`do_read_kept_platform_names`, through
+  `services/library/_stale_rows.py::with_kept_platform_names`) and counts the collection as kept. A row RomM was asked
+  about and did not return keeps its shortcut without being one of the kept rows `settle_stale_rows` answers, and so
+  does one whose game the run synced on a platform the run did not read: each stays bound, so it is in its platform's
+  Steam collection exactly where platform groups are on — except a row with no `fs_slug` recorded, which is in no
+  platform's collection (#2452 D5) — since the apply's end-of-run scan files every bound row through
   `domain/sync_diff.py::platform_collection_name`, and the preview files each stale row it neither removes nor keeps
   through the same function (#2490 D3). The preview's platform-collection diff names every platform it counts as the
   apply does, by the listed name, or, for a platform the listing does not name that a kept row, a row left bound or an
-  emitted entry is on, the name the `platform_names` cache holds, else the slug — an emitted entry and a row left bound
-  through `platform_collection_name`, a kept row by the same lookup — never by the `platform_name` an entry carries,
-  which a collection's skip fills with the slug and a collection's fetch with RomM's display name (#2558 D1). The
-  preview's per-platform table is named by the same names ([QAM panel — Sync](qam-panel.md#sync)). Force Full Sync
+  emitted entry is on, the name the `platform_names` cache holds, else the `fs_slug` — an emitted entry and a row left
+  bound through `platform_collection_name`, a kept row by the same lookup — never by the `platform_name` an entry
+  carries, which a collection's skip fills with the slug and a collection's fetch with RomM's display name (#2558 D1).
+  The preview's per-platform table is named by the same names ([QAM panel — Sync](qam-panel.md#sync)). Force Full Sync
   leaves the routes in place. The preview asks the same question for the same rows, through the same
   `services/library/_stale_rows.py::settle_stale_rows`, so the removals it counts are the ones the apply makes. Both
   judge a row's game by the group keys of the ROMs the run counts as synced (`domain/sync_diff.py::group_keys_of`): the
@@ -1076,10 +1088,10 @@ game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app
   than one, every bound row a delivery holds and every bound row whose stored key is the group's and that a delivered
   member of the group lists in `sibling_roms`; `services/library/_convergence.py::converge_collection_deliveries` hands
   those to the same `converge_bound_groups`, scoped to the platforms the sync leaves off
-  (`WorkUnit.unwalked_platform_slugs`). A brought-in row no collection delivered ranks as listed, by the chain over what
-  its last fetch stored (`domain/sync_diff.py::stored_version`: regions, revision, tags, whether RomM holds a file, the
-  `fs_name` stem) and RomM's default as the sibling list states it (#2661 D4), unless the user hid it ("A game the user
-  hid in RomM" above); its install, like every brought-in row's, comes from its install record. So which version a
+  (`WorkUnit.unwalked_platform_folders`). A brought-in row no collection delivered ranks as listed, by the chain over
+  what its last fetch stored (`domain/sync_diff.py::stored_version`: regions, revision, tags, whether RomM holds a file,
+  the `fs_name` stem) and RomM's default as the sibling list states it (#2661 D4), unless the user hid it ("A game the
+  user hid in RomM" above); its install, like every brought-in row's, comes from its install record. So which version a
   collection holds decides neither whether the game converges nor which shortcut stays. The losers join `run_converged`,
   which every collection unit's collapse leaves out, so a game split over two collections is decided once. A skipped
   collection's rebuilt rows deliver nothing, and the preview runs the same helper over the ROMs its collection units
@@ -1189,9 +1201,11 @@ forwarded as `null` where a listing lacks it; virtual rows carry no such key, si
 
 **Incremental skip — the per-platform completion stamp is the sole authority.** A platform unit skips only when its
 `PlatformSyncState` stamp exists and its skip has not been revoked
-([ADR-0023](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0023-chunked-per-unit-apply.md)). A completed
-`SyncRun`'s `last_sync` is deliberately **not** a fallback: a run-scoped timestamp cannot see a platform whose shortcuts
-were locally removed and only partially re-applied afterwards, so trusting it can silently skip a platform with missing
+([ADR-0023](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0023-chunked-per-unit-apply.md)). The stamp
+is keyed by the platform's `fs_slug`, so two platforms RomM files under one slug each keep a stamp of their own and skip
+on their own ([#2452](https://github.com/danielcopper/romm-tender/issues/2452) D1, D4). A completed `SyncRun`'s
+`last_sync` is deliberately **not** a fallback: a run-scoped timestamp cannot see a platform whose shortcuts were
+locally removed and only partially re-applied afterwards, so trusting it can silently skip a platform with missing
 shortcuts. No stamp means a full fetch. The reporter writes the stamp when a platform work unit's **last** apply chunk
 commits — atomically in the same write UoW as the chunk's `roms` upserts — so a platform that fully synced inside a run
 the user later cancelled/crashed still skips on the next run instead of re-walking every already-applied game through
@@ -1458,16 +1472,16 @@ to mint the shortcut regardless. Requiring the binding is what makes the count f
 shortcuts", where unbinding deliberately keeps the row and its record (ADR-0007) — a count over every row would keep
 offering to resume shortcuts that no longer exist. The panel keeps `roms > 0` as a conjunct on top, and it is
 **load-bearing rather than a restatement**: `has_completion_stamp` asks whether any stamp that may still skip survives
-anywhere, while the removal path is surgical — it revokes the skip of only the platform slugs its removed rows name, and
-deletes only the collection stamps whose member set intersects those rows. A stamp naming nothing the `roms` table still
-holds outlives a remove-all. Prune makes that reachable: it deletes `roms` rows and never touches `platform_sync_state`
-(`PruneRegistry.delete_rows` invalidates intersecting collection stamps only), so a platform whose games RomM dropped
-keeps its stamp with no rows left to name it, and the next remove-all cannot see that slug to revoke its skip. Verified
-end to end: with such a stamp standing, a remove-all leaves `roms == 0` and `has_completion_stamp == true`, so without
-the conjunct the panel would offer a resume over zero shortcuts. It carries the boundary rule too — a run stopped before
-a single shortcut was written begins from scratch. `resumable_games` is a count of what is **done**, never of what is
-left — naming the remainder needs the server's library — so the QAM line under the button states what a resume would
-skip, and is omitted when the count is zero.
+anywhere, while the removal path is surgical — it revokes the skip of only the platforms' `fs_slug`s its removed rows
+name, and deletes only the collection stamps whose member set intersects those rows. A stamp naming nothing the `roms`
+table still holds outlives a remove-all. Prune makes that reachable: it deletes `roms` rows and never touches
+`platform_sync_state` (`PruneRegistry.delete_rows` invalidates intersecting collection stamps only), so a platform whose
+games RomM dropped keeps its stamp with no rows left to name it, and the next remove-all cannot see that `fs_slug` to
+revoke its skip. Verified end to end: with such a stamp standing, a remove-all leaves `roms == 0` and
+`has_completion_stamp == true`, so without the conjunct the panel would offer a resume over zero shortcuts. It carries
+the boundary rule too — a run stopped before a single shortcut was written begins from scratch. `resumable_games` is a
+count of what is **done**, never of what is left — naming the remainder needs the server's library — so the QAM line
+under the button states what a resume would skip, and is omitted when the count is zero.
 
 **Single-owner run lifecycle (#1202).** The run-lifecycle pair — `sync_state` (idle/running/cancelling) and
 `current_sync_id` — is mutated **only** through four verb methods on `LibrarySyncStateBox`, never by direct field
@@ -2117,8 +2131,9 @@ chosen entry's verdict as `launch` — the game page, a core switch and Steam's 
 `CoreService.get_emulator_launches` answers every entry's for the emulator menu, which opens at once and shows each
 answer as it lands (D22, D31). Nothing asks it for a list of games: an entry's first answer may probe its core, which
 costs seconds (D31). Each answer carries the name the game page shows the game's platform under (`platform_name`, read
-through `domain/platform_names.py::platform_display_name` as game detail reads it, the slug where the cache names none),
-and the sentences name the platform by it rather than by the system the resolver was asked as (D36).
+through `domain/platform_names.py::platform_display_name` as game detail reads it, by the game's `fs_slug`, the slug
+where the cache names none or no `fs_slug` is recorded), and the sentences name the platform by it rather than by the
+system the resolver was asked as (D36).
 
 **Nothing is written for an installed game.** A shortcut's launch options are its appId whatever the verdict, and
 nothing asks for a list of games' verdicts: the start asks for the command of the one game it starts

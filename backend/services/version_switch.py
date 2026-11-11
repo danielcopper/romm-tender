@@ -165,6 +165,7 @@ class _SwitchContext:
     bound_label: str
     group_key: str | None
     platform_slug: str
+    platform_folder: str | None
     target_is_local: bool
     target_group_key: str | None
     target_app_id: int | None
@@ -673,7 +674,13 @@ class VersionSwitchService:
             raise Refused("not_in_group", _NOT_IN_GROUP_MESSAGE)
 
         return await self._loop.run_in_executor(
-            None, self._persist_and_bind, target_dict, app_id, ctx.platform_slug, ctx.group_key
+            None,
+            self._persist_and_bind,
+            target_dict,
+            app_id,
+            ctx.platform_slug,
+            ctx.group_key,
+            ctx.platform_folder,
         )
 
     async def _switch_to_local_target(
@@ -784,6 +791,7 @@ class VersionSwitchService:
                 bound_label=fs_name_stem(bound.fs_name),
                 group_key=group_key,
                 platform_slug=bound.platform_slug,
+                platform_folder=bound.platform_fs_slug,
                 target_is_local=target_local is not None,
                 target_group_key=target_local.sibling_group_key if target_local is not None else None,
                 target_app_id=target_local.shortcut_app_id if target_local is not None else None,
@@ -846,7 +854,12 @@ class VersionSwitchService:
             return uow.rom_installs.get(target_rom_id) is not None
 
     def _persist_and_bind(
-        self, target_dict: dict[str, Any], app_id: int, fallback_platform: str, bound_group_key: str | None
+        self,
+        target_dict: dict[str, Any],
+        app_id: int,
+        fallback_platform: str,
+        bound_group_key: str | None,
+        fallback_folder: str | None,
     ) -> dict[str, Any]:
         """Persist a server-only target (server-derived facts) and bind it.
 
@@ -856,7 +869,8 @@ class VersionSwitchService:
         server-only target has no ``rom_installs`` row, so it is never installed —
         ``target_installed`` is ``False``. Siblings share a platform, so the bound group's
         ``platform_slug`` backstops a detail that omits it (``Rom.synced`` requires
-        a non-empty slug). A detail that the aggregate rejects (bad id, no
+        a non-empty slug), and its ``fs_slug`` (*fallback_folder*) one that
+        omits ``platform_fs_slug``. A detail that the aggregate rejects (bad id, no
         resolvable slug) fails ``invalid_target`` — the target is a sibling, but
         its server payload can't become a local row.
 
@@ -882,7 +896,7 @@ class VersionSwitchService:
                 # before the next sync backfills it.
                 fs_size_bytes=target_dict.get("fs_size_bytes"),
                 has_file_on_disk=has_file_on_romm(target_dict),
-                platform_fs_slug=target_dict.get("platform_fs_slug"),
+                platform_fs_slug=target_dict.get("platform_fs_slug") or fallback_folder,
             )
         except (ValueError, KeyError) as e:
             self._logger.warning(f"Version switch: could not build target row: {e}")

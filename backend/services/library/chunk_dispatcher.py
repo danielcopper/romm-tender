@@ -415,9 +415,9 @@ class ChunkDispatcher:
         unit's fetch returned, whose checksum the next skip compares RomM's id
         set with.
         """
-        if unit.type == "platform" and unit.slug and chunk_index == chunk_count - 1:
+        if unit.type == "platform" and unit.platform_folder and chunk_index == chunk_count - 1:
             return PlatformSyncState.stamp(
-                platform_slug=unit.slug,
+                platform_folder=unit.platform_folder,
                 at=self._clock.now().isoformat(),
                 rom_count=unit.rom_count,
                 fetch_id=fetch_id,

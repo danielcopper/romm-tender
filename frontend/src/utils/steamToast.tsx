@@ -18,8 +18,8 @@ import type { ToastData } from "../api/host";
 import type { ToastClasses } from "./deckyUiInternals";
 
 /**
- * Where Steam is drawing the notification. Source: `library.js`, function `Bn`
- * (reached as `ey3`), in the Steam client build on disk.
+ * Where Steam is drawing the notification. Where Steam's values are read:
+ * `docs/architecture/frontend-bundles.md`, "Talking to the backend".
  */
 export const TOAST_LOCATION_BIG_PICTURE_POPUP = 1;
 export const TOAST_LOCATION_DESKTOP_POPUP = 2;
@@ -39,7 +39,8 @@ const classNames = (...names: (string | undefined | false)[]): string => names.f
 
 /**
  * Steam's subtext rule allows one line, or two with `Multiline`, and ends the
- * rest in an ellipsis (`css/chunk~2dcc5aaf7.css`, `StandardNotificationSubText`).
+ * rest in an ellipsis (`StandardNotificationSubText` and `Multiline`, in
+ * `steamui/css/sp.css` under the hashed names `steamui/sp.js` maps them to).
  * The tab entry is where a reason has to be readable in full, so its subtext
  * takes neither and wraps as far as it runs.
  */

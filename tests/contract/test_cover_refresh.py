@@ -184,6 +184,7 @@ async def test_null_fingerprint_with_cache_adopts_without_download(harness):
             Rom(
                 rom_id=10,
                 platform_slug="n64",
+                platform_fs_slug="n64",
                 name="Game",
                 fs_name="game.z64",
                 shortcut_app_id=7777,

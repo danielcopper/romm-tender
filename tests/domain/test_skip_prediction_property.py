@@ -64,6 +64,7 @@ def test_estimate_matches_real_collapse_emission_count(rows):
             "name": f"G{rom_id}",
             "fs_name": f"g{rom_id}.z64",
             "platform_slug": "n64",
+            "platform_fs_slug": "n64",
             "sibling_group_key": key,
         }
         for rom_id, (key, bound, _installed) in enumerate(rows, start=1)
@@ -71,7 +72,7 @@ def test_estimate_matches_real_collapse_emission_count(rows):
     }
     installed_rom_ids = {rom_id for rom_id, (_key, _bound, installed) in enumerate(rows, start=1) if installed}
 
-    converged = converge_bound_groups(shortcuts_data, registry, installed_rom_ids, platform_slugs={"n64"})
+    converged = converge_bound_groups(shortcuts_data, registry, installed_rom_ids, platform_folders={"n64"})
     emitted = collapse_sibling_groups(
         shortcuts_data,
         registry,

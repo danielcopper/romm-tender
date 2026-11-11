@@ -95,36 +95,37 @@ def _row_to_rom(row: sqlite3.Row) -> Rom:
     # The JSON-array columns are NOT NULL DEFAULT '[]', so json.loads is always
     # safe; is_main_sibling and has_file_on_disk are STRICT 0/1 INTEGERs mapped
     # back to bool.
+    values = dict(zip(row.keys(), row, strict=True))
     return Rom(
-        rom_id=row["rom_id"],
-        platform_slug=row["platform_slug"],
-        name=row["name"],
-        fs_name=row["fs_name"],
-        shortcut_app_id=row["shortcut_app_id"],
-        last_synced_at=row["last_synced_at"],
-        cover_path=row["cover_path"],
-        cover_source=row["cover_source"],
-        igdb_id=row["igdb_id"],
-        sgdb_id=row["sgdb_id"],
-        chosen_sgdb_id=row["chosen_sgdb_id"],
-        artwork_checked_at=row["artwork_checked_at"],
-        ra_id=row["ra_id"],
-        emulator_override=row["emulator_override"],
-        emulator_override_source=row["emulator_override_source"],
-        selected_disc=row["selected_disc"],
-        shortcut_applied=bool(row["shortcut_applied"]),
-        sibling_group_key=row["sibling_group_key"],
-        regions=tuple(json.loads(row["regions"])),
-        languages=tuple(json.loads(row["languages"])),
-        revision=row["revision"],
-        tags=tuple(json.loads(row["tags"])),
-        is_main_sibling=bool(row["is_main_sibling"]),
-        fs_size_bytes=row["fs_size_bytes"],
-        has_file_on_disk=bool(row["has_file_on_disk"]),
-        last_fetch_id=row["last_fetch_id"],
-        delivered_through=row["delivered_through"],
-        gone_from_romm=row["gone_from_romm"],
-        platform_fs_slug=row["platform_fs_slug"],
+        rom_id=values["rom_id"],
+        platform_slug=values["platform_slug"],
+        name=values["name"],
+        fs_name=values["fs_name"],
+        shortcut_app_id=values["shortcut_app_id"],
+        last_synced_at=values["last_synced_at"],
+        cover_path=values["cover_path"],
+        cover_source=values["cover_source"],
+        igdb_id=values["igdb_id"],
+        sgdb_id=values["sgdb_id"],
+        chosen_sgdb_id=values["chosen_sgdb_id"],
+        artwork_checked_at=values["artwork_checked_at"],
+        ra_id=values["ra_id"],
+        emulator_override=values["emulator_override"],
+        emulator_override_source=values["emulator_override_source"],
+        selected_disc=values["selected_disc"],
+        shortcut_applied=bool(values["shortcut_applied"]),
+        sibling_group_key=values["sibling_group_key"],
+        regions=tuple(json.loads(values["regions"])),
+        languages=tuple(json.loads(values["languages"])),
+        revision=values["revision"],
+        tags=tuple(json.loads(values["tags"])),
+        is_main_sibling=bool(values["is_main_sibling"]),
+        fs_size_bytes=values["fs_size_bytes"],
+        has_file_on_disk=bool(values["has_file_on_disk"]),
+        last_fetch_id=values["last_fetch_id"],
+        delivered_through=values["delivered_through"],
+        gone_from_romm=values["gone_from_romm"],
+        platform_fs_slug=values["platform_fs_slug"],
     )
 
 
@@ -296,6 +297,14 @@ class SqliteRomRepository(BaseRepository):
         cursor = self._conn.execute(
             f"SELECT {_SELECT_COLUMNS} FROM roms WHERE platform_slug = ?",
             (platform_slug,),
+        )
+        for row in cursor:
+            yield _row_to_rom(row)
+
+    def iter_by_platform_folder(self, platform_folder: str) -> Iterator[Rom]:
+        cursor = self._conn.execute(
+            f"SELECT {_SELECT_COLUMNS} FROM roms WHERE platform_fs_slug = ?",
+            (platform_folder,),
         )
         for row in cursor:
             yield _row_to_rom(row)

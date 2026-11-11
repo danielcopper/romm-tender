@@ -111,6 +111,26 @@ _STRANDED_LOG_WORDING = {
 }
 
 
+async def close_without_abandoning(server: asyncio.Server) -> None:
+    """Close *server* without abandoning a connection it has begun to accept.
+
+    An accepted connection becomes a transport only on a later loop turn, and a
+    ``Server.close()`` in between abandons it half-made: outside the server's
+    clients, so nothing closes it. The collector reaching it warns about it as
+    unclosed, and from 3.13 on also raises an unraisable ``TypeError``
+    (python/cpython#109564, fixed by python/cpython#160851). Removing the reader
+    cancels every accept not yet begun, one already queued for this turn
+    included; the yield lets a transport already being built attach, so the
+    caller's closing of the clients reaches it. Closing the clients and waiting
+    for the close are left to the caller.
+    """
+    loop = asyncio.get_running_loop()
+    for listening in server.sockets:
+        loop.remove_reader(listening.fileno())
+    await asyncio.sleep(0)
+    server.close()
+
+
 class HostServer:
     """Binds a loopback port and serves the panel: one file route, one upgrade."""
 
@@ -247,13 +267,7 @@ class HostServer:
             self._connection = None
             self._panel_present.clear()
         if self._server is not None:
-            # A connection accepted in the previous tick is still a pending task
-            # building its transport; the yield lets it attach, so the close below
-            # reaches it. One whose accept lands in this same iteration can still
-            # be abandoned half-made, and CPython 3.13 then raises one harmless
-            # unraisable ``TypeError`` when the collector reaches that transport.
-            await asyncio.sleep(0)
-            self._server.close()
+            await close_without_abandoning(self._server)
             # From 3.12.1 ``wait_closed`` waits for every client, so an accepted
             # connection that never sends its request head would hold it open.
             if sys.version_info >= (3, 13):
@@ -269,7 +283,7 @@ class HostServer:
 
         ``asyncio.Server.close_clients()`` is new in 3.13. Without it this server
         reaches only the sockets its handler has begun to serve, and one
-        accepted in the tick before the stop is attached to the listener before
+        accepted in the turn before the stop is attached to the listener before
         its handler runs — so that handler closes its socket on arrival.
         """
         self._closing_clients_by_hand = True

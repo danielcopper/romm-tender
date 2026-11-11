@@ -282,6 +282,7 @@ def _rom(
     rom = Rom.synced(
         rom_id=rom_id,
         platform_slug=platform,
+        platform_fs_slug=platform,
         name=name or f"Game {rom_id}",
         fs_name=fs_name or f"Game {rom_id}.gdi",
         shortcut_app_id=app_id,
@@ -317,10 +318,10 @@ def _seed(uow: FakeUnitOfWork, *rows: Rom, stamp_count: int = 1, control: bool =
             # thing being questioned), and outside every ``dc``-scoped count.
             uow.roms.save(_rom(_CONTROL_ROM_ID, fetch="ctl", platform="ctl", fs_name="Control.gdi"))
             uow.platform_sync_state.save(
-                PlatformSyncState.stamp(platform_slug="ctl", at="now", rom_count=1, fetch_id="ctl")
+                PlatformSyncState.stamp(platform_folder="ctl", at="now", rom_count=1, fetch_id="ctl")
             )
         uow.platform_sync_state.save(
-            PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=stamp_count, fetch_id="new")
+            PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=stamp_count, fetch_id="new")
         )
 
 

@@ -255,13 +255,14 @@ there is nothing to read a document's visibility off. It is asked through `utils
 copy of `@decky/ui`'s hook, because upstream's throws on that reading instead of answering — why a copy rather than a
 guard at the call site is written out at that module, along with what else it changes besides the guard.
 
-Steam moves the same flag on its own, in both directions, and neither is a bug in Tender. `OpenQuickAccessMenu` clears
-it (`SetQAMFriendsChatExpanded(false)`) on every QAM tab change away from Friends, which is a second net under Tender's
-own `ActiveTab` observer; and the Friends tab's list expands it from `onFocusWithin`, so Friends goes wide the moment
-gamepad focus enters it. A Friends panel that widens after a wide page closed is Steam doing that. Both are in
-`chunk~2dcc5aaf7.js` in Steam's own bundle, where the receiver is also visible: `OnMessage` on the FriendsUI store sets
-`m_bQamFriendsExpanded` from exactly the two messages Tender sends, and Steam's own senders post with the literal
-`"https://steamloopback.host"` — which is what `window.origin` is in the SharedJSContext.
+Steam moves the same flag on its own, in both directions, and neither is a bug in Tender. `MenuStore`'s
+`SetQuickAccessTab`, which `OpenQuickAccessMenu` goes through, clears it (`SetQAMFriendsChatExpanded(false)`) on every
+QAM tab change away from Friends, which is a second net under Tender's own `ActiveTab` observer; and the Friends tab's
+list (`FriendsListAndChatsSteamDeck`) expands it from `onFocusWithin`, so Friends goes wide the moment gamepad focus
+enters it. A Friends panel that widens after a wide page closed is Steam doing that. Both are in Steam's
+`steamui/sp.js`, where the receiver is also visible: `OnMessage` on the FriendsUI store sets `m_bQamFriendsExpanded`
+from exactly the two messages Tender sends, and Steam's own senders post with the literal `"https://steamloopback.host"`
+— which is what `window.origin` is in the SharedJSContext.
 
 Steam's tabbed page fills its parent instead of growing, and nothing in the QAM chain provides a height. A wide page
 therefore measures the space left below its header and takes that as its height; its regions scroll inside it. A
@@ -329,17 +330,17 @@ px of breathing room off its own measurement, which is why a page ended at y=752
 A QAM panel of Steam's own, measured in the same document, runs its content to its box with a gap of 0, so the constant
 went rather than being set to zero — room under a page belongs to that page's layout, where it can be seen and adjusted,
 not to a number the frame takes off every page's height. The second is Steam's, and it is **cancelled by an override
-rather than absorbed**: a tabbed page's content scroller carries `padding-bottom: 40px` (rule
-`._1X4dtbZ_AMX_DXT-SGiK01`), and that scroller sits inside the box `WidePage` measured and handed the tab as its height
-— so on Library the content stopped at y=712 inside a body of ours that ran to 752, a 40 px reserve taken out of a
-height the frame had already paid for. An untabbed page renders no such scroller and keeps none of it, which is why
-Library read as having a deeper band than Settings and Sync — the difference that was reported and could not be
-explained. The injected sheet zeroes the padding for a wide page of ours (`qamExpansion.ts`, written against the
-readable `_TabContentsScroll` rather than the hashed class, and degrading to Steam's padding if either name goes). With
-both gaps gone, Library's body measured 660 px and its content ran to y=764.0 against a panel box of 764.3,
-`scrollHeight` still equal to `clientHeight`. What the reader gets is 52 px on the tab's own scrolling region — the box
-the rows live in — measured on Library at 161.8 → 712 before and 161.8 → 764 after, a `clientHeight` of 550 against 602
-over the same 1570 px of content.
+rather than absorbed**: a tabbed page's content scroller carries `padding-bottom: 40px` (its `TabContentsScroll` class,
+`steamui/css/sp.css`), and that scroller sits inside the box `WidePage` measured and handed the tab as its height — so
+on Library the content stopped at y=712 inside a body of ours that ran to 752, a 40 px reserve taken out of a height the
+frame had already paid for. An untabbed page renders no such scroller and keeps none of it, which is why Library read as
+having a deeper band than Settings and Sync — the difference that was reported and could not be explained. The injected
+sheet zeroes the padding for a wide page of ours (`qamExpansion.ts`, written against the readable `_TabContentsScroll`
+rather than the hashed class, and degrading to Steam's padding if either name goes). With both gaps gone, Library's body
+measured 660 px and its content ran to y=764.0 against a panel box of 764.3, `scrollHeight` still equal to
+`clientHeight`. What the reader gets is 52 px on the tab's own scrolling region — the box the rows live in — measured on
+Library at 161.8 → 712 before and 161.8 → 764 after, a `clientHeight` of 550 against 602 over the same 1570 px of
+content.
 
 **No test here can see any of that.** happy-dom performs no layout, so `WidePage.test.tsx` pins the arithmetic — the
 height, and that the pull-up equals whatever overhang was measured — and `qamExpansion.test.tsx` pins that the override
@@ -541,9 +542,10 @@ glyphs overlap the labels. In the panel only Library has tabs; outside it, Tende
 component (§ The game page's tabs).
 
 On a page opened by a swap, entry focus lands in the content — the active tab's, so the list of a list-and-detail page —
-and the bumper glyphs follow, because Steam draws them only while gamepad focus is within the tabbed page. Entering a
-tabbed page the panel appeared with lands on the active tab instead ("Pages"), which is within the tabbed page too. Back
-stays reachable by moving up.
+and the bumper glyphs follow, because Steam draws them only while gamepad focus is within the tabbed page
+(`steamui/sp.js`: the `GamepadTabbedPage`'s `onFocusWithin` drives its tab row's `showGlyphs`). Entering a tabbed page
+the panel appeared with lands on the active tab instead ("Pages"), which is within the tabbed page too. Back stays
+reachable by moving up.
 
 **Entry focus belongs to the frame, on every wide page opened by a swap.** `WidePage` marks its root as placing its own,
 so the panel's router leaves the page alone rather than placing focus of its own, which would land on the Back chip
@@ -703,11 +705,11 @@ that root — an absolutely positioned element at the region's top left, which S
 and the size Steam takes for a row's ring (`GetBoundingRectForFocusRing` on its nav node) is the row's own box, which
 there was the column's full width and, for the first row, started at the region's top. Read from Steam's stylesheet
 rather than measured: the ring is the `FocusRing` class of the same module that exports `FocusRingRoot` (in
-`css/chunk~2dcc5aaf7.css` for the client this was read on — the chunk name changes between Steam builds, the module's
-two class names are how to find it again), a 2 px outline at a 2 px offset, so it reaches 4 px past every edge of what
-is focused, and the region clips it at its own box. The ring itself could not be observed through CEF — Steam draws it
-only in the active navigation context. So without the room, a row spanning its column loses both side edges of its ring,
-and the first and last rows their top and bottom edges too.
+`steamui/css/sp.css` under a hashed name Steam's build generates and nothing keeps stable; the module's two class names,
+in `steamui/sp.js`, are how to find it), a 2 px outline at a 2 px offset, so it reaches 4 px past every edge of what is
+focused, and the region clips it at its own box. The ring itself could not be observed through CEF — Steam draws it only
+in the active navigation context. So without the room, a row spanning its column loses both side edges of its ring, and
+the first and last rows their top and bottom edges too.
 
 **The room is the region's own padding**, not something inside it and not something on the outside of it. Outside is
 ruled out by the region's sideways clip, which is deliberate (`ScrollRegion`). Inside — a padded element between the
@@ -766,9 +768,10 @@ with the CSS with no sign of it but that assertion in Steam's console.
 
 This is read in `steamui/sp.js`, not measured on the device: the parser is the switch that ends in the
 `Unhandled flow-children` assertion, and the fallback is the navigation node's `GetLayout`, which hands the element to a
-helper that reads its computed style. Module numbers change between Steam builds; the assertion's text and the method's
-name are how to find them again. The ESLint rule `tender/flow-children-value` (`frontend/eslint.config.js`) refuses any
-other value in a `.ts` or `.tsx` file under `frontend/src/`, and a value that is not a string literal.
+helper that reads its computed style. Module numbers are Steam's bundler output and nothing keeps them stable; the
+assertion's text and the method's name are how to find them again. The ESLint rule `tender/flow-children-value`
+(`frontend/eslint.config.js`) refuses any other value in a `.ts` or `.tsx` file under `frontend/src/`, and a value that
+is not a string literal.
 
 ### Columns
 
@@ -1425,22 +1428,23 @@ unchanged and removed counts, the platform and collection counts, and more), the
 added and removed collection names (`collection_diff`), each the name-part of a Steam collection — the key the run
 finalizer builds ([Collection naming mode](steam-non-steam-shortcuts.md#collection-naming-mode-merge-vs-by_label-1539)).
 The same counts split per platform ride the summary as `platform_breakdown` — one row per platform holding at least one
-non-zero count, ordered by name, each carrying `synced` for whether the platform is in the run's platform list. A
-`synced: false` row is a platform outside it: its toggle went off, RomM stopped listing it, or the only route to it is
-an enabled collection, which is not filtered by platform enablement. The causes compose, so one row can carry removals
-for the ROMs the run no longer fetches and new or changed counts for the ROMs a collection still reaches. Its name is
-the one the preview's platform-collection diff files the platform by, so the row carries the name the apply gives the
-platform's Steam collection: RomM's listed name for every platform the run's listing names, synced or not, else the name
-the backend recorded, and the bare slug where neither answers (#2564). A name carried on a fetched entry is not read.
-There is no collections row there: `collection_diff` on the same summary already carries the added and removed
-collection names. The Steam collections kept one per platform are a third field, `platform_collection_diff` —
-`has_changes` and an added and a removed count, no names, which is why the page's row for them states counts where the
-collections row states names. `get_sync_runs` answers the ten newest `sync_runs` rows of any status, newest first, each
-verbatim from the `SyncRun` aggregate (id, started, finished, status, planned counts, completed platforms and
-collections, error) — a field a run never recorded stays null, and the status is what says why. Skip preview is a
-user-intent setting in `settings.json` written by its owner (`adapters/persistence.py`) and reported by `get_settings`.
-No backend sync path consults it: the choice between asking for a preview and starting the run is made on the frontend,
-by this page's own start button.
+non-zero count, keyed by the platform's `fs_slug` ([#2452](https://github.com/danielcopper/romm-tender/issues/2452) D1),
+ordered by name, each carrying `synced` for whether the platform is in the run's platform list. A `synced: false` row is
+a platform outside it: its toggle went off, RomM stopped listing it, or the only route to it is an enabled collection,
+which is not filtered by platform enablement. The causes compose, so one row can carry removals for the ROMs the run no
+longer fetches and new or changed counts for the ROMs a collection still reaches. Its name is the one the preview's
+platform-collection diff files the platform by, so the row carries the name the apply gives the platform's Steam
+collection: RomM's listed name for every platform the run's listing names, synced or not, else the name the backend
+recorded, and the bare `fs_slug` where neither answers (#2564). A name carried on a fetched entry is not read. There is
+no collections row there: `collection_diff` on the same summary already carries the added and removed collection names.
+The Steam collections kept one per platform are a third field, `platform_collection_diff` — `has_changes` and an added
+and a removed count, no names, which is why the page's row for them states counts where the collections row states
+names. `get_sync_runs` answers the ten newest `sync_runs` rows of any status, newest first, each verbatim from the
+`SyncRun` aggregate (id, started, finished, status, planned counts, completed platforms and collections, error) — a
+field a run never recorded stays null, and the status is what says why. Skip preview is a user-intent setting in
+`settings.json` written by its owner (`adapters/persistence.py`) and reported by `get_settings`. No backend sync path
+consults it: the choice between asking for a preview and starting the run is made on the frontend, by this page's own
+start button.
 
 ## Library
 
@@ -2106,12 +2110,14 @@ it, for the focused platform:
 Six reads feed the tab. Three run once per page mount: `get_platforms` (RomM's platforms with ROMs, the list itself),
 `get_firmware_status` (whether RomM's firmware listing could be read, which the BIOS downloads stand on, and nothing
 about any platform) and `get_registry_platforms` (ROMs bound to a Steam shortcut per platform — the shortcut counts, and
-what "has synced games" means here). Only the first gates the list; the other two fill in beside it. A failed
-`get_firmware_status` leaves the downloads offered, as they are while it is in flight, and a download the server cannot
-serve says so itself. A failed `get_registry_platforms` **says so on the pane**, because a failure and an answer arrive
-the same way — as an absence: read as zero shortcuts would print `0 versions in Steam` in the header and disable the
-removal, two claims about a platform nothing was learned about; the counts go to `null` instead, which is not zero, and
-a line under the header says the number is missing while the removal stays live (it needs only the slug).
+what "has synced games" means here; one entry per slug, summed over every `fs_slug` its games carry, until the tab knows
+a platform by its `fs_slug`, [#2452](https://github.com/danielcopper/romm-tender/issues/2452) D3). Only the first gates
+the list; the other two fill in beside it. A failed `get_firmware_status` leaves the downloads offered, as they are
+while it is in flight, and a download the server cannot serve says so itself. A failed `get_registry_platforms` **says
+so on the pane**, because a failure and an answer arrive the same way — as an absence: read as zero shortcuts would
+print `0 versions in Steam` in the header and disable the removal, two claims about a platform nothing was learned
+about; the counts go to `null` instead, which is not zero, and a line under the header says the number is missing while
+the removal stays live (it needs only the slug).
 
 The fourth is `get_platform_firmware_status`, and it is asked **once per platform** rather than once per page — for
 **every platform the list shows**, whether or not the RomM library holds firmware for it or any of its games is synced
