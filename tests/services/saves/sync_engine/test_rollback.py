@@ -183,8 +183,9 @@ class TestResolveSyncConflict:
             device_syncs=[{"device_id": "device-1", "is_current": False}],
         )
         fake.saves[100] = ss
-        # No uploaded_files entry — wouldn't matter anyway, the download_save_content
-        # call inside hash_server_copy is going to raise before reading.
+        # The server copy holds the local bytes, so only the raising fetch below
+        # keeps the adopt-without-upload short-circuit from firing.
+        fake.uploaded_files[100] = str(save_path)
 
         # Make ``hash_server_copy`` re-raise: ``download_save_content`` raises
         # and the retry mock reports the exception as retryable, so the
