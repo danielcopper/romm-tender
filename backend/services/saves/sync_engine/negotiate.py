@@ -81,33 +81,18 @@ class NegotiateEnvelope:
     def build_inventory(
         self, rom_id: int | None = None, *, save_answer: SaveAnswer | None = None
     ) -> list[ClientSaveState]:
-        """Build the negotiate inventory of this device's local save files.
+        """Build the negotiate inventory of this device's local save files, one entry per file.
 
-        Gathers one :class:`ClientSaveState` per local save file belonging to a
-        ROM whose slot is **confirmed** and whose ``active_slot`` is a real
-        (non-legacy) slot — ``slot_confirmed`` is true and ``active_slot`` is
-        truthy (excludes both ``None`` and the legacy ``""``). A confirmed ROM
-        with no local files contributes nothing; per-file granularity means
-        each local file yields its own entry.
-
-        ``rom_id`` scopes the inventory: ``None`` (the default) builds the
-        whole-device inventory for the sweep's session; a concrete id restricts
-        it to that one ROM for its own session. The in-scope predicate is
-        unchanged either way.
+        Which ROMs are in scope and what an entry carries is the docs page's:
+        ``docs/architecture/save-file-sync-architecture.md``, "Negotiate
+        inventory builder". ``rom_id`` ``None`` builds the whole-device
+        inventory; a concrete id restricts it to that one ROM.
 
         ``save_answer`` is that one ROM's save reading where the caller already
         took one, and it spares this build a second live reading of the machine.
         It applies to the scoped form only: the whole-device inventory runs
         BEFORE the sweep's per-ROM loop, so no answer exists yet for any of the
         ROMs it walks, and one ROM's answer says nothing about another's.
-
-        ``content_hash`` is always set via :meth:`SaveFileStore.content_hash`
-        (the zip-aware RomM-parity hash — never ``checksum_md5``), and
-        ``updated_at`` is the local file's mtime rendered as a UTC ISO-8601
-        string.
-
-        Single-file-first: the multi-file-per-slot collision case (several local
-        files mapping to one slot) is not handled.
         """
         with self._uow_factory() as uow:
             confirmed = [
@@ -141,9 +126,7 @@ class NegotiateEnvelope:
         POSTs the ROM-scoped inventory to ``negotiate``, with that one ROM as its
         ``rom_ids`` scope, and keeps only the ``session_id``. Answers ``None`` on
         any failure, building the inventory included, EXCEPT
-        :class:`RommSyncDisabledError`, which is re-raised. An unclosed session
-        lingers harmlessly until this device's next ``negotiate`` cancels it, so
-        a missed close is harmless.
+        :class:`RommSyncDisabledError`, which is re-raised.
 
         *save_answer* is the reading the run already took, handed on so the
         inventory does not take a second one. Without it a ROM whose slot the

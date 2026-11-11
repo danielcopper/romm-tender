@@ -1,7 +1,6 @@
 """Save-sync aggregate root and facade for the save endpoints.
 
-Holds the save-sync sub-services the composition root built (sync_engine,
-status, local_saves, versions, the slot sub-modules, rom_info) over the SQLite
+Holds the save-sync sub-services the composition root built over the SQLite
 ``rom_save_sync_states`` aggregate (reached through the injected Unit-of-Work
 factory) and exposes the use cases the endpoints call. The five save-sync
 feature toggles live in ``settings.json`` and are read/written here directly;
@@ -50,15 +49,13 @@ class SaveDeletionIncomplete(PartialFailure):
 class SaveService:
     """Aggregate root for bidirectional save file sync between RetroDECK and RomM.
 
-    Holds the save-sync sub-services (sync_engine, status, local_saves,
-    versions, the slot sub-modules, rom_info) over the SQLite
-    ``rom_save_sync_states`` aggregate. Exposes the use cases the endpoints on
-    ``Endpoints`` call — every public method delegates to a sub-service or
-    reads ``settings.json``. A use
+    Holds the save-sync sub-services over the SQLite ``rom_save_sync_states``
+    aggregate. Exposes the use cases the endpoints on ``Endpoints`` call — most
+    public methods delegate to a sub-service or read ``settings.json``. A use
     case an endpoint calls checks its conflict rules at its entry, under that
     endpoint's name, and raises the rule's refusal when one holds
-    (GLOSSARY.md → Conflict rules). Bulk local-save deletion is the only flow
-    whose orchestration lives directly on the aggregate root because it spans
+    (GLOSSARY.md → Conflict rules). Bulk local-save deletion's orchestration
+    lives directly on the aggregate root because it spans
     :class:`RomInfoService` (file discovery), the on-disk save files (via the
     injected ``SaveFileStore``), and the ``rom_save_sync_states`` repository
     (file-tracking state hygiene) without belonging to any single sub-service.
@@ -78,9 +75,6 @@ class SaveService:
         self._uow_factory: UnitOfWorkFactory = config.uow_factory
         self._settings_persister = config.settings_persister
         self._rules = config.conflict_rules
-        # Held for the one read this façade offloads itself: the per-platform
-        # save count walks the filesystem once per installed ROM, and the page
-        # asks it on every selection.
         self._loop = config.loop
         self._tasks = BackgroundTasks(logger=config.logger)
         self._rom_info = config.rom_info

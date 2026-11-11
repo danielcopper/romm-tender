@@ -502,25 +502,6 @@ class TestDeviceSyncDisabled:
         _create_save(tmp_path, system=system, rom_name=rom_name, content=content)
 
     @pytest.mark.asyncio
-    async def test_open_negotiate_session_degrades_to_none_on_generic_error(self, tmp_path):
-        """A transient negotiate failure still degrades to a sessionless run (None)."""
-        svc, fake = make_service(tmp_path)
-        self._seed_confirmed_rom(svc, tmp_path)
-        fake.fail_on_next(RommConnectionError("transient"))
-        session_id = await svc._sync_engine._negotiate.open_rom_session(42, LiveDeviceId("test-device"))
-        assert session_id is None
-
-    @pytest.mark.asyncio
-    async def test_open_negotiate_session_reraises_policy_error(self, tmp_path):
-        """The per-device sync-disabled 400 is re-raised, not swallowed like transports."""
-        svc, fake = make_service(tmp_path)
-        self._seed_confirmed_rom(svc, tmp_path)
-        fake.negotiate_sync_disabled = True
-        device_id = LiveDeviceId("test-device")
-        with pytest.raises(RommSyncDisabledError):
-            await svc._sync_engine._negotiate.open_rom_session(42, device_id)
-
-    @pytest.mark.asyncio
     async def test_sync_rom_saves_refuses_with_the_policy_stop(self, tmp_path):
         svc, fake = make_service(tmp_path)
         self._seed_confirmed_rom(svc, tmp_path)
@@ -1272,46 +1253,7 @@ class TestSummarizeSyncResult:
 
 
 class TestSyncEngineDelegates:
-    """Cover the matrix executor's conflict descriptor and the device list SyncEngine forwards to DeviceRegistry."""
-
-    def test_build_sync_conflict_entry_builds_the_descriptor(self, tmp_path):
-        """MatrixExecutor.build_sync_conflict_entry builds the ``sync_conflict`` descriptor's dict shape."""
-        svc, _ = make_service(tmp_path)
-        server = _server_save(save_id=77, filename="pokemon.srm", file_size_bytes=2048)
-
-        entry = svc._sync_engine._matrix.build_sync_conflict_entry(
-            rom_id=42,
-            filename="pokemon.srm",
-            server=server,
-            local_path=None,
-            local_hash=None,
-        )
-
-        assert entry["type"] == "sync_conflict"
-        assert entry["rom_id"] == 42
-        assert entry["filename"] == "pokemon.srm"
-        assert entry["server_save_id"] == 77
-        assert entry["server_size"] == 2048
-        assert "created_at" in entry
-
-    @pytest.mark.parametrize("missing", ["absent", "null"])
-    def test_build_sync_conflict_entry_refuses_a_server_save_without_id(self, tmp_path, missing):
-        """A server save with no id never becomes a descriptor with ``server_save_id: None``."""
-        svc, _ = make_service(tmp_path)
-        server = _server_save(save_id=77, filename="pokemon.srm")
-        if missing == "absent":
-            del server["id"]
-        else:
-            server["id"] = None
-
-        with pytest.raises(ValueError, match="without an id"):
-            svc._sync_engine._matrix.build_sync_conflict_entry(
-                rom_id=42,
-                filename="pokemon.srm",
-                server=server,
-                local_path=None,
-                local_hash=None,
-            )
+    """Cover the device list SyncEngine forwards to DeviceRegistry."""
 
     @pytest.mark.asyncio
     async def test_list_devices_delegates_to_device_registry(self, tmp_path):

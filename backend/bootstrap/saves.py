@@ -93,8 +93,9 @@ class SaveWiring:
 class SaveParts:
     """The save service and every part :func:`wire_saves` built for it, each built once.
 
-    The device registry is not among them: the sync engine is the one holder
-    of it, so nothing can read the stored id around ``live_device_id``.
+    The device registry is not among them: the sync engine is its one holder,
+    so every save part takes the id from ``live_device_id``, and the cached id
+    from the engine.
     """
 
     service: SaveService
@@ -163,10 +164,7 @@ def wire_saves(wiring: SaveWiring, *, matrix_executor: type[MatrixExecutor] = Ma
         transfer=save_transfer,
     )
 
-    # The single owner of the server device id (kv_config["device_id"]),
-    # handed to the sync engine alone: every other save part takes its id from
-    # ``SyncEngine.live_device_id``. The device label stays in settings.json
-    # (ADR-0003).
+    # The device registry is handed to the sync engine alone.
     sync_engine = SyncEngine(
         config=SyncEngineConfig(
             settings=wiring.settings,

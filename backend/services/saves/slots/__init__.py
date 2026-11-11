@@ -2,8 +2,8 @@
 
 Anything that creates, lists, switches, migrates, or deletes slots
 lives here, including the first-sync setup wizard. The matrix
-executor and I/O orchestrators belong in SyncEngine; status
-reporting in StatusService; persistence is each operation's own
+executor lives in ``sync_engine/matrix.py`` and the sync orchestration
+in SyncEngine; status reporting in StatusService; persistence is each operation's own
 narrow Unit of Work (ADR-0006).
 """
 

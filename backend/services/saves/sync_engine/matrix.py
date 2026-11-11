@@ -119,7 +119,7 @@ class SyncRunOptions:
 class RomDispatchContext:
     """The ROM-level constants threaded through one ROM's sync dispatch.
 
-    Built once per ``do_sync_rom_saves`` run and passed to
+    Built once per ``sync_rom_saves`` run and passed to
     ``_dispatch_sync_action`` and its sub-dispatchers, so the remaining
     per-call args stay to the values that actually vary per file (mirrors
     ``DispatchSink`` / ``SyncRunOptions``). ``stop`` is the run's own stop,
@@ -144,9 +144,8 @@ class MatrixExecutor:
     ``compute_sync_action`` against per-filename inputs, and hands the
     resulting :class:`SyncAction` to the :class:`SaveTransfer` step that
     carries it out. The loaded :class:`RomSaveSyncState` aggregate is threaded
-    in by the public rom-level orchestration use cases on :class:`SyncEngine`;
-    it is mutated in memory only — the operation entry owns the single write
-    Unit of Work.
+    in by its caller and mutated in memory only — the operation entry owns the
+    single write Unit of Work.
     """
 
     def __init__(

@@ -10,10 +10,12 @@ from fakes.fake_rom_save_sync_state_repository import FakeRomSaveSyncStateReposi
 from domain.iso_time import epoch_to_iso
 from domain.live_device_id import LiveDeviceId
 from domain.rom_save_sync_state import RomSaveSyncState
+from lib.errors import RommConnectionError, RommSyncDisabledError
 from tests.services.saves._helpers import (
     _create_save,
     _install_rom,
     _seed_save_state,
+    _set_device_id,
     make_service,
 )
 
@@ -180,3 +182,35 @@ class TestTheWholeDeviceSession:
         assert [r.getMessage() for r in caplog.records] == [
             "sync_all_saves: negotiate session open failed (database is locked) — per-ROM sessions"
         ]
+
+
+def _seed_confirmed_rom(svc, tmp_path) -> None:
+    """Install ROM 42 with a confirmed named slot and a local-only save file."""
+    svc._config.settings["save_sync_enabled"] = True
+    _set_device_id(svc, "test-device")
+    _install_rom(svc, tmp_path)
+    _seed_save_state(svc, 42, RomSaveSyncState(system="gba", slot_confirmed=True, active_slot="default"))
+    _create_save(tmp_path, content=b"save data")
+
+
+class TestTheRomSession:
+    """``open_rom_session`` answers no session where it cannot open one, but for RomM's sync-disabled answer."""
+
+    @pytest.mark.asyncio
+    async def test_a_failed_negotiate_answers_no_session(self, tmp_path):
+        """A transient negotiate failure still degrades to a sessionless run (None)."""
+        svc, fake = make_service(tmp_path)
+        _seed_confirmed_rom(svc, tmp_path)
+        fake.fail_on_next(RommConnectionError("transient"))
+        session_id = await svc._sync_engine._negotiate.open_rom_session(42, LiveDeviceId("test-device"))
+        assert session_id is None
+
+    @pytest.mark.asyncio
+    async def test_the_sync_disabled_answer_is_raised(self, tmp_path):
+        """The per-device sync-disabled 400 is re-raised, not swallowed like transports."""
+        svc, fake = make_service(tmp_path)
+        _seed_confirmed_rom(svc, tmp_path)
+        fake.negotiate_sync_disabled = True
+        device_id = LiveDeviceId("test-device")
+        with pytest.raises(RommSyncDisabledError):
+            await svc._sync_engine._negotiate.open_rom_session(42, device_id)

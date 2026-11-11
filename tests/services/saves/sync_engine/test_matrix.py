@@ -2546,3 +2546,46 @@ class TestTheSizeClaimReachesTheDecision:
         assert [c["server_save_id"] for c in status["conflicts"]] == conflicts
         assert [c["server_save_id"] for c in synced] == conflicts
         assert (uploaded, errors) == (0 if conflicts else 1, [])
+
+
+class TestBuildSyncConflictEntry:
+    """The ``sync_conflict`` descriptor the matrix executor builds for the panel."""
+
+    def test_the_descriptor_carries_the_server_save(self, tmp_path):
+        """MatrixExecutor.build_sync_conflict_entry builds the ``sync_conflict`` descriptor's dict shape."""
+        svc, _ = make_service(tmp_path)
+        server = _server_save(save_id=77, filename="pokemon.srm", file_size_bytes=2048)
+
+        entry = svc._sync_engine._matrix.build_sync_conflict_entry(
+            rom_id=42,
+            filename="pokemon.srm",
+            server=server,
+            local_path=None,
+            local_hash=None,
+        )
+
+        assert entry["type"] == "sync_conflict"
+        assert entry["rom_id"] == 42
+        assert entry["filename"] == "pokemon.srm"
+        assert entry["server_save_id"] == 77
+        assert entry["server_size"] == 2048
+        assert "created_at" in entry
+
+    @pytest.mark.parametrize("missing", ["absent", "null"])
+    def test_a_server_save_without_an_id_is_refused(self, tmp_path, missing):
+        """A server save with no id never becomes a descriptor with ``server_save_id: None``."""
+        svc, _ = make_service(tmp_path)
+        server = _server_save(save_id=77, filename="pokemon.srm")
+        if missing == "absent":
+            del server["id"]
+        else:
+            server["id"] = None
+
+        with pytest.raises(ValueError, match="without an id"):
+            svc._sync_engine._matrix.build_sync_conflict_entry(
+                rom_id=42,
+                filename="pokemon.srm",
+                server=server,
+                local_path=None,
+                local_hash=None,
+            )

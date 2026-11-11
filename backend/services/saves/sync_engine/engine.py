@@ -25,9 +25,8 @@ save services (status, versions, slots) consume.
 There is a single sync code path (ADR-0017, superseding ADR-0016's
 routing fork): every ROM decides via the local ``compute_sync_action``
 matrix (driven by ``list_saves``), the sole detection authority. A confirmed
-non-legacy ROM's run is wrapped in a ``negotiate`` session, which is a
-transport envelope and never a gate on sync; a legacy or unconfirmed ROM runs
-the same matrix without one.
+non-legacy ROM's run is wrapped in a ``negotiate`` session; a legacy or
+unconfirmed ROM runs the same matrix without one.
 """
 
 from __future__ import annotations
