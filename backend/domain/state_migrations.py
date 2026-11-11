@@ -20,6 +20,14 @@ PLATFORM_PICK_SOURCE_VERSION = 14
 # The source every pick stored before sources were recorded came from.
 PICKS_FROM_BEFORE_SOURCES = "retrodeck"
 
+# The version from which the per-platform sync toggles are kept by the
+# platform's ``fs_slug`` rather than by RomM's platform id.
+SWITCHES_BY_FOLDER_VERSION = 15
+
+# Where the toggles kept by RomM's platform id wait for a read of RomM's
+# listing to move them onto the platforms' ``fs_slug``.
+SWITCHES_BY_ID_SETTING = "enabled_platform_ids"
+
 _JSON_KINDS: dict[type, str] = {
     dict: "object",
     list: "array",
@@ -66,6 +74,12 @@ def migrate_settings(data: dict[str, Any]) -> dict[str, Any]:
     Tender started through (#2195 D20); a value that is no label is dropped, as
     it named no pick. The step stays in every later release and is safe to run
     again: it converts only a file older than 14.
+
+    Version 15 keeps the per-platform sync toggles by ``fs_slug``. The map kept
+    by RomM's platform id moves to ``enabled_platform_ids`` — an empty one too,
+    since it meant every platform on — until a read of RomM's listing moves it
+    onto the platforms' ``fs_slug`` (#2452 D8, D24); a value that is no map
+    names no toggle and is dropped. The new map starts empty.
     """
     migrated = dict(data)
     if migrated["version"] < PLATFORM_PICK_SOURCE_VERSION:
@@ -77,4 +91,10 @@ def migrate_settings(data: dict[str, Any]) -> dict[str, Any]:
                 if isinstance(label, str) and label
             }
         migrated["version"] = PLATFORM_PICK_SOURCE_VERSION
+    if migrated["version"] < SWITCHES_BY_FOLDER_VERSION:
+        by_id = migrated.get("enabled_platforms")
+        if isinstance(by_id, dict):
+            migrated[SWITCHES_BY_ID_SETTING] = by_id
+        migrated["enabled_platforms"] = {}
+        migrated["version"] = SWITCHES_BY_FOLDER_VERSION
     return migrated

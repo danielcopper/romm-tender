@@ -171,6 +171,7 @@ modules =
     services.migration
     services.platform_picks
     services.platform_refiling
+    services.platform_switches
     services.platform_systems
     services.playtime
     services.prune

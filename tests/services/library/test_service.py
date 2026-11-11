@@ -98,7 +98,7 @@ class TestGetPlatforms:
             ]
         )
         library = make_library(loop=mock_loop)
-        library.settings["enabled_platforms"] = {"1": True, "2": False}
+        library.settings["enabled_platforms"] = {"n64": True, "snes": False}
 
         result = await library.sync.get_platforms()
         assert result["platforms"][0]["sync_enabled"] is True
@@ -138,15 +138,33 @@ class TestSavePlatformSync:
     """Tests for save_platform_sync() — lines 120-123."""
 
     async def test_saves_enabled_setting(self, library):
-        result = await library.sync.save_platform_sync(42, True)
+        result = await library.sync.save_platform_sync("snes", True)
         assert result["success"] is True
-        assert library.settings["enabled_platforms"]["42"] is True
+        assert library.settings["enabled_platforms"]["snes"] is True
 
     async def test_saves_disabled_setting(self, library):
-        library.settings["enabled_platforms"]["42"] = True
-        result = await library.sync.save_platform_sync(42, False)
+        library.settings["enabled_platforms"]["snes"] = True
+        result = await library.sync.save_platform_sync("snes", False)
         assert result["success"] is True
-        assert library.settings["enabled_platforms"]["42"] is False
+        assert library.settings["enabled_platforms"]["snes"] is False
+
+    async def test_switching_one_platform_leaves_every_other_toggle_as_it_was(self, library):
+        library.settings["enabled_platforms"] = {"snes": True, "snes-hacks": True}
+
+        await library.sync.save_platform_sync("snes-hacks", False)
+
+        assert library.settings["enabled_platforms"] == {"snes": True, "snes-hacks": False}
+        assert library.settings_persister.save_count == 1
+
+    @pytest.mark.parametrize("folder", [42, None, "", ["snes"]])
+    async def test_a_folder_that_is_no_name_is_refused_and_nothing_is_written(self, library, folder):
+        """RomM's platform id is never taken in place of the folder the toggle is kept by (#2452 D8)."""
+        with pytest.raises(Refused) as excinfo:
+            await library.sync.save_platform_sync(folder, True)
+
+        assert excinfo.value.reason == "invalid_value"
+        assert library.settings["enabled_platforms"] == {}
+        assert library.settings_persister.save_count == 0
 
 
 class TestSetAllPlatformsSync:
@@ -159,28 +177,48 @@ class TestSetAllPlatformsSync:
         mock_loop = MagicMock()
         mock_loop.run_in_executor = AsyncMock(
             return_value=[
-                {"id": 1, "name": "N64"},
-                {"id": 2, "name": "SNES"},
+                {"id": 1, "name": "N64", "fs_slug": "n64"},
+                {"id": 2, "name": "SNES", "fs_slug": "snes"},
             ]
         )
         library = make_library(loop=mock_loop)
 
         result = await library.sync.set_all_platforms_sync(True)
         assert result["success"] is True
-        assert library.settings["enabled_platforms"]["1"] is True
-        assert library.settings["enabled_platforms"]["2"] is True
+        assert library.settings["enabled_platforms"]["n64"] is True
+        assert library.settings["enabled_platforms"]["snes"] is True
 
     @pytest.mark.asyncio
     async def test_disables_all(self, make_library):
         from unittest.mock import AsyncMock, MagicMock
 
         mock_loop = MagicMock()
-        mock_loop.run_in_executor = AsyncMock(return_value=[{"id": 1, "name": "N64"}])
+        mock_loop.run_in_executor = AsyncMock(return_value=[{"id": 1, "name": "N64", "fs_slug": "n64"}])
         library = make_library(loop=mock_loop)
 
         result = await library.sync.set_all_platforms_sync(False)
         assert result["success"] is True
-        assert library.settings["enabled_platforms"]["1"] is False
+        assert library.settings["enabled_platforms"]["n64"] is False
+
+    @pytest.mark.asyncio
+    async def test_every_listed_platform_with_a_folder_gets_a_toggle_in_place_of_every_one_kept_before(
+        self, make_library
+    ):
+        """A listed platform without an fs_slug has no toggle (#2452 D26)."""
+        mock_loop = MagicMock()
+        mock_loop.run_in_executor = AsyncMock(
+            return_value=[
+                {"id": 1, "slug": "snes", "fs_slug": "snes"},
+                {"id": 2, "slug": "snes", "fs_slug": "snes-hacks"},
+                {"id": 3, "slug": "gba", "fs_slug": None},
+            ]
+        )
+        library = make_library(loop=mock_loop)
+        library.settings["enabled_platforms"] = {"n64": True}
+
+        await library.sync.set_all_platforms_sync(True)
+
+        assert library.settings["enabled_platforms"] == {"snes": True, "snes-hacks": True}
 
     @pytest.mark.asyncio
     async def test_http_error(self, make_library):

@@ -8,6 +8,7 @@ All but the metadata service check conflict rules, and theirs share one
 """
 
 import asyncio
+import threading
 from dataclasses import dataclass
 from typing import Any, Protocol
 from unittest.mock import MagicMock
@@ -45,6 +46,7 @@ from services.library import (
     UnitApplier,
 )
 from services.metadata import MetadataService, MetadataServiceConfig
+from services.platform_switches import PlatformSwitches, PlatformSwitchesConfig
 from services.platform_systems import PlatformSystemService, PlatformSystemServiceConfig
 from services.shortcut_removal import ShortcutRemovalService, ShortcutRemovalServiceConfig
 
@@ -219,6 +221,11 @@ async def make_library(tmp_path, emit, logger, home) -> MakeLibrary:
                 running_rom_ids=running_games,
                 refiling=FakeListingRefiler(),
                 platform_listing=platform_systems,
+                platform_switches=PlatformSwitches(
+                    config=PlatformSwitchesConfig(
+                        settings=settings, settings_persister=persister, lock=threading.Lock()
+                    )
+                ),
             ),
         )
 

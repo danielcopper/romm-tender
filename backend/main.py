@@ -401,8 +401,8 @@ class Endpoints:
         return await self._services.sync_service.get_platforms()
 
     @route
-    async def save_platform_sync(self, platform_id, enabled):
-        return await self._services.sync_service.save_platform_sync(platform_id, enabled)
+    async def save_platform_sync(self, platform_folder, enabled):
+        return await self._services.sync_service.save_platform_sync(platform_folder, enabled)
 
     @route
     async def set_all_platforms_sync(self, enabled):

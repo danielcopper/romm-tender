@@ -89,7 +89,7 @@ async def test_a_shortcut_created_anew_does_not_read_its_old_steamgriddb_cover_a
         "path_cover_large": _COVER,
     }
     harness.romm.download_payloads[f"cover:{_COVER}"] = b"romm's cover"
-    harness.settings["enabled_platforms"] = {"1": True}
+    harness.settings["enabled_platforms"] = {"saturn": True}
     # The shortcut was removed: the row stays unbound, with the record of the SteamGridDB cover it showed.
     _row(harness, 2, app_id=None, fs_name="game.chd")
     _stand_in_record(harness, 2)
@@ -128,7 +128,7 @@ async def test_a_sync_rebinding_the_shortcut_does_not_read_the_versions_old_cove
         "path_cover_large": _COVER,
     }
     harness.romm.download_payloads[f"cover:{_COVER}"] = b"romm's cover"
-    harness.settings["enabled_platforms"] = {"1": True}
+    harness.settings["enabled_platforms"] = {"saturn": True}
     _row(harness, 1, app_id=5000, fs_name="Game (USA).zip", sibling_group_key="igdb:100:1")
     # Version 2 was bound once and showed Tender's SteamGridDB cover then.
     _row(harness, 2, app_id=None, fs_name="Game (USA)", sibling_group_key="igdb:100:1")

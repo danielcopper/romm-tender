@@ -26,7 +26,7 @@ from domain.fetch_generation import (
     hidden_without_a_listed_version,
 )
 from domain.platform_names import listed_fs_slug, listed_platform_folders, listed_platform_names
-from domain.platform_prefs import materialize_enabled_platforms, resolve_sync_enabled
+from domain.platform_prefs import platform_sync_enabled
 from domain.platform_skip import probe_verdict, stamp_can_match
 from domain.platform_sync_state import stamp_for_skip
 from domain.skip_prediction import (
@@ -56,6 +56,7 @@ if TYPE_CHECKING:
         DebugLogger,
         ListingRefiler,
         ListingReplacer,
+        PlatformSwitchesWriter,
         RommLibraryApi,
         SettingsPersister,
         UnitOfWorkFactory,
@@ -130,8 +131,9 @@ class LibraryFetcherConfig:
     to surface long paginated fetches to the frontend, and the
     ``LocalLibraryReader`` peer the collections listing asks which ROMs
     the sync's collection filing resolves to a shortcut, the refiling
-    each of its reads of RomM's platform listing is handed to, and the
-    platform system the sync's listing is kept by.
+    each of its reads of RomM's platform listing is handed to, the
+    platform system the sync's listing is kept by, and the writer of the
+    per-platform sync toggles.
     """
 
     romm_api: RommLibraryApi
@@ -146,6 +148,7 @@ class LibraryFetcherConfig:
     local_library_reader: LocalLibraryReader
     refiling: ListingRefiler
     platform_listing: ListingReplacer
+    platform_switches: PlatformSwitchesWriter
 
 
 class LibraryFetcher:
@@ -164,6 +167,7 @@ class LibraryFetcher:
         self._local_library_reader = config.local_library_reader
         self._refiling = config.refiling
         self._platform_listing = config.platform_listing
+        self._platform_switches = config.platform_switches
 
     # ── Platform metadata use cases ──────────────────────────────
 
@@ -175,22 +179,7 @@ class LibraryFetcher:
 
     async def get_platforms(self):
         platforms = await self._read_listing()
-
-        # Only platforms with ROMs are shown (and thus toggleable), so the
-        # materialized map covers exactly the set the user can act on.
-        shown_ids = [str(p["id"]) for p in platforms if p.get("rom_count", 0) > 0]
-
-        # Self-heal the empty-map sentinel into an explicit all-True map at the
-        # first read with a live platform list, so every later single-key
-        # ``save_platform_sync`` write is a partial update of a complete map —
-        # a one-platform toggle can never again be misread as "rest disabled"
-        # (#1007). Idempotent: only fires while the map is the empty sentinel.
         enabled = self._settings.get("enabled_platforms", {})
-        materialized = materialize_enabled_platforms(enabled, shown_ids)
-        if materialized is not None:
-            self._settings["enabled_platforms"] = materialized
-            self._settings_persister.save_settings()
-            enabled = materialized
 
         # One row per platform, by its fs_slug, named as its Steam collection is (#2452 D1, D2).
         names = listed_platform_names(platforms)
@@ -200,33 +189,27 @@ class LibraryFetcher:
             fs_slug = listed_fs_slug(p)
             if rom_count == 0 or fs_slug is None:
                 continue
-            pid = str(p["id"])
             entry = {
                 "id": p["id"],
                 "name": names.get(fs_slug, p.get("name", "")),
                 "slug": p.get("slug", ""),
                 "fs_slug": fs_slug,
                 "rom_count": rom_count,
-                "sync_enabled": resolve_sync_enabled(enabled, pid),
+                "sync_enabled": platform_sync_enabled(enabled, fs_slug),
             }
             result.append(entry)
         return {"success": True, "platforms": result}
 
-    def save_platform_sync(self, platform_id, enabled):
-        pid = str(platform_id)
-        self._settings["enabled_platforms"][pid] = bool(enabled)
-        self._settings_persister.save_settings()
+    def save_platform_sync(self, platform_folder: str, enabled):
+        """Switch the platform kept in *platform_folder* on or off; every other toggle stays as it is."""
+        self._platform_switches.replace(lambda switches: {**switches, platform_folder: bool(enabled)})
         return {"success": True}
 
     async def set_all_platforms_sync(self, enabled):
-        enabled = bool(enabled)
+        """Switch every listed platform with an ``fs_slug`` on or off, in place of every toggle kept before."""
         platforms = await self._read_listing()
-
-        ep = {}
-        for p in platforms:
-            ep[str(p["id"])] = enabled
-        self._settings["enabled_platforms"] = ep
-        self._settings_persister.save_settings()
+        switches = dict.fromkeys(listed_platform_folders(platforms), bool(enabled))
+        self._platform_switches.replace(lambda _current: switches)
         return {"success": True}
 
     # ── Collection metadata use cases ────────────────────────────
@@ -351,7 +334,7 @@ class LibraryFetcher:
     # ── ROM fetch pipeline ───────────────────────────────────────
 
     async def _fetch_enabled_platforms(self) -> tuple[list[dict[str, Any]], tuple[int, ...]]:
-        """Fetch and filter platforms by enabled_platforms setting, keeping every listed platform's ids.
+        """Fetch and filter platforms by their sync toggles, keeping every listed platform's ids.
 
         Answers ``(enabled, unwalked_ids)``: the platforms this run syncs, and
         the id of every listed platform it does not. Every listed platform's
@@ -362,14 +345,11 @@ class LibraryFetcher:
         self._sync_state.run_listed_platform_names = listed_platform_names(listed)
         await self._loop.run_in_executor(None, self._platform_listing.replace_listing, listed)
 
-        # Empty map = "all platforms enabled" (the safety floor for a user who
-        # syncs without ever opening the Platforms page). ``get_platforms``
-        # materializes the full map on first view, so a partial map here always
-        # reflects explicit per-platform choices, never the sentinel (#1007).
+        # The refiling ran on this read (``_read_listing``), so toggles an
+        # earlier release kept by RomM id have moved to their folders by now.
         enabled = self._settings.get("enabled_platforms", {})
-        self._logger.info(f"Platform filter: {len(enabled)} prefs saved, no_prefs={not enabled}")
         self._logger.info(f"Enabled platforms: {[k for k, v in enabled.items() if v]}")
-        platforms = [p for p in listed if resolve_sync_enabled(enabled, str(p["id"]))]
+        platforms = [p for p in listed if platform_sync_enabled(enabled, listed_fs_slug(p))]
         self._logger.info(f"Syncing {len(platforms)} platforms: {[p['name'] for p in platforms]}")
         synced_ids = {int(p["id"]) for p in platforms}
         left_off_ids = tuple(int(p["id"]) for p in listed if int(p["id"]) not in synced_ids)

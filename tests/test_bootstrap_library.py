@@ -9,6 +9,7 @@ from _factories import _make_conflict_rules
 from fakes.fake_event_sink import FakeEventSink
 from fakes.fake_listing_refiler import FakeListingRefiler
 from fakes.fake_listing_replacer import FakeListingReplacer
+from fakes.fake_platform_switches import FakePlatformSwitches
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_romm_api import FakeRommApi
@@ -51,6 +52,7 @@ def parts(home) -> LibraryParts:
             running_rom_ids=FakeRunningRomIds(),
             refiling=FakeListingRefiler(),
             platform_listing=FakeListingReplacer(),
+            platform_switches=FakePlatformSwitches(),
         )
     )
 

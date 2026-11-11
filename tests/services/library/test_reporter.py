@@ -146,6 +146,32 @@ class TestGetSyncStats:
             assert uow.roms.get(20).shortcut_app_id is None
 
 
+class TestGetSyncStatsCountsThePlatformsSwitchedOn:
+    """The main page's platform count, before and after the toggles move from RomM id to fs_slug (#2452 D25)."""
+
+    @pytest.mark.asyncio
+    async def test_the_toggles_kept_by_folder_are_counted(self, library):
+        library.settings["enabled_platforms"] = {"snes": True, "snes-hacks": False, "gba": True}
+        library.settings["enabled_platform_ids"] = None
+
+        assert library.sync.get_sync_stats()["platforms"] == 2
+
+    @pytest.mark.asyncio
+    async def test_until_they_move_the_toggles_kept_by_id_are_counted(self, library):
+        library.settings["enabled_platforms"] = {}
+        library.settings["enabled_platform_ids"] = {"1": True, "2": False, "3": True}
+
+        assert library.sync.get_sync_stats()["platforms"] == 2
+
+    @pytest.mark.asyncio
+    async def test_none_ever_saved_counts_no_platform(self, library):
+        """The main page leaves a count of 0 out, rather than reading every platform as on."""
+        library.settings["enabled_platforms"] = {}
+        library.settings["enabled_platform_ids"] = {}
+
+        assert library.sync.get_sync_stats()["platforms"] == 0
+
+
 class TestGetSyncStatsLastAttempt:
     """last_attempt — surface a cancelled/crashed run so 'Last sync' isn't 'Never' (#1367-class)."""
 

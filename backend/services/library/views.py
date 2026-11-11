@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from domain.fetch_generation import gone_from_romm_ids, rows_with_their_stamp
 from domain.platform_names import PLATFORM_NAMES_KEY, platform_display_name
 from domain.sibling_resolution import reachable_rom_ids
+from domain.state_migrations import SWITCHES_BY_ID_SETTING
 
 if TYPE_CHECKING:
     from domain.rom import Rom
@@ -109,8 +110,12 @@ class LibraryViews:
     # ── Stats / run history ──────────────────────────────────────
 
     def get_sync_stats(self):
-        enabled_platforms = self._settings.get("enabled_platforms", {})
-        enabled_platform_count = sum(1 for v in enabled_platforms.values() if v)
+        # Until a read of RomM's listing moves them, the toggles are counted where
+        # they are still kept by RomM id; kept there empty, no platform is counted
+        # (#2452 D25).
+        by_id = self._settings.get(SWITCHES_BY_ID_SETTING)
+        enabled_platforms = by_id if isinstance(by_id, dict) else self._settings.get("enabled_platforms", {})
+        enabled_platform_count = sum(1 for v in enabled_platforms.values() if v is True)
         enabled_collections = self._settings.get("enabled_collections", {})
         if isinstance(enabled_collections, dict):
             enabled_collection_count = sum(

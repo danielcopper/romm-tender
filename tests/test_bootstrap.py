@@ -545,9 +545,15 @@ class TestBootstrapReadsOnlySettingsAtTheOldestVersionOrNewer:
         with caplog.at_level(logging.WARNING):
             result = _bootstrap_for(tmp_path)
 
-        expected = {**content, "version": 14, "platform_cores": {"snes": {"label": "bsnes", "source": "retrodeck"}}}
-        assert {key: result.stores.settings[key] for key in content} == expected
-        assert {key: json.loads(path.read_text())[key] for key in content} == expected
+        expected = {
+            **content,
+            "version": 15,
+            "enabled_platforms": {},
+            "enabled_platform_ids": {"3": True},
+            "platform_cores": {"snes": {"label": "bsnes", "source": "retrodeck"}},
+        }
+        assert {key: result.stores.settings[key] for key in expected} == expected
+        assert {key: json.loads(path.read_text())[key] for key in expected} == expected
         assert not [r for r in caplog.records if "settings.json" in r.getMessage()]
 
     @pytest.mark.parametrize(

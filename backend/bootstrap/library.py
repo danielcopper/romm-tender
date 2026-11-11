@@ -58,6 +58,7 @@ if TYPE_CHECKING:
         EventEmitter,
         ListingRefiler,
         ListingReplacer,
+        PlatformSwitchesWriter,
         RendererGcFn,
         RendererRssFn,
         RommLibraryApi,
@@ -101,6 +102,7 @@ class LibraryWiring:
     running_rom_ids: RunningRomIdsFn
     refiling: ListingRefiler
     platform_listing: ListingReplacer
+    platform_switches: PlatformSwitchesWriter
 
 
 @dataclass(frozen=True)
@@ -147,6 +149,7 @@ def wire_library(wiring: LibraryWiring) -> LibraryParts:
             local_library_reader=local_library_reader,
             refiling=wiring.refiling,
             platform_listing=wiring.platform_listing,
+            platform_switches=wiring.platform_switches,
         )
     )
 

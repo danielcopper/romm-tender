@@ -92,6 +92,27 @@ class PlatformPicksWriter(Protocol):
     def replace(self, build: Callable[[Mapping[str, Any]], dict[str, Any] | None]) -> bool: ...
 
 
+class PlatformSwitchesWriter(Protocol):
+    """The one writer of the per-platform sync toggles, consumed by the library fetcher and the refiling.
+
+    Both methods run *build* under the lock every change of the toggles is made
+    under and save the map it answers; where the save raises, the new map stays
+    and the exception propagates. Blocking.
+    """
+
+    def replace(self, build: Callable[[Mapping[str, bool]], dict[str, bool]]) -> None:
+        """Put *build*'s map of the current toggles in their place."""
+        ...
+
+    def carry_over(self, build: Callable[[Mapping[str, Any], Mapping[str, bool]], dict[str, bool] | None]) -> bool:
+        """Put the toggles *build* moves from those kept by RomM id, and the current ones, in place of both.
+
+        *build* answers ``None`` to change nothing yet. Answers whether a map was
+        built; ``False`` too where nothing is kept by id.
+        """
+        ...
+
+
 class RomInstallRecorder(Protocol):
     """The one writer of a ``rom_installs`` row.
 

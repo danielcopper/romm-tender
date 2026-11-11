@@ -16,7 +16,7 @@ from adapters.system_clock import SystemClock
 from domain.emulator_pick import StoredPick, platform_pick
 from domain.state_migrations import unreadable_settings
 
-_SETTINGS_VERSION = 14
+_SETTINGS_VERSION = 15
 _LOCK_EXT = ".lock"
 
 # The settings file's name, and the only spelling of it in the codebase.

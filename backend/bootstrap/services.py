@@ -51,6 +51,7 @@ from services.metadata import MetadataService, MetadataServiceConfig
 from services.migration import MigrationService, MigrationServiceConfig
 from services.platform_picks import PlatformPicks, PlatformPicksConfig
 from services.platform_refiling import PlatformRefiling, PlatformRefilingConfig
+from services.platform_switches import PlatformSwitches, PlatformSwitchesConfig
 from services.platform_systems import PlatformSystemService, PlatformSystemServiceConfig
 from services.playtime import PlaytimeService, PlaytimeServiceConfig
 from services.prune import PruneService, PruneServiceConfig
@@ -247,13 +248,24 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         )
     )
 
-    # Every reader that keeps or uses RomM's platform listing hands what it read here (#2452 D6, D7),
+    # The one writer of the per-platform sync toggles, which the library fetcher
+    # writes through on the loop and the refiling from executor threads.
+    platform_switches = PlatformSwitches(
+        config=PlatformSwitchesConfig(
+            settings=cfg.stores.settings,
+            settings_persister=cfg.callbacks.settings_persister,
+            lock=threading.Lock(),
+        )
+    )
+
+    # Every reader that keeps or uses RomM's platform listing hands what it read here (#2452 D6, D7, D8),
     # and the refiling hands it on to the platform system to keep, which itself hands its reads here.
     listing_keeper_binding: LateBinding[ListingKeeper] = LateBinding("listing_keeper")
     platform_refiling = PlatformRefiling(
         config=PlatformRefilingConfig(
             uow_factory=cfg.callbacks.uow_factory,
             platform_picks=platform_picks,
+            platform_switches=platform_switches,
             refile_lock=threading.Lock(),
             listing_keeper=listing_keeper_binding.get,
             logger=cfg.runtime.logger,
@@ -536,6 +548,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             running_rom_ids=running_games.running_rom_ids,
             refiling=platform_refiling,
             platform_listing=platform_systems,
+            platform_switches=platform_switches,
         ),
     ).service
     pending_sync_binding.set(lambda: sync_service.pending_sync)

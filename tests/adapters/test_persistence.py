@@ -85,8 +85,8 @@ class TestLocking:
 class TestSettingsSchema:
     """Schema-level expectations for the settings defaults + version stamp."""
 
-    def test_settings_version_is_14(self):
-        assert _SETTINGS_VERSION == 14
+    def test_settings_version_is_15(self):
+        assert _SETTINGS_VERSION == 15
 
     def test_default_settings_default_slot_is_autosave(self):
         # New ROMs adopt "autosave" (the slot name the official RomM clients use),

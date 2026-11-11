@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from lib.errors import Refused
+
 if TYPE_CHECKING:
     from services.library._state import LibrarySyncStateBox
     from services.library.fetcher import LibraryFetcher
@@ -96,9 +98,10 @@ class LibraryService:
     async def get_platforms(self):
         return await self._fetcher.get_platforms()
 
-    async def save_platform_sync(self, platform_id, enabled):
+    async def save_platform_sync(self, platform_folder, enabled):
+        _require_folder(platform_folder)
         async with self._rules.hold("save_platform_sync", update=True, migration=True):
-            return self._fetcher.save_platform_sync(platform_id, enabled)
+            return self._fetcher.save_platform_sync(platform_folder, enabled)
 
     async def set_all_platforms_sync(self, enabled):
         async with self._rules.hold("set_all_platforms_sync", update=True, migration=True):
@@ -170,3 +173,13 @@ class LibraryService:
 
     def get_sync_runs(self):
         return self._views.get_sync_runs()
+
+
+def _require_folder(platform_folder: object) -> None:
+    """Refuse ``invalid_value`` for a platform folder that is not a non-empty name.
+
+    A platform's sync toggle is kept by the folder RomM keeps it in (#2452 D8),
+    and RomM's platform id is never taken in its place.
+    """
+    if not isinstance(platform_folder, str) or not platform_folder:
+        raise Refused("invalid_value", f"{platform_folder!r} is not a RomM platform folder")

@@ -24,7 +24,7 @@ def _seed_one_platform(harness):
         "platform_name": "N64",
         "platform_slug": "n64",
     }
-    harness.settings["enabled_platforms"] = {"1": True}
+    harness.settings["enabled_platforms"] = {"n64": True}
 
 
 async def test_nothing_pending_is_a_success_not_a_failure(harness):

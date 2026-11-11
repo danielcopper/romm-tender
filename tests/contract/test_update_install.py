@@ -161,7 +161,7 @@ async def test_a_press_installs_the_stored_release_through_the_real_cache_root(i
 async def test_from_the_press_on_an_endpoint_a_migration_refuses_answers_blocked_by_update(installed):
     await installed.endpoints.install_update(_OFFERED)
 
-    answer = await installed.endpoints.save_platform_sync(7, True)
+    answer = await installed.endpoints.save_platform_sync("snes", True)
 
     assert answer == {
         "success": False,
@@ -178,7 +178,7 @@ async def test_a_failed_attempt_gives_the_rule_back_and_says_try_again(installed
 
     assert state["attempt"]["failure"] == "installer_not_started"
     assert state["try_again"] is True
-    assert (await installed.endpoints.save_platform_sync(7, True))["success"] is True
+    assert (await installed.endpoints.save_platform_sync("snes", True))["success"] is True
     assert not os.path.lexists(os.path.join(installed.cache_dir, "update"))
 
 
