@@ -1720,6 +1720,28 @@ describe("PlayButton", () => {
         expect(screen.getByRole("button", { name: "USE EXISTING FILES" })).toBeInTheDocument();
       });
 
+      it("keeps the bar and the files it found when the cancel is refused with another reason", async () => {
+        vi.mocked(backend.cancelDownload).mockResolvedValueOnce({
+          success: false,
+          reason: "server_unreachable",
+          message: "No.",
+        } as never);
+        await pressUseExistingFiles();
+
+        await waitFor(() =>
+          expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+            "DesktopPlayButton: the backend refused to cancel the download of romId=100: server_unreachable: No.",
+          ),
+        );
+        expect(screen.getByRole("progressbar")).toBeInTheDocument();
+        expect(downloadStore.removeDownload).not.toHaveBeenCalled();
+
+        act(() =>
+          emitHostEvent<Partial<DownloadProgressEvent>>("download_progress", { rom_id: 100, status: "downloading" }),
+        );
+        expect(screen.getByRole("button", { name: "USE EXISTING FILES" })).toBeInTheDocument();
+      });
+
       it("ends its bar and drops the store's entry, keeping the files it found, once the backend says nothing runs", async () => {
         vi.mocked(backend.cancelDownload).mockResolvedValueOnce({
           success: false,
@@ -2097,16 +2119,40 @@ describe("PlayButton", () => {
       expect(download()).toHaveStyle({ cursor: "pointer" });
     });
 
-    it("keeps an OFFLINE DOWNLOAD's cursor while the selector is switching, and its throbber", () => {
+    it("keeps an OFFLINE or blocked DOWNLOAD's style while the selector is switching, and its throbber", async () => {
       vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ installed: false }));
       setRommConnectionState("offline");
-      render(<PlayButton appId={APP_ID} />);
-
+      const { unmount } = render(<PlayButton appId={APP_ID} />);
       act(() => selectorProps()!.onSwitchingChange(true));
+      const offline = screen.getByRole("button", { name: "OFFLINE" });
+      expect(throbberIn(offline)).not.toBeNull();
+      expect(offline).toHaveStyle({
+        background: "linear-gradient(90deg, #4a5968 0%, #3a4754 100%)",
+        cursor: "not-allowed",
+        opacity: "0.7",
+      });
+      unmount();
 
-      const download = screen.getByRole("button", { name: "OFFLINE" });
-      expect(throbberIn(download)).not.toBeNull();
-      expect(download).toHaveStyle({ cursor: "not-allowed" });
+      setRommConnectionState("connected");
+      vi.mocked(backend.getCachedGameDetail).mockResolvedValueOnce({
+        found: true,
+        rom_id: 100,
+        installed: false,
+        has_file_on_disk: false,
+      });
+      const noFileRender = render(<PlayButton appId={APP_ID} />);
+      const noFile = await screen.findByRole("button", { name: "NO FILE ON ROMM" });
+      act(() => selectorProps()!.onSwitchingChange(true));
+      expect(throbberIn(noFile)).not.toBeNull();
+      expect(noFile).toHaveStyle({ cursor: "not-allowed", opacity: "0.7" });
+      noFileRender.unmount();
+
+      setBoundAvailability(APP_ID, "version_gone");
+      render(<PlayButton appId={APP_ID} />);
+      act(() => selectorProps()!.onSwitchingChange(true));
+      const vanished = screen.getByRole("button", { name: "DOWNLOAD" });
+      expect(throbberIn(vanished)).not.toBeNull();
+      expect(vanished).toHaveStyle({ cursor: "not-allowed", opacity: "0.7" });
     });
 
     it("is told the press is over once the download has started", async () => {
