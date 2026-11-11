@@ -309,7 +309,8 @@ class TestFailures:
         assert (
             failure.getMessage() == "Failed to move older BIOS download records to their platforms: OSError: db locked"
         )
-        assert failure.exc_info and failure.exc_info[0] is OSError
+        assert failure.exc_info
+        assert failure.exc_info[0] is OSError
 
     def test_a_picks_half_that_fails_leaves_the_records_moved(self, caplog):
         harness = _Harness(_record("psx"), picks={"psx": {"label": "SwanStation"}}, persister=_FailingPersister())
@@ -320,7 +321,8 @@ class TestFailures:
         assert harness.records() == {("ps", "scph5501.bin", "/bios/scph5501.bin")}
         [failure] = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert failure.getMessage() == "Failed to move older per-platform picks to their platforms: OSError: disk full"
-        assert failure.exc_info and failure.exc_info[0] is OSError
+        assert failure.exc_info
+        assert failure.exc_info[0] is OSError
 
     def test_a_records_half_that_fails_midway_moves_none(self, monkeypatch):
         harness = _Harness(_record("psx"), _record("bios_from_user", path="/bios/other.bin", file_name="other.bin"))

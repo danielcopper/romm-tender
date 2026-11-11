@@ -1548,10 +1548,10 @@ class TestAPlatformsPickIsKeptByItsFolder:
     @pytest.mark.parametrize(("slug", "folder"), [("", "snes"), ("snes", ""), (None, "snes"), ("snes", None)])
     def test_a_platform_asked_without_a_slug_or_a_folder_is_refused(self, event_loop, service, settings, slug, folder):
         for call in (
-            lambda: service.get_system_core_info(slug, folder),
-            lambda: service.set_system_core(slug, folder, "bsnes"),
+            service.get_system_core_info(slug, folder),
+            service.set_system_core(slug, folder, "bsnes"),
         ):
             with pytest.raises(Refused) as refused:
-                event_loop.run_until_complete(call())
+                event_loop.run_until_complete(call)
             assert refused.value.reason == "invalid_value"
         assert settings["platform_cores"] == {}

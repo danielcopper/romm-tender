@@ -428,16 +428,17 @@ export function usePlatformsPage(): PlatformsPageState {
       if (focused !== null && !asked.current.has(focused)) return focused;
       return order.find((folder) => !asked.current.has(folder)) ?? null;
     };
-    const walk = async () => {
-      for (let folder = next(); folder !== null && walking && alive.current; folder = next()) {
-        const platform = platformOf(folder);
-        if (platform !== null) {
-          await readPlatform(platform);
-          continue;
-        }
+    const walk = async (): Promise<void> => {
+      const folder = next();
+      if (folder === null || !walking || !alive.current) return;
+      const platform = platformOf(folder);
+      if (platform === null) {
         asked.current.add(folder);
         setReadFailed((prev) => ({ ...prev, [folder]: true }));
+      } else {
+        await readPlatform(platform);
       }
+      return walk();
     };
     detach(walk());
     return () => {

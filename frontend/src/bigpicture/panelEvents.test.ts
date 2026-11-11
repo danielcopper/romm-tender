@@ -135,9 +135,7 @@ describe("the panel's core info", () => {
     await loadData(
       APP_ID,
       () => false,
-      { current: null },
-      { current: "" },
-      { current: "" },
+      { romId: { current: null }, platformSlug: { current: "" }, platformFolder: { current: "" } },
       { current: { detail: 0, saveStatus: 0, slots: 0, slotTracking: 0, saveSync: 0, localSaves: 0, bios: 0 } },
       (update) => {
         state = typeof update === "function" ? update(state) : update;

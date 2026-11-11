@@ -66,9 +66,10 @@ class TestReplace:
     def test_a_save_that_raises_puts_the_old_picks_back_and_raises(self, error):
         before = {"ps": {"label": "SwanStation"}}
         settings: dict[str, Any] = {"platform_cores": before}
+        picks = _picks(settings, _FailingPersister(error))
 
         with pytest.raises(type(error)):
-            _picks(settings, _FailingPersister(error)).replace(lambda picks: {})
+            picks.replace(lambda current: {})
 
         assert settings["platform_cores"] is before
 

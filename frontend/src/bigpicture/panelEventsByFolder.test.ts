@@ -142,9 +142,7 @@ describe("which game pages a platform's change reaches", () => {
     await loadData(
       APP_ID,
       () => false,
-      { current: null },
-      { current: "" },
-      folderRef,
+      { romId: { current: null }, platformSlug: { current: "" }, platformFolder: folderRef },
       { current: seqs() },
       () => {},
       () => {},

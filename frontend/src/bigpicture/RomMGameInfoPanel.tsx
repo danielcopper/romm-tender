@@ -135,9 +135,7 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
       loadData(
         appId,
         () => cancelled,
-        romIdRef,
-        platformSlugRef,
-        platformFolderRef,
+        { romId: romIdRef, platformSlug: platformSlugRef, platformFolder: platformFolderRef },
         readSeqs,
         setState,
         setPlatformSlug,
