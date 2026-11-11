@@ -10,9 +10,9 @@ the same refusal before it sets a slot up, and the whole-library sweep, which
 passes a refused ROM over rather than raising, counts it by that refusal's
 reason (:class:`SweepTally`).
 
-It lives beside the engine rather than inside it because nothing is added to the
-engine's own module, and because these are the whole refusal: one reading and the
-refusals it raises, with no engine state between them.
+It lives beside the engine rather than inside it because these are the whole
+refusal: one reading and the refusals it raises, with no engine state between
+them.
 
 **The reading happens before the heartbeat, deliberately.** A PS2 game needs no
 server to establish that its saves live on a shared card, and a device that is
