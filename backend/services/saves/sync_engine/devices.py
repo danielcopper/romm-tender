@@ -52,11 +52,6 @@ class DeviceRegistry:
     *label* lives in ``settings.json`` (ADR-0003: server identity in
     ``kv_config``, user-set label in settings) and flows through the
     injected ``SettingsPersister``.
-
-    The async entry points take ``loop``, ``hostname_provider``, and
-    ``machine_id_provider`` per call so :class:`SyncEngine` can pass its live
-    (test-rebindable) attributes without having to thread reassignments
-    through this sub-module.
     """
 
     def __init__(
@@ -70,6 +65,9 @@ class DeviceRegistry:
         log_debug: DebugLogger,
         settings_persister: SettingsPersister,
         version: str,
+        loop: asyncio.AbstractEventLoop,
+        hostname_provider: HostnameReader,
+        machine_id_provider: MachineIdReader,
     ) -> None:
         self._uow_factory = uow_factory
         self._settings = settings
@@ -79,6 +77,9 @@ class DeviceRegistry:
         self._log_debug = log_debug
         self._settings_persister = settings_persister
         self._version = version
+        self._loop = loop
+        self._hostname_provider = hostname_provider
+        self._machine_id_provider = machine_id_provider
         # Cached server device id. ``_device_id_loaded`` distinguishes
         # "never read" from "read and found absent" (``None``) so an
         # unregistered device is not re-queried on every call. The id is a
@@ -198,17 +199,11 @@ class DeviceRegistry:
                 self._settings.pop("device_name", None)
             raise
 
-    async def ensure_device_registered(
-        self,
-        *,
-        loop: asyncio.AbstractEventLoop,
-        hostname_provider: HostnameReader,
-        machine_id_provider: MachineIdReader,
-    ) -> dict[str, Any]:
+    async def ensure_device_registered(self) -> dict[str, Any]:
         """Ensure this device is registered with the RomM server for save sync tracking.
 
-        ``hostname_provider`` supplies the friendly display ``name``;
-        ``machine_id_provider`` supplies the stable ``/etc/machine-id``
+        The hostname provider supplies the friendly display ``name``; the
+        machine-id provider supplies the stable ``/etc/machine-id``
         fingerprint sent as the RomM ``hostname`` so the server dedupes
         this device across reinstalls. When the machine id is unreadable
         (``None``) the call degrades to no-fingerprint registration.
@@ -235,7 +230,7 @@ class DeviceRegistry:
         # still proceeds and the adapter just retains its current version.
         if not self._romm_api.get_version():
             try:
-                heartbeat = await loop.run_in_executor(None, self._romm_api.heartbeat)
+                heartbeat = await self._loop.run_in_executor(None, self._romm_api.heartbeat)
                 with contextlib.suppress(AttributeError, TypeError):
                     version = heartbeat.get("SYSTEM", {}).get("VERSION")
                     # SYSTEM.VERSION is server-controlled and untrusted: only cache
@@ -247,7 +242,7 @@ class DeviceRegistry:
             except Exception as e:
                 self._logger.debug(f"ensure_device_registered: version probe failed (non-fatal): {e}")
 
-        device_id = await loop.run_in_executor(None, self.get_device_id)
+        device_id = await self._loop.run_in_executor(None, self.get_device_id)
         # Set only once the touch below proves the cached id dead — the
         # registration path then re-addresses the play sessions still queued
         # under it to the fresh id.
@@ -264,7 +259,7 @@ class DeviceRegistry:
             # leaves a breadcrumb. A transient server blip must NEVER throw away
             # a valid id and churn a spurious re-registration.
             try:
-                await loop.run_in_executor(
+                await self._loop.run_in_executor(
                     None,
                     lambda: self._romm_api.update_device(server_id_str, client_version=self._version),
                 )
@@ -272,7 +267,7 @@ class DeviceRegistry:
                 self._log_debug(
                     f"ensure_device_registered: server no longer has device {server_id_str} (404), re-registering: {e}"
                 )
-                await loop.run_in_executor(None, self.forget_device)
+                await self._loop.run_in_executor(None, self.forget_device)
                 dead_device_id = server_id_str
             except Exception as e:
                 self._log_debug(f"ensure_device_registered: update_device failed (non-fatal): {e}")
@@ -286,10 +281,10 @@ class DeviceRegistry:
             # The cached id was dead and has been forgotten above; fall through to
             # registration so a fresh id is minted and persisted.
 
-        hostname = hostname_provider.get()
-        machine_id = machine_id_provider.get()
+        hostname = self._hostname_provider.get()
+        machine_id = self._machine_id_provider.get()
 
-        result = await loop.run_in_executor(
+        result = await self._loop.run_in_executor(
             None,
             lambda: self._romm_api.register_device(
                 name=hostname,
@@ -310,15 +305,15 @@ class DeviceRegistry:
         # label write fails (e.g. a settings.json fsync error) the
         # device is still fully registered and usable — the prior/default
         # label persists — instead of being left in a broken half-state.
-        await loop.run_in_executor(None, self._set_device_id, new_id)
+        await self._loop.run_in_executor(None, self._set_device_id, new_id)
         if dead_device_id is not None and dead_device_id != new_id:
             # A heal, not a first registration: carry the outbox over to
             # the id the server actually knows (RomM's machine-id dedup
             # can hand back the SAME id, which needs no re-address).
-            await loop.run_in_executor(None, self._reassign_pending_play_sessions, dead_device_id, new_id)
+            await self._loop.run_in_executor(None, self._reassign_pending_play_sessions, dead_device_id, new_id)
         device_name = hostname
         try:
-            await loop.run_in_executor(None, self._set_device_name, hostname)
+            await self._loop.run_in_executor(None, self._set_device_name, hostname)
         except Exception as e:
             device_name = self._get_device_name() or ""
             self._log_debug(
@@ -332,7 +327,7 @@ class DeviceRegistry:
             "server_device_id": new_id,
         }
 
-    async def list_devices(self, *, loop: asyncio.AbstractEventLoop) -> dict[str, Any]:
+    async def list_devices(self) -> dict[str, Any]:
         """List all devices registered with the RomM server for this user.
 
         Refuses with ``sync_disabled`` and ``disabled`` while save sync is off;
@@ -340,8 +335,8 @@ class DeviceRegistry:
         """
         if not save_sync_enabled(self._settings):
             raise Refused("sync_disabled", SAVE_SYNC_DISABLED, disabled=True)
-        own_id = await loop.run_in_executor(None, self.get_device_id)
-        devices = await loop.run_in_executor(
+        own_id = await self._loop.run_in_executor(None, self.get_device_id)
+        devices = await self._loop.run_in_executor(
             None,
             lambda: self._retry.with_retry(lambda: self._romm_api.list_devices()),
         )

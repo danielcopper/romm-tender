@@ -17,20 +17,17 @@ decision and its dispatch live in :mod:`services.saves.sync_engine.matrix`,
 and the file and server transfers it dispatches to in
 :class:`services.saves.save_transfer.SaveTransfer`; device registration lives in
 :mod:`services.saves.sync_engine.devices`; conflict-resolution rollback
-lives in :mod:`services.saves.sync_engine.rollback`. SyncEngine wires
-those sub-modules together and exposes the surface peer save services
-(status, versions, slots) consume.
+lives in :mod:`services.saves.sync_engine.rollback`; RomM's ``negotiate``
+session around a sync lives in :mod:`services.saves.sync_engine.negotiate`.
+SyncEngine runs the matrix executor it is handed and exposes the surface peer
+save services (status, versions, slots) consume.
 
 There is a single sync code path (ADR-0017, superseding ADR-0016's
 routing fork): every ROM decides via the local ``compute_sync_action``
-matrix (driven by ``list_saves``), the sole detection authority. RomM's
-``negotiate`` operation is kept only as a session **transport** for a
-confirmed non-legacy ROM — its planned ``operations`` are ignored; the run
-opens a session for the play-session/telemetry envelope, keeps just the
-``session_id``, runs the bare matrix, then completes the session in a
-``finally``. A legacy or unconfirmed ROM runs the same matrix without a
-session wrapper. Any failure opening the session degrades to a bare
-matrix run — the session is an envelope, never a gate on sync.
+matrix (driven by ``list_saves``), the sole detection authority. A confirmed
+non-legacy ROM's run is wrapped in a ``negotiate`` session, which is a
+transport envelope and never a gate on sync; a legacy or unconfirmed ROM runs
+the same matrix without one.
 """
 
 from __future__ import annotations
@@ -87,30 +84,24 @@ from services.saves.sync_engine._running_game import RomSyncStops, RunningGameGu
 from services.saves.sync_engine._shape_refusal import SweepTally, live_save_answer, refuse_unsyncable
 from services.saves.sync_engine._sweep_step import sweep_reading, sweep_rom
 from services.saves.sync_engine._sweep_stop import SaveSweepIncomplete
-from services.saves.sync_engine.matrix import MatrixExecutor, MatrixOutcome
+from services.saves.sync_engine.matrix import MatrixOutcome
+from services.saves.sync_engine.negotiate import NegotiateEnvelope, NegotiateEnvelopeConfig
 from services.saves.sync_engine.rollback import RollbackOrchestrator
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Awaitable, Callable, Iterator
+    from collections.abc import Awaitable, Callable
 
-    from domain.rom_save_sync_state import RomSaveSyncState
-    from domain.save_answer import SaveAnswer, SaveComponent
+    from domain.save_answer import SaveAnswer
     from services.protocols import (
         ActiveCoreReader,
-        Clock,
-        ComputeSyncActionFn,
         DebugLogger,
         EventEmitter,
-        HostnameReader,
-        MachineIdReader,
         MigrationPendingFn,
-        ResolveUploadConflictFn,
         RetryStrategy,
         RommSyncApi,
         RunningRomIdsFn,
         SaveFileStore,
-        SaveInventoryBuilderFn,
         UnitOfWorkFactory,
         UpdateInProgressFn,
     )
@@ -119,13 +110,10 @@ if TYPE_CHECKING:
     from services.saves.save_backup import SaveBackup
     from services.saves.save_transfer import SaveTransfer
     from services.saves.sync_engine.devices import DeviceRegistry
+    from services.saves.sync_engine.matrix import MatrixExecutor
 
 
 __all__ = ["MatrixOutcome", "SyncEngine", "SyncEngineConfig"]
-
-# RomM 5.3.0's ``POST /api/sync/negotiate`` takes at most this many ``rom_ids``
-# and answers a longer list with 422 (rommapp/romm#4304).
-NEGOTIATE_ROM_IDS_CAP = 500
 
 
 @dataclass(frozen=True)
@@ -136,38 +124,30 @@ class SyncEngineConfig:
     toggles), the Unit-of-Work factory (the transactional seam over the
     SQLite repositories), the peer save sub-service rom_info, the
     :class:`DeviceRegistry` that owns the server device id and that no other
-    save service holds, the
-    Protocol-typed RomM adapter and retry strategy, the two save-sync
-    decision kernels (``compute_sync_action`` and its upload-409 backstop
-    ``resolve_upload_conflict``), runtime infrastructure (loop, logger,
-    clock), the Protocol-typed filesystem adapter, the ``DebugLogger`` seam,
-    the per-ROM active-core resolver, the hostname and machine-id providers
-    passed through to device registration, the update-in-progress and
-    migration-pending callbacks its sync backstops and follow ask, the
-    reading of which ROMs' games are running, the save backup and save
-    transfer the save service built for every peer, and the event emitter
-    that tells the panel a sync before a start has begun.
+    save service holds, the matrix executor that decides and carries out each
+    file's sync, the Protocol-typed RomM adapter and retry strategy, runtime
+    infrastructure (loop, logger), the Protocol-typed filesystem adapter, the
+    ``DebugLogger`` seam, the per-ROM active-core resolver, the
+    update-in-progress and migration-pending callbacks its sync backstops and
+    follow ask, the reading of which ROMs' games are running, the save backup
+    and save transfer built once for every peer, and the event emitter that
+    tells the panel a sync before a start has begun.
     """
 
     settings: dict[str, Any]
     uow_factory: UnitOfWorkFactory
     rom_info: RomInfoService
     device_registry: DeviceRegistry
+    matrix: MatrixExecutor
     romm_api: RommSyncApi
     retry: RetryStrategy
-    resolve_upload_conflict: ResolveUploadConflictFn
-    compute_sync_action: ComputeSyncActionFn
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
-    clock: Clock
     save_file_store: SaveFileStore
     log_debug: DebugLogger
     active_core: ActiveCoreReader
-    hostname_provider: HostnameReader
-    machine_id_provider: MachineIdReader
     is_update_in_progress: UpdateInProgressFn
     is_retrodeck_migration_pending: MigrationPendingFn
-    build_inventory: SaveInventoryBuilderFn
     running_rom_ids: RunningRomIdsFn
     save_backup: SaveBackup
     save_transfer: SaveTransfer
@@ -175,43 +155,38 @@ class SyncEngineConfig:
 
 
 class SyncEngine:
-    """Newest-wins matrix executor, sync orchestration use cases, and rom-level lock dispatch."""
+    """Sync orchestration use cases around the matrix executor, and rom-level lock dispatch."""
 
     def __init__(self, *, config: SyncEngineConfig) -> None:
-        self._config = config
         self._settings = config.settings
         self._uow_factory = config.uow_factory
         self._rom_info = config.rom_info
         self._devices = config.device_registry
+        self._matrix = config.matrix
         self._romm_api = config.romm_api
-        self._retry = config.retry
         self._loop = config.loop
         self._logger = config.logger
-        self._clock = config.clock
         self._save_file_store = config.save_file_store
         self._log_debug = config.log_debug
         self._active_core = config.active_core
-        self._hostname_provider = config.hostname_provider
-        self._machine_id_provider = config.machine_id_provider
         self._is_update_in_progress = config.is_update_in_progress
         self._is_retrodeck_migration_pending = config.is_retrodeck_migration_pending
-        self._build_inventory = config.build_inventory
         self._emit = config.emit
         # Per-rom lock dict — serializes concurrent sync operations on the
         # same rom_id (pre_launch_sync, post_exit_sync, manual sync, resolve).
         self._rom_sync_locks: dict[int, asyncio.Lock] = {}
 
-        self._matrix = MatrixExecutor(
-            rom_info=config.rom_info,
-            romm_api=config.romm_api,
-            retry=config.retry,
-            resolve_upload_conflict=config.resolve_upload_conflict,
-            compute_sync_action=config.compute_sync_action,
-            logger=config.logger,
-            clock=config.clock,
-            save_file_store=config.save_file_store,
-            log_debug=config.log_debug,
-            transfer=config.save_transfer,
+        self._negotiate = NegotiateEnvelope(
+            config=NegotiateEnvelopeConfig(
+                uow_factory=config.uow_factory,
+                rom_info=config.rom_info,
+                save_file_store=config.save_file_store,
+                romm_api=config.romm_api,
+                retry=config.retry,
+                loop=config.loop,
+                logger=config.logger,
+                log_debug=config.log_debug,
+            )
         )
         self._rollback = RollbackOrchestrator(
             uow_factory=config.uow_factory,
@@ -225,6 +200,7 @@ class SyncEngine:
             log_debug=config.log_debug,
             resolve_core=self.resolve_core,
             settings=config.settings,
+            loop=config.loop,
         )
         self._follower = SaveDirectoryFollower(
             uow_factory=config.uow_factory,
@@ -303,68 +279,6 @@ class SyncEngine:
         return core_so
 
     # ------------------------------------------------------------------
-    # Matrix-executor delegates — consumed by tests, peer services, and
-    # internal orchestration. Kept on SyncEngine so monkey-patching
-    # `svc._sync_engine.do_sync_rom_saves = stub` continues to short-circuit
-    # the public use cases that drive `do_sync_rom_saves` through
-    # `self.do_sync_rom_saves`.
-    # ------------------------------------------------------------------
-
-    def do_sync_rom_saves(
-        self,
-        rom_id: int,
-        save_state: RomSaveSyncState,
-        device_id: LiveDeviceId,
-        core_so: str | None,
-        default_slot: str | None = None,
-        autocleanup_limit: int | None = None,
-        save_answer: SaveAnswer | None = None,
-        stop: SyncStop | None = None,
-    ) -> tuple[int, int, list[str], list[dict[str, Any]]]:
-        """Sync saves for a single ROM (delegate to :class:`MatrixExecutor`).
-
-        Returns ``(uploaded, downloaded, errors, conflicts)`` — the per-direction
-        transfer counts (#250). *save_answer* is this operation's own live
-        reading, passed down so it is taken once rather than once per layer;
-        absent it, the matrix takes its own. *stop* is the run's own, where it
-        can be stopped.
-        """
-        return self._matrix.sync_rom_saves(
-            rom_id, save_state, device_id, core_so, default_slot, autocleanup_limit, save_answer=save_answer, stop=stop
-        )
-
-    def iter_matrix_outcomes(
-        self,
-        server_in_slot: list[dict[str, Any]],
-        *,
-        save_state: RomSaveSyncState | None,
-        device_id: str | None,
-        info: dict[str, Any],
-        synced_files: tuple[SaveComponent, ...],
-        saves_dir: str | None,
-    ) -> Iterator[MatrixOutcome]:
-        """Yield one :class:`MatrixOutcome` per save file in the ROM's active slot."""
-        return self._matrix.iter_matrix_outcomes(
-            server_in_slot,
-            save_state=save_state,
-            device_id=device_id,
-            info=info,
-            synced_files=synced_files,
-            saves_dir=saves_dir,
-        )
-
-    def build_sync_conflict_entry(
-        self,
-        rom_id: int,
-        filename: str,
-        server: dict[str, Any],
-        local_path: str | None,
-        local_hash: str | None,
-    ) -> dict[str, Any]:
-        """Build a Phase-2 ``sync_conflict`` descriptor for the frontend."""
-        return self._matrix.build_sync_conflict_entry(rom_id, filename, server, local_path, local_hash)
-
-    # ------------------------------------------------------------------
     # Device registration
     # ------------------------------------------------------------------
 
@@ -377,14 +291,7 @@ class SyncEngine:
         :meth:`live_device_id`.
         """
         async with self._registration_lock:
-            return await self._register_device()
-
-    async def _register_device(self) -> dict[str, Any]:
-        return await self._devices.ensure_device_registered(
-            loop=self._loop,
-            hostname_provider=self._hostname_provider,
-            machine_id_provider=self._machine_id_provider,
-        )
+            return await self._devices.ensure_device_registered()
 
     async def live_device_id(self, **refusal_details: Any) -> LiveDeviceId:
         """The device id a save operation sends to RomM, registered or healed a moment before.
@@ -412,7 +319,7 @@ class SyncEngine:
         """
         async with self._registration_lock:
             try:
-                await self._register_device()
+                await self._devices.ensure_device_registered()
             except RommApiError as e:
                 reason, message = classify_error(e)
                 if reason == ErrorCode.SERVER_UNREACHABLE.value:
@@ -427,7 +334,7 @@ class SyncEngine:
 
     async def list_devices(self) -> dict[str, Any]:
         """List all devices registered with the RomM server for this user."""
-        return await self._devices.list_devices(loop=self._loop)
+        return await self._devices.list_devices()
 
     # ------------------------------------------------------------------
     # Public sync orchestration use cases
@@ -588,7 +495,7 @@ class SyncEngine:
         to anchor a ``rom_save_sync_states`` write against (ADR-0007 FK) — so we
         short-circuit before touching the aggregate. A ROM whose emulator keeps
         no per-game save file set is short-circuited one level down, inside
-        ``do_sync_rom_saves``, which is where the answer is already resolved: the
+        ``MatrixExecutor.sync_rom_saves``, which is where the answer is already resolved: the
         single-ROM entry points check it themselves so they can name the skip in
         their result, and the whole-library sweep passes such a ROM over before
         the matrix, counting it by the refusal's reason into *sweep_tally*, so
@@ -607,11 +514,11 @@ class SyncEngine:
         compared with RomM into *sweep_tally*.
 
         Detection is always the local ``compute_sync_action`` matrix
-        (``do_sync_rom_saves``); ADR-0017 collapsed the old routing fork. A
-        confirmed non-legacy ROM (``slot_confirmed`` + a named ``active_slot``)
-        additionally opens a transport-only ``negotiate`` session around the run —
-        its planned ``operations`` are ignored, only the ``session_id`` is kept —
-        so the session envelope (play-session / telemetry) still gets recorded.
+        (``MatrixExecutor.sync_rom_saves``); ADR-0017 collapsed the old routing
+        fork. A confirmed non-legacy ROM (``slot_confirmed`` + a named
+        ``active_slot``) additionally opens a transport-only ``negotiate``
+        session around the run (:meth:`NegotiateEnvelope.open_rom_session`), so
+        the session envelope (play-session / telemetry) still gets recorded.
         A legacy/unconfirmed ROM runs the bare matrix without a session. When the
         bulk sweep already opened one whole-device session, its *session_id* is
         threaded in (this call does not open its own) and *session_counts* (the
@@ -657,7 +564,7 @@ class SyncEngine:
         # hash the same files (#1457). Reentrant with the bulk-sweep scope.
         with self._save_file_store.hash_memo_scope():
             if session_id is None and save_state.slot_confirmed and save_state.active_slot:
-                own_session_id = await self._open_negotiate_session(rom_id, device_id, save_answer)
+                own_session_id = await self._negotiate.open_rom_session(rom_id, device_id, save_answer)
 
             uploaded = 0
             downloaded = 0
@@ -669,7 +576,7 @@ class SyncEngine:
                 uploaded, downloaded, errors, conflicts = await self._loop.run_in_executor(
                     None,
                     functools.partial(
-                        self.do_sync_rom_saves,
+                        self._matrix.sync_rom_saves,
                         rom_id,
                         save_state,
                         device_id,
@@ -686,67 +593,11 @@ class SyncEngine:
             finally:
                 synced = uploaded + downloaded
                 if own_session_id is not None:
-                    await self._close_negotiate_session(own_session_id, synced, len(errors))
+                    await self._negotiate.close_session(own_session_id, synced, len(errors))
                 elif session_counts is not None:
                     session_counts[0] += synced
                     session_counts[1] += len(errors)
             return uploaded, downloaded, errors, conflicts
-
-    async def _open_negotiate_session(
-        self, rom_id: int, device_id: LiveDeviceId, save_answer: SaveAnswer | None = None
-    ) -> int | None:
-        """Open a transport-only negotiate session for a confirmed ROM; ``None`` on failure.
-
-        POSTs the ROM-scoped inventory to ``negotiate``, with that one ROM as its
-        ``rom_ids`` scope, and keeps only the ``session_id`` — the planned
-        ``operations`` are intentionally discarded because the local
-        ``compute_sync_action`` matrix is the sole detection
-        authority (ADR-0017). Any failure degrades to ``None`` — the sync run
-        proceeds without a session envelope rather than aborting — EXCEPT the
-        server-side sync-disabled 400 (:class:`RommSyncDisabledError`), which is
-        re-raised so the run aborts with a visible policy reason (#1489). An
-        unclosed session lingers harmlessly until this device's next
-        ``negotiate`` cancels it, so a missed close is harmless.
-
-        *save_answer* is the reading the run already took, handed on so the
-        inventory does not take a second one. Without it a ROM whose slot the
-        user has confirmed costs two live readings of the machine per sync
-        rather than one.
-        """
-        try:
-            inventory = await self._loop.run_in_executor(
-                None, functools.partial(self._build_inventory, rom_id, save_answer=save_answer)
-            )
-            response = await self._loop.run_in_executor(
-                None,
-                lambda: self._retry.with_retry(
-                    lambda: self._romm_api.negotiate_sync(device_id, inventory, rom_ids=[rom_id])
-                ),
-            )
-            return response["session_id"]
-        except RommSyncDisabledError:
-            raise
-        except Exception as e:
-            self._log_debug(f"_run_rom_sync({rom_id}): negotiate session open failed ({e}) — syncing without a session")
-            return None
-
-    async def _close_negotiate_session(self, session_id: int, completed: int, failed: int) -> None:
-        """Close a negotiate session, reporting op counts (non-fatal).
-
-        Invoked off-loop like :func:`write_save_state` and swallows any failure:
-        a session the server never hears closed lingers until it is cancelled by
-        this device's next ``negotiate``, so a failed close must never fail the
-        sync run.
-        """
-        try:
-            await self._loop.run_in_executor(
-                None,
-                lambda: self._romm_api.complete_sync_session(
-                    session_id, operations_completed=completed, operations_failed=failed
-                ),
-            )
-        except Exception as e:
-            self._log_debug(f"complete_sync_session({session_id}) failed (non-fatal): {e}")
 
     async def pre_launch_sync(self, rom_id: int) -> dict[str, Any]:
         """Sync this ROM's saves with the server before the game starts.
@@ -777,9 +628,9 @@ class SyncEngine:
                     # and a caller could reach the engine without it. saves_dir would
                     # otherwise resolve under the new home and silently desync from
                     # files still living at the old home. Every other path into
-                    # do_sync_rom_saves either checks the migration rule at its use
-                    # case's entry or carries a guard of its own; this one is
-                    # pre_launch_sync's. The update rule is backstopped the same way.
+                    # MatrixExecutor.sync_rom_saves either checks the migration rule
+                    # at its use case's entry or carries a guard of its own; this one
+                    # is pre_launch_sync's. The update rule is backstopped the same way.
                     if self._is_update_in_progress():
                         raise Refused("blocked_by_update", UPDATE_MESSAGE, synced=0)
                     if self._is_retrodeck_migration_pending():
@@ -796,7 +647,7 @@ class SyncEngine:
 
     async def _pre_launch_sync_held(self, rom_id: int, stop: SyncStop) -> dict[str, Any]:
         """The sync before a start, run while it holds the device gate and the ROM's lock."""
-        save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
+        save_answer = await self.read_save_answer(rom_id)
         if stop.stops_here():
             raise SyncStopped
         await self.follow_save_directory(rom_id, save_answer, while_running=True)
@@ -879,7 +730,7 @@ class SyncEngine:
                     self._logger.info("post_exit_sync skipped: sync_after_exit disabled")
                     return {"success": True, "message": "Post-exit sync disabled", "synced": 0}
 
-                save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
+                save_answer = await self.read_save_answer(rom_id)
                 await self.follow_save_directory(rom_id, save_answer, while_running=True)
                 try:
                     refuse_unsyncable(save_answer)
@@ -966,7 +817,7 @@ class SyncEngine:
             if self._is_update_in_progress():
                 raise Refused("blocked_by_update", UPDATE_MESSAGE, synced=0)
             await self._running.refuse_if_running(rom_id, synced=0)
-            save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
+            save_answer = await self.read_save_answer(rom_id)
             if stop.stops_here():
                 raise SyncStopped
             await self.follow_save_directory(rom_id, save_answer)
@@ -1002,54 +853,6 @@ class SyncEngine:
         with self._uow_factory() as uow:
             return sorted(install.rom_id for install in uow.rom_installs.iter_all())
 
-    async def _bulk_pre_negotiate(self, device_id: LiveDeviceId) -> int | None:
-        """Open one whole-device transport-only negotiate session for the bulk sweep.
-
-        Builds the full ``ClientSaveState`` inventory (every confirmed non-legacy
-        ROM with local saves) and POSTs ``negotiate`` once, keeping only the
-        ``session_id`` — the planned ``operations`` are discarded because detection
-        is the local ``compute_sync_action`` matrix (ADR-0017). Returns the
-        ``session_id``, or ``None`` on an empty inventory (nothing to negotiate) or
-        any negotiate failure. When ``None``, each confirmed non-legacy ROM opens
-        its own per-ROM session inside ``_run_rom_sync`` — the sweep degrades,
-        never aborts. The sync verdicts are unaffected either way; only the
-        session envelope (one shared vs. per-ROM) differs. The one exception is
-        the server-side sync-disabled 400 (:class:`RommSyncDisabledError`), which
-        is re-raised so the whole sweep aborts with a visible policy reason (#1489).
-
-        The POST names the inventory's distinct ROM ids, in first-seen order, as
-        its ``rom_ids`` scope. Over :data:`NEGOTIATE_ROM_IDS_CAP` of them it goes
-        out unscoped and says so in the debug log: splitting it is no way out,
-        because each negotiate cancels this device's prior sessions, the earlier
-        parts included.
-        """
-        full_inventory = await self._loop.run_in_executor(None, self._build_inventory, None)
-        if not full_inventory:
-            return None
-        rom_ids: list[int] | None = list(dict.fromkeys(save["rom_id"] for save in full_inventory))
-        if len(rom_ids) > NEGOTIATE_ROM_IDS_CAP:
-            self._log_debug(
-                f"sync_all_saves: the inventory names {len(rom_ids)} ROMs, over negotiate's cap of "
-                f"{NEGOTIATE_ROM_IDS_CAP}; negotiating without a rom_ids scope"
-            )
-            rom_ids = None
-        try:
-            response = await self._loop.run_in_executor(
-                None,
-                lambda: self._retry.with_retry(
-                    lambda: self._romm_api.negotiate_sync(device_id, full_inventory, rom_ids=rom_ids)
-                ),
-            )
-            # Read the key INSIDE the guard: a 200 body missing session_id must
-            # degrade like a failure (session_id None → per-ROM sessions), not
-            # abort the whole sweep.
-            return response["session_id"]
-        except RommSyncDisabledError:
-            raise
-        except Exception as e:
-            self._logger.warning("sync_all_saves: negotiate session open failed (%s) — per-ROM sessions", e)
-            return None
-
     async def sync_all_saves(self) -> dict[str, Any] | SaveSweepIncomplete:
         """Manual full sync of all ROMs with shortcuts (both directions)."""
         # Cheap stateless early-out before the device gate — never queue behind
@@ -1075,7 +878,7 @@ class SyncEngine:
                 # files (#1457). The per-ROM scope inside _run_rom_sync nests under
                 # this one (reentrant), so the memo spans the entire run.
                 with self._save_file_store.hash_memo_scope():
-                    session_id = await self._bulk_pre_negotiate(device_id)
+                    session_id = await self._negotiate.open_device_session(device_id)
                     session_counts = [0, 0]
                     sweep_tally = SweepTally()
                     running_skips = RunningSkips()
@@ -1131,7 +934,7 @@ class SyncEngine:
                         )
                     finally:
                         if session_id is not None:
-                            await self._close_negotiate_session(session_id, session_counts[0], session_counts[1])
+                            await self._negotiate.close_session(session_id, session_counts[0], session_counts[1])
 
                 sweep_tally.refuse_if_all_beside_content(roms_checked=rom_count)
                 conflicts_count = len(all_conflicts)
@@ -1209,11 +1012,4 @@ class SyncEngine:
             await self.follow_save_directory(rom_id_int, save_answer, while_running=before_start)
             if self._content_dir_blocked(rom_id_int, save_answer, "resolve_sync_conflict"):
                 raise SavefilesInContentDir(SAVE_SYNC_IN_CONTENT_DIR)
-            return await self._rollback.resolve(
-                rom_id_int,
-                filename,
-                server_save_id,
-                action,
-                loop=self._loop,
-                save_answer=save_answer,
-            )
+            return await self._rollback.resolve(rom_id_int, filename, server_save_id, action, save_answer=save_answer)

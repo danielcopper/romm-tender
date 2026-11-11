@@ -9,29 +9,29 @@ import pytest
 from fakes.system_time import FakeClock
 
 from domain.save_backup import BACKUP_DIR_NAME, BACKUP_RETENTION, backup_name, backup_timestamp
-from tests.services.saves._helpers import make_service
+from tests.services.saves._helpers import make_parts
 
 _NOW = datetime(2026, 3, 4, 5, 6, 7, tzinfo=UTC)
 
 
-def _service(tmp_path):
-    svc, _ = make_service(tmp_path, clock=FakeClock(now=_NOW))
-    return svc
+def _parts(tmp_path):
+    parts, _ = make_parts(tmp_path, clock=FakeClock(now=_NOW))
+    return parts
 
 
 class TestTheClaimedBackupIsNamedByTheSameRule:
     """The removed-game cleanup's backup takes its name and time stamp where every other backup does."""
 
     def test_a_claimed_backup_is_named_with_the_backups_own_time_stamp(self, tmp_path):
-        svc = _service(tmp_path)
+        parts = _parts(tmp_path)
         saves_dir = tmp_path / "saves" / "gba"
         saves_dir.mkdir(parents=True)
         save = saves_dir / "game.srm"
         save.write_bytes(b"the only copy")
-        store = svc._save_file_store
+        store = parts.service._save_file_store
         claim = store.claim_source(str(save), str(tmp_path / "saves"))
 
-        outcome = svc._save_backup.back_up_claimed_save_file(
+        outcome = parts.save_backup.back_up_claimed_save_file(
             str(saves_dir), "game.srm", claim=claim, safe_root=str(tmp_path / "saves")
         )
 
@@ -42,16 +42,16 @@ class TestTheClaimedBackupIsNamedByTheSameRule:
         assert not save.exists()
 
     def test_a_claimed_backup_beside_an_ordinary_one_of_the_same_second_takes_the_next_name(self, tmp_path):
-        svc = _service(tmp_path)
+        parts = _parts(tmp_path)
         saves_dir = tmp_path / "saves" / "gba"
         saves_dir.mkdir(parents=True)
         save = saves_dir / "game.srm"
         save.write_bytes(b"first")
-        assert svc._save_backup.back_up_save_file(str(saves_dir), "game.srm", keep=10) is True
+        assert parts.save_backup.back_up_save_file(str(saves_dir), "game.srm", keep=10) is True
         save.write_bytes(b"second")
-        claim = svc._save_file_store.claim_source(str(save), str(tmp_path / "saves"))
+        claim = parts.service._save_file_store.claim_source(str(save), str(tmp_path / "saves"))
 
-        svc._save_backup.back_up_claimed_save_file(
+        parts.save_backup.back_up_claimed_save_file(
             str(saves_dir), "game.srm", claim=claim, safe_root=str(tmp_path / "saves")
         )
 
@@ -60,7 +60,7 @@ class TestTheClaimedBackupIsNamedByTheSameRule:
         assert (saves_dir / BACKUP_DIR_NAME / "game_20260304_050607_1.srm").read_bytes() == b"second"
 
     def test_a_claimed_backup_keeps_every_earlier_backup(self, tmp_path):
-        svc = _service(tmp_path)
+        parts = _parts(tmp_path)
         saves_dir = tmp_path / "saves" / "gba"
         backup_dir = saves_dir / BACKUP_DIR_NAME
         backup_dir.mkdir(parents=True)
@@ -69,9 +69,9 @@ class TestTheClaimedBackupIsNamedByTheSameRule:
             (backup_dir / name).write_bytes(b"old")
         save = saves_dir / "game.srm"
         save.write_bytes(b"now")
-        claim = svc._save_file_store.claim_source(str(save), str(tmp_path / "saves"))
+        claim = parts.service._save_file_store.claim_source(str(save), str(tmp_path / "saves"))
 
-        svc._save_backup.back_up_claimed_save_file(
+        parts.save_backup.back_up_claimed_save_file(
             str(saves_dir), "game.srm", claim=claim, safe_root=str(tmp_path / "saves")
         )
 
@@ -81,13 +81,13 @@ class TestTheClaimedBackupIsNamedByTheSameRule:
 class TestAnOrdinaryBackupKeepsWhatItIsTold:
     def test_the_retention_is_the_callers(self, tmp_path):
         clock = FakeClock(now=_NOW)
-        svc, _ = make_service(tmp_path, clock=clock)
+        parts, _ = make_parts(tmp_path, clock=clock)
         saves_dir = tmp_path / "saves" / "gba"
         saves_dir.mkdir(parents=True)
         for n in range(4):
             (saves_dir / "game.srm").write_bytes(f"v{n}".encode())
             clock.advance(1)
-            assert svc._save_backup.back_up_save_file(str(saves_dir), "game.srm", keep=2) is True
+            assert parts.save_backup.back_up_save_file(str(saves_dir), "game.srm", keep=2) is True
 
         survivors = sorted(os.listdir(saves_dir / BACKUP_DIR_NAME))
         assert [(saves_dir / BACKUP_DIR_NAME / name).read_bytes() for name in survivors] == [b"v2", b"v3"]
@@ -105,8 +105,8 @@ class TestSaveBackupRetention:
     def test_same_second_collision_keeps_both_backups(self, tmp_path):
         """Two same-second backups of one file produce two distinct backups —
         the earlier copy is never overwritten by the ``_<n>`` counter."""
-        svc, _ = make_service(tmp_path)
-        backup = svc._save_backup
+        parts, _ = make_parts(tmp_path)
+        backup = parts.save_backup
         saves_dir = tmp_path / "saves" / "gba"
         saves_dir.mkdir(parents=True, exist_ok=True)
         save_path = saves_dir / "game.srm"
@@ -139,8 +139,8 @@ class TestSaveBackupRetention:
         from fakes.system_time import FakeClock
 
         clock = FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC))
-        svc, _ = make_service(tmp_path, clock=clock)
-        backup = svc._save_backup
+        parts, _ = make_parts(tmp_path, clock=clock)
+        backup = parts.save_backup
         saves_dir = tmp_path / "saves" / "gba"
         saves_dir.mkdir(parents=True, exist_ok=True)
         backup_dir = saves_dir / ".romm-backup"
@@ -177,8 +177,8 @@ class TestSaveBackupRetention:
         recoverable somewhere in ``.romm-backup``; the folder stays bounded.
         """
 
-        svc, _ = make_service(tmp_path)
-        backup = svc._save_backup  # fixed clock → every backup is same-second
+        parts, _ = make_parts(tmp_path)
+        backup = parts.save_backup  # fixed clock → every backup is same-second
         saves_dir = tmp_path / "saves" / "gba"
         saves_dir.mkdir(parents=True, exist_ok=True)
         backup_dir = saves_dir / ".romm-backup"
@@ -200,16 +200,16 @@ class TestSaveBackupRetention:
 
     def test_returns_false_when_nothing_to_back_up(self, tmp_path):
         """No file at *filename* → early return False, no backup dir churn."""
-        svc, _ = make_service(tmp_path)
-        backup = svc._save_backup
+        parts, _ = make_parts(tmp_path)
+        backup = parts.save_backup
         saves_dir = tmp_path / "saves" / "gba"
         saves_dir.mkdir(parents=True, exist_ok=True)
 
         assert backup.back_up_save_file(str(saves_dir), "absent.srm", keep=BACKUP_RETENTION) is False
 
     def test_symlinked_backup_directory_fails_closed(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        backup = svc._save_backup
+        parts, _ = make_parts(tmp_path)
+        backup = parts.save_backup
         saves_dir = tmp_path / "saves" / "gba"
         outside = tmp_path / "outside"
         saves_dir.mkdir(parents=True, exist_ok=True)
@@ -229,7 +229,7 @@ class TestARetentionRemovalThatFails:
     """A backup whose move went through answers moved even when removing an older backup fails afterwards."""
 
     def test_the_file_is_answered_as_moved_and_the_older_backup_is_kept(self, tmp_path, monkeypatch, caplog):
-        svc = _service(tmp_path)
+        parts = _parts(tmp_path)
         saves_dir = tmp_path / "saves" / "gba"
         backup_dir = saves_dir / BACKUP_DIR_NAME
         backup_dir.mkdir(parents=True)
@@ -242,10 +242,10 @@ class TestARetentionRemovalThatFails:
         def remove_file(_path: str) -> None:
             raise PermissionError("backup folder is read-only")
 
-        monkeypatch.setattr(svc._save_file_store, "remove_file", remove_file)
+        monkeypatch.setattr(parts.service._save_file_store, "remove_file", remove_file)
 
         with caplog.at_level("WARNING", logger="test"):
-            moved = svc._save_backup.back_up_save_file(str(saves_dir), "game.srm", keep=BACKUP_RETENTION)
+            moved = parts.save_backup.back_up_save_file(str(saves_dir), "game.srm", keep=BACKUP_RETENTION)
 
         assert moved is True
         assert not save.exists()
@@ -260,19 +260,19 @@ class TestPreparingTheBackupFolder:
     """``prepare_save_backup_folder`` makes ``.romm-backup`` ready, or raises, and moves nothing."""
 
     def test_a_missing_folder_is_created_and_no_save_moves(self, tmp_path):
-        svc = _service(tmp_path)
+        parts = _parts(tmp_path)
         saves_dir = tmp_path / "saves" / "gba"
         saves_dir.mkdir(parents=True)
         save = saves_dir / "game.srm"
         save.write_bytes(b"keep")
 
-        svc._save_backup.prepare_save_backup_folder(str(saves_dir))
+        parts.save_backup.prepare_save_backup_folder(str(saves_dir))
 
         assert list((saves_dir / BACKUP_DIR_NAME).iterdir()) == []
         assert save.read_bytes() == b"keep"
 
     def test_a_folder_that_is_a_link_raises(self, tmp_path):
-        svc = _service(tmp_path)
+        parts = _parts(tmp_path)
         saves_dir = tmp_path / "saves" / "gba"
         saves_dir.mkdir(parents=True)
         outside = tmp_path / "outside"
@@ -280,30 +280,30 @@ class TestPreparingTheBackupFolder:
         (saves_dir / BACKUP_DIR_NAME).symlink_to(outside, target_is_directory=True)
 
         with pytest.raises(ValueError, match="Unsafe save backup directory"):
-            svc._save_backup.prepare_save_backup_folder(str(saves_dir))
+            parts.save_backup.prepare_save_backup_folder(str(saves_dir))
 
     def test_a_folder_that_cannot_be_created_raises_the_stores_error(self, tmp_path, monkeypatch):
-        svc = _service(tmp_path)
+        parts = _parts(tmp_path)
         saves_dir = tmp_path / "saves" / "gba"
         saves_dir.mkdir(parents=True)
 
         def make_dirs(_path: str) -> None:
             raise PermissionError("saves folder is read-only")
 
-        monkeypatch.setattr(svc._save_file_store, "make_dirs", make_dirs)
+        monkeypatch.setattr(parts.service._save_file_store, "make_dirs", make_dirs)
 
         with pytest.raises(PermissionError, match="read-only"):
-            svc._save_backup.prepare_save_backup_folder(str(saves_dir))
+            parts.save_backup.prepare_save_backup_folder(str(saves_dir))
 
     def test_a_folder_that_cannot_be_listed_raises_the_stores_error(self, tmp_path, monkeypatch):
-        svc = _service(tmp_path)
+        parts = _parts(tmp_path)
         saves_dir = tmp_path / "saves" / "gba"
         saves_dir.mkdir(parents=True)
 
         def listdir(_path: str) -> list[str]:
             raise PermissionError("backup folder cannot be read")
 
-        monkeypatch.setattr(svc._save_file_store, "listdir", listdir)
+        monkeypatch.setattr(parts.service._save_file_store, "listdir", listdir)
 
         with pytest.raises(PermissionError, match="cannot be read"):
-            svc._save_backup.prepare_save_backup_folder(str(saves_dir))
+            parts.save_backup.prepare_save_backup_folder(str(saves_dir))

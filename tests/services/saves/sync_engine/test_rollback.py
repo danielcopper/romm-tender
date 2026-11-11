@@ -36,6 +36,7 @@ from tests.services.saves._helpers import (
     _seed_save_state,
     _seed_save_state_dict,
     _server_save_with_syncs,
+    make_parts,
     make_service,
 )
 
@@ -197,7 +198,7 @@ class TestResolveSyncConflict:
             raise RommApiError("transient")
 
         fake.download_save_content = _raise_on_download  # type: ignore[method-assign]
-        svc._sync_engine._retry.is_retryable.return_value = True  # type: ignore[attr-defined]
+        svc._sync_engine._rollback._retry.is_retryable.return_value = True  # type: ignore[attr-defined]
 
         result = await svc.resolve_sync_conflict(
             rom_id=42,
@@ -624,10 +625,11 @@ class TestUseServerMarksThisDeviceOnlyOnceItPlaced:
     async def test_a_download_it_could_not_place_leaves_romm_s_record_and_the_next_sync_asks_again(
         self, tmp_path, monkeypatch
     ):
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         save_path = self._seed_a_conflict(svc, fake, tmp_path)
         record_before = dict(fake._device_sync_ledger)
-        _fail_save_backups(svc, monkeypatch)
+        _fail_save_backups(parts, monkeypatch)
 
         with pytest.raises(Refused) as caught:
             await svc.resolve_sync_conflict(42, "pokemon.srm", 101, "use_server")

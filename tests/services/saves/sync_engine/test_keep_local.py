@@ -67,14 +67,14 @@ class TestKeepLocalAdoptsAsTheSyncDoes:
     @pytest.mark.asyncio
     async def test_a_file_that_changed_after_the_identity_check_is_uploaded_with_overwrite(self, tmp_path):
         svc, fake, save_path = _setup(tmp_path)
-        hash_server_copy = svc._save_transfer.hash_server_copy
+        hash_server_copy = svc._sync_engine._rollback._transfer.hash_server_copy
 
         def then_the_game_writes(server_save):
             answered = hash_server_copy(server_save)
             save_path.write_bytes(b"written after the comparison")
             return answered
 
-        svc._save_transfer.hash_server_copy = then_the_game_writes
+        svc._sync_engine._rollback._transfer.hash_server_copy = then_the_game_writes
 
         result = await svc.resolve_sync_conflict(
             rom_id=42, filename="pokemon.srm", server_save_id=100, action="keep_local"

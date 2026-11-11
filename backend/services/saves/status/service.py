@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     from services.saves.rom_info import RomInfoService
     from services.saves.save_transfer import SaveTransfer
     from services.saves.sync_engine import MatrixOutcome, SyncEngine
+    from services.saves.sync_engine.matrix import MatrixExecutor
 
 
 @dataclass(frozen=True)
@@ -49,7 +50,8 @@ class StatusServiceConfig:
     Holds the live ``settings.json`` dict (save-sync enabled toggle), the
     Unit-of-Work factory (the transactional seam over the SQLite
     repositories), the peer save sub-services (sync_engine, whose
-    ``live_device_id`` answers the device id, and rom_info), the
+    ``live_device_id`` answers the device id, the matrix executor whose
+    decisions the status reads without carrying them out, and rom_info), the
     Protocol-typed RomM adapter and retry strategy, the backend's
     event loop, the standard-library logger, the ``DebugLogger`` seam, the
     per-ROM active-core resolver, the event emitter used to push background
@@ -61,6 +63,7 @@ class StatusServiceConfig:
     settings: dict[str, Any]
     uow_factory: UnitOfWorkFactory
     sync_engine: SyncEngine
+    matrix: MatrixExecutor
     rom_info: RomInfoService
     romm_api: RommSaveApi
     retry: RetryStrategy
@@ -81,6 +84,7 @@ class StatusService:
         self._settings = config.settings
         self._uow_factory = config.uow_factory
         self._sync_engine = config.sync_engine
+        self._matrix = config.matrix
         self._rom_info = config.rom_info
         self._romm_api = config.romm_api
         self._retry = config.retry
@@ -126,7 +130,7 @@ class StatusService:
                 f"_get_save_status_io({rom_id}): conflict {outcome.filename} "
                 f"server_save_id={action.server_save.get('id')}"
             )
-            conflict_entry = self._sync_engine.build_sync_conflict_entry(
+            conflict_entry = self._matrix.build_sync_conflict_entry(
                 rom_id, outcome.filename, action.server_save, outcome.local_path, outcome.local_hash
             )
         return status_entry, conflict_entry
@@ -153,7 +157,7 @@ class StatusService:
         present — a multi-file slot (e.g. Saturn ``.bkr``/``.bcr``/``.smpc``,
         #908) yields one local outcome per component file, and the status view
         surfaces a row + any conflict for each so its ``conflicts`` array
-        matches ``do_sync_rom_saves``. ``all_filenames`` is every distinct
+        matches ``MatrixExecutor.sync_rom_saves``'s. ``all_filenames`` is every distinct
         canonical target filename the slot resolves to (one per outcome), used
         to detect a multi-file save (#908 guard).
         """
@@ -161,7 +165,7 @@ class StatusService:
         server_only_outcomes: list[MatrixOutcome] = []
         baseline_adopted = False
         all_filenames: list[str] = []
-        for outcome in self._sync_engine.iter_matrix_outcomes(
+        for outcome in self._matrix.iter_matrix_outcomes(
             server_in_slot,
             save_state=save_state,
             device_id=device_id,
@@ -214,7 +218,7 @@ class StatusService:
           surface each file's status, server attribution, and any conflict.
           A multi-file slot (e.g. Saturn ``.bkr``/``.bcr``/``.smpc``, #908)
           yields one row per component file, so a conflict on any component
-          surfaces in ``conflicts``, as it does in ``do_sync_rom_saves``. The
+          surfaces in ``conflicts``, as it does in ``MatrixExecutor.sync_rom_saves``. The
           status then agrees with what a sync would do.
         - No local file but the slot has server saves: surface the newest
           server save as a single "ready to download" row. The canonical
@@ -290,7 +294,7 @@ class StatusService:
                 own_upload_ids = working_state.own_upload_ids
 
             # Surface a row (and any conflict) for every local component file so a
-            # multi-file slot's status matches ``do_sync_rom_saves`` — a conflict on
+            # multi-file slot's status matches ``MatrixExecutor.sync_rom_saves`` — a conflict on
             # the 2nd/3rd component (e.g. Saturn .bcr/.smpc) must still surface as a
             # conflict, not be dropped by reporting only the first file (#908).
             chosen_outcomes = local_outcomes
@@ -410,7 +414,7 @@ class StatusService:
         ROM) and the ``rom_save_sync_states`` read-modify-write (the
         baseline-adopt write in ``_get_save_status_io``) run under the per-ROM
         sync lock (``SyncEngine.rom_lock(rom_id)``), so they cannot interleave
-        with a concurrent ``do_sync_rom_saves`` and lose that sync's update. The
+        with a concurrent ``MatrixExecutor.sync_rom_saves`` and lose that sync's update. The
         server-saves network fetch stays outside the lock.
         """
         rom_id = int(rom_id)

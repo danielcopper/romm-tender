@@ -35,10 +35,9 @@ and binds, and the other areas: [the register's index](index.md).
 - **Every save operation sends RomM the device id `SyncEngine.live_device_id` answers — registered or healed a moment
   before — and no other** — check + test + prompt-only
 
-  `RommSaveApi.list_saves`, the sync logic (`do_sync_rom_saves`, `MatrixExecutor.sync_rom_saves`) and the save
-  transfer's steps that name the device (`SaveTransfer.download_save_file`, `upload_save_file`,
-  `acknowledge_server_head`, `adopt_server_head`) take a `LiveDeviceId`, only that entry builds one, and no save service
-  but `SyncEngine` holds the `DeviceRegistry`
+  `RommSaveApi.list_saves`, the sync logic (`MatrixExecutor.sync_rom_saves`) and the save transfer's steps that name the
+  device (`SaveTransfer.download_save_file`, `upload_save_file`, `acknowledge_server_head`, `adopt_server_head`) take a
+  `LiveDeviceId`, only that entry builds one, and no save service but `SyncEngine` holds the `DeviceRegistry`
 
   RomM answers a listing without a device id with no sync row for this device on any save, so the decision reads every
   save as one this device never touched (the never-touched rows of the decision table, among them a conflict on a save
@@ -95,10 +94,10 @@ and binds, and the other areas: [the register's index](index.md).
   refusal is enforced at five call sites — the three per-ROM entry points, which report the refusal via
   `sync_engine/_shape_refusal.py`'s `live_save_answer` / `refuse_unsyncable`, the whole-library sweep, which asks the
   same refusal of every installed ROM it does not pass over as running through `SweepTally.passes_over` and counts what
-  it passed over by the refusal's reason, and `MatrixExecutor.sync_rom_saves` (reached through
-  `SyncEngine.do_sync_rom_saves`), the backstop behind them all. A sixth entry point added without `refuse_unsyncable`
-  or the backstop goes green, and its failure is silent because a per-game probe for a shared card finds nothing and
-  reports "no saves". The backstop is pinned by the ABSENCE of a server round-trip
+  it passed over by the refusal's reason, and `MatrixExecutor.sync_rom_saves`, the backstop behind them all. A sixth
+  entry point added without `refuse_unsyncable` or the backstop goes green, and its failure is silent because a per-game
+  probe for a shared card finds nothing and reports "no saves". The backstop is pinned by the ABSENCE of a server
+  round-trip
   (`tests/services/saves/test_save_shape_gate.py::TestTheRefusalIsASkipAndNotAFailure::test_the_matrix_backstop_asks_romm_nothing_for_a_refusing_answer`,
   which calls it directly beside a control), because everything downstream of it is redundantly safe — a refusing answer
   carries no names, so nothing is probed or grouped even without it. The five write paths refuse for themselves. Four

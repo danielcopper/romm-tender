@@ -44,6 +44,7 @@ from tests.services.saves._helpers import (
     _server_save,
     _server_save_with_syncs,
     _set_device_id,
+    make_parts,
     make_service,
     rom_save_sync_state_from_dict,
 )
@@ -82,13 +83,14 @@ class TestV47SyncFlow:
 
     def test_upload_passes_device_id_and_slot(self, tmp_path):
         """v4.7: upload_save receives device_id and slot."""
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "server-dev-123")
         _install_rom(svc, tmp_path)
         save_path = _create_save(tmp_path)
 
-        _do_upload(svc, 42, str(save_path), "pokemon.srm", "gba")
+        _do_upload(parts, 42, str(save_path), "pokemon.srm", "gba")
 
         upload_calls = [c for c in fake.call_log if c[0] == "upload_save"]
         assert len(upload_calls) == 1
@@ -802,7 +804,8 @@ class TestOwnUploadIds:
     @pytest.mark.asyncio
     async def test_post_upload_idempotent_in_own_list(self, tmp_path):
         """Calling upload_save_file twice with the same resulting save_id does not duplicate."""
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _set_device_id(svc, "dev-1")
         _install_rom(svc, tmp_path)
         save_file = _create_save(tmp_path)
@@ -822,7 +825,7 @@ class TestOwnUploadIds:
         fake.saves[1000] = _server_save(save_id=1000, rom_id=42)
 
         # Call internal upload with no server_save (POST path)
-        _do_upload(svc, 42, str(save_file), "pokemon.srm", "gba", server_save=None)
+        _do_upload(parts, 42, str(save_file), "pokemon.srm", "gba", server_save=None)
 
         rom_state = _require_save_state(svc, 42)
         assert rom_state.own_upload_ids is not None
@@ -832,7 +835,8 @@ class TestOwnUploadIds:
     @pytest.mark.asyncio
     async def test_put_upload_appends_own_upload_id(self, tmp_path):
         """A PUT upload (existing save id) records that id in own_upload_ids."""
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _set_device_id(svc, "dev-1")
         _install_rom(svc, tmp_path)
         save_file = _create_save(tmp_path)
@@ -851,7 +855,7 @@ class TestOwnUploadIds:
         )
 
         server_save = fake.saves[100]
-        _do_upload(svc, 42, str(save_file), "pokemon.srm", "gba", server_save=server_save)
+        _do_upload(parts, 42, str(save_file), "pokemon.srm", "gba", server_save=server_save)
 
         rom_state = _require_save_state(svc, 42)
         # This device pushed new content to id 100 → 100 is now ours; 99 untouched.
@@ -860,7 +864,8 @@ class TestOwnUploadIds:
     @pytest.mark.asyncio
     async def test_put_upload_idempotent_in_own_list(self, tmp_path):
         """Two PUT uploads to the same save id record it only once (dedup)."""
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _set_device_id(svc, "dev-1")
         _install_rom(svc, tmp_path)
         save_file = _create_save(tmp_path)
@@ -878,8 +883,8 @@ class TestOwnUploadIds:
         )
 
         server_save = fake.saves[100]
-        _do_upload(svc, 42, str(save_file), "pokemon.srm", "gba", server_save=server_save)
-        _do_upload(svc, 42, str(save_file), "pokemon.srm", "gba", server_save=server_save)
+        _do_upload(parts, 42, str(save_file), "pokemon.srm", "gba", server_save=server_save)
+        _do_upload(parts, 42, str(save_file), "pokemon.srm", "gba", server_save=server_save)
 
         rom_state = _require_save_state(svc, 42)
         assert rom_state.own_upload_ids is not None
@@ -1814,7 +1819,7 @@ class TestSyncRomSavesDispatch:
         engine = svc._sync_engine
         state = read_save_state_or_new(engine._uow_factory, 42)
 
-        uploaded, downloaded, errors, conflicts = engine.do_sync_rom_saves(
+        uploaded, downloaded, errors, conflicts = engine._matrix.sync_rom_saves(
             42, state, LiveDeviceId("device-1"), None, "default", stop=SyncStop()
         )
 
@@ -2079,7 +2084,8 @@ class TestRecordOwnUploadNoneId:
 
     def test_own_upload_unchanged_when_upload_result_has_no_id(self, tmp_path):
         """An upload whose server response carries no id leaves own_upload_ids alone."""
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _set_device_id(svc, "dev-1")
         _install_rom(svc, tmp_path)
         save_path = _create_save(tmp_path)
@@ -2098,7 +2104,7 @@ class TestRecordOwnUploadNoneId:
         # Force the upload to return a result with no id (the None-guard path).
         fake.upload_save = lambda *a, **k: {"updated_at": "2026-01-01T00:00:00Z"}
 
-        state = _do_upload(svc, 42, str(save_path), "pokemon.srm", "gba")
+        state = _do_upload(parts, 42, str(save_path), "pokemon.srm", "gba")
 
         assert state.own_upload_ids == [50, 51]
 
@@ -2230,7 +2236,7 @@ class TestAnAdoptOfTheHead:
         svc, fake, save_path = self._setup(tmp_path, current=True)
         state = RomSaveSyncState()
 
-        recorded = svc._save_transfer.record_server_head(
+        recorded = svc._sync_engine._matrix._transfer.record_server_head(
             state, "pokemon.srm", fake.saves[100], str(save_path), "the-hash-the-decision-saw", system="gba"
         )
 

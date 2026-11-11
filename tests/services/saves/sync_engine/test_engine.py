@@ -47,7 +47,7 @@ from services.saves.sync_engine._gate import GateHolder
 from services.saves.sync_engine._result_message import first_error_reason as _first_error_reason
 from services.saves.sync_engine._result_message import summarize_sync_result as _summarize_sync_result
 from services.saves.sync_engine._shape_refusal import live_save_answer
-from services.saves.sync_engine.engine import NEGOTIATE_ROM_IDS_CAP
+from services.saves.sync_engine.negotiate import NEGOTIATE_ROM_IDS_CAP
 from tests.services.saves._helpers import (
     _create_save,
     _do_sync,
@@ -63,6 +63,8 @@ from tests.services.saves._helpers import (
     _server_save_with_syncs,
     _set_device_id,
     _stored_device_id,
+    executor_answering,
+    make_parts,
     make_service,
 )
 
@@ -131,16 +133,15 @@ class TestSyncRomSaves:
         which reads as success — user had no signal that manual intervention
         was needed.
         """
-        svc, _ = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
 
-        # Stub do_sync_rom_saves to return 1 conflict, 0 synced, 0 errors
+        # Stub the matrix worker to return 1 conflict, 0 synced, 0 errors
         def stub_sync(rom_id, *args, **kwargs):
             return (0, 0, [], [{"type": "newer_in_slot", "rom_id": rom_id}])
 
-        svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
+        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(stub_sync))
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path)
 
         result = await svc.sync_rom_saves(42)
 
@@ -263,18 +264,17 @@ class TestSyncAllSaves:
         technical failure. Frontend distinguishes via conflicts count; success
         flag must stay reserved for actual errors.
         """
-        svc, _ = make_service(tmp_path)
+
+        # Stub the matrix worker to produce conflicts but no errors (every ROM
+        # decides via the matrix now, ADR-0017).
+        def stub_sync(rom_id, *args, **kwargs):
+            return (0, 0, [], [{"type": "newer_in_slot", "rom_id": rom_id}])
+
+        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(stub_sync))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
         _seed_save_state(svc, 1, RomSaveSyncState(system="gba", slot_confirmed=True, active_slot="default"))
-
-        # Stub the matrix worker to produce conflicts but no errors (every ROM
-        # decides via do_sync_rom_saves now, ADR-0017).
-        def stub_sync(rom_id, *args, **kwargs):
-            return (0, 0, [], [{"type": "newer_in_slot", "rom_id": rom_id}])
-
-        svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
 
         result = await svc.sync_all_saves()
         assert isinstance(result, dict)
@@ -451,15 +451,14 @@ class TestPostExitSync:
         Previously "Uploaded 0 save(s)" even with conflicts — user has no
         signal that sync is blocked on manual resolution.
         """
-        svc, _ = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
 
         def stub_sync(rom_id, *args, **kwargs):
             return (0, 0, [], [{"type": "newer_in_slot", "rom_id": rom_id}])
 
-        svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
+        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(stub_sync))
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path)
 
         result = await svc.post_exit_sync(42)
 
@@ -506,7 +505,7 @@ class TestDeviceSyncDisabled:
         svc, fake = make_service(tmp_path)
         self._seed_confirmed_rom(svc, tmp_path)
         fake.fail_on_next(RommConnectionError("transient"))
-        session_id = await svc._sync_engine._open_negotiate_session(42, LiveDeviceId("test-device"))
+        session_id = await svc._sync_engine._negotiate.open_rom_session(42, LiveDeviceId("test-device"))
         assert session_id is None
 
     @pytest.mark.asyncio
@@ -517,7 +516,7 @@ class TestDeviceSyncDisabled:
         fake.negotiate_sync_disabled = True
         device_id = LiveDeviceId("test-device")
         with pytest.raises(RommSyncDisabledError):
-            await svc._sync_engine._open_negotiate_session(42, device_id)
+            await svc._sync_engine._negotiate.open_rom_session(42, device_id)
 
     @pytest.mark.asyncio
     async def test_sync_rom_saves_refuses_with_the_policy_stop(self, tmp_path):
@@ -1019,21 +1018,19 @@ class TestSyncUseCaseErrorMessages:
     error's classified reason (never buried behind "Uploaded 0 save(s)"); a
     partial run keeps the count summary and appends the reason; pre-launch
     (download) keeps the plain count clause (#1334). Driven by stubbing
-    do_sync_rom_saves to return a non-empty errors list."""
+    the matrix executor's sync_rom_saves to return a non-empty errors list."""
 
     @pytest.mark.asyncio
     async def test_pre_launch_sync_message_includes_error_count(self, tmp_path):
         # pre_launch keeps the plain count clause — the reason promotion is
         # scoped to the upload-side use cases (#1334).
-        svc, _ = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
-
         def stub_sync(rom_id, *args, **kwargs):
             return (0, 0, ["pokemon.srm: bad gateway"], [])
 
-        svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
+        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(stub_sync))
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path)
 
         result = await svc.pre_launch_sync(42)
 
@@ -1043,15 +1040,13 @@ class TestSyncUseCaseErrorMessages:
 
     @pytest.mark.asyncio
     async def test_post_exit_sync_promotes_reason_when_nothing_uploaded(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
-
         def stub_sync(rom_id, *args, **kwargs):
             return (0, 0, ["pokemon.srm: timeout"], [])
 
-        svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
+        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(stub_sync))
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path)
 
         result = await svc.post_exit_sync(42)
 
@@ -1061,15 +1056,13 @@ class TestSyncUseCaseErrorMessages:
 
     @pytest.mark.asyncio
     async def test_post_exit_sync_partial_keeps_count_and_appends_reason(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
-
         def stub_sync(rom_id, *args, **kwargs):
             return (2, 0, ["pokemon.srm: timeout"], [])
 
-        svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
+        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(stub_sync))
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path)
 
         result = await svc.post_exit_sync(42)
 
@@ -1078,15 +1071,13 @@ class TestSyncUseCaseErrorMessages:
 
     @pytest.mark.asyncio
     async def test_post_exit_sync_multiple_errors_count_the_extras(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
-
         def stub_sync(rom_id, *args, **kwargs):
             return (0, 0, ["a.srm: timeout", "b.srm: timeout", "c.srm: timeout"], [])
 
-        svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
+        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(stub_sync))
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path)
 
         result = await svc.post_exit_sync(42)
 
@@ -1094,15 +1085,13 @@ class TestSyncUseCaseErrorMessages:
 
     @pytest.mark.asyncio
     async def test_sync_rom_saves_promotes_reason_when_nothing_synced(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
-
         def stub_sync(rom_id, *args, **kwargs):
             return (0, 0, ["pokemon.srm: 502 bad gateway"], [])
 
-        svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
+        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(stub_sync))
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path)
 
         result = await svc.sync_rom_saves(42)
 
@@ -1119,15 +1108,13 @@ class TestSyncUseCasesSurfaceDirectionCounts:
 
     @pytest.mark.asyncio
     async def test_pre_launch_sync_reports_download_count(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
-
         def stub_sync(rom_id, *args, **kwargs):
             return (0, 2, [], [])  # two downloads, no upload
 
-        svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
+        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(stub_sync))
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path)
 
         result = await svc.pre_launch_sync(42)
 
@@ -1138,15 +1125,13 @@ class TestSyncUseCasesSurfaceDirectionCounts:
 
     @pytest.mark.asyncio
     async def test_post_exit_sync_reports_upload_count(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
-
         def stub_sync(rom_id, *args, **kwargs):
             return (3, 0, [], [])  # three uploads, no download
 
-        svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
+        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(stub_sync))
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path)
 
         result = await svc.post_exit_sync(42)
 
@@ -1157,15 +1142,13 @@ class TestSyncUseCasesSurfaceDirectionCounts:
 
     @pytest.mark.asyncio
     async def test_sync_rom_saves_reports_mixed_counts(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
-
         def stub_sync(rom_id, *args, **kwargs):
             return (1, 2, [], [])  # one up, two down
 
-        svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
+        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(stub_sync))
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path)
 
         result = await svc.sync_rom_saves(42)
 
@@ -1287,15 +1270,14 @@ class TestSummarizeSyncResult:
 
 
 class TestSyncEngineDelegates:
-    """Cover the thin delegate methods on SyncEngine that forward to MatrixExecutor
-    or DeviceRegistry."""
+    """Cover the matrix executor's conflict descriptor and the device list SyncEngine forwards to DeviceRegistry."""
 
-    def test_build_sync_conflict_entry_delegates_to_matrix(self, tmp_path):
-        """SyncEngine.build_sync_conflict_entry builds the same dict shape as the matrix."""
+    def test_build_sync_conflict_entry_builds_the_descriptor(self, tmp_path):
+        """MatrixExecutor.build_sync_conflict_entry builds the ``sync_conflict`` descriptor's dict shape."""
         svc, _ = make_service(tmp_path)
         server = _server_save(save_id=77, filename="pokemon.srm", file_size_bytes=2048)
 
-        entry = svc._sync_engine.build_sync_conflict_entry(
+        entry = svc._sync_engine._matrix.build_sync_conflict_entry(
             rom_id=42,
             filename="pokemon.srm",
             server=server,
@@ -1321,7 +1303,7 @@ class TestSyncEngineDelegates:
             server["id"] = None
 
         with pytest.raises(ValueError, match="without an id"):
-            svc._sync_engine.build_sync_conflict_entry(
+            svc._sync_engine._matrix.build_sync_conflict_entry(
                 rom_id=42,
                 filename="pokemon.srm",
                 server=server,
@@ -1755,16 +1737,6 @@ class TestSaveSyncDeviceGate:
         overlap if the gate were absent; the gate forces peak concurrency to 1.
         Both runs complete successfully (the second waited, it did not time out).
         """
-        svc, _ = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
-        _install_rom(svc, tmp_path, rom_id=2, system="snes", file_name="game2.sfc")
-        _seed_save_state(svc, 1, RomSaveSyncState(system="gba", slot_confirmed=True, active_slot="default"))
-        _seed_save_state(
-            svc, 2, RomSaveSyncState(system="snes", slot_confirmed=True, active_slot="default"), platform_slug="snes"
-        )
-
         counter_lock = threading.Lock()
         state = {"active": 0, "peak": 0}
 
@@ -1779,7 +1751,15 @@ class TestSaveSyncDeviceGate:
 
         # Every ROM decides via the local matrix (ADR-0017); the device-gate
         # serialization is the same, so stub the matrix worker.
-        svc._sync_engine.do_sync_rom_saves = slow_sync  # type: ignore[method-assign]
+        svc, _ = make_service(tmp_path, matrix_executor=executor_answering(slow_sync))
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
+        _install_rom(svc, tmp_path, rom_id=2, system="snes", file_name="game2.sfc")
+        _seed_save_state(svc, 1, RomSaveSyncState(system="gba", slot_confirmed=True, active_slot="default"))
+        _seed_save_state(
+            svc, 2, RomSaveSyncState(system="snes", slot_confirmed=True, active_slot="default"), platform_slug="snes"
+        )
 
         results = await asyncio.gather(svc.sync_rom_saves(1), svc.sync_rom_saves(2))
 
@@ -2174,10 +2154,11 @@ class TestTheSyncAfterAGameMarksThisDeviceOnlyOnceItPlaced:
     async def test_a_download_it_could_not_place_leaves_romm_s_record_and_the_next_sync_downloads_the_head(
         self, tmp_path, monkeypatch
     ):
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         seeded = self._seed_a_newer_head(svc, fake, tmp_path)
         record_before = dict(fake._device_sync_ledger)
-        _fail_save_backups(svc, monkeypatch)
+        _fail_save_backups(parts, monkeypatch)
 
         first = await svc.post_exit_sync(42)
 
@@ -2289,7 +2270,7 @@ class TestRunRomSyncSession:
     """``_run_rom_sync`` single sync path with a transport-only session (ADR-0017).
 
     Every ROM decides via the local ``compute_sync_action`` matrix
-    (``list_saves`` → ``do_sync_rom_saves``). A confirmed non-legacy ROM
+    (``list_saves`` → ``MatrixExecutor.sync_rom_saves``). A confirmed non-legacy ROM
     additionally opens a transport-only ``negotiate`` session around the run —
     its planned operations are ignored; only the ``session_id`` is kept, and the
     session is completed afterward. A legacy ``slot:null`` or not-yet-confirmed
@@ -2734,7 +2715,7 @@ class TestBulkNegotiateScope:
         ) -> list[ClientSaveState]:
             return inventory
 
-        svc._sync_engine._build_inventory = build_inventory
+        svc._sync_engine._negotiate.build_inventory = build_inventory
 
     @pytest.mark.asyncio
     async def test_an_inventory_at_the_cap_is_still_scoped(self, tmp_path):
@@ -2743,7 +2724,7 @@ class TestBulkNegotiateScope:
         rom_ids = list(range(1, NEGOTIATE_ROM_IDS_CAP + 1))
         self._hand_the_engine_an_inventory_over(svc, rom_ids)
 
-        await svc._sync_engine._bulk_pre_negotiate(LiveDeviceId("device-1"))
+        await svc._sync_engine._negotiate.open_device_session(LiveDeviceId("device-1"))
 
         negotiations = [c for c in fake.call_log if c[0] == "negotiate_sync"]
         assert len(negotiations) == 1
@@ -2758,7 +2739,7 @@ class TestBulkNegotiateScope:
         # One ROM twice: a save more than the cap, over exactly the cap's ROMs.
         self._hand_the_engine_an_inventory_over(svc, [*rom_ids, rom_ids[0]])
 
-        await svc._sync_engine._bulk_pre_negotiate(LiveDeviceId("device-1"))
+        await svc._sync_engine._negotiate.open_device_session(LiveDeviceId("device-1"))
 
         negotiations = [c for c in fake.call_log if c[0] == "negotiate_sync"]
         assert len(negotiations) == 1
@@ -2771,7 +2752,7 @@ class TestBulkNegotiateScope:
         svc, fake = make_service(tmp_path, log_debug=logged.append)
         self._hand_the_engine_an_inventory_over(svc, range(1, NEGOTIATE_ROM_IDS_CAP + 2))
 
-        await svc._sync_engine._bulk_pre_negotiate(LiveDeviceId("device-1"))
+        await svc._sync_engine._negotiate.open_device_session(LiveDeviceId("device-1"))
 
         negotiations = [c for c in fake.call_log if c[0] == "negotiate_sync"]
         assert len(negotiations) == 1

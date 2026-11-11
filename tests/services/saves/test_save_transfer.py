@@ -26,7 +26,7 @@ from tests.services.saves._helpers import (
     _install_rom,
     _server_save,
     _set_device_id,
-    make_service,
+    make_parts,
     rom_save_sync_state_from_dict,
 )
 
@@ -35,12 +35,12 @@ class TestFetchingAServerCopy:
     """A server copy lands in the file it is asked into, names no device and records nothing."""
 
     def test_the_copy_is_left_in_place_and_its_hash_answered(self, tmp_path):
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
         fake.saves[100] = _server_save(save_id=100)
         fake.set_server_save_content(100, b"server bytes")
         tmp = tmp_path / "pokemon.srm.tmp"
 
-        answered = svc._save_transfer.fetch_server_copy(100, str(tmp))
+        answered = parts.save_transfer.fetch_server_copy(100, str(tmp))
 
         assert answered == hashlib.md5(b"server bytes").hexdigest()
         assert tmp.read_bytes() == b"server bytes"
@@ -54,7 +54,7 @@ class TestFetchingAServerCopy:
         ids=["romm-unreachable", "this-device-cannot-write"],
     )
     def test_a_fetch_that_breaks_off_removes_what_it_wrote_and_raises_on(self, tmp_path, failure):
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
         tmp = tmp_path / "pokemon.srm.tmp"
 
         def partial_download(save_id: int, dest_path: str) -> None:
@@ -65,7 +65,7 @@ class TestFetchingAServerCopy:
         fake.download_save_content = partial_download  # type: ignore[method-assign]
 
         with pytest.raises(type(failure)) as caught:
-            svc._save_transfer.fetch_server_copy(100, str(tmp))
+            parts.save_transfer.fetch_server_copy(100, str(tmp))
 
         assert caught.value is failure
         assert not tmp.exists()
@@ -75,12 +75,13 @@ class TestRecordTransferredFile:
     """Tests for SaveTransfer._record_transferred_file, the sync-state writer a download and an upload share."""
 
     def test_creates_proper_entry(self, tmp_path):
-        svc, _ = make_service(tmp_path)
+        parts, _ = make_parts(tmp_path)
+        svc = parts.service
         save_file = _create_save(tmp_path)
         server_resp = {"id": 200, "updated_at": "2026-02-17T15:00:00Z"}
 
         state = RomSaveSyncState()
-        svc._save_transfer._record_transferred_file(state, "pokemon.srm", server_resp, str(save_file), "gba")
+        parts.save_transfer._record_transferred_file(state, "pokemon.srm", server_resp, str(save_file), "gba")
 
         entry = state.files["pokemon.srm"]
         assert entry.last_sync_hash == svc._save_file_store.checksum_md5(str(save_file))
@@ -90,34 +91,34 @@ class TestRecordTransferredFile:
     def test_records_server_content_hash_from_response(self, tmp_path):
         """#1468 — the server response's ``content_hash`` (RomM's own digest of the
         bytes) is stored as ``last_sync_server_hash``, the provenance anchor."""
-        svc, _ = make_service(tmp_path)
+        parts, _ = make_parts(tmp_path)
         save_file = _create_save(tmp_path)
         server_resp = {"id": 200, "updated_at": "2026-02-17T15:00:00Z", "content_hash": "srv-abc123"}
 
         state = RomSaveSyncState()
-        svc._save_transfer._record_transferred_file(state, "pokemon.srm", server_resp, str(save_file), "gba")
+        parts.save_transfer._record_transferred_file(state, "pokemon.srm", server_resp, str(save_file), "gba")
 
         assert state.files["pokemon.srm"].last_sync_server_hash == "srv-abc123"
 
     def test_records_none_server_hash_when_response_lacks_content_hash(self, tmp_path):
         """#1468 — a response without ``content_hash`` records ``None`` (never a
         fabricated or locally-computed value); the identity check falls back to parity."""
-        svc, _ = make_service(tmp_path)
+        parts, _ = make_parts(tmp_path)
         save_file = _create_save(tmp_path)
         server_resp = {"id": 200, "updated_at": "2026-02-17T15:00:00Z"}  # no content_hash
 
         state = RomSaveSyncState()
-        svc._save_transfer._record_transferred_file(state, "pokemon.srm", server_resp, str(save_file), "gba")
+        parts.save_transfer._record_transferred_file(state, "pokemon.srm", server_resp, str(save_file), "gba")
 
         assert state.files["pokemon.srm"].last_sync_server_hash is None
 
     def test_creates_entry_with_new_fields(self, tmp_path):
-        svc, _ = make_service(tmp_path)
+        parts, _ = make_parts(tmp_path)
         save_file = _create_save(tmp_path)
         server_resp = {"id": 200, "updated_at": "2026-02-17T15:00:00Z"}
 
         state = RomSaveSyncState()
-        svc._save_transfer._record_transferred_file(
+        parts.save_transfer._record_transferred_file(
             state,
             "pokemon.srm",
             server_resp,
@@ -137,7 +138,7 @@ class TestRecordTransferredFile:
         assert file_state.last_sync_server_save_id == 200
 
     def test_updates_emulator_on_existing_entry(self, tmp_path):
-        svc, _ = make_service(tmp_path)
+        parts, _ = make_parts(tmp_path)
         save_file = _create_save(tmp_path)
         # Pre-populate with old emulator tag
         state = rom_save_sync_state_from_dict(
@@ -151,7 +152,7 @@ class TestRecordTransferredFile:
         )
         server_resp = {"id": 200, "updated_at": "2026-02-17T15:00:00Z"}
 
-        svc._save_transfer._record_transferred_file(
+        parts.save_transfer._record_transferred_file(
             state,
             "pokemon.srm",
             server_resp,
@@ -166,7 +167,7 @@ class TestRecordTransferredFile:
 
     def test_core_so_none_does_not_overwrite(self, tmp_path):
         """core_so=None should not reset an already-set last_synced_core."""
-        svc, _ = make_service(tmp_path)
+        parts, _ = make_parts(tmp_path)
         save_file = _create_save(tmp_path)
         state = rom_save_sync_state_from_dict(
             {
@@ -179,7 +180,7 @@ class TestRecordTransferredFile:
         )
         server_resp = {"id": 200, "updated_at": "2026-02-17T15:00:00Z"}
 
-        svc._save_transfer._record_transferred_file(
+        parts.save_transfer._record_transferred_file(
             state,
             "pokemon.srm",
             server_resp,
@@ -192,26 +193,26 @@ class TestRecordTransferredFile:
         assert state.last_synced_core == "mgba_libretro"
 
     def test_writes_last_sync_local_mtime_as_float(self, tmp_path):
-        svc, _ = make_service(tmp_path)
+        parts, _ = make_parts(tmp_path)
         save_file = _create_save(tmp_path, system="gba", rom_name="pokemon", content=b"\x00" * 1024)
         local_path = str(save_file)
         server_response = _server_save()
 
         state = RomSaveSyncState()
-        svc._save_transfer._record_transferred_file(state, "pokemon.srm", server_response, local_path, "gba")
+        parts.save_transfer._record_transferred_file(state, "pokemon.srm", server_response, local_path, "gba")
 
         file_state = state.files["pokemon.srm"]
         assert isinstance(file_state.last_sync_local_mtime, float)
         assert file_state.last_sync_local_mtime == pytest.approx(os.path.getmtime(local_path))
 
     def test_writes_last_sync_local_size_as_int(self, tmp_path):
-        svc, _ = make_service(tmp_path)
+        parts, _ = make_parts(tmp_path)
         save_file = _create_save(tmp_path, system="gba", rom_name="pokemon", content=b"\x00" * 2048)
         local_path = str(save_file)
         server_response = _server_save()
 
         state = RomSaveSyncState()
-        svc._save_transfer._record_transferred_file(state, "pokemon.srm", server_response, local_path, "gba")
+        parts.save_transfer._record_transferred_file(state, "pokemon.srm", server_response, local_path, "gba")
 
         file_state = state.files["pokemon.srm"]
         assert isinstance(file_state.last_sync_local_size, int)
@@ -219,12 +220,12 @@ class TestRecordTransferredFile:
 
     def test_skips_baseline_for_missing_file(self, tmp_path):
         """A missing local file yields an empty hash → no untrackable baseline (invariant 1)."""
-        svc, _ = make_service(tmp_path)
+        parts, _ = make_parts(tmp_path)
         local_path = str(tmp_path / "saves" / "gba" / "missing.srm")
         server_response = _server_save()
 
         state = RomSaveSyncState()
-        svc._save_transfer._record_transferred_file(state, "missing.srm", server_response, local_path, "gba")
+        parts.save_transfer._record_transferred_file(state, "missing.srm", server_response, local_path, "gba")
 
         # No baseline is recorded — the aggregate rejects a hash-less file entry.
         assert "missing.srm" not in state.files
@@ -237,12 +238,13 @@ class TestServerHashBaselineWriterFlows:
     def test_upload_flow_records_server_content_hash_from_response(self, tmp_path):
         """The upload flow records the upload RESPONSE's ``content_hash`` (RomM's
         digest of the bytes it received), not a locally-recomputed value."""
-        svc, _ = make_service(tmp_path)
+        parts, _ = make_parts(tmp_path)
+        svc = parts.service
         _enable_sync_with_device(svc)
         _install_rom(svc, tmp_path)
         save_file = _create_save(tmp_path)
 
-        state = _do_upload(svc, 42, str(save_file), "pokemon.srm", "gba")
+        state = _do_upload(parts, 42, str(save_file), "pokemon.srm", "gba")
 
         # The fake server returns content_hash = its own hash of the received bytes.
         expected = svc._save_file_store.content_hash(str(save_file))
@@ -250,7 +252,8 @@ class TestServerHashBaselineWriterFlows:
 
     def test_download_flow_records_adopted_server_save_content_hash(self, tmp_path):
         """The download flow records the ADOPTED server save's ``content_hash``."""
-        svc, _ = make_service(tmp_path)
+        parts, _ = make_parts(tmp_path)
+        svc = parts.service
         _enable_sync_with_device(svc)
         _install_rom(svc, tmp_path)
         saves_dir = str(tmp_path / "saves" / "gba")
@@ -258,7 +261,7 @@ class TestServerHashBaselineWriterFlows:
         server_save["content_hash"] = "srv-download-hash"
 
         state = RomSaveSyncState()
-        svc._save_transfer.download_save_file(
+        parts.save_transfer.download_save_file(
             server_save, saves_dir, "pokemon.srm", state, LiveDeviceId("device-1"), "gba"
         )
 
@@ -266,14 +269,15 @@ class TestServerHashBaselineWriterFlows:
 
     def test_download_flow_records_none_when_server_save_lacks_content_hash(self, tmp_path):
         """A server save with no ``content_hash`` records ``None`` (parity fallback)."""
-        svc, _ = make_service(tmp_path)
+        parts, _ = make_parts(tmp_path)
+        svc = parts.service
         _enable_sync_with_device(svc)
         _install_rom(svc, tmp_path)
         saves_dir = str(tmp_path / "saves" / "gba")
         server_save = _server_save(save_id=100)  # no content_hash
 
         state = RomSaveSyncState()
-        svc._save_transfer.download_save_file(
+        parts.save_transfer.download_save_file(
             server_save, saves_dir, "pokemon.srm", state, LiveDeviceId("device-1"), "gba"
         )
 
@@ -303,12 +307,13 @@ class TestConfirmDownloadAfterSync:
         The add_save upsert already made us ``is_current`` on the new save, so the
         redundant ack is elided — but we still end up current on the next read.
         """
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _set_device_id(svc, "dev-1")
         _install_rom(svc, tmp_path)
         save_path = _create_save(tmp_path)
 
-        _do_upload(svc, 42, str(save_path), "pokemon.srm", "gba")
+        _do_upload(parts, 42, str(save_path), "pokemon.srm", "gba")
 
         upload_calls = [c for c in fake.call_log if c[0] == "upload_save"]
         assert len(upload_calls) == 1
@@ -327,7 +332,8 @@ class TestConfirmDownloadAfterSync:
 
     def test_upload_save_file_put_calls_confirm_download(self, tmp_path):
         """PUT (existing save_id) → confirm_download fires for that save_id."""
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _set_device_id(svc, "dev-1")
         _install_rom(svc, tmp_path)
         save_path = _create_save(tmp_path)
@@ -336,7 +342,7 @@ class TestConfirmDownloadAfterSync:
         fake.saves[100] = _server_save(save_id=100, rom_id=42)
         server_save = fake.saves[100]
 
-        _do_upload(svc, 42, str(save_path), "pokemon.srm", "gba", server_save=server_save)
+        _do_upload(parts, 42, str(save_path), "pokemon.srm", "gba", server_save=server_save)
 
         upload_calls = [c for c in fake.call_log if c[0] == "upload_save"]
         assert len(upload_calls) == 1
@@ -354,7 +360,8 @@ class TestConfirmDownloadAfterSync:
         row on: the answer reads it not current, so the ack still fires and the
         swallow-the-error contract stays exercised (#1458).
         """
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _set_device_id(svc, "dev-1")
         _install_rom(svc, tmp_path)
         save_path = _create_save(tmp_path)
@@ -377,7 +384,7 @@ class TestConfirmDownloadAfterSync:
         fake.confirm_download = boom  # type: ignore[method-assign]
         state = RomSaveSyncState()
         try:
-            result = svc._save_transfer.upload_save_file(
+            result = parts.save_transfer.upload_save_file(
                 42, str(save_path), "pokemon.srm", state, LiveDeviceId("dev-1"), "gba", None
             )
         finally:
@@ -394,7 +401,8 @@ class TestConfirmDownloadAfterSync:
     def test_download_save_file_streams_unmarked_and_acknowledges_once_placed(self, tmp_path, monkeypatch):
         """download_save_content names the device with optimistic=False, and
         confirm_download follows once the file is in place."""
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _set_device_id(svc, "dev-1")
         saves_dir = str(tmp_path / "saves" / "gba")
         os.makedirs(saves_dir, exist_ok=True)
@@ -407,7 +415,7 @@ class TestConfirmDownloadAfterSync:
             return confirm(save_id, device_id, **kwargs)
 
         monkeypatch.setattr(fake, "confirm_download", recording_confirm)
-        svc._save_transfer.download_save_file(
+        parts.save_transfer.download_save_file(
             server_save, saves_dir, "pokemon.srm", RomSaveSyncState(), LiveDeviceId("dev-1"), "gba"
         )
 
@@ -424,15 +432,16 @@ class TestEveryRequestCarriesTheContentHash:
     """#2664 D4/D5: uploads, in-place updates and acknowledgements name the hash of the file they are about."""
 
     def test_a_post_and_an_in_place_put_carry_the_uploaded_file_s_hash(self, tmp_path):
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _enable_sync_with_device(svc)
         _install_rom(svc, tmp_path)
         save_path = _create_save(tmp_path, content=b"first bytes")
-        _do_upload(svc, 42, str(save_path), "pokemon.srm", "gba")
+        _do_upload(parts, 42, str(save_path), "pokemon.srm", "gba")
         posted = next(iter(fake.saves.values()))
         save_path.write_bytes(b"second bytes")
 
-        _do_upload(svc, 42, str(save_path), "pokemon.srm", "gba", server_save=posted)
+        _do_upload(parts, 42, str(save_path), "pokemon.srm", "gba", server_save=posted)
 
         uploads = [(c[2]["save_id"], c[2]["content_hash"]) for c in fake.call_log if c[0] == "upload_save"]
         assert uploads == [
@@ -441,24 +450,26 @@ class TestEveryRequestCarriesTheContentHash:
         ]
 
     def test_the_upload_s_own_acknowledgement_carries_the_uploaded_file_s_hash(self, tmp_path):
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _enable_sync_with_device(svc)
         _install_rom(svc, tmp_path)
         save_path = _create_save(tmp_path, content=b"put bytes")
         fake.saves[100] = _server_save(save_id=100, rom_id=42)
 
-        _do_upload(svc, 42, str(save_path), "pokemon.srm", "gba", server_save=fake.saves[100])
+        _do_upload(parts, 42, str(save_path), "pokemon.srm", "gba", server_save=fake.saves[100])
 
         acks = [(c[1], c[2]["content_hash"]) for c in fake.call_log if c[0] == "confirm_download"]
         assert acks == [((100, "device-1"), hashlib.md5(b"put bytes").hexdigest())]
 
     def test_a_download_s_acknowledgement_carries_the_placed_file_s_hash(self, tmp_path):
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _enable_sync_with_device(svc)
         fake.saves[100] = _server_save(save_id=100)
         fake.set_server_save_content(100, b"server bytes")
 
-        svc._save_transfer.download_save_file(
+        parts.save_transfer.download_save_file(
             fake.saves[100],
             str(tmp_path / "saves" / "gba"),
             "pokemon.srm",
@@ -471,13 +482,14 @@ class TestEveryRequestCarriesTheContentHash:
         assert acks == [((100, "device-1"), hashlib.md5(b"server bytes").hexdigest())]
 
     def test_an_adopt_s_acknowledgement_carries_the_local_file_s_hash(self, tmp_path):
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _enable_sync_with_device(svc)
         save_path = _create_save(tmp_path, content=b"identical")
         local_hash = hashlib.md5(b"identical").hexdigest()
         fake.saves[100] = {**_server_save(save_id=100), "content_hash": local_hash}
 
-        adopted = svc._save_transfer.adopt_server_head(
+        adopted = parts.save_transfer.adopt_server_head(
             RomSaveSyncState(),
             "pokemon.srm",
             fake.saves[100],
@@ -495,8 +507,8 @@ class TestEveryRequestCarriesTheContentHash:
 class TestAnAcknowledgementRomMDidNotTake:
     """#2664 D6: an answer still showing this device not current is acknowledged once more, and only once."""
 
-    def _download(self, svc, fake, tmp_path) -> None:
-        svc._save_transfer.download_save_file(
+    def _download(self, parts, fake, tmp_path) -> None:
+        parts.save_transfer.download_save_file(
             fake.saves[100],
             str(tmp_path / "saves" / "gba"),
             "pokemon.srm",
@@ -506,7 +518,8 @@ class TestAnAcknowledgementRomMDidNotTake:
         )
 
     def test_a_row_left_without_a_hash_is_taken_by_the_second_acknowledgement(self, tmp_path):
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _enable_sync_with_device(svc)
         content = b"replaced in place"
         fake.saves[100] = {
@@ -516,7 +529,7 @@ class TestAnAcknowledgementRomMDidNotTake:
         fake.set_server_save_content(100, content)
         fake.stage_device_sync(100, "device-1", "2026-02-01T00:00:00Z", last_sync_server_hash="an-older-hash")
 
-        self._download(svc, fake, tmp_path)
+        self._download(parts, fake, tmp_path)
 
         assert [c[0] for c in fake.call_log if c[0] == "confirm_download"] == ["confirm_download"] * 2
         (listed,) = fake.list_saves(42, device_id="device-1")
@@ -525,7 +538,8 @@ class TestAnAcknowledgementRomMDidNotTake:
     def test_one_still_not_taken_after_the_second_fails_with_the_file_in_place_and_nothing_recorded(
         self, tmp_path, monkeypatch
     ):
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _enable_sync_with_device(svc)
         save_path = _create_save(tmp_path, content=b"local bytes")
         fake.saves[100] = _server_save(save_id=100)
@@ -542,7 +556,7 @@ class TestAnAcknowledgementRomMDidNotTake:
 
         monkeypatch.setattr(fake, "confirm_download", not_taken)
         state = RomSaveSyncState()
-        download = svc._save_transfer.download_save_file
+        download = parts.save_transfer.download_save_file
         server_save, saves_dir, device_id = fake.saves[100], str(save_path.parent), LiveDeviceId("device-1")
 
         with pytest.raises(RommAcknowledgementNotTaken):
@@ -554,7 +568,8 @@ class TestAnAcknowledgementRomMDidNotTake:
 
     def test_a_save_replaced_since_the_download_is_not_acknowledged_again(self, tmp_path, monkeypatch):
         """A second acknowledgement would mark this device current on bytes another client put there meanwhile."""
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _enable_sync_with_device(svc)
         save_path = _create_save(tmp_path, content=b"local bytes")
         fake.saves[100] = {
@@ -572,7 +587,7 @@ class TestAnAcknowledgementRomMDidNotTake:
 
         monkeypatch.setattr(fake, "download_save_content", download_then_another_client_replaces_it)
         state = RomSaveSyncState()
-        download = svc._save_transfer.download_save_file
+        download = parts.save_transfer.download_save_file
         server_save, saves_dir, device_id = fake.saves[100], str(save_path.parent), LiveDeviceId("device-1")
 
         with pytest.raises(RommAcknowledgementNotTaken):
@@ -601,8 +616,8 @@ class TestTheUploadsOwnAcknowledgement:
 
     @staticmethod
     def _transfer_and_fake(tmp_path):
-        svc, fake = make_service(tmp_path)
-        return svc._save_transfer, fake
+        parts, fake = make_parts(tmp_path)
+        return parts.save_transfer, fake
 
     @staticmethod
     def _confirmed(fake) -> bool:
@@ -685,7 +700,8 @@ class TestDedupToNonHeadUploadGuard:
     def test_dedup_to_non_head_raises_conflict_without_baseline_or_confirm(self, tmp_path):
         """Non-head dedup → RommConflictError before any baseline / own-upload /
         confirm write (value-exact: nothing was stamped on the non-head save)."""
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _set_device_id(svc, "device-1")
         _install_rom(svc, tmp_path)
         save_path = _create_save(tmp_path, content=b"local reverted content")
@@ -701,7 +717,7 @@ class TestDedupToNonHeadUploadGuard:
         state = RomSaveSyncState(active_slot="default")
         file_path, device_id = str(save_path), LiveDeviceId("device-1")
         with pytest.raises(RommConflictError):
-            svc._save_transfer.upload_save_file(
+            parts.save_transfer.upload_save_file(
                 42,
                 file_path,
                 "pokemon.srm",
@@ -723,7 +739,8 @@ class TestDedupToNonHeadUploadGuard:
         """Dedup to the head itself is benign — baseline recorded on the head. RomM
         reaches its dedup only past the slot gate, so the device is already current
         on the head, the answer says so, and the #1458 confirm ack is not sent."""
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _set_device_id(svc, "device-1")
         _install_rom(svc, tmp_path)
         save_path = _create_save(tmp_path, content=b"head content")
@@ -737,7 +754,7 @@ class TestDedupToNonHeadUploadGuard:
         fake.arm_add_save_dedup(200)  # dedup to the HEAD → benign
 
         state = RomSaveSyncState(active_slot="default")
-        result = svc._save_transfer.upload_save_file(
+        result = parts.save_transfer.upload_save_file(
             42,
             str(save_path),
             "pokemon.srm",
@@ -757,7 +774,8 @@ class TestDedupToNonHeadUploadGuard:
         """A caller that passes no ``planned_group`` (one that plans no listing)
         never triggers the guard, even on a non-head dedup shape — baseline is
         recorded as before."""
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _set_device_id(svc, "device-1")
         _install_rom(svc, tmp_path)
         save_path = _create_save(tmp_path, content=b"local content")
@@ -771,7 +789,7 @@ class TestDedupToNonHeadUploadGuard:
         fake.arm_add_save_dedup(100)  # non-head dedup, but no planned_group passed
 
         state = RomSaveSyncState(active_slot="default")
-        result = svc._save_transfer.upload_save_file(
+        result = parts.save_transfer.upload_save_file(
             42, str(save_path), "pokemon.srm", state, LiveDeviceId("device-1"), "gba", None
         )
 
@@ -785,7 +803,8 @@ class TestHashServerCopyNonRetryable:
     covered by TestResolveSyncConflict.test_resolve_keep_local_falls_back_*."""
 
     def test_hash_server_copy_returns_none_on_non_retryable_error_and_raises_a_device_fault(self, tmp_path):
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _install_rom(svc, tmp_path)
 
         # download_save_content raises, and retry.is_retryable returns False (default
@@ -796,7 +815,7 @@ class TestHashServerCopyNonRetryable:
 
         fake.download_save_content = _raise_on_download  # type: ignore[method-assign]
 
-        result = svc._save_transfer.hash_server_copy({"id": 100})
+        result = parts.save_transfer.hash_server_copy({"id": 100})
         assert result is None
         # download_save_content was attempted exactly once.
         download_calls = [c for c in fake.call_log if c[0] == "download_save_content"]
@@ -808,13 +827,13 @@ class TestHashServerCopyNonRetryable:
         fake.download_save_content = _cannot_write  # type: ignore[method-assign]
 
         with pytest.raises(DeviceWriteError):
-            svc._save_transfer.hash_server_copy({"id": 100})
+            parts.save_transfer.hash_server_copy({"id": 100})
 
     def test_hash_server_copy_returns_none_when_save_id_missing(self, tmp_path):
         """No save_id on the server-save dict → short-circuit to None (line 120)."""
-        svc, _ = make_service(tmp_path)
+        parts, _ = make_parts(tmp_path)
 
-        result = svc._save_transfer.hash_server_copy({"file_name": "x.srm"})
+        result = parts.save_transfer.hash_server_copy({"file_name": "x.srm"})
         assert result is None
 
 
@@ -831,13 +850,14 @@ class TestADownloadThatFailsLeavesNoTmp:
         ids=["stalled", "this-device-cannot-write", "any-other-fault"],
     )
     def test_a_download_that_breaks_off_leaves_no_tmp(self, tmp_path, failure):
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _enable_sync_with_device(svc)
         save_path = _create_save(tmp_path, content=b"local bytes")
         fake.saves[100] = _server_save(save_id=100)
         fake.break_download_on(100, failure)
         state = RomSaveSyncState()
-        download = svc._save_transfer.download_save_file
+        download = parts.save_transfer.download_save_file
         server_save, saves_dir_path, device_id = fake.saves[100], str(save_path.parent), LiveDeviceId("device-1")
 
         with pytest.raises(type(failure)) as caught:
@@ -849,7 +869,8 @@ class TestADownloadThatFailsLeavesNoTmp:
         assert state.files == {}
 
     def test_a_download_that_cannot_be_moved_into_place_leaves_no_tmp(self, tmp_path, monkeypatch):
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _enable_sync_with_device(svc)
         saves_dir = tmp_path / "saves" / "gba"
         saves_dir.mkdir(parents=True)
@@ -860,7 +881,7 @@ class TestADownloadThatFailsLeavesNoTmp:
 
         monkeypatch.setattr(svc._save_file_store, "rename", failing_rename)
 
-        download = svc._save_transfer.download_save_file
+        download = parts.save_transfer.download_save_file
         server_save, saves_dir_path, state = fake.saves[100], str(saves_dir), RomSaveSyncState()
         device_id = LiveDeviceId("device-1")
         with pytest.raises(PermissionError, match="read-only"):
@@ -869,7 +890,8 @@ class TestADownloadThatFailsLeavesNoTmp:
         assert not (saves_dir / "pokemon.srm.tmp").exists()
 
     def test_a_tmp_that_cannot_be_removed_leaves_the_download_s_own_failure_raised(self, tmp_path, monkeypatch):
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _enable_sync_with_device(svc)
         saves_dir = tmp_path / "saves" / "gba"
         saves_dir.mkdir(parents=True)
@@ -884,7 +906,7 @@ class TestADownloadThatFailsLeavesNoTmp:
 
         monkeypatch.setattr(svc._save_file_store, "remove_file", failing_remove)
 
-        download = svc._save_transfer.download_save_file
+        download = parts.save_transfer.download_save_file
         server_save, saves_dir_path, state = fake.saves[100], str(saves_dir), RomSaveSyncState()
         device_id = LiveDeviceId("device-1")
         with pytest.raises(RommTimeoutError) as caught:
@@ -898,7 +920,8 @@ class TestADownloadItsStopEnded:
     """#2184 D4: a download whose stop was asked by the time it finished is never put in place."""
 
     def test_the_finished_download_is_discarded_and_the_local_file_left_as_it_was(self, tmp_path, monkeypatch):
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _enable_sync_with_device(svc)
         save_path = _create_save(tmp_path, content=b"local bytes")
         fake.saves[100] = _server_save(save_id=100)
@@ -912,7 +935,7 @@ class TestADownloadItsStopEnded:
         monkeypatch.setattr(fake, "download_save_content", download_then_stop)
         state = RomSaveSyncState()
 
-        download_file = svc._save_transfer.download_save_file
+        download_file = parts.save_transfer.download_save_file
         server_save, saves_dir, device_id = fake.saves[100], str(save_path.parent), LiveDeviceId("device-1")
 
         with pytest.raises(SyncStopped):
@@ -928,7 +951,8 @@ class TestADownloadItsStopEnded:
 
     def test_a_stoppable_download_is_acknowledged_only_once_it_is_in_place(self, tmp_path, monkeypatch):
         """#2184 D8: no optimistic sync mark at the GET; the acknowledgement follows the rename."""
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _enable_sync_with_device(svc)
         saves_dir = tmp_path / "saves" / "gba"
         fake.saves[100] = _server_save(save_id=100)
@@ -947,7 +971,7 @@ class TestADownloadItsStopEnded:
         monkeypatch.setattr(svc._save_file_store, "rename", recording_rename)
         monkeypatch.setattr(fake, "confirm_download", recording_confirm)
 
-        svc._save_transfer.download_save_file(
+        parts.save_transfer.download_save_file(
             fake.saves[100],
             str(saves_dir),
             "pokemon.srm",
@@ -965,7 +989,8 @@ class TestADownloadItsStopEnded:
     def test_an_acknowledgement_that_fails_leaves_the_file_in_place_with_its_backup_and_records_nothing(
         self, tmp_path, monkeypatch
     ):
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _enable_sync_with_device(svc)
         save_path = _create_save(tmp_path, content=b"local bytes")
         fake.saves[100] = _server_save(save_id=100)
@@ -977,7 +1002,7 @@ class TestADownloadItsStopEnded:
         monkeypatch.setattr(fake, "confirm_download", failing_confirm)
         state = RomSaveSyncState()
 
-        download_file = svc._save_transfer.download_save_file
+        download_file = parts.save_transfer.download_save_file
         server_save, saves_dir, device_id, stop = (
             fake.saves[100],
             str(save_path.parent),
@@ -995,14 +1020,15 @@ class TestADownloadItsStopEnded:
         assert state.files == {}
 
     def test_a_stop_not_asked_places_the_download(self, tmp_path):
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _enable_sync_with_device(svc)
         saves_dir = tmp_path / "saves" / "gba"
         fake.saves[100] = _server_save(save_id=100)
         stop = SyncStop()
         state = RomSaveSyncState()
 
-        svc._save_transfer.download_save_file(
+        parts.save_transfer.download_save_file(
             fake.saves[100], str(saves_dir), "pokemon.srm", state, LiveDeviceId("device-1"), "gba", stop=stop
         )
 
@@ -1014,13 +1040,13 @@ class TestADownloadItsStopEnded:
 class TestRecordServerHead:
     def test_record_server_head_records_the_head_as_the_baseline(self, tmp_path):
         """SaveTransfer.record_server_head records the head as the baseline on the passed aggregate."""
-        svc, _ = make_service(tmp_path)
+        parts, _ = make_parts(tmp_path)
         save_path = _create_save(tmp_path, content=b"identical")
         local_hash = hashlib.md5(b"identical").hexdigest()
         head = {**_server_save(save_id=77, filename="pokemon.srm"), "content_hash": local_hash}
 
         state = RomSaveSyncState()
-        recorded = svc._save_transfer.record_server_head(
+        recorded = parts.save_transfer.record_server_head(
             state, "pokemon.srm", head, str(save_path), local_hash, system="gba"
         )
 

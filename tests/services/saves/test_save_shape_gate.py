@@ -478,7 +478,7 @@ class TestTheRefusalIsASkipAndNotAFailure:
         answer = _refusing(state)
         svc, _store, fake = _service(tmp_path, answer)
 
-        result = svc._sync_engine.do_sync_rom_saves(
+        result = svc._sync_engine._matrix.sync_rom_saves(
             42,
             RomSaveSyncState(active_slot="default", slot_confirmed=True),
             _stored_device_id(svc),
@@ -493,7 +493,7 @@ class TestTheRefusalIsASkipAndNotAFailure:
         answer = _syncable(str(tmp_path / "saves" / "gba"))
         svc, _store, fake = _service(tmp_path, answer)
 
-        svc._sync_engine.do_sync_rom_saves(
+        svc._sync_engine._matrix.sync_rom_saves(
             42,
             RomSaveSyncState(active_slot="default", slot_confirmed=True),
             _stored_device_id(svc),

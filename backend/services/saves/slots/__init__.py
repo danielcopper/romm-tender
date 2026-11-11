@@ -7,6 +7,9 @@ reporting in StatusService; persistence is each operation's own
 narrow Unit of Work (ADR-0006).
 """
 
-from services.saves.slots.service import SlotsService, SlotsServiceConfig
+from services.saves.slots.deletion import SlotDeleter
+from services.saves.slots.listing import SlotListing
+from services.saves.slots.setup import SetupWizard
+from services.saves.slots.switching import SlotSwitcher
 
-__all__ = ["SlotsService", "SlotsServiceConfig"]
+__all__ = ["SetupWizard", "SlotDeleter", "SlotListing", "SlotSwitcher"]

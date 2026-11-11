@@ -24,14 +24,15 @@ from fakes.fake_save_api import FakeSaveApi
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.identity import VERSION
-from domain.iso_time import epoch_to_iso
 from domain.live_device_id import LiveDeviceId
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from lib.errors import Refused, RommConnectionError, RommNotFoundError, ServerUnreachable
 from services.saves import SaveService
 from services.saves._settings import resolve_default_slot, sanitize_setting
 from services.saves.service import SaveDeletionIncomplete
+from services.saves.sync_engine.matrix import MatrixExecutor
 from tests.services.saves._helpers import (
+    SyncTally,
     _create_save,
     _enable_sync_with_device,
     _get_device_id,
@@ -39,6 +40,8 @@ from tests.services.saves._helpers import (
     _install_rom,
     _seed_save_state,
     _set_device_id,
+    executor_answering,
+    make_parts,
     make_service,
 )
 
@@ -337,7 +340,7 @@ class TestEnsureDeviceRegistered:
     @pytest.mark.asyncio
     async def test_sets_hostname_as_device_name(self, saves):
         """Device name is set to the local hostname."""
-        saves.service._sync_engine._hostname_provider = FakeHostnameReader(hostname="steamdeck")
+        saves.service._sync_engine._devices._hostname_provider = FakeHostnameReader(hostname="steamdeck")
 
         result = await saves.service.ensure_device_registered()
 
@@ -518,16 +521,18 @@ class TestRetroDeckMigrationBlocksSaveSync:
     @pytest.mark.asyncio
     async def test_sync_all_saves_respects_migration_block_via_its_conflict_rules(self, tmp_path):
         """sync_all_saves must be refused by the migration rule it checks at its
-        entry, so the internal do_sync_rom_saves call path is never reached when
+        entry, so the internal matrix sync call path is never reached when
         migration is pending. Protects against the rule being dropped from the
         use case."""
-        svc, _ = make_service(tmp_path, conflict_rules=_make_conflict_rules(migration_pending=True))
+        spy = MagicMock(name="sync_rom_saves_spy")
+        svc, _ = make_service(
+            tmp_path,
+            conflict_rules=_make_conflict_rules(migration_pending=True),
+            matrix_executor=executor_answering(spy),
+        )
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
-
-        spy = MagicMock(name="do_sync_rom_saves_spy")
-        svc._sync_engine.do_sync_rom_saves = spy  # type: ignore[method-assign]
 
         with _refused_by_conflict_rule("blocked_by_migration", details={"synced": 0, "conflicts": 0}):
             await svc.sync_all_saves()
@@ -1231,15 +1236,16 @@ class TestPlatformSaves:
 class TestEmulatorTag:
     def test_upload_uses_emulator_tag_from_core(self, tmp_path):
         """When core resolver returns a core, upload uses retroarch-{core} tag."""
-        svc, fake = make_service(
+        parts, fake = make_parts(
             tmp_path,
             active_core=FakeActiveCoreResolver(default=("mgba_libretro", "mGBA")),
         )
+        svc = parts.service
         svc._config.settings["save_sync_enabled"] = True
         _install_rom(svc, tmp_path)
         _create_save(tmp_path)
 
-        svc._save_transfer.upload_save_file(
+        parts.save_transfer.upload_save_file(
             42,
             str(tmp_path / "saves" / "gba" / "pokemon.srm"),
             "pokemon.srm",
@@ -1256,12 +1262,13 @@ class TestEmulatorTag:
 
     def test_upload_uses_fallback_when_no_core(self, tmp_path):
         """When the resolved core is None, upload falls back to 'retroarch'."""
-        svc, fake = make_service(tmp_path)  # default: active_core returns (None, None)
+        parts, fake = make_parts(tmp_path)  # default: active_core returns (None, None)
+        svc = parts.service
         svc._config.settings["save_sync_enabled"] = True
         _install_rom(svc, tmp_path)
         _create_save(tmp_path)
 
-        svc._save_transfer.upload_save_file(
+        parts.save_transfer.upload_save_file(
             42,
             str(tmp_path / "saves" / "gba" / "pokemon.srm"),
             "pokemon.srm",
@@ -1661,27 +1668,25 @@ class TestPerRomLockSerialization:
     @pytest.mark.asyncio
     async def test_per_rom_lock_serializes_concurrent_sync(self, tmp_path):
         """Two concurrent sync_rom_saves calls on the same rom must not interleave."""
-        svc, _ = make_service(tmp_path)
-        _enable_sync_with_device(svc)
-        _install_rom(svc, tmp_path)
-        _create_save(tmp_path, content=b"local data")
-
-        # Spy timing on do_sync_rom_saves entry/exit. The lock is held in the
+        # Spy timing on the matrix sync's entry/exit. The lock is held in the
         # async wrapper around run_in_executor, so the inner call's
         # entry/exit windows for two concurrent invocations must not overlap.
         events: list[tuple[str, float]] = []
-        original = svc._sync_engine.do_sync_rom_saves
 
-        def wrapped(rom_id: int, *args, **kwargs):
-            events.append(("enter", time.time()))
-            # Sleep to ensure overlap is *possible* if the lock is broken.
-            time.sleep(0.05)
-            try:
-                return original(rom_id, *args, **kwargs)
-            finally:
-                events.append(("exit", time.time()))
+        class _Timed(MatrixExecutor):
+            def sync_rom_saves(self, rom_id: int, *args: Any, **kwargs: Any) -> SyncTally:
+                events.append(("enter", time.time()))
+                # Sleep to ensure overlap is *possible* if the lock is broken.
+                time.sleep(0.05)
+                try:
+                    return super().sync_rom_saves(rom_id, *args, **kwargs)
+                finally:
+                    events.append(("exit", time.time()))
 
-        svc._sync_engine.do_sync_rom_saves = wrapped  # type: ignore[method-assign]
+        svc, _ = make_service(tmp_path, matrix_executor=_Timed)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path, content=b"local data")
 
         await asyncio.gather(svc.sync_rom_saves(42), svc.sync_rom_saves(42))
 
@@ -1699,25 +1704,23 @@ class TestPerRomLockSerialization:
         calls never overlap, regardless of rom_id. (Pre-2a this asserted the
         opposite; the device gate is the new governing serializer.)
         """
-        svc, _ = make_service(tmp_path)
+        events: list[tuple[int, str, float]] = []
+
+        class _Timed(MatrixExecutor):
+            def sync_rom_saves(self, rom_id: int, *args: Any, **kwargs: Any) -> SyncTally:
+                events.append((rom_id, "enter", time.time()))
+                time.sleep(0.05)
+                try:
+                    return super().sync_rom_saves(rom_id, *args, **kwargs)
+                finally:
+                    events.append((rom_id, "exit", time.time()))
+
+        svc, _ = make_service(tmp_path, matrix_executor=_Timed)
         _enable_sync_with_device(svc)
         _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
         _install_rom(svc, tmp_path, rom_id=2, system="snes", file_name="game2.sfc")
         _create_save(tmp_path, system="gba", rom_name="game1", content=b"a")
         _create_save(tmp_path, system="snes", rom_name="game2", content=b"b")
-
-        events: list[tuple[int, str, float]] = []
-        original = svc._sync_engine.do_sync_rom_saves
-
-        def wrapped(rom_id: int, *args, **kwargs):
-            events.append((rom_id, "enter", time.time()))
-            time.sleep(0.05)
-            try:
-                return original(rom_id, *args, **kwargs)
-            finally:
-                events.append((rom_id, "exit", time.time()))
-
-        svc._sync_engine.do_sync_rom_saves = wrapped  # type: ignore[method-assign]
 
         await asyncio.gather(svc.sync_rom_saves(1), svc.sync_rom_saves(2))
 
@@ -1819,157 +1822,15 @@ class TestDeviceVersionResolution:
 
         Asked with a version the program will never carry, because comparing
         against ``VERSION`` alone proves nothing: this module and
-        ``services/saves/service.py`` would then read the same constant, and a
+        ``bootstrap/saves.py`` would then read the same constant, and a
         literal spelled at the call site would satisfy it — which is the drift
         this exists to catch.
         """
-        monkeypatch.setattr("services.saves.service.VERSION", "9.9.9")
+        monkeypatch.setattr("bootstrap.saves.VERSION", "9.9.9")
 
         service, _ = make_service(tmp_path)
 
         assert service._sync_engine._devices._version == "9.9.9"
-
-
-class TestBuildSaveInventory:
-    """``build_save_inventory`` — the Phase 1c negotiate inventory builder.
-
-    Scope predicate: ``slot_confirmed`` ∧ a non-legacy (truthy) ``active_slot``.
-    Per-file granularity; ``content_hash`` is the zip-aware store hash and
-    ``updated_at`` is the local mtime as a UTC ISO string.
-    """
-
-    def test_one_confirmed_rom_one_file(self, tmp_path):
-        """A confirmed non-null slot with one local save → one fully-populated entry."""
-        svc, _ = make_service(tmp_path)
-        content = b"pokemon-save-bytes"
-        save_path = _create_save(tmp_path, system="gba", rom_name="pokemon", content=content)
-        os.utime(save_path, (1705320000.0, 1705320000.0))
-        _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="pokemon.gba")
-
-        state = RomSaveSyncState(emulator="retroarch-mgba", system="gba")
-        state.confirm_slot("A")
-        _seed_save_state(svc, 42, state)
-
-        inventory = svc.build_save_inventory()
-
-        assert inventory == [
-            {
-                "rom_id": 42,
-                "file_name": "pokemon.srm",
-                "slot": "A",
-                "emulator": "retroarch-mgba",
-                "content_hash": hashlib.md5(content).hexdigest(),
-                "updated_at": epoch_to_iso(1705320000.0),
-                "file_size_bytes": len(content),
-            }
-        ]
-
-    def test_multiple_local_files_yield_one_entry_each(self, tmp_path):
-        """Two local save files for one confirmed ROM → two entries (per-file)."""
-        svc, _ = make_service(tmp_path)
-        _create_save(tmp_path, system="gba", rom_name="pokemon", content=b"a", ext=".srm")
-        _create_save(tmp_path, system="gba", rom_name="pokemon", content=b"bb", ext=".rtc")
-        _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="pokemon.gba")
-
-        state = RomSaveSyncState(system="gba")
-        state.confirm_slot("A")
-        _seed_save_state(svc, 42, state)
-
-        inventory = svc.build_save_inventory()
-
-        assert len(inventory) == 2
-        assert {e["file_name"] for e in inventory} == {"pokemon.srm", "pokemon.rtc"}
-        assert all(e["rom_id"] == 42 for e in inventory)
-        assert all(e.get("slot") == "A" for e in inventory)
-
-    def test_excludes_legacy_null_slot(self, tmp_path):
-        """A confirmed ROM whose active_slot is the legacy None is excluded."""
-        svc, _ = make_service(tmp_path)
-        _create_save(tmp_path, system="gba", rom_name="pokemon", content=b"data")
-        _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="pokemon.gba")
-
-        # Construct the legacy confirmed state directly — confirm_slot(None) is
-        # rejected now (#1276), but a pre-#1276 DB row (or one mid-migration
-        # before 005 un-confirms it) can still carry active_slot=None +
-        # slot_confirmed=True, and build_save_inventory must still exclude it.
-        state = RomSaveSyncState(system="gba", slot_confirmed=True, active_slot=None)
-        assert state.slot_confirmed is True
-        assert state.active_slot is None
-        _seed_save_state(svc, 42, state)
-
-        assert svc.build_save_inventory() == []
-
-    def test_excludes_unconfirmed_slot(self, tmp_path):
-        """A ROM with a real active_slot but slot_confirmed=False is excluded."""
-        svc, _ = make_service(tmp_path)
-        _create_save(tmp_path, system="gba", rom_name="pokemon", content=b"data")
-        _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="pokemon.gba")
-
-        state = RomSaveSyncState(system="gba")
-        state.switch_active_slot("A")  # active_slot="A", slot_confirmed stays False
-        assert state.active_slot == "A"
-        assert state.slot_confirmed is False
-        _seed_save_state(svc, 42, state)
-
-        assert svc.build_save_inventory() == []
-
-    def test_confirmed_rom_with_no_local_files_contributes_nothing(self, tmp_path):
-        """A confirmed non-null slot whose ROM has no local save files yields no entry."""
-        svc, _ = make_service(tmp_path)
-        _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="pokemon.gba")
-        # No _create_save — the saves directory has no matching files.
-
-        state = RomSaveSyncState(system="gba")
-        state.confirm_slot("A")
-        _seed_save_state(svc, 42, state)
-
-        assert svc.build_save_inventory() == []
-
-    def test_no_confirmed_roms_returns_empty(self, tmp_path):
-        """No tracked ROMs at all → empty inventory."""
-        svc, _ = make_service(tmp_path)
-        assert svc.build_save_inventory() == []
-
-    def test_rom_id_scopes_inventory_to_one_rom(self, tmp_path):
-        """``build_save_inventory(rom_id=42)`` returns only rom 42's entries.
-
-        The scoped form backs the single-ROM negotiate trigger; the whole-device
-        form (``rom_id=None``) backs the bulk pre-negotiate.
-        """
-        svc, _ = make_service(tmp_path)
-        _create_save(tmp_path, system="gba", rom_name="pokemon", content=b"a")
-        _create_save(tmp_path, system="snes", rom_name="mario", content=b"bb")
-        _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="pokemon.gba")
-        _install_rom(svc, tmp_path, rom_id=99, system="snes", file_name="mario.sfc")
-
-        state42 = RomSaveSyncState(system="gba")
-        state42.confirm_slot("A")
-        _seed_save_state(svc, 42, state42)
-        state99 = RomSaveSyncState(system="snes")
-        state99.confirm_slot("A")
-        _seed_save_state(svc, 99, state99, platform_slug="snes")
-
-        # Whole-device inventory sees both ROMs.
-        assert {e["rom_id"] for e in svc.build_save_inventory()} == {42, 99}
-
-        # Scoped to 42 → only rom 42's entry.
-        scoped = svc.build_save_inventory(rom_id=42)
-        assert len(scoped) == 1
-        assert scoped[0]["rom_id"] == 42
-        assert scoped[0]["file_name"] == "pokemon.srm"
-
-    def test_rom_id_scope_excludes_unconfirmed_target(self, tmp_path):
-        """A scoped build still applies the in-scope predicate — an unconfirmed
-        target yields nothing."""
-        svc, _ = make_service(tmp_path)
-        _create_save(tmp_path, system="gba", rom_name="pokemon", content=b"a")
-        _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="pokemon.gba")
-
-        state = RomSaveSyncState(system="gba")
-        state.switch_active_slot("A")  # not confirmed
-        _seed_save_state(svc, 42, state)
-
-        assert svc.build_save_inventory(rom_id=42) == []
 
 
 class TestPreLaunchSync:
@@ -2080,8 +1941,6 @@ class TestSavesVersionHistory:
         saves_dir.mkdir(parents=True, exist_ok=True)
         save_file = saves_dir / "pokemon.srm"
         save_file.write_bytes(b"\x00" * 1024)
-
-        import hashlib
 
         local_hash = hashlib.md5(b"\x00" * 1024).hexdigest()
 
