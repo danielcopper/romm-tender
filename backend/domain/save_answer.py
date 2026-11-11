@@ -315,6 +315,11 @@ class SaveAnswer:
         return self.root_kind == ROOT_CONTENT_DIRECTORY and self.syncable
 
     @property
+    def follows_start_folder(self) -> bool:
+        """Whether a hole for the folder the game is started from is what refuses this save."""
+        return self.state == SAVE_STATE_HOLE and HOLE_START_FOLDER in self.needs
+
+    @property
     def concrete_directory(self) -> str | None:
         """:attr:`directory` where it names a folder, ``None`` where a hole is still in it.
 
@@ -410,7 +415,7 @@ def save_shape_message(answer: SaveAnswer) -> str:
     """
     if answer.state == SAVE_STATE_SAVES_ROOT_MISSING:
         return f"Save sync is unavailable: {saves_folder_missing(answer.missing_saves_root)}."
-    if answer.state == SAVE_STATE_HOLE and HOLE_START_FOLDER in answer.needs:
+    if answer.follows_start_folder:
         sentence = _START_FOLDER_MESSAGE
     else:
         sentence = _STATE_MESSAGES.get(answer.state, _STATE_MESSAGES[SAVE_STATE_UNESTABLISHED])
@@ -431,7 +436,7 @@ def save_refusal_label(answer: SaveAnswer) -> str:
     """The few words a small surface says where a refusal's ``message`` will not fit."""
     if answer.in_content_directory:
         return "Saved beside the game"
-    if answer.state == SAVE_STATE_HOLE and HOLE_START_FOLDER in answer.needs:
+    if answer.follows_start_folder:
         return "Saves follow the start folder"
     return _STATE_LABELS.get(answer.state, _STATE_LABELS[SAVE_STATE_UNESTABLISHED])
 

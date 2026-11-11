@@ -9,7 +9,10 @@ import type { SaveSyncDisplay } from "../types";
 
 /** The backend's display for a ROM with a conflict (`backend/domain/save_status.py`). */
 const CONFLICT_DISPLAY: SaveSyncDisplay = { status: "conflict", label: "Conflict", last_sync_check_at: null };
-const SYNCED_JUST_NOW_DISPLAY: SaveSyncDisplay = { status: "synced", label: "Just now", last_sync_check_at: null };
+
+function syncedJustNowDisplay(): SaveSyncDisplay {
+  return { status: "synced", label: "Just now", last_sync_check_at: new Date().toISOString() };
+}
 
 export async function executeManualSaveSync(appId: number, romId: number): Promise<void> {
   try {
@@ -36,7 +39,7 @@ export async function executeManualSaveSync(appId: number, romId: number): Promi
         showToast(`${c} conflict(s) need resolution`);
       }
       announceSaveSync(romId, c > 0);
-      noteSaveSyncDisplay(appId, romId, c > 0 ? CONFLICT_DISPLAY : SYNCED_JUST_NOW_DISPLAY);
+      noteSaveSyncDisplay(appId, romId, c > 0 ? CONFLICT_DISPLAY : syncedJustNowDisplay());
       return;
     }
     showToast(result.message || "Save sync failed");

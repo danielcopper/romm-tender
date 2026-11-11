@@ -23,6 +23,7 @@ import {
   type Located,
 } from "./watcher/elementSelectors";
 import { createStickyPlayBarController, type StickyPlayBarController } from "./watcher/stickyPlayBarController";
+import { PLAY_BAR_ROW_HEIGHT } from "./gameview/styles";
 
 interface ViewProps {
   appId: number;
@@ -274,7 +275,7 @@ function attachToDesktopWindow(page: DesktopGamePage, deskWin: Window): () => vo
       // desktop-dom-architecture.md says why Steam's wrapper shrinks and keeps its height.
       ledger.style(nativePlayBtn.parentElement, "flex-shrink", "1");
       ledger.style(nativePlayBtn.parentElement, "min-width", "0");
-      ledger.style(nativePlayBtn.parentElement, "height", "46px");
+      ledger.style(nativePlayBtn.parentElement, "height", PLAY_BAR_ROW_HEIGHT);
     }
   }
 

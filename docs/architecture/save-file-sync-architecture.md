@@ -1059,6 +1059,9 @@ kept RomM's platform list is read once (`PlatformSystems.platform_system`).
   saves, auto-configures with default. A game whose saves no sync carries starts with no setup step and no toast, also
   where RomM holds saves for it: the sync before the start passes it over, or asks first where the saves folder is
   missing. The launch watcher's cold start confirms nothing for it either.
+- **SAVE SYNC badge (`frontend/src/desktop/gameview/PlayButtonBadges.tsx`, dev build only):** reads
+  `get_save_sync_availability` for an installed game; see
+  [How the desktop surface adapts Steam's game page](desktop-dom-architecture.md).
 
 ## Save File Discovery
 
@@ -1114,7 +1117,8 @@ endpoints (rollback, slot switch, conflict resolve, the slot choice with or with
 with the same reason. The game's SAVES tab says so like every other refusal, marked beside its title, and names
 RetroArch's setting under the sentence, only as the usual cause
 ([#2149](https://github.com/danielcopper/romm-tender/issues/2149) D2); nothing above the play row says it.
-`get_save_status` carries the additive `savefiles_in_content_dir` flag, which the panel does not read.
+`get_save_status` carries the additive `savefiles_in_content_dir` flag, which only `saveSyncBadge` (desktop dev build)
+reads.
 
 **Why this is easy to confuse**: "Write Saves to **Content Directory**" controls the **destination** (next to the ROM vs
 the saves directory), while "Sort Saves **Into Folders by Content Directory**" controls the **layout within** the saves

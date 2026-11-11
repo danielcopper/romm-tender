@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useReducer, useState, type CSSProperties, type FC, type ReactNode } from "react";
-import { debugLog, getSaveSetupInfo, getSaveSyncAvailability, isSaveTrackingConfigured } from "../../api/backend";
+import { getSaveSetupInfo, getSaveSyncAvailability, isSaveTrackingConfigured, logWarn } from "../../api/backend";
 import type { SaveSetupInfo, SaveStatus } from "../../types";
 import { BIOS_MISSING_RED } from "../../utils/biosColor";
 import { detach } from "../../utils/detach";
@@ -12,11 +12,12 @@ import { formatBytes, formatTimeAgo } from "../../utils/formatters";
 import type { GameDetailState } from "../../utils/gameDetailStore";
 import { useGamePlaytime } from "../../utils/playtimeReconcile";
 import { saveSyncBadge, type SaveSyncBadgeTone } from "../../utils/saveSyncBadge";
+import { PLAY_BAR_ROW_HEIGHT } from "./styles";
 
 interface PlayButtonBadgesProps {
   appId: number;
-  detail: GameDetailState;
-  /** This ROM's save status, or `null`: `PlayButton`'s `saveStatusOf`, never the one in `detail`. */
+  detail: Omit<GameDetailState, "saveStatus">;
+  /** This ROM's save status, or `null` (`PlayButton`'s `saveStatusOf`). */
   saveStatus: SaveStatus | null;
   isOffline: boolean;
 }
@@ -26,7 +27,7 @@ const ROW_STYLE: CSSProperties = {
   display: "flex",
   flexWrap: "wrap",
   alignItems: "center",
-  height: "46px",
+  height: PLAY_BAR_ROW_HEIGHT,
   minWidth: "0",
   marginLeft: "10px",
   overflow: "hidden",
@@ -126,7 +127,7 @@ function useRomAnswer<T>(
         const value = await ask(romId);
         if (!cancelled && thisRead === latestRead) setAnswer({ romId, value });
       } catch (e) {
-        detach(debugLog(`DesktopPlayButtonBadges: ${what} read failed: ${e}`));
+        logWarn(`DesktopPlayButtonBadges: ${what} read for romId=${romId} failed: ${e}`);
         if (!cancelled && thisRead === latestRead) setAnswer(null);
       }
     };
@@ -141,7 +142,7 @@ function useRomAnswer<T>(
     };
   }, [romId, wanted, what, ask]);
 
-  return answer !== null && answer.romId === romId ? answer.value : null;
+  return wanted && answer !== null && answer.romId === romId ? answer.value : null;
 }
 
 /**
@@ -179,9 +180,10 @@ export const PlayButtonBadges: FC<PlayButtonBadgesProps> = ({ appId, detail, sav
     installed,
     status: saveSyncStatus,
     label,
+    checkedAt: saveSyncCheckedAt,
     saveStatus,
     setupInfo,
-    saveSyncAnswer: installed ? saveSyncAnswer : null,
+    saveSyncAnswer,
   });
   const saveSyncColor = TONE_COLOR[saveSync.tone];
 

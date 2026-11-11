@@ -9,10 +9,10 @@ import type { GameDetailState } from "../../utils/gameDetailStore";
 import type { SaveSetupInfo, SaveStatus, SaveSyncAvailability } from "../../types";
 
 vi.mock("../../api/backend", () => ({
-  debugLog: vi.fn(),
   getSaveSetupInfo: vi.fn(),
   getSaveSyncAvailability: vi.fn(),
   isSaveTrackingConfigured: vi.fn(),
+  logWarn: vi.fn(),
 }));
 
 vi.mock("../../utils/playtimeReconcile", () => ({
@@ -22,20 +22,21 @@ vi.mock("../../utils/playtimeReconcile", () => ({
 const APP_ID = 123;
 const ROM_ID = 100;
 
-function detail(overrides: Partial<GameDetailState> = {}): GameDetailState {
+type DetailWithoutSaveStatus = Omit<GameDetailState, "saveStatus">;
+
+function detail(overrides: Partial<DetailWithoutSaveStatus> = {}): DetailWithoutSaveStatus {
   return {
     romId: ROM_ID,
     installed: true,
     downloadSizeBytes: null,
     saveSyncEnabled: false,
-    saveStatus: null,
     saveSyncStatus: null,
     saveSyncLabel: "",
     saveSyncCheckedAt: null,
     biosRequiredMissing: false,
     biosLabel: "",
     ...overrides,
-  } as GameDetailState;
+  } as DetailWithoutSaveStatus;
 }
 
 const SETUP_TO_CHOOSE: SaveSetupInfo = {
@@ -58,7 +59,7 @@ const REFUSED: SaveSyncAvailability = {
   short_message: "Shared save",
 };
 
-function draw(d: GameDetailState, { saveStatus = null as SaveStatus | null, isOffline = false } = {}) {
+function draw(d: DetailWithoutSaveStatus, { saveStatus = null as SaveStatus | null, isOffline = false } = {}) {
   return <PlayButtonBadges appId={APP_ID} detail={d} saveStatus={saveStatus} isOffline={isOffline} />;
 }
 
@@ -76,7 +77,6 @@ beforeEach(() => {
     playtime: "2h 30m",
     steamPlaytime: "2.5 hours",
   });
-  vi.mocked(backend.debugLog).mockResolvedValue(undefined as never);
   vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
     configured: true,
     active_slot: "slot1",
@@ -158,7 +158,7 @@ describe("PlayButtonBadges", () => {
 
     it("judges by the save status it is handed, never the one left in the detail", async () => {
       const anotherVersions = { rom_id: 99, files: [], conflicts: [{}] } as unknown as SaveStatus;
-      render(draw(detail({ saveSyncEnabled: true, saveStatus: anotherVersions })));
+      render(draw({ ...detail({ saveSyncEnabled: true }), saveStatus: anotherVersions } as GameDetailState));
       await act(async () => {});
 
       expect(screen.getByText("Not checked")).toBeInTheDocument();
@@ -193,6 +193,18 @@ describe("PlayButtonBadges", () => {
       render(draw(d, { isOffline }));
 
       expect(backend.getSaveSyncAvailability).not.toHaveBeenCalled();
+    });
+
+    it("is asked once a download finishes or RomM comes back online", async () => {
+      const { rerender } = render(draw(detail({ saveSyncEnabled: true, installed: false })));
+      expect(backend.getSaveSyncAvailability).not.toHaveBeenCalled();
+
+      rerender(draw(ENABLED));
+      await waitFor(() => expect(backend.getSaveSyncAvailability).toHaveBeenCalledTimes(1));
+
+      rerender(draw(ENABLED, { isOffline: true }));
+      rerender(draw(ENABLED, { isOffline: false }));
+      await waitFor(() => expect(backend.getSaveSyncAvailability).toHaveBeenCalledTimes(2));
     });
 
     it.each([
@@ -234,6 +246,82 @@ describe("PlayButtonBadges", () => {
       rerender(draw({ ...ENABLED, installed: false }));
 
       expect(screen.queryByText("Shared save")).not.toBeInTheDocument();
+      expect(screen.getByText("No saves")).toBeInTheDocument();
+    });
+
+    it("does not stand for the next version once the page has switched", async () => {
+      vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue(REFUSED);
+      const { rerender } = render(draw(ENABLED));
+      await screen.findByText("Shared save");
+
+      vi.mocked(backend.getSaveSyncAvailability).mockReturnValue(new Promise<SaveSyncAvailability>(() => undefined));
+      rerender(draw({ ...ENABLED, romId: ROM_ID + 1 }));
+      await act(async () => {});
+
+      expect(screen.queryByText("Shared save")).not.toBeInTheDocument();
+      expect(screen.getByText("No saves")).toBeInTheDocument();
+    });
+
+    it("drops an answer that lands after the page switched version", async () => {
+      let answerTheOldVersion: (info: SaveSyncAvailability) => void = () => undefined;
+      vi.mocked(backend.getSaveSyncAvailability).mockReturnValueOnce(
+        new Promise<SaveSyncAvailability>((resolve) => {
+          answerTheOldVersion = resolve;
+        }),
+      );
+      const { rerender } = render(draw(ENABLED));
+      await waitFor(() => expect(backend.getSaveSyncAvailability).toHaveBeenCalledWith(ROM_ID));
+
+      vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue(SYNCS);
+      rerender(draw({ ...ENABLED, romId: ROM_ID + 1 }));
+      await waitFor(() => expect(backend.getSaveSyncAvailability).toHaveBeenCalledWith(ROM_ID + 1));
+      await act(async () => {
+        answerTheOldVersion(REFUSED);
+      });
+
+      expect(screen.queryByText("Shared save")).not.toBeInTheDocument();
+    });
+
+    it("leaves the next version's answer standing when the old version's lands", async () => {
+      let answerTheOldVersion: (info: SaveSyncAvailability) => void = () => undefined;
+      vi.mocked(backend.getSaveSyncAvailability).mockReturnValueOnce(
+        new Promise<SaveSyncAvailability>((resolve) => {
+          answerTheOldVersion = resolve;
+        }),
+      );
+      const { rerender } = render(draw(ENABLED));
+      await waitFor(() => expect(backend.getSaveSyncAvailability).toHaveBeenCalledWith(ROM_ID));
+
+      vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue(REFUSED);
+      rerender(draw({ ...ENABLED, romId: ROM_ID + 1 }));
+      await screen.findByText("Shared save");
+      await act(async () => {
+        answerTheOldVersion(SYNCS);
+      });
+
+      expect(screen.getByText("Shared save")).toBeInTheDocument();
+    });
+
+    it("keeps to the newer of two reads for one ROM", async () => {
+      let answerTheFirst: (info: SaveSyncAvailability) => void = () => undefined;
+      vi.mocked(backend.getSaveSyncAvailability)
+        .mockReturnValueOnce(
+          new Promise<SaveSyncAvailability>((resolve) => {
+            answerTheFirst = resolve;
+          }),
+        )
+        .mockResolvedValue(SYNCS);
+      render(draw(ENABLED));
+      await waitFor(() => expect(backend.getSaveSyncAvailability).toHaveBeenCalledTimes(1));
+
+      dataChanged(ROM_ID);
+      await waitFor(() => expect(backend.getSaveSyncAvailability).toHaveBeenCalledTimes(2));
+      await act(async () => {
+        answerTheFirst(REFUSED);
+      });
+
+      expect(screen.getByText("No saves")).toBeInTheDocument();
+      expect(screen.queryByText("Shared save")).not.toBeInTheDocument();
     });
 
     it("logs a read that failed and makes no claim", async () => {
@@ -241,8 +329,8 @@ describe("PlayButtonBadges", () => {
       render(draw(ENABLED));
 
       await waitFor(() =>
-        expect(backend.debugLog).toHaveBeenCalledWith(
-          "DesktopPlayButtonBadges: save sync availability read failed: Error: gone",
+        expect(backend.logWarn).toHaveBeenCalledWith(
+          "DesktopPlayButtonBadges: save sync availability read for romId=100 failed: Error: gone",
         ),
       );
       expect(screen.getByText("No saves")).toBeInTheDocument();
@@ -366,14 +454,14 @@ describe("PlayButtonBadges", () => {
           detail({
             saveSyncEnabled: true,
             saveSyncStatus: "synced",
-            saveSyncLabel: "Just now",
+            saveSyncLabel: "Not synced",
             saveSyncCheckedAt: null,
           }),
         ),
       );
       await act(async () => {});
 
-      expect(screen.getByText("Synced just now")).toBeInTheDocument();
+      expect(screen.getByText("Not synced")).toBeInTheDocument();
     });
   });
 
@@ -408,6 +496,32 @@ describe("PlayButtonBadges", () => {
       render(draw(d, { isOffline }));
 
       expect(backend.isSaveTrackingConfigured).not.toHaveBeenCalled();
+    });
+
+    it("is asked once a download finishes or RomM comes back online", async () => {
+      const { rerender } = render(draw(detail({ saveSyncEnabled: true, installed: false })));
+      expect(backend.isSaveTrackingConfigured).not.toHaveBeenCalled();
+
+      rerender(draw(ENABLED));
+      await waitFor(() => expect(backend.isSaveTrackingConfigured).toHaveBeenCalledTimes(1));
+
+      rerender(draw(ENABLED, { isOffline: true }));
+      rerender(draw(ENABLED, { isOffline: false }));
+      await waitFor(() => expect(backend.isSaveTrackingConfigured).toHaveBeenCalledTimes(2));
+    });
+
+    it("does not lend its local-save answer to the offline badge once RomM goes offline", async () => {
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: false,
+        active_slot: null,
+        setup_needed: true,
+      });
+      const { rerender } = render(draw(ENABLED));
+      await screen.findByText("Slot not confirmed");
+
+      rerender(draw(ENABLED, { isOffline: true }));
+
+      expect(screen.getByText("RomM unavailable")).toBeInTheDocument();
     });
 
     it("is asked again on this ROM's save sync, and on one that names no ROM", async () => {
@@ -544,7 +658,9 @@ describe("PlayButtonBadges", () => {
       render(draw(ENABLED));
 
       await waitFor(() =>
-        expect(backend.debugLog).toHaveBeenCalledWith("DesktopPlayButtonBadges: save setup read failed: Error: gone"),
+        expect(backend.logWarn).toHaveBeenCalledWith(
+          "DesktopPlayButtonBadges: save setup read for romId=100 failed: Error: gone",
+        ),
       );
       expect(screen.getByText("Not checked")).toBeInTheDocument();
     });

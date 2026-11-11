@@ -9,11 +9,10 @@ export const COULD_NOT_CHECK_LABEL = "Couldn't check RomM";
 export const SAVED_ON_ROMM_LABEL = "Saved on RomM";
 export const CANNOT_SYNC_LABEL = "Can't sync";
 
-/** `resolveSaveSyncLabel`'s and the backend's word for a save at rest with no sync recorded. */
+/** The badge's word for an offline local save with no sync recorded on its rows. */
 export const NOT_SYNCED_LABEL = "Not synced";
 
-/** "Just now" reads "Synced just now", "3d ago" reads "Synced 3d ago"; no sync recorded stays as it is. */
+/** "Just now" reads "Synced just now", "3d ago" reads "Synced 3d ago". */
 export function syncedLabel(label: string): string {
-  if (label === NOT_SYNCED_LABEL) return label;
   return `Synced ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
 }

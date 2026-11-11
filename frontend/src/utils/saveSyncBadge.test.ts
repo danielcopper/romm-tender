@@ -3,12 +3,15 @@ import { resolveSaveSyncLabel } from "./playSection";
 import { saveSyncBadge } from "./saveSyncBadge";
 import type { SaveFileStatus, SaveSetupInfo, SaveStatus, SaveSyncAvailability, SyncConflict } from "../types";
 
+const CHECKED_AT = "2026-11-01T00:00:00Z";
+
 const INPUT: Parameters<typeof saveSyncBadge>[0] = {
   enabled: true,
   offline: false,
   installed: true,
   status: null,
   label: "",
+  checkedAt: null,
   saveStatus: null,
   setupInfo: null,
   saveSyncAnswer: null,
@@ -74,7 +77,9 @@ describe("saveSyncBadge", () => {
 
     it("is read off the save status's conflicts", () => {
       const saveStatus = status({ conflicts: [{} as SyncConflict] });
-      expect(saveSyncBadge({ ...INPUT, status: "synced", label: "3d ago", saveStatus }).label).toBe("Save conflict");
+      expect(
+        saveSyncBadge({ ...INPUT, status: "synced", label: "3d ago", checkedAt: CHECKED_AT, saveStatus }).label,
+      ).toBe("Save conflict");
     });
 
     it("stands while RomM is offline, as the button's RESOLVE CONFLICT does", () => {
@@ -134,9 +139,16 @@ describe("saveSyncBadge", () => {
     });
 
     it("says when a local save last synced, in the attention tone", () => {
-      expect(saveSyncBadge({ ...OFFLINE, status: "synced", label: "3d ago" })).toEqual({
+      expect(saveSyncBadge({ ...OFFLINE, status: "synced", label: "3d ago", checkedAt: CHECKED_AT })).toEqual({
         tone: "attention",
         label: "Synced 3d ago",
+      });
+    });
+
+    it("keeps a never-synced save's label without claiming a sync", () => {
+      expect(saveSyncBadge({ ...OFFLINE, status: "synced", label: "Never synced", checkedAt: null })).toEqual({
+        tone: "attention",
+        label: "Never synced",
       });
     });
 
@@ -269,8 +281,8 @@ describe("saveSyncBadge", () => {
       expect(
         saveSyncBadge({ ...INPUT, status: "none", label: "Server unreachable", saveStatus, saveSyncAnswer: refused() }),
       ).toEqual({
-        tone: "attention",
-        label: "Server unreachable",
+        tone: "unavailable",
+        label: "RomM unavailable",
       });
     });
 
@@ -306,21 +318,26 @@ describe("saveSyncBadge", () => {
 
     it("gives way to a local save at rest", () => {
       const saveStatus = status({ server_has_saves: true });
-      expect(saveSyncBadge({ ...INPUT, status: "synced", label: "3d ago", saveStatus }).label).toBe("Synced 3d ago");
+      expect(
+        saveSyncBadge({ ...INPUT, status: "synced", label: "3d ago", checkedAt: CHECKED_AT, saveStatus }).label,
+      ).toBe("Synced 3d ago");
     });
   });
 
   describe("the store's verdict", () => {
     it("reads a recent sync after its verb", () => {
-      expect(saveSyncBadge({ ...INPUT, status: "synced", label: "Just now" })).toEqual({
+      expect(saveSyncBadge({ ...INPUT, status: "synced", label: "Just now", checkedAt: CHECKED_AT })).toEqual({
         tone: "ok",
         label: "Synced just now",
       });
     });
 
-    it("draws a save at rest with no recorded sync in the attention tone, in resolveSaveSyncLabel's word", () => {
-      const label = resolveSaveSyncLabel({ status: "synced", label: "Not synced", last_sync_check_at: null });
-      expect(saveSyncBadge({ ...INPUT, status: "synced", label })).toEqual({ tone: "attention", label: "Not synced" });
+    it("draws a save at rest with no recorded sync in the attention tone, whatever word the backend gave it", () => {
+      const label = resolveSaveSyncLabel({ status: "synced", label: "Never synced", last_sync_check_at: null });
+      expect(saveSyncBadge({ ...INPUT, status: "synced", label, checkedAt: null })).toEqual({
+        tone: "attention",
+        label: "Never synced",
+      });
     });
 
     it.each(["Local changes", "Server newer"])("never draws %s as synced, whatever the last check", (label) => {
@@ -332,10 +349,21 @@ describe("saveSyncBadge", () => {
       ["server_unreachable", status({ server_query_failed: true, server_query_reason: "server_unreachable" })],
       ["none", status({ server_query_failed: true, server_query_reason: null })],
       ["absent", status({ server_query_failed: true })],
-    ])("says the server is unreachable for a failed listing whose reason is %s", (_name, saveStatus) => {
+    ])("answers as offline for a failed listing whose reason is %s", (_name, saveStatus) => {
       expect(saveSyncBadge({ ...INPUT, status: "none", label: "Server unreachable", saveStatus })).toEqual({
+        tone: "unavailable",
+        label: "RomM unavailable",
+      });
+      expect(
+        saveSyncBadge({ ...INPUT, installed: false, status: "none", label: "Server unreachable", saveStatus }),
+      ).toEqual({
+        tone: "off",
+        label: "RomM unavailable",
+      });
+      const withLocal = { ...saveStatus, files: [{ ...LOCAL_FILE, last_sync_at: daysAgo(3) }] };
+      expect(saveSyncBadge({ ...INPUT, status: "none", label: "Server unreachable", saveStatus: withLocal })).toEqual({
         tone: "attention",
-        label: "Server unreachable",
+        label: "Synced 3d ago",
       });
     });
 

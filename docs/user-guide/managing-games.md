@@ -29,9 +29,9 @@ When you open a RomM game in the Steam Library, you'll see the Tender panel belo
 - **Action buttons** — Download, Pause/Resume, Uninstall, Cancel, or Refresh Metadata depending on state
 
 **Coming soon:** **on the desktop client's game page** the **Last Played**, **Playtime** and **Space Required** cells
-stand beside **PLAY**, with a **BIOS** cell where required BIOS files are missing, and one more: **Save Sync** says when
-the game's saves last synced, or what is keeping them from it. Playtime reads as on Steam's own game pages: **Play
-Time**, in minutes up to two hours and in hours from there, and no cell for a game with none.
+stand beside the Play button, with a **BIOS** cell where required BIOS files are missing, and one more: **Save Sync**
+says when the game's saves last synced, or what is keeping them from it. Playtime reads as on Steam's own game pages:
+**Play Time**, in minutes up to two hours and in hours from there, and no cell for a game with none.
 
 Below the play row stand the panel's tabs — **GAME INFO**, **ACHIEVEMENTS**, **SAVES**, **BIOS** and **ARTWORK** — on
 Steam's own tab row, the one a Steam game's page has. **ACHIEVEMENTS** is there for a game RetroAchievements knows;

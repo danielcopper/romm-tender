@@ -84,18 +84,19 @@ ask through one dialog host, where a newer question answers the open one dismiss
 `PlayButtonBadges` (`frontend/src/desktop/gameview/PlayButtonBadges.tsx`) stands after the selector in the button's row,
 in the place of Steam's own badges, and draws nothing where the button draws nothing. SPACE REQUIRED, LAST PLAYED, PLAY
 TIME and BIOS read what Big Picture's cells beside `CustomPlayButton` read
-(`frontend/src/bigpicture/RomMPlaySection.tsx`); PLAY TIME says it in the words of Steam's own cell rather than Big
-Picture's (`formatSteamPlaytime`), and like Steam's is not drawn for a game with none. SAVE SYNC has no counterpart
-there, where a game's save state is on its **SAVES** tab: what it says, and in which tone, is `saveSyncBadge`
-(`frontend/src/utils/saveSyncBadge.ts`), over the game detail store's save-sync status and this ROM's save status. For
-an installed game with save sync on, while RomM is reachable, it also asks whether a slot is still to be set up, in the
-launch gates' two steps, so a page that needs none asks RomM nothing for it, and whether the game's saves sync at all
-(`get_save_sync_availability`, which for an installed game asks RomM nothing). A game whose saves cannot sync says why
-in grey, in the backend's few words for the refusal (`short_message`); as on the **SAVES** tab, only a downloaded game's
-refusal stands. Both are asked again when a save sync, a platform's core or the emulator sources change, and a read that
-fails holds no answer rather than the one from before. With nothing established yet the badge makes no claim either: it
-reads **Not checked**, in grey. A time since the last sync moves on while the page stays open. None of the badges takes
-a press.
+(`frontend/src/bigpicture/RomMPlaySection.tsx`), so opening the page also reconciles playtime and last played with RomM
+(`useGamePlaytime`, `frontend/src/utils/playtimeReconcile.ts`); PLAY TIME says it in the words of Steam's own cell
+rather than Big Picture's (`formatSteamPlaytime`), and like Steam's is not drawn for a game with none. SAVE SYNC has no
+counterpart there, where a game's save state is on its **SAVES** tab: what it says, and in which tone, is
+`saveSyncBadge` (`frontend/src/utils/saveSyncBadge.ts`), over the game detail store's save-sync status and this ROM's
+save status. For an installed game with save sync on, while RomM is reachable, it also asks whether a slot is still to
+be set up, in the launch gates' two steps, so a page that needs none asks RomM nothing for it, and whether the game's
+saves sync at all (`get_save_sync_availability`, which for an installed game asks RomM nothing). A game whose saves
+cannot sync says why in grey, in the backend's few words for the refusal (`short_message`); as on the **SAVES** tab,
+only a downloaded game's refusal stands. Both are asked again when a save sync, a platform's core or the emulator
+sources change, and a read that fails holds no answer rather than the one from before. With nothing established yet the
+badge makes no claim either: it reads **Not checked**, in grey. A time since the last sync moves on while the page stays
+open. None of the badges takes a press.
 
 The row takes its type and spacing from Steam's own play bar, as measured on a Linux desktop running Steam client build
 1792618285: Save Sync and BIOS keep their own colours, every other value is Steam's. It also behaves as Steam's does

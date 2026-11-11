@@ -441,6 +441,7 @@ class TestAPlaceNotRead:
 
     def test_its_short_label(self):
         assert save_refusal_label(self._refused()) == "Save location not read"
+        assert save_refusal_label(self._refused(_answer(needs=("cwd",)))) == "Save location not read"
 
     def test_the_refusal_carries_the_finding_the_source_and_the_emulator(self):
         assert save_finding_details(self._refused()) == {

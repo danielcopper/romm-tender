@@ -28,9 +28,10 @@ interface SaveSyncBadgeInput {
   enabled: boolean;
   offline: boolean;
   installed: boolean;
-  /** The game detail store's `saveSyncStatus` and `saveSyncLabel`. */
+  /** The game detail store's `saveSyncStatus`, `saveSyncLabel` and `saveSyncCheckedAt`. */
   status: SaveSyncDisplay["status"] | null;
   label: string;
+  checkedAt: string | null;
   /** Each is this ROM's, or `null`: another version's answer must not reach this. */
   saveStatus: SaveStatus | null;
   setupInfo: SaveSetupInfo | null;
@@ -52,9 +53,9 @@ function lastSyncedAt(saveStatus: SaveStatus | null): string | null {
   );
 }
 
-function offlineLabel({ status, label, saveStatus }: SaveSyncBadgeInput): string {
+function offlineLabel({ status, label, checkedAt, saveStatus }: SaveSyncBadgeInput): string {
   if (status === "pending") return label;
-  if (status === "synced") return syncedLabel(label);
+  if (status === "synced") return checkedAt === null ? label : syncedLabel(label);
   // A status read that could not reach RomM carries no verdict, but its rows still know when this save last synced.
   const lastSync = lastSyncedAt(saveStatus);
   const ago = lastSync ? formatTimeAgo(lastSync) : null;
@@ -67,9 +68,9 @@ function offlineBadge(input: SaveSyncBadgeInput): SaveSyncBadge {
   return { tone: installed ? "unavailable" : "off", label: ROMM_UNAVAILABLE_LABEL };
 }
 
-function reachableBadge({ installed, status, label, saveStatus }: SaveSyncBadgeInput): SaveSyncBadge {
+function reachableBadge({ installed, status, label, checkedAt, saveStatus }: SaveSyncBadgeInput): SaveSyncBadge {
   if (status === "synced") {
-    return { tone: label === NOT_SYNCED_LABEL ? "attention" : "ok", label: syncedLabel(label) };
+    return checkedAt === null ? { tone: "attention", label } : { tone: "ok", label: syncedLabel(label) };
   }
   if (status === "pending") return { tone: "attention", label };
   if (saveStatus?.server_query_failed) return { tone: "attention", label: COULD_NOT_CHECK_LABEL };
@@ -79,7 +80,7 @@ function reachableBadge({ installed, status, label, saveStatus }: SaveSyncBadgeI
 }
 
 export function saveSyncBadge(input: SaveSyncBadgeInput): SaveSyncBadge {
-  const { enabled, offline, installed, status, label, saveStatus, setupInfo, saveSyncAnswer } = input;
+  const { enabled, offline, installed, status, saveStatus, setupInfo, saveSyncAnswer } = input;
   if (!enabled) return { tone: "off", label: SAVE_SYNC_OFF_LABEL };
   if (status === "conflict" || hasAnySaveConflict(saveStatus)) {
     return { tone: "attention", label: SAVE_CONFLICT_LABEL };
@@ -91,7 +92,7 @@ export function saveSyncBadge(input: SaveSyncBadgeInput): SaveSyncBadge {
   const queryFailed = saveStatus?.server_query_failed ?? false;
   const reason = saveStatus?.server_query_reason;
   if (queryFailed && (reason === "server_unreachable" || reason === null || reason === undefined)) {
-    return { tone: "attention", label };
+    return offlineBadge(input);
   }
 
   if (saveSyncAnswer !== null && refusesDownloadedGame(saveSyncAnswer)) {
