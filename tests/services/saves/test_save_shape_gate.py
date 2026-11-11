@@ -621,7 +621,7 @@ class TestAPlaceNotReadIsRefusedWithItsFinding:
         assert refused.value.reason in BENIGN_SYNC_SKIP_REASONS
         assert refused.value.details == {**self._DETAILS, "synced": 0}
         assert not self._directory(tmp_path).exists()
-        assert not [call for call in fake.call_log if call[0] in ("upload_save", "download_save")]
+        assert not [call for call in fake.call_log if call[0] in ("upload_save", "download_save_content")]
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(

@@ -54,7 +54,7 @@ class TestResolveSyncConflict:
             device_syncs=[{"device_id": "device-1", "is_current": False}],
         )
         # Make the server hash equal to the local hash by uploading the same
-        # file as the source: FakeSaveApi.download_save copies uploaded_files.
+        # file as the source: FakeSaveApi.download_save_content copies uploaded_files.
         fake.saves[100] = ss
         fake.uploaded_files[100] = str(save_path)
 
@@ -182,21 +182,21 @@ class TestResolveSyncConflict:
             device_syncs=[{"device_id": "device-1", "is_current": False}],
         )
         fake.saves[100] = ss
-        # No uploaded_files entry — wouldn't matter anyway, the download_save
+        # No uploaded_files entry — wouldn't matter anyway, the download_save_content
         # call inside hash_server_copy is going to raise before reading.
 
-        # Make ``hash_server_copy`` re-raise: ``download_save`` raises
+        # Make ``hash_server_copy`` re-raise: ``download_save_content`` raises
         # and the retry mock reports the exception as retryable, so the
         # inner ``except Exception`` in ``hash_server_copy`` re-raises
         # and the outer ``except Exception`` in
         # ``_resolve_conflict_keep_local`` catches it. We monkey-patch
-        # ``download_save`` directly (rather than ``fail_on_next``, which
+        # ``download_save_content`` directly (rather than ``fail_on_next``, which
         # would consume on the earlier ``list_saves`` call).
         def _raise_on_download(save_id: int, dest_path: str) -> None:
-            fake.call_log.append(("download_save", (save_id, dest_path), {}))
+            fake.call_log.append(("download_save_content", (save_id, dest_path), {}))
             raise RommApiError("transient")
 
-        fake.download_save = _raise_on_download  # type: ignore[method-assign]
+        fake.download_save_content = _raise_on_download  # type: ignore[method-assign]
         svc._sync_engine._retry.is_retryable.return_value = True  # type: ignore[attr-defined]
 
         result = await svc.resolve_sync_conflict(
@@ -216,8 +216,8 @@ class TestResolveSyncConflict:
         # keep_local POSTs a new save with overwrite=true (not a PUT to the head).
         assert upload_calls[0][2]["save_id"] is None
         assert upload_calls[0][2]["overwrite"] is True
-        # download_save was attempted exactly once (the one that raised).
-        download_calls = [c for c in fake.call_log if c[0] == "download_save"]
+        # download_save_content was attempted exactly once (the one that raised).
+        download_calls = [c for c in fake.call_log if c[0] == "download_save_content"]
         assert len(download_calls) == 1
 
         # State carries the local hash from the successful PUT.

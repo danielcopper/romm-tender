@@ -44,8 +44,8 @@ class TestFetchingAServerCopy:
 
         assert answered == hashlib.md5(b"server bytes").hexdigest()
         assert tmp.read_bytes() == b"server bytes"
-        assert [c for c in fake.call_log if c[0].startswith("download_save")] == [
-            ("download_save", (100, str(tmp)), {})
+        assert [c for c in fake.call_log if c[0].startswith("download_save_content")] == [
+            ("download_save_content", (100, str(tmp)), {"device_id": None, "optimistic": True})
         ]
 
     @pytest.mark.parametrize(
@@ -62,7 +62,7 @@ class TestFetchingAServerCopy:
                 f.write(b"half a save")
             raise failure
 
-        fake.download_save = partial_download  # type: ignore[method-assign]
+        fake.download_save_content = partial_download  # type: ignore[method-assign]
 
         with pytest.raises(type(failure)) as caught:
             svc._save_transfer.fetch_server_copy(100, str(tmp))
@@ -788,24 +788,24 @@ class TestHashServerCopyNonRetryable:
         svc, fake = make_service(tmp_path)
         _install_rom(svc, tmp_path)
 
-        # download_save raises, and retry.is_retryable returns False (default
+        # download_save_content raises, and retry.is_retryable returns False (default
         # in _make_retry), so the matrix should swallow and return None.
         def _raise_on_download(save_id: int, dest_path: str) -> None:
-            fake.call_log.append(("download_save", (save_id, dest_path), {}))
+            fake.call_log.append(("download_save_content", (save_id, dest_path), {}))
             raise RommApiError("permanent failure")
 
-        fake.download_save = _raise_on_download  # type: ignore[method-assign]
+        fake.download_save_content = _raise_on_download  # type: ignore[method-assign]
 
         result = svc._save_transfer.hash_server_copy({"id": 100})
         assert result is None
-        # download_save was attempted exactly once.
-        download_calls = [c for c in fake.call_log if c[0] == "download_save"]
+        # download_save_content was attempted exactly once.
+        download_calls = [c for c in fake.call_log if c[0] == "download_save_content"]
         assert len(download_calls) == 1
 
         def _cannot_write(save_id: int, dest_path: str) -> None:
             raise DeviceWriteError(28, "No space left on device")
 
-        fake.download_save = _cannot_write  # type: ignore[method-assign]
+        fake.download_save_content = _cannot_write  # type: ignore[method-assign]
 
         with pytest.raises(DeviceWriteError):
             svc._save_transfer.hash_server_copy({"id": 100})

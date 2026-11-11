@@ -1861,7 +1861,7 @@ an earlier sync of that slot, or an acknowledgement RomM took whose answer was l
 acknowledged (row 8a). Where another client replaced the head meanwhile, the sync decides against that newer head as any
 sync does.
 
-`download_save(save_id, dest_path)` names no device: it fetches a server copy to compare
+`download_save_content(save_id, dest_path)` without a `device_id` names no device: it fetches a server copy to compare
 (`SaveTransfer.fetch_server_copy`) and records nothing.
 
 ### Implication for the sync algorithm

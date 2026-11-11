@@ -96,7 +96,7 @@ class TestKeepLocalWhenTheServerCopyCannotBeWritten:
         def no_space(save_id: int, dest_path: str) -> None:
             raise DeviceWriteError(28, "No space left on device")
 
-        fake.download_save = no_space  # type: ignore[method-assign]
+        fake.download_save_content = no_space  # type: ignore[method-assign]
 
         with caplog.at_level(logging.WARNING):
             result = await svc.resolve_sync_conflict(

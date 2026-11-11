@@ -1479,7 +1479,7 @@ class TestSyncRomSavesDispatch:
         assert errors == []
         assert conflicts == []
         # No I/O initiated.
-        assert not any(c[0] in ("upload_save", "download_save_content", "download_save") for c in fake.call_log)
+        assert not any(c[0] in ("upload_save", "download_save_content") for c in fake.call_log)
         assert not any(c[0] == "confirm_download" for c in fake.call_log)
         # Baseline now persisted, anchored on the adopted head.
         file_state = _require_save_state(svc, 42).files["pokemon.srm"]
@@ -2135,7 +2135,7 @@ def _confirm_calls(fake) -> list[tuple[int, str]]:
 
 
 def _transfers(fake) -> list[str]:
-    return [c[0] for c in fake.call_log if c[0] in ("upload_save", "download_save_content", "download_save")]
+    return [c[0] for c in fake.call_log if c[0] in ("upload_save", "download_save_content")]
 
 
 class TestAnAdoptOfTheHead:

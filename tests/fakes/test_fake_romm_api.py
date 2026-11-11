@@ -281,13 +281,6 @@ class TestDownloads:
         assert dest.exists()
         assert dest.read_bytes() == b""
 
-    def test_download_save_uses_set_server_save_content(self, tmp_path) -> None:
-        api = FakeRommApi()
-        api.set_server_save_content(99, b"save-bytes")
-        dest = tmp_path / "out.sav"
-        api.download_save(99, str(dest))
-        assert dest.read_bytes() == b"save-bytes"
-
 
 class TestUploadSave:
     """``upload_save`` synthesises ids and records uploads."""

@@ -1231,10 +1231,10 @@ class TestConfirmSlotChoice:
         _create_save(tmp_path, content=b"L" * 100)
         fake.saves[1] = _server_save(save_id=1, filename="pokemon [ts].srm", slot=None)
 
-        def failing_download(save_id, dest_path):
+        def failing_download(save_id, dest_path, **_kwargs):
             raise RommConnectionError("offline")
 
-        fake.download_save = failing_download
+        fake.download_save_content = failing_download
         confirming = svc.confirm_slot_choice(42, "default", True, None)
 
         with pytest.raises(RommConnectionError):
@@ -1303,14 +1303,14 @@ class TestConfirmSlotChoice:
         fake.saves[2] = _server_save(save_id=2, filename="b [ts].rtc", slot=None)
         fake.saves[2]["file_extension"] = "rtc"
 
-        orig_download = fake.download_save
+        orig_download = fake.download_save_content
 
-        def selective_download(save_id, dest_path):
+        def selective_download(save_id, dest_path, **_kwargs):
             if save_id == 2:
                 raise RommConnectionError("offline")
             return orig_download(save_id, dest_path)
 
-        fake.download_save = selective_download
+        fake.download_save_content = selective_download
         confirming = svc.confirm_slot_choice(42, "default", True, None)
 
         with pytest.raises(RommConnectionError):
@@ -3895,12 +3895,12 @@ class TestASlotMigrationFetchThatBreaksOff:
         _create_save(tmp_path, content=b"L" * 100)
         fake.saves[1] = _server_save(save_id=1, filename="pokemon [ts].srm", slot=None)
 
-        def half_a_download(save_id, dest_path):
+        def half_a_download(save_id, dest_path, **_kwargs):
             with open(dest_path, "wb") as f:
                 f.write(b"half")
             raise RommConnectionError("offline")
 
-        fake.download_save = half_a_download
+        fake.download_save_content = half_a_download
 
         with pytest.raises(RommConnectionError):
             await svc.confirm_slot_choice(42, "default", True, None)

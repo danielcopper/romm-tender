@@ -94,7 +94,7 @@ class SaveTransfer:
         remove.
         """
         try:
-            self._retry.with_retry(lambda: self._romm_api.download_save(save_id, tmp_path))
+            self._retry.with_retry(lambda: self._romm_api.download_save_content(save_id, tmp_path))
             return self._save_file_store.content_hash(tmp_path)
         except Exception:
             with contextlib.suppress(OSError):

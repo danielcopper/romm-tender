@@ -144,19 +144,6 @@ class TestListRoms:
         assert "with_rom_id_index" not in client.request.call_args[0][0]
 
 
-class TestDownloadSave:
-    def test_uses_content_endpoint(self):
-        api, client = _make_api()
-        api.download_save(99, "/tmp/save.srm")
-        client.download.assert_called_once_with("/api/saves/99/content", "/tmp/save.srm")
-
-    def test_no_metadata_round_trip(self):
-        """download_save should NOT call request() to fetch metadata first."""
-        api, client = _make_api()
-        api.download_save(5, "/tmp/save.srm")
-        client.request.assert_not_called()
-
-
 class TestUploadSave:
     def test_post_new_save(self):
         api, client = _make_api()

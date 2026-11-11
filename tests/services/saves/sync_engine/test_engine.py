@@ -328,7 +328,7 @@ class TestSyncAllSaves:
         assert result["synced"] == 0
         assert result["roms_checked"] == 1
         assert not any(c[0] == "upload_save" for c in fake.call_log)
-        assert not any(c[0] == "download_save" for c in fake.call_log)
+        assert not any(c[0] == "download_save_content" for c in fake.call_log)
 
     @pytest.mark.asyncio
     async def test_mixed_only_confirmed_rom_syncs(self, tmp_path):
@@ -934,7 +934,7 @@ class TestPreLaunchServerOfflineGuard:
         assert refused.value.message == "Server offline"
         assert refused.value.details == {"synced": 0, "offline": True}
         # No download/list was attempted after heartbeat failed.
-        assert not any(c[0] in ("download_save", "list_saves") for c in fake.call_log)
+        assert not any(c[0] in ("download_save_content", "list_saves") for c in fake.call_log)
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -957,7 +957,7 @@ class TestPreLaunchServerOfflineGuard:
             await sync
 
         assert raised.value is failure
-        assert not any(c[0] in ("download_save", "list_saves") for c in fake.call_log)
+        assert not any(c[0] in ("download_save_content", "list_saves") for c in fake.call_log)
 
     @pytest.mark.asyncio
     async def test_pre_launch_sync_offline_branch_logs_at_debug(self, tmp_path):
