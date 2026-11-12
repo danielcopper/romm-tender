@@ -1,13 +1,14 @@
 /**
  * The desktop Play button's presses: Play through the shared launch gate
  * (`utils/launchGateOps.ts`, `utils/launchVerdict.ts`) asked through the desktop
- * dialogs, Stop and Resolve Conflict. `bigpicture/CustomPlayButton`'s handlers
- * are the gamepad drawing of the same presses.
+ * dialogs, Stop, Resolve Conflict and Uninstall. `bigpicture/CustomPlayButton`'s
+ * handlers are the gamepad drawing of the same presses.
  */
 
-import { useRef, type Dispatch, type SetStateAction } from "react";
-import { debugLog } from "../../api/backend";
+import { useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { debugLog, logError } from "../../api/backend";
 import { desktopLaunchPrompts, desktopResolveConflicts, desktopStopGameDialog } from "./dialogs/desktopDialogs";
+import { executeRomUninstall } from "../../utils/romUninstall";
 import { executeStopRunningGame } from "../../utils/runningGame";
 import { resolveKnownConflicts } from "../../utils/saveConflictFlow";
 import { noteAppRom, readGameRunning } from "../../utils/sessionManager";
@@ -31,18 +32,35 @@ const TAG = "DesktopPlayButton";
 /** What a press puts the button on until it settles. */
 export type PressState = "checking" | "syncing" | "launching";
 
+/**
+ * What the button reads for one ROM, each ended by an event of its own rather
+ * than by the shared detail: a download this button started, until the
+ * download's first frame, its end or a switch to another version; the moment a
+ * download completed, for `READY_FLASH_MS`; an uninstall, until the removal
+ * answers.
+ */
+export type ActionState = "downloading" | "dl_complete" | "uninstalling";
+
+/** A verdict the button holds until the shared detail moves on; `"download"` is a game just uninstalled. */
+export type HeldState = "play" | "conflict" | "download";
+
 interface UsePlayLaunchOptions {
   appId: number;
   romId: number | null;
+  romName: string;
   pressState: PressState | null;
   /** Whether the page's check of whether the game can start went wrong. */
   startCheckFailed: boolean;
   ask: AskDialog;
   leaseOwner: string;
   setPressState: Dispatch<SetStateAction<PressState | null>>;
+  /** Put `state` on the button for the ROM a press was made for, and take it off again. */
+  startAction: (state: ActionState, romId: number) => void;
+  endAction: (state: ActionState, romId: number) => void;
   /** Bring the running state down when the game turns out not to be running. */
   clearSessionRunning: () => void;
-  holdVerdict: (state: "play" | "conflict") => void;
+  /** Hold a verdict reached for `forRomId`, only while the page still shows that ROM. */
+  holdVerdict: (state: HeldState, forRomId: number) => void;
   setStopPending: (pending: boolean) => void;
 }
 
@@ -50,21 +68,30 @@ interface UsePlayLaunchResult {
   handlePlayClick: () => Promise<void>;
   handleResolveConflictClick: () => Promise<void>;
   handleStopClick: () => Promise<void>;
+  handleUninstallClick: () => Promise<void>;
+  /** Whether a removal the page started is still running, whichever version it was pressed for. */
+  uninstallUnderWay: boolean;
 }
 
 export function usePlayLaunch({
   appId,
   romId,
+  romName,
   pressState,
   startCheckFailed,
   ask,
   leaseOwner,
   setPressState,
+  startAction,
+  endAction,
   clearSessionRunning,
   holdVerdict,
   setStopPending,
 }: UsePlayLaunchOptions): UsePlayLaunchResult {
   const stopInFlightRef = useRef(false);
+  // The ref refuses a second press in the same turn; the state is what the button draws from.
+  const uninstallInFlightRef = useRef(false);
+  const [uninstallUnderWay, setUninstallUnderWay] = useState(false);
 
   // Every start is prepared first; without the hand-over nothing starts, so a
   // preparation that does not come about refuses the start with its sentence
@@ -143,13 +170,13 @@ export function usePlayLaunch({
         onMigrationBlocked: () => setPressState(null),
         onConflictCancelled: () => {
           setPressState(null);
-          holdVerdict("conflict");
+          holdVerdict("conflict", romId);
           detach(refreshSaveStatus(appId));
         },
         onRetry: () => setPressState("checking"),
       });
     } catch (e) {
-      detach(debugLog(`${TAG}: Play's launch check threw — resetting to play: ${e}`));
+      logError(`${TAG}: Play's launch check of romId=${romId} threw — resetting to play: ${e}`);
       if (startCheckFailed) showToast(startFailedSentence(e));
       setPressState(null);
     }
@@ -160,7 +187,7 @@ export function usePlayLaunch({
     setPressState("syncing");
     const outcome = await resolveKnownConflicts(romId, desktopResolveConflicts(ask), TAG);
     setPressState(null);
-    holdVerdict(outcome === "resolved" ? "play" : "conflict");
+    holdVerdict(outcome === "resolved" ? "play" : "conflict", romId);
   };
 
   const handleStopClick = async () => {
@@ -178,5 +205,22 @@ export function usePlayLaunch({
     });
   };
 
-  return { handlePlayClick, handleResolveConflictClick, handleStopClick };
+  const handleUninstallClick = async () => {
+    if (romId === null || uninstallInFlightRef.current) return;
+    const rid = romId;
+    uninstallInFlightRef.current = true;
+    setUninstallUnderWay(true);
+    startAction("uninstalling", rid);
+    detach(debugLog(`${TAG}: uninstalling romId=${rid}`));
+    try {
+      const removed = await executeRomUninstall({ romId: rid, romName, leaseOwner, tag: TAG });
+      if (removed) holdVerdict("download", rid);
+    } finally {
+      uninstallInFlightRef.current = false;
+      setUninstallUnderWay(false);
+      endAction("uninstalling", rid);
+    }
+  };
+
+  return { handlePlayClick, handleResolveConflictClick, handleStopClick, handleUninstallClick, uninstallUnderWay };
 }

@@ -361,6 +361,10 @@ class StatusService:
             # drives ``status="unknown"``; this slug only says why, so a
             # definitive 404 stops being reported as an offline server (#1570).
             "server_query_reason": server_query_reason,
+            # Any slot's save, whether or not this device has a row for it: a
+            # game not on this device, a game whose saves are refused and a save
+            # in another slot have none. False says nothing where the query failed.
+            "server_has_saves": bool(server_saves),
             # Interim #908 guard: a slot whose current save spans >1 distinct
             # file (e.g. Saturn .bkr/.bcr/.smpc) is an N-file *set*, not a
             # single file with a version history. Per-version rollback would

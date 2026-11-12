@@ -2,8 +2,8 @@
  * The words of the "already on your device" dialogs a download opens (#260,
  * ADR-0028) — every title, sentence and label of theirs that the frontend
  * writes, fixed labels included — and the toasts about the same case: how a
- * Download press ended, and a resume refused because something now sits at the
- * game's location. One home, so every surface that draws those dialogs states
+ * Download press ended, and how a resume of a paused download was refused or
+ * failed. One home, so every surface that draws those dialogs states
  * the same case the same way; the drawing itself stays with each surface. Why a
  * sentence says what it says sits on the constant or function that builds it,
  * so whoever draws a dialog sees which sentences must not be softened.
@@ -338,3 +338,9 @@ export function adoptedToast(romName: string): string {
 /** The toast for a paused download whose resume found something else at the game's location. */
 export const RESUME_TARGET_OCCUPIED_TOAST =
   "Something else is at this game's location now — cancel the download and start again";
+
+/** A resume refused for any other reason, when the refusal carries no sentence of its own. */
+export const RESUME_REFUSED_TOAST = "Couldn't resume the download";
+
+/** The resume request threw: no answer came back at all. */
+export const RESUME_THREW_TOAST = "Couldn't resume the download — is RomM server running?";

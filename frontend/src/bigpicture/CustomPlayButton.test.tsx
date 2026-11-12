@@ -32,6 +32,7 @@ import type {
   AdoptResult,
   DownloadCompleteEvent,
   DownloadFailedEvent,
+  DownloadItem,
   DownloadProgressEvent,
   PreLaunchSyncStartedEvent,
 } from "../types";
@@ -843,6 +844,51 @@ describe("CustomPlayButton — pause/resume on active download (#1124)", () => {
     expect(backend.resumeDownload).toHaveBeenCalledWith(42);
   });
 
+  it("drops a queue answer that lands after the page moved to another game", async () => {
+    vi.mocked(getCachedGameDetail).mockImplementation(async (appId: number) => ({
+      found: true,
+      rom_id: appId === 100 ? 42 : 43,
+      rom_name: appId === 100 ? "Test ROM" : "Other Game",
+      installed: false,
+    }));
+    let answerA!: (value: { downloads: DownloadItem[] }) => void;
+    vi.mocked(backend.getDownloadQueue)
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          answerA = resolve;
+        }),
+      )
+      .mockResolvedValue({ downloads: [] });
+
+    const { findByText, queryByText, rerender } = render(<CustomPlayButton appId={100} />);
+    await waitFor(() => expect(backend.getDownloadQueue).toHaveBeenCalledTimes(1));
+    rerender(<CustomPlayButton appId={200} />);
+    await waitFor(() => expect(backend.getDownloadQueue).toHaveBeenCalledTimes(2));
+    expect(await findByText("Download")).toBeInTheDocument();
+
+    await act(async () => {
+      answerA({
+        downloads: [
+          {
+            rom_id: 42,
+            rom_name: "Test ROM",
+            platform_name: "PSX",
+            file_name: "test.chd",
+            status: "paused",
+            progress: 0.3,
+            bytes_downloaded: 300,
+            total_bytes: 1000,
+            resumable: true,
+          },
+        ],
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(queryByText("Paused")).toBeNull();
+    expect(queryByText("Download")).toBeInTheDocument();
+  });
+
   it("rehydrates a plain downloading (non-paused) download on mount from the queue (#145 / #1126)", async () => {
     // Sibling of the paused-rehydration case above: a plain "downloading" entry
     // in the queue at mount must rehydrate the button straight into its active
@@ -943,6 +989,12 @@ describe("CustomPlayButton — extraction phase on a multi-file download", () =>
     const { findByText } = await renderWithFrames([downloadingFrame, extractingFrame]);
     // 4200 / 10000 = 42% — the label reads the uncompressed-byte fraction.
     expect(await findByText("Extracting… 42%")).toBeInTheDocument();
+  });
+
+  it("takes no press on its main part while its download runs", async () => {
+    const { container } = await renderWithFrames([downloadingFrame]);
+
+    expect(container.querySelector<HTMLButtonElement>("button.romm-btn-download")?.disabled).toBe(true);
   });
 
   it("removes the cancel control during extraction and surfaces a disabled throbber instead", async () => {
@@ -5311,6 +5363,28 @@ describe("CustomPlayButton — content already on disk (#260)", () => {
     });
 
     expect(await utils.findByText("Use Existing Files")).toBeTruthy();
+  });
+
+  it("a version switch takes the incoming ROM's answer on whether RomM holds a file", async () => {
+    mockCachedDetail({ rom_id: 42, installed: false, has_file_on_disk: true });
+    const utils = render(<CustomPlayButton appId={100} />);
+    expect(await utils.findByText("Download")).toBeTruthy();
+
+    vi.mocked(getCachedGameDetail).mockResolvedValue({
+      found: true,
+      rom_id: 43,
+      rom_name: "Other version",
+      installed: false,
+      has_file_on_disk: false,
+    });
+    await act(async () => {
+      globalThis.dispatchEvent(
+        new CustomEvent("romm_data_changed", { detail: { type: "version_switched", app_id: 100, rom_id: 43 } }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(await utils.findByText("No file on RomM")).toBeTruthy();
   });
 
   it("opens the dialog on a target_occupied refusal instead of toasting a failure", async () => {

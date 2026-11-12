@@ -1024,7 +1024,8 @@ kind and emulator label where it carries them, so the panel words it as it does 
 nothing: no device registration, no listing. A game that syncs answers by the table above, its local probe reading that
 same answer ([#2153](https://github.com/danielcopper/romm-tender/issues/2153)). `get_save_sync_availability` asks the
 same refusal alone, with no device registration and no save listing, beside one catalogue question for the label below:
-`available`, with those fields where it is false; `installed`, since a game that is not downloaded is asked about the
+`available`, with those fields where it is false and `short_message`, the same refusal in a few words for a surface with
+no room for the sentence (`save_refusal_label`); `installed`, since a game that is not downloaded is asked about the
 path it would be downloaded to (the save answer's own `content_installed`, `RomInfoService._uninstalled_answer`);
 `established`, false where that reading established nothing — no path could be formed, or the emulator's answer could
 not be established — so a refusal there says nothing of whether the saves would sync; and `emulator_label`, the label of
@@ -1058,6 +1059,9 @@ kept RomM's platform list is read once (`PlatformSystems.platform_system`).
   saves, auto-configures with default. A game whose saves no sync carries starts with no setup step and no toast, also
   where RomM holds saves for it: the sync before the start passes it over, or asks first where the saves folder is
   missing. The launch watcher's cold start confirms nothing for it either.
+- **SAVE SYNC badge (`frontend/src/desktop/gameview/PlayButtonBadges.tsx`, dev build only):** reads
+  `get_save_sync_availability` for an installed game; see
+  [How the desktop surface adapts Steam's game page](desktop-dom-architecture.md).
 
 ## Save File Discovery
 
@@ -1113,7 +1117,8 @@ endpoints (rollback, slot switch, conflict resolve, the slot choice with or with
 with the same reason. The game's SAVES tab says so like every other refusal, marked beside its title, and names
 RetroArch's setting under the sentence, only as the usual cause
 ([#2149](https://github.com/danielcopper/romm-tender/issues/2149) D2); nothing above the play row says it.
-`get_save_status` carries the additive `savefiles_in_content_dir` flag, which the panel does not read.
+`get_save_status` carries the additive `savefiles_in_content_dir` flag, which only `saveSyncBadge` (desktop dev build)
+reads.
 
 **Why this is easy to confuse**: "Write Saves to **Content Directory**" controls the **destination** (next to the ROM vs
 the saves directory), while "Sort Saves **Into Folders by Content Directory**" controls the **layout within** the saves
@@ -2214,7 +2219,9 @@ Triggered by the game-detail panel and SAVES tab via `getSaveStatus(romId)`. Run
 counterpart of `do_sync_rom_saves` that returns the same `compute_sync_action` decisions but performs no upload/download
 I/O. The only mutation it allows is recording the baseline of a `Skip(adopt_baseline=True)` that needs no
 acknowledgement, so future drift detection works; one that must be acknowledged is left to the next sync, and its row
-reads "synced", which is true — the bytes are identical ([Outcomes](#outcomes)).
+reads "synced", which is true — the bytes are identical ([Outcomes](#outcomes)). `server_has_saves` says whether RomM's
+listing of the ROM's saves returned anything, in any slot, also for a game with no `files` row; it is false where the
+query failed or was never sent, with `server_query_failed` beside it.
 
 ### This device's save files (save sync off)
 

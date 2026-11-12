@@ -60,8 +60,10 @@ describe("executeManualSaveSync", () => {
     expect(gameDetailStore.noteSaveSyncDisplay).toHaveBeenCalledWith(100, 42, {
       status: "synced",
       label: "Just now",
-      last_sync_check_at: null,
+      last_sync_check_at: expect.any(String),
     });
+    const recorded = vi.mocked(gameDetailStore.noteSaveSyncDisplay).mock.calls[0]![2];
+    expect(Date.parse(recorded.last_sync_check_at!)).not.toBeNaN();
   });
 
   it("shows 'Saves already up to date' when no files moved and no conflicts exist", async () => {
@@ -158,7 +160,7 @@ describe("executeManualSaveSync", () => {
     expect(gameDetailStore.noteSaveSyncDisplay).toHaveBeenCalledWith(100, 42, {
       status: "synced",
       label: "Just now",
-      last_sync_check_at: null,
+      last_sync_check_at: expect.any(String),
     });
   });
 

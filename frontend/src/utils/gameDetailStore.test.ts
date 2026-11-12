@@ -661,6 +661,24 @@ describe("gameDetailStore", () => {
         }),
       );
 
+    it("disabling drops the time a label was worded from", async () => {
+      const at = "2026-11-01T00:00:00Z";
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ save_sync_enabled: true }));
+      vi.mocked(backend.getSaveStatus).mockResolvedValue(
+        saveStatus({ save_sync_display: { status: "synced", label: null, last_sync_check_at: at } }),
+      );
+      subscribe(nextAppId);
+      await flush();
+      expect(getGameDetail(nextAppId).saveSyncCheckedAt).toBe(at);
+
+      await act(async () => {
+        dispatchSettings(false);
+        await Promise.resolve();
+      });
+
+      expect(getGameDetail(nextAppId).saveSyncCheckedAt).toBeNull();
+    });
+
     it("enabling re-reads the status", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found());
       subscribe(nextAppId);
@@ -1978,6 +1996,47 @@ describe("gameDetailStore", () => {
       noteSaveSyncDisplay(nextAppId, 42, { status: "synced", label: "Just now", last_sync_check_at: null });
 
       expect(getGameDetail(nextAppId)).toMatchObject({ saveSyncStatus: "synced", saveSyncLabel: "Just now" });
+    });
+
+    it("keeps the time a time-ago label was worded from, and drops it for a label the caller was told", async () => {
+      const at = "2026-11-01T00:00:00Z";
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ save_sync_enabled: true }));
+      vi.mocked(backend.getSaveStatus).mockResolvedValue(
+        saveStatus({ save_sync_display: { status: "synced", label: null, last_sync_check_at: at } }),
+      );
+      subscribe(nextAppId);
+      await flush();
+      expect(getGameDetail(nextAppId).saveSyncCheckedAt).toBe(at);
+
+      noteSaveSyncDisplay(nextAppId, 42, { status: "synced", label: "Just now", last_sync_check_at: null });
+
+      expect(getGameDetail(nextAppId).saveSyncCheckedAt).toBeNull();
+    });
+
+    it("keeps the time a display it is told carries", async () => {
+      const at = "2026-11-01T00:00:00Z";
+      subscribe(nextAppId);
+      await flush();
+
+      noteSaveSyncDisplay(nextAppId, 42, { status: "synced", label: null, last_sync_check_at: at });
+
+      expect(getGameDetail(nextAppId).saveSyncCheckedAt).toBe(at);
+    });
+
+    it("keeps the time the cached detail's display carries, before the save status lands", async () => {
+      const at = "2026-11-01T00:00:00Z";
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(
+        found({
+          save_sync_enabled: true,
+          save_sync_display: { status: "synced", label: null, last_sync_check_at: at },
+        }),
+      );
+      vi.mocked(backend.getSaveStatus).mockReturnValue(new Promise(() => {}));
+
+      subscribe(nextAppId);
+      await flush();
+
+      expect(getGameDetail(nextAppId).saveSyncCheckedAt).toBe(at);
     });
 
     it("noteSaveSyncDisplay does not record a display for the rom the entry has since left", async () => {

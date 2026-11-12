@@ -121,6 +121,9 @@ which names no folder.
 | **saves root missing** | The source read its saves folder from its settings, and it is missing.                                               | saves on an SD card that is out     |
 | **place not read**     | The emulator's own settings did not name the place, so its defaults stand in for them.                               | a standalone emulator never started |
 
+The desktop surface's play bar, which has no room for a refusal's sentence, says it in the few words
+`save_refusal_label` (`domain/save_answer.py`) holds for each (dev build only).
+
 **The sixth is about the emulator source, not the emulator.** While the answering source reports `saves-root-missing`
 for a saves root it read from its settings (its roots answer states that root `read`), the resolver still places a save
 under a folder that does not exist, and a sync would create it — on internal storage while the SD card it belongs on is

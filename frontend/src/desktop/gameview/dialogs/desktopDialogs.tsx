@@ -1,16 +1,30 @@
 /**
- * The desktop dialogs in the shapes their callers ask for: a launch's
- * {@link LaunchPrompts}, the Play button's Resolve Conflict walk and Stop
- * confirm, and a version switch's {@link UnsyncedSavesPrompt}. Every one of
- * them settles with its cancel exit when dismissed.
+ * The desktop dialogs in the shapes their callers ask for: the adoption flow's
+ * {@link AdoptionDialogs}, a launch's {@link LaunchPrompts}, the Play button's
+ * Resolve Conflict walk and Stop confirm, and a version switch's
+ * {@link UnsyncedSavesPrompt}. Every one of them settles with its cancel exit
+ * when dismissed.
  */
 
+import type {
+  AdoptChoice,
+  AdoptionDialogs,
+  CandidateChoice,
+  CollisionAnswer,
+  UnusableChoice,
+  VanishedChoice,
+} from "../../../utils/adoptFlow";
 import { resolveConflictsSequentially, type SyncConflictResolution } from "../../../utils/saveConflictFlow";
 import type { LaunchPrompts } from "../../../utils/launchVerdict";
 import type { SyncFinish, SyncWaitChoice, SyncWaitReason } from "../../../utils/launchGate";
 import type { UnsyncedSavesChoice, UnsyncedSavesPrompt } from "../../../utils/versionSwitch";
 import type { SyncConflict } from "../../../types";
 import type { AskDialog } from "./askDialog";
+import { DesktopAdoptCandidatesDialog } from "./DesktopAdoptCandidatesDialog";
+import { DesktopAdoptCollisionsDialog } from "./DesktopAdoptCollisionsDialog";
+import { DesktopAdoptExistingDialog } from "./DesktopAdoptExistingDialog";
+import { DesktopAdoptUnusableDialog } from "./DesktopAdoptUnusableDialog";
+import { DesktopAdoptVanishedDialog } from "./DesktopAdoptVanishedDialog";
 import { DesktopSaveConflictDialog } from "./DesktopSaveConflictDialog";
 import { DesktopOfflineDriftDialog } from "./DesktopOfflineDriftDialog";
 import { DesktopFallbackLaunchDialog } from "./DesktopFallbackLaunchDialog";
@@ -19,6 +33,32 @@ import { DesktopUncheckedSourceDialog } from "./DesktopUncheckedSourceDialog";
 import { DesktopSyncWaitDialog } from "./DesktopSyncWaitDialog";
 import { DesktopStopGameDialog } from "./DesktopStopGameDialog";
 import { DesktopUnsyncedSavesDialog } from "./DesktopUnsyncedSavesDialog";
+
+export function desktopAdoptionDialogs(ask: AskDialog): AdoptionDialogs {
+  return {
+    showExisting: (romId, occupied, candidatePath) =>
+      ask<AdoptChoice>("cancel", (resolve) => (
+        <DesktopAdoptExistingDialog
+          romId={romId}
+          occupied={occupied}
+          candidatePath={candidatePath}
+          onChoice={resolve}
+        />
+      )),
+    showCandidates: (found) =>
+      ask<CandidateChoice>({ kind: "cancel" }, (resolve) => (
+        <DesktopAdoptCandidatesDialog found={found} onChoice={resolve} />
+      )),
+    showCollisions: (collisions) =>
+      ask<CollisionAnswer>("cancel", (resolve) => (
+        <DesktopAdoptCollisionsDialog collisions={collisions} onChoice={resolve} />
+      )),
+    showUnusable: (unusable) =>
+      ask<UnusableChoice>("cancel", (resolve) => <DesktopAdoptUnusableDialog namesake={unusable} onChoice={resolve} />),
+    showVanished: (vanished) =>
+      ask<VanishedChoice>("cancel", (resolve) => <DesktopAdoptVanishedDialog vanished={vanished} onChoice={resolve} />),
+  };
+}
 
 function desktopSaveConflictDialog(
   ask: AskDialog,

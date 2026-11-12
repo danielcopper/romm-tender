@@ -4,6 +4,7 @@ import {
   formatCheevoDate,
   formatLastPlayed,
   formatPlaytime,
+  formatSteamPlaytime,
   formatReleaseDate,
   formatTimestamp,
   formatTimestampWithYear,
@@ -183,6 +184,40 @@ describe("formatLastPlayed", () => {
     expect(formatLastPlayed(twentiethOfAugust)).toBe("20 Aug 2024");
     formatDatesIn("en-US");
     expect(formatLastPlayed(twentiethOfAugust)).toBe("Aug 20, 2024");
+  });
+});
+
+describe("formatSteamPlaytime", () => {
+  it.each([0, -5])("has no words for %s", (minutes) => {
+    expect(formatSteamPlaytime(minutes)).toBe("");
+  });
+
+  it.each([
+    [1, "1 minute"],
+    [42, "42 minutes"],
+    [60, "60 minutes"],
+    [119, "119 minutes"],
+  ])("counts %s in minutes, below two hours", (minutes, words) => {
+    expect(formatSteamPlaytime(minutes)).toBe(words);
+  });
+
+  it.each([
+    [120, 2],
+    [122, 2],
+    [125, 2.1],
+    [150, 2.5],
+    [1584, 26.4],
+    [74070, 1234.5],
+  ])("counts %s in hours to one place, from two hours", (minutes, hours) => {
+    const inRuntimeLocale = hours.toLocaleString(undefined, { maximumFractionDigits: 1 });
+    expect(formatSteamPlaytime(minutes)).toBe(`${inRuntimeLocale} hours`);
+  });
+
+  it("writes the number in the runtime's locale", () => {
+    const toLocaleString = vi.spyOn(Number.prototype, "toLocaleString");
+    formatSteamPlaytime(150);
+    expect(toLocaleString.mock.calls[0]?.[0]).toBeUndefined();
+    toLocaleString.mockRestore();
   });
 });
 

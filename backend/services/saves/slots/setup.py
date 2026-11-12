@@ -16,7 +16,7 @@ import os
 from typing import TYPE_CHECKING, Any
 
 from domain.iso_time import epoch_to_iso, parse_iso_to_epoch
-from domain.save_answer import SAVE_STATE_UNESTABLISHED
+from domain.save_answer import SAVE_STATE_UNESTABLISHED, save_refusal_label
 from domain.save_backup import BACKUP_RETENTION
 from domain.save_slot import save_in_slot
 from lib.errors import NotInstalled, Refused, RommApiError, RommNotFoundError, classify_error
@@ -316,7 +316,8 @@ class SetupWizard:
         the game starts with, ``None`` where it has none. One live reading,
         beside the catalogue question the label takes, so the panel can ask it
         while it holds RomM as unreachable, where the setup info would wait out
-        the retry ladder.
+        the retry ladder. ``short_message`` stands beside a refusal's ``message``
+        for a surface with no room for the sentence.
         """
         rom_id = int(rom_id)
         answer, label = await self._loop.run_in_executor(None, self._availability_io, rom_id)
@@ -327,7 +328,7 @@ class SetupWizard:
             "established": answer.state != SAVE_STATE_UNESTABLISHED,
             "emulator_label": label,
         }
-        return base if refusal is None else {**base, **refusal}
+        return base if refusal is None else {**base, **refusal, "short_message": save_refusal_label(answer)}
 
     def _availability_io(self, rom_id: int) -> tuple[SaveAnswer, str | None]:
         return self._rom_info.save_answer(rom_id), self._rom_info.start_label(rom_id)

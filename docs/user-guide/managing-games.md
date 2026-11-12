@@ -28,6 +28,11 @@ When you open a RomM game in the Steam Library, you'll see the Tender panel belo
   for.
 - **Action buttons** — Download, Pause/Resume, Uninstall, Cancel, or Refresh Metadata depending on state
 
+**Coming soon:** **on the desktop client's game page** the **Last Played**, **Playtime** and **Space Required** cells
+stand beside the Play button, with a **BIOS** cell where required BIOS files are missing, and one more: **Save Sync**
+says when the game's saves last synced, or what is keeping them from it. Playtime reads as on Steam's own game pages:
+**Play Time**, in minutes up to two hours and in hours from there, and no cell for a game with none.
+
 Below the play row stand the panel's tabs — **GAME INFO**, **ACHIEVEMENTS**, **SAVES**, **BIOS** and **ARTWORK** — on
 Steam's own tab row, the one a Steam game's page has. **ACHIEVEMENTS** is there for a game RetroAchievements knows;
 **SAVES** is there with save sync on or off ([Save Sync](save-sync.md#with-save-sync-off)). **L1** and **R1** step to
@@ -478,6 +483,10 @@ When both are on your device — the zip and an unpacked folder — each gets a 
 second, and nothing is deleted until you have chosen **Download Instead** in both: **Cancel** in the second dialog
 leaves both copies as they are, including the one you already agreed to replace.
 
+**Coming soon:** **on the desktop client's game page** the download button behaves the same way: it reads **USE EXISTING
+FILES**, and this dialog — and every other one in this section and the next — opens there with the same choices and the
+same words. Pressing **Escape** or clicking outside a dialog is the same as **Cancel**.
+
 ### When the same game is on your device under a different name
 
 Your copy is rarely named the way your server names it. `Example Quest - Second Journey (U).zip` and
@@ -582,6 +591,10 @@ then paused, resuming picks up where it left off as usual: your existing file is
 finishes, and the answer you gave covers it. Resume is only refused if something _new_ has turned up at the game's
 location in the meantime — Tender says so rather than deleting it, since you were never shown that content. Cancel the
 download and start again to see the dialog for what is there now.
+
+**Coming soon:** **on the desktop client's game page** a download in progress shows its progress where the Play button
+is, with **Pause** or **Resume** beside it where the download can be resumed, and **Cancel**; while the download is
+unpacked, a spinner stands in their place.
 
 ### Multi-Disc and Multi-File Games
 
@@ -815,6 +828,10 @@ both entry points: **Uninstall all ROM files** on Data Management claims every g
 refused while a single uninstall is running, and a single uninstall is refused while the bulk run holds that game. If
 Tender's backend restarts or the Deck shuts down mid-removal, the next uninstall of that game picks up where the
 interrupted one stopped.
+
+**Coming soon:** **on the desktop client's game page** **Uninstall** is in the menu the arrow beside **PLAY** opens. The
+arrow takes no press while you switch to another version, or while another version of the game is still being
+uninstalled.
 
 ## When a Downloaded Game's File Is Missing
 

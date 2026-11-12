@@ -25,8 +25,8 @@ sentence names Big Picture as where the Tender menu is, because the desktop clie
 backend for the migration state again for each game page it is drawn for (`useMigrationRefresh`,
 `frontend/src/utils/migrationRefresh.ts`).
 
-`PlayButton` (`frontend/src/desktop/gameview/PlayButton.tsx`) is Tender's Play button in the desktop client. Its presses
-(`frontend/src/desktop/gameview/usePlayLaunch.ts`) are those of Big Picture's `CustomPlayButton`
+`PlayButton` (`frontend/src/desktop/gameview/PlayButton.tsx`) is Tender's Play button in the desktop client. Its launch
+presses and Uninstall (`frontend/src/desktop/gameview/usePlayLaunch.ts`) are those of Big Picture's `CustomPlayButton`
 (`frontend/src/bigpicture/CustomPlayButton.tsx`): PLAY starts the game through the launch gate
 ([Pre-launch sync](save-file-sync-architecture.md#pre-launch-sync)), STOP does what Big Picture's Stop Game menu entry
 does, and RESOLVE CONFLICT what its Resolve Conflict button does. It has no RESUME: while the game runs, whatever
@@ -34,16 +34,37 @@ started it, the button is STOP, as Steam's own Play button in the desktop client
 client build 1792618285), and bringing the game's window to the front is the window manager's. It asks its questions in
 the desktop dialogs, which `useDialogHost` (`frontend/src/desktop/gameview/dialogs/useDialogHost.tsx`) draws into the
 body of the document the button is drawn in. Its save-tracking step is the one the
-[Pre-launch sync](save-file-sync-architecture.md#pre-launch-sync) table names for it. Where the game cannot be played
-from the page — not downloaded, downloading, or its downloaded file gone — it draws a disabled button that says which,
-and where the game cannot start — its emulator cannot, or its file does not start with it — PLAY is disabled with the
-sentence `startRefusal` (`frontend/src/utils/emulatorStart.ts`) answers. While the page checks whether the game can
-start, and where that check went wrong, PLAY does what Big Picture's does
+[Pre-launch sync](save-file-sync-architecture.md#pre-launch-sync) table names for it. A game not on this device gets
+DOWNLOAD in PLAY's place, which downloads through the adoption flow (`runDownloadWithAdoption`,
+`frontend/src/utils/adoptFlow.ts`) and asks its already-on-your-device questions in the desktop dialogs; it takes no
+press where Big Picture's Download takes none — offline, while the bound version is gone from RomM, or where RomM holds
+no file for the game — since both buttons ask `downloadTakesNoPress` (`frontend/src/utils/downloadPress.ts`), whose
+`downloadAnswers` also reads, for both, what the cached detail says lies on disk and whether RomM holds a file. A
+download in flight draws its progress (`frontend/src/desktop/gameview/DownloadingButton.tsx`), its fill ending on PLAY's
+own green, with pause or resume where the download can be resumed, and cancel; while it unpacks none of them shows, and
+the ring stands in cancel's place. A downloaded file that is gone draws a disabled FILE MISSING with the path as its
+title. DOWNLOAD's press and the bar's own are the button's. When the page shows a game, and again on a version switch,
+the button reads that game's download from the backend's queue into the download store, as Big Picture's reads it when
+its page opens (`seedDownloadFromQueue`, `frontend/src/utils/downloadRehydrate.ts`): a paused download sends no frames,
+nor a queued one until it starts, so after Steam's interface reloads the bar would otherwise be missing and DOWNLOAD
+would start a paused one from nothing. A press of cancel or pause moves nothing on the button, as Big Picture's moves
+nothing: the bar, and what the cached detail found on disk, go with the backend's cancelled or failed frame, since a
+press that is refused or gets no answer leaves the transfer running. Such a press is logged, and a cancel the backend
+refuses because it holds no download of the game, running or paused, ends the press's own bar and drops the game from
+the download store, since no frame will. The chevron beside PLAY opens the game's menu, whose one entry is Uninstall
+(`executeRomUninstall`, `frontend/src/utils/romUninstall.ts`), which, like Big Picture's, asks nothing first. The
+chevron is disabled while a press or a version switch is under way, an open menu closing when one starts, and, with a
+title that says why, while a removal the page started for another version still runs, since the button takes no second
+one. What a download, an adoption or an uninstall puts on the button — STARTING..., the bar before the download store
+carries the transfer, READY!, UNINSTALLING..., the verdict it holds after — stays with the version it was pressed for,
+so a version switch while it runs leaves it behind and the button draws the new version's own state. Where the game
+cannot start — its emulator cannot, or its file does not start with it — PLAY is disabled with the sentence
+`startRefusal` (`frontend/src/utils/emulatorStart.ts`) answers. While the page checks whether the game can start, and
+where that check went wrong, PLAY does what Big Picture's does
 ([Launch-target validation](backend-architecture.md#launch-target-validation)), and reads CHECKING... where Big
 Picture's shows its throbber. On a stranded panel it gates as the [invariant register](invariants/panel.md)'s
 stranded-panel entry says. Steam's Play button and the badges beside it are hidden as soon as the button's root has
-rendered, also while it draws nothing — before the page's detail names the ROM, and on a stranded panel — and the button
-draws no badges in their place.
+rendered, also while it draws nothing — before the page's detail names the ROM, and on a stranded panel.
 
 `DiscSelector` (`frontend/src/desktop/gameview/DiscSelector.tsx`) sits beside the Play button, one control where Big
 Picture has two beside `CustomPlayButton`, `frontend/src/bigpicture/DiscSelector.tsx` and
@@ -54,12 +75,40 @@ and a version's row says what Big Picture's says (`frontend/src/utils/versionPic
 RomM is listed and offers nothing: Big Picture's way to its removed-game cleanup from the picker has no desktop
 counterpart. A switch that would leave unsynced saves behind asks in a desktop dialog. The selector draws nothing where
 the button draws nothing, and leaves the discs out while the bound version's file is missing. While a switch is under
-way its trigger is disabled and dimmed, with the throbber in place of its face, and PLAY and RESOLVE CONFLICT are
-disabled, with the throbber left of their labels and no pointer cursor ([qam-panel.md](qam-panel.md#waiting) says what
-draws it there); while the Play button's check is under way its trigger is disabled and dimmed and an open menu closes,
-since the two ask through one dialog host, where a newer question answers the open one dismissed.
+way its trigger is disabled and dimmed, with the throbber in place of its face, and PLAY, RESOLVE CONFLICT and DOWNLOAD
+are disabled, with the throbber left of their labels and no pointer cursor ([qam-panel.md](qam-panel.md#waiting) says
+what draws it there); while the Play button's check or a press of DOWNLOAD is under way, the latter until the download
+has started or the adoption flow has ended, its trigger is disabled and dimmed and an open menu closes, since the two
+ask through one dialog host, where a newer question answers the open one dismissed.
 
-Neither the Play button nor the selector adds a stylesheet to Steam's document, so nothing changes on hover on either.
+`PlayButtonBadges` (`frontend/src/desktop/gameview/PlayButtonBadges.tsx`) stands after the selector in the button's row,
+in the place of Steam's own badges, and draws nothing where the button draws nothing. SPACE REQUIRED, LAST PLAYED, PLAY
+TIME and BIOS read what Big Picture's cells beside `CustomPlayButton` read
+(`frontend/src/bigpicture/RomMPlaySection.tsx`), so opening the page also reconciles playtime and last played with RomM
+(`useGamePlaytime`, `frontend/src/utils/playtimeReconcile.ts`); PLAY TIME says it in the words of Steam's own cell
+rather than Big Picture's (`formatSteamPlaytime`), and like Steam's is not drawn for a game with none. SAVE SYNC has no
+counterpart there, where a game's save state is on its **SAVES** tab: what it says, and in which tone, is
+`saveSyncBadge` (`frontend/src/utils/saveSyncBadge.ts`), over the game detail store's save-sync status and this ROM's
+save status. For an installed game with save sync on, while RomM is reachable, it also asks whether a slot is still to
+be set up, in the launch gates' two steps, so a page that needs none asks RomM nothing for it, and whether the game's
+saves sync at all (`get_save_sync_availability`, which for an installed game asks RomM nothing). A game whose saves
+cannot sync says why in grey, in the backend's few words for the refusal (`short_message`); as on the **SAVES** tab,
+only a downloaded game's refusal stands. Both are asked again when a save sync, a platform's core or the emulator
+sources change, and a read that fails holds no answer rather than the one from before. With nothing established yet the
+badge makes no claim either: it reads **Not checked**, in grey. A time since the last sync moves on while the page stays
+open. None of the badges takes a press.
+
+The row takes its type and spacing from Steam's own play bar, as measured on a Linux desktop running Steam client build
+1792618285: Save Sync and BIOS keep their own colours, every other value is Steam's. It also behaves as Steam's does
+when the window narrows: it wraps inside a clipped box, so a badge that does not fit leaves whole, from the end of the
+row. That needs the watcher's help, because the element Steam's Play button stands in does not shrink (`flex-shrink: 0`,
+same client), and nothing inside it would learn the row no longer fits. The watcher also holds that element at its 46px:
+below a right panel of 884px Steam's page turns `NarrowRightPanel`, and that takes the element to 32px along with
+Steam's own button, while Tender's button keeps its height, so the bar would close up under it. The row keeps its type
+there too, where Steam's own cells get smaller.
+
+Neither the Play button, the selector nor the badges add a stylesheet to Steam's document, so nothing changes on hover
+on any of them, and a download's glow, which pulses on Big Picture, stands still.
 
 ## Two windows, two realms
 
@@ -221,10 +270,11 @@ So each pass (`pass()` in `frontend/src/desktop/navigationWatcher.ts`) runs in t
    unmounted with everything the ledger holds. Both of these come before the adaptations because they restore everything
    the ledger holds: after them, they would undo them all.
 3. **The adaptations, on every pass**, in this order: hide the page's content sections (once a `gameView` is drawn);
-   mount `playButton` beside Steam's Play button, and hide Steam's once it is drawn — remounted only when it is missing,
-   detached, for another appId or moved; set up or refresh the sticky play bar controller, which also keeps the hero
-   wrapper at `overflow: visible` (below); hide Steam's duplicate sticky header; hide the play bar's badges (once a
-   `playButton` is drawn); push the right-hand controls to the right edge.
+   mount `playButton` beside Steam's Play button, and once it is drawn hide Steam's, let the element both stand in
+   shrink, and hold it at its height — remounted only when it is missing, detached, for another appId or moved; set up
+   or refresh the sticky play bar controller, which also keeps the hero wrapper at `overflow: visible` (below); hide
+   Steam's duplicate sticky header; hide the play bar's badges (once a `playButton` is drawn); push the right-hand
+   controls to the right edge.
 4. **The mount guard.** If a `GameView` for this appId is already in place, or failed for it before, the pass ends here.
    Otherwise it mounts one right after the play bar.
 
