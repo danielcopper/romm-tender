@@ -207,9 +207,8 @@ class PlatformRefiling:
     def _refile_switches(self, platforms: Sequence[Mapping[str, Any]]) -> None:
         """Hand the toggles writer the toggles kept by RomM id moved onto the listed platforms' ``fs_slug``.
 
-        A move whose save fails has still moved the toggles (#2452 D23), so it
-        is logged as a failed save, beside the ids it dropped; a failure before
-        anything moved propagates to the step's own log line.
+        A failure once ``built`` holds the move is its save's, after the toggles
+        moved; a failure before propagates to the step's own log line.
         """
         built: list[SwitchesMove] = []
 

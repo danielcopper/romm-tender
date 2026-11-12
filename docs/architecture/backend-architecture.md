@@ -1648,9 +1648,9 @@ move sets `enabled_platform_ids` to `null` rather than removing the key, so the 
 save after one toggle, or after Enable all / Disable all, fails, the old map is put back, so the Platforms tab, its
 message and the next sync agree (D28). A write whose call is cancelled, as a panel that disconnects cancels its calls,
 still runs to its end in its thread, and how it ended is then logged, since no caller is left to hear of it. Where the
-save after the move fails, the moved toggles stay, the log says so beside the ids the move dropped, and the run filters
-by them; the next save that succeeds writes them, and the move runs again at the next start if it never reached the file
-(D23).
+save after the move fails, the moved toggles stay and the run filters by them, and the log says so beside the ids the
+move dropped; the next save that succeeds writes them, and the move runs again at the next start if it never reached the
+file (D23).
 
 #### Sync time estimate and live ETA (frontend)
 

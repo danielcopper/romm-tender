@@ -4,8 +4,7 @@ The toggles are kept by each platform's ``fs_slug`` (#2452 D8). Those an earlier
 release kept by RomM's platform id wait under their own key until a read of
 RomM's listing moves them (:func:`switches_by_folder`); until then the
 Platforms tab and a sync go by the map that move would write
-(:func:`switches_as_read`, D27), and the main page counts them where they are
-kept (D25).
+(:func:`switches_as_read`, D27).
 
 Pure compute — no I/O, no state mutation.
 """
