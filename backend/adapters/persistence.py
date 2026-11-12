@@ -209,10 +209,11 @@ class PersistenceAdapter:
         ``settings.json.corrupt-<ts>`` and a transient :attr:`_corrupt_reset`
         flag is set so bootstrap can persist the reset marker. The error is logged loudly. If the backup rename
         itself fails, the error is logged and defaults are still returned so
-        boot never crashes. The defaults after such a reset keep an empty map of
-        per-platform sync toggles by RomM id, as an installation that never
-        touched them has, so the next read of RomM's listing switches every
-        listed platform on (#2452 D29).
+        boot never crashes. The defaults returned for a file that is not read —
+        either kind — keep an empty map of per-platform sync toggles by RomM id,
+        as an installation that never touched them has, so the next read of
+        RomM's listing switches every listed platform on (#2452 D29). A first
+        run keeps none.
         """
         settings_path = os.path.join(self._settings_dir, SETTINGS_FILENAME)
         settings: dict[str, Any]
@@ -230,7 +231,7 @@ class PersistenceAdapter:
             unreadable = unreadable_settings(settings)
             if unreadable is not None:
                 self._logger.warning("settings.json is not read, because %s — starting on the defaults", unreadable)
-                settings = {}
+                settings = {SWITCHES_BY_ID_SETTING: {}}
 
         for key, default in DEFAULT_SETTINGS.items():
             # deepcopy so a mutable default (e.g. the ``platform_cores`` / enabled-*

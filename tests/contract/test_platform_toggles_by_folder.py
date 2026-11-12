@@ -137,6 +137,18 @@ async def test_a_fresh_setup_starts_with_every_platform_off(tmp_path):
     assert "enabled_platform_ids" not in on_disk
 
 
+async def test_after_a_settings_file_too_old_to_read_every_listed_platform_is_switched_on_at_the_next_listing_read(
+    tmp_path,
+):
+    """#2452 D29 (changed): a file Tender does not take over leaves the platforms as never touched."""
+    harness = _updated_from(tmp_path, {"version": 12, "enabled_platforms": {"1": False}})
+
+    result = await harness.endpoints.get_platforms()
+
+    assert _shown(result) == {"snes": True, "snes-hacks": True}
+    assert _on_disk(harness)["enabled_platforms"] == {"snes": True, "snes-hacks": True}
+
+
 async def test_of_two_platforms_sharing_a_slug_switching_one_off_syncs_only_the_other(tmp_path):
     """Done when: of two platforms that share a slug, switching one off syncs only the other (the sync's filter)."""
     harness = build_contract_harness(tmp_path)

@@ -256,9 +256,21 @@ class TestASettingsFileItDoesNotRead:
         with caplog.at_level(logging.WARNING, logger="test_persistence"):
             result = adapter.load_settings()
 
-        assert result == {**DEFAULT_SETTINGS, "version": _SETTINGS_VERSION}
+        assert result == {**DEFAULT_SETTINGS, "enabled_platform_ids": {}, "version": _SETTINGS_VERSION}
         assert [r.levelno for r in caplog.records] == [logging.WARNING]
         assert "settings.json is not read" in caplog.records[0].getMessage()
+
+    @pytest.mark.parametrize("content", [{"version": 12, "enabled_platforms": {"1": False}}, {"version": "13"}, []])
+    def test_its_toggles_are_those_of_an_installation_that_never_touched_them(self, adapter, content):
+        """#2452 D29: the next read of RomM's listing switches every listed platform on."""
+        settings_path = os.path.join(adapter._settings_dir, "settings.json")
+        with open(settings_path, "w") as f:
+            json.dump(content, f)
+
+        result = adapter.load_settings()
+
+        assert result["enabled_platform_ids"] == {}
+        assert result["enabled_platforms"] == {}
 
     def test_it_is_neither_backed_up_nor_flagged(self, adapter):
         settings_path = os.path.join(adapter._settings_dir, "settings.json")
