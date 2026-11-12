@@ -32,12 +32,12 @@ async def test_nothing_detected_lists_nothing(harness):
 
 async def test_switching_the_source_off_takes_its_emulators_away_and_on_brings_them_back(harness):
     seed_es_systems(harness)
-    assert (await harness.endpoints.get_system_core_info("gba"))["emulator_data_available"] is True
+    assert (await harness.endpoints.get_system_core_info("gba", "gba"))["emulator_data_available"] is True
 
     await harness.endpoints.set_emulator_source_enabled("retrodeck", False)
-    off = await harness.endpoints.get_system_core_info("gba")
+    off = await harness.endpoints.get_system_core_info("gba", "gba")
     await harness.endpoints.set_emulator_source_enabled("retrodeck", True)
-    on = await harness.endpoints.get_system_core_info("gba")
+    on = await harness.endpoints.get_system_core_info("gba", "gba")
 
     assert (off["emulator_data_available"], off["emulators"], off["emulator_data_reason"]) == (
         False,
@@ -96,7 +96,7 @@ async def test_a_retrodeck_that_is_not_set_up_is_listed_and_answers_why_it_has_n
     seed_retrodeck_not_set_up(harness)
 
     listing = await harness.endpoints.get_emulator_sources()
-    info = await harness.endpoints.get_system_core_info("gba")
+    info = await harness.endpoints.get_system_core_info("gba", "gba")
 
     assert listing["answering"] == "retrodeck"
     (source,) = listing["sources"]

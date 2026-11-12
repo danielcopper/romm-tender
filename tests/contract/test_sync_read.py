@@ -537,14 +537,14 @@ async def test_get_registry_platforms_empty_shape(harness):
 
 
 async def test_get_registry_platforms_counts_bound_roms(harness):
-    """Registry read is offline (no RomM call) and counts bound ROMs per slug."""
+    """Registry read is offline (no RomM call) and counts bound ROMs per platform folder."""
     seed_rom(harness, 21, platform_slug="snes")
     seed_rom(harness, 22, platform_slug="snes")
     result = harness.endpoints.get_registry_platforms()
     assert "platforms" in result
     assert len(result["platforms"]) == 1
     entry = result["platforms"][0]
-    assert set(entry.keys()) == {"name", "slug", "count", "reachable_count"}
+    assert set(entry.keys()) == {"name", "slug", "fs_slug", "count", "reachable_count"}
     assert entry["slug"] == "snes"
     assert entry["count"] == 2
     # Each seeded row carries a NULL group key, so each is its own group and

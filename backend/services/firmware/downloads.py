@@ -163,7 +163,7 @@ class FirmwareDownloader:
         """
         system = await self.platform_system(platform_slug, rom_id)
         catalogue = await self._loop.run_in_executor(None, self._demand.platform_catalogue, system)
-        identity = await self._shown_emulator(catalogue, system, platform_slug, emulator)
+        identity = await self._shown_emulator(catalogue, system, platform_folder, emulator)
         platform_firmware = await self._platform_firmware(platform_folder)
         rows = await self._loop.run_in_executor(
             None, self._required_files, catalogue, platform_folder, identity, platform_firmware
@@ -281,7 +281,7 @@ class FirmwareDownloader:
         return await self._loop.run_in_executor(None, self._listing.get_platform_firmware_list, platform_folder)
 
     async def _shown_emulator(
-        self, catalogue: FirmwareCatalogue, system: str | None, platform_slug: str, emulator: str | None
+        self, catalogue: FirmwareCatalogue, system: str | None, platform_folder: str, emulator: str | None
     ) -> str | None:
         """The emulator a "Download required" is for: the one the page shows, or the platform's pick.
 
@@ -291,12 +291,12 @@ class FirmwareDownloader:
         if emulator is None:
             if system is None:
                 return None
-            return await self._loop.run_in_executor(None, self._platform_emulator_identity, system, platform_slug)
+            return await self._loop.run_in_executor(None, self._platform_emulator_identity, system, platform_folder)
         if catalogue.verdict_for(emulator) is None:
             raise Refused("emulator_unknown", f"Nothing is known about where {emulator} opens its BIOS files")
         return emulator
 
-    def _platform_emulator_identity(self, system: str, platform_slug: str) -> str | None:
+    def _platform_emulator_identity(self, system: str, platform_folder: str) -> str | None:
         """The identity of the platform's resolved emulator, or ``None``.
 
         The same resolution the status surfaces read
@@ -306,7 +306,7 @@ class FirmwareDownloader:
         this platform about" cannot appear behind a download button.
         """
         options = self._core_info.get_emulator_options(system)
-        pick = pick_for(self._platform_core_reader.get_platform_core(platform_slug), source_kind(options))
+        pick = pick_for(self._platform_core_reader.get_platform_core(platform_folder), source_kind(options))
         emulator = resolve_firmware_option(options["options"], pick.label if pick is not None else None)
         return emulator.emulator if emulator is not None else None
 

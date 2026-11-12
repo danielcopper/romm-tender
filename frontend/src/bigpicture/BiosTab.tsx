@@ -23,7 +23,7 @@
  * styleInjector.
  */
 
-import { FC, useCallback, useState, type FocusEvent, type ReactElement } from "react";
+import { FC, useMemo, useState, type FocusEvent, type ReactElement } from "react";
 import { Focusable } from "@decky/ui";
 import type { BiosLevel, BiosStatus, CoreInfo } from "../types";
 import { biosColorForLevel } from "../utils/biosColor";
@@ -87,7 +87,7 @@ export interface BiosTabStateInput {
    *  the press's spinner ends once they are in. */
   onReread?: () => Promise<void>;
   /** Tell the other pages the platform's firmware changed, once `onReread` is in. */
-  onAnnounce?: (slug: string) => void;
+  onAnnounce?: (slug: string, folder: string) => void;
 }
 
 /** What the BIOS tab holds of its own across the switches that unmount its pane. */
@@ -112,22 +112,21 @@ export function useBiosTab({
   onReread = NO_REREAD,
   onAnnounce = announceBiosChange,
 }: BiosTabStateInput): BiosTabState {
-  const [busySlug, setBusySlug] = useState<string | null>(null);
+  const [busyFolder, setBusyFolder] = useState<string | null>(null);
   const [status, setStatus] = useState<BiosStatusLine | null>(null);
-  const folderOf = useCallback(() => platformFolder, [platformFolder]);
+  const platform = useMemo(() => ({ slug: platformSlug, folder: platformFolder }), [platformSlug, platformFolder]);
   const actions = useBiosActions({
-    setBusy: setBusySlug,
+    setBusy: setBusyFolder,
     setStatus,
     reread: onReread,
     announce: onAnnounce,
     romId,
-    folderOf,
   });
   const part = useBiosFiles({
-    slug: platformSlug,
+    platform,
     platformName: platformName || platformSlug,
     answer: biosStatus ?? {},
-    busySlug,
+    busyFolder,
     serverOffline: biosStatus?.server_offline ?? false,
     actions,
     launching: "shown",
@@ -372,7 +371,10 @@ export const BiosTab: FC<BiosTabProps> = ({
             )}
             <BiosEmulatorSelector part={part} padding={`4px ${PANE_GUTTER} 6px`} />
             <BiosShownTable part={part} />
-            <BiosButtons part={part} status={status && { key: status.slug, scope: status.scope, text: status.text }} />
+            <BiosButtons
+              part={part}
+              status={status && { key: status.folder, scope: status.scope, text: status.text }}
+            />
             <div data-testid="bios-legend-row" style={{ opacity: 0.6, marginTop: "12px" }}>
               <BiosPartLegend part={part} inline />
             </div>

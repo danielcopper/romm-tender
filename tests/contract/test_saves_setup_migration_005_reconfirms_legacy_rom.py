@@ -103,6 +103,8 @@ def _rewind_to_v4(db_path: str) -> None:
         conn.execute("ALTER TABLE rom_installs DROP COLUMN fetched_size_bytes")
         # Reverse 043's roms column so its ADD COLUMN re-applies instead of duplicating.
         conn.execute("ALTER TABLE roms DROP COLUMN platform_fs_slug")
+        # Reverse 045 so its RENAME re-applies instead of failing.
+        conn.execute("ALTER TABLE downloaded_bios RENAME COLUMN platform_folder TO platform_slug")
         # Reverse 018 so 005's `UPDATE rom_save_states` finds the table under its
         # pre-rename name and 018 re-applies the rename cleanly.
         conn.execute("ALTER TABLE rom_save_sync_states RENAME TO rom_save_states")

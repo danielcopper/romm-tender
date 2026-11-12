@@ -741,13 +741,18 @@ class SaveService:
             "message": f"Deleted {deleted} save file(s)",
         }
 
-    def _installed_rom_ids_on_platform(self, platform_slug: str) -> list[int]:
-        """Read installed-ROM ids on *platform_slug* from the rom_installs aggregate (WS3)."""
-        with self._uow_factory() as uow:
-            return [install.rom_id for install in uow.rom_installs.iter_all() if install.platform_slug == platform_slug]
+    def _installed_rom_ids_on_platform(self, platform_folder: str) -> list[int]:
+        """The installed ROMs whose game is on the platform with ``fs_slug`` *platform_folder*.
 
-    async def count_platform_saves(self, platform_slug: str) -> dict[str, Any]:
-        """How many local save files the installed ROMs on *platform_slug* hold.
+        An install is found through its game's ``roms.platform_fs_slug``, so a
+        game with none recorded is on no platform (#2452 D9, D17).
+        """
+        with self._uow_factory() as uow:
+            on_platform = {rom.rom_id for rom in uow.roms.iter_by_platform_folder(platform_folder)}
+            return [install.rom_id for install in uow.rom_installs.iter_all() if install.rom_id in on_platform]
+
+    async def count_platform_saves(self, platform_folder: str) -> dict[str, Any]:
+        """How many local save files the installed ROMs on the platform *platform_folder* hold.
 
         The read half of :meth:`delete_platform_saves`, over the same two steps
         in the same order — the platform's installed ROM ids, then each one's
@@ -772,7 +777,7 @@ class SaveService:
         the sentence above makes. A cached answer on a destructive path is worse
         than a slow one.
         """
-        rom_ids = await self._loop.run_in_executor(None, self._installed_rom_ids_on_platform, platform_slug)
+        rom_ids = await self._loop.run_in_executor(None, self._installed_rom_ids_on_platform, platform_folder)
         # The file walk runs after the id read's UoW has closed, for the reason
         # the delete does the same: a Unit of Work never spans file I/O. Each ROM
         # follows a moved directory first, as the delete does, so the two agree.
@@ -786,7 +791,7 @@ class SaveService:
             count += len(files)
         return {"count": count}
 
-    async def delete_platform_saves(self, platform_slug: str) -> dict[str, Any] | SaveDeletionIncomplete:
+    async def delete_platform_saves(self, platform_folder: str) -> dict[str, Any] | SaveDeletionIncomplete:
         """Delete the local save files of every installed ROM on this platform.
 
         A deletion that could not remove every file it found answers
@@ -795,7 +800,7 @@ class SaveService:
         """
         skips = RunningSkips()
         async with self._rules.hold("delete_platform_saves", update=True, migration=True, prune=True):
-            rom_ids = await self._loop.run_in_executor(None, self._installed_rom_ids_on_platform, platform_slug)
+            rom_ids = await self._loop.run_in_executor(None, self._installed_rom_ids_on_platform, platform_folder)
             total_deleted, total_errors = await self._delete_saves_for_roms(rom_ids, skips)
 
         rom_count = len(rom_ids) - len(skips.skipped)

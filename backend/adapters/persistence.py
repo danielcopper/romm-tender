@@ -323,15 +323,16 @@ class SettingsPersisterAdapter:
 class PlatformCoreReaderAdapter:
     """Adapter view exposing the ``PlatformCoreReader`` Protocol over settings.
 
-    Binds the live ``settings`` dict so the per-platform core selection is
-    always read from ``settings["platform_cores"]`` as it stands at call time.
-    The bound reference is the same dict every writer mutates, so a fan-out
-    that resolves a freshly-written platform core sees the new value rather
-    than a stale snapshot.
+    Binds the live ``settings`` dict and looks ``settings["platform_cores"]``
+    up afresh at every call: the picks' writer replaces that map whole rather
+    than changing it, so a fan-out that resolves a freshly-written platform
+    core sees the new map rather than a stale one.
     """
 
     def __init__(self, settings: dict[str, Any]) -> None:
         self._settings = settings
 
-    def get_platform_core(self, platform_slug: str) -> StoredPick | None:
-        return platform_pick(self._settings.get("platform_cores", {}).get(platform_slug))
+    def get_platform_core(self, platform_folder: str | None) -> StoredPick | None:
+        if platform_folder is None:
+            return None
+        return platform_pick(self._settings.get("platform_cores", {}).get(platform_folder))

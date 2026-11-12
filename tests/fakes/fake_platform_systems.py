@@ -26,7 +26,8 @@ class FakePlatformSystems:
     which is why a slug nothing names answers itself. ``calls`` records each
     ``(platform_slug, source)`` asked, through either method; an installed game
     is answered from its record. ``listed`` is the platforms whose ids are kept —
-    nothing by default, and ``None`` where no listing was ever kept.
+    nothing by default, and ``None`` where no listing was ever kept. ``kept`` is
+    each slug's kept ``fs_slug`` values, and ``kept_asked`` the slugs asked.
     """
 
     def __init__(
@@ -35,6 +36,8 @@ class FakePlatformSystems:
         self.mapping: dict[str, str] = mapping if mapping is not None else {}
         self.answers: dict[str, PlatformSystem] = answers if answers is not None else {}
         self.listed: frozenset[str] | None = frozenset()
+        self.kept: dict[str, frozenset[str]] = {}
+        self.kept_asked: list[str] = []
         self.calls: list[tuple[str, str | None]] = []
 
     def platform_system(
@@ -61,3 +64,7 @@ class FakePlatformSystems:
 
     def listed_platforms(self) -> frozenset[str] | None:
         return self.listed
+
+    def kept_folders(self, platform_slug: str) -> frozenset[str]:
+        self.kept_asked.append(platform_slug)
+        return self.kept.get(platform_slug, frozenset())

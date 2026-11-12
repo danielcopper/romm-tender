@@ -270,6 +270,8 @@ export interface SyncRunsAnswer {
 export interface RegistryPlatform {
   name: string;
   slug: string;
+  /** The platform's fs_slug, which the Platforms tab knows it by (#2452 D1). */
+  fs_slug: string;
   /** Bound ROMs — how many Steam shortcuts this platform has. What the Remove
    *  group acts on, and never what the header line states. */
   count: number;

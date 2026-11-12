@@ -506,6 +506,7 @@ export const setQamEntryPosition = endpoint<
   { success: boolean; reason?: WireReason; message?: string }
 >("set_qam_entry_position");
 export const getRegistryPlatforms = endpoint<[], { platforms: RegistryPlatform[] }>("get_registry_platforms");
+// Keyed by the platform's fs_slug (#2452 D11).
 export const removePlatformShortcuts = endpoint<
   [string],
   {
@@ -877,7 +878,8 @@ export const checkPlatformBios = endpoint<[string, string], BiosStatus>("check_p
 export const getBiosStatus = endpoint<[number], BiosAnswer>("get_bios_status");
 // A per-platform core change touches no shortcut: the next start of each game
 // that follows the platform asks with it.
-export const setSystemCore = endpoint<[string, string], { success: true } | EndpointFailure>("set_system_core");
+// The slug finds the system, the fs_slug the platform whose pick it is (#2452 D11).
+export const setSystemCore = endpoint<[string, string, string], { success: true } | EndpointFailure>("set_system_core");
 
 /**
  * Result of pinning / clearing a per-game emulator override. It touches no
@@ -902,7 +904,8 @@ export const getEmulatorLaunches = endpoint<[number], GameLaunch[]>("get_emulato
 // The platform-keyed twin (#1815): the Library page's Platforms detail asks it
 // once per selected platform. Distinct from getPlatformCoreInfo, which layers a
 // ROM's own pin on top and so cannot answer for a platform with no synced ROM.
-export const getSystemCoreInfo = endpoint<[string], SystemCoreInfo>("get_system_core_info");
+// Asked with the slug and the fs_slug, as setSystemCore is.
+export const getSystemCoreInfo = endpoint<[string, string], SystemCoreInfo | EndpointFailure>("get_system_core_info");
 
 /** Every detected emulator source, in the user's order, with its health and its switch. */
 export const getEmulatorSources = endpoint<[], EmulatorSourcesListing>("get_emulator_sources");
@@ -1868,6 +1871,7 @@ export const finalizeGameSession = endpoint<[number], SessionFinalizeResult | En
 export const deleteLocalSaves = endpoint<[number], { success: boolean; deleted_count: number; message: string }>(
   "delete_local_saves",
 );
+// Keyed by the platform's fs_slug, as countPlatformSaves is (#2452 D11).
 export const deletePlatformSaves = endpoint<
   [string],
   { success: boolean; deleted_count: number; message: string; skipped_running?: SkippedRunningGame[] }

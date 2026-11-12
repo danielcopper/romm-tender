@@ -16,10 +16,11 @@ if TYPE_CHECKING:
     from adapters.repositories.unit_of_work import SqliteUnitOfWork
 
 
-def _rom(rom_id: int, *, platform: str = "snes", app_id: int = 1000) -> Rom:
+def _rom(rom_id: int, *, platform: str = "snes", app_id: int = 1000, folder: str | None = None) -> Rom:
     return Rom(
         rom_id=rom_id,
         platform_slug=platform,
+        platform_fs_slug=folder,
         name=f"Game {rom_id}",
         fs_name=f"game_{rom_id}.sfc",
         shortcut_app_id=app_id,
@@ -291,14 +292,6 @@ class TestIteration:
         ids = {rom.rom_id for rom in uow.roms.iter_all()}
         assert ids == {1, 2, 3}
 
-    def test_iter_by_platform_returns_subset(self, uow: SqliteUnitOfWork):
-        uow.roms.save(_rom(1, platform="snes"))
-        uow.roms.save(_rom(2, platform="gba"))
-        uow.roms.save(_rom(3, platform="snes"))
-
-        snes_ids = {rom.rom_id for rom in uow.roms.iter_by_platform("snes")}
-        assert snes_ids == {1, 3}
-
     def test_count_reflects_row_count(self, uow: SqliteUnitOfWork):
         assert uow.roms.count() == 0
         uow.roms.save(_rom(1))
@@ -319,38 +312,39 @@ class TestIteration:
         assert uow.roms.count() == 3
 
 
-class TestBoundPlatformSlugs:
-    """``get_bound_platform_slugs`` — the platforms the firmware overview calls synced.
+class TestBoundPlatformFolders:
+    """``get_bound_platform_folders`` — the platforms, by their ``fs_slug``, the firmware page calls synced.
 
-    ``platform_slug`` is ``TEXT NOT NULL`` (``001_initial.sql``), so a NULL slug
-    cannot be stored; the empty slug can, and is left out.
+    A row no sync recorded a folder for (``NULL``) belongs to no platform (#2452 D17).
     """
 
     @staticmethod
     def _seed_mixed(uow: SqliteUnitOfWork) -> None:
-        unbound = _rom(4, platform="psx", app_id=6004)
+        unbound = _rom(4, platform="psx", app_id=6004, folder="psx")
         unbound.unbind_shortcut()
-        uow.roms.save(_rom(1, platform="snes", app_id=5001))
-        uow.roms.save(_rom(2, platform="snes", app_id=5002))
-        uow.roms.save(_rom(3, platform="gba", app_id=5003))
+        uow.roms.save(_rom(1, platform="snes", app_id=5001, folder="snes"))
+        uow.roms.save(_rom(2, platform="snes", app_id=5002, folder="snes-hacks"))
+        uow.roms.save(_rom(3, platform="gba", app_id=5003, folder="gba"))
         uow.roms.save(unbound)
-        uow.roms.save(_rom(5, platform="", app_id=5005))
+        uow.roms.save(_rom(5, platform="snes", app_id=5005, folder=None))
 
     def test_it_names_each_platform_with_a_bound_rom_once(self, uow: SqliteUnitOfWork):
         self._seed_mixed(uow)
 
-        assert uow.roms.get_bound_platform_slugs() == {"snes", "gba"}
+        assert uow.roms.get_bound_platform_folders() == {"snes", "snes-hacks", "gba"}
 
     def test_it_is_empty_on_an_empty_registry(self, uow: SqliteUnitOfWork):
-        assert uow.roms.get_bound_platform_slugs() == set()
+        assert uow.roms.get_bound_platform_folders() == set()
 
     def test_it_answers_what_a_scan_over_every_row_answers(self, uow: SqliteUnitOfWork):
         self._seed_mixed(uow)
 
         scanned = {
-            rom.platform_slug for rom in uow.roms.iter_all() if rom.platform_slug and rom.shortcut_app_id is not None
+            rom.platform_fs_slug
+            for rom in uow.roms.iter_all()
+            if rom.platform_fs_slug and rom.shortcut_app_id is not None
         }
-        assert uow.roms.get_bound_platform_slugs() == scanned
+        assert uow.roms.get_bound_platform_folders() == scanned
 
 
 class TestIterByGroupKey:

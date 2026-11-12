@@ -436,7 +436,7 @@ describe("Library › Platforms", () => {
     vi.mocked(backend.getPlatforms).mockResolvedValue({ success: true, platforms: [platform()] });
     mockFirmware([firmwarePlatform()]);
     vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
-      platforms: [{ slug: "gba", name: "GBA", count: 9, reachable_count: 9 }],
+      platforms: [{ slug: "gba", fs_slug: "gba", name: "GBA", count: 9, reachable_count: 9 }],
     });
     vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(coreInfo());
     vi.mocked(backend.countPlatformSaves).mockResolvedValue({ count: 3 });
@@ -1135,7 +1135,7 @@ describe("Library › Platforms", () => {
       await flushAsync();
 
       expect(vi.mocked(backend.getSystemCoreInfo)).toHaveBeenCalledTimes(1);
-      expect(vi.mocked(backend.getSystemCoreInfo)).toHaveBeenCalledWith("gba");
+      expect(vi.mocked(backend.getSystemCoreInfo)).toHaveBeenCalledWith("gba", "gba");
     });
 
     it("reads a platform's core once however often it is selected", async () => {
@@ -1204,8 +1204,8 @@ describe("Library › Platforms", () => {
       mockFirmware([firmwarePlatform(), firmwarePlatform({ platform_slug: "n64" })]);
       vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
         platforms: [
-          { slug: "gba", name: "GBA", count: 9, reachable_count: 9 },
-          { slug: "n64", name: "N64", count: 4, reachable_count: 4 },
+          { slug: "gba", fs_slug: "gba", name: "GBA", count: 9, reachable_count: 9 },
+          { slug: "n64", fs_slug: "n64", name: "N64", count: 4, reachable_count: 4 },
         ],
       });
       let finish: (v: { success: true; message: string; downloaded: number }) => void = () => {};
@@ -1414,7 +1414,7 @@ describe("Library › Platforms", () => {
       // header is about ROMs and reads 12; the button is about Steam entries
       // and still reads 9.
       vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
-        platforms: [{ slug: "gba", name: "GBA", count: 9, reachable_count: 12 }],
+        platforms: [{ slug: "gba", fs_slug: "gba", name: "GBA", count: 9, reachable_count: 12 }],
       });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
@@ -1427,7 +1427,7 @@ describe("Library › Platforms", () => {
       // One applied game of four, and the three unapplied ones are behind no
       // shortcut by any route — so the difference is real and must show.
       vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
-        platforms: [{ slug: "gba", name: "GBA", count: 1, reachable_count: 3 }],
+        platforms: [{ slug: "gba", fs_slug: "gba", name: "GBA", count: 1, reachable_count: 3 }],
       });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
@@ -1438,7 +1438,7 @@ describe("Library › Platforms", () => {
     it("counts a single version in the singular", async () => {
       vi.mocked(backend.getPlatforms).mockResolvedValue({ success: true, platforms: [platform({ rom_count: 1 })] });
       vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
-        platforms: [{ slug: "gba", name: "GBA", count: 1, reachable_count: 1 }],
+        platforms: [{ slug: "gba", fs_slug: "gba", name: "GBA", count: 1, reachable_count: 1 }],
       });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
@@ -1448,7 +1448,7 @@ describe("Library › Platforms", () => {
 
     it("counts a single version in Steam in the singular beside many on RomM", async () => {
       vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
-        platforms: [{ slug: "gba", name: "GBA", count: 1, reachable_count: 1 }],
+        platforms: [{ slug: "gba", fs_slug: "gba", name: "GBA", count: 1, reachable_count: 1 }],
       });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
@@ -2280,7 +2280,7 @@ describe("Library › Platforms", () => {
       await openCoreMenu(container);
       await pickFromCoreMenu("PCSX2");
 
-      expect(backend.setSystemCore).toHaveBeenCalledWith("gba", "PCSX2");
+      expect(backend.setSystemCore).toHaveBeenCalledWith("gba", "gba", "PCSX2");
       expect(within(container).getByTestId("status-core").textContent).toBe("Switching to PCSX2…");
       await act(async () => {
         finish({ success: true });
@@ -2329,7 +2329,7 @@ describe("Library › Platforms", () => {
       await openCoreMenu(container);
       await pickFromCoreMenu("VBA Next");
 
-      expect(vi.mocked(backend.setSystemCore)).toHaveBeenCalledWith("gba", "VBA Next");
+      expect(vi.mocked(backend.setSystemCore)).toHaveBeenCalledWith("gba", "gba", "VBA Next");
     });
 
     it("offers the core picker for a platform with no shortcuts in Steam, and pins the pick", async () => {
@@ -2345,7 +2345,7 @@ describe("Library › Platforms", () => {
       await openCoreMenu(container);
       await pickFromCoreMenu("VBA Next");
 
-      expect(vi.mocked(backend.setSystemCore)).toHaveBeenCalledWith("gba", "VBA Next");
+      expect(vi.mocked(backend.setSystemCore)).toHaveBeenCalledWith("gba", "gba", "VBA Next");
     });
 
     it("clears the override when the default-marked emulator is picked", async () => {
@@ -2354,7 +2354,7 @@ describe("Library › Platforms", () => {
       await openCoreMenu(container);
       await pickFromCoreMenu("mGBA");
 
-      expect(vi.mocked(backend.setSystemCore)).toHaveBeenCalledWith("gba", "");
+      expect(vi.mocked(backend.setSystemCore)).toHaveBeenCalledWith("gba", "gba", "");
     });
 
     it("re-reads the core and the BIOS state, writes nothing to a shortcut, and tells the game page", async () => {
@@ -2423,8 +2423,8 @@ describe("Library › Platforms", () => {
       // on a platform with nothing in Steam for a reason of its own.
       vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
         platforms: [
-          { slug: "gba", name: "GBA", count: 9, reachable_count: 9 },
-          { slug: "n64", name: "N64", count: 4, reachable_count: 4 },
+          { slug: "gba", fs_slug: "gba", name: "GBA", count: 9, reachable_count: 9 },
+          { slug: "n64", fs_slug: "n64", name: "N64", count: 4, reachable_count: 4 },
         ],
       });
       let finish: (v: { success: true }) => void = () => {};
@@ -4818,8 +4818,8 @@ describe("Library › Platforms", () => {
       mockFirmware([firmwarePlatform(), firmwarePlatform({ platform_slug: "n64" })]);
       vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
         platforms: [
-          { slug: "gba", name: "GBA", count: 9, reachable_count: 9 },
-          { slug: "n64", name: "N64", count: 4, reachable_count: 4 },
+          { slug: "gba", fs_slug: "gba", name: "GBA", count: 9, reachable_count: 9 },
+          { slug: "n64", fs_slug: "n64", name: "N64", count: 4, reachable_count: 4 },
         ],
       });
       let finish: (v: { success: true; message: string; downloaded: number }) => void = () => {};
@@ -5170,7 +5170,7 @@ describe("Library › Platforms", () => {
           .mock.calls.map(([slug]) => slug)
           .slice(readsBefore);
         expect(since).toEqual(["gba"]);
-        expect(events.map((e) => e.detail)).toEqual([{ type: "bios", platform_slug: "gba" }]);
+        expect(events.map((e) => e.detail)).toEqual([{ type: "bios", platform_slug: "gba", platform_fs_slug: "gba" }]);
       } finally {
         globalThis.removeEventListener("romm_data_changed", listener);
       }
@@ -6180,5 +6180,293 @@ describe("Library › Platforms", () => {
 
       expect(within(container).getByTestId("status-remove").textContent).toBe("Failed to delete saves");
     });
+  });
+});
+
+// Two RomM platforms that share a slug: each is a row of its own, named as its
+// Steam collection is, and every choice and action of a row is that platform's
+// alone (#2452 D1, D2, D11).
+describe("Library › Platforms › two platforms sharing a slug", () => {
+  const SNES = platform({ id: 1, name: "Super Nintendo", slug: "snes", fs_slug: "snes" });
+  const HACKS = platform({ id: 2, name: "Super Nintendo (snes-hacks)", slug: "snes", fs_slug: "snes-hacks" });
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(backend.getPlatforms).mockResolvedValue({ success: true, platforms: [SNES, HACKS] });
+    mockFirmware([]);
+    vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
+      platforms: [
+        { slug: "snes", fs_slug: "snes", name: "Super Nintendo", count: 2, reachable_count: 2 },
+        { slug: "snes", fs_slug: "snes-hacks", name: "Super Nintendo (snes-hacks)", count: 3, reachable_count: 3 },
+      ],
+    });
+    vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(coreInfo());
+    vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true });
+    vi.mocked(backend.countPlatformSaves).mockResolvedValue({ count: 0 });
+    vi.mocked(backend.getCollections).mockResolvedValue({ success: true, collections: [] });
+    vi.mocked(backend.debugLog).mockResolvedValue(undefined);
+    vi.mocked(backend.updateBiosLinks).mockResolvedValue({ success: true, placed: 0, removed: 0 } as BiosLinkResult);
+    vi.mocked(backend.removePlatformShortcuts).mockResolvedValue({
+      success: true,
+      app_ids: [21, 22, 23],
+      rom_ids: [21, 22, 23],
+      platform_name: "Super Nintendo (snes-hacks)",
+    });
+    vi.mocked(backend.reportRemovalResults).mockResolvedValue({ success: true, message: "" });
+    vi.mocked(removeShortcut).mockResolvedValue(undefined);
+    vi.mocked(clearPlatformCollection).mockResolvedValue(undefined);
+  });
+
+  async function openTheCoreMenu(container: HTMLElement): Promise<void> {
+    await act(async () => {
+      fireEvent.click(coreButton(container)!);
+      await Promise.resolve();
+    });
+  }
+
+  it("shows each platform as a row of its own, under its own name", async () => {
+    const { container } = render(<LibraryPage onBack={vi.fn()} />);
+    await flushAsync();
+
+    expect(rowToggle(container, "Super Nintendo (snes-hacks)")).toBeTruthy();
+    const rows = [...container.querySelectorAll<HTMLElement>('[data-testid="focusable"]')].filter(
+      (el) =>
+        el.textContent.includes("Super Nintendo") && el.querySelectorAll('[data-testid="toggle-input"]').length === 1,
+    );
+    expect(rows).toHaveLength(2);
+  });
+
+  it("reads and stores a pick for the row's own platform, so the other row keeps its own", async () => {
+    const { container } = render(<LibraryPage onBack={vi.fn()} />);
+    await flushAsync();
+    await focusRow(container, "Super Nintendo (snes-hacks)");
+
+    await openTheCoreMenu(container);
+    await pickFromCoreMenu("VBA Next");
+
+    expect(vi.mocked(backend.getSystemCoreInfo)).toHaveBeenCalledWith("snes", "snes-hacks");
+    expect(vi.mocked(backend.setSystemCore)).toHaveBeenCalledWith("snes", "snes-hacks", "VBA Next");
+    expect(vi.mocked(backend.setSystemCore)).not.toHaveBeenCalledWith("snes", "snes", expect.anything());
+  });
+
+  it("tells the game pages which platform's pick changed", async () => {
+    const events: CustomEvent[] = [];
+    const listener = ((e: Event) => events.push(e as CustomEvent)) as EventListener;
+    globalThis.addEventListener("romm_data_changed", listener);
+    try {
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      await focusRow(container, "Super Nintendo (snes-hacks)");
+      await openTheCoreMenu(container);
+      await pickFromCoreMenu("VBA Next");
+      await flushAsync();
+
+      const changed = events.filter((e) => e.detail.type === "core_changed").map((e) => e.detail);
+      expect(changed).toEqual([{ type: "core_changed", platform_fs_slug: "snes-hacks" }]);
+    } finally {
+      globalThis.removeEventListener("romm_data_changed", listener);
+    }
+  });
+
+  it("removes one row's shortcuts by its platform and leaves the other row's count", async () => {
+    const { container } = render(<LibraryPage onBack={vi.fn()} />);
+    await flushAsync();
+    await focusRow(container, "Super Nintendo (snes-hacks)");
+
+    await act(async () => {
+      fireEvent.click(buttonByText(container, "Remove 3 shortcuts")!);
+      await Promise.resolve();
+    });
+    await confirmLastModal();
+    await flushAsync();
+
+    expect(vi.mocked(backend.removePlatformShortcuts)).toHaveBeenCalledWith("snes-hacks");
+    await focusRow(container, "Super Nintendo");
+    expect(buttonByText(container, "Remove 2 shortcuts")).toBeTruthy();
+  });
+
+  it("counts one row's saves by its platform", async () => {
+    vi.mocked(backend.countPlatformSaves).mockResolvedValue({ count: 4 });
+    const { container } = render(<LibraryPage onBack={vi.fn()} />);
+    await flushAsync();
+    await focusRow(container, "Super Nintendo (snes-hacks)");
+
+    expect(vi.mocked(backend.countPlatformSaves)).toHaveBeenCalledWith("snes-hacks");
+  });
+
+  /** Each row's own BIOS answer, by the folder it was asked for. */
+  function answerByFolder(): void {
+    vi.mocked(backend.getPlatformFirmwareStatus).mockImplementation(async (slug: string, folder: string) => ({
+      success: true,
+      platform: firmwarePlatform({
+        platform_slug: slug,
+        files: [firmwareFile({ file_name: `${folder}_bios.bin`, local_path: `/bios/${folder}_bios.bin` })],
+      }),
+    }));
+  }
+
+  it("deletes one row's saves by its platform alone", async () => {
+    vi.mocked(backend.countPlatformSaves).mockResolvedValue({ count: 4 });
+    vi.mocked(backend.deletePlatformSaves).mockResolvedValue({
+      success: true,
+      deleted_count: 4,
+      message: "Deleted 4 save files",
+    });
+    const { container } = render(<LibraryPage onBack={vi.fn()} />);
+    await flushAsync();
+    await focusRow(container, "Super Nintendo (snes-hacks)");
+
+    await act(async () => {
+      fireEvent.click(buttonByText(container, "Delete 4 save files")!);
+      await Promise.resolve();
+    });
+    await confirmLastModal();
+    await flushAsync();
+
+    expect(vi.mocked(backend.deletePlatformSaves).mock.calls).toEqual([["snes-hacks"]]);
+  });
+
+  it("keeps each row's own sync toggle", async () => {
+    vi.mocked(backend.savePlatformSync).mockResolvedValue({ success: true, message: "" });
+    const { container } = render(<LibraryPage onBack={vi.fn()} />);
+    await flushAsync();
+
+    await press(rowToggle(container, "Super Nintendo (snes-hacks)"));
+
+    expect(vi.mocked(backend.savePlatformSync)).toHaveBeenCalledWith(2, false);
+    expect(rowToggle(container, "Super Nintendo (snes-hacks)").checked).toBe(false);
+    expect(rowToggle(container, "Super Nintendo").checked).toBe(true);
+  });
+
+  it("asks each row's BIOS answer for its own platform and shows it on that row alone", async () => {
+    answerByFolder();
+    const { container } = render(<LibraryPage onBack={vi.fn()} />);
+    await flushAsync();
+
+    expect(vi.mocked(backend.getPlatformFirmwareStatus)).toHaveBeenCalledWith("snes", "snes");
+    expect(vi.mocked(backend.getPlatformFirmwareStatus)).toHaveBeenCalledWith("snes", "snes-hacks");
+    await focusRow(container, "Super Nintendo (snes-hacks)");
+    expect(container.textContent).toContain("snes-hacks_bios.bin");
+    expect(container.textContent).not.toContain("snes_bios.bin");
+    expect(vi.mocked(backend.updateBiosLinks)).toHaveBeenCalledWith("snes", "snes-hacks", null);
+  });
+
+  /** Every row's BIOS answer, with one file of its own on disk that Tender can delete. */
+  function oneDeletableFileEach(): void {
+    vi.mocked(backend.getPlatformFirmwareStatus).mockImplementation(async (slug: string, folder: string) => ({
+      success: true,
+      platform: firmwarePlatform({
+        platform_slug: slug,
+        deletable_count: 1,
+        files: [
+          firmwareFile({
+            file_name: `${folder}_bios.bin`,
+            local_path: `/bios/${folder}_bios.bin`,
+            downloaded: true,
+            satisfied: true,
+            deletable_count: 1,
+          }),
+        ],
+      }),
+    }));
+  }
+
+  it("deletes one row's BIOS downloads by its own platform", async () => {
+    oneDeletableFileEach();
+    vi.mocked(backend.deletePlatformBios).mockResolvedValue({ success: true, deleted_count: 1, message: "Deleted" });
+    const { container } = render(<LibraryPage onBack={vi.fn()} />);
+    await flushAsync();
+    await focusRow(container, "Super Nintendo (snes-hacks)");
+
+    await act(async () => {
+      fireEvent.click(buttonByText(container, "Delete downloads (1)")!);
+      await Promise.resolve();
+    });
+    await confirmLastModal();
+    await flushAsync();
+
+    expect(vi.mocked(backend.deletePlatformBios).mock.calls).toEqual([["snes", "snes-hacks"]]);
+  });
+
+  it("deletes one file of a row by its own platform", async () => {
+    oneDeletableFileEach();
+    vi.mocked(backend.deleteBiosFile).mockResolvedValue({ success: true, deleted_count: 1, message: "Deleted" });
+    const { container } = render(<LibraryPage onBack={vi.fn()} />);
+    await flushAsync();
+    await focusRow(container, "Super Nintendo (snes-hacks)");
+
+    const rowDelete = [...container.querySelectorAll<HTMLElement>('[data-testid="disk-mark"]')]
+      .map((mark) => mark.parentElement?.parentElement as HTMLElement)
+      .find((grid) => grid.firstElementChild?.getAttribute("title") === "snes-hacks_bios.bin")
+      ?.querySelector("button") as HTMLButtonElement;
+    await act(async () => {
+      fireEvent.click(rowDelete);
+    });
+    await confirmLastModal();
+    await flushAsync();
+
+    expect(vi.mocked(backend.deleteBiosFile).mock.calls).toEqual([["snes", "snes-hacks", "snes-hacks_bios.bin"]]);
+  });
+
+  it("says why the core read of a row was refused, in place of the generic sentence", async () => {
+    vi.mocked(backend.getSystemCoreInfo).mockResolvedValue({
+      success: false,
+      reason: "invalid_value",
+      message: "'' is not a RomM platform slug",
+    });
+    const { container } = render(<LibraryPage onBack={vi.fn()} />);
+    await flushAsync();
+
+    expect(container.textContent).toContain(
+      "RomM lists this platform without a console slug, so Tender cannot tell which emulators it has. Check the platform in RomM.",
+    );
+    expect(container.textContent).not.toContain("'' is not a RomM platform slug");
+    expect(container.textContent).not.toContain("Could not read the emulators for this platform");
+  });
+
+  it("says any other refusal of a row's core read in the refusal's own words", async () => {
+    vi.mocked(backend.getSystemCoreInfo).mockResolvedValue({
+      success: false,
+      reason: "blocked_by_migration",
+      message: "Tender is moving your RetroDECK folder",
+    });
+    const { container } = render(<LibraryPage onBack={vi.fn()} />);
+    await flushAsync();
+
+    expect(container.textContent).toContain("Tender is moving your RetroDECK folder");
+    expect(container.textContent).not.toContain("without a console slug");
+  });
+
+  it("runs a BIOS press for its own row, tells the game pages which platform changed, and leaves the other row's line", async () => {
+    answerByFolder();
+    vi.mocked(backend.downloadAllFirmware).mockResolvedValue({
+      success: true,
+      message: "Downloaded 1 firmware file",
+      downloaded: 1,
+      failed: ["x.bin"],
+    });
+    const events: CustomEvent[] = [];
+    const listener = ((e: Event) => events.push(e as CustomEvent)) as EventListener;
+    globalThis.addEventListener("romm_data_changed", listener);
+    try {
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      await focusRow(container, "Super Nintendo (snes-hacks)");
+      await act(async () => {
+        fireEvent.click(buttonByText(container, "Download all")!);
+        for (let i = 0; i < 8; i++) await Promise.resolve();
+      });
+      await flushAsync();
+
+      expect(vi.mocked(backend.downloadAllFirmware).mock.calls).toEqual([["snes", "snes-hacks", null]]);
+      expect(events.filter((e) => e.detail.type === "bios").map((e) => e.detail)).toEqual([
+        { type: "bios", platform_slug: "snes", platform_fs_slug: "snes-hacks" },
+      ]);
+      expect(within(container).getByTestId("status-bios").textContent).toContain("Downloaded 1 firmware file");
+      await focusRow(container, "Super Nintendo");
+      expect(within(container).queryByTestId("status-bios")).toBeNull();
+    } finally {
+      globalThis.removeEventListener("romm_data_changed", listener);
+    }
   });
 });

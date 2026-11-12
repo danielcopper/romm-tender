@@ -106,7 +106,7 @@ const RowLabel: FC<{ row: PlatformRow; selected: boolean }> = ({ row, selected }
           and goes shifts every name beside it, and the list is meant to be
           scanned down its left edge. */}
       <span
-        data-testid={`bios-dot-${row.slug}`}
+        data-testid={`bios-dot-${row.folder}`}
         style={{
           display: "inline-block",
           width: "8px",
@@ -150,15 +150,15 @@ export const PlatformsTab: FC<{ state: PlatformsPageState }> = ({ state }) => {
   }
 
   const items: ListDetailItem[] = [];
-  const pushGroup = (slugs: string[], title: string) => {
-    slugs.forEach((slug, index) => {
-      const row = state.rows.get(slug);
+  const pushGroup = (folders: string[], title: string) => {
+    folders.forEach((folder, index) => {
+      const row = state.rows.get(folder);
       if (!row) return;
       items.push({
-        id: slug,
+        id: folder,
         render: (selected: boolean) => (
           <>
-            {index === 0 && <GroupHeading title={title} count={slugs.length} />}
+            {index === 0 && <GroupHeading title={title} count={folders.length} />}
             {/* The marker bar, with room between it and the status dot — flush
                 against the dot it reads as part of it. */}
             <div
@@ -229,11 +229,11 @@ export const PlatformsTab: FC<{ state: PlatformsPageState }> = ({ state }) => {
         <ListDetail
           items={items}
           listHeader={listHeader}
-          selectedId={state.selectedSlug}
+          selectedId={state.selectedFolder}
           onSelect={state.select}
           onButtonDown={onButtonDown}
-          renderDetail={(slug) => {
-            const row = slug === null ? undefined : state.rows.get(slug);
+          renderDetail={(folder) => {
+            const row = folder === null ? undefined : state.rows.get(folder);
             if (!row) return <div style={{ padding: "16px", color: "#8f98a0" }}>Pick a platform on the left.</div>;
             return <PlatformDetail row={row} state={state} />;
           }}

@@ -114,7 +114,7 @@ async def test_set_system_core_takes_effect_for_the_unpinned_rom_only(harness):
     with harness.uow_factory() as uow:
         uow.roms.set_emulator_override(2, "mGBA", "retrodeck")
 
-    result = await harness.endpoints.set_system_core("gba", "VBA Next")
+    result = await harness.endpoints.set_system_core("gba", "gba", "VBA Next")
 
     assert result == {"success": True}
     assert (await harness.endpoints.get_platform_core_info(1))["active_core"] == "vba_next_libretro.so"
@@ -126,7 +126,7 @@ async def test_set_system_core_answers_success_alone(harness):
     seed_es_systems(harness)
     seed_install(harness, 1, system="gba", platform_slug="gba", file_name="a.gba")
 
-    result = await harness.endpoints.set_system_core("gba", "VBA Next")
+    result = await harness.endpoints.set_system_core("gba", "gba", "VBA Next")
 
     assert result == {"success": True}
 
@@ -193,7 +193,7 @@ async def test_get_system_core_info_payload_shape(harness):
     """The platform-keyed picker payload pins its keys and the resolved label."""
     seed_es_systems(harness)
 
-    result = await harness.endpoints.get_system_core_info("gba")
+    result = await harness.endpoints.get_system_core_info("gba", "gba")
 
     # No `success`: the endpoint has no in-band failure branch, so a key that
     # could only ever read True would be an offer of an answer it never gives.
@@ -224,7 +224,7 @@ async def test_get_system_core_info_answers_without_a_rom(harness):
     """
     seed_es_systems(harness)
 
-    result = await harness.endpoints.get_system_core_info("gba")
+    result = await harness.endpoints.get_system_core_info("gba", "gba")
 
     with harness.uow_factory() as uow:
         assert list(uow.roms.iter_all()) == []
@@ -235,15 +235,15 @@ async def test_get_system_core_info_reflects_a_landed_platform_core(harness):
     """After ``set_system_core`` the read answers with the new label, not the default."""
     seed_es_systems(harness)
 
-    assert (await harness.endpoints.set_system_core("gba", "VBA Next"))["success"] is True
-    result = await harness.endpoints.get_system_core_info("gba")
+    assert (await harness.endpoints.set_system_core("gba", "gba", "VBA Next"))["success"] is True
+    result = await harness.endpoints.get_system_core_info("gba", "gba")
 
     assert result["active_core_label"] == "VBA Next"
 
 
 async def test_get_system_core_info_unavailable_when_no_es_systems(harness):
     """No es_systems (RetroDECK not detected) → emulator data flagged unavailable."""
-    result = await harness.endpoints.get_system_core_info("gba")
+    result = await harness.endpoints.get_system_core_info("gba", "gba")
 
     assert result["emulator_data_available"] is False
     assert result["emulators"] == []
@@ -375,7 +375,7 @@ async def test_a_standalone_whose_component_is_absent_stays_the_default_and_cann
     seed_es_systems(harness, _SWITCH_ES_SYSTEMS_XML)
     seed_es_find_rules(harness, _SWITCH_ES_FIND_RULES_XML)
 
-    result = await harness.endpoints.get_system_core_info("switch")
+    result = await harness.endpoints.get_system_core_info("switch", "switch")
 
     assert result["emulator_data_available"] is True
     assert result["emulators"] == [
@@ -414,7 +414,7 @@ async def test_the_same_standalone_is_the_default_once_its_component_is_there(ha
     seed_es_find_rules(harness, _SWITCH_ES_FIND_RULES_XML)
     seed_component_launcher(harness, "ryubing")
 
-    result = await harness.endpoints.get_system_core_info("switch")
+    result = await harness.endpoints.get_system_core_info("switch", "switch")
 
     assert [(e["label"], e["reason"], e["is_default"]) for e in result["emulators"]] == [
         ("Ryubing (Standalone)", None, True),
@@ -444,7 +444,7 @@ async def test_finalburn_neo_on_neo_geo_cd_reads_as_its_core(harness):
     seed_es_systems(harness, _NEOGEOCD_ES_SYSTEMS_XML)
     seed_install(harness, 7, system="neogeocd", platform_slug="neogeocd", file_name="game.chd")
 
-    info = await harness.endpoints.get_system_core_info("neogeocd")
+    info = await harness.endpoints.get_system_core_info("neogeocd", "neogeocd")
 
     fbneo = info["emulators"][0]
     assert (fbneo["label"], fbneo["kind"], fbneo["core_so"], fbneo["is_default"]) == (

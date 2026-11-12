@@ -144,7 +144,7 @@ _ARGS: dict[str, tuple[Any, ...]] = {
     "set_all_platforms_sync": (True,),
     "set_artwork_slot_automatic": (41, "logo"),
     "set_game_core": (41, "core"),
-    "set_system_core": ("n64", ""),
+    "set_system_core": ("n64", "n64", ""),
     "sign_out": (),
     "start_download": (41, False, None, None, False),
     "start_prune": (_START_PRUNE_REQUEST,),

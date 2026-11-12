@@ -91,7 +91,7 @@ def _seed_what_a_press_would_touch(harness) -> list[str]:
     with harness.uow_factory() as uow:
         uow.bios_files.save(
             BiosFile.mark_downloaded(
-                platform_slug="dc",
+                platform_folder="dc",
                 file_name="dc_boot.bin",
                 file_path=bios,
                 downloaded_at="2026-01-01T00:00:00",

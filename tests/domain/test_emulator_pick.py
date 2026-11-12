@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from domain.emulator_pick import StoredPick, pick_for, platform_pick, platform_pick_value
+from domain.emulator_pick import StoredPick, game_platform_pick, pick_for, platform_pick, platform_pick_value
 
 
 class TestPlatformPick:
@@ -40,3 +40,36 @@ class TestPickFor:
 
     def test_no_pick_is_no_pick(self):
         assert pick_for(None, "retrodeck") is None
+
+
+class TestGamePlatformPick:
+    """A game's per-platform pick (#2452 D15)."""
+
+    _BSNES = StoredPick(label="bsnes", source="retrodeck")
+
+    def _pick(self, folder, picks, kept=(), asked=None):
+        def kept_folders():
+            if asked is not None:
+                asked.append("kept")
+            return frozenset(kept)
+
+        return game_platform_pick(folder, "snes", picks.get, kept_folders)
+
+    def test_a_game_with_a_folder_takes_that_platform_s_pick_alone(self):
+        asked: list[str] = []
+
+        assert self._pick("snes-hacks", {"snes": self._BSNES}, ("snes",), asked) is None
+        assert asked == []
+
+    def test_a_game_without_one_takes_the_pick_under_its_slug_without_asking_what_is_kept(self):
+        asked: list[str] = []
+
+        assert self._pick(None, {"snes": self._BSNES}, ("snes-hacks",), asked) == self._BSNES
+        assert asked == []
+
+    def test_then_the_pick_of_the_one_platform_kept_for_its_slug(self):
+        assert self._pick(None, {"snes-hacks": self._BSNES}, ("snes-hacks",)) == self._BSNES
+
+    def test_none_where_several_platforms_share_the_slug_or_none_is_kept(self):
+        assert self._pick(None, {"snes-hacks": self._BSNES}, ("snes", "snes-hacks")) is None
+        assert self._pick(None, {"snes-hacks": self._BSNES}, ()) is None

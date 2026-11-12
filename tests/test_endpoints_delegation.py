@@ -218,8 +218,8 @@ class TestCoreEndpointDelegation:
     @pytest.mark.asyncio
     async def test_set_system_core_delegates(self, endpoints, services):
         services.core_service.set_system_core = AsyncMock(return_value={"success": True})
-        result = await endpoints.set_system_core("snes", "core_a")
-        services.core_service.set_system_core.assert_awaited_once_with("snes", "core_a")
+        result = await endpoints.set_system_core("snes", "snes", "core_a")
+        services.core_service.set_system_core.assert_awaited_once_with("snes", "snes", "core_a")
         assert result == {"success": True}
 
     @pytest.mark.asyncio

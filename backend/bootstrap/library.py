@@ -56,6 +56,8 @@ if TYPE_CHECKING:
         ConflictRules,
         DebugLogger,
         EventEmitter,
+        ListingRefiler,
+        ListingReplacer,
         RendererGcFn,
         RendererRssFn,
         RommLibraryApi,
@@ -97,6 +99,8 @@ class LibraryWiring:
     conflict_rules: ConflictRules
     artwork_job: ShortcutArtworkJob
     running_rom_ids: RunningRomIdsFn
+    refiling: ListingRefiler
+    platform_listing: ListingReplacer
 
 
 @dataclass(frozen=True)
@@ -141,6 +145,8 @@ def wire_library(wiring: LibraryWiring) -> LibraryParts:
             sync_state_box=box,
             emit_progress=progress.emit_progress,
             local_library_reader=local_library_reader,
+            refiling=wiring.refiling,
+            platform_listing=wiring.platform_listing,
         )
     )
 
