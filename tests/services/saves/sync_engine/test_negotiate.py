@@ -182,6 +182,7 @@ class TestTheWholeDeviceSession:
         assert [r.getMessage() for r in caplog.records] == [
             "sync_all_saves: negotiate session open failed (database is locked) — per-ROM sessions"
         ]
+        assert caplog.records[0].exc_info is not None
 
 
 class TestTheRomSession:
@@ -193,7 +194,7 @@ class TestTheRomSession:
         svc, fake = make_service(tmp_path)
         _seed_confirmed_rom(svc, tmp_path)
         fake.fail_on_next(RommConnectionError("transient"))
-        session_id = await svc._sync_engine._negotiate.open_rom_session(42, LiveDeviceId("test-device"))
+        session_id = await svc._sync_engine._negotiate.open_rom_session(42, LiveDeviceId("device-1"))
         assert session_id is None
 
     @pytest.mark.asyncio
@@ -202,6 +203,6 @@ class TestTheRomSession:
         svc, fake = make_service(tmp_path)
         _seed_confirmed_rom(svc, tmp_path)
         fake.negotiate_sync_disabled = True
-        device_id = LiveDeviceId("test-device")
+        device_id = LiveDeviceId("device-1")
         with pytest.raises(RommSyncDisabledError):
             await svc._sync_engine._negotiate.open_rom_session(42, device_id)
