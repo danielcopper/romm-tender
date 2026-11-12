@@ -36,16 +36,16 @@ _switches = st.dictionaries(_folders, st.booleans(), max_size=10)
 
 @given(platforms=_listings, by_id=_by_id, switches=_switches)
 def test_the_move_switches_no_listed_platform_on_or_off(platforms, by_id, switches) -> None:
-    moved = switches_by_folder(by_id, switches, platforms)
+    move = switches_by_folder(by_id, switches, platforms)
 
     listed = [(str(p["id"]), p["fs_slug"]) for p in platforms if p["fs_slug"] is not None]
     if not listed:
-        assert moved is None
+        assert move is None
         return
-    assert moved is not None
+    assert move is not None
     for pid, folder in listed:
-        before = switches[folder] if folder in switches else bool(resolve_sync_enabled(by_id, pid))
-        assert platform_sync_enabled(moved, folder) is before
+        before = switches[folder] if folder in switches else resolve_sync_enabled(by_id, pid)
+        assert platform_sync_enabled(move.switches, folder) is before
 
 
 @given(switches=_switches, target=_folders, on=st.booleans(), other=_folders)

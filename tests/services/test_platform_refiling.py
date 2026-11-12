@@ -639,13 +639,16 @@ class TestPerPlatformSyncToggles:
         assert harness.settings["platform_cores"] == {"psx": {"label": "SwanStation"}}
 
     def test_the_ids_the_listing_drops_are_named(self, caplog):
-        """#2452 D21: a toggle dropped with its id is said, beside the move."""
-        harness = self._kept_by_id({"5": True, "99": False, "42": True})
+        """#2452 D21, D26: a toggle dropped with its id — not listed, or listed without a folder — is said."""
+        harness = self._kept_by_id({"5": True, "99": False, "7": True})
 
         with caplog.at_level(logging.INFO):
-            harness.refile()
+            harness.refiling.do_refile([*_PLATFORMS, {"id": 7, "slug": "arcade", "fs_slug": None, "firmware": []}])
 
-        assert "Dropped the sync toggles of RomM platform ids the listing no longer names: 42, 99" in caplog.text
+        assert (
+            "Dropped the sync toggles of RomM platform ids the listing does not name with a folder: 7, 99"
+            in caplog.text
+        )
 
     def test_a_move_says_so(self, caplog):
         harness = self._kept_by_id({"5": True})

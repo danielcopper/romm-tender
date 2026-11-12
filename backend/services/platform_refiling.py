@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.firmware_platforms import ListedPlatforms, listed_platforms, pick_moves, refiled_record_folder
-from domain.platform_prefs import ids_the_listing_drops, switches_by_folder
+from domain.platform_prefs import switches_by_folder
 
 if TYPE_CHECKING:
     import logging
@@ -86,11 +86,10 @@ class PlatformRefiling:
 
         The listed platforms are kept first, then the download records, the
         picks and the sync toggles are moved: each step on its own, so a failure
-        of one is logged and the others still run. The toggles need only the
-        listing as read, so they move even where the platforms it places the
-        records and picks with cannot be worked out. A failed step gives back
-        what it had changed, except the toggles' save, whose moved toggles stay
-        (#2452 D23).
+        of one is logged and the others still run, and the toggles move even
+        where the platforms the records and picks belong with cannot be worked
+        out. A failed step gives back what it had changed, except the toggles'
+        save, whose moved toggles stay (#2452 D23).
         """
         with self._lock:
             listed = self._run("Failed to read where older entries belong", lambda: listed_platforms(platforms))
@@ -210,14 +209,16 @@ class PlatformRefiling:
         dropped: list[str] = []
 
         def moved_switches(by_id: Mapping[str, Any], switches: Mapping[str, Any]) -> dict[str, Any] | None:
-            moved = switches_by_folder(by_id, switches, platforms)
-            if moved is not None:
-                dropped.extend(ids_the_listing_drops(by_id, platforms))
-            return moved
+            move = switches_by_folder(by_id, switches, platforms)
+            if move is None:
+                return None
+            dropped.extend(move.dropped)
+            return move.switches
 
         if self._platform_switches.carry_over(moved_switches):
             self._logger.info("Moved the per-platform sync toggles from RomM's platform ids to the platforms' folders")
             if dropped:
                 self._logger.info(
-                    f"Dropped the sync toggles of RomM platform ids the listing no longer names: {', '.join(dropped)}"
+                    "Dropped the sync toggles of RomM platform ids the listing does not name with a folder: "
+                    f"{', '.join(dropped)}"
                 )

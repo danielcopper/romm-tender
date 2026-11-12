@@ -8,15 +8,18 @@ per-method ``*_side_effect`` attributes (persistent) — no
 ``run_in_executor`` patching, no ``MagicMock(romm_api)``.
 """
 
+import asyncio
 import base64
 import json
 import logging
+import threading
 from dataclasses import replace
 from typing import Any, ClassVar
 from unittest.mock import MagicMock
 
 import pytest
 from _romm_platforms import LISTED_GAMECUBE
+from fakes.fake_settings_persister import FakeSettingsPersister
 
 from domain.platform_system import PLATFORM_IDS_KEY, KeptPlatform, decode_platform_ids
 from domain.sync_diff import ExactAnswers
@@ -172,6 +175,54 @@ class TestTheTogglesAreKeptByFolder:
         assert [p["id"] for p in result] == synced
         assert [p["id"] for p in shown["platforms"] if p["sync_enabled"]] == synced
         assert "toggles kept by RomM's platform ids have not moved" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_a_platform_switched_while_the_move_is_pending_is_synced_as_switched(
+        self, make_library, fake_romm_api
+    ):
+        """#2452 D27: the user's own toggle wins over the one still kept by RomM id."""
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.platforms = list(self._SHARING_A_SLUG)
+        library.settings["enabled_platforms"] = {}
+        library.settings["enabled_platform_ids"] = {"1": True, "2": True}
+
+        await library.sync._fetcher.save_platform_sync("snes", False)
+        result, _unwalked = await library.sync._fetcher._fetch_enabled_platforms()
+
+        assert [p["id"] for p in result] == [2]
+
+    @pytest.mark.asyncio
+    async def test_a_save_whose_call_was_cancelled_still_says_it_failed(self, make_library, caplog):
+        """A panel that disconnects cancels its calls; the write it asked for goes on in its thread."""
+        saving = threading.Event()
+        release = threading.Event()
+
+        class _SlowFailingPersister(FakeSettingsPersister):
+            def save_settings(self) -> None:
+                saving.set()
+                release.wait(5)
+                raise OSError("disk full")
+
+        library = make_library(settings_persister=_SlowFailingPersister())
+        library.settings["enabled_platforms"] = {"snes": True}
+        call = asyncio.create_task(library.sync._fetcher.save_platform_sync("snes", False))
+        await asyncio.to_thread(saving.wait, 5)
+
+        call.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await call
+        with caplog.at_level(logging.ERROR):
+            release.set()
+            for _ in range(200):
+                if "after the call that asked for it ended" in caplog.text:
+                    break
+                await asyncio.sleep(0.01)
+
+        assert (
+            "Saving the per-platform sync toggles failed after the call that asked for it ended: disk full"
+            in caplog.text
+        )
+        assert library.settings["enabled_platforms"] == {"snes": True}
 
     @pytest.mark.asyncio
     async def test_toggles_that_have_moved_are_read_without_a_warning(self, make_library, fake_romm_api, caplog):

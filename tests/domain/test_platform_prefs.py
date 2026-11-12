@@ -5,17 +5,21 @@ Hand-enumerated cases; the property-based companion lives in ``test_platform_pre
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 import pytest
 
 from domain.platform_prefs import (
-    ids_the_listing_drops,
-    listed_platform_synced,
     platform_sync_enabled,
     resolve_sync_enabled,
     stored_switches,
+    switches_as_read,
     switches_by_folder,
     switches_kept_by_id,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 class TestResolveSyncEnabled:
@@ -70,45 +74,51 @@ class TestPlatformSyncEnabled:
         assert platform_sync_enabled({"snes": "yes"}, "snes") is False
 
 
+def _moved(by_id: Mapping[str, Any], switches: Mapping[str, Any], platforms: list[dict[str, Any]]) -> dict[str, Any]:
+    move = switches_by_folder(by_id, switches, platforms)
+    assert move is not None
+    return move.switches
+
+
 class TestSwitchesByFolder:
     """switches_by_folder — the toggles kept by RomM id moved onto the listed platforms' fs_slug (#2452 D8)."""
 
     def test_each_id_moves_to_its_platform_s_folder(self):
-        moved = switches_by_folder({"1": False, "2": True}, {}, [_listed(1, "snes"), _listed(2, "snes-hacks")])
+        moved = _moved({"1": False, "2": True}, {}, [_listed(1, "snes"), _listed(2, "snes-hacks")])
 
         assert moved == {"snes": False, "snes-hacks": True}
 
     def test_an_id_the_listing_does_not_name_is_dropped(self):
         """#2452 D21."""
-        moved = switches_by_folder({"1": True, "9": True}, {}, [_listed(1, "snes")])
+        moved = _moved({"1": True, "9": True}, {}, [_listed(1, "snes")])
 
         assert moved == {"snes": True}
 
     def test_a_listed_platform_the_old_map_did_not_name_keeps_its_state_off(self):
         """#2452 D22: once a toggle was saved, a platform without one was off, and stays off."""
-        moved = switches_by_folder({"1": True}, {}, [_listed(1, "snes"), _listed(2, "snes-hacks")])
+        moved = _moved({"1": True}, {}, [_listed(1, "snes"), _listed(2, "snes-hacks")])
 
         assert moved == {"snes": True, "snes-hacks": False}
 
     def test_a_map_never_touched_switches_every_listed_platform_on(self):
         """#2452 D24: an existing installation whose toggles were never touched had every platform on."""
-        moved = switches_by_folder({}, {}, [_listed(1, "snes"), _listed(2, "snes-hacks"), _listed(3, "gba", "gba")])
+        moved = _moved({}, {}, [_listed(1, "snes"), _listed(2, "snes-hacks"), _listed(3, "gba", "gba")])
 
         assert moved == {"snes": True, "snes-hacks": True, "gba": True}
 
     def test_a_folder_that_already_has_a_toggle_keeps_it(self):
-        moved = switches_by_folder({"1": True}, {"snes": False}, [_listed(1, "snes")])
+        moved = _moved({"1": True}, {"snes": False}, [_listed(1, "snes")])
 
         assert moved == {"snes": False}
 
     def test_a_toggle_kept_for_a_folder_not_listed_stays(self):
-        moved = switches_by_folder({"1": True}, {"gba": True}, [_listed(1, "snes")])
+        moved = _moved({"1": True}, {"gba": True}, [_listed(1, "snes")])
 
         assert moved == {"gba": True, "snes": True}
 
     def test_a_listed_platform_without_an_fs_slug_gets_no_toggle(self):
         """#2452 D26."""
-        moved = switches_by_folder({}, {}, [_listed(1, "snes"), _listed(2, None), _listed(3, "  ")])
+        moved = _moved({}, {}, [_listed(1, "snes"), _listed(2, None), _listed(3, "  ")])
 
         assert moved == {"snes": True}
 
@@ -148,52 +158,61 @@ class TestTheStoredToggles:
         assert switches_kept_by_id(settings) is None
 
 
-class TestListedPlatformSynced:
-    """listed_platform_synced — a sync reads exactly what the move would switch on (#2452 D27)."""
+class TestSwitchesAsRead:
+    """switches_as_read — a reader goes by the map the move would write while one is pending (#2452 D27)."""
 
-    def test_once_moved_a_platform_is_read_by_its_own_toggle(self):
-        assert listed_platform_synced({"snes": True}, None, _listed(1, "snes")) is True
-        assert listed_platform_synced({"snes": True}, None, _listed(2, "snes-hacks")) is False
+    def test_once_moved_the_toggles_are_read_as_they_stand(self):
+        switches = {"snes": True}
 
-    def test_while_kept_by_id_a_platform_is_read_by_the_rule_its_id_was_saved_under(self):
-        by_id = {"1": True, "2": False}
+        assert switches_as_read(switches, None, [_listed(1, "snes"), _listed(2, "snes-hacks")]) is switches
 
-        assert listed_platform_synced({}, by_id, _listed(1, "snes")) is True
-        assert listed_platform_synced({}, by_id, _listed(2, "snes-hacks")) is False
-        assert listed_platform_synced({}, by_id, _listed(3, "gba", "gba")) is False
+    def test_while_kept_by_id_each_platform_is_read_by_the_rule_its_id_was_saved_under(self):
+        read = switches_as_read({}, {"1": True, "2": False}, [_listed(1, "snes"), _listed(2, "snes-hacks")])
 
-    def test_while_kept_never_touched_every_listed_platform_is_synced(self):
+        assert platform_sync_enabled(read, "snes") is True
+        assert platform_sync_enabled(read, "snes-hacks") is False
+
+    def test_while_kept_never_touched_every_listed_platform_is_read_on(self):
         """#2452 D24, D27: an installation that never touched a toggle had every platform on."""
-        assert listed_platform_synced({}, {}, _listed(1, "snes")) is True
-        assert listed_platform_synced({}, {}, _listed(2, "snes-hacks")) is True
+        read = switches_as_read({}, {}, [_listed(1, "snes"), _listed(2, "snes-hacks")])
+
+        assert read == {"snes": True, "snes-hacks": True}
 
     def test_a_toggle_of_its_own_wins_over_the_one_kept_by_id(self):
-        assert listed_platform_synced({"snes": False}, {"1": True}, _listed(1, "snes")) is False
+        read = switches_as_read({"snes": False}, {"1": True}, [_listed(1, "snes")])
 
-    @pytest.mark.parametrize("by_id", [None, {}, {"1": True}])
-    def test_a_platform_without_an_fs_slug_is_never_synced(self, by_id):
-        assert listed_platform_synced({"  ": True}, by_id, _listed(1, "  ")) is False
-        assert listed_platform_synced({}, by_id, _listed(1, None)) is False
+        assert platform_sync_enabled(read, "snes") is False
 
-    def test_it_reads_what_the_move_writes(self):
+    def test_two_listed_platforms_sharing_a_folder_read_one_toggle(self):
+        read = switches_as_read({}, {"1": True, "2": False}, [_listed(1, "snes"), _listed(2, "snes")])
+
+        assert read == {"snes": True}
+
+    def test_a_listing_naming_no_folder_reads_the_toggles_as_they_stand(self):
+        switches = {"snes": True}
+
+        assert switches_as_read(switches, {"1": False}, [_listed(1, None)]) is switches
+
+    def test_it_is_what_the_move_writes(self):
         by_id = {"1": True, "9": True}
         platforms = [_listed(1, "snes"), _listed(2, "snes-hacks"), _listed(3, None)]
-        moved = switches_by_folder(by_id, {"snes-hacks": True}, platforms)
-        assert moved is not None
 
-        for platform in platforms:
-            assert listed_platform_synced({"snes-hacks": True}, by_id, platform) is listed_platform_synced(
-                moved, None, platform
-            )
+        assert switches_as_read({"snes-hacks": True}, by_id, platforms) == _moved(
+            by_id, {"snes-hacks": True}, platforms
+        )
 
 
-class TestIdsTheListingDrops:
-    """ids_the_listing_drops — the ids no listed platform with an fs_slug carries (#2452 D21)."""
+class TestTheIdsTheMoveDrops:
+    """switches_by_folder's dropped ids — those no listed platform with an fs_slug carries (#2452 D21, D26)."""
 
-    def test_an_id_not_listed_or_listed_without_a_folder_is_dropped(self):
-        dropped = ids_the_listing_drops({"1": True, "2": True, "9": False}, [_listed(1, "snes"), _listed(2, None)])
+    def test_an_id_not_listed_or_listed_without_a_folder_is_dropped_in_order(self):
+        move = switches_by_folder({"9": False, "1": True, "2": True}, {}, [_listed(1, "snes"), _listed(2, None)])
 
-        assert dropped == ["2", "9"]
+        assert move is not None
+        assert move.dropped == ("2", "9")
 
     def test_none_dropped_where_every_id_is_listed(self):
-        assert ids_the_listing_drops({"1": True}, [_listed(1, "snes")]) == []
+        move = switches_by_folder({"1": True}, {}, [_listed(1, "snes")])
+
+        assert move is not None
+        assert move.dropped == ()

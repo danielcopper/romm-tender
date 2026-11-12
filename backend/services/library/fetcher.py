@@ -26,7 +26,7 @@ from domain.fetch_generation import (
     hidden_without_a_listed_version,
 )
 from domain.platform_names import listed_fs_slug, listed_platform_folders, listed_platform_names
-from domain.platform_prefs import listed_platform_synced, stored_switches, switches_kept_by_id
+from domain.platform_prefs import platform_sync_enabled, stored_switches, switches_as_read, switches_kept_by_id
 from domain.platform_skip import probe_verdict, stamp_can_match
 from domain.platform_sync_state import stamp_for_skip
 from domain.skip_prediction import (
@@ -45,7 +45,7 @@ from services.library._fetch_pages import emit_fetch_page_progress, raise_if_can
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Callable, Collection
+    from collections.abc import Callable, Collection, Mapping
 
     from domain.platform_sync_state import PlatformSyncState
     from domain.sync_diff import RomAnswer
@@ -179,8 +179,7 @@ class LibraryFetcher:
 
     async def get_platforms(self):
         platforms = await self._read_listing()
-        switches = stored_switches(self._settings)
-        by_id = switches_kept_by_id(self._settings)
+        switches = switches_as_read(stored_switches(self._settings), switches_kept_by_id(self._settings), platforms)
 
         # One row per platform, by its fs_slug, named as its Steam collection is (#2452 D1, D2).
         names = listed_platform_names(platforms)
@@ -196,24 +195,43 @@ class LibraryFetcher:
                 "slug": p.get("slug", ""),
                 "fs_slug": fs_slug,
                 "rom_count": rom_count,
-                "sync_enabled": listed_platform_synced(switches, by_id, p),
+                "sync_enabled": platform_sync_enabled(switches, fs_slug),
             }
             result.append(entry)
         return {"success": True, "platforms": result}
 
     async def save_platform_sync(self, platform_folder: str, enabled: bool):
         """Switch the platform kept in *platform_folder* on or off; every other toggle stays as it is."""
-        await self._loop.run_in_executor(
-            None, self._platform_switches.replace, lambda switches: {**switches, platform_folder: enabled}
-        )
+        await self._write_switches(lambda switches: {**switches, platform_folder: enabled})
         return {"success": True}
 
     async def set_all_platforms_sync(self, enabled: bool):
         """Switch every listed platform with an ``fs_slug`` on or off, in place of every toggle kept before."""
         platforms = await self._read_listing()
         switches = dict.fromkeys(listed_platform_folders(platforms), enabled)
-        await self._loop.run_in_executor(None, self._platform_switches.replace, lambda _current: switches)
+        await self._write_switches(lambda _current: switches)
         return {"success": True}
+
+    async def _write_switches(self, build: Callable[[Mapping[str, Any]], dict[str, Any]]) -> None:
+        """Have the toggles writer put *build*'s map in place, in an executor thread, and wait for it.
+
+        A write whose call is cancelled still runs to its end, and a failure is
+        then logged here.
+        """
+        write = self._loop.run_in_executor(None, self._platform_switches.replace, build)
+        try:
+            await asyncio.wait([write])
+        except asyncio.CancelledError:
+            write.add_done_callback(self._log_an_orphaned_write)
+            raise
+        write.result()
+
+    def _log_an_orphaned_write(self, write: asyncio.Future[None]) -> None:
+        failure = None if write.cancelled() else write.exception()
+        if failure is not None:
+            self._logger.error(
+                f"Saving the per-platform sync toggles failed after the call that asked for it ended: {failure}"
+            )
 
     # ── Collection metadata use cases ────────────────────────────
 
@@ -348,11 +366,11 @@ class LibraryFetcher:
         self._sync_state.run_listed_platform_names = listed_platform_names(listed)
         await self._loop.run_in_executor(None, self._platform_listing.replace_listing, listed)
 
-        switches = stored_switches(self._settings)
         by_id = switches_kept_by_id(self._settings)
         if by_id is not None:
             self._logger.warning("The per-platform sync toggles kept by RomM's platform ids have not moved; read by id")
-        platforms = [p for p in listed if listed_platform_synced(switches, by_id, p)]
+        switches = switches_as_read(stored_switches(self._settings), by_id, listed)
+        platforms = [p for p in listed if platform_sync_enabled(switches, listed_fs_slug(p))]
         self._logger.info(f"Syncing {len(platforms)} platforms: {[p['name'] for p in platforms]}")
         synced_ids = {int(p["id"]) for p in platforms}
         left_off_ids = tuple(int(p["id"]) for p in listed if int(p["id"]) not in synced_ids)
