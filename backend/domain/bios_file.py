@@ -1,10 +1,11 @@
 """BiosFile — one downloaded BIOS/firmware file Tender tracks on disk.
 
-Identified by ``(platform_slug, file_name)`` — a bare filename is unsafe because
-two platforms can ship same-named BIOS. ``platform_slug`` is the RomM platform
-the library files the file on (``domain/firmware_platforms.py``); a record
-written before the platform came from RomM's ``platform_id`` holds a server
-folder name there until the refiling can place it. ``firmware_id`` is nullable metadata from
+Identified by ``(platform_folder, file_name)`` — a bare filename is unsafe because
+two platforms can ship same-named BIOS. ``platform_folder`` is the ``fs_slug`` of
+the RomM platform the library files the file on (``domain/firmware_platforms.py``);
+a record written before records were keyed by ``fs_slug`` holds a slug or a server
+folder name there until the refiling can place it; while nothing places one
+under a slug, each page of that slug offers it (``records_of_platform``). ``firmware_id`` is nullable metadata from
 RomM, not part of the identity. Tracked so migrations can move the file when
 the RetroDECK home path changes.
 """
@@ -16,9 +17,9 @@ from domain._aggregate import cosmic_aggregate
 
 @cosmic_aggregate
 class BiosFile:
-    """One downloaded BIOS file, keyed by (platform_slug, file_name)."""
+    """One downloaded BIOS file, keyed by (platform_folder, file_name)."""
 
-    platform_slug: str
+    platform_folder: str
     file_name: str
     file_path: str
     downloaded_at: str
@@ -28,31 +29,31 @@ class BiosFile:
     def mark_downloaded(
         cls,
         *,
-        platform_slug: str,
+        platform_folder: str,
         file_name: str,
         file_path: str,
         downloaded_at: str,
         firmware_id: int | None = None,
     ) -> BiosFile:
         """Record a freshly downloaded BIOS file at ISO timestamp ``downloaded_at``."""
-        if not platform_slug or not file_name:
-            raise ValueError("platform_slug and file_name are required")
+        if not platform_folder or not file_name:
+            raise ValueError("platform_folder and file_name are required")
         return cls(
-            platform_slug=platform_slug,
+            platform_folder=platform_folder,
             file_name=file_name,
             file_path=file_path,
             downloaded_at=downloaded_at,
             firmware_id=firmware_id,
         )
 
-    def refiled_under(self, platform_slug: str) -> BiosFile:
-        """This record filed under *platform_slug* instead, every other field kept.
+    def refiled_under(self, platform_folder: str) -> BiosFile:
+        """This record filed under *platform_folder* instead, every other field kept.
 
         The platform is part of the identity, so the answer is a new record;
         the caller removes the old one.
         """
         return BiosFile.mark_downloaded(
-            platform_slug=platform_slug,
+            platform_folder=platform_folder,
             file_name=self.file_name,
             file_path=self.file_path,
             downloaded_at=self.downloaded_at,

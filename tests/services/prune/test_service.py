@@ -282,6 +282,7 @@ def _rom(
     rom = Rom.synced(
         rom_id=rom_id,
         platform_slug=platform,
+        platform_fs_slug=platform,
         name=name or f"Game {rom_id}",
         fs_name=fs_name or f"Game {rom_id}.gdi",
         shortcut_app_id=app_id,
@@ -317,10 +318,10 @@ def _seed(uow: FakeUnitOfWork, *rows: Rom, stamp_count: int = 1, control: bool =
             # thing being questioned), and outside every ``dc``-scoped count.
             uow.roms.save(_rom(_CONTROL_ROM_ID, fetch="ctl", platform="ctl", fs_name="Control.gdi"))
             uow.platform_sync_state.save(
-                PlatformSyncState.stamp(platform_slug="ctl", at="now", rom_count=1, fetch_id="ctl")
+                PlatformSyncState.stamp(platform_folder="ctl", at="now", rom_count=1, fetch_id="ctl")
             )
         uow.platform_sync_state.save(
-            PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=stamp_count, fetch_id="new")
+            PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=stamp_count, fetch_id="new")
         )
 
 
@@ -2710,7 +2711,7 @@ async def test_inline_purge_keeps_the_platform_stamp_and_still_denies_the_increm
     assert stamp is not None
     assert (stamp.fetch_id, stamp.rom_count) == ("new", 2)
     # Scoped to the stamped platform, because that is what the stamp describes.
-    remaining = list(harness.uow.roms.iter_by_platform("dc"))
+    remaining = list(harness.uow.roms.iter_by_platform_folder("dc"))
     # The purge removed a row carrying the stamp's generation, so the fetcher's
     # own conditions must still deny the skip: the stamped server count no longer
     # matches the count the server now reports (1), which forces the full fetch.

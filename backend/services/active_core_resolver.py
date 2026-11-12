@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING
 
 from domain.emulator_choice import ResolvedEmulator, choose_emulator
 from domain.emulator_commands import option_for_label
-from domain.emulator_pick import StoredPick, pick_for, source_kind
+from domain.emulator_pick import StoredPick, game_platform_pick, pick_for, source_kind
 
 if TYPE_CHECKING:
     import logging
@@ -47,12 +47,12 @@ if TYPE_CHECKING:
 class ActiveCoreResolverConfig:
     """Frozen wiring bundle handed to ``ActiveCoreResolver.__init__``.
 
-    Carries the SQLite Unit-of-Work factory (to read the ROM's
-    ``platform_slug`` + ``emulator_override``), the core-info read seam (the
-    system's emulator options), the per-platform
-    core reader (the ``settings.json`` ``platform_cores`` map), the platform's
-    system — the install record's for an installed ROM — and the logger used to
-    warn on a stale label.
+    Carries the SQLite Unit-of-Work factory (to read the ROM and its install
+    record), the core-info read seam (the system's emulator options), the
+    per-platform core reader (the ``settings.json`` ``platform_cores`` map), the
+    platform's system — the install record's for an installed ROM — and the
+    folders Tender keeps for a slug, and the logger used to warn on a stale
+    label.
     """
 
     uow_factory: UnitOfWorkFactory
@@ -118,7 +118,15 @@ class ActiveCoreResolver:
         platform = (
             None
             if game is not None and option_for_label(options, game.label) is not None
-            else pick_for(self._platform_core_reader.get_platform_core(rom.platform_slug), starting)
+            else pick_for(
+                game_platform_pick(
+                    rom.platform_fs_slug,
+                    rom.platform_slug,
+                    self._platform_core_reader.get_platform_core,
+                    lambda: self._platform_systems.kept_folders(rom.platform_slug),
+                ),
+                starting,
+            )
         )
         choice = choose_emulator(options, game=game, platform=platform)
         self._warn_vanished(game, platform, options, rom, system)

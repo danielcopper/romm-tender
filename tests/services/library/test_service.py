@@ -24,6 +24,7 @@ def _seed_rom(uow, rom_id, *, app_id, platform_slug, name="Game"):
     rom = Rom(
         rom_id=rom_id,
         platform_slug=platform_slug,
+        platform_fs_slug=platform_slug,
         name=name,
         fs_name=f"{name}.zip",
         shortcut_app_id=app_id,
@@ -42,14 +43,14 @@ class TestGetPlatforms:
 
         mock_loop = MagicMock()
         # get_platforms makes two executor calls: list_platforms, then the
-        # collapsed-count read (#1382) — stage both in call order.
+        # refiling of what it read — stage both in call order.
         mock_loop.run_in_executor = AsyncMock(
             side_effect=[
                 [
-                    {"id": 1, "name": "N64", "slug": "n64", "rom_count": 10},
-                    {"id": 2, "name": "SNES", "slug": "snes", "rom_count": 5},
+                    {"id": 1, "name": "N64", "slug": "n64", "fs_slug": "n64", "rom_count": 10},
+                    {"id": 2, "name": "SNES", "slug": "snes", "fs_slug": "snes", "rom_count": 5},
                 ],
-                {},
+                None,
             ]
         )
         library = make_library(loop=mock_loop)
@@ -69,10 +70,10 @@ class TestGetPlatforms:
         mock_loop.run_in_executor = AsyncMock(
             side_effect=[
                 [
-                    {"id": 1, "name": "N64", "slug": "n64", "rom_count": 10},
-                    {"id": 2, "name": "Empty", "slug": "empty", "rom_count": 0},
+                    {"id": 1, "name": "N64", "slug": "n64", "fs_slug": "n64", "rom_count": 10},
+                    {"id": 2, "name": "Empty", "slug": "empty", "fs_slug": "empty", "rom_count": 0},
                 ],
-                {},
+                None,
             ]
         )
         library = make_library(loop=mock_loop)
@@ -90,10 +91,10 @@ class TestGetPlatforms:
         mock_loop.run_in_executor = AsyncMock(
             side_effect=[
                 [
-                    {"id": 1, "name": "N64", "slug": "n64", "rom_count": 10},
-                    {"id": 2, "name": "SNES", "slug": "snes", "rom_count": 5},
+                    {"id": 1, "name": "N64", "slug": "n64", "fs_slug": "n64", "rom_count": 10},
+                    {"id": 2, "name": "SNES", "slug": "snes", "fs_slug": "snes", "rom_count": 5},
                 ],
-                {},
+                None,
             ]
         )
         library = make_library(loop=mock_loop)
@@ -109,7 +110,7 @@ class TestGetPlatforms:
 
         mock_loop = MagicMock()
         mock_loop.run_in_executor = AsyncMock(
-            side_effect=[[{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}], {}]
+            side_effect=[[{"id": 1, "name": "N64", "slug": "n64", "fs_slug": "n64", "rom_count": 3}], None]
         )
         library = make_library(loop=mock_loop)
         library.settings["enabled_platforms"] = {}

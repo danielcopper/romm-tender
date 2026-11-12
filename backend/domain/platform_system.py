@@ -24,6 +24,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from domain.emulator_sources import ALL_SOURCES_SWITCHED_OFF, NO_SOURCE_DETECTED, ArrangedSource
+from domain.platform_names import listed_fs_slug
 from domain.retrodeck_folders import FolderRefused, not_installed, switched_off, unanswered_refusal
 
 if TYPE_CHECKING:
@@ -120,7 +121,7 @@ def kept_platform_of(platform: Mapping[str, Any], romm_version: str | None) -> K
     identified = platform.get("is_identified")
     return KeptPlatform(
         slug=_text(platform.get("slug")),
-        fs_slug=_text(platform.get("fs_slug")),
+        fs_slug=listed_fs_slug(platform),
         platform_id=_number(platform.get("id")),
         name=_listed_name(platform),
         is_identified=identified if isinstance(identified, bool) else None,
@@ -144,6 +145,12 @@ def kept_by_slug(kept: Mapping[str, KeptPlatform], slug: str) -> KeptPlatform | 
     # metadata id up by the platform's slug (``handler/scan_handler.py::
     # scan_platform``, 5.4.1), so which of them answers changes no question.
     return next((entry for entry in reversed(list(kept.values())) if entry.slug == slug), None)
+
+
+def kept_folders_of_slug(raw: str | None, slug: str) -> frozenset[str]:
+    """The ``fs_slug`` of every platform of *slug* kept under :data:`PLATFORM_IDS_KEY` in *raw*."""
+    kept = decode_platform_ids(raw) or {}
+    return frozenset(entry.fs_slug for entry in kept.values() if entry.slug == slug and entry.fs_slug)
 
 
 def encode_platform_ids(kept: Mapping[str, KeptPlatform]) -> str:

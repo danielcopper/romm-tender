@@ -609,8 +609,8 @@ replaces is retired as it goes, because whatever overwrote it may still delegate
 
 There are three layouts, chosen from the `location` Steam passes the renderer, and all of their class names come from
 one map (`findClassModule((m) => m.ShortTemplate)`): several class maps carry these template names and exactly one
-carries `ShortTemplate`. Steam's own values, from `library.js`'s function `Bn` (reached as `ey3`), which turns the prop
-into a telemetry submethod name over `0 invalid, 1 gamepad, 2 desktop, 3 tray, 4 all, 5 push`: **1** is the Big Picture
+carries `ShortTemplate`. Steam's own values, from the function `library.js` exports as `ey3`, which turns the prop into
+a telemetry submethod name over `0 invalid, 1 gamepad, 2 desktop, 3 tray, 4 all, 5 push`: **1** is the Big Picture
 popup, **2** the desktop-client popup and **3** the Quick Access notifications tab. Location 3 has a second consumer,
 the desktop client's own notifications menu — but that menu skips client-sourced entries, which is what a Tender toast
 is, so a kept toast is listed in the Quick Access tab and nowhere else. The Big Picture popup is a native window of a

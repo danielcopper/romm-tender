@@ -24,6 +24,7 @@ from domain.platform_system import (
     decode_platform_ids,
     encode_platform_ids,
     kept_by_slug,
+    kept_folders_of_slug,
     kept_platform_of,
     kept_platforms,
     pick_system,
@@ -432,3 +433,18 @@ class TestPlatformSystem:
     def test_with_no_source_asked_the_pages_read_nothing(self):
         assert _platform(UNASKED, unasked=NO_SOURCE_DETECTED, source=None).payload() is None
         assert _platform(FOUND, system="c64", source=None).payload() is None
+
+
+class TestKeptFoldersOfSlug:
+    def test_every_kept_platform_of_the_slug_by_its_folder(self):
+        kept = {
+            "gc": KeptPlatform(slug="gamecube", fs_slug="gc"),
+            "ngc": KeptPlatform(slug="gamecube", fs_slug="ngc"),
+            "ps": KeptPlatform(slug="psx", fs_slug="ps"),
+            "gamecube": KeptPlatform(slug="gamecube"),
+        }
+
+        assert kept_folders_of_slug(encode_platform_ids(kept), "gamecube") == frozenset({"gc", "ngc"})
+
+    def test_nothing_kept_is_no_folder(self):
+        assert kept_folders_of_slug(None, "gamecube") == frozenset()

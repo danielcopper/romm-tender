@@ -8,8 +8,8 @@ unreachable server degrades in one place instead of five.
 The firmware comes off RomM's platform list, which carries each platform's
 files, and each file belongs to the platform its ``platform_id`` names
 (``domain/firmware_platforms.py``). Each read that reaches the server also
-moves Tender's older entries to those platforms
-(:class:`~services.firmware.refiling.FirmwareRefiling`); a read the cache
+hands the platform list to the refiling, which moves Tender's older entries to
+those platforms (:class:`~services.protocols.ListingRefiler`); a read the cache
 answers moves nothing.
 
 The cache is durable by way of the SQLite ``firmware_cache`` table, so a
@@ -28,8 +28,7 @@ from domain.firmware_rows import platform_library
 if TYPE_CHECKING:
     import logging
 
-    from services.firmware.refiling import FirmwareRefiling
-    from services.protocols import Clock, RommFirmwareApi, UnitOfWorkFactory
+    from services.protocols import Clock, ListingRefiler, RommFirmwareApi, UnitOfWorkFactory
 
 _FIRMWARE_CACHE_TTL = 3600  # 1 hour
 
@@ -48,7 +47,7 @@ class FirmwareListingConfig:
     logger: logging.Logger
     clock: Clock
     uow_factory: UnitOfWorkFactory
-    refiling: FirmwareRefiling
+    refiling: ListingRefiler
 
 
 class FirmwareListing:
@@ -152,7 +151,7 @@ class FirmwareListing:
             if self._firmware_cache is not None:
                 return self._firmware_cache
             raise
-        self._refile(platforms, result)
+        self._refiling.do_refile(platforms)
         return result
 
     def get_platform_firmware_list(self, platform_folder: str) -> list[dict[str, Any]]:
@@ -162,15 +161,6 @@ class FirmwareListing:
         and raises the same way.
         """
         return platform_library(self.get_firmware_list(), platform_folder)
-
-    def _refile(self, platforms: list[dict[str, Any]], rows: list[dict[str, Any]]) -> None:
-        """Move Tender's older entries to their platforms; a failure costs that move, never the listing."""
-        try:
-            self._refiling.do_refile(platforms, rows)
-        except Exception as e:
-            self._logger.warning(
-                f"Failed to move older BIOS records and per-platform emulator overrides to their platforms: {e}"
-            )
 
     def invalidate(self) -> None:
         """Clear cached firmware list so the next call re-fetches."""

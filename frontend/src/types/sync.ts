@@ -270,6 +270,8 @@ export interface SyncRunsAnswer {
 export interface RegistryPlatform {
   name: string;
   slug: string;
+  /** The platform's fs_slug, which the Platforms tab knows it by (#2452 D1). */
+  fs_slug: string;
   /** Bound ROMs — how many Steam shortcuts this platform has. What the Remove
    *  group acts on, and never what the header line states. */
   count: number;
@@ -304,13 +306,14 @@ export interface SyncAddItem {
  *
  * `name` is the name the apply gives the platform's Steam collection: RomM's
  * listed name for every platform the run's listing names, synced or not, else
- * the name the last sync cached for it, else the bare slug.
+ * the name the last sync cached for it, else its `fs_slug`.
  *
  * Collections are NOT a row here — `collection_diff` on the same summary already
  * carries the added and removed collection names.
  */
 export interface PlatformBreakdownRow {
-  slug: string;
+  /** The platform's `fs_slug`, which names one platform where a slug may name two. */
+  fs_slug: string;
   name: string;
   synced: boolean;
   new_count: number;

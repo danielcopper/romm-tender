@@ -9,7 +9,7 @@ When a platform or collection is skipped, and what its completion stamp records.
 
   The resume offer's `PlatformSyncStateRepository.has_any` applies the same rule in its query; removed-game discovery,
   the prune canaries, `reachable_count` and the recovery snapshot read the stamp raw; the end-of-run stale removal
-  revokes a skip only on a platform outside `processed_platform_slugs`
+  revokes a skip only on a platform outside `processed_platform_folders`
 
   The helper by `tests/domain/test_platform_sync_state.py::TestStampForSkip`; each skip-side reader by tests over a
   revoked stamp (`tests/services/library/test_fetcher.py`'s

@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from domain.sync_diff import StaleRow
+from domain.sync_diff import ExactAnswers, StaleRow
 from services.library._stale_rows import settle_stale_rows, stale_rows_of, with_kept_platform_names
 
 _LOGGER = logging.getLogger("test_stale_rows")
@@ -16,15 +16,15 @@ _LOGGER = logging.getLogger("test_stale_rows")
 class TestSettleStaleRows:
     @pytest.mark.asyncio
     async def test_a_row_reached_through_a_collection_is_removed_only_where_romm_returns_it(self):
-        ask = AsyncMock(return_value={1: "present", 2: "gone"})
+        ask = AsyncMock(return_value=ExactAnswers({1: "present", 2: "gone"}, {}))
         rows = [StaleRow(1, 1001, "gba", "collection"), StaleRow(2, 1002, "gba", "collection")]
 
-        remove, kept, _marks = await settle_stale_rows(
+        remove, kept, _marks, _folders = await settle_stale_rows(
             rows,
             ask_romm=ask,
             logger=_LOGGER,
-            read_platform_slugs=set(),
-            listed_platform_slugs={"gba"},
+            read_platform_folders=set(),
+            listed_platform_folders={"gba"},
             collection_listed_rom_ids=set(),
             synced_group_keys=frozenset(),
         )
@@ -37,15 +37,15 @@ class TestSettleStaleRows:
 
     @pytest.mark.asyncio
     async def test_romm_is_not_asked_when_no_row_needs_it(self):
-        ask = AsyncMock(return_value={})
+        ask = AsyncMock(return_value=ExactAnswers({}, {}))
         rows = [StaleRow(1, 1001, "n64", "platform")]
 
-        remove, kept, _marks = await settle_stale_rows(
+        remove, kept, _marks, _folders = await settle_stale_rows(
             rows,
             ask_romm=ask,
             logger=_LOGGER,
-            read_platform_slugs={"n64"},
-            listed_platform_slugs={"n64"},
+            read_platform_folders={"n64"},
+            listed_platform_folders={"n64"},
             collection_listed_rom_ids=set(),
             synced_group_keys=frozenset(),
         )
@@ -55,19 +55,19 @@ class TestSettleStaleRows:
 
     @pytest.mark.asyncio
     async def test_a_row_whose_game_the_run_synced_is_asked_where_another_would_be_and_never_removed(self):
-        ask = AsyncMock(return_value={1: "present", 3: "gone"})
+        ask = AsyncMock(return_value=ExactAnswers({1: "present", 3: "gone"}, {}))
         rows = [
             StaleRow(1, 1001, "gba", "collection", "igdb:1:1"),
             StaleRow(2, 1002, "gba", None, "igdb:1:1"),
             StaleRow(3, 1003, "gba", "collection", "igdb:1:1"),
         ]
 
-        remove, kept, marks = await settle_stale_rows(
+        remove, kept, marks, _folders = await settle_stale_rows(
             rows,
             ask_romm=ask,
             logger=_LOGGER,
-            read_platform_slugs=set(),
-            listed_platform_slugs={"gba"},
+            read_platform_folders=set(),
+            listed_platform_folders={"gba"},
             collection_listed_rom_ids=set(),
             synced_group_keys=frozenset({"igdb:1:1"}),
         )
@@ -79,8 +79,13 @@ class TestSettleStaleRows:
 class TestStaleRowsOf:
     def test_each_row_carries_what_the_registry_holds_for_it(self):
         registry = {
-            "1": {"app_id": 1001, "platform_slug": "gba", "delivered_through": "collection", "sibling_group_key": "g1"},
-            "2": {"app_id": 1002, "platform_slug": "n64", "delivered_through": None, "sibling_group_key": None},
+            "1": {
+                "app_id": 1001,
+                "platform_fs_slug": "gba",
+                "delivered_through": "collection",
+                "sibling_group_key": "g1",
+            },
+            "2": {"app_id": 1002, "platform_fs_slug": "n64", "delivered_through": None, "sibling_group_key": None},
         }
 
         assert stale_rows_of([2, 1], registry) == [

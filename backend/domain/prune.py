@@ -15,6 +15,7 @@ class BundleGameRow(TypedDict):
     name: str
     fs_name: str
     platform_slug: str
+    platform_fs_slug: NotRequired[str | None]
     role: str
 
 
@@ -129,7 +130,8 @@ def render_bundle_readme(context: BundleReadmeContext, records: Sequence[Mapping
         "--------------------",
     ]
     for game in games:
-        lines.append(f"ROM {game['rom_id']} — {game['name']} [{game['platform_slug']}] — {game['role']}")
+        platform = game.get("platform_fs_slug") or game["platform_slug"]
+        lines.append(f"ROM {game['rom_id']} — {game['name']} [{platform}] — {game['role']}")
         if game["fs_name"]:
             lines.append(f"    file name on the server: {game['fs_name']}")
     app_id = context.get("steam_app_id")

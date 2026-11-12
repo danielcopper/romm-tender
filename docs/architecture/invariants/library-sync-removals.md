@@ -50,30 +50,34 @@ other areas: [the register's index](index.md).
   (`roms.delivered_through`) is asked for by its exact id on every run until it is found or unbound, and kept unless
   RomM's answer is the ROM itself, while any other row is kept when the run's own platform listing no longer names its
   platform and removed unasked when it does; a row with no recorded route is asked only when the collections' last
-  completed members list it; a kept row stays in its platform's Steam collection, and so does a bound row a collection's
-  skip rebuilt on a platform the run read whole without returning it (#2549 D1), and, with platform groups on, every
-  other row the run leaves bound, a row RomM did not confirm included (#2490 D2, D3); the preview counts exactly the
-  removals and the platform collections the apply makes; and of the two, only the apply records what the stale removal
-  established on the row (`roms.gone_from_romm`): a 404 or a keep on a platform RomM no longer lists marks it, the ROM
-  itself clears the mark, and any other answer writes nothing. Beside it, a group holding more than one bound shortcut
-  converges (#2645): on a platform unit the run fetched in full, every bound row of such a group but the one
-  `domain/sync_diff.py::converge_bound_groups` keeps is removed on a run that was not stopped — never sorted as stale,
-  never over an appId the run bound, and never while Steam lists one of the group's shortcuts as running, read at the
-  platform unit and again before the removal — with the preview counting the same removals unless a game starts or quits
-  between the preview and the removal (#2645 D5, D6), and no platform whose rows still hold such a group is skipped; on
-  a platform the sync leaves off, the run's collection deliveries converge a group they bring in the same way (#2661),
-  once for the run, over the bound rows they deliver and the bound rows of the same stored key a delivered member lists
-  in `sibling_roms` (`domain/sync_diff.py::brought_in_by_delivery`), a row no collection delivered ranked by its stored
-  version fields and the sibling list's default, while the convergence leaves a bound row no delivered member lists to
-  the stale sort, and no collection holding a member of such a group is skipped; a bound version RomM joined to the game
-  after Tender last read it, its stored key still its old game's, is not brought in and goes the stale way (#2661 D5);
-  in a group no listed version holds, a bound row the user hid takes no part in either convergence (#2502 D1), and in a
-  group a listed version holds it ranks as one RomM no longer lists in both (D8). A row whose shortcut either removes
-  keeps its binding until the panel reports the shortcut gone from Steam, the finalize settles the row's stamps whatever
-  its binding by then, and `report_sync_removals` unbinds it only while it still holds the reported appId; a removal
-  never reported is emitted and counted by the preview again while the shortcut is in Steam, and unbound by the next
-  sync's start reconcile where it is gone (#2653 D1). The removed-game cleanup's own proof marks and clears rows too, by
-  its rule in docs/architecture/removed-game-cleanup.md, "Discovery"
+  completed members list it; a row with no `fs_slug` recorded counts as on a platform the run did not read and is asked
+  for by its exact id — one a collection last delivered is settled as a collection's row, any other one RomM returns
+  with its `fs_slug` is sorted as a row on that platform, which the apply records on the row (#2452 D5); a kept row
+  stays in its platform's Steam collection, and so does a bound row a collection's skip rebuilt on a platform the run
+  read whole without returning it (#2549 D1), and, with platform groups on, every other row the run leaves bound, a row
+  RomM did not confirm included (#2490 D2, D3), but for a row with no `fs_slug` recorded, which is in no platform's
+  collection (#2452 D5); the preview counts exactly the removals and the platform collections the apply makes; and of
+  the two, only the apply records what the stale removal established on the row (`roms.gone_from_romm`): a 404 or a keep
+  on a platform RomM no longer lists marks it, the ROM itself clears the mark, and any other answer writes nothing.
+  Beside it, a group holding more than one bound shortcut converges (#2645): on a platform unit the run fetched in full,
+  every bound row of such a group but the one `domain/sync_diff.py::converge_bound_groups` keeps is removed on a run
+  that was not stopped — never sorted as stale, never over an appId the run bound, and never while Steam lists one of
+  the group's shortcuts as running, read at the platform unit and again before the removal — with the preview counting
+  the same removals unless a game starts or quits between the preview and the removal (#2645 D5, D6), and no platform
+  whose rows still hold such a group is skipped; on a platform the sync leaves off, the run's collection deliveries
+  converge a group they bring in the same way (#2661), once for the run, over the bound rows they deliver and the bound
+  rows of the same stored key a delivered member lists in `sibling_roms`
+  (`domain/sync_diff.py::brought_in_by_delivery`), a row no collection delivered ranked by its stored version fields and
+  the sibling list's default, while the convergence leaves a bound row no delivered member lists to the stale sort, and
+  no collection holding a member of such a group is skipped; a bound version RomM joined to the game after Tender last
+  read it, its stored key still its old game's, is not brought in and goes the stale way (#2661 D5); in a group no
+  listed version holds, a bound row the user hid takes no part in either convergence (#2502 D1), and in a group a listed
+  version holds it ranks as one RomM no longer lists in both (D8). A row whose shortcut either removes keeps its binding
+  until the panel reports the shortcut gone from Steam, the finalize settles the row's stamps whatever its binding by
+  then, and `report_sync_removals` unbinds it only while it still holds the reported appId; a removal never reported is
+  emitted and counted by the preview again while the shortcut is in Steam, and unbound by the next sync's start
+  reconcile where it is gone (#2653 D1). The removed-game cleanup's own proof marks and clears rows too, by its rule in
+  docs/architecture/removed-game-cleanup.md, "Discovery"
 
   `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule (`sort_stale_rows`, `settle_asked_rows`),
   `tests/domain/test_sync_diff.py::TestAHiddenRowInTheStaleSort` for a row the user hid,
@@ -81,7 +85,10 @@ other areas: [the register's index](index.md).
   such a row stale, `TestConvergeBoundGroups`' hidden cases and
   `tests/services/library/test_sync_orchestrator.py::TestAGameACollectionBringsInConverges::test_a_version_the_user_hid_ranks_as_one_romm_no_longer_lists`
   for the convergence, and `tests/services/library/test_sync_orchestrator.py::TestAGameTheUserHidInRomm` for every route
-  end to end, preview included,
+  end to end, preview included, `tests/domain/test_sync_diff.py::TestARowWithoutAFolder` and
+  `tests/services/library/test_platforms_by_folder.py::TestAGameWithoutARecordedFolder` for a row with no `fs_slug`
+  recorded (removed with its platform turned off once RomM answers its `fs_slug`, kept and marked on a 404, the preview
+  counting the removal the apply makes),
   `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and the
   preview (a 404 keeps, a found ROM removes, an answer that establishes nothing keeps; a 404 is asked again on the third
   run, a stopped run leaves the row asked at the next, a row its platform last delivered is removed unasked, and a row
@@ -111,7 +118,7 @@ other areas: [the register's index](index.md).
   asked about it, and a route recorded only at a unit's commit is untouched by the question, so a 404 is asked again on
   every later run. A row with no recorded route falls back to the collection records, read before the run's first unit
   rewrites any of them (`LocalLibraryReader.do_read_collection_listed_rom_ids`). A platform RomM no longer lists is read
-  off the run's own platform listing (`LibrarySyncStateBox.run_listed_platform_slugs`), never off the kept ids under
+  off the run's own platform listing (`LibrarySyncStateBox.run_listed_platform_folders`), never off the kept ids under
   `platform_ids`, which a game page's read can widen during the run; which platforms are on in Tender is keyed by a RomM
   id such a platform no longer has, so the route stands in for it. Only a 404 is evidence of absence, so every other
   answer keeps the shortcut. The apply's finalize writes what it established onto the row
@@ -129,9 +136,12 @@ other areas: [the register's index](index.md).
   naming a platform collection alike where a platform's slug and name differ, a rebuilt row's and a platform only
   collections reach alike. A row RomM was asked about and did not return stays bound, and so does one whose game the run
   synced on a platform it did not read, so the apply's end-of-run scan, which files every bound row through
-  `domain/sync_diff.py::platform_collection_name`, files either where platform groups are on. No emitted entry carries
-  such a row, so the preview passes `compute_platform_collection_diff` every stale row the stale removal neither removes
-  nor keeps (`left_bound_rows`), and the diff files each through the same function (#2490 D3).
+  `domain/sync_diff.py::platform_collection_name`, files either where platform groups are on — unless it has no
+  `fs_slug` recorded, which that function files under no platform
+  (`tests/domain/test_sync_diff.py::TestPlatformCollectionName::test_a_row_with_no_fs_slug_recorded_is_filed_under_no_platform`,
+  #2452 D5). No emitted entry carries such a row, so the preview passes `compute_platform_collection_diff` every stale
+  row the stale removal neither removes nor keeps (`left_bound_rows`), and the diff files each through the same function
+  (#2490 D3).
   `tests/services/library/test_sync_orchestrator.py::TestThePreviewFilesAGameRommDidNotConfirmAsTheApplyDoes` pins the
   two agreeing for a 404 and for an answer that establishes nothing, with platform groups on and off, on a platform RomM
   still lists and on one it no longer lists, and
@@ -196,44 +206,45 @@ other areas: [the register's index](index.md).
   `services/library/_stale_rows.py::settle_stale_rows` with the group keys `domain/sync_diff.py::group_keys_of` reads
   for the run's synced ROMs, which is prompt-only, as is that the chunk dispatcher names the unit's kind on every
   commit; that the collection records are read before the run's first unit (`do_read_collection_listed_rom_ids`); that
-  the platform listing is the run's own (`LibrarySyncStateBox.run_listed_platform_slugs`) and never the kept ids; that
+  the platform listing is the run's own (`LibrarySyncStateBox.run_listed_platform_folders`) and never the kept ids; that
   the preview names every platform collection its diff counts by the name the names
-  `services/library/_stale_rows.py::with_kept_platform_names` answers hold for its slug, else the slug — an emitted
-  entry's and a row left bound's through `domain/sync_diff.py::platform_collection_name`, a kept row's by the same
-  lookup in `compute_platform_collection_diff` — which must agree with `RunFinalizer._names_with_bound_platforms_kept`;
-  that the preview hands that diff every stale row `settle_stale_rows` neither removes nor keeps; that both pick the
-  rebuilt rows they file as kept through `domain/sync_diff.py::rebuilt_rows_filed_as_kept`; and that both converge a
-  game a collection brings in through `services/library/_convergence.py::converge_collection_deliveries`, over the ROMs
-  the collection units fetched and never a skipped collection's rebuilt rows. **What breaks without it:** a kept row the
-  preview counts as a removal offers Apply on every preview; a game only a collection delivers loses its shortcut on
-  every sync after a switch to a version the collection does not list; a kept version never asked about keeps a mark
-  RomM disproved, or never gets the one the cleanup needs; a removal on a platform read whole takes a game gone from
-  RomM out of Steam with its playtime and collections; a rule read off the collection stamps alone removes a game gone
-  from RomM at the second run after its collection dropped it; a platform RomM stopped listing loses every shortcut as
-  if it had been turned off; a kept row left out of the platform's collection drops out of it, or keeps its game under a
-  collection renamed to the slug; a game hidden in RomM leaves its platform's collection whenever the collection that
-  lists it is skipped; a preview that names a platform collection by an entry's own `platform_name` counts one added —
-  the slug beside the name — that the apply never makes, and offers Apply on every preview; with platform groups on, a
-  preview that files only the kept rows counts as removed the platform collection of a game RomM did not confirm, which
-  the apply keeps, and offers Apply on every preview; and a mark a preview wrote, or an answer that established nothing
-  set or cleared, would offer the cleanup a game RomM still serves or hide one it no longer does; a game a collection
-  brings in keeps every shortcut it holds, for good; and a row unbound before its shortcut was gone leaves that shortcut
-  in Steam with no row, for good; a game the user hid keeps its shortcut on a platform read whole while the cleanup
-  offers it on every scan and refuses it, and through a standard collection goes only once that collection is fetched
-  for another reason. Prompt-only: the panel reports from the `sync_stale` tail's `finally`, and only what Steam no
-  longer lists; a new collapse caller on a complete view hands the collapse the convergence's losers (`converged=`); the
-  collection records are read before the run's first unit (`do_read_collection_listed_rom_ids`); the platform listing is
-  the run's own (`LibrarySyncStateBox.run_listed_platform_slugs`) and never the kept ids; the chunk dispatcher names the
-  unit's kind on every commit; the preview and the apply both sort through
-  `services/library/_stale_rows.py::settle_stale_rows` with the group keys `domain/sync_diff.py::group_keys_of` reads
-  for the run's synced ROMs; the preview names every platform collection its diff counts by the name the names
-  `services/library/_stale_rows.py::with_kept_platform_names` answers hold for its slug, else the slug — an emitted
-  entry's and a row left bound's through `domain/sync_diff.py::platform_collection_name`, a kept row's by the same
-  lookup in `compute_platform_collection_diff` — which must agree with `RunFinalizer._names_with_bound_platforms_kept`;
-  the preview hands that diff every stale row `settle_stale_rows` neither removes nor keeps; the preview and the apply
-  both pick the rebuilt rows they file as kept through `domain/sync_diff.py::rebuilt_rows_filed_as_kept`; and both
-  converge a game a collection brings in through `services/library/_convergence.py::converge_collection_deliveries`,
-  over the ROMs the collection units fetched and never a skipped collection's rebuilt rows
+  `services/library/_stale_rows.py::with_kept_platform_names` answers hold for its `fs_slug`, else the `fs_slug` — an
+  emitted entry's and a row left bound's through `domain/sync_diff.py::platform_collection_name`, a kept row's by the
+  same lookup in `compute_platform_collection_diff` — which must agree with
+  `RunFinalizer._names_with_bound_platforms_kept`; that the preview hands that diff every stale row `settle_stale_rows`
+  neither removes nor keeps; that both pick the rebuilt rows they file as kept through
+  `domain/sync_diff.py::rebuilt_rows_filed_as_kept`; and that both converge a game a collection brings in through
+  `services/library/_convergence.py::converge_collection_deliveries`, over the ROMs the collection units fetched and
+  never a skipped collection's rebuilt rows. **What breaks without it:** a kept row the preview counts as a removal
+  offers Apply on every preview; a game only a collection delivers loses its shortcut on every sync after a switch to a
+  version the collection does not list; a kept version never asked about keeps a mark RomM disproved, or never gets the
+  one the cleanup needs; a removal on a platform read whole takes a game gone from RomM out of Steam with its playtime
+  and collections; a rule read off the collection stamps alone removes a game gone from RomM at the second run after its
+  collection dropped it; a platform RomM stopped listing loses every shortcut as if it had been turned off; a kept row
+  left out of the platform's collection drops out of it, or keeps its game under a collection renamed to the `fs_slug`;
+  a game hidden in RomM leaves its platform's collection whenever the collection that lists it is skipped; a preview
+  that names a platform collection by an entry's own `platform_name` counts one added — the slug beside the name — that
+  the apply never makes, and offers Apply on every preview; with platform groups on, a preview that files only the kept
+  rows counts as removed the platform collection of a game RomM did not confirm, which the apply keeps, and offers Apply
+  on every preview; and a mark a preview wrote, or an answer that established nothing set or cleared, would offer the
+  cleanup a game RomM still serves or hide one it no longer does; a game a collection brings in keeps every shortcut it
+  holds, for good; and a row unbound before its shortcut was gone leaves that shortcut in Steam with no row, for good; a
+  game the user hid keeps its shortcut on a platform read whole while the cleanup offers it on every scan and refuses
+  it, and through a standard collection goes only once that collection is fetched for another reason. Prompt-only: the
+  panel reports from the `sync_stale` tail's `finally`, and only what Steam no longer lists; a new collapse caller on a
+  complete view hands the collapse the convergence's losers (`converged=`); the collection records are read before the
+  run's first unit (`do_read_collection_listed_rom_ids`); the platform listing is the run's own
+  (`LibrarySyncStateBox.run_listed_platform_folders`) and never the kept ids; the chunk dispatcher names the unit's kind
+  on every commit; the preview and the apply both sort through `services/library/_stale_rows.py::settle_stale_rows` with
+  the group keys `domain/sync_diff.py::group_keys_of` reads for the run's synced ROMs; the preview names every platform
+  collection its diff counts by the name the names `services/library/_stale_rows.py::with_kept_platform_names` answers
+  hold for its `fs_slug`, else the `fs_slug` — an emitted entry's and a row left bound's through
+  `domain/sync_diff.py::platform_collection_name`, a kept row's by the same lookup in `compute_platform_collection_diff`
+  — which must agree with `RunFinalizer._names_with_bound_platforms_kept`; the preview hands that diff every stale row
+  `settle_stale_rows` neither removes nor keeps; the preview and the apply both pick the rebuilt rows they file as kept
+  through `domain/sync_diff.py::rebuilt_rows_filed_as_kept`; and both converge a game a collection brings in through
+  `services/library/_convergence.py::converge_collection_deliveries`, over the ROMs the collection units fetched and
+  never a skipped collection's rebuilt rows
 - **What the user hid in RomM is read off one request, `GET /api/roms?statuses=hidden`
   (`RommApiAdapter.list_hidden_roms`), read only through `RommApiAdapter.read_hidden_rom_ids`, which parses it with
   `domain/hidden_roms.py::hidden_rom_ids` and logs an answer it cannot read** — test + prompt-only

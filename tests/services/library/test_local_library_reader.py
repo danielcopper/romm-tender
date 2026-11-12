@@ -35,7 +35,7 @@ class TestRegistryProjections:
         )
         _seed_rom_row(library, 11, app_id=1011, platform_slug="n64", name="Null", fs_name="null.z64", cover_source=None)
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=2)
         registry = library.local_library_reader.do_read_apply_registry(unit)
 
         assert registry["10"]["cover_source"] == self._OLD

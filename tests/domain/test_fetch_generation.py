@@ -11,6 +11,7 @@ from domain.fetch_generation import (
     gone_from_romm_ids,
     hidden_without_a_listed_version,
     prune_candidate_ids,
+    rows_with_their_stamp,
 )
 from domain.platform_sync_state import PlatformSyncState
 from domain.rom import Rom
@@ -20,6 +21,7 @@ def _row(rom_id: int, fetch_id: str | None) -> Rom:
     rom = Rom.synced(
         rom_id=rom_id,
         platform_slug="dc",
+        platform_fs_slug="dc",
         name=f"rom-{rom_id}",
         fs_name=f"rom-{rom_id}.gdi",
         shortcut_app_id=None,
@@ -76,19 +78,21 @@ class TestCountRowsForSkip:
 
 class TestPruneCandidateIds:
     def test_mismatch_and_null_are_candidates(self):
-        stamp = PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id="new")
+        stamp = PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=1, fetch_id="new")
         assert prune_candidate_ids([_row(1, "new"), _row(2, "old"), _row(3, None)], stamp) == {2, 3}
 
     def test_missing_legacy_and_empty_completion_yield_none(self):
         rows = [_row(1, "old")]
         assert prune_candidate_ids(rows, None) == set()
         assert (
-            prune_candidate_ids(rows, PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id=None))
+            prune_candidate_ids(
+                rows, PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=1, fetch_id=None)
+            )
             == set()
         )
         assert (
             prune_candidate_ids(
-                rows, PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=0, fetch_id="new")
+                rows, PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=0, fetch_id="new")
             )
             == set()
         )
@@ -96,7 +100,7 @@ class TestPruneCandidateIds:
 
 class TestGoneFromRommIds:
     def test_the_stamp_s_candidates_and_every_marked_row(self):
-        stamp = PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id="new")
+        stamp = PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=1, fetch_id="new")
         returned_but_marked = _row(1, "new")
         returned_but_marked.mark_gone_from_romm("delisted")
 
@@ -114,6 +118,7 @@ def _keyed_row(rom_id: int, fetch_id: str | None, group_key: str | None) -> Rom:
     return Rom(
         rom_id=rom_id,
         platform_slug="dc",
+        platform_fs_slug="dc",
         name=f"rom-{rom_id}",
         fs_name=f"rom-{rom_id}.gdi",
         shortcut_app_id=None,
@@ -151,12 +156,12 @@ class TestBackfillNeeded:
 class TestCurrentGenerationIds:
     def test_returns_only_rows_carrying_the_stamped_generation(self):
         rows = [_row(4375, "run-old"), _row(25135, "run-new"), _row(25136, "run-new")]
-        stamp = PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=2, fetch_id="run-new")
+        stamp = PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=2, fetch_id="run-new")
         assert current_generation_ids(rows, stamp) == {25135, 25136}
 
     def test_is_the_exact_complement_of_the_candidate_set(self):
         rows = [_row(4375, "run-old"), _row(25135, "run-new")]
-        stamp = PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id="run-new")
+        stamp = PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=1, fetch_id="run-new")
         assert current_generation_ids(rows, stamp) | prune_candidate_ids(rows, stamp) == {4375, 25135}
         assert current_generation_ids(rows, stamp) & prune_candidate_ids(rows, stamp) == set()
 
@@ -164,8 +169,8 @@ class TestCurrentGenerationIds:
         "stamp",
         [
             None,
-            PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id=""),
-            PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=0, fetch_id="run-new"),
+            PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=1, fetch_id=""),
+            PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=0, fetch_id="run-new"),
         ],
     )
     def test_an_unusable_stamp_establishes_nothing(self, stamp):
@@ -173,7 +178,7 @@ class TestCurrentGenerationIds:
         assert current_generation_ids([_row(25135, "run-new")], stamp) == set()
 
     def test_no_rows_yields_nothing(self):
-        stamp = PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id="run-new")
+        stamp = PlatformSyncState.stamp(platform_folder="dc", at="now", rom_count=1, fetch_id="run-new")
         assert current_generation_ids([], stamp) == set()
 
 
@@ -209,3 +214,38 @@ class TestHiddenWithoutAListedVersion:
 
     def test_an_unbound_hidden_row_is_not_named(self):
         assert hidden_without_a_listed_version([_game_row(1, key="g", fetch_id="old")], {1}, "new") == set()
+
+
+class TestRowsWithTheirStamp:
+    """Each platform's rows go with that platform's stamp, asked by its ``fs_slug`` (#2452 D1)."""
+
+    def test_two_fs_slugs_sharing_a_slug_each_go_with_their_own_stamp(self):
+        stamps = {
+            fs_slug: PlatformSyncState.stamp(platform_folder=fs_slug, at="2026-07-20T06:27:12", rom_count=1)
+            for fs_slug in ("dc", "dc-hacks")
+        }
+        rows = [_row(1, None), _row(2, None), _row(3, None)]
+        rows[1].record_platform_folder("dc-hacks")
+
+        groups = rows_with_their_stamp(rows, stamps.get)
+
+        assert [([r.rom_id for r in group], stamp) for group, stamp in groups] == [
+            ([1, 3], stamps["dc"]),
+            ([2], stamps["dc-hacks"]),
+        ]
+
+    def test_rows_with_no_fs_slug_are_one_group_with_no_stamp_and_none_is_asked(self):
+        row = Rom.synced(
+            rom_id=4,
+            platform_slug="dc",
+            platform_fs_slug=None,
+            name="rom-4",
+            fs_name="rom-4.gdi",
+            shortcut_app_id=None,
+            synced_at="2026-07-20T06:27:12",
+        )
+        asked: list[str] = []
+
+        groups = rows_with_their_stamp([row], lambda fs_slug: asked.append(fs_slug))
+
+        assert (groups, asked) == ([([row], None)], [])

@@ -31,7 +31,7 @@ async def _finalize(library, *, synced_rom_ids: set[int]) -> None:
         synced_rom_ids=synced_rom_ids,
         collection_memberships={},
         platform_rom_ids=synced_rom_ids,
-        processed_platform_slugs=frozenset(),
+        processed_platform_folders=frozenset(),
         cancelled=False,
     )
 

@@ -10,8 +10,9 @@ from zero. This stamp is the per-platform checkpoint that survives that
 cancellation: the skip compares RomM's answer with the completing fetch's
 ``fetch_started_at`` and ``rom_id_checksum`` (``domain/platform_skip.py``).
 
-Keyed by ``platform_slug``. A thin record built whole and upserted — never a
-partial field mutation — so it carries a single ``stamp`` constructor and no
+Keyed by ``platform_folder``, the platform's ``fs_slug``,
+which two platforms never share. A thin record built whole and
+upserted — never a partial field mutation — so it carries a single ``stamp`` constructor and no
 verb-named mutators. The contract is *a stamp may authorise a skip ⟺ the
 platform's most recent apply attempt ran to completion, and neither a local
 removal nor a stale removal on a run that did not process the platform has
@@ -34,9 +35,9 @@ from domain._aggregate import cosmic_aggregate
 
 @cosmic_aggregate
 class PlatformSyncState:
-    """One platform's last fully-completed sync, keyed by ``platform_slug``."""
+    """One platform's last fully-completed sync, keyed by its ``fs_slug`` (``platform_folder``)."""
 
-    platform_slug: str
+    platform_folder: str
     completed_at: str
     rom_count: int
     fetch_id: str | None = None
@@ -48,14 +49,14 @@ class PlatformSyncState:
     def stamp(
         cls,
         *,
-        platform_slug: str,
+        platform_folder: str,
         at: str,
         rom_count: int,
         fetch_id: str | None = None,
         fetch_started_at: str | None = None,
         rom_id_checksum: str | None = None,
     ) -> PlatformSyncState:
-        """Record that ``platform_slug`` fully synced at ISO timestamp ``at``.
+        """Record that the platform whose ``fs_slug`` is ``platform_folder`` fully synced at ISO timestamp ``at``.
 
         ``rom_count`` is the server's platform ROM count the completing run
         planned with. The skip does not read it; removed-game discovery reads
@@ -75,12 +76,12 @@ class PlatformSyncState:
         cannot say what its fetch returned, so discovery finds no candidates
         under it, and it predates ``rom_id_checksum`` too, so it never skips.
         """
-        if not platform_slug:
-            raise ValueError("platform_slug is required")
+        if not platform_folder:
+            raise ValueError("platform_folder is required")
         if rom_count < 0:
             raise ValueError("rom_count must be non-negative")
         return cls(
-            platform_slug=platform_slug,
+            platform_folder=platform_folder,
             completed_at=at,
             rom_count=rom_count,
             fetch_id=fetch_id,

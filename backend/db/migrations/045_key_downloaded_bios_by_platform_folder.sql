@@ -1,0 +1,16 @@
+-- =============================================================================
+-- 045_key_downloaded_bios_by_platform_folder.sql — an older BIOS download
+-- record is kept per RomM platform fs_slug
+-- #2797, #2452 (D1, D6), #2223 (D49)
+-- =============================================================================
+--
+--   * downloaded_bios — `platform_slug` renamed `platform_folder`, values kept:
+--     each record is read as filed under the fs_slug it holds. A record whose
+--     value is no listed fs_slug is moved where a later read of RomM's
+--     platform listing places it, and stays where it places it nowhere
+--     (services/platform_refiling.py).
+--
+-- Transaction-safe DDL only — the runner (adapters/sqlite_migrations.py) wraps
+-- BEGIN/COMMIT and stamps PRAGMA user_version = 45.
+-- -----------------------------------------------------------------------------
+ALTER TABLE downloaded_bios RENAME COLUMN platform_slug TO platform_folder;

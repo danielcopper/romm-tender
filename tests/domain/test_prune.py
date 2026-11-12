@@ -224,3 +224,16 @@ def test_selected_ids_truth_table():
         )
         == set()
     )
+
+
+def test_readme_names_a_game_s_platform_by_its_folder_and_by_its_slug_where_no_folder_is_recorded():
+    context = _readme_context()
+    context["games"] = [
+        {**context["games"][0], "platform_fs_slug": "dreamcast-hacks"},
+        {**context["games"][0], "rom_id": 8, "platform_fs_slug": None},
+    ]
+
+    readme = render_bundle_readme(context, [])
+
+    assert "ROM 7 — Test Game [dreamcast-hacks] — removed by this cleanup" in readme
+    assert "ROM 8 — Test Game [dc] — removed by this cleanup" in readme

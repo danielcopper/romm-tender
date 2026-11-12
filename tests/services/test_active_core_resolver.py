@@ -35,20 +35,20 @@ if TYPE_CHECKING:
 
 
 class FakePlatformCoreReader:
-    """In-memory ``PlatformCoreReader`` mapping platform slugs to core labels.
+    """In-memory ``PlatformCoreReader`` mapping a platform's ``fs_slug`` to its core label.
 
-    Returns the configured label for a slug as RetroDECK's pick, or ``None`` when absent. Records
-    each queried slug so a test can assert the per-platform layer was consulted
+    Returns the configured label as RetroDECK's pick, or ``None`` when absent. Records
+    each queried ``fs_slug`` so a test can assert the per-platform layer was consulted
     (or skipped when a per-game override already resolved).
     """
 
     def __init__(self, mapping: dict[str, str] | None = None) -> None:
         self.mapping = mapping if mapping is not None else {}
-        self.calls: list[str] = []
+        self.calls: list[str | None] = []
 
-    def get_platform_core(self, platform_slug: str) -> StoredPick | None:
-        self.calls.append(platform_slug)
-        label = self.mapping.get(platform_slug)
+    def get_platform_core(self, platform_folder: str | None) -> StoredPick | None:
+        self.calls.append(platform_folder)
+        label = self.mapping.get(platform_folder) if platform_folder is not None else None
         return StoredPick(label=label, source="retrodeck") if label is not None else None
 
 
@@ -64,6 +64,7 @@ def _seed_rom(
         Rom(
             rom_id=rom_id,
             platform_slug=platform_slug,
+            platform_fs_slug=platform_slug,
             name=f"rom-{rom_id}",
             fs_name=f"rom-{rom_id}.gba",
             shortcut_app_id=rom_id,
@@ -652,3 +653,112 @@ def test_the_resolution_carries_the_source_that_answered() -> None:
 
     assert resolved is not None
     assert resolved.source == {"kind": "emudeck", "starts_games": False}
+
+
+# --- the per-platform pick is the one of the game's own folder (#2452 D7, D15) --
+
+
+def _seed_rom_on_folder(uow: FakeUnitOfWork, *, rom_id: int, folder: str | None) -> None:
+    """An un-pinned ``snes`` game on the platform RomM keeps in *folder*; ``None`` is one no sync recorded it for."""
+    uow.roms.save(
+        Rom(
+            rom_id=rom_id,
+            platform_slug="snes",
+            platform_fs_slug=folder,
+            name=f"rom-{rom_id}",
+            fs_name=f"rom-{rom_id}.sfc",
+            shortcut_app_id=rom_id,
+            last_synced_at="2026-01-01T00:00:00+00:00",
+        )
+    )
+
+
+_SNES_CORES = FakeCoreInfoProvider(
+    available_cores=[
+        {"core_so": "snes9x_libretro", "label": "Snes9x", "is_default": True},
+        {"core_so": "bsnes_libretro", "label": "bsnes", "is_default": False},
+    ],
+    active_core=("snes9x_libretro", "Snes9x"),
+)
+
+
+def test_a_game_takes_the_pick_of_its_own_folder_not_its_slug() -> None:
+    uow = FakeUnitOfWork()
+    _seed_rom_on_folder(uow, rom_id=70, folder="snes-hacks")
+    reader = FakePlatformCoreReader(mapping={"snes": "Snes9x", "snes-hacks": "bsnes"})
+    resolver, _ = _make_resolver(uow=uow, core_info=_SNES_CORES, platform_core_reader=reader)
+
+    assert resolver.active_core_for_rom(70) == ("bsnes_libretro", "bsnes")
+
+
+def test_a_game_without_a_folder_takes_the_pick_still_under_its_slug() -> None:
+    """D15 (changed): a game with no fs_slug recorded reads the pick kept under its slug."""
+    uow = FakeUnitOfWork()
+    _seed_rom_on_folder(uow, rom_id=71, folder=None)
+    reader = FakePlatformCoreReader(mapping={"snes": "bsnes"})
+    resolver, _ = _make_resolver(uow=uow, core_info=_SNES_CORES, platform_core_reader=reader)
+
+    assert resolver.active_core_for_rom(71) == ("bsnes_libretro", "bsnes")
+
+
+def test_a_game_without_a_folder_and_no_pick_under_its_slug_takes_the_default() -> None:
+    uow = FakeUnitOfWork()
+    _seed_rom_on_folder(uow, rom_id=72, folder=None)
+    reader = FakePlatformCoreReader(mapping={"snes-hacks": "bsnes"})
+    resolver, _ = _make_resolver(uow=uow, core_info=_SNES_CORES, platform_core_reader=reader)
+
+    assert resolver.active_core_for_rom(72) == ("snes9x_libretro", "Snes9x")
+
+
+def _kept(*folders: str) -> FakePlatformSystems:
+    """The platform systems keeping each of *folders* as a listed platform of the slug ``snes``."""
+    systems = FakePlatformSystems()
+    systems.kept = {"snes": frozenset(folders)}
+    return systems
+
+
+def test_a_game_without_a_folder_whose_slug_pick_moved_takes_the_one_kept_platform_s_pick() -> None:
+    """D15: the refiling moved the slug's pick to the one platform kept for the slug."""
+    uow = FakeUnitOfWork()
+    _seed_rom_on_folder(uow, rom_id=74, folder=None)
+    reader = FakePlatformCoreReader(mapping={"snes-hacks": "bsnes"})
+    resolver, _ = _make_resolver(
+        uow=uow, core_info=_SNES_CORES, platform_core_reader=reader, platform_systems=_kept("snes-hacks")
+    )
+
+    assert resolver.active_core_for_rom(74) == ("bsnes_libretro", "bsnes")
+
+
+def test_a_game_without_a_folder_whose_slug_several_platforms_share_takes_the_default() -> None:
+    uow = FakeUnitOfWork()
+    _seed_rom_on_folder(uow, rom_id=75, folder=None)
+    reader = FakePlatformCoreReader(mapping={"snes-hacks": "bsnes"})
+    resolver, _ = _make_resolver(
+        uow=uow, core_info=_SNES_CORES, platform_core_reader=reader, platform_systems=_kept("snes", "snes-hacks")
+    )
+
+    assert resolver.active_core_for_rom(75) == ("snes9x_libretro", "Snes9x")
+
+
+def test_a_game_without_a_folder_takes_the_pick_under_its_slug_though_that_is_a_platform_s_own() -> None:
+    """D15 meets D18 (D19): ``snes`` is the slug and a listed platform's folder, so its pick is read for the game."""
+    uow = FakeUnitOfWork()
+    _seed_rom_on_folder(uow, rom_id=76, folder=None)
+    reader = FakePlatformCoreReader(mapping={"snes": "bsnes", "snes-hacks": "Snes9x"})
+    resolver, _ = _make_resolver(
+        uow=uow, core_info=_SNES_CORES, platform_core_reader=reader, platform_systems=_kept("snes", "snes-hacks")
+    )
+
+    assert resolver.active_core_for_rom(76) == ("bsnes_libretro", "bsnes")
+
+
+def test_a_game_with_a_folder_never_reads_the_pick_under_its_slug_or_the_kept_platforms() -> None:
+    uow = FakeUnitOfWork()
+    _seed_rom_on_folder(uow, rom_id=73, folder="snes-hacks")
+    reader = FakePlatformCoreReader(mapping={"snes": "bsnes"})
+    systems = _kept("snes")
+    resolver, _ = _make_resolver(uow=uow, core_info=_SNES_CORES, platform_core_reader=reader, platform_systems=systems)
+
+    assert resolver.active_core_for_rom(73) == ("snes9x_libretro", "Snes9x")
+    assert reader.calls == ["snes-hacks"]
+    assert systems.kept_asked == []

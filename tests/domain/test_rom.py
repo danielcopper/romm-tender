@@ -393,3 +393,19 @@ class TestGoneFromRomm:
         assert rom.gone_from_romm == evidence
         rom.clear_gone_from_romm()
         assert rom.gone_from_romm is None
+
+
+class TestRecordPlatformFolder:
+    @staticmethod
+    def _rom() -> Rom:
+        return Rom.synced(rom_id=1, platform_slug="ngc", name="G", fs_name="g.iso", shortcut_app_id=None, synced_at="t")
+
+    def test_it_records_the_folder_romm_answered_with(self):
+        rom = self._rom()
+        rom.record_platform_folder("gc")
+        assert rom.platform_fs_slug == "gc"
+
+    def test_an_empty_folder_names_none_and_is_refused(self):
+        rom = self._rom()
+        with pytest.raises(ValueError, match="platform_folder must not be empty"):
+            rom.record_platform_folder("")

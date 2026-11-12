@@ -54,13 +54,15 @@ const NUMBER: CSSProperties = { textAlign: "right" };
 /**
  * The Sync cell's toggle without the row padding and the focus fill its Field
  * brings — the row draws the focus instead. Both are read from Steam's bundle
- * (`steamui/chunk~2dcc5aaf7.js` and its `css/` twin). The gamepad `ToggleField`
- * passes `padding` and `highlightOnFocus` on to the Field it renders. The Field
- * adds its 10 px top and bottom only for `padding: "standard"`, the default
- * (`"standard"==K&&StandardPadding`), and its `HighlightOnFocus` class — the one
- * that paints `#3d4450` under `.gpfocus` / `.gpfocuswithin` — unless
- * `highlightOnFocus` is `false` (`J=R??!0`). `ToggleFieldProps` declares
- * `highlightOnFocus` but not `padding`, so both arrive through this spread.
+ * (`steamui/sp.js` and `steamui/css/sp.css`). The gamepad `ToggleField` — the
+ * one the gamepad UI's component set registers under that name — passes
+ * `padding` and `highlightOnFocus` on to the Field it renders. The Field sets
+ * its `StandardPadding` class — its 10 px top and bottom — only for
+ * `padding: "standard"`, the default, and its `HighlightOnFocus` class — the
+ * one that paints `#3d4450` under `.gpfocus` / `.gpfocuswithin` — unless
+ * `highlightOnFocus` is `false`; it defaults to `true`. `ToggleFieldProps`
+ * declares `highlightOnFocus` but not `padding`, so both arrive through this
+ * spread.
  */
 const SYNC_CELL_TOGGLE: Pick<FieldProps, "padding" | "highlightOnFocus"> = {
   padding: "none",

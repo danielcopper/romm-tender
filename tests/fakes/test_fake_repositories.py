@@ -65,10 +65,11 @@ if TYPE_CHECKING:
     )
 
 
-def _rom(rom_id: int, *, platform: str = "snes") -> Rom:
+def _rom(rom_id: int, *, platform: str = "snes", folder: str | None = None) -> Rom:
     return Rom(
         rom_id=rom_id,
         platform_slug=platform,
+        platform_fs_slug=folder,
         name=f"Game {rom_id}",
         fs_name=f"game_{rom_id}.sfc",
         shortcut_app_id=1000 + rom_id,
@@ -125,8 +126,6 @@ class TestFakeRomRepository:
         assert repo.get_by_app_id(1002) is not None
         assert repo.get_by_app_id(9999) is None
         assert {r.rom_id for r in repo.iter_all()} == {1, 2}
-        assert {r.rom_id for r in repo.iter_by_platform("snes")} == {1, 2}
-        assert list(repo.iter_by_platform("gba")) == []
         assert repo.count() == 2
         assert repo.save_count == 2
         repo.delete(1)
@@ -182,14 +181,21 @@ class TestFakeRomRepository:
         assert loaded is not None
         assert loaded.artwork_checked_at == 1700000000.5
 
-    def test_bound_platform_slugs_leave_out_unbound_and_empty_slug_rows(self):
+    def test_bound_platform_folders_leave_out_unbound_rows_and_rows_with_no_folder(self):
         repo = FakeRomRepository()
-        unbound = _rom(3, platform="psx")
+        unbound = _rom(3, platform="psx", folder="psx")
         unbound.unbind_shortcut()
-        for rom in (_rom(1), _rom(2), unbound, _rom(4, platform=""), _rom(5, platform="gba")):
+        rows = (
+            _rom(1, folder="snes"),
+            _rom(2, folder="snes-hacks"),
+            unbound,
+            _rom(4, folder=None),
+            _rom(5, platform="gba", folder="gba"),
+        )
+        for rom in rows:
             repo.save(rom)
 
-        assert repo.get_bound_platform_slugs() == {"snes", "gba"}
+        assert repo.get_bound_platform_folders() == {"snes", "snes-hacks", "gba"}
 
 
 class TestFakeRomInstallRepository:
@@ -331,7 +337,7 @@ class TestFakeBiosFileRepository:
     def test_round_trip_composite_key_iter_delete(self):
         repo = FakeBiosFileRepository()
         bios = BiosFile(
-            platform_slug="psx",
+            platform_folder="psx",
             file_name="b.bin",
             file_path="/b",
             downloaded_at="2026-01-01T00:00:00Z",
@@ -340,8 +346,6 @@ class TestFakeBiosFileRepository:
         assert repo.get("psx", "b.bin") == bios
         assert repo.get("psx", "missing.bin") is None
         assert [b.file_name for b in repo.iter_all()] == ["b.bin"]
-        assert [b.file_name for b in repo.iter_by_platform("psx")] == ["b.bin"]
-        assert list(repo.iter_by_platform("saturn")) == []
         repo.delete("psx", "b.bin")
         assert repo.get("psx", "b.bin") is None
 
@@ -416,13 +420,13 @@ class TestFakePlatformSyncStateRepository:
     def test_round_trip_upsert_clear(self):
         repo = FakePlatformSyncStateRepository()
         assert repo.get("n64") is None
-        repo.save(PlatformSyncState.stamp(platform_slug="n64", at="2026-01-01T00:00:00+00:00", rom_count=100))
+        repo.save(PlatformSyncState.stamp(platform_folder="n64", at="2026-01-01T00:00:00+00:00", rom_count=100))
         loaded = repo.get("n64")
         assert loaded is not None
         assert loaded.rom_count == 100
         assert repo.save_count == 1
         # Same slug overwrites.
-        repo.save(PlatformSyncState.stamp(platform_slug="n64", at="2026-02-01T00:00:00+00:00", rom_count=105))
+        repo.save(PlatformSyncState.stamp(platform_folder="n64", at="2026-02-01T00:00:00+00:00", rom_count=105))
         overwritten = repo.get("n64")
         assert overwritten is not None
         assert overwritten.rom_count == 105
@@ -431,7 +435,7 @@ class TestFakePlatformSyncStateRepository:
 
     def test_get_returns_copy_so_caller_mutations_dont_leak(self):
         repo = FakePlatformSyncStateRepository()
-        repo.save(PlatformSyncState.stamp(platform_slug="n64", at="2026-01-01T00:00:00+00:00", rom_count=100))
+        repo.save(PlatformSyncState.stamp(platform_folder="n64", at="2026-01-01T00:00:00+00:00", rom_count=100))
         first = repo.get("n64")
         assert first is not None
         first.rom_count = 999  # mutate the returned copy, no save()
@@ -441,8 +445,8 @@ class TestFakePlatformSyncStateRepository:
 
     def test_delete_removes_only_the_named_slug(self):
         repo = FakePlatformSyncStateRepository()
-        repo.save(PlatformSyncState.stamp(platform_slug="n64", at="2026-01-01T00:00:00+00:00", rom_count=100))
-        repo.save(PlatformSyncState.stamp(platform_slug="snes", at="2026-01-01T00:00:00+00:00", rom_count=200))
+        repo.save(PlatformSyncState.stamp(platform_folder="n64", at="2026-01-01T00:00:00+00:00", rom_count=100))
+        repo.save(PlatformSyncState.stamp(platform_folder="snes", at="2026-01-01T00:00:00+00:00", rom_count=200))
         repo.delete("n64")
         assert repo.get("n64") is None
         assert repo.get("snes") is not None
@@ -452,20 +456,20 @@ class TestFakePlatformSyncStateRepository:
         """Keyed by slug like the SQLite table, so deleting the last slug empties it."""
         repo = FakePlatformSyncStateRepository()
         assert repo.has_any() is False
-        repo.save(PlatformSyncState.stamp(platform_slug="n64", at="2026-01-01T00:00:00+00:00", rom_count=100))
-        repo.save(PlatformSyncState.stamp(platform_slug="n64", at="2026-02-01T00:00:00+00:00", rom_count=105))
+        repo.save(PlatformSyncState.stamp(platform_folder="n64", at="2026-01-01T00:00:00+00:00", rom_count=100))
+        repo.save(PlatformSyncState.stamp(platform_folder="n64", at="2026-02-01T00:00:00+00:00", rom_count=105))
         assert repo.has_any() is True
         repo.delete("n64")
         assert repo.has_any() is False
-        repo.save(PlatformSyncState.stamp(platform_slug="snes", at="2026-01-01T00:00:00+00:00", rom_count=200))
+        repo.save(PlatformSyncState.stamp(platform_folder="snes", at="2026-01-01T00:00:00+00:00", rom_count=200))
         repo.clear()
         assert repo.has_any() is False
 
     def test_revoke_skip_flags_the_stored_stamp_and_hides_it_from_has_any(self):
         """Mirrors the SQLite ``UPDATE``: the stamp stays, flagged, and a fresh save clears it."""
         repo = FakePlatformSyncStateRepository()
-        repo.save(PlatformSyncState.stamp(platform_slug="n64", at="2026-01-01T00:00:00+00:00", rom_count=3))
-        repo.save(PlatformSyncState.stamp(platform_slug="snes", at="2026-01-01T00:00:00+00:00", rom_count=200))
+        repo.save(PlatformSyncState.stamp(platform_folder="n64", at="2026-01-01T00:00:00+00:00", rom_count=3))
+        repo.save(PlatformSyncState.stamp(platform_folder="snes", at="2026-01-01T00:00:00+00:00", rom_count=200))
 
         repo.revoke_skip("n64")
         repo.revoke_skip("nope")  # absent slug is a no-op, and creates nothing
@@ -481,7 +485,7 @@ class TestFakePlatformSyncStateRepository:
         repo.revoke_skip("snes")
         assert repo.has_any() is False
 
-        repo.save(PlatformSyncState.stamp(platform_slug="n64", at="2026-02-01T00:00:00+00:00", rom_count=3))
+        repo.save(PlatformSyncState.stamp(platform_folder="n64", at="2026-02-01T00:00:00+00:00", rom_count=3))
         refreshed = repo.get("n64")
         assert refreshed is not None
         assert refreshed.skip_revoked is False
@@ -691,7 +695,7 @@ class TestFakeUnitOfWorkRomIdForeignKey:
         uow = FakeUnitOfWork()
         with uow:
             uow.bios_files.save(
-                BiosFile(platform_slug="psx", file_name="b.bin", file_path="/b", downloaded_at="2026-01-01T00:00:00Z")
+                BiosFile(platform_folder="psx", file_name="b.bin", file_path="/b", downloaded_at="2026-01-01T00:00:00Z")
             )
             uow.firmware_cache.replace_all(
                 [
@@ -707,7 +711,7 @@ class TestFakeUnitOfWorkRomIdForeignKey:
             )
             uow.sync_runs.save(SyncRun.start(id="r1", at="2026-01-01T00:00:00Z", platforms_planned=1, roms_planned=1))
             uow.platform_sync_state.save(
-                PlatformSyncState.stamp(platform_slug="psx", at="2026-01-01T00:00:00Z", rom_count=1)
+                PlatformSyncState.stamp(platform_folder="psx", at="2026-01-01T00:00:00Z", rom_count=1)
             )
             uow.kv_config.set("k", "v")
         assert uow.committed is True

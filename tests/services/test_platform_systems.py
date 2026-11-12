@@ -7,6 +7,7 @@ import logging
 from unittest.mock import MagicMock
 
 import pytest
+from fakes.fake_listing_refiler import FakeListingRefiler
 from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_source_platform_systems import RETRODECK_SOURCE, FakeSourcePlatformSystems
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
@@ -57,16 +58,24 @@ def sources() -> FakeSourcePlatformSystems:
 
 
 @pytest.fixture
-def service(uow_factory, romm, sources) -> PlatformSystemService:
-    return PlatformSystemService(
+def refiling() -> FakeListingRefiler:
+    return FakeListingRefiler()
+
+
+@pytest.fixture
+def service(uow_factory, romm, sources, refiling) -> PlatformSystemService:
+    built = PlatformSystemService(
         config=PlatformSystemServiceConfig(
             uow_factory=uow_factory,
             romm_api=romm,
+            refiling=refiling,
             source_platform_systems=sources,
             logger=logging.getLogger("test_platform_systems"),
             log_debug=MagicMock(),
         )
     )
+    refiling.keeper = built
+    return built
 
 
 def _keep(uow_factory: FakeUnitOfWorkFactory, value: str) -> None:
@@ -98,6 +107,15 @@ class TestTheKeptIds:
         uow_factory.uow.kv_config.set("platform_names", json.dumps({"snes": "Super Nintendo"}))
 
         assert service.platform_system("snes").platform_name == "Super Nintendo"
+
+    def test_the_name_is_the_one_kept_for_the_kept_platform_s_fs_slug(self, service, uow_factory):
+        """The names cache is keyed by ``fs_slug``; the platform is asked by its slug (#2452 D10)."""
+        kept = KeptPlatform(slug="ngc", fs_slug="gamecube", name="Nintendo GameCube", ids={"igdb_id": 21})
+        _keep(uow_factory, encode_platform_ids({"gamecube": kept}))
+        names = {"gamecube": "Nintendo GameCube (gamecube)", "ngc": "Another platform whose fs_slug is ngc"}
+        uow_factory.uow.kv_config.set("platform_names", json.dumps(names))
+
+        assert service.platform_system("ngc").platform_name == "Nintendo GameCube (gamecube)"
 
     def test_a_platform_no_sync_named_is_named_by_the_name_kept_with_its_ids(self, service, uow_factory):
         _keep(uow_factory, json.dumps({"snes": {"igdb_id": 19, "name": "Super Famicom"}}))
@@ -298,3 +316,114 @@ class TestTheListedPlatforms:
     def test_without_any_kept_there_is_no_answer(self, service, romm):
         assert service.listed_platforms() is None
         assert _listing_reads(romm) == 0
+
+
+class TestAPlatformJustReadIsNamedByItsFolder:
+    def test_a_platform_read_from_the_listing_is_named_by_the_name_kept_for_its_fs_slug(
+        self, service, uow_factory, romm
+    ):
+        """The names cache is keyed by ``fs_slug`` (#2452 D10), also for a platform no ids were kept for."""
+        romm.platforms = [{"id": 7, "slug": "psx", "fs_slug": "ps", "name": "PlayStation", "igdb_id": 7}]
+        uow_factory.uow.kv_config.set("platform_names", json.dumps({"ps": "Sony PlayStation"}))
+
+        assert service.platform_system("psx").platform_name == "Sony PlayStation"
+
+
+class TestAListingReadHereIsRefiled:
+    """The listing read here is handed to the refiling (#2452 D6, D7)."""
+
+    def test_the_listing_read_for_a_platform_with_no_ids_is_handed_over(self, service, romm, refiling):
+        service.platform_system("snes")
+
+        assert refiling.listings == [romm.platforms]
+
+    def test_kept_ids_read_no_listing_and_hand_nothing_over(self, service, uow_factory, refiling):
+        _keep(uow_factory, json.dumps({"snes": {"igdb_id": 19}}))
+
+        service.platform_system("snes")
+
+        assert refiling.listings == []
+
+
+class TestTheListingTheRefilingIsHandedIsKept:
+    """Every listing handed to the refiling is kept, so a game with no fs_slug finds its slug's platform (#2452 D15)."""
+
+    def test_every_listed_platform_is_kept_beside_those_of_slugs_it_does_not_name(self, service, uow_factory):
+        kept_before = {
+            "gc": KeptPlatform(slug="gamecube", fs_slug="gc"),
+            "ps": KeptPlatform(slug="psx", fs_slug="ps", platform_id=1),
+        }
+        uow_factory.uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids(kept_before))
+
+        service.keep_listing([{"id": 9, "slug": "psx", "fs_slug": "psx-hacks", "name": "PlayStation"}])
+
+        kept = decode_platform_ids(uow_factory.uow.kv_config.get(PLATFORM_IDS_KEY)) or {}
+        assert sorted(kept) == ["gc", "psx-hacks"]
+
+    def test_the_kept_folders_of_a_slug(self, service):
+        service.keep_listing(
+            [
+                {"id": 1, "slug": "snes", "fs_slug": "snes", "name": "SNES"},
+                {"id": 2, "slug": "snes", "fs_slug": "snes-hacks", "name": "SNES"},
+                {"id": 3, "slug": "gba", "fs_slug": "gba", "name": "GBA"},
+            ]
+        )
+
+        assert service.kept_folders("snes") == frozenset({"snes", "snes-hacks"})
+        assert service.kept_folders("n64") == frozenset()
+
+
+class TestAPlatformReadHereIsKeptOnce:
+    """The listing read here is kept by the refiling it is handed to; only a platform it does not name is added."""
+
+    @staticmethod
+    def _writes(uow_factory: FakeUnitOfWorkFactory, monkeypatch) -> list[str]:
+        written: list[str] = []
+        kv = uow_factory.uow.kv_config
+        set_value = kv.set
+
+        def counting(key: str, value: str) -> None:
+            if key == PLATFORM_IDS_KEY:
+                written.append(value)
+            set_value(key, value)
+
+        monkeypatch.setattr(kv, "set", counting)
+        return written
+
+    def test_a_platform_the_listing_names_is_written_once(self, service, uow_factory, monkeypatch):
+        writes = self._writes(uow_factory, monkeypatch)
+
+        service.platform_system("snes")
+
+        assert len(writes) == 1
+        assert sorted(decode_platform_ids(uow_factory.uow.kv_config.get(PLATFORM_IDS_KEY)) or {}) == ["psx", "snes"]
+
+    def test_a_platform_the_listing_does_not_name_is_added_beside_it(self, service, uow_factory, monkeypatch):
+        writes = self._writes(uow_factory, monkeypatch)
+
+        service.platform_system("n64")
+
+        assert len(writes) == 2
+        kept = decode_platform_ids(uow_factory.uow.kv_config.get(PLATFORM_IDS_KEY)) or {}
+        assert sorted(kept) == ["n64", "psx", "snes"]
+
+
+class TestTheSyncListingReplacesTheKept:
+    def test_only_the_platforms_the_listing_names_are_kept(self, service, uow_factory):
+        uow_factory.uow.kv_config.set(
+            PLATFORM_IDS_KEY, encode_platform_ids({"n64": KeptPlatform(slug="n64", fs_slug="n64")})
+        )
+
+        service.replace_listing([_SNES, _PSX])
+
+        assert sorted(decode_platform_ids(uow_factory.uow.kv_config.get(PLATFORM_IDS_KEY)) or {}) == ["psx", "snes"]
+
+    def test_a_write_that_fails_is_said_and_raises_nothing(self, service, uow_factory, monkeypatch, caplog):
+        def _fails(key: str, value: str) -> None:
+            raise OSError("db locked")
+
+        monkeypatch.setattr(uow_factory.uow.kv_config, "set", _fails)
+        with caplog.at_level(logging.WARNING):
+            service.replace_listing([_SNES])
+
+        assert "Could not keep the platforms' ids: db locked" in caplog.text

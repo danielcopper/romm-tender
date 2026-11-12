@@ -18,6 +18,7 @@ import pytest
 from _romm_platforms import LISTED_GAMECUBE
 
 from domain.platform_system import PLATFORM_IDS_KEY, KeptPlatform, decode_platform_ids
+from domain.sync_diff import ExactAnswers
 from domain.sync_state import SyncCancelled, SyncState
 from domain.work_unit import WorkUnit
 from lib.errors import Refused, RommApiError, RommNotFoundError, classify_error
@@ -88,6 +89,25 @@ class TestFetchEnabledPlatforms:
         with pytest.raises(RommApiError, match=r"^Unexpected response from /api/platforms: dict$") as exc_info:
             await library.sync._fetcher._fetch_enabled_platforms()
         assert not isinstance(exc_info.value, RommNotFoundError)
+
+
+class TestAPlatformUnitCarriesItsFsSlug:
+    """A platform unit carries the listing's ``fs_slug``, and none where the listing gives a blank one (#2452 D1)."""
+
+    @pytest.mark.asyncio
+    async def test_each_unit_carries_its_own_fs_slug_and_a_blank_one_counts_as_none(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.platforms = [
+            {"id": 1, "name": "SNES", "slug": "snes", "fs_slug": "snes"},
+            {"id": 2, "name": "SNES", "slug": "snes", "fs_slug": "snes-hacks"},
+            {"id": 3, "name": "GBA", "slug": "gba", "fs_slug": "   "},
+        ]
+        library.settings["enabled_platforms"] = {}
+        library.settings["enabled_collections"] = {"standard": {}, "smart": {}, "virtual": {}}
+
+        units = await library.sync._fetcher.build_work_queue()
+
+        assert {u.id: u.platform_folder for u in units} == {1: "snes", 2: "snes-hacks", 3: ""}
 
 
 class TestGetPlatformsMaterialization:
@@ -660,7 +680,7 @@ class TestTryUnitIncrementalSkip:
 
         fake_romm_api.list_roms_newest_first_side_effect = RuntimeError("delta boom")
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
         # Falls back to "force full fetch" sentinel.
@@ -693,7 +713,7 @@ class TestIncrementalSkipGroupParity:
         # No server rows updated after the stamp → delta total 0. RomM's rom_count
         # (all siblings) matches the 3 persisted rows → skip. Under the old
         # bound-only count this platform full-fetched forever.
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=3)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=3)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -708,7 +728,7 @@ class TestIncrementalSkipGroupParity:
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2)
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1", has_file_on_disk=False)
         _seed_persisted_rom(uow, 20, app_id=1002, group_key="igdb:200:1")
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=2)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -723,7 +743,7 @@ class TestIncrementalSkipGroupParity:
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
         _seed_persisted_rom(uow, 11, app_id=None, group_key="igdb:100:1")
         # Server reports 3 ROMs but only 2 are persisted → a new sibling appeared.
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=3)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=3)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -737,7 +757,7 @@ class TestIncrementalSkipGroupParity:
         # A legacy bound row whose sibling_group_key was never captured — even
         # though the count matches, the backfill forces a full fetch.
         _seed_persisted_rom(uow, 10, app_id=1001, group_key=None)
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -766,7 +786,7 @@ class TestIncrementalSkipZeroBoundRows:
         _seed_persisted_rom(uow, 10, app_id=None, group_key="igdb:100:1")
         _seed_persisted_rom(uow, 11, app_id=None, group_key="igdb:100:1")
         _seed_persisted_rom(uow, 12, app_id=None, group_key="igdb:100:1")
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=3)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=3)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -783,7 +803,7 @@ class TestIncrementalSkipZeroBoundRows:
         _seed_persisted_rom(uow, 12, app_id=None, group_key="igdb:100:1")
         # The full-fetch path paginates the live server list back into the re-add path.
         fake_romm_api.roms = {i: {"id": i, "platform_id": 1, "name": f"G{i}"} for i in range(3)}
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=3)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=3)
 
         unit_roms, skipped = await library.sync._fetcher.fetch_platform_unit(unit)
 
@@ -800,7 +820,7 @@ class TestIncrementalSkipZeroBoundRows:
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
         _seed_persisted_rom(uow, 11, app_id=None, group_key="igdb:100:1")
         _seed_persisted_rom(uow, 12, app_id=None, group_key="igdb:100:1")
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=3)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=3)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -825,7 +845,7 @@ def _seed_platform_stamp(uow, slug, *, at, rom_count, fetch_id=None, rom_ids=(),
     with uow:
         uow.platform_sync_state.save(
             PlatformSyncState.stamp(
-                platform_slug=slug,
+                platform_folder=slug,
                 at=at,
                 rom_count=rom_count,
                 fetch_id=fetch_id,
@@ -847,7 +867,7 @@ def _seed_stamp_from_before_031(uow, slug, *, rom_count, fetch_id):
     with uow:
         uow.platform_sync_state.save(
             PlatformSyncState.stamp(
-                platform_slug=slug, at="2025-01-01T00:00:00", rom_count=rom_count, fetch_id=fetch_id
+                platform_folder=slug, at="2025-01-01T00:00:00", rom_count=rom_count, fetch_id=fetch_id
             )
         )
 
@@ -874,7 +894,7 @@ class TestIncrementalSkipSupersededRows:
         # Their superseded predecessors: unbound, ids the server has since dropped.
         _seed_persisted_rom(uow, 4375, app_id=None, group_key="igdb:100:1", fetch_id="run-old")
         _seed_persisted_rom(uow, 4376, app_id=None, group_key="igdb:200:1", fetch_id="run-old")
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=2)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -890,7 +910,7 @@ class TestIncrementalSkipSupersededRows:
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=1, fetch_id="run-new")
         _seed_persisted_rom(uow, 25135, app_id=1001, group_key="igdb:100:1", fetch_id="run-new")
         _seed_persisted_rom(uow, 4375, app_id=None, group_key="igdb:100:1", fetch_id="run-old")
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
 
         assert await library.sync._fetcher._try_unit_incremental_skip(unit) is not None
 
@@ -917,7 +937,7 @@ class TestIncrementalSkipSupersededRows:
         _seed_persisted_rom(uow, 25135, app_id=1001, group_key="igdb:100:1", fetch_id="run-new")
         _seed_persisted_rom(uow, 25136, app_id=None, group_key="igdb:100:1", fetch_id="run-new")
         _seed_persisted_rom(uow, 4375, app_id=None, group_key="igdb:100:1", fetch_id="run-old")
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=2)
 
         first = await library.sync._fetcher._try_unit_incremental_skip(unit)
         second = await library.sync._fetcher._try_unit_incremental_skip(unit)
@@ -949,7 +969,7 @@ class TestIncrementalSkipSupersededRows:
         fake_romm_api.roms = {
             i: {"id": i, "platform_id": 1, "updated_at": _OLD_UPDATED_AT} for i in (25135, 25136, 25137)
         }
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=3)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=3)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -962,7 +982,7 @@ class TestIncrementalSkipSupersededRows:
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=1, fetch_id="run-new")
         _seed_persisted_rom(uow, 4375, app_id=1001, group_key="igdb:100:1", fetch_id="run-old")
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -979,7 +999,7 @@ class TestIncrementalSkipSupersededRows:
         # Superseded by 25135 and dropped by the server before the key was ever
         # captured — no fetch will return it again to backfill it.
         _seed_persisted_rom(uow, 4375, app_id=None, group_key=None, fetch_id="run-old")
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -994,7 +1014,7 @@ class TestIncrementalSkipSupersededRows:
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=1, fetch_id="run-new")
         _seed_persisted_rom(uow, 25135, app_id=1001, group_key=None, fetch_id="run-new")
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -1009,7 +1029,7 @@ class TestIncrementalSkipSupersededRows:
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2, fetch_id=None)
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1", fetch_id=None)
         _seed_persisted_rom(uow, 11, app_id=None, group_key=None, fetch_id="run-old")
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=2)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -1025,7 +1045,7 @@ class TestIncrementalSkipSupersededRows:
         _seed_stamp_from_before_031(uow, "n64", rom_count=2, fetch_id=None)
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1", fetch_id=None)
         _seed_persisted_rom(uow, 11, app_id=None, group_key="igdb:100:1", fetch_id=None)
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=2)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -1053,7 +1073,7 @@ class TestIncrementalSkipBoundRowNotReturned:
         # Deleted on RomM before the stamping fetch, still bound.
         _seed_persisted_rom(uow, 3, app_id=5003, group_key="igdb:3:1", fetch_id="run-old")
         fake_romm_api.roms = {i: {"id": i, "platform_id": 1, "updated_at": _OLD_UPDATED_AT} for i in (1, 2)}
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=2)
 
         unit_roms, skipped = await library.sync._fetcher.fetch_platform_unit(unit)
 
@@ -1071,7 +1091,7 @@ class TestIncrementalSkipBoundRowNotReturned:
         _seed_persisted_rom(uow, 2, app_id=5002, group_key="igdb:2:1", fetch_id="run-new")
         _seed_persisted_rom(uow, 3, app_id=5003, group_key="igdb:3:1", fetch_id=None)
         fake_romm_api.roms = {i: {"id": i, "platform_id": 1, "updated_at": _OLD_UPDATED_AT} for i in (1, 2)}
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=2)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -1088,7 +1108,7 @@ class TestIncrementalSkipBoundRowNotReturned:
         _seed_persisted_rom(uow, 2, app_id=5002, group_key="igdb:2:1", fetch_id="run-new")
         _seed_persisted_rom(uow, 3, app_id=5003, group_key="igdb:3:1", fetch_id="run-old")
         fake_romm_api.roms = {i: {"id": i, "platform_id": 1, "updated_at": _OLD_UPDATED_AT} for i in (1, 2, 4)}
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=3)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=3)
 
         unit_roms, skipped = await library.sync._fetcher.fetch_platform_unit(unit)
 
@@ -1105,7 +1125,7 @@ class TestIncrementalSkipBoundRowNotReturned:
         _seed_persisted_rom(uow, 1, app_id=5001, group_key="igdb:1:1", fetch_id="run-new")
         _seed_persisted_rom(uow, 2, app_id=5002, group_key="igdb:2:1", fetch_id="run-new")
         _seed_persisted_rom(uow, 3, app_id=None, group_key="igdb:3:1", fetch_id="run-old")
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=2)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -1123,7 +1143,7 @@ class TestIncrementalSkipBoundRowNotReturned:
         _seed_stamp_from_before_031(uow, "n64", rom_count=2, fetch_id=None)
         _seed_persisted_rom(uow, 1, app_id=5001, group_key="igdb:1:1", fetch_id="run-old")
         _seed_persisted_rom(uow, 2, app_id=5002, group_key="igdb:2:1", fetch_id=None)
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=2)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -1149,7 +1169,7 @@ class TestIncrementalSkipFromPlatformStamp:
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
         _seed_persisted_rom(uow, 11, app_id=None, group_key="igdb:100:1")
         _seed_persisted_rom(uow, 12, app_id=None, group_key="igdb:100:1")
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=3)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=3)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -1167,7 +1187,7 @@ class TestIncrementalSkipFromPlatformStamp:
         _seed_persisted_rom(uow, 12, app_id=None, group_key="igdb:100:1")
         with uow:
             uow.platform_sync_state.revoke_skip("n64")
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=3)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=3)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -1190,7 +1210,7 @@ class TestIncrementalSkipFromPlatformStamp:
         )
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
         fake_romm_api.roms[10] = {"id": 10, "platform_id": 1, "updated_at": "2025-05-31T22:50:00+00:00"}
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -1209,7 +1229,7 @@ class TestIncrementalSkipFromPlatformStamp:
         )
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
         fake_romm_api.roms[10] = {"id": 10, "platform_id": 1, "updated_at": "2025-05-31T23:30:00+00:00"}
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -1226,7 +1246,7 @@ class TestIncrementalSkipFromPlatformStamp:
         )
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
         fake_romm_api.roms[10] = {"id": 10, "platform_id": 1, "updated_at": "2025-05-31T23:30:00+00:00"}
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
 
         with caplog.at_level(logging.INFO, logger=logger.name):
             await library.sync._fetcher._try_unit_incremental_skip(unit)
@@ -1245,7 +1265,7 @@ class TestIncrementalSkipFromPlatformStamp:
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=1, rom_ids=(10,))
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
         fake_romm_api.roms[10] = {"id": 10, "platform_id": 1}
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
 
         with caplog.at_level(logging.INFO, logger=logger.name):
             await library.sync._fetcher._try_unit_incremental_skip(unit)
@@ -1260,7 +1280,7 @@ class TestIncrementalSkipFromPlatformStamp:
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=1, rom_ids=(10,))
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
         fake_romm_api.roms[10] = {"id": 10, "platform_id": 1}
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -1277,7 +1297,7 @@ class TestIncrementalSkipFromPlatformStamp:
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1", fetch_id="run-1")
         _seed_persisted_rom(uow, 11, app_id=1002, group_key="igdb:110:1", fetch_id="run-1")
         fake_romm_api.roms = {i: {"id": i, "platform_id": 1, "updated_at": _OLD_UPDATED_AT} for i in (10, 12)}
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=2)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -1291,7 +1311,7 @@ class TestIncrementalSkipFromPlatformStamp:
         _seed_stamp_from_before_031(uow, "n64", rom_count=1, fetch_id="run-1")
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1", fetch_id="run-1")
         fake_romm_api.roms[10] = {"id": 10, "platform_id": 1, "updated_at": _OLD_UPDATED_AT}
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -1307,7 +1327,7 @@ class TestIncrementalSkipFromPlatformStamp:
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=len(ids), fetch_id="run-1", rom_ids=ids)
         _seed_persisted_rom(uow, 1, app_id=1001, group_key="igdb:1:1", fetch_id="run-1")
         fake_romm_api.roms = {i: {"id": i, "platform_id": 1, "updated_at": _OLD_UPDATED_AT} for i in ids}
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=len(ids))
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=len(ids))
 
         _unit_roms, skipped = await library.sync._fetcher.fetch_platform_unit(unit)
 
@@ -1329,7 +1349,7 @@ class TestIncrementalSkipFromPlatformStamp:
         _seed_persisted_rom(uow, 11, app_id=None, group_key="igdb:100:1")
         _seed_persisted_rom(uow, 12, app_id=None, group_key="igdb:100:1")
         _seed_persisted_rom(uow, 13, app_id=None, group_key="igdb:100:1")
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=4)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=4)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -1349,7 +1369,7 @@ class TestIncrementalSkipFromPlatformStamp:
         _seed_persisted_rom(uow, 10, app_id=None, group_key="igdb:100:1")
         _seed_persisted_rom(uow, 11, app_id=None, group_key="igdb:100:1")
         _seed_persisted_rom(uow, 12, app_id=None, group_key="igdb:100:1")
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=3)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=3)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -1368,7 +1388,7 @@ class TestIncrementalSkipFromPlatformStamp:
         uow = library.uow
         _seed_completed_run(uow)  # finished at 2025-01-01T00:00:00, no stamp
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -1391,7 +1411,7 @@ class TestAGroupWithSeveralShortcutsIsFetchedInFull:
         _seed_persisted_rom(uow, 11, app_id=1002, group_key="igdb:100:1")
         for rom_id in (10, 11):
             fake_romm_api.roms[rom_id] = {"id": rom_id, "platform_id": 1, "updated_at": "2024-01-01T00:00:00+00:00"}
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=2)
 
         with caplog.at_level(logging.INFO):
             result = await library.sync._fetcher._try_unit_incremental_skip(unit)
@@ -1410,7 +1430,7 @@ class TestAGroupWithSeveralShortcutsIsFetchedInFull:
         _seed_persisted_rom(uow, 11, app_id=1002, group_key="igdb:100:1", fetch_id="run-old")
         # RomM's answer matches the stamp: only the convergence holds the skip off.
         fake_romm_api.roms[10] = {"id": 10, "platform_id": 1, "updated_at": "2024-01-01T00:00:00+00:00"}
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
 
         assert await library.sync._fetcher._try_unit_incremental_skip(unit) is None
 
@@ -1459,7 +1479,7 @@ class TestStaleStampPartialGapRegression:
         _seed_persisted_rom(uow, 12, app_id=None, group_key="igdb:12:1")
         _seed_persisted_rom(uow, 13, app_id=None, group_key="igdb:13:1")
         _seed_persisted_rom(uow, 14, app_id=None, group_key="igdb:14:1")
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=5)
 
         # A surviving stale stamp (rom_count still matches the server) → wrongful skip.
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=5)
@@ -1497,7 +1517,7 @@ class TestFetchPlatformUnit:
 
         fake_romm_api.list_roms_side_effect = RuntimeError("page boom")
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=10)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=10)
         with pytest.raises(RuntimeError, match="page boom"):
             await library.sync._fetcher.fetch_platform_unit(unit)
 
@@ -1527,7 +1547,9 @@ class TestFetchPlatformUnit:
 
         fake_romm_api.list_roms = list_roms_with_second_page_failure  # type: ignore[method-assign]
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=LIST_PAGE_SIZE + 100)
+        unit = WorkUnit(
+            type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=LIST_PAGE_SIZE + 100
+        )
         with pytest.raises(RuntimeError, match="page 2 boom"):
             await library.sync._fetcher.fetch_platform_unit(unit)
 
@@ -1541,7 +1563,7 @@ class TestFetchPlatformUnit:
         rom_count = LIST_PAGE_SIZE + 1
         fake_romm_api.roms = {i: {"id": i, "platform_id": 1, "name": f"G{i}"} for i in range(rom_count)}
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=rom_count)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=rom_count)
         unit_roms, skipped = await library.sync._fetcher.fetch_platform_unit(unit)
 
         assert skipped is False
@@ -1609,7 +1631,7 @@ class TestFetchProgressNarration:
         rom_count = 3084
         _seed_pages(fake_romm_api, platform_id=1, count=rom_count)
 
-        unit = WorkUnit(type="platform", id=1, name="GBA", slug="gba", rom_count=rom_count)
+        unit = WorkUnit(type="platform", id=1, name="GBA", slug="gba", platform_folder="gba", rom_count=rom_count)
         await library.sync._fetcher.fetch_platform_unit(unit, progress_step=3, progress_total_steps=12)
 
         frames = _fetching_frames(emit)
@@ -1631,7 +1653,7 @@ class TestFetchProgressNarration:
         library = make_library(romm_api=fake_romm_api)
         _seed_pages(fake_romm_api, platform_id=1, count=3)
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=3)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=3)
         await library.sync._fetcher.fetch_platform_unit(unit, progress_step=1, progress_total_steps=1)
 
         frames = _fetching_frames(emit)
@@ -1647,7 +1669,7 @@ class TestFetchProgressNarration:
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=1)
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
         _unit_roms, skipped = await library.sync._fetcher.fetch_platform_unit(
             unit, progress_step=1, progress_total_steps=1
         )
@@ -1663,7 +1685,7 @@ class TestFetchProgressNarration:
         library = make_library(romm_api=fake_romm_api)
         _seed_pages(fake_romm_api, platform_id=1, count=3)
 
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=3)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=3)
         await library.sync._fetcher.fetch_platform_unit(unit)
 
         frames = _fetching_frames(emit)
@@ -2436,7 +2458,7 @@ class TestTheSyncKeepsThePlatformsIds:
         def _boom():
             raise RuntimeError("db down")
 
-        library.sync._fetcher._uow_factory = _boom
+        library.platform_systems._uow_factory = _boom
 
         units = await library.sync._fetcher.build_work_queue()
 
@@ -2502,7 +2524,7 @@ class TestPredictionNeverFeedsSkipGate:
         uow = library.uow
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=1)
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
-        base = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        base = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
 
         results = [
             await library.sync._fetcher._try_unit_incremental_skip(unit)
@@ -2521,7 +2543,9 @@ class TestPredictionNeverFeedsSkipGate:
         """A (wrong) predicted_skip=True can only mis-estimate, never mis-skip."""
         library = make_library(romm_api=fake_romm_api)
         # No stamp, no rows — the gate must full-fetch.
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1, predicted_skip=True)
+        unit = WorkUnit(
+            type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1, predicted_skip=True
+        )
 
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -2557,7 +2581,7 @@ class TestAskRommForRoms:
 
         answers = await library.sync._fetcher.ask_romm_for_roms([4, 3, 2, 1, 1])
 
-        assert answers == {1: "present", 2: "gone", 3: "unknown", 4: "unknown"}
+        assert answers.answers == {1: "present", 2: "gone", 3: "unknown", 4: "unknown"}
         assert sorted(args for name, args, _kwargs in fake_romm_api.call_log if name == "get_rom_once") == [
             (1,),
             (2,),
@@ -2569,7 +2593,7 @@ class TestAskRommForRoms:
     async def test_asking_about_nothing_sends_nothing(self, make_library, fake_romm_api):
         library = make_library(romm_api=fake_romm_api)
 
-        assert await library.sync._fetcher.ask_romm_for_roms([]) == {}
+        assert await library.sync._fetcher.ask_romm_for_roms([]) == ExactAnswers({}, {})
         assert fake_romm_api.call_log == []
 
 
@@ -2649,7 +2673,7 @@ class TestAHiddenGameIsLeftOutOfAPlatformSkip:
     async def test_a_game_whose_every_version_is_hidden_is_not_rebuilt(self, make_library, fake_romm_api, hidden_key):
         library = make_library(romm_api=fake_romm_api)
         self._seed(library, fake_romm_api, hidden_key=hidden_key, sibling=())
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
 
         rebuilt = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -2659,7 +2683,7 @@ class TestAHiddenGameIsLeftOutOfAPlatformSkip:
     async def test_a_hidden_version_whose_game_the_last_fetch_returned_is_rebuilt(self, make_library, fake_romm_api):
         library = make_library(romm_api=fake_romm_api)
         self._seed(library, fake_romm_api, hidden_key="igdb:11:1", sibling=(12,))
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=2)
 
         rebuilt = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -2677,7 +2701,7 @@ class TestAHiddenGameIsLeftOutOfAPlatformSkip:
             fake_romm_api.roms[rom_id] = {"id": rom_id, "platform_id": 1, "updated_at": _OLD_UPDATED_AT}
         fake_romm_api.hidden_rom_ids = {11}
         library.sync._box.run_hidden_rom_ids = frozenset({11})
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
 
         rebuilt = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
@@ -2688,7 +2712,7 @@ class TestAHiddenGameIsLeftOutOfAPlatformSkip:
         library = make_library(romm_api=fake_romm_api)
         self._seed(library, fake_romm_api, hidden_key="igdb:11:1", sibling=())
         library.sync._box.run_hidden_rom_ids = None
-        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", platform_folder="n64", rom_count=1)
 
         rebuilt = await library.sync._fetcher._try_unit_incremental_skip(unit)
 

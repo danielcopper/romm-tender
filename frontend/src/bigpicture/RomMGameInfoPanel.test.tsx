@@ -1187,6 +1187,7 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: romId,
+        platform_fs_slug: "snes",
         save_sync_enabled: true,
         metadata: makeMetadata(),
         stale_fields: [],
@@ -2340,6 +2341,7 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 60,
+        platform_fs_slug: "snes",
         rom_file: "mario.sfc",
         save_sync_enabled: true,
         metadata: makeMetadata(),
@@ -2354,6 +2356,7 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 60,
+        platform_fs_slug: "snes",
         rom_file: "mario.sfc",
         bios_status: {
           platform_slug: "snes",
@@ -2395,7 +2398,7 @@ describe("RomMGameInfoPanel", () => {
       await act(async () => {
         globalThis.dispatchEvent(
           new CustomEvent("romm_data_changed", {
-            detail: { type: "core_changed", platform_slug: "snes" },
+            detail: { type: "core_changed", platform_fs_slug: "snes" },
           }),
         );
         await Promise.resolve();
@@ -2426,7 +2429,7 @@ describe("RomMGameInfoPanel", () => {
       await act(async () => {
         globalThis.dispatchEvent(
           new CustomEvent("romm_data_changed", {
-            detail: { type: "core_changed", platform_slug: "snes" },
+            detail: { type: "core_changed", platform_fs_slug: "snes" },
           }),
         );
         await Promise.resolve();
@@ -2449,7 +2452,7 @@ describe("RomMGameInfoPanel", () => {
       await act(async () => {
         globalThis.dispatchEvent(
           new CustomEvent("romm_data_changed", {
-            detail: { type: "core_changed", platform_slug: "snes" },
+            detail: { type: "core_changed", platform_fs_slug: "snes" },
           }),
         );
         await Promise.resolve();
@@ -2515,7 +2518,7 @@ describe("RomMGameInfoPanel", () => {
       await act(async () => {
         globalThis.dispatchEvent(
           new CustomEvent("romm_data_changed", {
-            detail: { type: "core_changed", platform_slug: "snes" },
+            detail: { type: "core_changed", platform_fs_slug: "snes" },
           }),
         );
         await Promise.resolve();
@@ -2619,7 +2622,7 @@ describe("RomMGameInfoPanel", () => {
       await act(async () => {
         globalThis.dispatchEvent(
           new CustomEvent("romm_data_changed", {
-            detail: { type: "core_changed", platform_slug: "snes" },
+            detail: { type: "core_changed", platform_fs_slug: "snes" },
           }),
         );
         await Promise.resolve();
@@ -4303,6 +4306,7 @@ describe("RomMGameInfoPanel", () => {
       found: true,
       rom_id: 60,
       platform_slug: "snes",
+      platform_fs_slug: "snes",
       metadata: makeMetadata(),
       stale_fields: ["bios"],
       ...overrides,
@@ -4458,7 +4462,7 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(backend.getBiosStatus).mockResolvedValue(biosAnswer(3));
       await act(async () => {
         globalThis.dispatchEvent(
-          new CustomEvent("romm_data_changed", { detail: { type: "core_changed", platform_slug: "snes" } }),
+          new CustomEvent("romm_data_changed", { detail: { type: "core_changed", platform_fs_slug: "snes" } }),
         );
       });
       await flushAsync();
@@ -4587,7 +4591,7 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockImplementationOnce(() => coreChangeDetail.promise);
       await act(async () => {
         globalThis.dispatchEvent(
-          new CustomEvent("romm_data_changed", { detail: { type: "core_changed", platform_slug: "snes" } }),
+          new CustomEvent("romm_data_changed", { detail: { type: "core_changed", platform_fs_slug: "snes" } }),
         );
       });
 
@@ -5994,6 +5998,7 @@ describe("RomMGameInfoPanel", () => {
       rom_id: romId,
       rom_name: romName,
       platform_slug: "snes",
+      platform_fs_slug: "snes",
       metadata: makeMetadata(),
       stale_fields: [],
       ...overrides,
@@ -6112,7 +6117,7 @@ describe("RomMGameInfoPanel", () => {
       await flushAsync();
 
       vi.mocked(backend.getBiosStatus).mockResolvedValue(biosStatusFor(3));
-      await dispatchDataChanged({ type: "core_changed", platform_slug: "snes" });
+      await dispatchDataChanged({ type: "core_changed", platform_fs_slug: "snes" });
       await flushAsync();
       await openBiosTab();
       expect(container.textContent).toContain(
@@ -6177,7 +6182,7 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(
         detailFor(1, "Game", { ...biosStatusFor(3), stale_fields: [] }),
       );
-      await dispatchDataChanged({ type: "core_changed", platform_slug: "snes" });
+      await dispatchDataChanged({ type: "core_changed", platform_fs_slug: "snes" });
       await flushAsync();
       await openBiosTab();
       expect(container.textContent).toContain(
@@ -6729,6 +6734,7 @@ describe("RomMGameInfoPanel", () => {
       rom_id: romId,
       rom_name: `Game ${romId}`,
       platform_slug: "ps2",
+      platform_fs_slug: "ps2",
       save_sync_enabled: true,
       metadata: makeMetadata(),
       stale_fields: [],
@@ -6819,7 +6825,9 @@ describe("RomMGameInfoPanel", () => {
 
       vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue(REFUSED);
       await act(async () => {
-        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "core_changed" } }));
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", { detail: { type: "core_changed", platform_fs_slug: "ps2" } }),
+        );
       });
       await flushAsync();
 

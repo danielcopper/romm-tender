@@ -635,6 +635,6 @@ class TestPlatformCoreReaderAdapter:
         settings: dict[str, object] = {"platform_cores": {}}
         reader = PlatformCoreReaderAdapter(settings)
         assert reader.get_platform_core("snes") is None
-        # Mutate the same dict the adapter holds.
-        settings["platform_cores"]["snes"] = {"label": "bsnes", "source": "retrodeck"}  # type: ignore[index]
+        # The picks' writer replaces the map whole in the dict the adapter holds.
+        settings["platform_cores"] = {"snes": {"label": "bsnes", "source": "retrodeck"}}
         assert reader.get_platform_core("snes") == StoredPick("bsnes", "retrodeck")

@@ -5,7 +5,6 @@ per-platform BIOS check, the downloads, bringing a platform's links up to date,
 a replacement, what a library file is, the deletes) and composes the
 sub-services behind it. Implementation lives in those modules:
 :class:`FirmwareListing` for what the RomM library holds and its cache,
-:class:`FirmwareRefiling` for moving older entries to their platform,
 :class:`FirmwareDemand` for what the installed emulators want,
 :class:`FirmwareStore` for Tender's firmware store and its links,
 :class:`FirmwareStatusReader` for every status-bearing answer,
@@ -25,7 +24,6 @@ from services.firmware.deletion import FirmwareDeletionIncomplete, PlatformBiosD
 from services.firmware.demand import FirmwareDemand, FirmwareDemandConfig
 from services.firmware.downloads import FirmwareDownloader, FirmwareDownloaderConfig
 from services.firmware.listing import FirmwareListing, FirmwareListingConfig
-from services.firmware.refiling import FirmwareRefiling, FirmwareRefilingConfig
 from services.firmware.replacement import FirmwareReplacer, FirmwareReplacerConfig
 from services.firmware.status import FirmwareStatusReader, FirmwareStatusReaderConfig
 
@@ -41,14 +39,15 @@ if TYPE_CHECKING:
         Clock,
         ConflictRules,
         CoreInfoProvider,
+        DebugLogger,
         FirmwareFileStore,
         FirmwareIdentityProvider,
         FirmwarePlatformResolver,
+        ListingRefiler,
         PlatformCoreReader,
         PlatformSystems,
         RetroDeckFolders,
         RommFirmwareApi,
-        SettingsPersister,
         UnitOfWorkFactory,
     )
 
@@ -61,14 +60,15 @@ class FirmwareServiceConfig:
     adapters, the resolver seams (the per-platform demand and the
     identification of a piece of content), Tender's firmware store — built
     before this service, because Tender's folder asks it what is recorded
-    under a folder — the SQLite Unit-of-Work factory, the live settings dict
-    and its persister, and the provider callables the firmware subsystem needs
-    at construction time.
+    under a folder — the SQLite Unit-of-Work factory, the refiling a fresh read
+    of RomM's platform list is handed to, and the provider callables the
+    firmware subsystem needs at construction time.
     """
 
     romm_api: RommFirmwareApi
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
+    log_debug: DebugLogger
     clock: Clock
     firmware_file_store: FirmwareFileStore
     platform_firmware_resolver: FirmwarePlatformResolver
@@ -81,8 +81,7 @@ class FirmwareServiceConfig:
     active_core: ActiveCoreReader
     uow_factory: UnitOfWorkFactory
     conflict_rules: ConflictRules
-    settings: dict[str, Any]
-    settings_persister: SettingsPersister
+    refiling: ListingRefiler
 
 
 class FirmwareService:
@@ -115,14 +114,7 @@ class FirmwareService:
                 logger=config.logger,
                 clock=config.clock,
                 uow_factory=config.uow_factory,
-                refiling=FirmwareRefiling(
-                    config=FirmwareRefilingConfig(
-                        uow_factory=config.uow_factory,
-                        settings=config.settings,
-                        settings_persister=config.settings_persister,
-                        logger=config.logger,
-                    )
-                ),
+                refiling=config.refiling,
             )
         )
 
@@ -140,8 +132,10 @@ class FirmwareService:
                 platform_core_reader=config.platform_core_reader,
                 firmware_file_store=config.firmware_file_store,
                 uow_factory=config.uow_factory,
+                refiling=config.refiling,
                 loop=config.loop,
                 logger=config.logger,
+                log_debug=config.log_debug,
             )
         )
 
@@ -178,8 +172,10 @@ class FirmwareService:
                 firmware_file_store=config.firmware_file_store,
                 retrodeck_folders=config.retrodeck_folders,
                 uow_factory=config.uow_factory,
+                refiling=config.refiling,
                 loop=config.loop,
                 logger=config.logger,
+                log_debug=config.log_debug,
             )
         )
 

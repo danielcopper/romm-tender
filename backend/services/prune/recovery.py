@@ -73,8 +73,8 @@ class RecoveryCoordinator:
             ]
             platforms = [
                 asdict(stamp)
-                for slug in sorted({row.platform_slug for row in rows})
-                if (stamp := uow.platform_sync_state.get(slug)) is not None
+                for folder in sorted({row.platform_fs_slug for row in rows if row.platform_fs_slug is not None})
+                if (stamp := uow.platform_sync_state.get(folder)) is not None
             ]
             collections = [
                 asdict(stamp)
@@ -190,6 +190,7 @@ class RecoveryCoordinator:
                     "name": row.name,
                     "fs_name": row.fs_name,
                     "platform_slug": row.platform_slug,
+                    "platform_fs_slug": row.platform_fs_slug,
                     "role": "removed by this cleanup",
                 }
                 for row in rows

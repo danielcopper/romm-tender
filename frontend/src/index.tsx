@@ -196,16 +196,14 @@ const QAMPanel: FC = () => {
     // `el` is the panel's own content and nothing above it: the entry's heading
     // and whatever the menu draws around the panel sit outside this div, so the
     // search cannot reach them, and the first stop it finds is a row of the
-    // page. (Measured under Decky, whose title sat 34 px above the box it
-    // wrapped a plugin's content in — `WidePage`'s `ancestorOverhang`.)
+    // page.
     //
     // A page carrying the marker places entry focus itself, and this focus
     // would undo it: the first stop of a wide page is the Back chip, which sits
     // above the body — and above the tabs of a tabbed one, therefore outside
     // Steam's tabbed page, whose tab row draws the L1/R1 glyphs only while
-    // gamepad focus is within it (`chunk~2dcc5aaf7.js`, the tab row's
-    // `showGlyphs`). Landing here would leave such a page with no visible way
-    // to switch tabs.
+    // gamepad focus is within it (`docs/architecture/qam-panel.md`, "Tabs").
+    // Landing here would leave such a page with no visible way to switch tabs.
     //
     // Only after a swap: on the page the panel appears with, entry is Steam's,
     // by the `preferredFocus` the page marks where it marks one

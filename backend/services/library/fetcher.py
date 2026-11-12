@@ -25,8 +25,7 @@ from domain.fetch_generation import (
     count_rows_for_skip,
     hidden_without_a_listed_version,
 )
-from domain.firmware_platforms import listed_slugs
-from domain.platform_names import listed_platform_names
+from domain.platform_names import listed_fs_slug, listed_platform_folders, listed_platform_names
 from domain.platform_prefs import materialize_enabled_platforms, resolve_sync_enabled
 from domain.platform_skip import probe_verdict, stamp_can_match
 from domain.platform_sync_state import stamp_for_skip
@@ -36,13 +35,13 @@ from domain.skip_prediction import (
     predict_collection_skip,
     predict_unit_skip,
 )
+from domain.sync_diff import ExactAnswers
 from domain.sync_state import SyncCancelled
 from domain.virtual_collection_id import virtual_types_to_list
 from domain.work_unit import WorkUnit, collection_units
 from lib.errors import Refused, RommNotFoundError
 from lib.romm_paging import LIST_PAGE_SIZE
 from services.library._fetch_pages import emit_fetch_page_progress, raise_if_cancelling
-from services.library._platform_ids import keep_platform_ids
 
 if TYPE_CHECKING:
     import logging
@@ -55,6 +54,8 @@ if TYPE_CHECKING:
     from services.library.local_library_reader import LocalLibraryReader
     from services.protocols import (
         DebugLogger,
+        ListingRefiler,
+        ListingReplacer,
         RommLibraryApi,
         SettingsPersister,
         UnitOfWorkFactory,
@@ -128,7 +129,9 @@ class LibraryFetcherConfig:
     cancel signal), an ``_emit_progress`` callback the fetcher uses
     to surface long paginated fetches to the frontend, and the
     ``LocalLibraryReader`` peer the collections listing asks which ROMs
-    the sync's collection filing resolves to a shortcut.
+    the sync's collection filing resolves to a shortcut, the refiling
+    each of its reads of RomM's platform listing is handed to, and the
+    platform system the sync's listing is kept by.
     """
 
     romm_api: RommLibraryApi
@@ -141,6 +144,8 @@ class LibraryFetcherConfig:
     sync_state_box: LibrarySyncStateBox
     emit_progress: EmitProgressFn
     local_library_reader: LocalLibraryReader
+    refiling: ListingRefiler
+    platform_listing: ListingReplacer
 
 
 class LibraryFetcher:
@@ -157,11 +162,19 @@ class LibraryFetcher:
         self._sync_state = config.sync_state_box
         self._emit_progress = config.emit_progress
         self._local_library_reader = config.local_library_reader
+        self._refiling = config.refiling
+        self._platform_listing = config.platform_listing
 
     # ── Platform metadata use cases ──────────────────────────────
 
-    async def get_platforms(self):
+    async def _read_listing(self) -> list[dict[str, Any]]:
+        """RomM's platform listing, handed to the refiling once read (#2452 D6, D7)."""
         platforms = await self._loop.run_in_executor(None, self._romm_api.list_platforms)
+        await self._loop.run_in_executor(None, self._refiling.do_refile, platforms)
+        return platforms
+
+    async def get_platforms(self):
+        platforms = await self._read_listing()
 
         # Only platforms with ROMs are shown (and thus toggleable), so the
         # materialized map covers exactly the set the user can act on.
@@ -179,17 +192,20 @@ class LibraryFetcher:
             self._settings_persister.save_settings()
             enabled = materialized
 
+        # One row per platform, by its fs_slug, named as its Steam collection is (#2452 D1, D2).
+        names = listed_platform_names(platforms)
         result = []
         for p in platforms:
             rom_count = p.get("rom_count", 0)
-            if rom_count == 0:
+            fs_slug = listed_fs_slug(p)
+            if rom_count == 0 or fs_slug is None:
                 continue
             pid = str(p["id"])
             entry = {
                 "id": p["id"],
-                "name": p.get("name", ""),
+                "name": names.get(fs_slug, p.get("name", "")),
                 "slug": p.get("slug", ""),
-                "fs_slug": p.get("fs_slug", ""),
+                "fs_slug": fs_slug,
                 "rom_count": rom_count,
                 "sync_enabled": resolve_sync_enabled(enabled, pid),
             }
@@ -204,7 +220,7 @@ class LibraryFetcher:
 
     async def set_all_platforms_sync(self, enabled):
         enabled = bool(enabled)
-        platforms = await self._loop.run_in_executor(None, self._romm_api.list_platforms)
+        platforms = await self._read_listing()
 
         ep = {}
         for p in platforms:
@@ -339,14 +355,12 @@ class LibraryFetcher:
 
         Answers ``(enabled, unwalked_ids)``: the platforms this run syncs, and
         the id of every listed platform it does not. Every listed platform's
-        slug and name are held on the run's box.
+        ``fs_slug`` and name are held on the run's box.
         """
-        listed = await self._loop.run_in_executor(None, self._romm_api.list_platforms)
-        self._sync_state.run_listed_platform_slugs = listed_slugs(listed)
+        listed = await self._read_listing()
+        self._sync_state.run_listed_platform_folders = listed_platform_folders(listed)
         self._sync_state.run_listed_platform_names = listed_platform_names(listed)
-        await self._loop.run_in_executor(
-            None, keep_platform_ids, self._uow_factory, self._logger, listed, self._romm_api.get_version()
-        )
+        await self._loop.run_in_executor(None, self._platform_listing.replace_listing, listed)
 
         # Empty map = "all platforms enabled" (the safety floor for a user who
         # syncs without ever opening the Platforms page). ``get_platforms``
@@ -397,6 +411,7 @@ class LibraryFetcher:
                 name=platform.get("name", platform.get("display_name", "Unknown")),
                 slug=platform.get("slug", ""),
                 rom_count=int(platform.get("rom_count", 0)),
+                platform_folder=listed_fs_slug(platform) or "",
             )
             for platform in platforms
         ]
@@ -430,14 +445,17 @@ class LibraryFetcher:
             )
         )
         collection_queue.extend(await self._build_virtual_collection_units(enabled_virtual_ids))
-        unwalked_platform_slugs = tuple(
-            sorted((self._sync_state.run_listed_platform_slugs or frozenset()) - {unit.slug for unit in platform_units})
+        unwalked_platform_folders = tuple(
+            sorted(
+                (self._sync_state.run_listed_platform_folders or frozenset())
+                - {unit.platform_folder for unit in platform_units}
+            )
         )
         collection_queue = [
             replace(
                 unit,
                 unwalked_platform_ids=unwalked_platform_ids,
-                unwalked_platform_slugs=unwalked_platform_slugs,
+                unwalked_platform_folders=unwalked_platform_folders,
                 member_rom_ids=unit.member_rom_ids
                 if hidden is None
                 else tuple(rom_id for rom_id in unit.member_rom_ids if rom_id not in hidden),
@@ -521,12 +539,12 @@ class LibraryFetcher:
         return [
             replace(
                 unit,
-                predicted_skip=estimates[unit.slug].predicted_skip,
-                collapsed_count=estimates[unit.slug].collapsed_count,
-                bound_count=estimates[unit.slug].bound_count,
-                new_shortcut_count=estimates[unit.slug].new_shortcut_count,
+                predicted_skip=estimates[unit.platform_folder].predicted_skip,
+                collapsed_count=estimates[unit.platform_folder].collapsed_count,
+                bound_count=estimates[unit.platform_folder].bound_count,
+                new_shortcut_count=estimates[unit.platform_folder].new_shortcut_count,
             )
-            if unit.slug in estimates
+            if unit.platform_folder in estimates
             else unit
             for unit in platform_units
         ]
@@ -558,7 +576,7 @@ class LibraryFetcher:
         ``predicted_skip`` replays the collection skip gate's local conditions
         over the unit's listing, its completion stamp and the stored rows
         (``domain/skip_prediction.predict_collection_skip``, which also names
-        what it does not replay); the unit's ``unwalked_platform_slugs`` must
+        what it does not replay); the unit's ``unwalked_platform_folders`` must
         already be set. ``bound_count`` is read from the completion stamp's
         stored ``member_rom_ids`` only (the set the skip replays), counting
         those whose ``roms`` row carries a ``shortcut_app_id``. No ROM fetch:
@@ -603,14 +621,14 @@ class LibraryFetcher:
     def _read_plan_estimates(self, units: list[WorkUnit]) -> dict[str, _PlanEstimate]:
         """Read the plan-time estimate baseline for platform units (#1382).
 
-        Per unit slug: replay the wholesale-skip gate's LOCAL conditions
+        Per unit ``fs_slug``: replay the wholesale-skip gate's LOCAL conditions
         (``predict_unit_skip`` — a stamp present and not revoked
         (``stamp_for_skip``) that records what the gate compares RomM's answer
         with, rows carrying the stamp's fetch generation, bound rows, no
         group-key backfill pending, no group holding more than one bound
         shortcut) and derive the persisted post-collapse
         shortcut count (``collapsed_shortcut_count`` over the rows' sibling-group keys + bound
-        flags). The collapsed count is emitted ONLY for slugs that carry a
+        flags). The collapsed count is emitted ONLY for platforms that carry a
         ``PlatformSyncState`` completion stamp the gate would read (#1412): such a
         stamp stands only while the local mirror is complete, so without it a
         never-synced platform's PARTIAL rows (cross-platform collection siblings,
@@ -652,8 +670,8 @@ class LibraryFetcher:
         estimates: dict[str, _PlanEstimate] = {}
         with self._uow_factory() as uow:
             for unit in units:
-                stamp = stamp_for_skip(uow.platform_sync_state.get(unit.slug))
-                all_rows = list(uow.roms.iter_by_platform(unit.slug))
+                stamp = stamp_for_skip(uow.platform_sync_state.get(unit.platform_folder))
+                all_rows = list(uow.roms.iter_by_platform_folder(unit.platform_folder))
                 bound_count = sum(1 for rom in all_rows if rom.shortcut_app_id is not None)
                 fetch_id = stamp.fetch_id if stamp is not None else None
                 predicted = predict_unit_skip(
@@ -677,11 +695,11 @@ class LibraryFetcher:
                     ((rom.sibling_group_key, rom.shortcut_app_id is not None) for rom in all_rows),
                     unit_rom_count=unit.rom_count,
                 )
-                estimates[unit.slug] = _PlanEstimate(predicted, collapsed, bound_count, new_shortcuts)
+                estimates[unit.platform_folder] = _PlanEstimate(predicted, collapsed, bound_count, new_shortcuts)
         return estimates
 
-    def _read_incremental_baseline(self, platform_slug: str) -> _SkipBaseline:
-        """Read the incremental-skip baseline for *platform_slug* from SQLite.
+    def _read_incremental_baseline(self, platform_folder: str) -> _SkipBaseline:
+        """Read the incremental-skip baseline for the platform whose ``fs_slug`` is *platform_folder* from SQLite.
 
         * ``stamp`` — the platform's completion stamp (``PlatformSyncState``),
           or ``None`` when there is no stamp or its skip was revoked
@@ -723,8 +741,8 @@ class LibraryFetcher:
         Only one short read UoW is opened.
         """
         with self._uow_factory() as uow:
-            stamp = stamp_for_skip(uow.platform_sync_state.get(platform_slug))
-            all_rows = list(uow.roms.iter_by_platform(platform_slug))
+            stamp = stamp_for_skip(uow.platform_sync_state.get(platform_folder))
+            all_rows = list(uow.roms.iter_by_platform_folder(platform_folder))
         fetch_id = stamp.fetch_id if stamp is not None else None
         left_out = hidden_without_a_listed_version(all_rows, self._sync_state.run_hidden_rom_ids or (), fetch_id)
         reconstructed = [
@@ -733,6 +751,7 @@ class LibraryFetcher:
                 "name": rom.name,
                 "fs_name": rom.fs_name,
                 "platform_slug": rom.platform_slug,
+                "platform_fs_slug": rom.platform_fs_slug,
                 "igdb_id": rom.igdb_id,
                 "sgdb_id": rom.sgdb_id,
                 "ra_id": rom.ra_id,
@@ -803,7 +822,7 @@ class LibraryFetcher:
         platform_name = unit.name
         platform_slug = unit.slug
 
-        baseline = await self._loop.run_in_executor(None, self._read_incremental_baseline, platform_slug)
+        baseline = await self._loop.run_in_executor(None, self._read_incremental_baseline, unit.platform_folder)
         stamp = baseline.stamp
         reconstructed = baseline.reconstructed_roms
         fetched_count = baseline.fetched_count
@@ -966,6 +985,7 @@ class LibraryFetcher:
                 rom.pop("files", None)
                 rom["platform_name"] = platform_name
                 rom["platform_slug"] = platform_slug
+                rom["platform_fs_slug"] = unit.platform_folder
             unit_roms.extend(rom_list)
 
             if len(rom_list) < limit:
@@ -974,29 +994,33 @@ class LibraryFetcher:
 
         return unit_roms, False
 
-    async def ask_romm_for_roms(self, rom_ids: Collection[int]) -> dict[int, RomAnswer]:
+    async def ask_romm_for_roms(self, rom_ids: Collection[int]) -> ExactAnswers:
         """Ask RomM once for each of *rom_ids* by its exact id, all at once.
 
         ``gone`` only for a ``RommNotFoundError``, RomM's entity answer;
         ``present`` only for an answer carrying that very id; ``unknown`` for
-        anything else, a transport failure included, which is logged.
+        anything else, a transport failure included, which is logged. A
+        ``present`` answer's ``platform_fs_slug`` is answered beside it, where
+        it carries one (#2452 D5).
         """
         ordered = sorted(set(rom_ids))
-        answers = await asyncio.gather(
-            *(self._loop.run_in_executor(None, self._ask_once, rom_id) for rom_id in ordered)
+        asked = await asyncio.gather(*(self._loop.run_in_executor(None, self._ask_once, rom_id) for rom_id in ordered))
+        return ExactAnswers(
+            answers={rom_id: answer for rom_id, (answer, _folder) in zip(ordered, asked, strict=True)},
+            folders={rom_id: folder for rom_id, (_answer, folder) in zip(ordered, asked, strict=True) if folder},
         )
-        return dict(zip(ordered, answers, strict=True))
 
-    def _ask_once(self, rom_id: int) -> RomAnswer:
+    def _ask_once(self, rom_id: int) -> tuple[RomAnswer, str | None]:
         try:
             payload: Any = self._romm_api.get_rom_once(rom_id)
         except RommNotFoundError:
-            return "gone"
+            return "gone", None
         except Exception as e:
             self._logger.warning(f"Exact-id question for rom {rom_id} got no answer: {e}")
-            return "unknown"
+            return "unknown", None
         payload_id = payload.get("id") if isinstance(payload, dict) else None
         if type(payload_id) is int and payload_id == rom_id:
-            return "present"
+            folder = payload.get("platform_fs_slug")
+            return "present", folder if isinstance(folder, str) and folder else None
         self._logger.warning(f"Exact-id question for rom {rom_id} got an answer for another id: {payload_id!r}")
-        return "unknown"
+        return "unknown", None

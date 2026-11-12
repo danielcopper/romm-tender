@@ -92,8 +92,10 @@ def _set_user_version(db_path: str, version: int) -> None:
 # + 037_add_rom_artwork_checked_at + 038_add_last_sync_content_size
 # + 039_add_rom_emulator_override_source + 040_drop_rom_install_launchable
 # + 041_replace_applied_launch_options_with_shortcut_applied
-# + 042_add_rom_install_fetched_size + 043_key_firmware_store_by_platform_folder).
-_SHIPPED_VERSION = 43
+# + 042_add_rom_install_fetched_size + 043_key_firmware_store_by_platform_folder
+# + 044_key_platform_sync_state_by_platform_folder
+# + 045_key_downloaded_bios_by_platform_folder).
+_SHIPPED_VERSION = 45
 
 # Tables after every shipped migration: the v1 set plus 006's play-session outbox,
 # 012's per-platform completion stamp, 019's per-collection completion stamp,
@@ -819,10 +821,10 @@ class Test012PlatformSyncState:
         assert _user_version(db_path) == _SHIPPED_VERSION
         assert "platform_sync_state" in _tables(db_path)
         # fetch_id is added by 020 (#1504), skip_revoked by 025, and
-        # fetch_started_at and rom_id_checksum by 031; after a full apply the
-        # table carries all four.
+        # fetch_started_at and rom_id_checksum by 031, and 044 keys the table by
+        # platform_folder; after a full apply the table carries all of them.
         assert _columns(db_path, "platform_sync_state") == {
-            "platform_slug",
+            "platform_folder",
             "completed_at",
             "rom_count",
             "fetch_id",
@@ -842,7 +844,7 @@ class Test012PlatformSyncState:
     def test_platform_slug_is_primary_key_upsert(self, tmp_path: Path):
         # platform_slug is the PK — a second write for the same slug replaces the row.
         db_path = str(tmp_path / "romm_sync.db")
-        apply_migrations(db_path)
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 12)))
 
         conn = sqlite3.connect(db_path, isolation_level=None)
         try:
@@ -1404,7 +1406,7 @@ class Test020FetchGeneration:
         finally:
             conn.close()
 
-        apply_migrations(db_path)
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 20)))
 
         conn = sqlite3.connect(db_path, isolation_level=None)
         try:
@@ -1756,7 +1758,7 @@ class Test025AddPlatformSkipRevoked:
         finally:
             conn.close()
 
-        assert apply_migrations(db_path) == _SHIPPED_VERSION
+        assert apply_migrations(db_path, str(_only_migrations_through(tmp_path, 25))) == 25
 
         conn = sqlite3.connect(db_path)
         try:
@@ -1769,7 +1771,7 @@ class Test025AddPlatformSkipRevoked:
 
     def test_skip_revoked_refuses_a_null(self, tmp_path: Path):
         db_path = str(tmp_path / "romm_sync.db")
-        apply_migrations(db_path)
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 25)))
         conn = sqlite3.connect(db_path, isolation_level=None)
         try:
             with pytest.raises(sqlite3.IntegrityError):
@@ -1846,7 +1848,7 @@ class Test026AddRomHasFileOnDisk:
         finally:
             conn.close()
 
-        assert apply_migrations(db_path) == _SHIPPED_VERSION
+        assert apply_migrations(db_path, str(_only_migrations_through(tmp_path, 26))) == 26
 
         conn = sqlite3.connect(db_path)
         try:
@@ -2878,7 +2880,7 @@ class Test043KeyFirmwareStoreByPlatformFolder:
         finally:
             conn.close()
 
-        apply_migrations(db_path)
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 43)))
 
         conn = sqlite3.connect(db_path)
         try:
@@ -2907,3 +2909,75 @@ class Test043KeyFirmwareStoreByPlatformFolder:
         finally:
             conn.close()
         assert count == 0
+
+
+class Test044KeyPlatformSyncStateByPlatformFolder:
+    """044 — a platform's sync stamp is kept per RomM platform folder, rebuilt empty (#2796, #2452 D4)."""
+
+    def test_every_stamp_is_dropped_and_the_table_is_keyed_by_the_folder(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 43)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute(
+                "INSERT INTO platform_sync_state (platform_slug, completed_at, rom_count) VALUES ('snes', 'now', 3)"
+            )
+        finally:
+            conn.close()
+
+        assert apply_migrations(db_path, str(_only_migrations_through(tmp_path, 44))) == 44
+
+        assert "platform_slug" not in _columns(db_path, "platform_sync_state")
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            assert conn.execute("SELECT COUNT(*) FROM platform_sync_state").fetchone()[0] == 0
+            conn.execute(
+                "INSERT INTO platform_sync_state (platform_folder, completed_at, rom_count) VALUES ('snes', 'a', 1)"
+            )
+            conn.execute(
+                "INSERT INTO platform_sync_state (platform_folder, completed_at, rom_count) "
+                "VALUES ('snes-hacks', 'a', 2)"
+            )
+            with pytest.raises(sqlite3.IntegrityError):
+                conn.execute(
+                    "INSERT INTO platform_sync_state (platform_folder, completed_at, rom_count) VALUES ('snes', 'b', 4)"
+                )
+        finally:
+            conn.close()
+
+
+class Test045KeyDownloadedBiosByPlatformFolder:
+    """045 — an older BIOS download record is kept per RomM platform folder, its value kept (#2797, #2452 D6)."""
+
+    def test_a_record_keeps_its_value_under_the_folder_and_the_key_follows(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 44)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute(
+                "INSERT INTO downloaded_bios (platform_slug, file_name, file_path, downloaded_at, firmware_id) "
+                "VALUES ('psx', 'scph5501.bin', '/bios/scph5501.bin', 'now', 7)"
+            )
+        finally:
+            conn.close()
+
+        assert apply_migrations(db_path, str(_only_migrations_through(tmp_path, 45))) == 45
+
+        assert "platform_slug" not in _columns(db_path, "downloaded_bios")
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            rows = conn.execute(
+                "SELECT platform_folder, file_name, file_path, downloaded_at, firmware_id FROM downloaded_bios"
+            ).fetchall()
+            assert rows == [("psx", "scph5501.bin", "/bios/scph5501.bin", "now", 7)]
+            conn.execute(
+                "INSERT INTO downloaded_bios (platform_folder, file_name, file_path, downloaded_at) "
+                "VALUES ('ps', 'scph5501.bin', '/bios/ps/scph5501.bin', 'now')"
+            )
+            with pytest.raises(sqlite3.IntegrityError):
+                conn.execute(
+                    "INSERT INTO downloaded_bios (platform_folder, file_name, file_path, downloaded_at) "
+                    "VALUES ('psx', 'scph5501.bin', '/bios/other.bin', 'now')"
+                )
+        finally:
+            conn.close()

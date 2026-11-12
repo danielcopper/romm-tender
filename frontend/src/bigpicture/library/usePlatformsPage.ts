@@ -35,6 +35,8 @@ import {
   getPlatforms,
   getRegistryPlatforms,
   getSystemCoreInfo,
+  isEndpointFailure,
+  logError,
   logWarn,
   removePlatformShortcuts,
   reportRemovalResults,
@@ -43,7 +45,7 @@ import {
   setSystemCore,
   updateBiosLinks,
 } from "../../api/backend";
-import type { FirmwarePlatformExt, PlatformSyncSetting, SystemCoreInfo } from "../../types";
+import type { EndpointFailure, FirmwarePlatformExt, PlatformSyncSetting, SystemCoreInfo } from "../../types";
 import { placedSentence } from "../../utils/biosPlaceWords";
 import { detach } from "../../utils/detach";
 import { clearPlatformCollection } from "../../utils/collections";
@@ -58,7 +60,8 @@ import {
 import { biosAnswerStale, biosReadState, type BiosReadState } from "../../utils/biosReadState";
 import { removeShortcutsPaced } from "../../utils/shortcutRemoval";
 import { withTimeout } from "../../utils/withTimeout";
-import { announceBiosChange, useBiosActions, type BiosActions } from "../bios/useBiosActions";
+import { announceCoreChange } from "../../utils/coreChangedEvent";
+import { announceBiosChange, useBiosActions, type BiosActions, type PlatformKey } from "../bios/useBiosActions";
 import { useLatestWrites, useLineWrites } from "./latestWrites";
 import { SYNC_WRITE_FAILED } from "./syncWriteFailed";
 
@@ -74,7 +77,7 @@ export interface DetailStatus {
   /** The platform the line is about. Moving through the list changes the
    *  detail under an action that is still running, so the line is bound to the
    *  platform it was produced for rather than cleared on every selection. */
-  slug: string;
+  folder: string;
   scope: StatusScope;
   text: string;
   /** The line carries its operation's throbber. */
@@ -89,6 +92,9 @@ export type FirmwareState = BiosReadState;
 export interface PlatformRow {
   id: number;
   slug: string;
+  /** The folder RomM keeps the platform in, which names it on this page: two
+   *  listed platforms can share a slug, and each is a row of its own (#2452). */
+  folder: string;
   name: string;
   /** RomM's own ROM count for the platform, read from the server. Distinct from
    *  `reachableCount`, which is what reached Steam; the header line shows both.
@@ -144,6 +150,28 @@ export interface FrozenGroups {
  */
 export type CoreAnswer = SystemCoreInfo | null | undefined;
 
+/** A core read that did not answer: the endpoint's refusal, where it gave one, else `null`. */
+interface CoreReadFailed {
+  refusal: string | null;
+}
+
+/**
+ * What a refused core read says on the pane. The page asks with a listed
+ * platform's own folder, so `invalid_value` can only be the slug: RomM lists
+ * the platform without one, and the endpoint's own message names a parameter.
+ */
+const PLATFORM_WITHOUT_SLUG =
+  "RomM lists this platform without a console slug, so Tender cannot tell which emulators it has. Check the platform in RomM.";
+
+function coreRefusalSentence(refusal: EndpointFailure): string {
+  return refusal.reason === "invalid_value" ? PLATFORM_WITHOUT_SLUG : refusal.message;
+}
+
+/** The core read's answer as the detail takes it: a failed read, refused or not, is `null`. */
+function coreInfoOf(answer: SystemCoreInfo | CoreReadFailed | undefined): CoreAnswer {
+  return answer !== undefined && "refusal" in answer ? null : answer;
+}
+
 /**
  * How many save files a platform holds. `undefined` is "not read yet" and
  * `null` is "the read failed" — the same three-way answer the core read gives,
@@ -163,10 +191,12 @@ export interface PlatformsPageState extends BiosActions {
   /** The Steam shortcut counts could not be read — every row's `shortcutCount`
    *  is `null` and the detail says so where the number would have been. */
   shortcutCountsFailed: boolean;
-  selectedSlug: string | null;
-  select: (slug: string) => void;
-  coreFor: (slug: string) => CoreAnswer;
-  saveCountFor: (slug: string) => SaveCountAnswer;
+  selectedFolder: string | null;
+  select: (folder: string) => void;
+  coreFor: (folder: string) => CoreAnswer;
+  /** Why the core read for *folder* was refused, where it was — said in place of the generic failure. */
+  coreRefusalFor: (folder: string) => string | undefined;
+  saveCountFor: (folder: string) => SaveCountAnswer;
   status: DetailStatus | null;
   /**
    * Why the last sync write did not take, or `null`. The list's own line, not a
@@ -185,27 +215,27 @@ export interface PlatformsPageState extends BiosActions {
   /**
    * The platform whose action is in flight, or `null`. Every action the detail
    * offers disables on every platform while one is running; the list's own sync
-   * writes are outside the hold. The slug is what lets a pane that is not the
+   * writes are outside the hold. The folder is what lets a pane that is not the
    * one acting say why its buttons are dead.
    *
    * **What forbids running two at once is this page's own state, not a lock
-   * anywhere else.** `status`, `removalProgress` and `busySlug` are each
+   * anywhere else.** `status`, `removalProgress` and `busyFolder` are each
    * singular, so a second action would overwrite the first's line and the first
    * `finally` would clear the busy state out from under the second. The prune
    * lease is no obstacle and must not be cited as one: leases are keyed by
    * token on both sides, and the prune rule refuses on a prune *run*
    * reservation rather than on a sibling lease, so two platform removals would
-   * both be admitted. Making these three per-slug is what a per-platform
+   * both be admitted. Making these three per-folder is what a per-platform
    * disable would take.
    */
-  busySlug: string | null;
+  busyFolder: string | null;
   /** Bound to its platform for the reason {@link DetailStatus} is: walking the
    *  list under a running removal must not show its progress on another
    *  platform's pane. */
-  removalProgress: { slug: string; removed: number; total: number } | null;
+  removalProgress: { folder: string; removed: number; total: number } | null;
   toggleSync: (row: PlatformRow, enabled: boolean) => void;
   setAllSync: (enabled: boolean) => void;
-  changeCore: (slug: string, pickedLabel: string) => void;
+  changeCore: (row: PlatformKey, pickedLabel: string) => void;
   removeShortcuts: (row: PlatformRow) => void;
   deleteSaves: (row: PlatformRow) => void;
 }
@@ -215,8 +245,8 @@ export interface PlatformsPageState extends BiosActions {
 function freezeGroups(platforms: PlatformSyncSetting[]): FrozenGroups {
   const byName = [...platforms].sort((a, b) => a.name.localeCompare(b.name));
   return {
-    synced: byName.filter((p) => p.sync_enabled).map((p) => p.slug),
-    available: byName.filter((p) => !p.sync_enabled).map((p) => p.slug),
+    synced: byName.filter((p) => p.sync_enabled).map((p) => p.fs_slug),
+    available: byName.filter((p) => !p.sync_enabled).map((p) => p.fs_slug),
   };
 }
 
@@ -227,7 +257,7 @@ export function usePlatformsPage(): PlatformsPageState {
   const [failed, setFailed] = useState(false);
   // The two things known about the BIOS answers, kept apart because they are
   // two different statements: what each platform's answer IS (`firmware`, a
-  // landed entry) and which reads did not come back (`readFailed`). A slug in
+  // landed entry) and which reads did not come back (`readFailed`). A folder in
   // neither is a question still out.
   const [firmware, setFirmware] = useState<Record<string, FirmwarePlatformExt>>({});
   const [readFailed, setReadFailed] = useState<Record<string, true>>({});
@@ -240,18 +270,20 @@ export function usePlatformsPage(): PlatformsPageState {
   // either would leave the header disagreeing with the Remove button.
   const [shortcutCounts, setShortcutCounts] = useState<Record<string, { bound: number; reachable: number }>>({});
   const [shortcutCountsFailed, setShortcutCountsFailed] = useState(false);
-  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
-  const [cores, setCores] = useState<Record<string, SystemCoreInfo | null>>({});
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [cores, setCores] = useState<Record<string, SystemCoreInfo | CoreReadFailed>>({});
   const [saveCounts, setSaveCounts] = useState<Record<string, number | null>>({});
   const [status, setStatus] = useState<DetailStatus | null>(null);
   const [listStatus, setListStatus] = useState<string | null>(null);
   // Touched only in handlers and in answers, never during render.
   const syncWrites = useLatestWrites<boolean>();
   const lines = useLineWrites();
-  const [busySlug, setBusySlug] = useState<string | null>(null);
-  const [removalProgress, setRemovalProgress] = useState<{ slug: string; removed: number; total: number } | null>(null);
+  const [busyFolder, setBusyFolder] = useState<string | null>(null);
+  const [removalProgress, setRemovalProgress] = useState<{ folder: string; removed: number; total: number } | null>(
+    null,
+  );
 
-  // Which slugs a core read has already been issued for. A ref, not state:
+  // Which platforms a core read has already been issued for. A ref, not state:
   // walking the list issues one read per row and the guard must hold within a
   // single render pass, before any answer has come back.
   const coreRequested = useRef<Set<string>>(new Set());
@@ -273,58 +305,68 @@ export function usePlatformsPage(): PlatformsPageState {
   // platform are ordered by it, which is what a download's re-read needs: the
   // answer the walk asked for before the file landed is still in flight, and
   // without this it overwrites the fresh one — a wrong dot, no error, nothing to
-  // see. It answers ordering only; the slug itself is what binds an answer to
+  // see. It answers ordering only; the folder itself is what binds an answer to
   // its platform.
   const readSeq = useRef<Map<string, number>>(new Map());
-  // The folder RomM keeps each listed platform in, by slug, for every firmware
-  // call (`api/backend.ts`). A ref, filled with the list, so the reads issued
-  // from it see it.
-  const folders = useRef<Map<string, string>>(new Map());
-  const folderOf = useCallback((slug: string) => folders.current.get(slug) ?? "", []);
+  // Each listed platform's slug and folder, by its folder, for the reads the page
+  // issues by folder alone — the walk, a selection, the links of the pane shown.
+  // A ref, filled with the list in the same answer the groups come from, so a
+  // folder missing from it is a defect: it is logged, nothing is asked about it
+  // with "", and its reads are marked failed rather than left pending.
+  const listed = useRef<Map<string, PlatformKey>>(new Map());
+  const platformOf = useCallback((folder: string): PlatformKey | null => {
+    const platform = listed.current.get(folder);
+    if (platform === undefined) {
+      logError(`${folder} is not a listed platform's folder; nothing is asked about it`);
+      return null;
+    }
+    return platform;
+  }, []);
   // Which platforms the walk has issued a read for. A ref, not state: the walk
   // picks the next platform between awaits and must see its own progress
   // immediately, before any answer has landed.
   const asked = useRef<Set<string>>(new Set());
 
-  /** May an answer for *slug* be written — is this page still open, and is this
+  /** May an answer for *folder* be written — is this page still open, and is this
    *  still the newest read issued for that platform? */
-  const accept = useCallback((slug: string, seq: number) => alive.current && readSeq.current.get(slug) === seq, []);
+  const accept = useCallback((folder: string, seq: number) => alive.current && readSeq.current.get(folder) === seq, []);
 
   const readPlatform = useCallback(
-    async (slug: string) => {
-      asked.current.add(slug);
-      const seq = (readSeq.current.get(slug) ?? 0) + 1;
-      readSeq.current.set(slug, seq);
+    async (platform: PlatformKey) => {
+      const { folder } = platform;
+      asked.current.add(folder);
+      const seq = (readSeq.current.get(folder) ?? 0) + 1;
+      readSeq.current.set(folder, seq);
       try {
-        const result = await getPlatformFirmwareStatus(slug, folderOf(slug));
-        if (!accept(slug, seq)) return;
+        const result = await getPlatformFirmwareStatus(platform.slug, folder);
+        if (!accept(folder, seq)) return;
         if (!result.success) {
           // Unreachable today — the endpoint always answers success — but a
           // dropped failure would leave the row waiting for an answer that is
           // never coming.
-          logWarn(`BIOS state for ${slug} answered a failure: ${result.message ?? "no message"}`);
-          setReadFailed((prev) => ({ ...prev, [slug]: true }));
+          logWarn(`BIOS state for ${folder} answered a failure: ${result.message ?? "no message"}`);
+          setReadFailed((prev) => ({ ...prev, [folder]: true }));
           return;
         }
-        setFirmware((prev) => ({ ...prev, [slug]: result.platform }));
+        setFirmware((prev) => ({ ...prev, [folder]: result.platform }));
         setReadFailed((prev) => {
-          if (!(slug in prev)) return prev;
+          if (!(folder in prev)) return prev;
           const next = { ...prev };
-          delete next[slug];
+          delete next[folder];
           return next;
         });
       } catch (e) {
-        logWarn(`Failed to read the BIOS state for ${slug}: ${e}`);
-        if (!accept(slug, seq)) return;
+        logWarn(`Failed to read the BIOS state for ${folder}: ${e}`);
+        if (!accept(folder, seq)) return;
         // The previous answer, where there is one, is deliberately left in
         // place: the pane says it may be out of date, which is more use than
         // taking the rows away.
-        setReadFailed((prev) => ({ ...prev, [slug]: true }));
+        setReadFailed((prev) => ({ ...prev, [folder]: true }));
       }
     },
-    [accept, folderOf],
+    [accept],
   );
-  const bios = useBiosActions({ setBusy: setBusySlug, setStatus, reread: readPlatform, romId: null, folderOf });
+  const bios = useBiosActions({ setBusy: setBusyFolder, setStatus, reread: readPlatform, romId: null });
   const { noteLinkFailures } = bios;
 
   // What a failure here leaves offered: `docs/architecture/qam-panel.md`,
@@ -347,7 +389,7 @@ export function usePlatformsPage(): PlatformsPageState {
     try {
       const result = await getRegistryPlatforms();
       setShortcutCounts(
-        Object.fromEntries(result.platforms.map((p) => [p.slug, { bound: p.count, reachable: p.reachable_count }])),
+        Object.fromEntries(result.platforms.map((p) => [p.fs_slug, { bound: p.count, reachable: p.reachable_count }])),
       );
       setShortcutCountsFailed(false);
     } catch (e) {
@@ -361,8 +403,8 @@ export function usePlatformsPage(): PlatformsPageState {
   // selection as it is THEN, not as it was when the walk started.
   const selectedRef = useRef<string | null>(null);
   useEffect(() => {
-    selectedRef.current = selectedSlug;
-  }, [selectedSlug]);
+    selectedRef.current = selectedFolder;
+  }, [selectedFolder]);
 
   // Read every listed platform's BIOS answer, one at a time, in the order the
   // list shows them — preferring whichever row the reader is looking at, which
@@ -384,33 +426,55 @@ export function usePlatformsPage(): PlatformsPageState {
     const next = () => {
       const focused = selectedRef.current;
       if (focused !== null && !asked.current.has(focused)) return focused;
-      return order.find((slug) => !asked.current.has(slug)) ?? null;
+      return order.find((folder) => !asked.current.has(folder)) ?? null;
     };
-    const walk = async () => {
-      for (let slug = next(); slug !== null && walking && alive.current; slug = next()) {
-        await readPlatform(slug);
+    const walk = async (): Promise<void> => {
+      const folder = next();
+      if (folder === null || !walking || !alive.current) return;
+      const platform = platformOf(folder);
+      if (platform === null) {
+        asked.current.add(folder);
+        setReadFailed((prev) => ({ ...prev, [folder]: true }));
+      } else {
+        await readPlatform(platform);
       }
+      return walk();
     };
     detach(walk());
     return () => {
       walking = false;
     };
-  }, [groups, readPlatform]);
+  }, [groups, platformOf, readPlatform]);
 
-  const loadCore = useCallback((slug: string) => {
-    if (coreRequested.current.has(slug)) return;
-    coreRequested.current.add(slug);
-    getSystemCoreInfo(slug)
-      .then((info) => setCores((prev) => ({ ...prev, [slug]: info })))
+  const loadCore = useCallback((platform: PlatformKey) => {
+    const { folder } = platform;
+    if (coreRequested.current.has(folder)) return;
+    coreRequested.current.add(folder);
+    getSystemCoreInfo(platform.slug, folder)
+      .then((info) => {
+        if (isEndpointFailure(info)) {
+          logWarn(`The core read for ${folder} was refused: ${info.message}`);
+          setCores((prev) => ({ ...prev, [folder]: { refusal: coreRefusalSentence(info) } }));
+          return;
+        }
+        setCores((prev) => ({ ...prev, [folder]: info }));
+      })
       .catch((e) => {
-        logWarn(`Failed to read the core for ${slug}: ${e}`);
-        setCores((prev) => ({ ...prev, [slug]: null }));
+        logWarn(`Failed to read the core for ${folder}: ${e}`);
+        setCores((prev) => ({ ...prev, [folder]: { refusal: null } }));
       });
   }, []);
 
-  const loadSaveCount = useCallback((slug: string) => {
-    if (saveCountRequested.current.has(slug)) return;
-    saveCountRequested.current.add(slug);
+  /** A folder no listed platform has: its core read and its save count are failed on the spot, as nothing
+   *  can be asked. */
+  const unasked = useCallback((folder: string) => {
+    setCores((prev) => ({ ...prev, [folder]: { refusal: null } }));
+    setSaveCounts((prev) => ({ ...prev, [folder]: null }));
+  }, []);
+
+  const loadSaveCount = useCallback((folder: string) => {
+    if (saveCountRequested.current.has(folder)) return;
+    saveCountRequested.current.add(folder);
     // Back to unread while the read is in flight, which matters only on a
     // retry: the previous answer is a `null` failure, and leaving it in place
     // would show "could not be read" for the whole of the second attempt — the
@@ -418,42 +482,42 @@ export function usePlatformsPage(): PlatformsPageState {
     // exactly the moment the third state is true. `reloadCore` clears its slot
     // for the same reason.
     setSaveCounts((prev) => {
-      if (!(slug in prev)) return prev;
+      if (!(folder in prev)) return prev;
       const next = { ...prev };
-      delete next[slug];
+      delete next[folder];
       return next;
     });
-    countPlatformSaves(slug)
-      .then((result) => setSaveCounts((prev) => ({ ...prev, [slug]: result.count })))
+    countPlatformSaves(folder)
+      .then((result) => setSaveCounts((prev) => ({ ...prev, [folder]: result.count })))
       .catch((e) => {
-        logWarn(`Failed to count the save files for ${slug}: ${e}`);
-        // Forget the slug, so walking away and coming back asks again. Every
+        logWarn(`Failed to count the save files for ${folder}: ${e}`);
+        // Forget the folder, so walking away and coming back asks again. Every
         // other failure on this pane is recovered by reopening the page; this
         // one is recovered by re-selecting the platform, which is cheaper, and
         // the line under the button says so.
-        saveCountRequested.current.delete(slug);
-        setSaveCounts((prev) => ({ ...prev, [slug]: null }));
+        saveCountRequested.current.delete(folder);
+        setSaveCounts((prev) => ({ ...prev, [folder]: null }));
       });
   }, []);
 
   /** Ask again after a delete: the count the button showed is now spent. */
   const reloadSaveCount = useCallback(
-    (slug: string) => {
-      saveCountRequested.current.delete(slug);
-      loadSaveCount(slug);
+    (folder: string) => {
+      saveCountRequested.current.delete(folder);
+      loadSaveCount(folder);
     },
     [loadSaveCount],
   );
 
   const reloadCore = useCallback(
-    (slug: string) => {
-      coreRequested.current.delete(slug);
+    (platform: PlatformKey) => {
+      coreRequested.current.delete(platform.folder);
       setCores((prev) => {
         const next = { ...prev };
-        delete next[slug];
+        delete next[platform.folder];
         return next;
       });
-      loadCore(slug);
+      loadCore(platform);
     },
     [loadCore],
   );
@@ -466,16 +530,21 @@ export function usePlatformsPage(): PlatformsPageState {
           setFailed(true);
           return;
         }
-        syncWrites.seed(result.platforms.map((p) => [p.slug, p.sync_enabled]));
-        folders.current = new Map(result.platforms.map((p) => [p.slug, p.fs_slug]));
+        syncWrites.seed(result.platforms.map((p) => [p.fs_slug, p.sync_enabled]));
+        listed.current = new Map(result.platforms.map((p) => [p.fs_slug, { slug: p.slug, folder: p.fs_slug }]));
         setPlatforms(result.platforms);
         const frozen = freezeGroups(result.platforms);
         setGroups(frozen);
         const first = frozen.synced[0] ?? frozen.available[0] ?? null;
-        setSelectedSlug(first);
+        setSelectedFolder(first);
         if (first) {
-          loadCore(first);
-          loadSaveCount(first);
+          const platform = platformOf(first);
+          if (platform === null) {
+            unasked(first);
+          } else {
+            loadCore(platform);
+            loadSaveCount(first);
+          }
         }
       })
       .catch(() => setFailed(true))
@@ -490,41 +559,54 @@ export function usePlatformsPage(): PlatformsPageState {
     return () => {
       detach(releasePruneLeasesByOwner(LEASE_OWNER));
     };
-  }, [loadCore, loadSaveCount, readOverview, refreshShortcutCounts, syncWrites]);
+  }, [unasked, loadCore, loadSaveCount, platformOf, readOverview, refreshShortcutCounts, syncWrites]);
 
   const rows = new Map<string, PlatformRow>(
     platforms.map((p) => [
-      p.slug,
+      p.fs_slug,
       {
         id: p.id,
         slug: p.slug,
+        folder: p.fs_slug,
         name: p.name,
         romCount: p.rom_count,
         syncEnabled: p.sync_enabled,
-        firmware: firmware[p.slug] ?? null,
-        firmwareState: biosReadState(p.slug in firmware, readFailed[p.slug] === true),
-        firmwareStale: biosAnswerStale(p.slug in firmware, readFailed[p.slug] === true),
-        shortcutCount: shortcutCountsFailed ? null : (shortcutCounts[p.slug]?.bound ?? 0),
-        reachableCount: shortcutCountsFailed ? null : (shortcutCounts[p.slug]?.reachable ?? 0),
+        firmware: firmware[p.fs_slug] ?? null,
+        firmwareState: biosReadState(p.fs_slug in firmware, readFailed[p.fs_slug] === true),
+        firmwareStale: biosAnswerStale(p.fs_slug in firmware, readFailed[p.fs_slug] === true),
+        shortcutCount: shortcutCountsFailed ? null : (shortcutCounts[p.fs_slug]?.bound ?? 0),
+        reachableCount: shortcutCountsFailed ? null : (shortcutCounts[p.fs_slug]?.reachable ?? 0),
       },
     ]),
   );
 
   const select = useCallback(
-    (slug: string) => {
-      setSelectedSlug(slug);
-      loadCore(slug);
-      loadSaveCount(slug);
+    (folder: string) => {
+      setSelectedFolder(folder);
+      const platform = platformOf(folder);
+      if (platform === null) {
+        unasked(folder);
+        return;
+      }
+      loadSaveCount(folder);
+      loadCore(platform);
       // A read that did not come back is retried by picking the platform again
       // — the same recovery the save count offers, and the only one there is:
       // the walk asks each platform once, so nothing else would ever ask again.
-      if (readFailed[slug]) detach(readPlatform(slug));
+      if (readFailed[folder]) detach(readPlatform(platform));
     },
-    [loadCore, loadSaveCount, readFailed, readPlatform],
+    [unasked, loadCore, loadSaveCount, platformOf, readFailed, readPlatform],
   );
 
-  const coreFor = useCallback((slug: string): CoreAnswer => cores[slug], [cores]);
-  const saveCountFor = useCallback((slug: string): SaveCountAnswer => saveCounts[slug], [saveCounts]);
+  const coreFor = useCallback((folder: string): CoreAnswer => coreInfoOf(cores[folder]), [cores]);
+  const coreRefusalFor = useCallback(
+    (folder: string): string | undefined => {
+      const answer = cores[folder];
+      return answer !== undefined && "refusal" in answer ? (answer.refusal ?? undefined) : undefined;
+    },
+    [cores],
+  );
+  const saveCountFor = useCallback((folder: string): SaveCountAnswer => saveCounts[folder], [saveCounts]);
 
   const listLine = useCallback(() => {
     const speaks = lines.issue(LIST_LINE);
@@ -543,11 +625,11 @@ export function usePlatformsPage(): PlatformsPageState {
   const toggleSync = useCallback(
     (row: PlatformRow, enabled: boolean) => {
       const show = (want: boolean) =>
-        setPlatforms((prev) => prev.map((p) => (p.slug === row.slug ? { ...p, sync_enabled: want } : p)));
-      const write = syncWrites.issue([row.slug], enabled);
+        setPlatforms((prev) => prev.map((p) => (p.fs_slug === row.folder ? { ...p, sync_enabled: want } : p)));
+      const write = syncWrites.issue([row.folder], enabled);
       const line = listLine();
       const failed = (text: string) => {
-        if (write.isLatest(row.slug)) show(syncWrites.stored(row.slug) ?? !enabled);
+        if (write.isLatest(row.folder)) show(syncWrites.stored(row.folder) ?? !enabled);
         line(text);
       };
       show(enabled);
@@ -570,14 +652,14 @@ export function usePlatformsPage(): PlatformsPageState {
   const setAllSync = useCallback(
     (enabled: boolean) => {
       const write = syncWrites.issue(
-        platforms.map((p) => p.slug),
+        platforms.map((p) => p.fs_slug),
         enabled,
       );
       const line = listLine();
       const failed = (text: string) => {
         setPlatforms((prev) =>
           prev.map((p) =>
-            write.isLatest(p.slug) ? { ...p, sync_enabled: syncWrites.stored(p.slug) ?? p.sync_enabled } : p,
+            write.isLatest(p.fs_slug) ? { ...p, sync_enabled: syncWrites.stored(p.fs_slug) ?? p.sync_enabled } : p,
           ),
         );
         line(text);
@@ -603,77 +685,80 @@ export function usePlatformsPage(): PlatformsPageState {
    *  a single status, and the clear runs after an await: naming the line means a
    *  line that landed in the meantime is left where it is rather than taken by
    *  a clear that was about something else. */
-  const clearCoreLine = useCallback((slug: string) => {
-    setStatus((prev) => (prev?.slug === slug && prev.scope === "core" ? null : prev));
+  const clearCoreLine = useCallback((folder: string) => {
+    setStatus((prev) => (prev?.folder === folder && prev.scope === "core" ? null : prev));
   }, []);
 
   /**
-   * Bring *slug*'s links up to date, and read the platform again where that
+   * Bring *platform*'s links up to date, and read the platform again where that
    * changed anything. Downloads nothing. A refusal — Tender's folder that
    * cannot be reached, a conflict — is left to the notice that already says
    * so; this runs on its own, without a press.
    */
   const updateLinks = useCallback(
-    async (slug: string) => {
+    async (platform: PlatformKey) => {
+      const { slug, folder } = platform;
       try {
-        const result = await updateBiosLinks(slug, folderOf(slug), null);
+        const result = await updateBiosLinks(slug, folder, null);
         if (!alive.current || !result.success) return;
-        noteLinkFailures(slug, result.link_failures);
+        noteLinkFailures(folder, result.link_failures);
         const said = placedSentence(result);
-        if (said !== null) setStatus({ slug, scope: "bios", text: said });
+        if (said !== null) setStatus({ folder, scope: "bios", text: said });
         if (result.placed + result.removed > 0) {
-          await readPlatform(slug);
-          announceBiosChange(slug);
+          await readPlatform(platform);
+          announceBiosChange(slug, folder);
         }
       } catch (e) {
-        logWarn(`Failed to bring the BIOS links for ${slug} up to date: ${e}`);
+        logWarn(`Failed to bring the BIOS links for ${folder} up to date: ${e}`);
       }
     },
-    [folderOf, noteLinkFailures, readPlatform],
+    [noteLinkFailures, readPlatform],
   );
 
   // A platform's links are brought up to date the first time its pane is shown
   // with an answer on this visit — after the page stands, never as part of it.
   useEffect(() => {
-    if (selectedSlug === null || !(selectedSlug in firmware) || linksUpdated.current.has(selectedSlug)) return;
-    linksUpdated.current.add(selectedSlug);
-    detach(updateLinks(selectedSlug));
-  }, [firmware, selectedSlug, updateLinks]);
+    if (selectedFolder === null || !(selectedFolder in firmware) || linksUpdated.current.has(selectedFolder)) return;
+    linksUpdated.current.add(selectedFolder);
+    const platform = platformOf(selectedFolder);
+    if (platform === null) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- updateLinks sets state only after its first await
+    detach(updateLinks(platform));
+  }, [firmware, platformOf, selectedFolder, updateLinks]);
 
   const changeCore = useCallback(
-    (slug: string, pickedLabel: string) => {
-      const answer = cores[slug];
+    (platform: PlatformKey, pickedLabel: string) => {
+      const { slug, folder } = platform;
+      const answer = coreInfoOf(cores[folder]);
       // Picking the default-marked emulator clears the per-platform override
       // (empty label → follow the default); any other pins it.
       const defaultLabel = answer?.emulators.find((e) => e.is_default)?.label;
       const label = pickedLabel === defaultLabel ? "" : pickedLabel;
-      setBusySlug(slug);
-      setStatus({ slug, scope: "core", text: `Switching to ${pickedLabel}…`, busy: true });
+      setBusyFolder(folder);
+      setStatus({ folder, scope: "core", text: `Switching to ${pickedLabel}…`, busy: true });
       // Captured before the continuation starts, so the catch can tell a
       // cancelled continuation from a failed switch.
       const admission = capturePruneLeaseAdmission(LEASE_OWNER);
-      detach(debugLog(`setSystemCore: slug=${slug} label=${label} (selected=${pickedLabel})`));
+      detach(debugLog(`setSystemCore: folder=${folder} label=${label} (selected=${pickedLabel})`));
       detach(
         (async () => {
           try {
-            const result = await setSystemCore(slug, label);
+            const result = await setSystemCore(slug, folder, label);
             detach(debugLog(`setSystemCore: result success=${result.success}`));
             if (!result.success) {
               // Report the failure rather than leaving the detail looking as
               // though the switch took effect.
-              setStatus({ slug, scope: "core", text: result.message });
+              setStatus({ folder, scope: "core", text: result.message });
               return;
             }
-            clearCoreLine(slug);
-            reloadCore(slug);
+            clearCoreLine(folder);
+            reloadCore(platform);
             // A different core wants different BIOS files, at other places: its
             // links are placed from the store, nothing is downloaded, and the
             // table below the picker is stale until this platform is read again.
-            await updateLinks(slug);
-            await readPlatform(slug);
-            globalThis.dispatchEvent(
-              new CustomEvent("romm_data_changed", { detail: { type: "core_changed", platform_slug: slug } }),
-            );
+            await updateLinks(platform);
+            await readPlatform(platform);
+            announceCoreChange(folder);
           } catch (e) {
             // Leaving the page cancels the continuation, which is teardown
             // rather than a failure: the switch either committed or never ran
@@ -681,13 +766,13 @@ export function usePlatformsPage(): PlatformsPageState {
             // left to report to. The line the pick put up goes with it.
             if (isPruneLeaseCancellation(e, admission)) {
               logWarn(`Core switch continuation was cancelled: ${e}`);
-              clearCoreLine(slug);
+              clearCoreLine(folder);
               return;
             }
             detach(debugLog(`setSystemCore: error: ${e}`));
-            setStatus({ slug, scope: "core", text: "Could not change the core" });
+            setStatus({ folder, scope: "core", text: "Could not change the core" });
           } finally {
-            setBusySlug(null);
+            setBusyFolder(null);
           }
         })(),
       );
@@ -697,20 +782,20 @@ export function usePlatformsPage(): PlatformsPageState {
 
   const removeShortcuts = useCallback(
     (row: PlatformRow) => {
-      setBusySlug(row.slug);
+      setBusyFolder(row.folder);
       // Busy until the count line appears, which the pane hands the throbber to
       // (`removeGroupStatus` in PlatformDetail.tsx; docs/architecture/qam-panel.md, "Waiting").
-      setStatus({ slug: row.slug, scope: "remove", text: `Removing ${row.name} shortcuts…`, busy: true });
+      setStatus({ folder: row.folder, scope: "remove", text: `Removing ${row.name} shortcuts…`, busy: true });
       const admission = capturePruneLeaseAdmission(LEASE_OWNER);
       detach(
         (async () => {
           try {
-            const result = await removePlatformShortcuts(row.slug);
+            const result = await removePlatformShortcuts(row.folder);
             // A refusal by the update, migration, sync or prune rule answers
             // { success: false, reason, message } with no app_ids/rom_ids —
             // surface that message instead of cosmetically reporting a removal.
             if (!result.success) {
-              setStatus({ slug: row.slug, scope: "remove", text: result.message ?? "Failed to remove shortcuts" });
+              setStatus({ folder: row.folder, scope: "remove", text: result.message ?? "Failed to remove shortcuts" });
               return;
             }
             await withPruneLease(
@@ -719,7 +804,7 @@ export function usePlatformsPage(): PlatformsPageState {
               async (signal) => {
                 await removeShortcutsPaced(
                   result.app_ids ?? [],
-                  (removed, total) => setRemovalProgress({ slug: row.slug, removed, total }),
+                  (removed, total) => setRemovalProgress({ folder: row.folder, removed, total }),
                   signal,
                 );
                 if (isPruneLeaseCancelled(signal)) return;
@@ -739,7 +824,7 @@ export function usePlatformsPage(): PlatformsPageState {
             // the shortcut count is a read of its own and may not have landed.
             const removed = result.app_ids?.length ?? 0;
             setStatus({
-              slug: row.slug,
+              folder: row.folder,
               scope: "remove",
               text: `Removed ${removed} ${row.name} game${removed === 1 ? "" : "s"}`,
             });
@@ -751,9 +836,9 @@ export function usePlatformsPage(): PlatformsPageState {
               logWarn(`Platform shortcut removal continuation was cancelled: ${e}`);
               return;
             }
-            setStatus({ slug: row.slug, scope: "remove", text: "Failed to remove shortcuts" });
+            setStatus({ folder: row.folder, scope: "remove", text: "Failed to remove shortcuts" });
           } finally {
-            setBusySlug(null);
+            setBusyFolder(null);
             setRemovalProgress(null);
           }
         })(),
@@ -764,19 +849,19 @@ export function usePlatformsPage(): PlatformsPageState {
 
   const deleteSaves = useCallback(
     (row: PlatformRow) => {
-      setBusySlug(row.slug);
-      setStatus({ slug: row.slug, scope: "remove", text: `Deleting ${row.name} saves…`, busy: true });
+      setBusyFolder(row.folder);
+      setStatus({ folder: row.folder, scope: "remove", text: `Deleting ${row.name} saves…`, busy: true });
       detach(
         (async () => {
           try {
-            const result = await deletePlatformSaves(row.slug);
-            setStatus({ slug: row.slug, scope: "remove", text: result.message });
+            const result = await deletePlatformSaves(row.folder);
+            setStatus({ folder: row.folder, scope: "remove", text: result.message });
             globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync" } }));
           } catch {
-            setStatus({ slug: row.slug, scope: "remove", text: "Failed to delete saves" });
+            setStatus({ folder: row.folder, scope: "remove", text: "Failed to delete saves" });
           } finally {
-            setBusySlug(null);
-            reloadSaveCount(row.slug);
+            setBusyFolder(null);
+            reloadSaveCount(row.folder);
           }
         })(),
       );
@@ -791,14 +876,15 @@ export function usePlatformsPage(): PlatformsPageState {
     failed,
     serverOffline,
     shortcutCountsFailed,
-    selectedSlug,
+    selectedFolder,
     select,
     coreFor,
+    coreRefusalFor,
     saveCountFor,
     status,
     listStatus,
     enter,
-    busySlug,
+    busyFolder,
     removalProgress,
     toggleSync,
     setAllSync,

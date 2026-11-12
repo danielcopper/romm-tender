@@ -67,8 +67,8 @@ class FakeRomRepository:
     def iter_all(self) -> Iterator[Rom]:
         return iter([copy.deepcopy(rom) for rom in self._roms.values()])
 
-    def iter_by_platform(self, platform_slug: str) -> Iterator[Rom]:
-        return iter([copy.deepcopy(rom) for rom in self._roms.values() if rom.platform_slug == platform_slug])
+    def iter_by_platform_folder(self, platform_folder: str) -> Iterator[Rom]:
+        return iter([copy.deepcopy(rom) for rom in self._roms.values() if rom.platform_fs_slug == platform_folder])
 
     def iter_by_group_key(self, group_key: str) -> Iterator[Rom]:
         # Mirrors the SQLite ``WHERE sibling_group_key = ?``: NULL never compares
@@ -90,9 +90,11 @@ class FakeRomRepository:
     def count_bound(self) -> int:
         return sum(1 for rom in self._roms.values() if rom.shortcut_app_id is not None)
 
-    def get_bound_platform_slugs(self) -> set[str]:
+    def get_bound_platform_folders(self) -> set[str]:
         return {
-            rom.platform_slug for rom in self._roms.values() if rom.platform_slug and rom.shortcut_app_id is not None
+            rom.platform_fs_slug
+            for rom in self._roms.values()
+            if rom.platform_fs_slug and rom.shortcut_app_id is not None
         }
 
     def set_emulator_override(self, rom_id: int, label: str | None, source: str | None = "retrodeck") -> None:

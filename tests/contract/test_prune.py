@@ -32,6 +32,7 @@ def _seed_bulk_candidate(harness, rom_id: int = 41, *, control: bool = True) -> 
     rom = Rom.synced(
         rom_id=rom_id,
         platform_slug="gba",
+        platform_fs_slug="gba",
         name="Removed Game",
         fs_name="Removed Game.gba",
         shortcut_app_id=None,
@@ -41,6 +42,7 @@ def _seed_bulk_candidate(harness, rom_id: int = 41, *, control: bool = True) -> 
     control_rom = Rom.synced(
         rom_id=CONTROL_ROM_ID,
         platform_slug="snes",
+        platform_fs_slug="snes",
         name="Kept Game",
         fs_name="Kept Game.sfc",
         shortcut_app_id=None,
@@ -51,7 +53,7 @@ def _seed_bulk_candidate(harness, rom_id: int = 41, *, control: bool = True) -> 
         uow.roms.save(rom)
         uow.platform_sync_state.save(
             PlatformSyncState.stamp(
-                platform_slug="gba",
+                platform_folder="gba",
                 at="2026-01-02T00:00:00",
                 rom_count=1,
                 fetch_id="completed-fetch",
@@ -64,7 +66,7 @@ def _seed_bulk_candidate(harness, rom_id: int = 41, *, control: bool = True) -> 
             uow.roms.save(control_rom)
             uow.platform_sync_state.save(
                 PlatformSyncState.stamp(
-                    platform_slug="snes",
+                    platform_folder="snes",
                     at="2026-01-02T00:00:00",
                     rom_count=1,
                     fetch_id="snes-fetch",
@@ -448,6 +450,7 @@ async def test_a_bound_vanished_version_with_a_live_sibling_keeps_its_shortcut_r
     source = Rom.synced(
         rom_id=41,
         platform_slug="gba",
+        platform_fs_slug="gba",
         name="Removed Game",
         fs_name="Removed Game.gba",
         shortcut_app_id=app_id,
@@ -458,6 +461,7 @@ async def test_a_bound_vanished_version_with_a_live_sibling_keeps_its_shortcut_r
     target = Rom.synced(
         rom_id=42,
         platform_slug="gba",
+        platform_fs_slug="gba",
         name="Live Game",
         fs_name="Live Game.gba",
         shortcut_app_id=None,
@@ -490,7 +494,7 @@ async def test_a_bound_vanished_version_with_a_live_sibling_keeps_its_shortcut_r
         )
         uow.platform_sync_state.save(
             PlatformSyncState.stamp(
-                platform_slug="gba",
+                platform_folder="gba",
                 at="2026-01-02T00:00:00",
                 rom_count=2,
                 fetch_id="completed-fetch",
@@ -857,6 +861,7 @@ async def test_where_asking_for_one_system_s_folder_raises_the_cleanup_keeps_tha
     snes_row = Rom.synced(
         rom_id=43,
         platform_slug="snes",
+        platform_fs_slug="snes",
         name="Removed Snes Game",
         fs_name="Removed Snes Game.sfc",
         shortcut_app_id=None,

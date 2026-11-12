@@ -6,7 +6,8 @@ import asyncio
 import dataclasses
 import json
 import logging
-from typing import Any, ClassVar
+import threading
+from typing import Any, ClassVar, cast
 
 import pytest
 from _factories import (
@@ -24,13 +25,18 @@ from fakes.fake_start_commands import FakeStartCommands
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.uow_open_probe import record_uow_open
 
+from adapters.persistence import PlatformCoreReaderAdapter
 from domain.disc_selection import Disc
 from domain.emulator_choice import DEFAULT, EmulatorChoice, ResolvedEmulator, VanishedPick
 from domain.emulator_commands import options_to_payload
 from domain.emulator_pick import StoredPick
 from domain.emulator_sources import ArrangedSource
 from domain.launchability import NEEDS_INSTALLING, NOT_THIS_EMULATOR, TAKES_NO_FOLDER, Launchability
-from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
+from domain.platform_system import (
+    NO_SYSTEM,
+    SWITCHED_OFF,
+    PlatformSystem,
+)
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.start_command import (
@@ -43,6 +49,7 @@ from domain.start_command import (
 )
 from lib.errors import Refused
 from services.cores import CoreService, CoreServiceConfig
+from services.platform_picks import PlatformPicks, PlatformPicksConfig
 
 
 def _seed_rom(
@@ -58,6 +65,7 @@ def _seed_rom(
         Rom(
             rom_id=rom_id,
             platform_slug=platform_slug,
+            platform_fs_slug=platform_slug,
             name=f"rom-{rom_id}",
             fs_name=f"rom-{rom_id}.sfc",
             shortcut_app_id=shortcut_app_id,
@@ -184,8 +192,12 @@ def service(
             logger=logger,
             core_info=core_info,
             platform_systems=platform_systems,
-            settings=settings,
-            settings_persister=settings_persister,
+            platform_picks=PlatformPicks(
+                config=PlatformPicksConfig(
+                    settings=settings, settings_persister=settings_persister, lock=threading.Lock()
+                )
+            ),
+            platform_core_reader=PlatformCoreReaderAdapter(settings),
             uow_factory=uow_factory,
             active_core=active_core,
             disc_resolver=disc_resolver,
@@ -352,7 +364,7 @@ class TestGetPlatformCoreInfo:
 
 class TestGetSystemCoreInfo:
     def test_happy_path(self, event_loop, service, core_info):
-        result = event_loop.run_until_complete(service.get_system_core_info("snes"))
+        result = event_loop.run_until_complete(service.get_system_core_info("snes", "snes"))
         assert result == {
             "emulators": options_to_payload(core_info.get_emulator_options("snes")["options"]),
             "emulator_data_available": True,
@@ -373,40 +385,40 @@ class TestGetSystemCoreInfo:
         # The whole point of the platform-keyed read: no ROM row is consulted, so
         # a platform the user has never synced still gets its picker.
         assert list(uow.roms.iter_all()) == []
-        result = event_loop.run_until_complete(service.get_system_core_info("snes"))
+        result = event_loop.run_until_complete(service.get_system_core_info("snes", "snes"))
         assert result["emulators"] == options_to_payload(core_info.get_emulator_options("snes")["options"])
 
     def test_per_platform_override_wins_over_the_default(self, event_loop, service, settings):
         settings["platform_cores"]["snes"] = {"label": "bsnes", "source": "retrodeck"}
-        result = event_loop.run_until_complete(service.get_system_core_info("snes"))
+        result = event_loop.run_until_complete(service.get_system_core_info("snes", "snes"))
         assert result["active_core_label"] == "bsnes"
 
     def test_unresolvable_override_degrades_to_the_default(self, event_loop, service, settings):
         # A core the user picked and then uninstalled: the label degrades rather
         # than naming an emulator that would not launch.
         settings["platform_cores"]["snes"] = "Gone-o-Tron"
-        result = event_loop.run_until_complete(service.get_system_core_info("snes"))
+        result = event_loop.run_until_complete(service.get_system_core_info("snes", "snes"))
         assert result["active_core_label"] == "Snes9x"
 
     def test_another_platforms_override_is_not_read(self, event_loop, service, settings):
         settings["platform_cores"]["gba"] = "mGBA"
-        result = event_loop.run_until_complete(service.get_system_core_info("snes"))
+        result = event_loop.run_until_complete(service.get_system_core_info("snes", "snes"))
         assert result["active_core_label"] == "Snes9x"
 
     def test_no_emulator_answers_no_label(self, event_loop, service, core_info):
         core_info.options = []
-        result = event_loop.run_until_complete(service.get_system_core_info("snes"))
+        result = event_loop.run_until_complete(service.get_system_core_info("snes", "snes"))
         assert result["active_core_label"] is None
         assert result["emulators"] == []
 
     def test_unreadable_es_systems_surfaces_the_flag(self, event_loop, service, core_info):
         core_info.available = False
         core_info.options = []
-        result = event_loop.run_until_complete(service.get_system_core_info("snes"))
+        result = event_loop.run_until_complete(service.get_system_core_info("snes", "snes"))
         assert result["emulator_data_available"] is False
 
     def test_reads_the_options_for_the_normalized_system(self, event_loop, service, core_info, platform_systems):
-        event_loop.run_until_complete(service.get_system_core_info("dc"))
+        event_loop.run_until_complete(service.get_system_core_info("dc", "dc"))
         assert core_info.emulator_options_calls == ["dreamcast"]
         assert platform_systems.calls == [("dc", None)]
 
@@ -414,7 +426,7 @@ class TestGetSystemCoreInfo:
         # get_emulator_options re-probes the ES-DE files on every call; inside a
         # UoW that file I/O would run under BEGIN IMMEDIATE (ADR-0006).
         observed = record_uow_open(uow, core_info, "get_emulator_options")
-        event_loop.run_until_complete(service.get_system_core_info("snes"))
+        event_loop.run_until_complete(service.get_system_core_info("snes", "snes"))
         assert observed == [False]
 
 
@@ -433,7 +445,7 @@ class TestAPlatformWithNoSystem:
             state, "xbox-360", "Xbox 360", system=system, source=RETRODECK_SOURCE
         )
 
-        result = event_loop.run_until_complete(service.get_system_core_info("xbox-360"))
+        result = event_loop.run_until_complete(service.get_system_core_info("xbox-360", "xbox-360"))
 
         assert result["emulator_data_available"] is False
         assert result["emulator_data_reason"] == reason
@@ -457,7 +469,7 @@ class TestAPlatformWithNoSystem:
         assert core_info.emulator_options_calls == []
 
     def test_the_page_shows_the_system_taken(self, event_loop, service, platform_systems):
-        result = event_loop.run_until_complete(service.get_system_core_info("dc"))
+        result = event_loop.run_until_complete(service.get_system_core_info("dc", "dc"))
 
         assert result["platform_system"] == {
             "state": "found",
@@ -614,14 +626,14 @@ class TestClearGameCore:
 
 class TestSetSystemCore:
     def test_writes_label_to_settings_and_persists(self, event_loop, service, settings, settings_persister):
-        result = event_loop.run_until_complete(service.set_system_core("snes", "Snes9x"))
+        result = event_loop.run_until_complete(service.set_system_core("snes", "snes", "Snes9x"))
         assert result["success"] is True
         assert settings["platform_cores"] == {"snes": {"label": "Snes9x", "source": "retrodeck"}}
         assert settings_persister.save_count == 1
 
     def test_empty_core_label_clears_settings_entry(self, event_loop, service, settings, settings_persister):
         settings["platform_cores"]["snes"] = "Snes9x"
-        result = event_loop.run_until_complete(service.set_system_core("snes", ""))
+        result = event_loop.run_until_complete(service.set_system_core("snes", "snes", ""))
         assert result["success"] is True
         # Clearing removes the platform from the map (revert to es_systems default).
         assert "snes" not in settings["platform_cores"]
@@ -629,7 +641,7 @@ class TestSetSystemCore:
 
     def test_clearing_absent_platform_is_noop(self, event_loop, service, settings):
         # Clearing a platform with no prior selection just leaves the map empty.
-        result = event_loop.run_until_complete(service.set_system_core("psx", ""))
+        result = event_loop.run_until_complete(service.set_system_core("psx", "psx", ""))
         assert result["success"] is True
         assert settings["platform_cores"] == {}
 
@@ -639,7 +651,7 @@ class TestSetSystemCore:
         _seed_rom(uow, rom_id=1, platform_slug="snes", shortcut_app_id=101)
         _seed_install(uow, rom_id=1, file_path="/roms/snes/a.sfc")
 
-        result = event_loop.run_until_complete(service.set_system_core("snes", "bsnes"))
+        result = event_loop.run_until_complete(service.set_system_core("snes", "snes", "bsnes"))
 
         assert result == {"success": True}
         assert active_core.emulator_calls == []
@@ -651,7 +663,7 @@ class TestSetSystemCore:
             raise OSError("read-only file system")
 
         settings_persister.save_settings = refuse
-        setting = service.set_system_core("snes", "Snes9x")
+        setting = service.set_system_core("snes", "snes", "Snes9x")
 
         with pytest.raises(Refused) as refused:
             event_loop.run_until_complete(setting)
@@ -669,7 +681,7 @@ class TestSetSystemCore:
             raise OSError("read-only file system")
 
         settings_persister.save_settings = refuse
-        setting = service.set_system_core("snes", core_label)
+        setting = service.set_system_core("snes", "snes", core_label)
 
         with pytest.raises(Refused) as refused:
             event_loop.run_until_complete(setting)
@@ -828,7 +840,7 @@ class TestAPickIsStoredWithItsSource:
         self, event_loop, service, core_info, settings, settings_persister
     ):
         core_info.source = None
-        call = service.set_system_core("snes", "bsnes")
+        call = service.set_system_core("snes", "snes", "bsnes")
         with pytest.raises(Refused) as refused:
             event_loop.run_until_complete(call)
         assert refused.value.reason == "core_unavailable"
@@ -862,7 +874,7 @@ class TestAVanishedPick:
     def test_a_platform_pick_whose_label_is_gone_is_named_on_the_platform_page(self, event_loop, service, settings):
         settings["platform_cores"]["snes"] = {"label": "Gone-o-Tron", "source": "retrodeck"}
 
-        result = event_loop.run_until_complete(service.get_system_core_info("snes"))
+        result = event_loop.run_until_complete(service.get_system_core_info("snes", "snes"))
 
         assert result["vanished_pick"] == {
             "label": "Gone-o-Tron",
@@ -911,8 +923,14 @@ def _service_over(
             logger=logging.getLogger("test_cores"),
             core_info=core_info,
             platform_systems=FakePlatformSystems(),
-            settings=settings if settings is not None else {"platform_cores": {}},
-            settings_persister=FakeSettingsPersister(),
+            platform_picks=PlatformPicks(
+                config=PlatformPicksConfig(
+                    settings=(live := settings if settings is not None else {"platform_cores": {}}),
+                    settings_persister=FakeSettingsPersister(),
+                    lock=threading.Lock(),
+                )
+            ),
+            platform_core_reader=PlatformCoreReaderAdapter(live),
             uow_factory=FakeUnitOfWorkFactory(uow=FakeUnitOfWork()),
             active_core=FakeActiveCoreResolver(),
             disc_resolver=FakeDiscResolver(),
@@ -944,7 +962,7 @@ class TestEverySourcesDefault:
         )
 
         result = event_loop.run_until_complete(
-            _service_over(core_info, event_loop=event_loop).get_system_core_info("mastersystem")
+            _service_over(core_info, event_loop=event_loop).get_system_core_info("mastersystem", "mastersystem")
         )
 
         assert result["tender_default"] == {"kind": "emudeck", "label": "PicoDrive"}
@@ -961,7 +979,7 @@ class TestEverySourcesDefault:
         )
 
         result = event_loop.run_until_complete(
-            _service_over(core_info, event_loop=event_loop).get_system_core_info("mastersystem")
+            _service_over(core_info, event_loop=event_loop).get_system_core_info("mastersystem", "mastersystem")
         )
 
         assert result["source_defaults"] == [
@@ -972,7 +990,7 @@ class TestEverySourcesDefault:
 
         core_info._off = ("emudeck",)
         result = event_loop.run_until_complete(
-            _service_over(core_info, event_loop=event_loop).get_system_core_info("mastersystem")
+            _service_over(core_info, event_loop=event_loop).get_system_core_info("mastersystem", "mastersystem")
         )
         assert [entry["kind"] for entry in result["source_defaults"]] == ["retrodeck"]
 
@@ -989,7 +1007,9 @@ class TestEverySourcesDefault:
         settings = {"platform_cores": {"mastersystem": {"label": "Gone", "source": "retrodeck"}}}
 
         result = event_loop.run_until_complete(
-            _service_over(core_info, settings=settings, event_loop=event_loop).get_system_core_info("mastersystem")
+            _service_over(core_info, settings=settings, event_loop=event_loop).get_system_core_info(
+                "mastersystem", "mastersystem"
+            )
         )
 
         assert result["active_core_label"] == "PicoDrive"
@@ -1010,7 +1030,9 @@ class TestEverySourcesDefault:
         settings = {"platform_cores": {"mastersystem": {"label": "Missing", "source": "retrodeck"}}}
 
         result = event_loop.run_until_complete(
-            _service_over(core_info, settings=settings, event_loop=event_loop).get_system_core_info("mastersystem")
+            _service_over(core_info, settings=settings, event_loop=event_loop).get_system_core_info(
+                "mastersystem", "mastersystem"
+            )
         )
 
         assert result["active_core_label"] == "Missing"
@@ -1029,7 +1051,7 @@ class TestEverySourcesDefault:
         )
 
         result = event_loop.run_until_complete(
-            _service_over(core_info, event_loop=event_loop).get_system_core_info("mastersystem")
+            _service_over(core_info, event_loop=event_loop).get_system_core_info("mastersystem", "mastersystem")
         )
 
         assert result["start"]["state"] == "cannot_start"
@@ -1047,14 +1069,14 @@ class TestAPickWhileItsSourceIsSwitchedOff:
         settings = {"platform_cores": {"mastersystem": {"label": "Gearsystem", "source": "retrodeck"}}}
         service = _service_over(core_info, settings=settings, event_loop=event_loop)
 
-        off = event_loop.run_until_complete(service.get_system_core_info("mastersystem"))
+        off = event_loop.run_until_complete(service.get_system_core_info("mastersystem", "mastersystem"))
 
         assert off["active_core_label"] == "PicoDrive"
         assert off["vanished_pick"] is None
         assert settings["platform_cores"]["mastersystem"] == {"label": "Gearsystem", "source": "retrodeck"}
 
         core_info.source = {"kind": "retrodeck", "starts_games": True}
-        on = event_loop.run_until_complete(service.get_system_core_info("mastersystem"))
+        on = event_loop.run_until_complete(service.get_system_core_info("mastersystem", "mastersystem"))
 
         assert on["active_core_label"] == "Gearsystem"
 
@@ -1397,7 +1419,139 @@ class TestWhatTheResolversCommandSaysOfTheStart:
 
     def test_a_platforms_own_read_asks_no_command(self, event_loop, service, start_commands):
         """The platform page says nothing of the command (#2221 D20)."""
-        result = event_loop.run_until_complete(service.get_system_core_info("snes"))
+        result = event_loop.run_until_complete(service.get_system_core_info("snes", "snes"))
 
         assert result["start"]["state"] == "starts"
         assert start_commands.asked == []
+
+
+_PICK = {"label": "bsnes", "source": "retrodeck"}
+
+
+class TestAPlatformsPickIsKeptByItsFolder:
+    """A per-platform pick is stored under the platform's ``fs_slug`` (#2452 D7, D11, D15)."""
+
+    def test_a_pick_on_one_folder_leaves_the_other_of_its_slug(self, event_loop, service, settings):
+        """Done when: a pick on one of two platforms sharing a slug leaves the other at its default."""
+        event_loop.run_until_complete(service.set_system_core("snes", "snes-hacks", "bsnes"))
+
+        hacks = event_loop.run_until_complete(service.get_system_core_info("snes", "snes-hacks"))
+        snes = event_loop.run_until_complete(service.get_system_core_info("snes", "snes"))
+
+        assert settings["platform_cores"] == {"snes-hacks": {"label": "bsnes", "source": "retrodeck"}}
+        assert hacks["active_core_label"] == "bsnes"
+        assert snes["active_core_label"] == "Snes9x"
+
+    def test_a_game_reads_the_pick_of_its_own_folder(self, event_loop, service, settings, uow):
+        settings["platform_cores"]["snes-hacks"] = {"label": "bsnes", "source": "retrodeck"}
+        settings["platform_cores"]["snes"] = {"label": "Snes9x", "source": "retrodeck"}
+        uow.roms.save(
+            Rom(
+                rom_id=7,
+                platform_slug="snes",
+                platform_fs_slug="snes-hacks",
+                name="rom-7",
+                fs_name="rom-7.sfc",
+                shortcut_app_id=None,
+                last_synced_at="2026-01-01T00:00:00+00:00",
+            )
+        )
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(7))
+
+        assert result["platform_core_label"] == "bsnes"
+
+    @pytest.mark.parametrize(
+        ("folder", "picks", "kept", "label"),
+        [
+            # D15: a game with no fs_slug recorded reads the pick still under its slug ...
+            (None, {"snes": _PICK}, (), "bsnes"),
+            # ... once the refiling moved that key, the pick of the one platform kept for the slug ...
+            (None, {"snes-hacks": _PICK}, ("snes-hacks",), "bsnes"),
+            # ... and the default where several share the slug, or none is kept.
+            (None, {"snes-hacks": _PICK}, ("snes", "snes-hacks"), None),
+            (None, {"snes-hacks": _PICK}, (), None),
+            # A game with its fs_slug reads that platform's pick and nothing else.
+            ("snes-hacks", {"snes": _PICK}, ("snes",), None),
+        ],
+    )
+    def test_a_game_reads_its_folder_s_pick_else_without_one_its_slug_s(
+        self, event_loop, service, settings, uow, platform_systems, folder, picks, kept, label
+    ):
+        settings["platform_cores"].update(picks)
+        platform_systems.kept = {"snes": frozenset(kept)}
+        uow.roms.save(
+            Rom(
+                rom_id=8,
+                platform_slug="snes",
+                platform_fs_slug=folder,
+                name="rom-8",
+                fs_name="rom-8.sfc",
+                shortcut_app_id=None,
+                last_synced_at="2026-01-01T00:00:00+00:00",
+            )
+        )
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(8))
+
+        assert result["platform_core_label"] == label
+
+    def test_a_pick_waits_for_a_writer_that_holds_the_picks_lock(self, service, settings):
+        """The refiling and this write change the same picks from threads of their own."""
+        with cast("PlatformPicks", service._platform_picks)._lock:
+            worker = threading.Thread(target=service._set_system_core_io, args=("snes", "snes-hacks", "bsnes"))
+            worker.start()
+            worker.join(timeout=0.2)
+            assert worker.is_alive()
+            assert "snes-hacks" not in settings["platform_cores"]
+        worker.join(timeout=5)
+
+        assert settings["platform_cores"]["snes-hacks"]["label"] == "bsnes"
+
+    def test_any_failure_to_save_gives_the_picks_back(self, service, settings, settings_persister, monkeypatch):
+        settings["platform_cores"]["snes"] = {"label": "Snes9x", "source": "retrodeck"}
+
+        def _fails() -> None:
+            raise RuntimeError("dictionary changed size during iteration")
+
+        monkeypatch.setattr(settings_persister, "save_settings", _fails)
+        with pytest.raises(RuntimeError):
+            service._set_system_core_io("snes", "snes", "bsnes")
+
+        assert settings["platform_cores"] == {"snes": {"label": "Snes9x", "source": "retrodeck"}}
+
+    def test_a_failed_save_is_logged_with_the_platform_it_was_for(self, service, settings_persister, caplog):
+        def refuse() -> None:
+            raise OSError("read-only file system")
+
+        settings_persister.save_settings = refuse
+        with caplog.at_level(logging.ERROR), pytest.raises(Refused):
+            service._set_system_core_io("snes", "snes-hacks", "bsnes")
+
+        assert "Failed to set the system core of snes-hacks: read-only file system" in caplog.text
+
+    def test_a_save_of_the_whole_settings_iterating_them_meanwhile_does_not_fail(self, service, settings):
+        """A save on another thread may be walking the settings while a pick is stored."""
+        settings["platform_cores"]["snes"] = {"label": "Snes9x", "source": "retrodeck"}
+        settings["other"] = True
+        walking_settings = iter(settings)
+        walking_picks = iter(settings["platform_cores"])
+        next(walking_settings)
+        next(walking_picks)
+
+        service._set_system_core_io("snes", "snes-hacks", "bsnes")
+
+        assert list(walking_settings) == ["other"]
+        assert list(walking_picks) == []
+        assert settings["platform_cores"]["snes-hacks"]["label"] == "bsnes"
+
+    @pytest.mark.parametrize(("slug", "folder"), [("", "snes"), ("snes", ""), (None, "snes"), ("snes", None)])
+    def test_a_platform_asked_without_a_slug_or_a_folder_is_refused(self, event_loop, service, settings, slug, folder):
+        for call in (
+            service.get_system_core_info(slug, folder),
+            service.set_system_core(slug, folder, "bsnes"),
+        ):
+            with pytest.raises(Refused) as refused:
+                event_loop.run_until_complete(call)
+            assert refused.value.reason == "invalid_value"
+        assert settings["platform_cores"] == {}

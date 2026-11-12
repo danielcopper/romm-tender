@@ -317,7 +317,9 @@ class SyncOrchestrator:
             # below stays the raw planned total for backward compatibility.
             total_estimated_items = sum(u.estimated_items() for u in work_queue)
             platforms_planned = sum(1 for u in work_queue if u.type == "platform")
-            processed_platform_slugs = frozenset(u.slug for u in work_queue if u.type == "platform" and u.slug)
+            processed_platform_folders = frozenset(
+                u.platform_folder for u in work_queue if u.type == "platform" and u.platform_folder
+            )
             # The run's denominator for the paused banner's "X of Y games done" — the
             # same planned total the ``sync_plan`` event carries (#1383).
             box.run_total_items = total_roms_planned
@@ -407,7 +409,7 @@ class SyncOrchestrator:
                 synced_rom_ids=synced_rom_ids,
                 collection_memberships=collection_memberships,
                 platform_rom_ids=platform_rom_ids,
-                processed_platform_slugs=processed_platform_slugs,
+                processed_platform_folders=processed_platform_folders,
                 collection_listed_rom_ids=collection_listed,
                 cancelled=cancelled,
             )
@@ -515,7 +517,7 @@ class SyncOrchestrator:
         synced_rom_ids: set[int],
         collection_memberships: dict[tuple[str, str], CollectionMembership],
         platform_rom_ids: set[int],
-        processed_platform_slugs: frozenset[str],
+        processed_platform_folders: frozenset[str],
         cancelled: bool,
         collection_listed_rom_ids: frozenset[int] = frozenset(),
     ) -> FinalizeOutcome:
@@ -558,19 +560,20 @@ class SyncOrchestrator:
             candidates = [row for row in candidates if row.rom_id not in self._sync_state.run_converged]
         if candidates:
             group_keys = await self._loop.run_in_executor(None, self._local_library_reader.do_read_resident_group_keys)
-        stale, kept, gone_marks = await settle_stale_rows(
+        verdict = await settle_stale_rows(
             candidates,
             ask_romm=self._fetcher.ask_romm_for_roms,
             logger=self._logger,
-            read_platform_slugs=processed_platform_slugs,
-            listed_platform_slugs=self._sync_state.run_listed_platform_slugs,
+            read_platform_folders=processed_platform_folders,
+            listed_platform_folders=self._sync_state.run_listed_platform_folders,
             collection_listed_rom_ids=collection_listed_rom_ids,
             synced_group_keys=group_keys_of(synced_rom_ids, group_keys),
             hidden_rom_ids=self._sync_state.run_hidden_rom_ids,
         )
-        platform_rom_ids.update(row.rom_id for row in kept)
+        stale = verdict.remove
+        platform_rom_ids.update(row.rom_id for row in verdict.kept)
         rebuilt = {} if cancelled else self._sync_state.run_skip_rebuilt_rows
-        platform_rom_ids.update(rebuilt_rows_filed_as_kept(rebuilt, processed_platform_slugs, platform_rom_ids))
+        platform_rom_ids.update(rebuilt_rows_filed_as_kept(rebuilt, processed_platform_folders, platform_rom_ids))
         removable = set(
             select_stale_removals(
                 [(binding.rom_id, binding.app_id) for binding in converged], set(self._sync_state.committed_app_ids)
@@ -626,9 +629,10 @@ class SyncOrchestrator:
             pending_collection_memberships=collection_memberships,
             pending_platform_rom_ids=platform_rom_ids,
             platform_names=dict(self._sync_state.run_listed_platform_names),
-            processed_platform_slugs=processed_platform_slugs,
+            processed_platform_folders=processed_platform_folders,
             stale_rom_ids=removed_rom_ids,
-            gone_marks=gone_marks,
+            gone_marks=verdict.gone_marks,
+            found_folders=verdict.found_folders,
         )
         return FinalizeOutcome(
             platform_app_ids=platform_app_ids,
