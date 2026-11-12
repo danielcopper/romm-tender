@@ -370,6 +370,25 @@ def _enable_sync_with_device(svc, device_id: str = "device-1") -> None:
     svc._sync_engine._devices.invalidate_device_id_cache()
 
 
+def _seed_confirmed_rom(
+    svc,
+    tmp_path,
+    *,
+    rom_id: int = 42,
+    system: str = "gba",
+    rom_name: str = "pokemon",
+    file_name: str = "pokemon.gba",
+    content: bytes = b"save data",
+) -> None:
+    """Enable sync with a device, and install a ROM with a confirmed named slot and a local-only save file."""
+    _enable_sync_with_device(svc)
+    _install_rom(svc, tmp_path, rom_id=rom_id, system=system, file_name=file_name)
+    _seed_save_state(
+        svc, rom_id, RomSaveSyncState(system=system, slot_confirmed=True, active_slot="default"), platform_slug=system
+    )
+    _create_save(tmp_path, system=system, rom_name=rom_name, content=content)
+
+
 def _set_device_id(svc, device_id: str | None) -> None:
     """Set or clear the server device id in ``kv_config`` (None deletes it).
 

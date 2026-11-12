@@ -57,6 +57,7 @@ from tests.services.saves._helpers import (
     _get_save_state,
     _install_rom,
     _require_save_state,
+    _seed_confirmed_rom,
     _seed_save_state,
     _seed_save_state_dict,
     _server_save,
@@ -476,33 +477,10 @@ class TestDeviceSyncDisabled:
     toggle so the launch always proceeds.
     """
 
-    @staticmethod
-    def _seed_confirmed_rom(
-        svc,
-        tmp_path,
-        *,
-        rom_id=42,
-        system="gba",
-        rom_name="pokemon",
-        file_name="pokemon.gba",
-        content=b"save data",
-    ):
-        """Install a ROM with a confirmed named slot and a local-only save file."""
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path, rom_id=rom_id, system=system, file_name=file_name)
-        _seed_save_state(
-            svc,
-            rom_id,
-            RomSaveSyncState(system=system, slot_confirmed=True, active_slot="default"),
-            platform_slug=system,
-        )
-        _create_save(tmp_path, system=system, rom_name=rom_name, content=content)
-
     @pytest.mark.asyncio
     async def test_sync_rom_saves_refuses_with_the_policy_stop(self, tmp_path):
         svc, fake = make_service(tmp_path)
-        self._seed_confirmed_rom(svc, tmp_path)
+        _seed_confirmed_rom(svc, tmp_path)
         fake.negotiate_sync_disabled = True
         sync = svc.sync_rom_saves(42)
 
@@ -517,7 +495,7 @@ class TestDeviceSyncDisabled:
     @pytest.mark.asyncio
     async def test_post_exit_sync_refuses_with_the_policy_stop(self, tmp_path):
         svc, fake = make_service(tmp_path)
-        self._seed_confirmed_rom(svc, tmp_path)
+        _seed_confirmed_rom(svc, tmp_path)
         fake.negotiate_sync_disabled = True
         sync = svc.post_exit_sync(42)
 
@@ -532,7 +510,7 @@ class TestDeviceSyncDisabled:
     async def test_pre_launch_sync_silently_skips(self, tmp_path):
         """Pre-launch mirrors the local toggle-off skip: success shape, no offline/reason routing."""
         svc, fake = make_service(tmp_path)
-        self._seed_confirmed_rom(svc, tmp_path)
+        _seed_confirmed_rom(svc, tmp_path)
         fake.negotiate_sync_disabled = True
 
         result = await svc.pre_launch_sync(42)
@@ -549,8 +527,8 @@ class TestDeviceSyncDisabled:
     async def test_sync_all_saves_bulk_abort_refuses_with_the_policy_stop(self, tmp_path):
         """The whole-device bulk pre-negotiate hits the switch → abort before the sweep."""
         svc, fake = make_service(tmp_path)
-        self._seed_confirmed_rom(svc, tmp_path, rom_id=1, rom_name="game1", file_name="game1.gba", content=b"s1")
-        self._seed_confirmed_rom(
+        _seed_confirmed_rom(svc, tmp_path, rom_id=1, rom_name="game1", file_name="game1.gba", content=b"s1")
+        _seed_confirmed_rom(
             svc, tmp_path, rom_id=2, system="snes", rom_name="game2", file_name="game2.sfc", content=b"s2"
         )
         fake.negotiate_sync_disabled = True
@@ -568,8 +546,8 @@ class TestDeviceSyncDisabled:
         """When the bulk session degrades and a LATER per-ROM negotiate hits the switch,
         the sweep aborts reporting the partial totals synced so far (#1489)."""
         svc, fake = make_service(tmp_path)
-        self._seed_confirmed_rom(svc, tmp_path, rom_id=1, rom_name="game1", file_name="game1.gba", content=b"s1")
-        self._seed_confirmed_rom(
+        _seed_confirmed_rom(svc, tmp_path, rom_id=1, rom_name="game1", file_name="game1.gba", content=b"s1")
+        _seed_confirmed_rom(
             svc, tmp_path, rom_id=2, system="snes", rom_name="game2", file_name="game2.sfc", content=b"s2"
         )
 
@@ -2613,11 +2591,7 @@ class TestAWholeDeviceSessionThatCannotOpen:
         self, tmp_path, monkeypatch, caplog
     ):
         svc, fake = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "device-1")
-        _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
-        _seed_save_state(svc, 1, RomSaveSyncState(system="gba", slot_confirmed=True, active_slot="default"))
-        _create_save(tmp_path, system="gba", rom_name="game1", content=b"s")
+        _seed_confirmed_rom(svc, tmp_path, rom_id=1, rom_name="game1", file_name="game1.gba", content=b"s")
 
         def the_database_is_locked(_self):
             raise RuntimeError("database is locked")
@@ -2640,12 +2614,10 @@ class TestBulkNegotiateScope:
     @staticmethod
     def _seed_confirmed_roms(svc, tmp_path, rom_ids):
         """Install each ROM with a confirmed named slot and one local save file."""
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "device-1")
         for rom_id in rom_ids:
-            _install_rom(svc, tmp_path, rom_id=rom_id, system="gba", file_name=f"game{rom_id}.gba")
-            _seed_save_state(svc, rom_id, RomSaveSyncState(system="gba", slot_confirmed=True, active_slot="default"))
-            _create_save(tmp_path, system="gba", rom_name=f"game{rom_id}", content=b"s")
+            _seed_confirmed_rom(
+                svc, tmp_path, rom_id=rom_id, rom_name=f"game{rom_id}", file_name=f"game{rom_id}.gba", content=b"s"
+            )
 
     @pytest.mark.asyncio
     async def test_the_scope_is_the_inventory_s_distinct_roms_in_first_seen_order(self, tmp_path):

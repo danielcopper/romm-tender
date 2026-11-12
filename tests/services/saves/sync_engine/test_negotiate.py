@@ -14,8 +14,8 @@ from lib.errors import RommConnectionError, RommSyncDisabledError
 from tests.services.saves._helpers import (
     _create_save,
     _install_rom,
+    _seed_confirmed_rom,
     _seed_save_state,
-    _set_device_id,
     make_service,
 )
 
@@ -182,15 +182,6 @@ class TestTheWholeDeviceSession:
         assert [r.getMessage() for r in caplog.records] == [
             "sync_all_saves: negotiate session open failed (database is locked) — per-ROM sessions"
         ]
-
-
-def _seed_confirmed_rom(svc, tmp_path) -> None:
-    """Install ROM 42 with a confirmed named slot and a local-only save file."""
-    svc._config.settings["save_sync_enabled"] = True
-    _set_device_id(svc, "test-device")
-    _install_rom(svc, tmp_path)
-    _seed_save_state(svc, 42, RomSaveSyncState(system="gba", slot_confirmed=True, active_slot="default"))
-    _create_save(tmp_path, content=b"save data")
 
 
 class TestTheRomSession:
