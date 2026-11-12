@@ -14,7 +14,7 @@ from typing import Any, Protocol
 
 from adapters.system_clock import SystemClock
 from domain.emulator_pick import StoredPick, platform_pick
-from domain.state_migrations import unreadable_settings
+from domain.state_migrations import SWITCHES_BY_ID_SETTING, SWITCHES_SETTING, unreadable_settings
 
 _SETTINGS_VERSION = 15
 _LOCK_EXT = ".lock"
@@ -62,7 +62,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # the order they were entered. Values are proxy credentials: never sent to the
     # frontend, never logged.
     "romm_custom_headers": [],
-    "enabled_platforms": {},
+    SWITCHES_SETTING: {},
     "enabled_collections": {"standard": {}, "smart": {}, "virtual": {}},
     "collection_create_platform_groups": False,
     # QAM collection owner-scope: ``"all"`` (default — every collection the
@@ -209,9 +209,13 @@ class PersistenceAdapter:
         ``settings.json.corrupt-<ts>`` and a transient :attr:`_corrupt_reset`
         flag is set so bootstrap can persist the reset marker. The error is logged loudly. If the backup rename
         itself fails, the error is logged and defaults are still returned so
-        boot never crashes.
+        boot never crashes. The defaults after such a reset keep an empty map of
+        per-platform sync toggles by RomM id, as an installation that never
+        touched them has, so the next read of RomM's listing switches every
+        listed platform on (#2452 D29).
         """
         settings_path = os.path.join(self._settings_dir, SETTINGS_FILENAME)
+        settings: dict[str, Any]
         try:
             with open(settings_path) as f:
                 settings = json.load(f)
@@ -221,7 +225,7 @@ class PersistenceAdapter:
         except json.JSONDecodeError:
             self._logger.error("settings.json is corrupt/unparseable — backing up and resetting to defaults")
             self._quarantine_corrupt_settings(settings_path)
-            settings = {}
+            settings = {SWITCHES_BY_ID_SETTING: {}}
         else:
             unreadable = unreadable_settings(settings)
             if unreadable is not None:

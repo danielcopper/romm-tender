@@ -150,6 +150,42 @@ class TestTheTogglesAreKeptByFolder:
         assert library.settings["enabled_platforms"] == {}
         assert library.settings_persister.save_count == 0
 
+    @pytest.mark.parametrize(
+        ("by_id", "synced"),
+        [({"1": False, "2": True}, [2]), ({"1": True}, [1]), ({}, [1, 2])],
+        ids=["switched", "one-saved", "never-touched"],
+    )
+    @pytest.mark.asyncio
+    async def test_toggles_that_have_not_moved_sync_exactly_the_platforms_switched_on_before(
+        self, make_library, fake_romm_api, caplog, by_id, synced
+    ):
+        """#2452 D27: the harness's refiling moves nothing, as a move that failed."""
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.platforms = list(self._SHARING_A_SLUG)
+        library.settings["enabled_platforms"] = {}
+        library.settings["enabled_platform_ids"] = by_id
+
+        with caplog.at_level(logging.WARNING):
+            result, _unwalked = await library.sync._fetcher._fetch_enabled_platforms()
+        shown = await library.sync._fetcher.get_platforms()
+
+        assert [p["id"] for p in result] == synced
+        assert [p["id"] for p in shown["platforms"] if p["sync_enabled"]] == synced
+        assert "toggles kept by RomM's platform ids have not moved" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_toggles_that_have_moved_are_read_without_a_warning(self, make_library, fake_romm_api, caplog):
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.platforms = list(self._SHARING_A_SLUG)
+        library.settings["enabled_platforms"] = {"snes": True}
+        library.settings["enabled_platform_ids"] = None
+
+        with caplog.at_level(logging.WARNING):
+            result, _unwalked = await library.sync._fetcher._fetch_enabled_platforms()
+
+        assert [p["id"] for p in result] == [1]
+        assert "have not moved" not in caplog.text
+
     @pytest.mark.asyncio
     async def test_switching_one_off_after_enable_all_keeps_the_others_on(self, make_library, fake_romm_api):
         """#1007: switching exactly ONE platform off leaves every other platform synced."""
@@ -161,7 +197,7 @@ class TestTheTogglesAreKeptByFolder:
         ]
         await library.sync._fetcher.set_all_platforms_sync(True)
 
-        library.sync._fetcher.save_platform_sync("snes", False)
+        await library.sync._fetcher.save_platform_sync("snes", False)
         filtered, _unwalked = await library.sync._fetcher._fetch_enabled_platforms()
 
         assert {p["name"] for p in filtered} == {"N64", "GBA"}
@@ -473,14 +509,14 @@ class TestPlatformListingThatIsNotAList:
     @pytest.mark.asyncio
     async def test_set_all_platforms_sync_fails_and_writes_nothing(self, make_library):
         library = self._library_over_a_malformed_listing(make_library)
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         call = library.sync._fetcher.set_all_platforms_sync(False)
 
         with pytest.raises(RommApiError) as excinfo:
             await call
 
         assert classify_error(excinfo.value) == ("server_unreachable", "Unexpected response from /api/platforms: dict")
-        assert library.settings["enabled_platforms"] == {"1": True}
+        assert library.settings["enabled_platforms"] == {"n64": True}
 
 
 class TestSaveCollectionsSync:

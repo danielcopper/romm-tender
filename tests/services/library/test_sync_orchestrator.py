@@ -1673,7 +1673,6 @@ class TestSyncPreviewErrorHandling:
         # mid-paginate RomM failure would in production.
         failure = RuntimeError("Something broke")
         fake_romm_api.list_platforms_side_effect = failure
-        library.settings["enabled_platforms"] = {"1": True}
         call = library.sync.sync_preview()
 
         with pytest.raises(RuntimeError) as excinfo:
@@ -1733,7 +1732,6 @@ class TestSyncPreviewErrorHandling:
         library = make_library(romm_api=fake_romm_api)
 
         fake_romm_api.list_platforms = MagicMock(side_effect=SyncCancelled("Sync cancelled"))
-        library.settings["enabled_platforms"] = {"1": True}
 
         # sync_preview only runs from IDLE — guard against a leaked non-IDLE state.
         assert library.sync._box.sync_state == SyncState.IDLE
@@ -1773,7 +1771,6 @@ class TestSyncPreviewErrorHandling:
     ):
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.list_platforms_side_effect = failure
-        library.settings["enabled_platforms"] = {"1": True}
         self._stage_an_earlier_preview(library)
         call = library.sync.sync_preview()
 
@@ -1794,7 +1791,6 @@ class TestSyncPreviewErrorHandling:
 
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.list_platforms = MagicMock(side_effect=SyncCancelled("Sync cancelled"))
-        library.settings["enabled_platforms"] = {"1": True}
         self._stage_an_earlier_preview(library)
         call = library.sync.sync_preview()
 
@@ -3968,7 +3964,6 @@ class TestDoSyncPerUnitErrors:
         # ``list_platforms`` runs in the executor; the fake raises
         # CancelledError exactly like an asyncio cancel would propagate.
         fake_romm_api.list_platforms_side_effect = asyncio.CancelledError()
-        library.settings["enabled_platforms"] = {"1": True}
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "sync-cancel-build"
 
@@ -3989,7 +3984,6 @@ class TestDoSyncPerUnitErrors:
 
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.list_platforms_side_effect = RuntimeError("RomM down")
-        library.settings["enabled_platforms"] = {"1": True}
         library.sync._box.sync_state = SyncState.RUNNING
 
         # Should NOT raise — outer flow swallows the exception after emitting an error.
@@ -4222,7 +4216,6 @@ class TestDoSyncPerUnitErrors:
         library = make_library(romm_api=fake_romm_api)
 
         fake_romm_api.list_platforms = MagicMock(side_effect=asyncio.CancelledError("real task cancel"))
-        library.settings["enabled_platforms"] = {"1": True}
 
         # sync_preview only runs from IDLE — guard against a leaked non-IDLE state
         # that would short-circuit it to "sync_in_progress" before the fetch.
@@ -9824,7 +9817,6 @@ class TestTheShortcutArtworkJobAfterARun:
     async def test_an_apply_run_that_failed_asks_for_it_too(self, make_library, fake_romm_api):
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.list_platforms_side_effect = RuntimeError("boom")
-        library.settings["enabled_platforms"] = {"1": True}
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-fails"
 

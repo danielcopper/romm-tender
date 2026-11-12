@@ -598,6 +598,55 @@ class TestPerPlatformSyncToggles:
         assert harness.settings["enabled_platforms"]["snes-hacks"] is True
         assert harness.settings["enabled_platform_ids"] is None
 
+    def test_the_toggles_move_where_the_listed_platforms_cannot_be_worked_out(self, caplog, monkeypatch):
+        """#2452 D27: the toggles need only the listing as read, so a failure there does not hold them back."""
+        harness = self._kept_by_id({"5": True})
+
+        def _fail(platforms: Any) -> Any:
+            raise ValueError("unreadable listing")
+
+        monkeypatch.setattr("services.platform_refiling.listed_platforms", _fail)
+        with caplog.at_level(logging.WARNING):
+            harness.refile()
+
+        assert harness.settings["enabled_platforms"]["snes-hacks"] is True
+        assert harness.settings["enabled_platform_ids"] is None
+        assert "Failed to read where older entries belong: ValueError: unreadable listing" in caplog.text
+
+    def test_the_toggles_move_where_the_records_fail(self, monkeypatch):
+        harness = self._kept_by_id({"5": True})
+        harness.uow.bios_files.save(_record("psx"))
+
+        def _fail() -> list[BiosFile]:
+            raise OSError("db locked")
+
+        monkeypatch.setattr(harness.uow.bios_files, "iter_all", _fail)
+        harness.refile()
+
+        assert harness.settings["enabled_platforms"]["snes-hacks"] is True
+
+    def test_the_toggles_move_where_the_picks_fail(self, monkeypatch):
+        harness = self._kept_by_id({"5": True})
+        harness.settings["platform_cores"] = {"psx": {"label": "SwanStation"}}
+
+        def _fail(*_args: Any) -> Any:
+            raise RuntimeError("picks broke")
+
+        monkeypatch.setattr("services.platform_refiling.pick_moves", _fail)
+        harness.refile()
+
+        assert harness.settings["enabled_platforms"]["snes-hacks"] is True
+        assert harness.settings["platform_cores"] == {"psx": {"label": "SwanStation"}}
+
+    def test_the_ids_the_listing_drops_are_named(self, caplog):
+        """#2452 D21: a toggle dropped with its id is said, beside the move."""
+        harness = self._kept_by_id({"5": True, "99": False, "42": True})
+
+        with caplog.at_level(logging.INFO):
+            harness.refile()
+
+        assert "Dropped the sync toggles of RomM platform ids the listing no longer names: 42, 99" in caplog.text
+
     def test_a_move_says_so(self, caplog):
         harness = self._kept_by_id({"5": True})
 

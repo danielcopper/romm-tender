@@ -8,7 +8,7 @@ Invariants encoded here:
   on or off: each listed platform with an ``fs_slug`` and no toggle of its own
   answers after the move what its id answered before it (#2452 D22, D24).
 - Switching one platform's toggle never changes another platform's answer
-  (#1007), now that the toggles are kept by ``fs_slug``.
+  (#1007).
 """
 
 from __future__ import annotations

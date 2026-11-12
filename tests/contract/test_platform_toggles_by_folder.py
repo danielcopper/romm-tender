@@ -1,9 +1,11 @@
 """Contract tests: the per-platform sync toggles are kept by each platform's ``fs_slug`` (#2452 D8, #2798).
 
-Drives the real ``Endpoints`` over the real ``bootstrap()``, from a settings
-file an earlier release wrote where the test is about the update, and reads the
-real ``settings.json`` back. ``save_platform_sync`` is called as the frontend
-declares it: ``(platform_folder: string, enabled: boolean)``.
+Builds the real ``Endpoints`` over the real ``bootstrap()``, from a settings file
+an earlier release wrote where the test is about the update, and reads the real
+``settings.json`` back. ``save_platform_sync`` is called as the frontend declares
+it: ``(platform_folder: string, enabled: boolean)``. Which platforms a sync reads
+is asked of the sync's platform filter (``_fetch_enabled_platforms``) over that
+real wiring, not of a whole run.
 """
 
 from __future__ import annotations
@@ -11,6 +13,8 @@ from __future__ import annotations
 import json
 import os
 from typing import TYPE_CHECKING, Any
+
+import pytest
 
 from tests.contract._harness import ContractHarness, build_contract_harness
 
@@ -56,13 +60,56 @@ async def test_a_toggle_saved_by_rom_m_s_platform_id_is_kept_by_its_fs_slug_afte
     assert on_disk["enabled_platform_ids"] is None
 
 
-async def test_the_first_sync_after_the_update_reads_the_platforms_by_their_moved_toggles(tmp_path):
-    harness = _updated_from(tmp_path, {"version": 14, "enabled_platforms": {"1": False, "2": True}})
+@pytest.mark.parametrize(
+    ("by_id", "synced"),
+    [({"1": False, "2": True}, ["snes-hacks"]), ({}, ["snes", "snes-hacks"])],
+    ids=["switched", "never-touched"],
+)
+async def test_the_first_sync_after_the_update_reads_the_platforms_by_their_moved_toggles(tmp_path, by_id, synced):
+    """#2452 D22, D24: the sync's own read of the listing moves the toggles before it filters by them."""
+    harness = _updated_from(tmp_path, {"version": 14, "enabled_platforms": by_id})
 
-    synced, left_off = await harness.app.services.sync_service._fetcher._fetch_enabled_platforms()
+    filtered, _left_off = await harness.app.services.sync_service._fetcher._fetch_enabled_platforms()
 
-    assert [p["fs_slug"] for p in synced] == ["snes-hacks"]
-    assert left_off == (1,)
+    assert [p["fs_slug"] for p in filtered] == synced
+    assert _on_disk(harness)["enabled_platform_ids"] is None
+
+
+@pytest.mark.parametrize(
+    ("by_id", "synced"),
+    [({"1": False, "2": True}, ["snes-hacks"]), ({}, ["snes", "snes-hacks"])],
+    ids=["switched", "never-touched"],
+)
+async def test_a_sync_after_a_move_that_failed_reads_the_platforms_switched_on_before_the_update(
+    tmp_path, monkeypatch, by_id, synced
+):
+    """#2452 D27: the toggles still kept by RomM id are read by the rule they were saved under."""
+    harness = _updated_from(tmp_path, {"version": 14, "enabled_platforms": by_id})
+
+    def _fail(*_args: Any) -> Any:
+        raise RuntimeError("move broke")
+
+    monkeypatch.setattr("services.platform_refiling.switches_by_folder", _fail)
+    filtered, _left_off = await harness.app.services.sync_service._fetcher._fetch_enabled_platforms()
+    result = await harness.endpoints.get_platforms()
+
+    assert [p["fs_slug"] for p in filtered] == synced
+    assert [folder for folder, on in _shown(result).items() if on] == synced
+    assert harness.settings["enabled_platform_ids"] == by_id
+
+
+async def test_after_a_corrupt_settings_file_every_listed_platform_is_switched_on_at_the_next_listing_read(tmp_path):
+    """#2452 D29: the platforms are those of an installation that never touched a toggle."""
+    config = tmp_path / "config"
+    config.mkdir(parents=True, exist_ok=True)
+    (config / "settings.json").write_text("NOT_VALID_JSON{{{", encoding="utf-8")
+    harness = build_contract_harness(tmp_path)
+    harness.romm.platforms = [dict(p) for p in _SHARING_A_SLUG]
+
+    result = await harness.endpoints.get_platforms()
+
+    assert _shown(result) == {"snes": True, "snes-hacks": True}
+    assert _on_disk(harness)["enabled_platforms"] == {"snes": True, "snes-hacks": True}
 
 
 async def test_an_installation_whose_toggles_were_never_touched_keeps_every_platform_on(tmp_path):
@@ -91,7 +138,7 @@ async def test_a_fresh_setup_starts_with_every_platform_off(tmp_path):
 
 
 async def test_of_two_platforms_sharing_a_slug_switching_one_off_syncs_only_the_other(tmp_path):
-    """Done when: of two platforms that share a slug, switching one off syncs only the other."""
+    """Done when: of two platforms that share a slug, switching one off syncs only the other (the sync's filter)."""
     harness = build_contract_harness(tmp_path)
     harness.romm.platforms = [dict(p) for p in _SHARING_A_SLUG]
     assert (await harness.endpoints.set_all_platforms_sync(True)) == {"success": True}

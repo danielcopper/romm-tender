@@ -59,13 +59,15 @@ class TestReplace:
 
         assert handed == [{}]
 
-    def test_a_save_that_fails_keeps_the_new_map_and_raises(self):
-        settings: dict[str, Any] = {"enabled_platforms": {"snes": True}}
+    def test_a_save_that_fails_puts_the_old_map_back_and_raises(self):
+        """#2452 D28: the Platforms tab, its message and the next sync agree on the toggle."""
+        before = {"snes": True}
+        settings: dict[str, Any] = {"enabled_platforms": before}
 
         with pytest.raises(OSError, match="disk full"):
             _switches(settings, _FailingPersister()).replace(lambda switches: {"snes": False})
 
-        assert settings["enabled_platforms"] == {"snes": False}
+        assert settings["enabled_platforms"] is before
 
     def test_a_write_waits_for_a_writer_that_holds_the_lock(self):
         settings: dict[str, Any] = {"enabled_platforms": {}}
@@ -117,6 +119,17 @@ class TestCarryOver:
         assert handed == []
         assert settings["enabled_platforms"] == {}
         assert persister.save_count == 0
+
+    def test_toggles_kept_by_id_never_touched_are_handed_over_and_moved(self):
+        """An empty map kept by id is an installation that never touched a toggle, not nothing kept (#2452 D24)."""
+        settings: dict[str, Any] = {"enabled_platforms": {}, "enabled_platform_ids": {}}
+        handed: list[Any] = []
+
+        moved = _switches(settings).carry_over(lambda by_id, switches: handed.append(by_id) or {"snes": True})
+
+        assert moved is True
+        assert handed == [{}]
+        assert settings == {"enabled_platforms": {"snes": True}, "enabled_platform_ids": None}
 
     def test_nothing_built_leaves_both_maps_and_saves_nothing(self):
         settings: dict[str, Any] = {"enabled_platforms": {}, "enabled_platform_ids": {"1": True}}

@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from lib.errors import Refused
+from lib.errors import Refused, require_platform_folder
 
 if TYPE_CHECKING:
     from services.library._state import LibrarySyncStateBox
@@ -99,11 +99,13 @@ class LibraryService:
         return await self._fetcher.get_platforms()
 
     async def save_platform_sync(self, platform_folder, enabled):
-        _require_folder(platform_folder)
+        require_platform_folder(platform_folder)
+        _require_switch_state(enabled)
         async with self._rules.hold("save_platform_sync", update=True, migration=True):
-            return self._fetcher.save_platform_sync(platform_folder, enabled)
+            return await self._fetcher.save_platform_sync(platform_folder, enabled)
 
     async def set_all_platforms_sync(self, enabled):
+        _require_switch_state(enabled)
         async with self._rules.hold("set_all_platforms_sync", update=True, migration=True):
             return await self._fetcher.set_all_platforms_sync(enabled)
 
@@ -175,11 +177,7 @@ class LibraryService:
         return self._views.get_sync_runs()
 
 
-def _require_folder(platform_folder: object) -> None:
-    """Refuse ``invalid_value`` for a platform folder that is not a non-empty name.
-
-    A platform's sync toggle is kept by the folder RomM keeps it in (#2452 D8),
-    and RomM's platform id is never taken in its place.
-    """
-    if not isinstance(platform_folder, str) or not platform_folder:
-        raise Refused("invalid_value", f"{platform_folder!r} is not a RomM platform folder")
+def _require_switch_state(enabled: object) -> None:
+    """Refuse ``invalid_value`` for a sync toggle's state that is not ``True`` or ``False``."""
+    if not isinstance(enabled, bool):
+        raise Refused("invalid_value", f"{enabled!r} is not a sync toggle's state")

@@ -1,4 +1,4 @@
-"""In-memory ``PlatformSwitchesWriter`` for service tests: keeps the toggles in its own attributes."""
+"""Stand-in ``PlatformSwitchesWriter`` for wiring tests that never write the per-platform sync toggles."""
 
 from __future__ import annotations
 
@@ -9,21 +9,10 @@ if TYPE_CHECKING:
 
 
 class FakePlatformSwitches:
-    """Keeps the toggles in ``switches`` and those kept by RomM id in ``by_id``; ``None`` there is nothing kept."""
+    """Writes nothing: a test that writes the toggles uses the real ``PlatformSwitches``."""
 
-    def __init__(self) -> None:
-        self.switches: dict[str, bool] = {}
-        self.by_id: dict[str, Any] | None = None
+    def replace(self, build: Callable[[Mapping[str, Any]], dict[str, Any]]) -> None:
+        raise AssertionError("this test does not write the per-platform sync toggles")
 
-    def replace(self, build: Callable[[Mapping[str, bool]], dict[str, bool]]) -> None:
-        self.switches = build(self.switches)
-
-    def carry_over(self, build: Callable[[Mapping[str, Any], Mapping[str, bool]], dict[str, bool] | None]) -> bool:
-        if self.by_id is None:
-            return False
-        moved = build(self.by_id, self.switches)
-        if moved is None:
-            return False
-        self.switches = moved
-        self.by_id = None
-        return True
+    def carry_over(self, build: Callable[[Mapping[str, Any], Mapping[str, Any]], dict[str, Any] | None]) -> bool:
+        raise AssertionError("this test does not move the per-platform sync toggles")

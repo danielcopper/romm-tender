@@ -59,6 +59,7 @@ class TestMigrateSettings:
             "version": 15,
             "platform_cores": {"snes": {"label": "bsnes", "source": "retrodeck"}},
             "enabled_platforms": {},
+            "enabled_platform_ids": {},
         }
 
     def test_a_value_that_names_no_pick_is_dropped(self):
@@ -102,10 +103,11 @@ class TestTheTogglesKeptByRommId:
         assert migrated["enabled_platforms"] == {}
 
     @pytest.mark.parametrize("value", [None, [], "1", 7])
-    def test_a_value_that_is_no_map_names_no_toggle_and_is_dropped(self, value):
+    def test_a_value_that_is_no_map_moves_aside_as_no_toggle_saved(self, value):
+        """No toggle can be read from it, so every listed platform is switched on at the move (#2452 D22, D24)."""
         migrated = migrate_settings({"version": 14, "enabled_platforms": value})
 
-        assert "enabled_platform_ids" not in migrated
+        assert migrated["enabled_platform_ids"] == {}
         assert migrated["enabled_platforms"] == {}
 
     def test_a_file_at_version_15_keeps_its_toggles(self):

@@ -26,7 +26,7 @@ from domain.fetch_generation import (
     hidden_without_a_listed_version,
 )
 from domain.platform_names import listed_fs_slug, listed_platform_folders, listed_platform_names
-from domain.platform_prefs import platform_sync_enabled
+from domain.platform_prefs import listed_platform_synced, stored_switches, switches_kept_by_id
 from domain.platform_skip import probe_verdict, stamp_can_match
 from domain.platform_sync_state import stamp_for_skip
 from domain.skip_prediction import (
@@ -172,14 +172,15 @@ class LibraryFetcher:
     # ── Platform metadata use cases ──────────────────────────────
 
     async def _read_listing(self) -> list[dict[str, Any]]:
-        """RomM's platform listing, handed to the refiling once read (#2452 D6, D7)."""
+        """RomM's platform listing, handed to the refiling once read (#2452 D6, D7, D8)."""
         platforms = await self._loop.run_in_executor(None, self._romm_api.list_platforms)
         await self._loop.run_in_executor(None, self._refiling.do_refile, platforms)
         return platforms
 
     async def get_platforms(self):
         platforms = await self._read_listing()
-        enabled = self._settings.get("enabled_platforms", {})
+        switches = stored_switches(self._settings)
+        by_id = switches_kept_by_id(self._settings)
 
         # One row per platform, by its fs_slug, named as its Steam collection is (#2452 D1, D2).
         names = listed_platform_names(platforms)
@@ -195,21 +196,23 @@ class LibraryFetcher:
                 "slug": p.get("slug", ""),
                 "fs_slug": fs_slug,
                 "rom_count": rom_count,
-                "sync_enabled": platform_sync_enabled(enabled, fs_slug),
+                "sync_enabled": listed_platform_synced(switches, by_id, p),
             }
             result.append(entry)
         return {"success": True, "platforms": result}
 
-    def save_platform_sync(self, platform_folder: str, enabled):
+    async def save_platform_sync(self, platform_folder: str, enabled: bool):
         """Switch the platform kept in *platform_folder* on or off; every other toggle stays as it is."""
-        self._platform_switches.replace(lambda switches: {**switches, platform_folder: bool(enabled)})
+        await self._loop.run_in_executor(
+            None, self._platform_switches.replace, lambda switches: {**switches, platform_folder: enabled}
+        )
         return {"success": True}
 
-    async def set_all_platforms_sync(self, enabled):
+    async def set_all_platforms_sync(self, enabled: bool):
         """Switch every listed platform with an ``fs_slug`` on or off, in place of every toggle kept before."""
         platforms = await self._read_listing()
-        switches = dict.fromkeys(listed_platform_folders(platforms), bool(enabled))
-        self._platform_switches.replace(lambda _current: switches)
+        switches = dict.fromkeys(listed_platform_folders(platforms), enabled)
+        await self._loop.run_in_executor(None, self._platform_switches.replace, lambda _current: switches)
         return {"success": True}
 
     # ── Collection metadata use cases ────────────────────────────
@@ -345,11 +348,11 @@ class LibraryFetcher:
         self._sync_state.run_listed_platform_names = listed_platform_names(listed)
         await self._loop.run_in_executor(None, self._platform_listing.replace_listing, listed)
 
-        # The refiling ran on this read (``_read_listing``), so toggles an
-        # earlier release kept by RomM id have moved to their folders by now.
-        enabled = self._settings.get("enabled_platforms", {})
-        self._logger.info(f"Enabled platforms: {[k for k, v in enabled.items() if v]}")
-        platforms = [p for p in listed if platform_sync_enabled(enabled, listed_fs_slug(p))]
+        switches = stored_switches(self._settings)
+        by_id = switches_kept_by_id(self._settings)
+        if by_id is not None:
+            self._logger.warning("The per-platform sync toggles kept by RomM's platform ids have not moved; read by id")
+        platforms = [p for p in listed if listed_platform_synced(switches, by_id, p)]
         self._logger.info(f"Syncing {len(platforms)} platforms: {[p['name'] for p in platforms]}")
         synced_ids = {int(p["id"]) for p in platforms}
         left_off_ids = tuple(int(p["id"]) for p in listed if int(p["id"]) not in synced_ids)

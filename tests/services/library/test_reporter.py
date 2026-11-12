@@ -164,6 +164,20 @@ class TestGetSyncStatsCountsThePlatformsSwitchedOn:
         assert library.sync.get_sync_stats()["platforms"] == 2
 
     @pytest.mark.asyncio
+    async def test_only_a_toggle_that_is_true_is_counted(self, library):
+        library.settings["enabled_platforms"] = {"snes": True, "gba": "yes", "n64": 1}
+        library.settings["enabled_platform_ids"] = None
+
+        assert library.sync.get_sync_stats()["platforms"] == 1
+
+    @pytest.mark.asyncio
+    async def test_toggles_that_are_no_map_count_no_platform(self, library):
+        library.settings["enabled_platforms"] = ["snes"]
+        library.settings["enabled_platform_ids"] = None
+
+        assert library.sync.get_sync_stats()["platforms"] == 0
+
+    @pytest.mark.asyncio
     async def test_none_ever_saved_counts_no_platform(self, library):
         """The main page leaves a count of 0 out, rather than reading every platform as on."""
         library.settings["enabled_platforms"] = {}

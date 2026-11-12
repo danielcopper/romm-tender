@@ -208,6 +208,21 @@ class TestLoadingEdgeCases:
         for key, default_value in DEFAULT_SETTINGS.items():
             assert result[key] == default_value
 
+    def test_a_corrupt_file_leaves_the_toggles_as_those_of_an_installation_that_never_touched_them(self, adapter):
+        """#2452 D29: the next read of RomM's listing switches every listed platform on."""
+        settings_path = os.path.join(adapter._settings_dir, "settings.json")
+        with open(settings_path, "w") as f:
+            f.write("NOT_VALID_JSON{{{")
+
+        result = adapter.load_settings()
+
+        assert result["enabled_platform_ids"] == {}
+        assert result["enabled_platforms"] == {}
+
+    def test_a_first_run_keeps_no_toggles_by_id(self, adapter):
+        """#2452 D24: a fresh setup starts with every platform off."""
+        assert "enabled_platform_ids" not in adapter.load_settings()
+
     def test_load_settings_applies_defaults_for_missing_keys(self, adapter):
         settings_path = os.path.join(adapter._settings_dir, "settings.json")
         with open(settings_path, "w") as f:

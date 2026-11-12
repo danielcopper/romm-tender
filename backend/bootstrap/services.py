@@ -248,8 +248,6 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         )
     )
 
-    # The one writer of the per-platform sync toggles, which the library fetcher
-    # writes through on the loop and the refiling from executor threads.
     platform_switches = PlatformSwitches(
         config=PlatformSwitchesConfig(
             settings=cfg.stores.settings,
