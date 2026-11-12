@@ -1631,8 +1631,8 @@ listing no longer names, or names without an `fs_slug` — is dropped and named 
 the toggles even where it cannot work out where the records and picks belong, since the toggles need only the listing as
 read. Where the move fails all the same, the toggles stay kept by id, a warning says so, and the move is tried again at
 the next read: until then the Platforms tab and a sync go by the map the move would write
-(`domain/platform_prefs.py::switches_as_read`), so a sync reads exactly the platforms that were on before the update, or
-since switched on the tab (D27). Until the move, the main page counts the platforms switched on from
+(`domain/platform_prefs.py::switches_as_read`), so a sync reads exactly the platforms that were on before the update, as
+since switched on or off on the tab (D27). Until the move, the main page counts the platforms switched on from
 `enabled_platform_ids`, and a map kept there empty counts none, which the page leaves out (D25).
 
 Where Tender starts from the defaults because it could not take the settings file over — one that cannot be parsed and
@@ -1647,9 +1647,10 @@ rather than changing it in place, since a save on another thread may be walking 
 move sets `enabled_platform_ids` to `null` rather than removing the key, so the settings never change size. Where the
 save after one toggle, or after Enable all / Disable all, fails, the old map is put back, so the Platforms tab, its
 message and the next sync agree (D28). A write whose call is cancelled, as a panel that disconnects cancels its calls,
-still runs to its end in its thread, and a failure is then logged, since no caller is left to hear of it. Where the save
-after the move fails, the moved toggles stay and the run filters by them; the next save that succeeds writes them, and
-the move runs again at the next start if it never reached the file (D23).
+still runs to its end in its thread, and how it ended is then logged, since no caller is left to hear of it. Where the
+save after the move fails, the moved toggles stay, the log says so beside the ids the move dropped, and the run filters
+by them; the next save that succeeds writes them, and the move runs again at the next start if it never reached the file
+(D23).
 
 #### Sync time estimate and live ETA (frontend)
 
