@@ -192,7 +192,9 @@ class NegotiateEnvelope:
         except RommSyncDisabledError:
             raise
         except Exception as e:
-            self._logger.warning("sync_all_saves: negotiate session open failed (%s) — per-ROM sessions", e)
+            self._logger.warning(
+                "sync_all_saves: negotiate session open failed (%s) — per-ROM sessions", e, exc_info=True
+            )
             return None
 
     async def close_session(self, session_id: int, completed: int, failed: int) -> None:
