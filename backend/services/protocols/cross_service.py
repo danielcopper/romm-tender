@@ -38,7 +38,8 @@ class ListingRefiler(Protocol):
     here, so the download records, the per-platform picks and the per-platform
     sync toggles follow the user's current RomM (#2452 D6, D7, D8). ``do_refile``
     is blocking and never raises: a failed move is reported by the refiling
-    itself, and the reader goes on with the entries where they were.
+    itself, and the reader goes on with the entries where they were — except
+    toggles whose move was saved in vain, which stay moved (D23).
     """
 
     def do_refile(self, platforms: Sequence[Mapping[str, Any]]) -> None: ...

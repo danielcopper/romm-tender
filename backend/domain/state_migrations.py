@@ -81,10 +81,8 @@ def migrate_settings(data: dict[str, Any]) -> dict[str, Any]:
     Version 15 keeps the per-platform sync toggles by ``fs_slug``. The map kept
     by RomM's platform id moves to ``enabled_platform_ids`` — an empty one too,
     since it meant every platform on — until a read of RomM's listing moves it
-    onto the platforms' ``fs_slug`` (#2452 D8, D24). A value that is no map
-    moves aside as an empty one: no toggle can be read from it, and an
-    installation with no toggle saved had every platform on. The new map starts
-    empty.
+    onto the platforms' ``fs_slug`` (#2452 D8, D24); a value that is no map
+    moves aside as an empty one. The new map starts empty.
     """
     migrated = dict(data)
     if migrated["version"] < PLATFORM_PICK_SOURCE_VERSION:

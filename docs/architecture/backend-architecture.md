@@ -1610,14 +1610,15 @@ reliable reset.
 A platform's sync toggle is kept in `settings.json`'s `enabled_platforms` under the folder RomM keeps the platform in
 (`fs_slug`), so two platforms of one console in different folders are switched separately, and a RomM database set up
 anew, which gives every platform a new id, leaves them as they were
-([#2452](https://github.com/danielcopper/romm-tender/issues/2452) D8). A platform is synced only where its own toggle is
-`true` (`domain/platform_prefs.py::platform_sync_enabled`): a fresh setup starts with every platform off, as collections
-do, and opening the Platforms tab switches nothing on (D24). A listed platform without an `fs_slug` has no toggle and is
-never synced (D26). The Platforms tab's toggle (`save_platform_sync`) is called with the folder and `true` or `false`; a
-folder that is no name — not a string, or blank, RomM's numeric platform id among them — and a state that is not a
-boolean are refused with `invalid_value` (`lib/errors.py::require_platform_folder`, which the firmware and emulator-pick
-endpoints use too). Enable all / Disable all (`set_all_platforms_sync`) writes a toggle for every platform the listing
-names with an `fs_slug`, in place of every toggle kept before.
+([#2452](https://github.com/danielcopper/romm-tender/issues/2452) D8). Once the toggles have moved (below), a platform
+is synced only where its own toggle is `true` (`domain/platform_prefs.py::platform_sync_enabled`): a fresh setup starts
+with every platform off, as collections do, and opening the Platforms tab switches nothing on (D24). A listed platform
+without an `fs_slug` has no toggle and is never synced (D26). The Platforms tab's toggle (`save_platform_sync`) is
+called with the folder and `true` or `false`; a folder that is no name — not a string, or blank, RomM's numeric platform
+id among them — and a state that is not a boolean are refused with `invalid_value`
+(`lib/errors.py::require_platform_folder`, which the firmware and emulator-pick endpoints use too). Enable all / Disable
+all (`set_all_platforms_sync`) writes a toggle for every platform the listing names with an `fs_slug`, in place of every
+toggle kept before.
 
 Up to settings version 14 the toggles were kept by RomM's platform id, with an empty map meaning every platform on. The
 version-15 step (`domain/state_migrations.py`) moves that map to `enabled_platform_ids` — an empty one too, and a value
@@ -1625,13 +1626,14 @@ that is no map as an empty one, since no toggle can be read from it — and star
 read of RomM's platform listing that reaches the refiling — the Platforms tab's, Enable all's, a sync's or preview's, a
 BIOS page's, the platform system's — moves it (`domain/platform_prefs.py::switches_by_folder`): every listed platform
 with an `fs_slug` and no toggle of its own is written the state its id had, read by the rule it was saved under, so the
-update switches no platform on or off (D22, D24), and an id the listing does not name is dropped and named in the log
-(D21). The refiling moves the toggles even where it cannot work out where the records and picks belong, since the
-toggles need only the listing as read. Where the move fails all the same, the toggles stay kept by id, a warning says
-so, and the move is tried again at the next read: until then the Platforms tab and a sync read each platform without a
-toggle of its own by the rule its id was saved under (`domain/platform_prefs.py::listed_platform_synced`), so a sync
-reads exactly the platforms that were on before the update (D27). Until the move, the main page counts the platforms
-switched on from `enabled_platform_ids`, and a map kept there empty counts none, which the page leaves out (D25).
+update switches no platform on or off (D22, D24), and an id no listed platform with an `fs_slug` carries — one the
+listing no longer names, or names without an `fs_slug` — is dropped and named in the log (D21, D26). The refiling moves
+the toggles even where it cannot work out where the records and picks belong, since the toggles need only the listing as
+read. Where the move fails all the same, the toggles stay kept by id, a warning says so, and the move is tried again at
+the next read: until then the Platforms tab and a sync go by the map the move would write
+(`domain/platform_prefs.py::switches_as_read`), so a sync reads exactly the platforms that were on before the update, or
+since switched on the tab (D27). Until the move, the main page counts the platforms switched on from
+`enabled_platform_ids`, and a map kept there empty counts none, which the page leaves out (D25).
 
 Where Tender starts from the defaults because it could not take the settings file over — one that cannot be parsed and
 is set aside, or one too old or not a settings object (`PersistenceAdapter`, below) — those defaults keep an empty
@@ -1644,9 +1646,10 @@ library fetcher writes them from executor threads, as the refiling does. Like `P
 rather than changing it in place, since a save on another thread may be walking the settings; for the same reason the
 move sets `enabled_platform_ids` to `null` rather than removing the key, so the settings never change size. Where the
 save after one toggle, or after Enable all / Disable all, fails, the old map is put back, so the Platforms tab, its
-message and the next sync agree (D28). Where the save after the move fails, the moved toggles stay and the run filters
-by them; the next save that succeeds writes them, and the move runs again at the next start if it never reached the file
-(D23).
+message and the next sync agree (D28). A write whose call is cancelled, as a panel that disconnects cancels its calls,
+still runs to its end in its thread, and a failure is then logged, since no caller is left to hear of it. Where the save
+after the move fails, the moved toggles stay and the run filters by them; the next save that succeeds writes them, and
+the move runs again at the next start if it never reached the file (D23).
 
 #### Sync time estimate and live ETA (frontend)
 

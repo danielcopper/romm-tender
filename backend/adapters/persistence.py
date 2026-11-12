@@ -210,10 +210,8 @@ class PersistenceAdapter:
         flag is set so bootstrap can persist the reset marker. The error is logged loudly. If the backup rename
         itself fails, the error is logged and defaults are still returned so
         boot never crashes. The defaults returned for a file that is not read —
-        either kind — keep an empty map of per-platform sync toggles by RomM id,
-        as an installation that never touched them has, so the next read of
-        RomM's listing switches every listed platform on (#2452 D29). A first
-        run keeps none.
+        either kind — keep an empty map of per-platform sync toggles by RomM id
+        (#2452 D29); a first run's keep none.
         """
         settings_path = os.path.join(self._settings_dir, SETTINGS_FILENAME)
         settings: dict[str, Any]
