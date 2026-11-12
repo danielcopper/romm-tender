@@ -7,6 +7,9 @@
  *   - download_failed events from the backend (persistent listener in index.tsx)
  *   - DownloadQueue.tsx, which seeds the store from the backend queue on mount
  *     and drops the terminal entries after a successful "Clear Completed"
+ *   - the desktop client's Play button, which adds its ROM's download from the
+ *     backend queue when the store has none of it (utils/downloadRehydrate.ts),
+ *     and drops its ROM's entry when a cancel finds no download to cancel
  *
  * Read by:
  *   - MainPage.tsx, DownloadQueue.tsx and the desktop client's Play button, all
@@ -14,6 +17,8 @@
  *   - the download_progress / download_complete / download_failed handlers
  *     themselves, which read the current entry through {@link getDownloadState}
  *     to carry forward the fields their event frame does not carry
+ *   - seedDownloadFromQueue (utils/downloadRehydrate.ts), which reads
+ *     {@link getDownloadState} to see whether the store already holds the ROM
  *
  * The state is held immutably: every mutation that changes something installs a
  * NEW array and notifies, and one that changes nothing does neither. That is
@@ -76,6 +81,19 @@ export function removeDownload(romId: number): void {
 
 export function getDownloadState(): readonly DownloadItem[] {
   return _downloads;
+}
+
+/** Whether a download is under way: queued, downloading, paused or unpacking. */
+export function isDownloadUnderWay(
+  download: DownloadItem | undefined,
+): download is DownloadItem & { status: "queued" | "downloading" | "paused" | "extracting" } {
+  return (
+    download !== undefined &&
+    (download.status === "queued" ||
+      download.status === "downloading" ||
+      download.status === "paused" ||
+      download.status === "extracting")
+  );
 }
 
 // Drop every terminal (completed/failed/cancelled) entry from the store,

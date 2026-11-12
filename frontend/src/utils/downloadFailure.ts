@@ -4,9 +4,8 @@
  * Two surfaces consume the event:
  *   - Global (frontend/src/index.tsx): updates the download store and surfaces
  *     a toast.
- *   - Per-button (frontend/src/bigpicture/CustomPlayButton.tsx): resets local
- *     play-button state back to "download" when the failed event matches the
- *     button's rom.
+ *   - Per-button (a game page's Play button): resets the button's own state
+ *     back to "download" when the failed event matches the button's rom.
  *
  * Extracting the listener bodies into pure functions keeps the backend-event
  * listener registration as a one-line delegation and makes the behavior

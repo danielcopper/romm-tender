@@ -1112,10 +1112,9 @@ const tender = definePanel(() => {
 
   addEventListener<DownloadProgressEvent>("download_progress", (data: DownloadProgressEvent) => {
     // A cancel is an explicit discard — drop the entry entirely so no
-    // "Cancelled" row lingers in the queue view or the QAM summary count
-    // (#149 downloads-round). Both the running-cancel and the paused-cancel
-    // backend paths emit this terminal frame, so this is the single place the
-    // store drops a cancelled download. Every other status updates in place.
+    // "Cancelled" row lingers in the queue view or the QAM summary count. Both
+    // the running-cancel and the paused-cancel backend paths emit this terminal
+    // frame. Every other status updates in place.
     if (data.status === "cancelled") {
       removeDownload(data.rom_id);
       return;

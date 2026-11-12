@@ -52,6 +52,8 @@ export const DIALOG_TEXT_STYLE: CSSProperties = {
 
 export const DIALOG_MUTED_STYLE: CSSProperties = { fontSize: "12px", color: "#8f98a0", lineHeight: 1.4 };
 
+export const DIALOG_VALUE_STYLE: CSSProperties = { fontSize: "13px", color: "#ffffff" };
+
 export const DIALOG_ACTIONS_STYLE: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px" };
 
 const DIALOG_BUTTON_BASE: CSSProperties = {
@@ -61,7 +63,7 @@ const DIALOG_BUTTON_BASE: CSSProperties = {
   textAlign: "left",
 };
 
-type DialogButtonTone = "primary" | "secondary" | "quiet";
+type DialogButtonTone = "primary" | "secondary" | "danger" | "quiet";
 
 // Longhands only: `BUTTON_STYLE` sets `backgroundColor`, and a `background`
 // shorthand beside it is one React cannot update cleanly between renders.
@@ -71,6 +73,10 @@ const TONE_STYLE: Record<DialogButtonTone, CSSProperties> = {
     border: "1px solid rgba(26, 159, 255, 0.6)",
   },
   secondary: { backgroundImage: "none" },
+  danger: {
+    backgroundImage: "linear-gradient(90deg, #c83c3c 0%, #a02828 100%)",
+    border: "1px solid rgba(255, 107, 107, 0.5)",
+  },
   quiet: { backgroundImage: "none", backgroundColor: "transparent", color: "#8f98a0" },
 };
 

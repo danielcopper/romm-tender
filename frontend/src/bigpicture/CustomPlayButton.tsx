@@ -29,10 +29,8 @@ import { hasAnySaveConflict } from "../utils/saveStatus";
 import {
   getCachedGameDetail,
   invalidateCachedGameDetail,
-  isTargetOccupied,
   cancelDownload,
   pauseDownload,
-  resumeDownload,
   getDownloadQueue,
   forgetDownload,
   debugLog,
@@ -41,6 +39,7 @@ import {
 import { executeRomUninstall } from "../utils/romUninstall";
 import { activateRunningApp, executeStopRunningGame } from "../utils/runningGame";
 import {
+  READY_FLASH_MS,
   formatProgress,
   getDownloadFillGradient,
   getDownloadPulseColor,
@@ -51,8 +50,11 @@ import { isBoundVanished, onBoundAvailabilityChange } from "../utils/vanishedBin
 import { scrollToTop } from "../utils/scrollHelpers";
 import { getEventTarget } from "../utils/events";
 import { handleButtonDownloadFailure } from "../utils/downloadFailure";
+import { logFailure, logRefusal } from "../utils/backendLog";
 import { runDownloadWithAdoption } from "../utils/adoptFlow";
-import { RESUME_TARGET_OCCUPIED_TOAST } from "../utils/adoptWording";
+import { executeDownloadResume } from "../utils/downloadResume";
+import { isDownloadUnderWay } from "../utils/downloadStore";
+import { downloadAnswers, downloadTakesNoPress } from "../utils/downloadPress";
 import {
   DOWNLOAD_AGAIN_LABEL,
   FILE_MISSING_LABEL,
@@ -226,7 +228,8 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
       setRomId(rid);
       romIdRef.current = rid;
       if (cached.rom_name) setRomName(cached.rom_name);
-      setNoFileOnRomm(cached.has_file_on_disk === false);
+      const answers = downloadAnswers(cached);
+      setNoFileOnRomm(answers.noFileOnRomm);
       setMissingPath(cached.installed && cached.file_missing_at ? cached.file_missing_at : null);
       if (cached.installed && cached.file_missing_at) {
         setDlProgress(null);
@@ -240,7 +243,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
         // previous ROM's answer says nothing about this one's location.
         setDlProgress(null);
         setActionPending(false);
-        enterDownloadState(cached.target_path_occupied === true, cached.adoption_candidate_present === true);
+        enterDownloadState(answers.targetOccupied, answers.candidatePresent);
       }
     },
     [appId],
@@ -264,25 +267,19 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
     };
   }, []);
 
-  // Rehydrate an in-flight or paused download on remount. The cached detail
-  // only knows installed-or-not, so without this a paused (or still-running)
-  // download shows a plain "Download" button — and a click would `start_download`
-  // → truncate the partial .tmp → restart from 0, discarding the paused progress
-  // the user expected to resume. Seed from the live queue so the Pause/Resume
-  // state survives navigating away and back (#1124).
-  const rehydrateInflightDownload = async (rid: number): Promise<void> => {
+  // Rehydrate an in-flight or paused download: nothing in the cached detail
+  // says a download is under way, so without this a paused one shows a plain
+  // "Download" button, whose press calls `start_download` rather than resuming
+  // it. Seeding from the live queue keeps Pause/Resume across navigating away
+  // and back.
+  // The button stays mounted when the page moves to another game, so a read that
+  // answers after its init was cleaned up is dropped: it may be the old game's.
+  const rehydrateInflightDownload = async (rid: number, stale: () => boolean): Promise<void> => {
     try {
       const queue = await getDownloadQueue();
-      // No post-await `cancelled` guard needed: React 18 no-ops a setState on an
-      // unmounted component, and a remount keeps its own state.
+      if (stale()) return;
       const entry = queue.downloads.find((d) => d.rom_id === rid);
-      if (
-        entry &&
-        (entry.status === "downloading" ||
-          entry.status === "queued" ||
-          entry.status === "paused" ||
-          entry.status === "extracting")
-      ) {
+      if (isDownloadUnderWay(entry)) {
         setActionPending(true);
         setDlProgress({
           bytesDownloaded: entry.bytes_downloaded,
@@ -316,7 +313,8 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
         setRomId(rid);
         romIdRef.current = rid;
         if (cached.rom_name) setRomName(cached.rom_name);
-        setNoFileOnRomm(cached.has_file_on_disk === false);
+        const answers = downloadAnswers(cached);
+        setNoFileOnRomm(answers.noFileOnRomm);
 
         // Seed the running overlay from the live session/running-app state so a
         // button mounted mid-session (or after a reload-adoption) shows Resume
@@ -327,7 +325,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
           detach(debugLog(`CustomPlayButton: -> file missing`));
           setMissingPath(cached.file_missing_at);
           enterDownloadState();
-          await rehydrateInflightDownload(rid);
+          await rehydrateInflightDownload(rid, () => cancelled);
         } else if (cached.installed) {
           // Check for conflicts from cached save status
           const hasConflict = hasAnySaveConflict(cached.save_status);
@@ -347,8 +345,8 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
           }
         } else {
           detach(debugLog(`CustomPlayButton: -> download`));
-          enterDownloadState(cached.target_path_occupied === true, cached.adoption_candidate_present === true);
-          await rehydrateInflightDownload(rid);
+          enterDownloadState(answers.targetOccupied, answers.candidatePresent);
+          await rehydrateInflightDownload(rid, () => cancelled);
         }
       } catch (e) {
         logError(`CustomPlayButton init error: ${e}`);
@@ -418,7 +416,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
           const announced = lastAnnouncedState;
           lastAnnouncedState = null;
           setState(announced !== null && announced.romId === romIdRef.current ? announced.state : "play");
-        }, 1100);
+        }, READY_FLASH_MS);
       },
     );
 
@@ -498,7 +496,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
         // resting state is Download on success, and on a failed removal
         // `handleUninstall` restores the state it captured at the press.
         if (prev === "uninstall_pending" || prev === "uninstalling") return prev;
-        // The download flash holds the button for its own 1100ms and applies
+        // The download flash holds the button for its own READY_FLASH_MS and applies
         // `announced` from `lastAnnouncedState` when it ends.
         if (prev === "dl_complete") return prev;
         if (prev === "checking" || prev === "syncing" || prev === "launching" || prev === "download") return prev;
@@ -673,7 +671,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
         onRetry: () => setState("checking"),
       });
     } catch (e) {
-      detach(debugLog(`CustomPlayButton: handlePlay unexpected error — resetting to play: ${e}`));
+      logError(`CustomPlayButton: Play's launch check of romId=${romId} threw — resetting to play: ${e}`);
       if (startCheckFailed) showToast(startFailedSentence(e));
       setState("play");
     }
@@ -783,43 +781,42 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
     });
   };
 
-  // Cancel an in-flight download. Fire-and-forget: the backend emits a
-  // cancelled download_progress frame that the progress listener reacts to
-  // (resets to "download"). The inline .catch keeps the click non-throwing.
+  // Cancel an in-flight download: the backend emits a cancelled
+  // download_progress frame that the progress listener reacts to (resets to
+  // "download").
   const handleCancelDownload = () => {
     if (romId == null) return;
-    detach(cancelDownload(romId).catch(() => {}));
+    const rid = romId;
+    detach(
+      cancelDownload(rid).then(
+        (result) => {
+          if (!result.success) logRefusal("CustomPlayButton", "cancel the download of", rid, result);
+        },
+        (e: unknown) => logFailure("CustomPlayButton", "cancel the download of", rid, e),
+      ),
+    );
   };
 
-  // Pause an in-flight (resumable) download. Fire-and-forget: the backend
-  // freezes the transfer and emits a "paused" download_progress frame the
-  // listener reacts to (sets dlProgress.paused). .catch keeps the click safe.
+  // Pause an in-flight (resumable) download: the backend freezes the transfer
+  // and emits a "paused" download_progress frame the listener reacts to (sets
+  // dlProgress.paused).
   const handlePause = () => {
     if (romId == null) return;
-    detach(pauseDownload(romId).catch(() => {}));
+    const rid = romId;
+    detach(
+      pauseDownload(rid).then(
+        (result) => {
+          if (!result.success) logRefusal("CustomPlayButton", "pause the download of", rid, result);
+        },
+        (e: unknown) => logFailure("CustomPlayButton", "pause the download of", rid, e),
+      ),
+    );
   };
 
-  // Resume a paused download. The success path is fire-and-forget — the backend
-  // re-begins the transfer from the partial .tmp and emits "downloading" frames
-  // the listener reacts to (clears the paused flag). A REFUSAL has to be said out
-  // loud: a resume can be turned down (content appeared at the game's location
-  // while it sat paused, or a version switch stranded this target), and a silent
-  // refusal leaves the user pressing a button that does nothing, with Cancel —
-  // which discards the transferred bytes — as their only way out.
+  // Resume a paused download; `executeDownloadResume` says why when it is refused.
   const handleResume = () => {
     if (romId == null) return;
-    detach(
-      resumeDownload(romId)
-        .then((result) => {
-          if (result.success) return;
-          showToast(
-            isTargetOccupied(result)
-              ? RESUME_TARGET_OCCUPIED_TOAST
-              : result.message || "Couldn't resume the download",
-          );
-        })
-        .catch(() => showToast("Couldn't resume the download — is RomM server running?")),
-    );
+    detach(executeDownloadResume(romId, "CustomPlayButton"));
   };
 
   /**
@@ -1213,18 +1210,16 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
     // While a download is actively running, the main button shares the row
     // with a right-side action section (the cancel X or a Pause/Resume
     // dropdown). Square off its right edge so it butts cleanly against that
-    // section; idle/starting keeps the full pill radius. The pulse animation
+    // section; idle/starting keeps its 2px radius on every corner. The pulse animation
     // lives on the container (romm-dl-active-group) so it spans the whole
     // control — button + action — as one cohesive pulsing group.
-    // Only the idle Download action is blocked: a vanished bound ROM cannot be
-    // fetched, so offering it can only produce the not_found toast. The button
-    // stays visible rather than disappearing, matching how the picker shows a
-    // vanished version dimmed instead of hiding it. An in-flight download keeps
-    // its controls — that is a different action and out of scope.
-    const downloadBlockedByVanished = boundVanished && !downloading && !paused && !extracting;
-    // Nothing to download either: RomM holds no file for the ROM. An in-flight
-    // download keeps its controls, for the same reason as above.
-    const downloadBlockedByNoFile = noFileOnRomm && !downloading && !paused && !extracting;
+    // A vanished bound ROM cannot be fetched, so offering it can only produce
+    // the not_found toast, and a ROM RomM holds no file for has nothing to
+    // download. The button stays visible rather than disappearing, matching how
+    // the picker shows a vanished version dimmed instead of hiding it. A download
+    // in flight keeps its cancel and pause, which are presses of their own.
+    const downloadRefused = (pending: boolean) =>
+      downloadTakesNoPress({ offline: isOffline, pending, boundVanished, noFileOnRomm });
     const downloadBtn = (
       <DialogButton
         // romm-btn-download-idle carries the blue hover/focus highlight, which is
@@ -1242,7 +1237,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
         onClick={() => {
           detach(handleDownload());
         }}
-        disabled={actionPending || isOffline || downloadBlockedByVanished || downloadBlockedByNoFile}
+        disabled={downloadRefused(actionPending)}
       >
         {/* Progress fill bar — kept at its frozen width while paused. */}
         {downloading && (
@@ -1282,7 +1277,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
                 detach(handleDownload());
               }}
               onFocus={scrollToTop}
-              disabled={forgetPending || isOffline || downloadBlockedByVanished || downloadBlockedByNoFile}
+              disabled={downloadRefused(forgetPending)}
             >
               <span className="romm-dl-label">
                 <ThrobberLabel busy={forgetPending}>{missingMainLabel}</ThrobberLabel>
@@ -1294,11 +1289,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
               title={FILE_MISSING_LABEL}
               style={{ ...dropdownArrowStyle, background: dropdownBg, color: "#fff" }}
               onClick={(e: MouseEvent) =>
-                showMissingDownloadMenu(
-                  e,
-                  missingPath,
-                  forgetPending || isOffline || downloadBlockedByVanished || downloadBlockedByNoFile,
-                )
+                showMissingDownloadMenu(e, missingPath, downloadRefused(forgetPending))
               }
               onFocus={scrollToTop}
               disabled={forgetPending}

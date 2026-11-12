@@ -3,6 +3,7 @@
  */
 
 import { removeRom, debugLog } from "../api/backend";
+import { logFailure, logRefusal } from "./backendLog";
 import { capturePruneLeaseAdmission, isPruneLeaseAdmissionCurrent } from "./pruneLease";
 import { showToast } from "./toast";
 import { detach } from "./detach";
@@ -26,12 +27,16 @@ export async function executeRomUninstall(options: RomUninstallOptions): Promise
   const { romId, romName, leaseOwner, tag = "handleUninstall" } = options;
   const admission = capturePruneLeaseAdmission(leaseOwner);
 
-  const result = await removeRom(romId).catch(() => null);
+  const result = await removeRom(romId).catch((e: unknown) => {
+    logFailure(tag, "remove", romId, e);
+    return null;
+  });
   if (!result) {
     showToast("Uninstall failed");
     return false;
   }
   if (!result.success) {
+    logRefusal(tag, "remove", romId, result);
     showToast(result.message || "Uninstall failed");
     return false;
   }

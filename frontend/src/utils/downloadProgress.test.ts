@@ -5,6 +5,7 @@ import {
   getDownloadPulseColor,
   getDownloadBaseBackground,
 } from "./downloadProgress";
+import { PLAY_GRADIENT } from "./playGradient";
 
 // The expected strings are what CustomPlayButton rendered before these helpers
 // left it, written out rather than rebuilt from the module's own stops.
@@ -51,6 +52,32 @@ describe("downloadProgress", () => {
         "linear-gradient(to right, #1a9fff, #0078d4)",
       );
     });
+
+    it("turns toward the desktop PLAY's own stops in the desktop client, ending on them", () => {
+      const downloading = { extracting: false, downloading: true };
+      expect(getDownloadFillGradient(0, downloading, "desktop")).toBe(
+        "linear-gradient(to right, rgb(26, 159, 255) 0%, rgb(0, 120, 212) 60%)",
+      );
+      expect(getDownloadFillGradient(0.5, downloading, "desktop")).toBe(
+        "linear-gradient(to right, rgb(69, 187, 142) 0%, rgb(1, 144, 152) 60%)",
+      );
+      expect(getDownloadFillGradient(1, downloading, "desktop")).toBe(
+        "linear-gradient(to right, rgb(112, 214, 29) 0%, rgb(1, 167, 91) 60%)",
+      );
+      expect(getDownloadFillGradient(1, downloading, "desktop")).toBe(PLAY_GRADIENT);
+    });
+
+    it("is the desktop PLAY's gradient while extracting in the desktop client", () => {
+      expect(getDownloadFillGradient(0.2, { extracting: true, downloading: true }, "desktop")).toBe(
+        "linear-gradient(to right, rgb(112, 214, 29) 0%, rgb(1, 167, 91) 60%)",
+      );
+    });
+
+    it("is the download button's blue in the desktop client when nothing is downloading", () => {
+      expect(getDownloadFillGradient(0.5, { extracting: false, downloading: false }, "desktop")).toBe(
+        "linear-gradient(to right, #1a9fff, #0078d4)",
+      );
+    });
   });
 
   describe("getDownloadPulseColor", () => {
@@ -75,6 +102,18 @@ describe("downloadProgress", () => {
     it("is translucent blue when idle", () => {
       expect(getDownloadPulseColor(0, { paused: false, extracting: false, downloading: false })).toBe(
         "rgba(26,159,255,0.7)",
+      );
+    });
+
+    it("follows the desktop fill's left stop in the desktop client", () => {
+      expect(getDownloadPulseColor(0.5, { paused: false, extracting: false, downloading: true }, "desktop")).toBe(
+        "rgb(69, 187, 142)",
+      );
+      expect(getDownloadPulseColor(0.5, { paused: false, extracting: true, downloading: true }, "desktop")).toBe(
+        "rgb(112, 214, 29)",
+      );
+      expect(getDownloadPulseColor(0.5, { paused: true, extracting: false, downloading: true }, "desktop")).toBe(
+        "rgba(212,167,44,0.7)",
       );
     });
   });

@@ -8,7 +8,7 @@ import type { TargetOccupiedResult, VerifyContentResult, VerifyProgressEvent } f
 
 vi.mock("../api/backend", () => ({
   verifyExistingContent: vi.fn(),
-  debugLog: vi.fn(async () => {}),
+  logWarn: vi.fn(),
 }));
 
 const ROM_ID = 42;
