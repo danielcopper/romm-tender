@@ -14,10 +14,10 @@ and the fourth says which servers it will talk to at all.
   recorded in a recovery bundle's manifest, the running version the update
   check compares the last available release a check saw against, the
   ``client_version`` a registered device carries on the user's own RomM server
-  (``services/saves/service.py`` hands it to ``DeviceRegistry``), and the
-  injection's crash-record fingerprint (``main.py``). The first three are
-  reached from ``bootstrap/``; the last two are not, which is why they are easy
-  to miss when reading the composition root alone.
+  (``bootstrap/saves.py`` hands it to ``DeviceRegistry``), and the
+  injection's crash-record fingerprint (``main.py``). The first four are
+  reached from ``bootstrap/``; the last is not, which is why it is easy to miss
+  when reading the composition root alone.
 - :data:`MIN_ROMM_VERSION` is the oldest RomM release this program accepts. It
   has one consumer, ``ConnectionService``, which rejects a server below it, so
   the program is inert until the server is updated. It is handed there by

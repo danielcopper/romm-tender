@@ -3,8 +3,9 @@
 The package's public API is the ``SaveService`` aggregate root — it holds
 the save-sync sub-services over the SQLite ``rom_save_sync_states`` aggregate
 and exposes the use cases called by the endpoints on ``Endpoints``. Its parts
-are built only by the composition root, from the re-exports below, and handed
-to the parts that hold them. RomM communication goes through Protocol-typed
+are built only by the composition root (``bootstrap/saves.py``), from this
+package's re-exports and ``sync_engine``'s, and handed to the parts that hold
+them. RomM communication goes through Protocol-typed
 adapters.
 """
 

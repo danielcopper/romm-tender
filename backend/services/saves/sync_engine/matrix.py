@@ -143,9 +143,7 @@ class MatrixExecutor:
     Owns every code path that reads the server save list for a sync, runs
     ``compute_sync_action`` against per-filename inputs, and hands the
     resulting :class:`SyncAction` to the :class:`SaveTransfer` step that
-    carries it out. The loaded :class:`RomSaveSyncState` aggregate is threaded
-    in by its caller and mutated in memory only — the operation entry owns the
-    single write Unit of Work.
+    carries it out.
     """
 
     def __init__(

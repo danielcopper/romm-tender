@@ -49,10 +49,7 @@ class SaveDeletionIncomplete(PartialFailure):
 class SaveService:
     """Aggregate root for bidirectional save file sync between RetroDECK and RomM.
 
-    Holds the save-sync sub-services over the SQLite ``rom_save_sync_states``
-    aggregate. Exposes the use cases the endpoints on ``Endpoints`` call — most
-    public methods delegate to a sub-service or read ``settings.json``. A use
-    case an endpoint calls checks its conflict rules at its entry, under that
+    A use case an endpoint calls checks its conflict rules at its entry, under that
     endpoint's name, and raises the rule's refusal when one holds
     (GLOSSARY.md → Conflict rules). Bulk local-save deletion's orchestration
     lives directly on the aggregate root because it spans
