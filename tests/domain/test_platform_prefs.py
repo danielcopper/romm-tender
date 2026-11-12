@@ -164,7 +164,7 @@ class TestSwitchesAsRead:
     def test_once_moved_the_toggles_are_read_as_they_stand(self):
         switches = {"snes": True}
 
-        assert switches_as_read(switches, None, [_listed(1, "snes"), _listed(2, "snes-hacks")]) is switches
+        assert switches_as_read(switches, None, [_listed(1, "snes"), _listed(2, "snes-hacks")]) == {"snes": True}
 
     def test_while_kept_by_id_each_platform_is_read_by_the_rule_its_id_was_saved_under(self):
         read = switches_as_read({}, {"1": True, "2": False}, [_listed(1, "snes"), _listed(2, "snes-hacks")])
@@ -191,7 +191,7 @@ class TestSwitchesAsRead:
     def test_a_listing_naming_no_folder_reads_the_toggles_as_they_stand(self):
         switches = {"snes": True}
 
-        assert switches_as_read(switches, {"1": False}, [_listed(1, None)]) is switches
+        assert switches_as_read(switches, {"1": False}, [_listed(1, None)]) == {"snes": True}
 
     def test_it_is_what_the_move_writes(self):
         by_id = {"1": True, "9": True}

@@ -6,14 +6,9 @@ import threading
 from typing import Any
 
 import pytest
-from fakes.fake_settings_persister import FakeSettingsPersister
+from fakes.fake_settings_persister import FailingSettingsPersister, FakeSettingsPersister
 
 from services.platform_switches import PlatformSwitches, PlatformSwitchesConfig
-
-
-class _FailingPersister(FakeSettingsPersister):
-    def save_settings(self) -> None:
-        raise OSError("disk full")
 
 
 def _switches(
@@ -65,7 +60,7 @@ class TestReplace:
         settings: dict[str, Any] = {"enabled_platforms": before}
 
         with pytest.raises(OSError, match="disk full"):
-            _switches(settings, _FailingPersister()).replace(lambda switches: {"snes": False})
+            _switches(settings, FailingSettingsPersister()).replace(lambda switches: {"snes": False})
 
         assert settings["enabled_platforms"] is before
 
@@ -146,7 +141,7 @@ class TestCarryOver:
         settings: dict[str, Any] = {"enabled_platforms": {}, "enabled_platform_ids": {"1": True}}
 
         with pytest.raises(OSError, match="disk full"):
-            _switches(settings, _FailingPersister()).carry_over(_moved)
+            _switches(settings, FailingSettingsPersister()).carry_over(_moved)
 
         assert settings == {"enabled_platforms": {"folder-1": True}, "enabled_platform_ids": None}
 

@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.firmware_platforms import ListedPlatforms, listed_platforms, pick_moves, refiled_record_folder
-from domain.platform_prefs import switches_by_folder
+from domain.platform_prefs import SwitchesMove, switches_by_folder
 
 if TYPE_CHECKING:
     import logging
@@ -205,20 +205,40 @@ class PlatformRefiling:
             )
 
     def _refile_switches(self, platforms: Sequence[Mapping[str, Any]]) -> None:
-        """Hand the toggles writer the toggles kept by RomM id moved onto the listed platforms' ``fs_slug``."""
-        dropped: list[str] = []
+        """Hand the toggles writer the toggles kept by RomM id moved onto the listed platforms' ``fs_slug``.
+
+        A move whose save fails has still moved the toggles (#2452 D23), so it
+        is logged as a failed save, beside the ids it dropped; a failure before
+        anything moved propagates to the step's own log line.
+        """
+        built: list[SwitchesMove] = []
 
         def moved_switches(by_id: Mapping[str, Any], switches: Mapping[str, Any]) -> dict[str, Any] | None:
             move = switches_by_folder(by_id, switches, platforms)
             if move is None:
                 return None
-            dropped.extend(move.dropped)
+            built.append(move)
             return move.switches
 
-        if self._platform_switches.carry_over(moved_switches):
+        try:
+            moved = self._platform_switches.carry_over(moved_switches)
+        except Exception as e:
+            if not built:
+                raise
+            self._logger.warning(
+                f"Moved the per-platform sync toggles to the platforms' folders, but saving them failed: "
+                f"{type(e).__name__}: {e}",
+                exc_info=True,
+            )
+            self._log_dropped_switches(built[0].dropped)
+            return
+        if moved:
             self._logger.info("Moved the per-platform sync toggles from RomM's platform ids to the platforms' folders")
-            if dropped:
-                self._logger.info(
-                    "Dropped the sync toggles of RomM platform ids the listing does not name with a folder: "
-                    f"{', '.join(dropped)}"
-                )
+            self._log_dropped_switches(built[0].dropped)
+
+    def _log_dropped_switches(self, dropped: Sequence[str]) -> None:
+        if dropped:
+            self._logger.info(
+                "Dropped the sync toggles of RomM platform ids the listing does not name with a folder: "
+                f"{', '.join(dropped)}"
+            )

@@ -4,7 +4,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from fakes.fake_settings_persister import FakeSettingsPersister
+from fakes.fake_settings_persister import FailingSettingsPersister, FakeSettingsPersister
 
 from domain.rom import Rom
 from domain.sync_diff import classify_roms
@@ -17,11 +17,6 @@ from tests.services.library._helpers import (
     _make_registry_entry,
     _seed_rom_row,
 )
-
-
-class _FailingPersister(FakeSettingsPersister):
-    def save_settings(self) -> None:
-        raise OSError("disk full")
 
 
 def _seed_rom(uow, rom_id, *, app_id, platform_slug, name="Game"):
@@ -194,7 +189,7 @@ class TestSavePlatformSync:
 
     async def test_a_save_that_fails_is_no_success_and_takes_the_toggle_back(self, make_library):
         """#2452 D28: the Platforms tab, its message and the next sync agree."""
-        library = make_library(settings_persister=_FailingPersister())
+        library = make_library(settings_persister=FailingSettingsPersister())
         library.settings["enabled_platforms"] = {"snes": True}
 
         with pytest.raises(OSError, match="disk full"):
@@ -249,7 +244,7 @@ class TestSetAllPlatformsSync:
     async def test_a_save_that_fails_is_no_success_and_takes_every_toggle_back(self, make_library, fake_romm_api):
         """#2452 D28."""
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "fs_slug": "n64"}]
-        library = make_library(romm_api=fake_romm_api, settings_persister=_FailingPersister())
+        library = make_library(romm_api=fake_romm_api, settings_persister=FailingSettingsPersister())
         library.settings["enabled_platforms"] = {"gba": True}
 
         with pytest.raises(OSError, match="disk full"):

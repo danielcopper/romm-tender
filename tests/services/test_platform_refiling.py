@@ -7,7 +7,7 @@ import threading
 import time
 from typing import Any
 
-from fakes.fake_settings_persister import FakeSettingsPersister
+from fakes.fake_settings_persister import FailingSettingsPersister, FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from domain.bios_file import BiosFile
@@ -45,15 +45,6 @@ def _record(
         downloaded_at="2026-01-01T00:00:00+00:00",
         firmware_id=firmware_id,
     )
-
-
-class _FailingPersister(FakeSettingsPersister):
-    def __init__(self, error: Exception | None = None) -> None:
-        super().__init__()
-        self.error = error if error is not None else OSError("disk full")
-
-    def save_settings(self) -> None:
-        raise self.error
 
 
 class _Keeper:
@@ -251,7 +242,7 @@ class TestPerPlatformPicks:
 
     def test_a_save_that_fails_gives_every_move_back(self):
         picks = {"psx": {"label": "SwanStation"}, "gamecube": {"label": "Dolphin"}, "snes": {"label": "Snes9x"}}
-        harness = _Harness(picks=picks, persister=_FailingPersister())
+        harness = _Harness(picks=picks, persister=FailingSettingsPersister())
 
         harness.refile()
 
@@ -259,7 +250,7 @@ class TestPerPlatformPicks:
 
     def test_any_failure_gives_every_move_back(self):
         picks = {"psx": {"label": "SwanStation"}}
-        harness = _Harness(picks=picks, persister=_FailingPersister(RuntimeError("not serialisable")))
+        harness = _Harness(picks=picks, persister=FailingSettingsPersister(RuntimeError("not serialisable")))
 
         harness.refile()
 
@@ -319,7 +310,9 @@ class TestFailures:
         assert failure.exc_info[0] is OSError
 
     def test_a_picks_half_that_fails_leaves_the_records_moved(self, caplog):
-        harness = _Harness(_record("psx"), picks={"psx": {"label": "SwanStation"}}, persister=_FailingPersister())
+        harness = _Harness(
+            _record("psx"), picks={"psx": {"label": "SwanStation"}}, persister=FailingSettingsPersister()
+        )
 
         with caplog.at_level(logging.WARNING):
             harness.refile()
@@ -359,7 +352,7 @@ class TestFailures:
         assert "Failed to read where older entries belong: AttributeError" in caplog.text
 
     def test_the_same_failure_again_is_logged_without_its_traceback(self, caplog):
-        harness = _Harness(_record("psx"), persister=_FailingPersister())
+        harness = _Harness(_record("psx"), persister=FailingSettingsPersister())
         harness.settings["platform_cores"] = {"psx": {"label": "SwanStation"}}
 
         with caplog.at_level(logging.WARNING):
@@ -370,7 +363,7 @@ class TestFailures:
         assert [bool(r.exc_info) for r in failures] == [True, False]
 
     def test_a_failure_with_the_same_words_raised_elsewhere_brings_its_traceback(self, caplog):
-        harness = _Harness(_record("psx"), persister=_FailingPersister())
+        harness = _Harness(_record("psx"), persister=FailingSettingsPersister())
         harness.settings["platform_cores"] = {"psx": {"label": "SwanStation"}}
 
         def _fails_here() -> None:
@@ -585,18 +578,46 @@ class TestPerPlatformSyncToggles:
 
     def test_a_save_that_fails_is_logged_and_leaves_the_toggles_moved(self, caplog):
         """#2452 D23: the run filters by the moved toggles."""
-        harness = self._kept_by_id({"5": True}, persister=_FailingPersister())
+        harness = self._kept_by_id({"5": True}, persister=FailingSettingsPersister())
 
+        with caplog.at_level(logging.WARNING):
+            harness.refile()
+
+        [failure] = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert failure.getMessage() == (
+            "Moved the per-platform sync toggles to the platforms' folders, but saving them failed: OSError: disk full"
+        )
+        assert failure.exc_info
+        assert harness.settings["enabled_platforms"]["snes-hacks"] is True
+        assert harness.settings["enabled_platform_ids"] is None
+
+    def test_a_move_whose_save_fails_still_names_the_ids_it_dropped(self, caplog):
+        """#2452 D21, D23: the toggles have moved, so the ids the move dropped are said too."""
+        harness = self._kept_by_id({"5": True, "99": True}, persister=FailingSettingsPersister())
+
+        with caplog.at_level(logging.INFO):
+            harness.refile()
+
+        assert (
+            "Dropped the sync toggles of RomM platform ids the listing does not name with a folder: 99" in caplog.text
+        )
+
+    def test_a_move_that_fails_before_anything_moved_is_logged_as_a_failed_move(self, caplog, monkeypatch):
+        harness = self._kept_by_id({"5": True})
+
+        def _fail(*_args: Any) -> Any:
+            raise RuntimeError("move broke")
+
+        monkeypatch.setattr("services.platform_refiling.switches_by_folder", _fail)
         with caplog.at_level(logging.WARNING):
             harness.refile()
 
         [failure] = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert (
             failure.getMessage()
-            == "Failed to move the per-platform sync toggles to their platforms: OSError: disk full"
+            == "Failed to move the per-platform sync toggles to their platforms: RuntimeError: move broke"
         )
-        assert harness.settings["enabled_platforms"]["snes-hacks"] is True
-        assert harness.settings["enabled_platform_ids"] is None
+        assert harness.settings["enabled_platform_ids"] == {"5": True}
 
     def test_the_toggles_move_where_the_listed_platforms_cannot_be_worked_out(self, caplog, monkeypatch):
         """#2452 D27: the toggles need only the listing as read, so a failure there does not hold them back."""

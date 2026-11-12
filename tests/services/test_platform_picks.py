@@ -6,18 +6,9 @@ import threading
 from typing import Any
 
 import pytest
-from fakes.fake_settings_persister import FakeSettingsPersister
+from fakes.fake_settings_persister import FailingSettingsPersister, FakeSettingsPersister
 
 from services.platform_picks import PlatformPicks, PlatformPicksConfig
-
-
-class _FailingPersister(FakeSettingsPersister):
-    def __init__(self, error: BaseException) -> None:
-        super().__init__()
-        self.error = error
-
-    def save_settings(self) -> None:
-        raise self.error
 
 
 def _picks(
@@ -66,7 +57,7 @@ class TestReplace:
     def test_a_save_that_raises_puts_the_old_picks_back_and_raises(self, error):
         before = {"ps": {"label": "SwanStation"}}
         settings: dict[str, Any] = {"platform_cores": before}
-        picks = _picks(settings, _FailingPersister(error))
+        picks = _picks(settings, FailingSettingsPersister(error))
 
         with pytest.raises(type(error)):
             picks.replace(lambda current: {})

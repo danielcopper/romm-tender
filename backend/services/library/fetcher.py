@@ -215,8 +215,8 @@ class LibraryFetcher:
     async def _write_switches(self, build: Callable[[Mapping[str, Any]], dict[str, Any]]) -> None:
         """Have the toggles writer put *build*'s map in place, in an executor thread, and wait for it.
 
-        A write whose call is cancelled still runs to its end, and a failure is
-        then logged here.
+        A write whose call is cancelled still runs to its end, and how it ended
+        is then logged here.
         """
         write = self._loop.run_in_executor(None, self._platform_switches.replace, build)
         try:
@@ -232,6 +232,8 @@ class LibraryFetcher:
             self._logger.error(
                 f"Saving the per-platform sync toggles failed after the call that asked for it ended: {failure}"
             )
+        else:
+            self._logger.info("Saved the per-platform sync toggles after the call that asked for it ended")
 
     # ── Collection metadata use cases ────────────────────────────
 

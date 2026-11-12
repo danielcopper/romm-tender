@@ -2,8 +2,10 @@
 
 The toggles are kept by each platform's ``fs_slug`` (#2452 D8). Those an earlier
 release kept by RomM's platform id wait under their own key until a read of
-RomM's listing moves them (:func:`switches_by_folder`); until then a reader
-goes by the map that move would write (:func:`switches_as_read`, D27).
+RomM's listing moves them (:func:`switches_by_folder`); until then the
+Platforms tab and a sync go by the map that move would write
+(:func:`switches_as_read`, D27), and the main page counts them where they are
+kept (D25).
 
 Pure compute — no I/O, no state mutation.
 """
@@ -50,7 +52,10 @@ def resolve_sync_enabled(stored: Mapping[str, Any], pid: str) -> bool:
 
 
 class SwitchesMove(NamedTuple):
-    """The toggles once those kept by RomM id have moved, and the ids whose toggles the move drops."""
+    """The toggles once those kept by RomM id have moved, and the ids no listed platform with an ``fs_slug`` carries.
+
+    Those ids' toggles are dropped (#2452 D21, D26).
+    """
 
     switches: dict[str, Any]
     dropped: tuple[str, ...]
@@ -84,8 +89,7 @@ def switches_as_read(
     """The toggles a reader of the listed *platforms* goes by: the map the move would write, while one is pending.
 
     *by_id* is ``None`` once the toggles kept by RomM id have moved, and then
-    *switches* are read as they stand. Until then a sync and the Platforms tab
-    read exactly the platforms the move would switch on (#2452 D27).
+    *switches* are read as they stand (#2452 D27).
     """
     if by_id is None:
         return switches

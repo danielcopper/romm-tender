@@ -191,19 +191,20 @@ class TestTheTogglesAreKeptByFolder:
 
         assert [p["id"] for p in result] == [2]
 
-    @pytest.mark.asyncio
-    async def test_a_save_whose_call_was_cancelled_still_says_it_failed(self, make_library, caplog):
-        """A panel that disconnects cancels its calls; the write it asked for goes on in its thread."""
+    @staticmethod
+    async def _cancel_the_call_while_it_saves(make_library, caplog, *, fails: bool, ended: str) -> Any:
+        """Cancel ``save_platform_sync("snes", False)`` while its write is saving; then let the save end."""
         saving = threading.Event()
         release = threading.Event()
 
-        class _SlowFailingPersister(FakeSettingsPersister):
+        class _SlowPersister(FakeSettingsPersister):
             def save_settings(self) -> None:
                 saving.set()
                 release.wait(5)
-                raise OSError("disk full")
+                if fails:
+                    raise OSError("disk full")
 
-        library = make_library(settings_persister=_SlowFailingPersister())
+        library = make_library(settings_persister=_SlowPersister())
         library.settings["enabled_platforms"] = {"snes": True}
         call = asyncio.create_task(library.sync._fetcher.save_platform_sync("snes", False))
         await asyncio.to_thread(saving.wait, 5)
@@ -211,18 +212,36 @@ class TestTheTogglesAreKeptByFolder:
         call.cancel()
         with pytest.raises(asyncio.CancelledError):
             await call
-        with caplog.at_level(logging.ERROR):
+        with caplog.at_level(logging.INFO):
             release.set()
             for _ in range(200):
-                if "after the call that asked for it ended" in caplog.text:
+                if ended in caplog.text:
                     break
                 await asyncio.sleep(0.01)
+        return library
 
-        assert (
-            "Saving the per-platform sync toggles failed after the call that asked for it ended: disk full"
-            in caplog.text
-        )
+    @pytest.mark.asyncio
+    async def test_a_save_whose_call_was_cancelled_still_says_it_failed(self, make_library, caplog):
+        """A panel that disconnects cancels its calls; the write it asked for goes on in its thread."""
+        failed = "Saving the per-platform sync toggles failed after the call that asked for it ended: disk full"
+
+        library = await self._cancel_the_call_while_it_saves(make_library, caplog, fails=True, ended=failed)
+
+        errors = [r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR]
+        assert errors == [failed]
         assert library.settings["enabled_platforms"] == {"snes": True}
+
+    @pytest.mark.asyncio
+    async def test_a_save_whose_call_was_cancelled_and_that_succeeds_keeps_the_toggle_and_says_so(
+        self, make_library, caplog
+    ):
+        saved = "Saved the per-platform sync toggles after the call that asked for it ended"
+
+        library = await self._cancel_the_call_while_it_saves(make_library, caplog, fails=False, ended=saved)
+
+        assert [r for r in caplog.records if r.levelno >= logging.ERROR] == []
+        assert saved in caplog.text
+        assert library.settings["enabled_platforms"] == {"snes": False}
 
     @pytest.mark.asyncio
     async def test_toggles_that_have_moved_are_read_without_a_warning(self, make_library, fake_romm_api, caplog):
