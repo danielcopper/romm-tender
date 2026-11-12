@@ -360,9 +360,9 @@ A toggle belongs to the platform's folder in RomM, so two platforms of one conso
 `snes-hacks` folder beside `snes`, say — are switched separately. Updating Tender switches no platform on or off: an
 installation whose toggles were never touched, where every platform was synced, keeps every platform switched on.
 
-If Tender ever finds its settings file unreadable, it sets the file aside and starts again from its defaults; your
-platforms are then switched on again the next time Tender reads RomM's platform list, so the next sync keeps the games
-already in Steam. Switch off the ones you had off before.
+If Tender ever cannot take its settings file over — the file is damaged, or was written by a version too old to read —
+it starts again from its defaults; your platforms are then switched on again the next time Tender reads RomM's platform
+list, so the next sync keeps the games already in Steam. Switch off the ones you had off before.
 
 A toggle that cannot be saved goes back to what it was, and a line under **Enable all** / **Disable all** says so.
 

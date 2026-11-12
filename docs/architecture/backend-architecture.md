@@ -1633,10 +1633,11 @@ toggle of its own by the rule its id was saved under (`domain/platform_prefs.py:
 reads exactly the platforms that were on before the update (D27). Until the move, the main page counts the platforms
 switched on from `enabled_platform_ids`, and a map kept there empty counts none, which the page leaves out (D25).
 
-A settings file that cannot be parsed is set aside and Tender starts from the defaults (`PersistenceAdapter`, below);
-those defaults then keep an empty `enabled_platform_ids`, as an installation that never touched a toggle has, so the
-next read of the listing switches every listed platform on and the next sync keeps the games already in Steam (D29). A
-first run, with no file at all, keeps none and starts with every platform off.
+Where Tender starts from the defaults because it could not take the settings file over — one that cannot be parsed and
+is set aside, or one too old or not a settings object (`PersistenceAdapter`, below) — those defaults keep an empty
+`enabled_platform_ids`, as an installation that never touched a toggle has, so the next read of the listing switches
+every listed platform on and the next sync keeps the games already in Steam (D29). A first run, with no file at all,
+keeps none and starts with every platform off.
 
 Every write of the toggles goes through `PlatformSwitches` (`services/platform_switches.py`), under one lock: the
 library fetcher writes them from executor threads, as the refiling does. Like `PlatformPicks` it replaces the map whole
