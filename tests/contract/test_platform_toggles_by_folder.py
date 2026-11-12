@@ -80,22 +80,23 @@ async def test_the_first_sync_after_the_update_reads_the_platforms_by_their_move
     [({"1": False, "2": True}, ["snes-hacks"]), ({}, ["snes", "snes-hacks"])],
     ids=["switched", "never-touched"],
 )
-async def test_a_sync_after_a_move_that_failed_reads_the_platforms_switched_on_before_the_update(
-    tmp_path, monkeypatch, by_id, synced
+async def test_a_sync_whose_move_could_not_be_saved_reads_the_platforms_switched_on_before_the_update(
+    tmp_path, by_id, synced
 ):
-    """#2452 D27: the toggles still kept by RomM id are read by the rule they were saved under."""
+    """#2452 D23: the moved toggles stay and the run filters by them; the file keeps them by id for the next start."""
     harness = _updated_from(tmp_path, {"version": 14, "enabled_platforms": by_id})
-
-    def _fail(*_args: Any) -> Any:
-        raise RuntimeError("move broke")
-
-    monkeypatch.setattr("services.platform_refiling.switches_by_folder", _fail)
-    filtered, _left_off = await harness.app.services.sync_service._fetcher._fetch_enabled_platforms()
-    result = await harness.endpoints.get_platforms()
+    config = tmp_path / "config"
+    config.chmod(0o500)
+    try:
+        filtered, _left_off = await harness.app.services.sync_service._fetcher._fetch_enabled_platforms()
+        result = await harness.endpoints.get_platforms()
+    finally:
+        config.chmod(0o700)
 
     assert [p["fs_slug"] for p in filtered] == synced
     assert [folder for folder, on in _shown(result).items() if on] == synced
-    assert harness.settings["enabled_platform_ids"] == by_id
+    assert harness.settings["enabled_platform_ids"] is None
+    assert _on_disk(harness)["enabled_platform_ids"] == by_id
 
 
 async def test_after_a_corrupt_settings_file_every_listed_platform_is_switched_on_at_the_next_listing_read(tmp_path):

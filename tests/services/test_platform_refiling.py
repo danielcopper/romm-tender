@@ -47,6 +47,15 @@ def _record(
     )
 
 
+class _FailingPersister(FakeSettingsPersister):
+    def __init__(self, error: Exception | None = None) -> None:
+        super().__init__()
+        self.error = error if error is not None else OSError("disk full")
+
+    def save_settings(self) -> None:
+        raise self.error
+
+
 class _Keeper:
     """Keeps each listing it is handed; raises *error* instead where one is set."""
 
@@ -242,7 +251,7 @@ class TestPerPlatformPicks:
 
     def test_a_save_that_fails_gives_every_move_back(self):
         picks = {"psx": {"label": "SwanStation"}, "gamecube": {"label": "Dolphin"}, "snes": {"label": "Snes9x"}}
-        harness = _Harness(picks=picks, persister=FailingSettingsPersister())
+        harness = _Harness(picks=picks, persister=_FailingPersister())
 
         harness.refile()
 
@@ -250,7 +259,7 @@ class TestPerPlatformPicks:
 
     def test_any_failure_gives_every_move_back(self):
         picks = {"psx": {"label": "SwanStation"}}
-        harness = _Harness(picks=picks, persister=FailingSettingsPersister(RuntimeError("not serialisable")))
+        harness = _Harness(picks=picks, persister=_FailingPersister(RuntimeError("not serialisable")))
 
         harness.refile()
 
@@ -310,9 +319,7 @@ class TestFailures:
         assert failure.exc_info[0] is OSError
 
     def test_a_picks_half_that_fails_leaves_the_records_moved(self, caplog):
-        harness = _Harness(
-            _record("psx"), picks={"psx": {"label": "SwanStation"}}, persister=FailingSettingsPersister()
-        )
+        harness = _Harness(_record("psx"), picks={"psx": {"label": "SwanStation"}}, persister=_FailingPersister())
 
         with caplog.at_level(logging.WARNING):
             harness.refile()
@@ -352,7 +359,7 @@ class TestFailures:
         assert "Failed to read where older entries belong: AttributeError" in caplog.text
 
     def test_the_same_failure_again_is_logged_without_its_traceback(self, caplog):
-        harness = _Harness(_record("psx"), persister=FailingSettingsPersister())
+        harness = _Harness(_record("psx"), persister=_FailingPersister())
         harness.settings["platform_cores"] = {"psx": {"label": "SwanStation"}}
 
         with caplog.at_level(logging.WARNING):
@@ -363,7 +370,7 @@ class TestFailures:
         assert [bool(r.exc_info) for r in failures] == [True, False]
 
     def test_a_failure_with_the_same_words_raised_elsewhere_brings_its_traceback(self, caplog):
-        harness = _Harness(_record("psx"), persister=FailingSettingsPersister())
+        harness = _Harness(_record("psx"), persister=_FailingPersister())
         harness.settings["platform_cores"] = {"psx": {"label": "SwanStation"}}
 
         def _fails_here() -> None:
@@ -602,37 +609,30 @@ class TestPerPlatformSyncToggles:
             "Dropped the sync toggles of RomM platform ids the listing does not name with a folder: 99" in caplog.text
         )
 
-    def test_a_move_that_fails_before_anything_moved_is_logged_as_a_failed_move(self, caplog, monkeypatch):
+    def test_a_move_that_fails_before_anything_moved_is_logged_as_a_failed_move(self, caplog):
         harness = self._kept_by_id({"5": True})
 
-        def _fail(*_args: Any) -> Any:
-            raise RuntimeError("move broke")
-
-        monkeypatch.setattr("services.platform_refiling.switches_by_folder", _fail)
         with caplog.at_level(logging.WARNING):
-            harness.refile()
+            harness.refiling.do_refile([*_PLATFORMS, None])  # type: ignore[list-item]
 
-        [failure] = [r for r in caplog.records if r.levelno == logging.WARNING]
-        assert (
-            failure.getMessage()
-            == "Failed to move the per-platform sync toggles to their platforms: RuntimeError: move broke"
+        [failure] = [r.getMessage() for r in caplog.records if "per-platform sync toggles" in r.getMessage()]
+        assert failure == (
+            "Failed to move the per-platform sync toggles to their platforms: "
+            "AttributeError: 'NoneType' object has no attribute 'get'"
         )
         assert harness.settings["enabled_platform_ids"] == {"5": True}
 
-    def test_the_toggles_move_where_the_listed_platforms_cannot_be_worked_out(self, caplog, monkeypatch):
+    def test_the_toggles_move_where_the_listed_platforms_cannot_be_worked_out(self, caplog):
         """#2452 D27: the toggles need only the listing as read, so a failure there does not hold them back."""
         harness = self._kept_by_id({"5": True})
+        unreadable_firmware = {"id": 9, "slug": "arcade", "fs_slug": "arcade", "firmware": [None]}
 
-        def _fail(platforms: Any) -> Any:
-            raise ValueError("unreadable listing")
-
-        monkeypatch.setattr("services.platform_refiling.listed_platforms", _fail)
         with caplog.at_level(logging.WARNING):
-            harness.refile()
+            harness.refiling.do_refile([*_PLATFORMS, unreadable_firmware])
 
         assert harness.settings["enabled_platforms"]["snes-hacks"] is True
         assert harness.settings["enabled_platform_ids"] is None
-        assert "Failed to read where older entries belong: ValueError: unreadable listing" in caplog.text
+        assert "Failed to read where older entries belong: AttributeError" in caplog.text
 
     def test_the_toggles_move_where_the_records_fail(self, monkeypatch):
         harness = self._kept_by_id({"5": True})
@@ -646,18 +646,18 @@ class TestPerPlatformSyncToggles:
 
         assert harness.settings["enabled_platforms"]["snes-hacks"] is True
 
-    def test_the_toggles_move_where_the_picks_fail(self, monkeypatch):
+    def test_the_toggles_move_where_the_picks_fail(self, caplog):
         harness = self._kept_by_id({"5": True})
-        harness.settings["platform_cores"] = {"psx": {"label": "SwanStation"}}
+        # A pick that cannot be copied fails the picks' move.
+        uncopyable = threading.Lock()
+        harness.settings["platform_cores"] = {"psx": uncopyable}
 
-        def _fail(*_args: Any) -> Any:
-            raise RuntimeError("picks broke")
-
-        monkeypatch.setattr("services.platform_refiling.pick_moves", _fail)
-        harness.refile()
+        with caplog.at_level(logging.WARNING):
+            harness.refile()
 
         assert harness.settings["enabled_platforms"]["snes-hacks"] is True
-        assert harness.settings["platform_cores"] == {"psx": {"label": "SwanStation"}}
+        assert harness.settings["platform_cores"] == {"psx": uncopyable}
+        assert "Failed to move older per-platform picks to their platforms: TypeError" in caplog.text
 
     def test_the_ids_the_listing_drops_are_named(self, caplog):
         """#2452 D21, D26: a toggle dropped with its id — not listed, or listed without a folder — is said."""
