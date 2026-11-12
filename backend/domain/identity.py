@@ -9,15 +9,19 @@ and the fourth says which servers it will talk to at all.
   Never a path component, a header value, a storage key or a folder.
 - :data:`PACKAGE_NAME` is what a MACHINE reads about who is calling — the
   outgoing User-Agent.
-- :data:`VERSION` is which RELEASE this is. Five consumers today, and the list
+- :data:`VERSION` is which RELEASE this is. Nine consumers today, and the list
   is meant as one: the other half of that User-Agent, the ``plugin_version``
   recorded in a recovery bundle's manifest, the running version the update
-  check compares the last available release a check saw against, the
-  ``client_version`` a registered device carries on the user's own RomM server
-  (``bootstrap/saves.py`` hands it to ``DeviceRegistry``), and the
-  injection's crash-record fingerprint (``main.py``). The first four are
-  reached from ``bootstrap/``; the last is not, which is why it is easy to miss
-  when reading the composition root alone.
+  check compares the last available release a check saw against, the version
+  the update outcome records as this start's and announces an update to, the
+  version an update install starts from and judges a release and a refusal
+  against, the version the update output asks whether a recorded update
+  failure still stands for, the ``client_version`` a registered device carries
+  on the user's own RomM server (``bootstrap/saves.py`` hands it to
+  ``DeviceRegistry``), the injection's crash-record fingerprint (``main.py``),
+  and the pre-install check's report of what it built (``check.py``). The first
+  seven are reached from ``bootstrap/``; the last two are not, which is why they
+  are easy to miss when reading the composition root alone.
 - :data:`MIN_ROMM_VERSION` is the oldest RomM release this program accepts. It
   has one consumer, ``ConnectionService``, which rejects a server below it, so
   the program is inert until the server is updated. It is handed there by
