@@ -1,7 +1,7 @@
 /**
- * What one BIOS file row says about itself — its note and its description,
- * which the BIOS table both a platform's page and a game's BIOS tab draw
- * (`bigpicture/bios/BiosFiles.tsx`) puts on the lines under the row.
+ * What one BIOS file row says about itself — its marks, its note and its
+ * description, which the BIOS tables on a platform's page and on a game's page
+ * put in the row's cells and on the lines under it.
  *
  * What a row SAYS is decided only here; the table frames it, stating plain
  * absence in the row's On-disk cell rather than in words. What it hands over is
@@ -32,9 +32,29 @@
  * sentence written off the verdict itself.
  */
 
-import type { BiosFileStatus } from "../types";
+import type { BiosFileStatus, FirmwarePlatformExt } from "../types";
+import { BIOS_LIBRARY_VIOLET, BIOS_MISSING_RED, BIOS_MUTED_GREY, BIOS_OK_GREEN, BIOS_SPARE_GREEN } from "./biosColor";
 import { PATH_INACCESSIBLE } from "./biosFetchable";
+import { unmetWord } from "./biosGroup";
 import { lastPathSegment } from "./formatters";
+
+/** A row the BIOS table renders: a platform answer's own `files`, a game's, or
+ *  another emulator's rows, which carry no server record of their own. */
+export type BiosTableRow = FirmwarePlatformExt["files"][number] | BiosFileStatus;
+
+/** One glyph in a BIOS row's On-disk cell, with its colour and tooltip. */
+export interface BiosMark {
+  glyph: string;
+  color: string;
+  title: string;
+}
+
+/** One entry in the mark legend below a BIOS table. */
+export interface BiosLegendEntry {
+  glyph: string;
+  color: string;
+  text: string;
+}
 
 /** The subset of a row this note is derived from — a platform answer's row and
  *  a game's both satisfy it, so neither has to be converted into the other. */
@@ -511,4 +531,139 @@ function rowWords(row: BiosNoteRow, emulator: string | null): BiosFileWords {
     };
   }
   return { note: "", lines: [], fromLibrary: false };
+}
+
+/**
+ * The second mark: your RomM library does not hold this file.
+ *
+ * It sits BESIDE the verdict mark and never in place of it — the two are
+ * different questions, and a row that is present but unfetchable ("you have it,
+ * but you could not fetch it again") is exactly the combination a single
+ * channel would lose.
+ */
+const LIBRARY_MARK: BiosMark = { glyph: "⊘", color: BIOS_LIBRARY_VIOLET, title: "not in your RomM library" };
+
+const markRequiredUnmet = (word: string) => `required, ${word}`;
+const MARK_REQUIRED_HERE = "required, here";
+const MARK_HERE = "here, not required";
+const markUnmet = (word: string) => `${word}, not required`;
+const MARK_UNCHECKED = "nothing could establish this either way";
+const MARK_HERE_NEED_UNKNOWN = "here; nothing could say whether this is wanted";
+const MARK_MISSING_NEED_UNKNOWN = "missing; nothing could say whether this is wanted";
+const MARK_ONE_OF_THESE_HERE = "one of these, here";
+const markOneOfTheseUnmet = (word: string) => `one of these, ${word}`;
+const UNMET_WORDS = [unmetWord(null), unmetWord("mismatch"), unmetWord("refused")];
+
+/**
+ * The row's verdict, as the payload states it or as its silence leaves it.
+ *
+ * A folder's verdict is what it HOLDS, never that the folder is there — the
+ * register's rule (`docs/architecture/invariants/firmware.md`) — so a payload
+ * carrying no verdict for one leaves the row unestablished rather than falling
+ * back to presence.
+ */
+function rowVerdict(file: BiosTableRow): boolean | null {
+  const isFolder = file.declared_kind === "directory";
+  const fallback = isFolder ? null : file.downloaded;
+  return file.satisfied !== undefined ? file.satisfied : fallback;
+}
+
+function metDiskMark(required: boolean, option: boolean): BiosMark {
+  if (option) return { glyph: "✓", color: BIOS_OK_GREEN, title: MARK_ONE_OF_THESE_HERE };
+  return {
+    glyph: "✓",
+    color: required ? BIOS_OK_GREEN : BIOS_SPARE_GREEN,
+    title: required ? MARK_REQUIRED_HERE : MARK_HERE,
+  };
+}
+
+function unmetDiskMark(file: BiosTableRow, required: boolean, option: boolean): BiosMark {
+  const word = unmetWord(file.checked);
+  if (option) return { glyph: "✗", color: BIOS_MISSING_RED, title: markOneOfTheseUnmet(word) };
+  return {
+    glyph: "✗",
+    color: required ? BIOS_MISSING_RED : BIOS_MUTED_GREY,
+    title: required ? markRequiredUnmet(word) : markUnmet(word),
+  };
+}
+
+/**
+ * The first mark in one row's `On disk` cell, as a glyph, colour and tooltip.
+ *
+ * The glyph is the verdict (`✓` met, `✗` not met, `?` nothing could establish
+ * it — `BiosFileEntry.satisfied`, never presence), and the colour is the need
+ * (`required_by_active`, plus options of a one-of group).
+ */
+export function biosDiskMark(file: BiosTableRow): BiosMark {
+  const verdict = rowVerdict(file);
+  if (verdict === null) return { glyph: "?", color: BIOS_MUTED_GREY, title: MARK_UNCHECKED };
+  if (file.wanted === "unknown") {
+    return {
+      glyph: "?",
+      color: BIOS_MUTED_GREY,
+      title: verdict ? MARK_HERE_NEED_UNKNOWN : MARK_MISSING_NEED_UNKNOWN,
+    };
+  }
+  const required = Boolean(file.required_by_active);
+  const option = Boolean(file.one_of) && !required;
+  return verdict ? metDiskMark(required, option) : unmetDiskMark(file, required, option);
+}
+
+/**
+ * The row's second mark, or `null` where the library holds the file or the row
+ * declares a directory.
+ */
+export function biosLibraryMark(file: BiosTableRow): BiosMark | null {
+  return file.on_server === false && file.declared_kind !== "directory" ? LIBRARY_MARK : null;
+}
+
+/**
+ * The folder the emulator declared this file in, with its trailing slash, or
+ * `null` for a file that belongs at the root of the BIOS directory.
+ */
+export function declaredFolder(file: BiosTableRow): string | null {
+  const declared = file.declared_path;
+  if (!declared?.includes("/")) return null;
+  return `${declared.slice(0, declared.lastIndexOf("/"))}/`;
+}
+
+/**
+ * The legend entries explaining the marks present across *files*, in reading
+ * order: unmet required and group-option marks first, then met marks,
+ * unestablished marks, spare marks, and the second channel (`⊘`) when any row
+ * carries it.
+ */
+export function biosLegendEntries(files: readonly BiosTableRow[]): BiosLegendEntry[] {
+  const marks = files.map((file) => biosDiskMark(file));
+  const shown: BiosLegendEntry[] = [
+    ...UNMET_WORDS.map((word) => ({ glyph: "✗", color: BIOS_MISSING_RED, text: markRequiredUnmet(word) })),
+    ...UNMET_WORDS.map((word) => ({ glyph: "✗", color: BIOS_MISSING_RED, text: markOneOfTheseUnmet(word) })),
+    { glyph: "✓", color: BIOS_OK_GREEN, text: MARK_REQUIRED_HERE },
+    { glyph: "✓", color: BIOS_OK_GREEN, text: MARK_ONE_OF_THESE_HERE },
+    { glyph: "?", color: BIOS_MUTED_GREY, text: MARK_MISSING_NEED_UNKNOWN },
+    { glyph: "?", color: BIOS_MUTED_GREY, text: MARK_HERE_NEED_UNKNOWN },
+    { glyph: "?", color: BIOS_MUTED_GREY, text: MARK_UNCHECKED },
+    { glyph: "✓", color: BIOS_SPARE_GREEN, text: MARK_HERE },
+    ...UNMET_WORDS.map((word) => ({ glyph: "✗", color: BIOS_MUTED_GREY, text: markUnmet(word) })),
+  ].filter((entry) => marks.some((mark) => mark.title === entry.text));
+  if (files.some((file) => biosLibraryMark(file) !== null)) {
+    shown.push({ glyph: LIBRARY_MARK.glyph, color: LIBRARY_MARK.color, text: LIBRARY_MARK.title });
+  }
+  return shown;
+}
+
+/**
+ * Every line rendered under a BIOS table row: its note (when neither the
+ * library's second mark nor the Contents cell already says it), its image and
+ * setting lines, and *placeLines*.
+ */
+export function biosTableRowLines(
+  file: BiosTableRow,
+  emulator: string | null,
+  placeLines: readonly string[],
+): string[] {
+  const { note, lines, fromLibrary } = biosFileNote(file, emulator);
+  const contents = contentsWords(file, emulator);
+  const rowNote = note && note !== contents ? [note] : [];
+  return [...(fromLibrary ? [] : [...rowNote, ...lines]), ...placeLines];
 }

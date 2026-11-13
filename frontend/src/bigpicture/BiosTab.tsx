@@ -43,7 +43,7 @@ import {
   useBiosFiles,
   type BiosPart,
 } from "./bios/BiosFiles";
-import { announceBiosChange, useBiosActions, type BiosStatusLine } from "./bios/useBiosActions";
+import { announceBiosChange, useBiosActions, type BiosStatusLine } from "../utils/useBiosActions";
 import { PANE_GUTTER } from "./layout/pane";
 import { section } from "./panelSection";
 import { WaitingLine } from "./WaitingLine";

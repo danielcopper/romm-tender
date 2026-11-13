@@ -26,10 +26,10 @@ import type { CoreInfo, RomMetadata, SaveStatus, SyncConflict, DownloadCompleteE
 import type { RommDataChangedDetail } from "../types/events";
 import { detach } from "../utils/detach";
 import { coreChangeIsFor } from "../utils/coreChangedEvent";
-import { announceBiosChange } from "./bios/useBiosActions";
+import { announceBiosChange } from "../utils/useBiosActions";
+import { biosFieldsFromCache } from "../utils/biosReadState";
 import {
   bindRom,
-  biosFieldsFromCache,
   foldBiosRead,
   refreshBiosIfStale,
   refreshPanelCoreInfo,

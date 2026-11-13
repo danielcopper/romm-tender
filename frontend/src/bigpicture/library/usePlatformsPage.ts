@@ -61,7 +61,7 @@ import { biosAnswerStale, biosReadState, type BiosReadState } from "../../utils/
 import { removeShortcutsPaced } from "../../utils/shortcutRemoval";
 import { withTimeout } from "../../utils/withTimeout";
 import { announceCoreChange } from "../../utils/coreChangedEvent";
-import { announceBiosChange, useBiosActions, type BiosActions, type PlatformKey } from "../bios/useBiosActions";
+import { announceBiosChange, useBiosActions, type BiosActions, type PlatformKey } from "../../utils/useBiosActions";
 import { useLatestWrites, useLineWrites } from "./latestWrites";
 import { SYNC_WRITE_FAILED } from "./syncWriteFailed";
 

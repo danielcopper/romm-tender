@@ -19,6 +19,9 @@
  * taking an answer back because a later read failed is how a page loses an
  * answer it has.
  */
+import type { BiosAnswer } from "../api/backend";
+import type { BiosLevel, BiosStatus } from "../types";
+
 export type BiosReadState = "pending" | "answered" | "failed";
 
 /** The state of a page holding an answer or not (`held`) whose latest read did or did not fail (`failed`). */
@@ -31,4 +34,30 @@ export function biosReadState(held: boolean, failed: boolean): BiosReadState {
  *  it. */
 export function biosAnswerStale(held: boolean, failed: boolean): boolean {
   return held && failed;
+}
+
+/** What a game-detail BIOS answer carries when the requirement could not be
+ *  established — overlaid over an answer that ran and reported the `"unknown"`
+ *  level: no file rows, while keeping the answer's emulator entries and delete
+ *  counts intact. */
+const UNKNOWN_REQUIREMENT_STATUS: BiosStatus = { needs_bios: false, bios_status_unknown: true };
+
+/** Project a game-detail BIOS answer — from a cached game detail or a live
+ *  `get_bios_status` read — into `{ biosStatus, biosLevel }`, or `null` when
+ *  the payload carries no BIOS answer at all (`BiosAnswer` in `api/backend.ts`).
+ *
+ *  `bios_level` is computed by the backend (`compute_bios_level`) and threaded
+ *  straight through, never re-derived. */
+export function biosFieldsFromCache(
+  cached: BiosAnswer,
+): { biosStatus: BiosStatus; biosLevel: BiosLevel | null } | null {
+  if (cached.bios_status_unknown) {
+    if (cached.bios_level !== "unknown") return null;
+    return { biosStatus: { ...cached.bios_status, ...UNKNOWN_REQUIREMENT_STATUS, files: [] }, biosLevel: "unknown" };
+  }
+  if (!cached.bios_status) return null;
+  return {
+    biosStatus: { needs_bios: true, ...cached.bios_status },
+    biosLevel: cached.bios_level ?? null,
+  };
 }
