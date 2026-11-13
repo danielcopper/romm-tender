@@ -29,7 +29,7 @@ without restating it. The width mechanism's decision record is
 | `frontend/src/bigpicture/DataManagementPage.tsx`, `data/`, `RemovedGamesCleanup.tsx`, `CleanupList.tsx`, `cleanupPlan.ts` | Data Management — the inventory rows, their panes and the page's state; the cleanup dialog, its list and the prediction of what a run would do                      |
 | `frontend/src/bigpicture/DownloadQueue.tsx`                                                                               | Downloads                                                                                                                                                           |
 | `frontend/src/bigpicture/library/`                                                                                        | The Library tabs: `usePlatformsPage`, `PlatformsTab`, `PlatformDetail`; `useCollectionsPage`, `collectionKinds`, `CollectionsTab`, `CollectionsDetail`              |
-| `frontend/src/bigpicture/bios/`                                                                                           | The BIOS part a platform's pane and a game's BIOS tab both draw: `BiosFiles` (table, marks, legend, buttons), `useBiosActions` (the presses), `useBiosFocus`        |
+| `frontend/src/bigpicture/bios/`                                                                                           | The BIOS part a platform's pane and a game's BIOS tab both draw: `BiosFiles` (table, buttons) and `useBiosFocus`, with marks and presses in `frontend/src/utils/`   |
 | `frontend/src/utils/deckyUiInternals.ts`                                                                                  | Honest typing for `@decky/ui` values that come from a webpack probe: the frame's class names, `Tabs`, `ScrollPanel`, the controller glyph                           |
 | `frontend/src/utils/qamExpansion.ts`                                                                                      | The panel's width: the expand and hide messages, the injected `max-width` rule and the four paths that clear both, and the call that installs the wrapper           |
 | `frontend/src/utils/qamWidthPatch.ts`                                                                                     | The wrapper on Steam's QAM host, the half decidable without Steam: the host, one render widened, the console lines                                                  |
@@ -1779,15 +1779,16 @@ it, for the focused platform:
   the status line under the buttons: a replacement refused or failed ("Failed to replace the file: `<reason>`"), and a
   file a download moved out of the store ("A different `<file name>` was already in Tender's firmware store. It was
   moved to `<backup path>`."). The table, its buttons, their confirmations and lines, and where focus goes after a press
-  are one module the game page's BIOS tab draws too (`frontend/src/bigpicture/bios/`, the presses in
-  `useBiosActions.ts`; [#2429](https://github.com/danielcopper/romm-tender/issues/2429) D3). Above the table, a sentence
-  says where a download lands in the store only (`store_only`: an emulator the resolver does not cover, or no emulator
-  source for the platform). The library's own section words each row by what the resolver's identification says its
-  content is — "Checking…" until the answer arrives, then "Not recognised" or "Recognised as `<names>`" — asked one file
-  at a time after the page is shown, because the resolver's identification takes about 0.25 s a file on the reference
-  machine, kept by MD5 for the page and at most thirty minutes (`utils/firmwareIdentifications.ts`), and a store copy no
-  emulator uses reads "In Tender's firmware store, used by no emulator" with its Delete. When a platform's pane is first
-  shown with an answer, and after an emulator switch, the pane asks for the platform's links to be brought up to date
+  are one module the game page's BIOS tab draws too (`frontend/src/bigpicture/bios/`, with row marks in
+  `frontend/src/utils/biosFileNote.ts` and the presses in `frontend/src/utils/useBiosActions.ts`;
+  [#2429](https://github.com/danielcopper/romm-tender/issues/2429) D3). Above the table, a sentence says where a
+  download lands in the store only (`store_only`: an emulator the resolver does not cover, or no emulator source for the
+  platform). The library's own section words each row by what the resolver's identification says its content is —
+  "Checking…" until the answer arrives, then "Not recognised" or "Recognised as `<names>`" — asked one file at a time
+  after the page is shown, because the resolver's identification takes about 0.25 s a file on the reference machine,
+  kept by MD5 for the page and at most thirty minutes (`utils/firmwareIdentifications.ts`), and a store copy no emulator
+  uses reads "In Tender's firmware store, used by no emulator" with its Delete. When a platform's pane is first shown
+  with an answer, and after an emulator switch, the pane asks for the platform's links to be brought up to date
   (`update_bios_links`) and reads the platform again where that placed or removed one; a download's, a replacement's and
   that update's result say, in the status line, "`<n>` placed, `<m>` left in place: another file lies there" where
   something stayed in the way. Focus never falls back to the top of the page here (#2190 D32; `bios/useBiosFocus.ts`),

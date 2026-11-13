@@ -12,11 +12,24 @@ handed — a `DesktopGamePage` with an optional `gameView` and `playButton` — 
 `gameView` the page's content sections, `playButton` Steam's Play button and the badges beside it. A part left out
 leaves Steam's own in place, and the play bar, the hero and the controls beside them are adapted either way.
 
-It hands both. `GameView` (`frontend/src/desktop/gameview/GameView.tsx`) draws the page's cards in two columns. Its one
-card so far is About — the cover Steam shows (`steamsCover`, `frontend/src/utils/artworkThumbs.ts`), the title, the
-summary and the rows `metadataRows` answers, under the labels and in the order Big Picture's GAME INFO tab shows them.
-While it is drawn it holds two things `RomMPlaySection` holds on Big Picture's game page: the connection heartbeat, and
-the automatic artwork, whose apply in flight it cancels on leaving.
+It hands both. `GameView` (`frontend/src/desktop/gameview/GameView.tsx`) draws the page's cards in two columns. The left
+column holds two cards: About (`frontend/src/desktop/gameview/AboutDetails.tsx`) — the cover Steam shows (`steamsCover`,
+`frontend/src/utils/artworkThumbs.ts`), the title, the summary and the rows `metadataRows` answers, under the labels and
+in the order Big Picture's GAME INFO tab shows them — and Emulation
+(`frontend/src/desktop/gameview/EmulationSettings.tsx`), which draws the game's emulator / core picker (the answering
+source's entries with `(default)` and `(pinned)` markers, where clicking an unpinned entry pins it and clicking the
+pinned entry again clears the pin, alongside installation notes, per-entry launch verdicts for an installed game, and
+active, vanished and frontend-choice notes, writing through `executeGameCoreChange`,
+`frontend/src/utils/coreOverride.ts`) above its BIOS / firmware readiness, group blocks, emulator tab pills, file table,
+unclaimed RomM library rows (`useIdentifications`, `frontend/src/utils/firmwareIdentifications.ts`), legend
+(`frontend/src/utils/biosFileNote.ts`) and BIOS download, replace and delete presses (`useBiosActions`,
+`frontend/src/utils/useBiosActions.ts`), whose confirmations open in the desktop dialogs
+(`frontend/src/desktop/gameview/dialogs/DesktopBiosConfirmDialog.tsx`). Emulation shares the page-open BIOS collapse
+(`getBiosStatusShared`, `frontend/src/api/sharedReads.ts`) on first open for an `appId` and calls `getBiosStatus`
+directly on a version switch or re-read, tags its held answer by `romId` and orders reads for the same ROM by sequence,
+and draws nothing before the ROM identity is known or on a stranded panel ([invariant register](invariants/panel.md)).
+While `GameView` is drawn it holds two things `RomMPlaySection` holds on Big Picture's game page: the connection
+heartbeat, and the automatic artwork, whose apply in flight it cancels on leaving.
 
 While a RetroDECK migration is pending it draws the migration card
 (`frontend/src/desktop/gameview/MigrationBlockedCard.tsx`) in place of the columns, as the game page's section does on
@@ -97,7 +110,8 @@ cannot sync says why in grey, in the backend's few words for the refusal (`short
 only a downloaded game's refusal stands. Both are asked again when a save sync, a platform's core or the emulator
 sources change, and a read that fails holds no answer rather than the one from before. With nothing established yet the
 badge makes no claim either: it reads **Not checked**, in grey. A time since the last sync moves on while the page stays
-open. None of the badges takes a press.
+open. BIOS is a button: pressing it dispatches `romm_tab_switch` (`{ tab: "bios" }`), which scrolls the Emulation card
+into view. None of the other badges takes a press.
 
 The row takes its type and spacing from Steam's own play bar, as measured on a Linux desktop running Steam client build
 1792618285: Save Sync and BIOS keep their own colours, every other value is Steam's. It also behaves as Steam's does
