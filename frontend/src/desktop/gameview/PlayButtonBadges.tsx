@@ -45,6 +45,15 @@ const CELL_STYLE: CSSProperties = {
   whiteSpace: "nowrap",
 };
 
+const BUTTON_CELL_STYLE: CSSProperties = {
+  ...CELL_STYLE,
+  backgroundColor: "transparent",
+  border: "none",
+  font: "inherit",
+  textAlign: "left",
+  cursor: "pointer",
+};
+
 const HEADER_STYLE: CSSProperties = {
   fontSize: "14px",
   fontWeight: 400,
@@ -79,17 +88,33 @@ const TONE_COLOR: Record<SaveSyncBadgeTone, string> = {
   unavailable: BIOS_MISSING_RED,
 };
 
-const Badge: FC<{ name: string; header: string; color?: string; children: ReactNode }> = ({
-  name,
-  header,
-  color,
-  children,
-}) => (
-  <div className={`tender-desktop-badge-item tender-desktop-${name}`} style={CELL_STYLE}>
-    <div style={HEADER_STYLE}>{header}</div>
-    <div style={color === undefined ? VALUE_STYLE : { ...VALUE_STYLE, color }}>{children}</div>
-  </div>
-);
+const Badge: FC<{
+  name: string;
+  header: string;
+  color?: string;
+  onClick?: () => void;
+  children: ReactNode;
+}> = ({ name, header, color, onClick, children }) => {
+  const className = `tender-desktop-badge-item tender-desktop-${name}`;
+  const content = (
+    <>
+      <div style={HEADER_STYLE}>{header}</div>
+      <div style={color === undefined ? VALUE_STYLE : { ...VALUE_STYLE, color }}>{children}</div>
+    </>
+  );
+  if (onClick !== undefined) {
+    return (
+      <button type="button" className={className} style={BUTTON_CELL_STYLE} onClick={onClick}>
+        {content}
+      </button>
+    );
+  }
+  return (
+    <div className={className} style={CELL_STYLE}>
+      {content}
+    </div>
+  );
+};
 
 const Dot: FC<{ color: string }> = ({ color }) => (
   <span className="tender-desktop-badge-dot" style={{ ...DOT_STYLE, backgroundColor: color }} />
@@ -209,7 +234,14 @@ export const PlayButtonBadges: FC<PlayButtonBadgesProps> = ({ appId, detail, sav
         <span>{saveSync.label}</span>
       </Badge>
       {detail.biosRequiredMissing && (
-        <Badge name="bios" header="BIOS" color={BIOS_MISSING_RED}>
+        <Badge
+          name="bios"
+          header="BIOS"
+          color={BIOS_MISSING_RED}
+          onClick={() => {
+            globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
+          }}
+        >
           <Dot color={BIOS_MISSING_RED} />
           <span>{detail.biosLabel}</span>
         </Badge>

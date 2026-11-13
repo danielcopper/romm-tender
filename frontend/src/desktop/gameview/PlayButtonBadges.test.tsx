@@ -753,6 +753,21 @@ describe("PlayButtonBadges", () => {
 
       expect(screen.queryByText("BIOS")).not.toBeInTheDocument();
     });
+
+    it("dispatches romm_tab_switch for bios when pressed", () => {
+      const events: unknown[] = [];
+      const onSwitch = (e: Event) => events.push((e as CustomEvent).detail);
+      globalThis.addEventListener("romm_tab_switch", onSwitch);
+      try {
+        render(draw(detail({ biosRequiredMissing: true, biosLabel: "Missing" })));
+
+        screen.getByRole("button", { name: /BIOS/ }).click();
+
+        expect(events).toEqual([{ tab: "bios" }]);
+      } finally {
+        globalThis.removeEventListener("romm_tab_switch", onSwitch);
+      }
+    });
   });
 
   describe("the row", () => {
@@ -799,7 +814,7 @@ describe("PlayButtonBadges", () => {
     });
   });
 
-  it("takes no press: no button, link, form control or tab stop in the row, and no React handler", async () => {
+  it("offers a press on BIOS alone: no other badge has a button, tab stop, or React handler", async () => {
     const { container } = render(
       draw(
         detail({
@@ -814,14 +829,17 @@ describe("PlayButtonBadges", () => {
     await act(async () => {});
 
     expect(container.querySelectorAll(".tender-desktop-badge-item")).toHaveLength(5);
-    expect(
-      container.querySelector("[tabindex],[role='button'],button,a[href],input,select,textarea,summary"),
-    ).toBeNull();
-    for (const element of container.querySelectorAll("*")) {
-      const propsKey = Object.keys(element).find((key) => key.startsWith("__reactProps"));
-      expect(propsKey).toBeDefined();
-      const props = (element as unknown as Record<string, object>)[propsKey!]!;
-      expect(Object.keys(props).filter((name) => /^on[A-Z]/.test(name))).toEqual([]);
+    const controls = container.querySelectorAll(
+      "[tabindex],[role='button'],button,a[href],input,select,textarea,summary",
+    );
+    expect(Array.from(controls)).toEqual([container.querySelector(".tender-desktop-bios")]);
+    for (const badge of container.querySelectorAll(".tender-desktop-badge-item:not(.tender-desktop-bios)")) {
+      for (const element of [badge, ...badge.querySelectorAll("*")]) {
+        const propsKey = Object.keys(element).find((key) => key.startsWith("__reactProps"));
+        expect(propsKey).toBeDefined();
+        const props = (element as unknown as Record<string, object>)[propsKey!]!;
+        expect(Object.keys(props).filter((name) => /^on[A-Z]/.test(name))).toEqual([]);
+      }
     }
   });
 });

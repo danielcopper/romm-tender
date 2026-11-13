@@ -18,6 +18,7 @@ vi.mock("../../utils/gameDetailStore", async (importOriginal) => {
 });
 
 vi.mock("../../api/sharedReads", () => ({
+  getBiosStatusShared: vi.fn(),
   getRomMetadataShared: vi.fn(),
 }));
 
@@ -64,6 +65,7 @@ describe("GameView", () => {
     vi.clearAllMocks();
     _resetArtworkSlotsForTests();
     vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detail());
+    vi.mocked(sharedReads.getBiosStatusShared).mockReturnValue(new Promise(() => {}));
     vi.mocked(sharedReads.getRomMetadataShared).mockReturnValue(new Promise(() => {}));
     vi.mocked(connectionHeartbeat.registerConnectionHeartbeat).mockReturnValue(releaseHeartbeat);
     clearMigration();
@@ -75,12 +77,13 @@ describe("GameView", () => {
     });
   });
 
-  it("draws the About card for the page's game: Steam's title, the cover Steam shows, the ROM's record", async () => {
+  it("draws the About card and Emulation card for the page's game", async () => {
     vi.mocked(sharedReads.getRomMetadataShared).mockResolvedValue(METADATA);
 
     render(<GameView appId={APP_ID} />);
 
     expect(screen.getByRole("heading", { name: "Mario Golf: Advance Tour" })).toBeInTheDocument();
+    expect(screen.getByTestId("desktop-emulation-card")).toBeInTheDocument();
     expect(screen.getByText("Game Boy Advance")).toBeInTheDocument();
     expect(screen.getByRole("img")).toHaveAttribute(
       "src",
@@ -88,6 +91,7 @@ describe("GameView", () => {
     );
     await waitFor(() => expect(screen.getByText("A golf game.")).toBeInTheDocument());
     expect(sharedReads.getRomMetadataShared).toHaveBeenCalledWith(42);
+    expect(sharedReads.getBiosStatusShared).toHaveBeenCalledWith(42);
   });
 
   it("signs the cover by the ARTWORK read held for the page's ROM", async () => {
@@ -130,12 +134,14 @@ describe("GameView", () => {
     expect(screen.getByRole("heading", { name: "Mario Golf (USA)" })).toBeInTheDocument();
   });
 
-  it("reads no record before the page's ROM is known", () => {
+  it("reads no record and draws no Emulation card before the page's ROM is known", () => {
     vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detail({ romId: null }));
 
     render(<GameView appId={APP_ID} />);
 
     expect(sharedReads.getRomMetadataShared).not.toHaveBeenCalled();
+    expect(sharedReads.getBiosStatusShared).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("desktop-emulation-card")).not.toBeInTheDocument();
   });
 
   it("holds the connection heartbeat while it is drawn", () => {
@@ -168,6 +174,7 @@ describe("GameView", () => {
       expect(releaseHeartbeat).not.toHaveBeenCalled();
       expect(artwork.cancelArtworkApply).not.toHaveBeenCalled();
       expect(screen.queryByRole("heading", { name: "Mario Golf: Advance Tour" })).not.toBeInTheDocument();
+      expect(screen.queryByTestId("desktop-emulation-card")).not.toBeInTheDocument();
       expect(backend.refreshMigrationState).toHaveBeenCalledTimes(1);
     });
 
