@@ -1786,32 +1786,32 @@ it, for the focused platform:
   platform). The library's own section words each row by what the resolver's identification says its content is —
   "Checking…" until the answer arrives, then "Not recognised" or "Recognised as `<names>`" — asked one file at a time
   after the page is shown, because the resolver's identification takes about 0.25 s a file on the reference machine,
-  kept by MD5 for the page and at most thirty minutes (`utils/firmwareIdentifications.ts`), and a store copy no emulator
-  uses reads "In Tender's firmware store, used by no emulator" with its Delete. When a platform's pane is first shown
-  with an answer, and after an emulator switch, the pane asks for the platform's links to be brought up to date
-  (`update_bios_links`) and reads the platform again where that placed or removed one; a download's, a replacement's and
-  that update's result say, in the status line, "`<n>` placed, `<m>` left in place: another file lies there" where
-  something stayed in the way. Focus never falls back to the top of the page here (#2190 D32; `bios/useBiosFocus.ts`),
-  which is where Steam puts focus that was lost, scrolling the pane there. A button that greys out keeps the focus: as
-  Steam's shipped client code shows (`steamui/sp.js`), its `DialogButton` never disables its element — it adds the class
-  `Disabled`, unwires its handlers and hides its A legend — so a press on it does nothing. That grey is the whole look
-  of a greyed button: the red of a Delete label, and of "Failed", is drawn only while the button can be pressed. While a
-  row's download or delete, or one of the bulk buttons below, runs, the pressed button stays enabled and every other one
-  waits greyed; Steam's dialog hands no focus back, so a confirmed or cancelled delete puts it back on the pressed
-  button; and where the work leaves the row nothing to press, focus goes to the row itself. Steam also scrolls the pane
-  to every element focus lands on, so the position the pane stood at when the button was pressed — before its dialog,
-  for a delete — is put back at once and again after Steam's own scroll has run, each time only while focus is still in
-  the BIOS part. After a step of the selector, focus that was on a row of the table stays on the same file's row where
-  the new emulator lists it, goes to the new table's top row where it does not, and to the carousel's shown entry where
-  the new emulator lists no file; focus anywhere else stays where it is. Below the table one button,
-  `Download required for
-  <emulator> (N)`, over the shown emulator's rows, sending that emulator's identity. _N_ counts
-  those rows that are fetchable and that the backend marks `fetch_for_required` — the rule the download applies too,
-  which takes the options of a one-of group's uncovered regions as well as the files the emulator requires. Under a
-  sub-heading of their own, `For all of <platform>` — `SubHeading` in `layout/pane.tsx`, smaller and quieter than a
-  section title, so it reads as part of the BIOS section (#2190 D30) — the platform-wide pair, which no emulator choice
-  touches: `Download all`, every file the library holds for the platform, fetched into Tender's firmware store and
-  linked for every emulator that asks for it and is not stated not installed (#2191 D21, D36), and
+  kept by MD5 for the page and at most thirty minutes (`frontend/src/utils/firmwareIdentifications.ts`), and a store
+  copy no emulator uses reads "In Tender's firmware store, used by no emulator" with its Delete. When a platform's pane
+  is first shown with an answer, and after an emulator switch, the pane asks for the platform's links to be brought up
+  to date (`update_bios_links`) and reads the platform again where that placed or removed one; a download's, a
+  replacement's and that update's result say, in the status line, "`<n>` placed, `<m>` left in place: another file lies
+  there" where something stayed in the way. Focus never falls back to the top of the page here (#2190 D32;
+  `bios/useBiosFocus.ts`), which is where Steam puts focus that was lost, scrolling the pane there. A button that greys
+  out keeps the focus: as Steam's shipped client code shows (`steamui/sp.js`), its `DialogButton` never disables its
+  element — it adds the class `Disabled`, unwires its handlers and hides its A legend — so a press on it does nothing.
+  That grey is the whole look of a greyed button: the red of a Delete label, and of "Failed", is drawn only while the
+  button can be pressed. While a row's download or delete, or one of the bulk buttons below, runs, the pressed button
+  stays enabled and every other one waits greyed; Steam's dialog hands no focus back, so a confirmed or cancelled delete
+  puts it back on the pressed button; and where the work leaves the row nothing to press, focus goes to the row itself.
+  Steam also scrolls the pane to every element focus lands on, so the position the pane stood at when the button was
+  pressed — before its dialog, for a delete — is put back at once and again after Steam's own scroll has run, each time
+  only while focus is still in the BIOS part. After a step of the selector, focus that was on a row of the table stays
+  on the same file's row where the new emulator lists it, goes to the new table's top row where it does not, and to the
+  carousel's shown entry where the new emulator lists no file; focus anywhere else stays where it is. Below the table
+  one button, `Download required for
+  <emulator> (N)`, over the shown emulator's rows, sending that emulator's
+  identity. _N_ counts those rows that are fetchable and that the backend marks `fetch_for_required` — the rule the
+  download applies too, which takes the options of a one-of group's uncovered regions as well as the files the emulator
+  requires. Under a sub-heading of their own, `For all of <platform>` — `SubHeading` in `layout/pane.tsx`, smaller and
+  quieter than a section title, so it reads as part of the BIOS section (#2190 D30) — the platform-wide pair, which no
+  emulator choice touches: `Download all`, every file the library holds for the platform, fetched into Tender's firmware
+  store and linked for every emulator that asks for it and is not stated not installed (#2191 D21, D36), and
   `Delete downloads (N)` behind a `ConfirmModal`, whose title and text say it takes only Tender's own downloads (#2190
   D24). Each of the three is as wide as its label, never stretched across its row (#2429 D3). Then the library section,
   under the sub-heading "In your RomM library, asked for by no emulator here", with the same table and per-row buttons

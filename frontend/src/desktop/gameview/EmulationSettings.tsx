@@ -39,6 +39,7 @@ import { activeEmulatorNote } from "../../utils/emulatorInstallation";
 import { askEntryLaunches, type EntryLaunches } from "../../utils/emulatorLaunches";
 import {
   CORE_SWITCH_COMPAT_NOTE,
+  emulatorEntryLabel,
   emulatorEntryNotes,
   entryLaunchVerdictLine,
   isEmulatorEntryActive,
@@ -390,20 +391,6 @@ function useSettledEntryLaunches(romId: number | null, enabled: boolean): EntryL
   return enabled && romId !== null && settled !== null && settled.romId === romId ? settled.launches : null;
 }
 
-function desktopEmulatorEntryLabel(
-  entry: EmulatorOption,
-  isActive: boolean,
-  isPinned: boolean,
-  isPlatformCore: boolean,
-): string {
-  const defaultMark = entry.is_default ? " (default)" : "";
-  const pinnedMark = isPinned ? " (pinned)" : "";
-  const frontendMark = entry.chosen_in_frontend ? " (chosen in ES-DE)" : "";
-  const systemMark = isPlatformCore ? " (system)" : "";
-  const activeMark = isActive ? " ✓" : "";
-  return `${entry.label}${defaultMark}${pinnedMark}${frontendMark}${systemMark}${activeMark}${emulatorEntryNotes(entry)}`;
-}
-
 const DesktopEmulatorEntryButton: FC<{
   entry: EmulatorOption;
   isActive: boolean;
@@ -417,7 +404,7 @@ const DesktopEmulatorEntryButton: FC<{
 }> = ({ entry, isActive, isPinned, isPlatformCore, coreBusy, launchesAsked, settledLaunches, source, onToggle }) => {
   const choosable = isChoosable(entry);
   const disabled = !choosable || coreBusy;
-  const labelText = desktopEmulatorEntryLabel(entry, isActive, isPinned, isPlatformCore);
+  const labelText = `${emulatorEntryLabel(entry, isActive, isPlatformCore, isPinned)}${emulatorEntryNotes(entry)}`;
   let launchRow: ReactNode = null;
   if (launchesAsked) {
     if (settledLaunches === null) {
@@ -471,7 +458,11 @@ async function performDesktopCorePick(params: {
     leaseOwner,
     logTag: coreLabel === null ? "desktopResetGameCore" : "desktopChangeGameCore",
     onSuccess: async () => {
-      await Promise.all([refreshCoreAndBios(appId), rereadBios(romId)]);
+      // `refreshCoreAndBios` places the new emulator's store links before reading
+      // BIOS status; `rereadBios` runs after it so the table does not race link
+      // placement.
+      await refreshCoreAndBios(appId);
+      await rereadBios(romId);
       announceOwnCore(platformFolder);
     },
   });

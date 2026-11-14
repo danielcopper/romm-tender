@@ -13,8 +13,7 @@ export interface GameCoreChangeParams {
   logTag?: string;
 }
 
-export type GameCoreChangeResult =
-  { status: "applied" } | { status: "cancelled" } | { status: "failed"; message: string };
+type GameCoreChangeResult = { status: "applied" } | { status: "cancelled" } | { status: "failed"; message: string };
 
 /** Pin *coreLabel* as the game's core, or follow the system core again when it is
  *  `null`. Nothing is written to the Steam shortcut: its launch options are its

@@ -320,20 +320,20 @@ describe("the choice made in ES-DE", () => {
 });
 
 describe("shared emulator row helpers", () => {
-  it("formats entry labels, notes, active state, and system-override reset label consistently", async () => {
-    const { emulatorEntryLabel, emulatorEntryNotes, followSystemLabel, isEmulatorEntryActive } =
-      await import("./emulatorMenu");
+  it("formats entry labels, pinned markers, notes, and active state consistently", async () => {
+    const { emulatorEntryLabel, emulatorEntryNotes, isEmulatorEntryActive } = await import("./emulatorMenu");
     const def = libretroEmu("mgba_libretro", "mGBA", true);
     const missing = standaloneEmu("Vita3K", false, { reason: "not_installed" });
 
     expect(emulatorEntryLabel({ ...def, chosen_in_frontend: true }, true, true)).toBe(
       "mGBA (default) (chosen in ES-DE) (system) ✓",
     );
+    expect(emulatorEntryLabel({ ...def, chosen_in_frontend: true }, true, true, true)).toBe(
+      "mGBA (default) (pinned) (chosen in ES-DE) (system) ✓",
+    );
     expect(emulatorEntryNotes(missing)).toBe(" — emulator not installed");
     expect(emulatorEntryNotes(def)).toBe("");
     expect(isEmulatorEntryActive([def, missing], null, def)).toBe(true);
     expect(isEmulatorEntryActive([def, missing], null, def, false)).toBe(false);
-    expect(followSystemLabel([def, missing], null, true)).toBe("Use System Override (mGBA)");
-    expect(followSystemLabel([def, missing], "Vita3K", false)).toBe("Use System Override (Vita3K) ✓");
   });
 });

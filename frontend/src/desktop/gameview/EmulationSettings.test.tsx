@@ -55,19 +55,60 @@ function makeEntry(label: string, overrides: Partial<EmulatorOption> = {}): Emul
   };
 }
 
+function makeLibMatch(
+  fileName: string,
+  firmwareId: number,
+  md5: string,
+  matched: NonNullable<BiosFileStatus["library"]>["matched"] = "content",
+): NonNullable<BiosFileStatus["library"]> {
+  return {
+    firmware_id: firmwareId,
+    file_name: fileName,
+    platform_slug: "psx",
+    matched,
+    md5,
+    size: 512,
+    no_checksum: false,
+  };
+}
+
 function makeBiosFile(fileName: string, overrides: Partial<BiosFileStatus> = {}): BiosFileStatus {
   return {
     file_name: fileName,
     downloaded: false,
     local_path: `/bios/${fileName}`,
+    declared_path: fileName,
     description: "",
     wanted: "needed",
     required_by_active: true,
     on_server: true,
     satisfied: false,
+    declared_kind: "file",
+    caveats: [],
+    images: [],
+    checked: null,
+    one_of: null,
+    fetch_for_required: false,
+    supplied_by: null,
+    missing_configured_image: null,
+    configured_image_not_offered: null,
+    declared_by: "DUCKSTATION",
+    library: null,
+    store_file: null,
+    link: null,
+    linked_for: null,
+    linked_for_name: null,
+    place_refusal: null,
+    replace_offered: false,
+    in_folder: null,
     ...overrides,
   };
 }
+
+const flushMacrotask = () =>
+  act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
 
 function makeBiosAnswer(
   statusOverrides: Partial<BiosStatus> = {},
@@ -121,9 +162,9 @@ describe("EmulationSettings", () => {
   });
 
   it("draws nothing and issues no read before the ROM identity is known", () => {
-    const { container } = render(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: null })} />);
+    const view = render(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: null })} />);
 
-    expect(container).toBeEmptyDOMElement();
+    expect(view.container).toBeEmptyDOMElement();
     expect(sharedReads.getBiosStatusShared).not.toHaveBeenCalled();
     expect(backend.getEmulatorLaunches).not.toHaveBeenCalled();
   });
@@ -131,10 +172,9 @@ describe("EmulationSettings", () => {
   describe("while the panel is stranded", () => {
     it("draws nothing and issues neither BIOS nor launch-verdict reads", () => {
       setStrandedAnswer("reloads");
+      render(<EmulationSettings appId={APP_ID} detail={makeDetail({ installed: true })} />);
 
-      const { container } = render(<EmulationSettings appId={APP_ID} detail={makeDetail({ installed: true })} />);
-
-      expect(container).toBeEmptyDOMElement();
+      expect(screen.queryByTestId("desktop-emulation-card")).not.toBeInTheDocument();
       expect(sharedReads.getBiosStatusShared).not.toHaveBeenCalled();
       expect(backend.getEmulatorLaunches).not.toHaveBeenCalled();
     });
@@ -193,6 +233,8 @@ describe("EmulationSettings", () => {
     });
 
     it("pins the default entry to (default) (pinned) on click, unpins on clicking it again, or moves the pin to another option", async () => {
+      const storeRefresh = deferred<void>();
+      vi.mocked(gameDetailStore.refreshCoreAndBios).mockReturnValueOnce(storeRefresh.promise);
       vi.mocked(coreOverride.executeGameCoreChange).mockImplementation(async ({ onSuccess }) => {
         await onSuccess?.();
         return { status: "applied" };
@@ -205,8 +247,15 @@ describe("EmulationSettings", () => {
       );
       await screen.findByTestId("bios-table-header");
 
-      // 1. Unpinned default shows (default); clicking it pins it
+      // 1. Unpinned default shows (default); clicking it pins it, and rereadBios waits for refreshCoreAndBios
       fireEvent.click(screen.getByRole("button", { name: "DuckStation (default) ✓" }));
+      await waitFor(() => expect(gameDetailStore.refreshCoreAndBios).toHaveBeenCalledWith(APP_ID));
+      await flushMacrotask();
+      expect(backend.getBiosStatus).not.toHaveBeenCalled();
+
+      await act(async () => {
+        storeRefresh.resolve();
+      });
       await waitFor(() =>
         expect(coreOverride.executeGameCoreChange).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -217,8 +266,7 @@ describe("EmulationSettings", () => {
           }),
         ),
       );
-      expect(gameDetailStore.refreshCoreAndBios).toHaveBeenCalledWith(APP_ID);
-      expect(backend.getBiosStatus).toHaveBeenCalledWith(ROM_ID);
+      await waitFor(() => expect(backend.getBiosStatus).toHaveBeenCalledWith(ROM_ID));
 
       // 2. Pinned default shows (default) (pinned); clicking it again unpins (coreLabel: null)
       rerender(
@@ -286,6 +334,7 @@ describe("EmulationSettings", () => {
 
       fireEvent.click(screen.getByRole("button", { name: /Beetle PSX HW \(chosen in ES-DE\)/ }));
       await waitFor(() => expect(coreOverride.executeGameCoreChange).toHaveBeenCalledTimes(1));
+      await flushMacrotask();
       expect(screen.queryByTestId("desktop-core-error")).not.toBeInTheDocument();
 
       vi.mocked(coreOverride.executeGameCoreChange).mockResolvedValueOnce({
@@ -460,6 +509,7 @@ describe("EmulationSettings", () => {
           new CustomEvent("romm_data_changed", { detail: { type: "core_changed", platform_fs_slug: "gba" } }),
         );
       });
+      await flushMacrotask();
       expect(backend.getBiosStatus).not.toHaveBeenCalled();
 
       act(() => {
@@ -567,27 +617,8 @@ describe("EmulationSettings", () => {
         backup_root: "/backups",
         emulator_tabs: [{ emulator: "DUCKSTATION", label: "DuckStation", launching: true, requirements_met: false }],
         files: [
-          makeBiosFile("missing.bin", {
-            on_server: true,
-            downloaded: false,
-            satisfied: false,
-            library: {
-              firmware_id: 11,
-              file_name: "missing.bin",
-              platform_slug: "psx",
-              matched: "content",
-              md5: "aaa",
-              size: 512,
-              no_checksum: false,
-            },
-          }),
-          makeBiosFile("wrong.bin", {
-            on_server: false,
-            downloaded: true,
-            satisfied: false,
-            replace_offered: true,
-            local_path: "/bios/wrong.bin",
-          }),
+          makeBiosFile("missing.bin", { library: makeLibMatch("missing.bin", 11, "aaa") }),
+          makeBiosFile("wrong.bin", { on_server: false, downloaded: true, replace_offered: true }),
           makeBiosFile("owned.bin", {
             on_server: false,
             downloaded: true,
@@ -599,17 +630,7 @@ describe("EmulationSettings", () => {
             declared_by: null,
             wanted: "not_needed",
             required_by_active: false,
-            on_server: true,
-            downloaded: false,
-            library: {
-              firmware_id: 22,
-              file_name: "extra.bin",
-              platform_slug: "psx",
-              matched: null,
-              md5: "bbb",
-              size: 512,
-              no_checksum: false,
-            },
+            library: makeLibMatch("extra.bin", 22, "bbb", null),
           }),
         ],
       });
@@ -631,6 +652,7 @@ describe("EmulationSettings", () => {
       const replaceDialog = await screen.findByRole("dialog", { name: "Replace wrong.bin?" });
       fireEvent.click(within(replaceDialog).getByRole("button", { name: "Cancel" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      await flushMacrotask();
       expect(backend.replaceBiosFile).not.toHaveBeenCalled();
 
       fireEvent.click(screen.getByRole("button", { name: "Replace…" }));
@@ -660,57 +682,28 @@ describe("EmulationSettings", () => {
       vi.mocked(backend.downloadPlatformFirmwareFile).mockReturnValueOnce(pendingDownload.promise);
       vi.mocked(backend.identifyLibraryFirmware).mockResolvedValue({ success: true, known_as: [] });
 
-      const answer = makeBiosAnswer({
+      const layoutAnswer = makeBiosAnswer({
         emulator_tabs: [{ emulator: "DUCKSTATION", label: "DuckStation", launching: true, requirements_met: false }],
         files: [
-          makeBiosFile("unfetchable.bin", { on_server: false, downloaded: false, satisfied: false }),
-          makeBiosFile("missing.bin", {
-            on_server: true,
-            downloaded: false,
-            satisfied: false,
-            library: {
-              firmware_id: 11,
-              file_name: "missing.bin",
-              platform_slug: "psx",
-              matched: "content",
-              md5: "aaa",
-              size: 512,
-              no_checksum: false,
-            },
-          }),
-          makeBiosFile("replace.bin", {
-            on_server: false,
-            downloaded: true,
-            satisfied: false,
-            replace_offered: true,
-            local_path: "/bios/replace.bin",
-          }),
-          makeBiosFile("owned.bin", {
+          makeBiosFile("unfetchable.bin", { on_server: false }),
+          makeBiosFile("fetchable.bin", { library: makeLibMatch("fetchable.bin", 31, "ccc") }),
+          makeBiosFile("replace.bin", { on_server: false, downloaded: true, replace_offered: true }),
+          makeBiosFile("deletable.bin", {
             on_server: false,
             downloaded: true,
             satisfied: true,
             deletable_count: 1,
-            delete_name: "owned.bin",
+            delete_name: "deletable.bin",
           }),
-          makeBiosFile("extra.bin", {
+          makeBiosFile("unclaimed.bin", {
             declared_by: null,
             wanted: "not_needed",
             required_by_active: false,
-            on_server: true,
-            downloaded: false,
-            library: {
-              firmware_id: 22,
-              file_name: "extra.bin",
-              platform_slug: "psx",
-              matched: null,
-              md5: "bbb",
-              size: 512,
-              no_checksum: false,
-            },
+            library: makeLibMatch("unclaimed.bin", 41, "ddd", null),
           }),
         ],
       });
-      vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValueOnce(answer);
+      vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValueOnce(layoutAnswer);
 
       render(<EmulationSettings appId={APP_ID} detail={makeDetail()} />);
       const shownHeader = await screen.findByTestId("bios-table-header");
@@ -723,9 +716,9 @@ describe("EmulationSettings", () => {
         expect(cells).toHaveStyle({ gridTemplateColumns: expectedColumns });
       }
 
-      const missingRow = screen.getByText("missing.bin").closest("[data-testid='bios-file-row']") as HTMLElement;
+      const missingRow = screen.getByText("fetchable.bin").closest("[data-testid='bios-file-row']") as HTMLElement;
       const replaceRow = screen.getByText("replace.bin").closest("[data-testid='bios-file-row']") as HTMLElement;
-      const ownedRow = screen.getByText("owned.bin").closest("[data-testid='bios-file-row']") as HTMLElement;
+      const ownedRow = screen.getByText("deletable.bin").closest("[data-testid='bios-file-row']") as HTMLElement;
 
       const downloadBtn = within(missingRow).getByRole("button", { name: "Download" });
       const replaceBtn = within(replaceRow).getByRole("button", { name: "Replace…" });

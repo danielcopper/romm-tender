@@ -43,14 +43,14 @@ import { lastPathSegment } from "./formatters";
 export type BiosTableRow = FirmwarePlatformExt["files"][number] | BiosFileStatus;
 
 /** One glyph in a BIOS row's On-disk cell, with its colour and tooltip. */
-export interface BiosMark {
+interface BiosMark {
   glyph: string;
   color: string;
   title: string;
 }
 
 /** One entry in the mark legend below a BIOS table. */
-export interface BiosLegendEntry {
+interface BiosLegendEntry {
   glyph: string;
   color: string;
   text: string;

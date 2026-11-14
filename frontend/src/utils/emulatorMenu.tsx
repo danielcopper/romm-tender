@@ -58,7 +58,7 @@ export function isEmulatorEntryActive(
 }
 
 /** Label for the game-level "Use System Override" reset option. */
-export function followSystemLabel(
+function followSystemLabel(
   emulators: readonly EmulatorOption[],
   platformCoreLabel: string | null,
   hasGameOverride: boolean,
@@ -129,17 +129,23 @@ const EntryLaunchLine: FC<{
 /**
  * The entry text: its label plus the markers saying what it is. "(default)" is
  * the entry the source ships first, unless its installation is not
- * established, "(chosen in ES-DE)" the one the user chose
- * there, "(system)" the per-platform override, ✓ the one actually in effect —
- * one entry can carry several, which is why they are suffixes rather than a
- * single state.
+ * established, "(pinned)" the per-game override on a surface without a separate
+ * reset row, "(chosen in ES-DE)" the one the user chose there, "(system)" the
+ * per-platform override, ✓ the one actually in effect — one entry can carry
+ * several, which is why they are suffixes rather than a single state.
  */
-export function emulatorEntryLabel(e: EmulatorOption, isActive: boolean, isPlatformCore: boolean): string {
+export function emulatorEntryLabel(
+  e: EmulatorOption,
+  isActive: boolean,
+  isPlatformCore: boolean,
+  isPinned = false,
+): string {
   const defaultMark = e.is_default ? " (default)" : "";
+  const pinnedMark = isPinned ? " (pinned)" : "";
   const frontendMark = e.chosen_in_frontend ? " (chosen in ES-DE)" : "";
   const systemMark = isPlatformCore ? " (system)" : "";
   const activeMark = isActive ? " ✓" : "";
-  return `${e.label}${defaultMark}${frontendMark}${systemMark}${activeMark}`;
+  return `${e.label}${defaultMark}${pinnedMark}${frontendMark}${systemMark}${activeMark}`;
 }
 
 /** Build the `<Menu>` element for `showContextMenu`. */

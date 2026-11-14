@@ -50,7 +50,7 @@ export interface BiosStatusLine {
  * The platform an action is for: its slug, which finds its system, and the
  * folder RomM keeps it in (`""` where a game page does not know it), which
  * names it — two listed platforms can share a slug, and the Platforms tab shows
- * each as a row of its own (#2452). Every press passes both (`api/backend.ts`).
+ * each as a row of its own. Every press passes both (`api/backend.ts`).
  */
 export interface PlatformKey {
   slug: string;
@@ -130,7 +130,7 @@ export interface BiosActions {
 
 /** A BIOS row's one offered action: fetch it, replace what lies at its place,
  *  or remove the copy Tender holds. */
-export type BiosRowActionOffer =
+type BiosRowActionOffer =
   | { kind: "download"; name: string; firmwareId: number | null }
   | { kind: "replace"; place: string; fileName: string }
   | { kind: "delete"; name: string };
@@ -181,7 +181,7 @@ export function biosDownloadButtonState(
 }
 
 /** What the platform-wide and requirement-scoped BIOS buttons offer right now. */
-export interface BiosBulkOffer {
+interface BiosBulkOffer {
   shownEmulator: string | null;
   requiredLabel: string | null;
   requiredMissing: number;
@@ -258,12 +258,11 @@ export function deletePlatformBiosConfirmCopy(platformName: string): BiosConfirm
 
 /**
  * Tell open game-detail surfaces that this platform's firmware changed, so they
- * re-read their BIOS requirement instead of leaving the pre-change one standing
- * (#939).
+ * re-read their BIOS requirement instead of leaving the pre-change one standing.
  *
  * Call it only when firmware actually changed. The event fans out to every
  * mounted view and each one that matches the slug pays a live
- * `get_bios_status` for it (#1082) — all but the view whose own BIOS action
+ * `get_bios_status` for it — all but the view whose own BIOS action
  * ran, which has read its answer already and skips its own event — so a run
  * that moved no files must stay silent rather than send an event nothing can
  * act on.
