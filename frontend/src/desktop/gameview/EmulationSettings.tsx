@@ -174,7 +174,8 @@ const ACTION_ROW_STYLE: CSSProperties = {
   marginTop: "8px",
 };
 
-const TABLE_COLUMNS = "minmax(0, 1fr) 56px 96px auto";
+const ROW_ACTION_WIDTH = "88px";
+const TABLE_COLUMNS = `minmax(0, 1fr) 56px 96px ${ROW_ACTION_WIDTH}`;
 
 const TABLE_HEADER_STYLE: CSSProperties = {
   display: "grid",
@@ -229,6 +230,20 @@ function actionButtonStyle(disabled: boolean, active = false): CSSProperties {
     display: "inline-flex",
     alignItems: "center",
     gap: "6px",
+  };
+}
+
+function rowActionButtonStyle(disabled: boolean): CSSProperties {
+  return {
+    ...actionButtonStyle(disabled),
+    width: ROW_ACTION_WIDTH,
+    minWidth: ROW_ACTION_WIDTH,
+    maxWidth: ROW_ACTION_WIDTH,
+    minHeight: "26px",
+    padding: "5px 8px",
+    boxSizing: "border-box",
+    justifyContent: "center",
+    whiteSpace: "nowrap",
   };
 }
 
@@ -610,7 +625,7 @@ const DesktopBiosRowActionButton: FC<{
       <button
         type="button"
         disabled={disabled}
-        style={actionButtonStyle(disabled)}
+        style={rowActionButtonStyle(disabled)}
         onClick={() => {
           if (busy) return;
           onPressKey(buttonKey);
@@ -634,7 +649,7 @@ const DesktopBiosRowActionButton: FC<{
       <button
         type="button"
         disabled={disabled}
-        style={actionButtonStyle(disabled)}
+        style={rowActionButtonStyle(disabled)}
         onClick={() => detach(askReplace())}
       >
         Replace…
@@ -650,7 +665,12 @@ const DesktopBiosRowActionButton: FC<{
     actions.deleteBiosFile(platform, offer.name);
   };
   return (
-    <button type="button" disabled={disabled} style={actionButtonStyle(disabled)} onClick={() => detach(askDelete())}>
+    <button
+      type="button"
+      disabled={disabled}
+      style={rowActionButtonStyle(disabled)}
+      onClick={() => detach(askDelete())}
+    >
       {redText("Delete", disabled)}
     </button>
   );
@@ -671,9 +691,12 @@ const DesktopBiosFileRow: FC<{
 
   return (
     <div data-testid="bios-file-row" style={TABLE_ROW_STYLE}>
-      <div style={TABLE_CELLS_STYLE}>
+      <div data-testid="bios-file-cells" style={TABLE_CELLS_STYLE}>
         <div style={{ minWidth: 0 }} title={file.declared_path ?? file.file_name}>
-          <div data-testid="bios-file-name" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div
+            data-testid="bios-file-name"
+            style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          >
             {folder && <span style={{ color: MUTED_COLOR }}>{folder}</span>}
             {file.file_name}
           </div>
@@ -691,7 +714,9 @@ const DesktopBiosFileRow: FC<{
             </span>
           )}
         </div>
-        <div style={{ ...MUTED_TEXT_STYLE, overflowWrap: "break-word" }}>{contentsWords(file, emulator)}</div>
+        <div style={{ ...MUTED_TEXT_STYLE, minWidth: 0, overflowWrap: "break-word" }}>
+          {contentsWords(file, emulator)}
+        </div>
         <div>{actionButton}</div>
       </div>
       {description && <div style={{ ...MUTED_TEXT_STYLE, marginTop: "3px" }}>{description}</div>}
@@ -907,7 +932,7 @@ const DesktopBiosUnclaimedSection: FC<{
       <div style={{ ...SUBHEADING_STYLE, marginBottom: "6px" }}>
         In your RomM library, asked for by no emulator here
       </div>
-      <div style={TABLE_HEADER_STYLE}>
+      <div data-testid="bios-unclaimed-header" style={TABLE_HEADER_STYLE}>
         <span>File</span>
         <span>On disk</span>
         <span>Contents</span>

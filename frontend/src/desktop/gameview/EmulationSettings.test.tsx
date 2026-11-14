@@ -654,5 +654,102 @@ describe("EmulationSettings", () => {
       await waitFor(() => expect(backend.deletePlatformBios).toHaveBeenCalledWith("psx", "psx"));
       expect(await screen.findByTestId("bios-action-status")).toHaveTextContent("Deleted platform BIOS");
     });
+
+    it("pins header and row column tracks to fixed widths and keeps row action buttons a constant width across states", async () => {
+      const pendingDownload = deferred<Awaited<ReturnType<typeof backend.downloadPlatformFirmwareFile>>>();
+      vi.mocked(backend.downloadPlatformFirmwareFile).mockReturnValueOnce(pendingDownload.promise);
+      vi.mocked(backend.identifyLibraryFirmware).mockResolvedValue({ success: true, known_as: [] });
+
+      const answer = makeBiosAnswer({
+        emulator_tabs: [{ emulator: "DUCKSTATION", label: "DuckStation", launching: true, requirements_met: false }],
+        files: [
+          makeBiosFile("unfetchable.bin", { on_server: false, downloaded: false, satisfied: false }),
+          makeBiosFile("missing.bin", {
+            on_server: true,
+            downloaded: false,
+            satisfied: false,
+            library: {
+              firmware_id: 11,
+              file_name: "missing.bin",
+              platform_slug: "psx",
+              matched: "content",
+              md5: "aaa",
+              size: 512,
+              no_checksum: false,
+            },
+          }),
+          makeBiosFile("replace.bin", {
+            on_server: false,
+            downloaded: true,
+            satisfied: false,
+            replace_offered: true,
+            local_path: "/bios/replace.bin",
+          }),
+          makeBiosFile("owned.bin", {
+            on_server: false,
+            downloaded: true,
+            satisfied: true,
+            deletable_count: 1,
+            delete_name: "owned.bin",
+          }),
+          makeBiosFile("extra.bin", {
+            declared_by: null,
+            wanted: "not_needed",
+            required_by_active: false,
+            on_server: true,
+            downloaded: false,
+            library: {
+              firmware_id: 22,
+              file_name: "extra.bin",
+              platform_slug: "psx",
+              matched: null,
+              md5: "bbb",
+              size: 512,
+              no_checksum: false,
+            },
+          }),
+        ],
+      });
+      vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValueOnce(answer);
+
+      render(<EmulationSettings appId={APP_ID} detail={makeDetail()} />);
+      const shownHeader = await screen.findByTestId("bios-table-header");
+      const unclaimedHeader = screen.getByTestId("bios-unclaimed-header");
+      const expectedColumns = "minmax(0, 1fr) 56px 96px 88px";
+
+      expect(shownHeader).toHaveStyle({ gridTemplateColumns: expectedColumns });
+      expect(unclaimedHeader).toHaveStyle({ gridTemplateColumns: expectedColumns });
+      for (const cells of screen.getAllByTestId("bios-file-cells")) {
+        expect(cells).toHaveStyle({ gridTemplateColumns: expectedColumns });
+      }
+
+      const missingRow = screen.getByText("missing.bin").closest("[data-testid='bios-file-row']") as HTMLElement;
+      const replaceRow = screen.getByText("replace.bin").closest("[data-testid='bios-file-row']") as HTMLElement;
+      const ownedRow = screen.getByText("owned.bin").closest("[data-testid='bios-file-row']") as HTMLElement;
+
+      const downloadBtn = within(missingRow).getByRole("button", { name: "Download" });
+      const replaceBtn = within(replaceRow).getByRole("button", { name: "Replace…" });
+      const deleteBtn = within(ownedRow).getByRole("button", { name: "Delete" });
+
+      for (const btn of [downloadBtn, replaceBtn, deleteBtn]) {
+        expect(btn).toHaveStyle({
+          width: "88px",
+          minWidth: "88px",
+          maxWidth: "88px",
+          boxSizing: "border-box",
+          justifyContent: "center",
+        });
+      }
+
+      fireEvent.click(downloadBtn);
+      expect(within(downloadBtn).getByTestId("spinner")).toBeInTheDocument();
+      expect(downloadBtn).toHaveStyle({ width: "88px", minWidth: "88px", maxWidth: "88px" });
+
+      await act(async () => {
+        pendingDownload.resolve({ success: false, reason: "download_failed", message: "Download failed" });
+      });
+      expect(await within(downloadBtn).findByText("Failed")).toBeInTheDocument();
+      expect(downloadBtn).toHaveStyle({ width: "88px", minWidth: "88px", maxWidth: "88px" });
+    });
   });
 });
