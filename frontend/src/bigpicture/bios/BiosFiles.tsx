@@ -239,6 +239,17 @@ const BiosFileRow: FC<{
       focusStop={!action && stop === "focusable"}
       cells={[
         {
+          // With the folder in front of it what gets cut is the NAME rather
+          // than the description that used to sit here —
+          // `scummvm/extra/hadesch_translations.dat` does not fit the platform
+          // pane's ~202px name cell in any arrangement. The title is the mouse's
+          // way back to it; a reader on the controller has none, and the only
+          // real fix is width the list column currently holds.
+          //
+          // What the shown emulator needs of the file stands under the name in
+          // the same cell: the mark's colour alone does not tell a met required
+          // file from a met optional one, and a two-line cell is what the row's
+          // button is centred against.
           content: (
             <>
               <span data-testid="bios-file-name" style={NAME_LINE}>
@@ -253,6 +264,8 @@ const BiosFileRow: FC<{
           title: file.declared_path ?? file.file_name,
         },
         {
+          // Glyphs rather than a run of text: nothing to ellipsise, and the
+          // pair is laid out rather than flowed.
           content: (
             <>
               <span data-testid="disk-mark" style={{ color: mark.color }} title={mark.title}>
@@ -268,10 +281,20 @@ const BiosFileRow: FC<{
           style: { display: "flex", gap: "4px", fontSize: "12px", whiteSpace: "nowrap" },
           clip: false,
         },
+        // Wrapped, never cut: these words are the explanation of the mark
+        // beside them, and a controller has no way to the cell's title.
         { content: contents, clip: false, style: CONTENTS_CELL },
+        // The button draws its focus ring outside its own box (the injected
+        // sheet's outline), so this cell must not hide its overflow.
         { content: action, clip: false },
       ]}
     >
+      {/* The description is a muted line UNDER the row rather than beside the
+          name: this name lives in a table cell that clips (~202px on the
+          platform pane), and it already gives up its folder prefix to the same
+          shortage — hanging the label off it would take the NAME off the
+          screen, which is the one thing a reader placing a file by hand needs.
+          Under the row there is a whole width for it, on one clipped line. */}
       {description && <div style={UNDER_NAME_LINE}>{description}</div>}
       <BiosRowLines lines={rowLines} busyLine={busyLine} />
     </PaneTableRow>
@@ -310,6 +333,10 @@ function rowAction(part: BiosPart, file: BiosTableRow, fetchable: Set<string>, k
   const { platform, busyFolder, serverOffline, actions, answer } = part.input;
   const { focus } = part;
   const busy = busyFolder !== null;
+  // The pressed row's own button stays enabled while its work runs, and every
+  // other one waits greyed — still a focus stop, since Steam's `DialogButton`
+  // never disables its element, as its shipped client code shows
+  // (steamui/sp.js). A press on this one while anything runs does nothing.
   const disabled = busy && focus.pressed !== key;
   const offer = biosRowAction(file, fetchable.has(file.file_name), serverOffline);
   if (offer === null) return null;
@@ -517,6 +544,10 @@ export const BiosButtons: FC<{ part: BiosPart; status: ScopedStatus | null }> = 
     work();
   };
 
+  const reqDisabled = bulkDisabled(BULK_REQUIRED, offer.canDownloadRequired);
+  const allDisabled = bulkDisabled(BULK_ALL, offer.canDownloadAll);
+  const delDisabled = bulkDisabled(BULK_DELETE, offer.deletable > 0);
+
   return (
     <>
       {offer.requiredLabel !== null && (
@@ -524,42 +555,42 @@ export const BiosButtons: FC<{ part: BiosPart; status: ScopedStatus | null }> = 
           <div style={{ display: "contents" }} ref={focus.slot(BULK_REQUIRED)}>
             <DialogButton
               style={BULK_BUTTON}
-              disabled={bulkDisabled(BULK_REQUIRED, offer.canDownloadRequired)}
+              disabled={reqDisabled}
               onClick={pressBulk(BULK_REQUIRED, () => actions.downloadRequired(platform, offer.shownEmulator))}
             >
-              {downloadLabel(
-                part,
-                "required",
-                `${offer.requiredLabel} (${offer.requiredMissing})`,
-                12,
-                bulkDisabled(BULK_REQUIRED, offer.canDownloadRequired),
-              )}
+              {downloadLabel(part, "required", `${offer.requiredLabel} (${offer.requiredMissing})`, 12, reqDisabled)}
             </DialogButton>
           </div>
         </ButtonRow>
       )}
+      {/* The platform-wide pair, apart from the shown emulator's:
+          "Download all" fetches every file the library holds for the platform,
+          and the delete takes every download of Tender's own for it — its
+          number is the backend's `deletable_count`, the records still on disk,
+          which is exactly what the delete unlinks. Delete is local-only (no
+          server needed). */}
       <SubHeading title={`For all of ${platformName}`} />
       <ButtonRow padding="2px 16px 6px">
         <div style={{ display: "contents" }} ref={focus.slot(BULK_ALL)}>
           <DialogButton
             style={BULK_BUTTON}
-            disabled={bulkDisabled(BULK_ALL, offer.canDownloadAll)}
+            disabled={allDisabled}
             onClick={pressBulk(BULK_ALL, () => actions.downloadAll(platform))}
           >
-            {downloadLabel(part, "all", "Download all", 12, bulkDisabled(BULK_ALL, offer.canDownloadAll))}
+            {downloadLabel(part, "all", "Download all", 12, allDisabled)}
           </DialogButton>
         </div>
         <div style={{ display: "contents" }} ref={focus.slot(BULK_DELETE)}>
           <DialogButton
             style={BULK_BUTTON}
-            disabled={bulkDisabled(BULK_DELETE, offer.deletable > 0)}
+            disabled={delDisabled}
             onClick={() => {
               if (busy) return;
               focus.hold(BULK_DELETE);
               confirmDeleteBios();
             }}
           >
-            {redWhileEnabled(`Delete downloads (${offer.deletable})`, bulkDisabled(BULK_DELETE, offer.deletable > 0))}
+            {redWhileEnabled(`Delete downloads (${offer.deletable})`, delDisabled)}
           </DialogButton>
         </div>
       </ButtonRow>

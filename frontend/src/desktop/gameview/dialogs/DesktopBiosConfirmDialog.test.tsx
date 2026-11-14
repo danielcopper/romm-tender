@@ -11,8 +11,8 @@ describe("DesktopBiosConfirmDialog", () => {
 
     const dialog = screen.getByRole("dialog", { name: "Replace scph5501.bin?" });
     expect(dialog).toHaveTextContent(copy.description);
-    expect(screen.getByRole("button", { name: "Replace" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Replace" }).style.backgroundImage).toContain("#1a9fff");
+    expect(screen.getByRole("button", { name: "Cancel" }).style.backgroundColor).toBe("transparent");
   });
 
   it("answers true when the confirm button is clicked", () => {

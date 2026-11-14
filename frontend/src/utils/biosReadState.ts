@@ -43,8 +43,15 @@ export function biosAnswerStale(held: boolean, failed: boolean): boolean {
 const UNKNOWN_REQUIREMENT_STATUS: BiosStatus = { needs_bios: false, bios_status_unknown: true };
 
 /** Project a game-detail BIOS answer — from a cached game detail or a live
- *  `get_bios_status` read — into `{ biosStatus, biosLevel }`, or `null` when
- *  the payload carries no BIOS answer at all (`BiosAnswer` in `api/backend.ts`).
+ *  `get_bios_status` read, which ship the identical shape — into
+ *  `{ biosStatus, biosLevel }`, or `null` when the payload carries no BIOS
+ *  answer at all (`BiosAnswer` in `api/backend.ts`). The `"unknown"` level is
+ *  an answer and is shown as one.
+ *
+ *  What a `null` does is each caller's: a live read marks itself failed and
+ *  keeps any shown status, a core change keeps the shown status and reads
+ *  again, and a version switch or initial open waits for the live read instead,
+ *  because what was shown is another ROM's or nothing.
  *
  *  `bios_level` is computed by the backend (`compute_bios_level`) and threaded
  *  straight through, never re-derived. */

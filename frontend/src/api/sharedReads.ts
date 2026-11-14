@@ -47,11 +47,15 @@
  * `get_bios_status` needs that argument made twice over, because a BIOS answer
  * is the one of the three that a user action moves within a single page's
  * lifetime: a firmware download or delete empties the firmware cache, and the
- * next read answers differently. What admits it anyway is that no such action
- * ever leads to a read through this module. Every re-read that follows one is
- * change-driven and calls `api/backend` directly — the play row's post-download
- * `refreshBiosStatus`, the `bios` event's own `get_bios_status`, both
- * stores' core-change handlers, and the info panel's version-switch re-read —
+ * next read answers differently. It also has a third caller on the desktop
+ * client's game view (`desktop/gameview/EmulationSettings.tsx`), which joins
+ * `gameDetailStore`'s page-open read on initial open for an `appId` and uses
+ * `api/backend` directly for every subsequent read on that page. What admits
+ * all three callers is that no mutation or version switch ever leads to a read
+ * through this module: every re-read that follows one is change-driven and
+ * calls `api/backend` directly — the play row's `refreshBiosStatus`, the
+ * `bios` event's own `get_bios_status`, the core-change handlers, and both
+ * game surfaces' version-switch, folder-discovery, and post-action re-reads —
  * and neither store re-runs a LOAD on a `bios` event, so a shared read is never
  * issued after a firmware mutation.
  *
@@ -102,7 +106,8 @@ export const getRomMetadataShared = shareInFlight(getRomMetadata);
  *  read that doubled on every single one. */
 export const getPlatformCoreInfoShared = shareInFlight(getPlatformCoreInfo);
 
-/** `get_bios_status` for one ROM, shared across the page's two load lanes. Both
+/** `get_bios_status` for one ROM, shared across the page's load lanes and
+ *  `EmulationSettings`'s initial open for an `appId`. The stores
  *  issue it off the same `bios` stale mark on the same cached detail, and the
  *  backend sets that mark whenever the detail carries no BIOS answer — which
  *  includes every platform whose launching emulator needs none, so the pair of

@@ -6,8 +6,10 @@ import type { BiosAnswer } from "../../api/backend";
 import * as sharedReads from "../../api/sharedReads";
 import * as coreOverride from "../../utils/coreOverride";
 import * as gameDetailStore from "../../utils/gameDetailStore";
+import { BIOS_MISSING_RED } from "../../utils/biosColor";
+import { DOWNLOAD_DAMAGED, IDENTIFYING } from "../../utils/biosPlaceWords";
 import { forgetIdentifications } from "../../utils/firmwareIdentifications";
-import { setStrandedAnswer } from "../../test-utils/stranded-panel";
+import { resetStrandedPanel, setStrandedAnswer } from "../../test-utils/stranded-panel";
 import type { BiosFileStatus, BiosStatus, EmulatorOption, GameLaunch } from "../../types";
 import { EmulationSettings } from "./EmulationSettings";
 
@@ -743,6 +745,661 @@ describe("EmulationSettings", () => {
       });
       expect(await within(downloadBtn).findByText("Failed")).toBeInTheDocument();
       expect(downloadBtn).toHaveStyle({ width: "88px", minWidth: "88px", maxWidth: "88px" });
+    });
+
+    it("refreshes the newly shown ROM version when a version switch happens during an in-flight BIOS action", async () => {
+      const pendingDownload = deferred<Awaited<ReturnType<typeof backend.downloadPlatformFirmwareFile>>>();
+      vi.mocked(backend.downloadPlatformFirmwareFile).mockReturnValueOnce(pendingDownload.promise);
+      const answer42 = makeBiosAnswer({
+        files: [makeBiosFile("missing.bin", { library: makeLibMatch("missing.bin", 11, "aaa") })],
+      });
+      const answer99Initial = makeBiosAnswer({
+        files: [makeBiosFile("v99-before.bin", { library: makeLibMatch("v99-before.bin", 12, "bbb") })],
+      });
+      const answer99After = makeBiosAnswer({
+        files: [makeBiosFile("v99-after.bin", { downloaded: true, satisfied: true })],
+      });
+      vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValueOnce(answer42);
+      vi.mocked(backend.getBiosStatus).mockResolvedValueOnce(answer99Initial).mockResolvedValueOnce(answer99After);
+
+      const events: CustomEvent[] = [];
+      const onEvent = (e: Event) => events.push(e as CustomEvent);
+      globalThis.addEventListener("romm_data_changed", onEvent);
+
+      try {
+        const { rerender } = render(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: 42 })} />);
+        await screen.findByText("missing.bin");
+
+        fireEvent.click(screen.getByRole("button", { name: "Download" }));
+        rerender(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: 99 })} />);
+        await screen.findByText("v99-before.bin");
+
+        await act(async () => {
+          pendingDownload.resolve({ success: true, message: "Downloaded", downloaded: 1 });
+        });
+
+        expect(await screen.findByText("v99-after.bin")).toBeInTheDocument();
+        expect(vi.mocked(backend.getBiosStatus).mock.calls.map(([id]) => id)).toEqual([99, 99]);
+        expect(events).toHaveLength(1);
+        expect(events[0]!.detail).toEqual({ type: "bios", platform_slug: "psx", platform_fs_slug: "psx" });
+
+        // ownBiosDispatch resets in finally so a subsequent external bios event still triggers a re-read.
+        vi.mocked(backend.getBiosStatus).mockClear();
+        act(() => {
+          globalThis.dispatchEvent(
+            new CustomEvent("romm_data_changed", {
+              detail: { type: "bios", platform_slug: "psx", platform_fs_slug: "psx" },
+            }),
+          );
+        });
+        await waitFor(() => expect(backend.getBiosStatus).toHaveBeenCalledWith(99));
+      } finally {
+        globalThis.removeEventListener("romm_data_changed", onEvent);
+      }
+    });
+
+    it("covers bulk Download required / Download all busy gating, offline withdrawal, redText states, and duplicate-confirm guards", async () => {
+      const reqDeferred = deferred<Awaited<ReturnType<typeof backend.downloadRequiredFirmware>>>();
+      const allDeferred = deferred<Awaited<ReturnType<typeof backend.downloadAllFirmware>>>();
+      const repDeferred = deferred<Awaited<ReturnType<typeof backend.replaceBiosFile>>>();
+      const delRowDeferred = deferred<Awaited<ReturnType<typeof backend.deleteBiosFile>>>();
+      const delAllDeferred = deferred<Awaited<ReturnType<typeof backend.deletePlatformBios>>>();
+      vi.mocked(backend.downloadRequiredFirmware).mockReturnValueOnce(reqDeferred.promise);
+      vi.mocked(backend.downloadAllFirmware).mockReturnValueOnce(allDeferred.promise);
+      vi.mocked(backend.replaceBiosFile).mockReturnValueOnce(repDeferred.promise);
+      vi.mocked(backend.deleteBiosFile).mockReturnValueOnce(delRowDeferred.promise);
+      vi.mocked(backend.deletePlatformBios).mockReturnValueOnce(delAllDeferred.promise);
+
+      const makeRichAnswer = (overrides: Partial<BiosStatus> = {}) =>
+        makeBiosAnswer({
+          deletable_count: 1,
+          server_count: 2,
+          local_count: 0,
+          emulator_tabs: [
+            {
+              emulator: "DUCKSTATION",
+              label: "DuckStation",
+              launching: true,
+              installed: true,
+              requirements_met: false,
+            },
+            {
+              emulator: "mednafen_psx_hw_libretro.so",
+              label: "Beetle PSX HW",
+              launching: false,
+              installed: true,
+              requirements_met: false,
+              rows: [
+                makeBiosFile("scph5502.bin", {
+                  declared_by: "mednafen_psx_hw_libretro.so",
+                  fetch_for_required: true,
+                  library: makeLibMatch("scph5502.bin", 52, "5502"),
+                }),
+                makeBiosFile("replace.bin", {
+                  declared_by: "mednafen_psx_hw_libretro.so",
+                  on_server: false,
+                  downloaded: true,
+                  replace_offered: true,
+                  local_path: "/bios/sub/replace.bin",
+                }),
+                makeBiosFile("owned.bin", {
+                  declared_by: "mednafen_psx_hw_libretro.so",
+                  on_server: false,
+                  downloaded: true,
+                  satisfied: true,
+                  deletable_count: 1,
+                  delete_name: "owned.bin",
+                }),
+              ],
+            },
+            {
+              emulator: "pcsx_rearmed_libretro.so",
+              label: "PCSX ReARMed",
+              launching: false,
+              installed: false,
+              requirements_met: false,
+              rows: [],
+            },
+          ],
+          files: [
+            makeBiosFile("scph5501.bin", {
+              fetch_for_required: true,
+              library: makeLibMatch("scph5501.bin", 51, "5501"),
+            }),
+          ],
+          ...overrides,
+        });
+
+      vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValueOnce(makeRichAnswer());
+      vi.mocked(backend.getBiosStatus).mockImplementation(async () => makeRichAnswer());
+
+      render(<EmulationSettings appId={APP_ID} detail={makeDetail()} />);
+      const tabs = await screen.findByTestId("bios-emulator-tabs");
+      const duckPill = within(tabs).getByRole("button", { name: "DuckStation" });
+      const beetlePill = within(tabs).getByRole("button", { name: "Beetle PSX HW" });
+      const rearmedPill = within(tabs).getByRole("button", { name: "PCSX ReARMed" });
+
+      // Tab pill colors and aria-pressed: launching=blue, installed alt=uncolored, uninstalled alt=red.
+      expect(duckPill).toHaveAttribute("aria-pressed", "true");
+      expect(duckPill.style.backgroundColor).toContain("rgba(79, 163, 255");
+      expect(within(duckPill).getByText("DuckStation")).toHaveStyle({ color: "#4fa3ff" });
+      expect(beetlePill).toHaveAttribute("aria-pressed", "false");
+      expect(beetlePill.style.backgroundColor).toContain("rgba(255, 255, 255");
+      expect(within(beetlePill).getByText("Beetle PSX HW").getAttribute("style")).toBeNull();
+      expect(within(rearmedPill).getByText("PCSX ReARMed")).toHaveStyle({ color: BIOS_MISSING_RED });
+
+      // Switch to Beetle PSX HW tab and run Download required for that shown tab.
+      fireEvent.click(beetlePill);
+      expect(beetlePill).toHaveAttribute("aria-pressed", "true");
+
+      const reqBtn = screen.getByRole("button", { name: "Download required for Beetle PSX HW (1)" });
+      const allBtn = screen.getByRole("button", { name: "Download all" });
+      const bulkDelBtn = screen.getByRole("button", { name: "Delete downloads (1)" });
+      const rowDelBtn = screen.getByRole("button", { name: "Delete" });
+
+      // Enabled delete buttons render red inner spans.
+      expect(bulkDelBtn.querySelector("span")).toHaveStyle({ color: BIOS_MISSING_RED });
+      expect(rowDelBtn.querySelector("span")).toHaveStyle({ color: BIOS_MISSING_RED });
+
+      fireEvent.click(reqBtn);
+      expect(backend.downloadRequiredFirmware).toHaveBeenCalledWith(
+        "psx",
+        "psx",
+        "mednafen_psx_hw_libretro.so",
+        ROM_ID,
+      );
+      expect(reqBtn).toBeEnabled();
+      expect(within(reqBtn).getByTestId("spinner")).toBeInTheDocument();
+      expect(allBtn).toBeDisabled();
+      expect(bulkDelBtn).toBeDisabled();
+      expect(rowDelBtn).toBeDisabled();
+      // While disabled by another busy action, redText renders plain text without the red span.
+      expect(bulkDelBtn.querySelector("span")).toBeNull();
+      expect(rowDelBtn.querySelector("span")).toBeNull();
+
+      await act(async () => {
+        reqDeferred.resolve({ success: true, message: "ok", downloaded: 1 });
+      });
+      await waitFor(() => expect(allBtn).toBeEnabled());
+
+      // Download all busy state, followed by failure + server_offline re-read disabling Failed span.
+      vi.mocked(backend.getBiosStatus).mockResolvedValueOnce(makeRichAnswer({ server_offline: true }));
+      fireEvent.click(allBtn);
+      expect(backend.downloadAllFirmware).toHaveBeenCalledWith("psx", "psx", ROM_ID);
+      expect(allBtn).toBeEnabled();
+      expect(within(allBtn).getByTestId("spinner")).toBeInTheDocument();
+      expect(reqBtn).toBeDisabled();
+      expect(bulkDelBtn).toBeDisabled();
+
+      await act(async () => {
+        allDeferred.resolve({ success: false, reason: "download_failed", message: "boom" });
+      });
+      expect(within(allBtn).getByText("Failed")).toHaveStyle({ color: BIOS_MISSING_RED });
+
+      // Wait out the 2s Failed notice via a server_offline external bios event once idle, then verify offline state.
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 2050));
+      });
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", { detail: { type: "bios", platform_slug: "psx" } }),
+        );
+      });
+      await waitFor(() => expect(allBtn).toBeDisabled());
+      expect(reqBtn).toBeDisabled();
+      // Row Download is withdrawn while server_offline is true, while Replace… and Delete remain available.
+      expect(screen.queryByRole("button", { name: "Download" })).not.toBeInTheDocument();
+      expect(bulkDelBtn).toBeEnabled();
+
+      // Replace… without backup_root names "the backup folder", uses primary tone, and ignores clicks while busy.
+      const replaceBtn = screen.getByRole("button", { name: "Replace…" });
+      fireEvent.click(replaceBtn);
+      const repDialog = await screen.findByRole("dialog", { name: "Replace replace.bin?" });
+      expect(repDialog).toHaveTextContent("/bios/sub/replace.bin");
+      expect(repDialog).toHaveTextContent("the backup folder");
+      const repConfirm = within(repDialog).getByRole("button", { name: "Replace" });
+      expect(repConfirm.style.backgroundImage).toContain("#1a9fff");
+      fireEvent.click(repConfirm);
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(replaceBtn).toBeEnabled();
+      fireEvent.click(replaceBtn);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      await act(async () => {
+        repDeferred.resolve({
+          success: true,
+          placed: 1,
+          left_in_place: 0,
+          removed: 0,
+          link_failures: [{ file_name: "replace.bin", place: "/bios/sub/replace.bin", reason: "read_only" }],
+          backup_path: "/backups/replace.bin",
+        });
+      });
+      await waitFor(() => expect(bulkDelBtn).toBeEnabled());
+
+      // Row Delete uses danger tone and ignores a second click while busy.
+      fireEvent.click(rowDelBtn);
+      const delDialog = await screen.findByRole("dialog", { name: "Delete owned.bin?" });
+      expect(within(delDialog).getByRole("button", { name: "Delete" }).style.backgroundImage).toContain("#c83c3c");
+      fireEvent.click(within(delDialog).getByRole("button", { name: "Delete" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(rowDelBtn).toBeEnabled();
+      fireEvent.click(rowDelBtn);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      await act(async () => {
+        delRowDeferred.resolve({ success: true, message: "Deleted", deleted_count: 1 });
+      });
+      await waitFor(() => expect(bulkDelBtn).toBeEnabled());
+
+      // Bulk Delete uses danger tone, disables other buttons while busy, and ignores a second click while busy.
+      fireEvent.click(bulkDelBtn);
+      const bulkDialog = await screen.findByRole("dialog", {
+        name: "Delete Tender's BIOS downloads for PlayStation?",
+      });
+      expect(within(bulkDialog).getByRole("button", { name: "Delete" }).style.backgroundImage).toContain("#c83c3c");
+      fireEvent.click(within(bulkDialog).getByRole("button", { name: "Delete" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(bulkDelBtn).toBeEnabled();
+      expect(rowDelBtn).toBeDisabled();
+      fireEvent.click(bulkDelBtn);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      await act(async () => {
+        delAllDeferred.resolve({ success: true, message: "Deleted all", deleted_count: 1 });
+      });
+    }, 10000);
+
+    it("renders declared subfolders, descriptions, emulator-scoped mismatch wording, identifying spinner, damaged downloads, and console demand headlines", async () => {
+      const idDeferred = deferred<Awaited<ReturnType<typeof backend.identifyLibraryFirmware>>>();
+      vi.mocked(backend.identifyLibraryFirmware).mockReturnValueOnce(idDeferred.promise);
+      vi.mocked(backend.downloadPlatformFirmwareFile).mockResolvedValueOnce({
+        success: false,
+        reason: "bios_download_damaged",
+        message: "Checksum mismatch",
+      });
+
+      const answer = makeBiosAnswer(
+        {
+          active_core_label: null,
+          console_needs_image: true,
+          required_count: 2,
+          required_downloaded: 1,
+          deletable_count: 0,
+          one_of_groups: [
+            {
+              state: "unmet",
+              covered: [],
+              missing: ["ntsc-u"],
+              unchecked: [],
+              game_regions: ["ntsc-u"],
+              regions: ["ntsc-u"],
+              options: [{ file_name: "scph5501.bin", regions: ["ntsc-u"], satisfied: false }],
+            },
+            {
+              state: "met",
+              covered: ["pal"],
+              missing: [],
+              unchecked: [],
+              game_regions: ["pal"],
+              regions: ["pal"],
+              options: [{ file_name: "scph5502.bin", regions: ["pal"], satisfied: true }],
+            },
+          ],
+          files: [
+            makeBiosFile("dc_boot.bin", {
+              declared_path: "dc/dc_boot.bin",
+              declaration: "read",
+              description: "Dreamcast boot ROM",
+              checked: "mismatch",
+              downloaded: true,
+              satisfied: false,
+              required_by_active: false,
+              on_server: false,
+            }),
+            makeBiosFile("plain.bin", {
+              declared_path: "plain.bin",
+              description: "",
+              downloaded: true,
+              satisfied: false,
+              required_by_active: false,
+              used_by_active: false,
+              wanted: "not_needed",
+              on_server: true,
+            }),
+            makeBiosFile("lib_extra.bin", {
+              declared_by: null,
+              wanted: "not_needed",
+              required_by_active: false,
+              used_by_active: false,
+              library: makeLibMatch("lib_extra.bin", 77, "md5-77", null),
+            }),
+          ],
+        },
+        "missing",
+      );
+      vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValueOnce(answer);
+      vi.mocked(backend.getBiosStatus).mockResolvedValue(answer);
+
+      const { rerender } = render(
+        <EmulationSettings appId={APP_ID} detail={makeDetail({ platformName: "PlayStation" })} />,
+      );
+      await screen.findByText("dc_boot.bin");
+
+      // With active_core_label null and no emulator_tabs, Download required is omitted,
+      // tabs are hidden, and Delete downloads (0) has no red span.
+      expect(screen.queryByRole("button", { name: /Download required/ })).not.toBeInTheDocument();
+      expect(screen.queryByTestId("bios-emulator-tabs")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Delete downloads (0)" }).querySelector("span")).toBeNull();
+
+      // Console demand headline names PlayStation and uses BODY_COLOR; falls back when platformName is empty.
+      const headlineRow = screen.getByText(/PlayStation does not start without a BIOS image/).parentElement!;
+      expect(headlineRow).toHaveStyle({ color: "#dfe3e6" });
+      rerender(<EmulationSettings appId={APP_ID} detail={makeDetail({ platformName: "" })} />);
+      expect(screen.getByText(/This system does not start without a BIOS image/)).toBeInTheDocument();
+
+      // Subfolder span vs root file without span, description line, and clean row with single bios-file-cells child.
+      const dcRow = screen.getByText("dc_boot.bin").closest("[data-testid='bios-file-row']") as HTMLElement;
+      expect(within(dcRow).getByTestId("bios-file-name").querySelector("span")).toHaveTextContent("dc/");
+      expect(within(dcRow).getByTestId("bios-file-name").querySelector("span")).toHaveStyle({ color: "#8f98a0" });
+      expect(within(dcRow).getByText("Dreamcast boot ROM")).toBeInTheDocument();
+
+      const plainRow = screen.getByText("plain.bin").closest("[data-testid='bios-file-row']") as HTMLElement;
+      expect(within(plainRow).getByTestId("bios-file-name").querySelector("span")).toBeNull();
+      expect(plainRow.children).toHaveLength(1);
+
+      // Unclaimed library row shows IDENTIFYING with spinner while pending, clears
+      // spinner once settled, and shows DOWNLOAD_DAMAGED on checksum failure.
+      const libRow = screen.getByText("lib_extra.bin").closest("[data-testid='bios-file-row']") as HTMLElement;
+      expect(within(libRow).getByText(IDENTIFYING)).toBeInTheDocument();
+      expect(within(libRow).getByTestId("spinner")).toBeInTheDocument();
+
+      await act(async () => {
+        idDeferred.resolve({ success: true, known_as: ["PSX Extra"] });
+      });
+      expect(within(libRow).queryByTestId("spinner")).not.toBeInTheDocument();
+
+      fireEvent.click(within(libRow).getByRole("button", { name: "Download" }));
+      expect(await within(libRow).findByText(DOWNLOAD_DAMAGED)).toBeInTheDocument();
+    });
+  });
+
+  describe("edge transitions across picker, stranded recovery, appId switches, and unmount", () => {
+    it("covers platform_system_off wording, picker styles, busy spinner, error clearing, logTags, and launch verdict transitions", async () => {
+      const { rerender } = render(
+        <EmulationSettings
+          appId={APP_ID}
+          detail={makeDetail({
+            emulatorDataAvailable: false,
+            emulatorDataReason: "platform_system_off",
+            emulatorSource: { kind: "retrodeck", starts_games: true },
+            emulatorPlatformSystem: {
+              state: "switched_off",
+              source: "retrodeck",
+              platform: "PlayStation",
+              system: "psx",
+            },
+            emulators: [],
+          })}
+        />,
+      );
+      await screen.findByTestId("bios-table-header");
+      expect(screen.getByTestId("desktop-emulator-unavailable")).toHaveTextContent(
+        "System psx is switched off in RetroDECK.",
+      );
+
+      // Uninstalled game with emulators: no picker spinners, active button is blue and
+      // opacity 1, uninstalled is opacity 0.5, and matching chosen_in_frontend omits
+      // frontendChoiceSentence.
+      const beetleChosen = makeEntry("Beetle PSX HW", { is_default: true, chosen_in_frontend: true });
+      const missing = makeEntry("PCSX ReARMed", { reason: "not_installed" });
+      rerender(
+        <EmulationSettings
+          appId={APP_ID}
+          detail={makeDetail({
+            installed: false,
+            emulators: [beetleChosen, missing],
+            activeCoreLabel: "Beetle PSX HW",
+            platformSlug: "",
+          })}
+        />,
+      );
+      const activeBtn = screen.getByRole("button", { name: /Beetle PSX HW \(default\) \(chosen in ES-DE\)/ });
+      const disabledBtn = screen.getByRole("button", { name: /PCSX ReARMed — emulator not installed/ });
+      expect(activeBtn).toHaveStyle({ color: "#4fa3ff", opacity: "1" });
+      expect(disabledBtn).toHaveStyle({ opacity: "0.5" });
+      expect(within(activeBtn).queryByTestId("spinner")).not.toBeInTheDocument();
+      expect(screen.queryByText(/chosen in ES-DE; Tender starts/)).not.toBeInTheDocument();
+
+      // Empty platformSlug blocks core picks.
+      fireEvent.click(activeBtn);
+      expect(coreOverride.executeGameCoreChange).not.toHaveBeenCalled();
+
+      // Enabling installed triggers getEmulatorLaunches; switching romId before it
+      // settles ignores the stale launch answer, and an empty verdict renders no extra
+      // div inside the button.
+      const swan = makeEntry("SwanStation");
+      const launches42 = deferred<GameLaunch[]>();
+      const launches99 = deferred<GameLaunch[]>();
+      vi.mocked(backend.getEmulatorLaunches)
+        .mockReturnValueOnce(launches42.promise)
+        .mockReturnValueOnce(launches99.promise);
+
+      rerender(
+        <EmulationSettings
+          appId={APP_ID}
+          detail={makeDetail({
+            installed: true,
+            romId: 42,
+            emulators: [beetleChosen, swan],
+            activeCoreLabel: "Beetle PSX HW",
+          })}
+        />,
+      );
+      expect(backend.getEmulatorLaunches).toHaveBeenCalledWith(42);
+
+      rerender(
+        <EmulationSettings
+          appId={APP_ID}
+          detail={makeDetail({
+            installed: true,
+            romId: 99,
+            emulators: [beetleChosen, swan],
+            activeCoreLabel: "Beetle PSX HW",
+          })}
+        />,
+      );
+      await act(async () => {
+        launches42.resolve([
+          {
+            state: "not_this_emulator",
+            entry: "Beetle PSX HW",
+            system: "psx",
+            platform_name: "PlayStation",
+            file: "stale.pbp",
+            extension: ".pbp",
+            starts_from: [".chd"],
+            other_entries: [],
+            install_in: null,
+            reason: "format_refused",
+            contents_unread: false,
+            format_unestablished: false,
+          },
+        ]);
+      });
+      expect(screen.queryByText(/stale\.pbp/)).not.toBeInTheDocument();
+
+      await act(async () => {
+        launches99.resolve([
+          {
+            state: "starts",
+            entry: "Beetle PSX HW",
+            system: "psx",
+            platform_name: "PlayStation",
+            file: "castlevania.chd",
+            extension: ".chd",
+            starts_from: [".chd"],
+            other_entries: [],
+            install_in: null,
+            reason: null,
+            contents_unread: false,
+            format_unestablished: false,
+            start_verdict: { starts: false, reason: "not_established", remarks: [] },
+          },
+        ]);
+      });
+      const settledBtn = screen.getByRole("button", { name: /Beetle PSX HW/ });
+      const unlistedBtn = screen.getByRole("button", { name: /SwanStation/ });
+      expect(settledBtn.children).toHaveLength(1);
+      expect(unlistedBtn.children).toHaveLength(1);
+
+      // Core pick failure -> subsequent core pick busy spinner, duplicate-click guard,
+      // logTag, call order, error clearing, and ownCoreDispatch reset.
+      vi.mocked(coreOverride.executeGameCoreChange).mockResolvedValueOnce({ status: "failed", message: "First error" });
+      fireEvent.click(settledBtn);
+      expect(await screen.findByTestId("desktop-core-error")).toHaveTextContent("First error");
+      expect(coreOverride.executeGameCoreChange).toHaveBeenLastCalledWith(
+        expect.objectContaining({ logTag: "desktopChangeGameCore" }),
+      );
+
+      const coreChangePending = deferred<{ status: "applied" }>();
+      const callOrder: string[] = [];
+      vi.mocked(backend.getBiosStatus).mockImplementation(async () => {
+        callOrder.push("rereadBios");
+        return makeBiosAnswer({ files: [] });
+      });
+      const onCoreEvent = (e: Event) => {
+        if ((e as CustomEvent).detail?.type === "core_changed") callOrder.push("announceCore");
+      };
+      globalThis.addEventListener("romm_data_changed", onCoreEvent);
+
+      try {
+        rerender(
+          <EmulationSettings
+            appId={APP_ID}
+            detail={makeDetail({
+              installed: true,
+              romId: 99,
+              emulators: [beetleChosen],
+              activeCoreLabel: "Beetle PSX HW",
+              hasGameOverride: true,
+            })}
+          />,
+        );
+        vi.mocked(coreOverride.executeGameCoreChange).mockImplementationOnce(async ({ onSuccess }) => {
+          const result = await coreChangePending.promise;
+          await onSuccess?.();
+          return result;
+        });
+
+        const pinnedBtn = screen.getByRole("button", { name: /Beetle PSX HW.*\(pinned\)/ });
+        fireEvent.click(pinnedBtn);
+        expect(screen.queryByTestId("desktop-core-error")).not.toBeInTheDocument();
+        const headingRow = screen.getByText("EMULATOR / CORE").parentElement!;
+        expect(within(headingRow).getByTestId("spinner")).toBeInTheDocument();
+        expect(pinnedBtn).toBeDisabled();
+        fireEvent.click(pinnedBtn);
+        expect(coreOverride.executeGameCoreChange).toHaveBeenCalledTimes(2);
+        expect(coreOverride.executeGameCoreChange).toHaveBeenLastCalledWith(
+          expect.objectContaining({ logTag: "desktopResetGameCore" }),
+        );
+
+        callOrder.length = 0;
+        await act(async () => {
+          coreChangePending.resolve({ status: "applied" });
+        });
+        await waitFor(() => expect(within(headingRow).queryByTestId("spinner")).not.toBeInTheDocument());
+        expect(callOrder).toEqual(["rereadBios", "announceCore"]);
+
+        // External core_changed right after own core change still re-reads (ownCoreDispatch reset in finally).
+        vi.mocked(backend.getBiosStatus).mockClear();
+        act(() => {
+          globalThis.dispatchEvent(
+            new CustomEvent("romm_data_changed", { detail: { type: "core_changed", platform_fs_slug: "psx" } }),
+          );
+        });
+        await waitFor(() => expect(backend.getBiosStatus).toHaveBeenCalledWith(99));
+      } finally {
+        globalThis.removeEventListener("romm_data_changed", onCoreEvent);
+      }
+    });
+
+    it("logs failed BIOS reads, ignores events while romId is null or stranded, re-reads on appId change, and detaches tab listener on unmount", async () => {
+      const logSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => undefined);
+      vi.mocked(sharedReads.getBiosStatusShared).mockRejectedValueOnce(new Error("read boom"));
+
+      const { unmount: unmountFailed } = render(
+        <EmulationSettings appId={APP_ID} detail={makeDetail({ romId: 42 })} />,
+      );
+      await screen.findByTestId("bios-read-failed");
+      expect(logSpy).toHaveBeenCalledWith("EmulationSettings: BIOS read for romId=42 failed: Error: read boom");
+      unmountFailed();
+
+      // Stranded mount ignores events and tab switches without issuing reads.
+      vi.clearAllMocks();
+      setStrandedAnswer("reloads");
+      const { unmount: unmountStranded } = render(
+        <EmulationSettings appId={APP_ID} detail={makeDetail({ romId: 42 })} />,
+      );
+
+      act(() => {
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "emulator_sources" } }));
+        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
+      });
+      expect(sharedReads.getBiosStatusShared).not.toHaveBeenCalled();
+      expect(backend.getBiosStatus).not.toHaveBeenCalled();
+      unmountStranded();
+      resetStrandedPanel();
+
+      // Fresh mount once not stranded: initial shared read runs, optional sections stay
+      // hidden when empty, and tab switch scrolls until unmount.
+      vi.mocked(sharedReads.getBiosStatusShared).mockResolvedValueOnce(
+        makeBiosAnswer(
+          {
+            emulator_tabs: [{ emulator: "DUCKSTATION", label: "DuckStation", launching: true, requirements_met: true }],
+            files: [],
+          },
+          "ok",
+        ),
+      );
+      const { rerender, unmount } = render(<EmulationSettings appId={APP_ID} detail={makeDetail({ romId: 42 })} />);
+      const card = await screen.findByTestId("desktop-emulation-card");
+      expect(sharedReads.getBiosStatusShared).toHaveBeenCalledWith(42);
+      expect(screen.queryByTestId("bios-group")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("bios-unclaimed-header")).not.toBeInTheDocument();
+
+      const scrollSpy = vi.fn();
+      card.scrollIntoView = scrollSpy;
+      act(() => {
+        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
+      });
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
+
+      // Switching appId issues getBiosStatusShared again; transitioning romId -> null
+      // while pending drops the answer and ignores events.
+      const pendingNewApp = deferred<BiosAnswer>();
+      vi.mocked(sharedReads.getBiosStatusShared).mockReturnValueOnce(pendingNewApp.promise);
+      rerender(<EmulationSettings appId={APP_ID + 1} detail={makeDetail({ romId: 77 })} />);
+      expect(sharedReads.getBiosStatusShared).toHaveBeenCalledWith(77);
+
+      rerender(<EmulationSettings appId={APP_ID + 1} detail={makeDetail({ romId: null })} />);
+      act(() => {
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "emulator_sources" } }));
+      });
+      expect(backend.getBiosStatus).not.toHaveBeenCalled();
+
+      await act(async () => {
+        pendingNewApp.resolve(makeBiosAnswer({ files: [makeBiosFile("dropped-null.bin")] }));
+      });
+      const stillPending = deferred<BiosAnswer>();
+      vi.mocked(backend.getBiosStatus).mockReturnValueOnce(stillPending.promise);
+      rerender(<EmulationSettings appId={APP_ID + 1} detail={makeDetail({ romId: 77 })} />);
+      expect(screen.getByTestId("bios-checking")).toBeInTheDocument();
+      expect(screen.queryByText("dropped-null.bin")).not.toBeInTheDocument();
+
+      scrollSpy.mockClear();
+      unmount();
+      act(() => {
+        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
+      });
+      expect(scrollSpy).not.toHaveBeenCalled();
     });
   });
 });

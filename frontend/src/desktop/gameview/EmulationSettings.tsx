@@ -315,11 +315,18 @@ function useDesktopBiosReadState(
     } catch (e) {
       logWarn(`EmulationSettings: BIOS read for romId=${targetRomId} failed: ${e}`);
     }
-    if (!mountedRef.current || romIdRef.current !== targetRomId || readSeqRef.current !== ticket) return;
+    if (!mountedRef.current) return;
+    if (romIdRef.current !== targetRomId || readSeqRef.current !== ticket) return;
     setBiosState((prev) => foldBiosAnswer(prev, targetRomId, answer));
   }, []);
 
   const rereadBios = useCallback((targetRomId: number) => runBiosRead(targetRomId, getBiosStatus), [runBiosRead]);
+
+  const rereadCurrentBios = useCallback(async () => {
+    const currentRomId = romIdRef.current;
+    if (currentRomId === null) return;
+    await rereadBios(currentRomId);
+  }, [rereadBios]);
 
   useEffect(() => {
     if (isStranded || romId === null) return;
@@ -369,14 +376,14 @@ function useDesktopBiosReadState(
       ? biosState
       : { biosStatus: null, biosLevel: null, readFailed: false };
 
-  return { ...current, rereadBios, announceOwnBios, announceOwnCore };
+  return { ...current, rereadBios, rereadCurrentBios, announceOwnBios, announceOwnCore };
 }
 
-function useSettledEntryLaunches(romId: number | null, enabled: boolean): EntryLaunches | null {
+function useSettledEntryLaunches(romId: number, enabled: boolean): EntryLaunches | null {
   const [settled, setSettled] = useState<{ romId: number; launches: EntryLaunches } | null>(null);
 
   useEffect(() => {
-    if (!enabled || romId === null) return;
+    if (!enabled) return;
     let active = true;
     const launches = askEntryLaunches(romId, () => active);
     const unsubscribe = launches.subscribe(() => {
@@ -388,7 +395,7 @@ function useSettledEntryLaunches(romId: number | null, enabled: boolean): EntryL
     };
   }, [romId, enabled]);
 
-  return enabled && romId !== null && settled !== null && settled.romId === romId ? settled.launches : null;
+  return enabled && settled?.romId === romId ? settled.launches : null;
 }
 
 const DesktopEmulatorEntryButton: FC<{
@@ -471,22 +478,21 @@ async function performDesktopCorePick(params: {
 
 const DesktopEmulatorSection: FC<{
   appId: number;
+  romId: number;
   detail: GameDetailState;
-  isStranded: boolean;
   leaseOwner: string;
   rereadBios: (romId: number) => Promise<void>;
   announceOwnCore: (folder: string | undefined) => void;
-}> = ({ appId, detail, isStranded, leaseOwner, rereadBios, announceOwnCore }) => {
+}> = ({ appId, romId, detail, leaseOwner, rereadBios, announceOwnCore }) => {
   const [busyRomId, setBusyRomId] = useState<number | null>(null);
   const [failure, setFailure] = useState<{ romId: number; message: string } | null>(null);
-  const romId = detail.romId;
-  const coreBusy = romId !== null && busyRomId === romId;
-  const failureMessage = romId !== null && failure !== null && failure.romId === romId ? failure.message : null;
-  const launchesAsked = !isStranded && detail.installed && detail.emulatorDataAvailable && detail.emulators.length > 0;
+  const coreBusy = busyRomId === romId;
+  const failureMessage = failure?.romId === romId ? failure.message : null;
+  const launchesAsked = detail.installed && detail.emulatorDataAvailable && detail.emulators.length > 0;
   const settledLaunches = useSettledEntryLaunches(romId, launchesAsked);
 
   const runCorePick = async (coreLabel: string | null) => {
-    if (romId === null || !detail.platformSlug || coreBusy) return;
+    if (!detail.platformSlug || coreBusy) return;
     const targetRomId = romId;
     setBusyRomId(targetRomId);
     setFailure(null);
@@ -525,7 +531,7 @@ const DesktopEmulatorSection: FC<{
                 <DesktopEmulatorEntryButton
                   key={entry.label}
                   entry={entry}
-                  isActive={isEmulatorEntryActive(detail.emulators, detail.activeCoreLabel, entry)}
+                  isActive={isEmulatorEntryActive(detail.activeCoreLabel, entry)}
                   isPinned={isPinned}
                   isPlatformCore={platformCore === entry}
                   coreBusy={coreBusy}
@@ -1130,35 +1136,27 @@ export const EmulationSettings: FC<EmulationSettingsProps> = ({ appId, detail })
   const dialogHost = useDialogHost();
   const confirmBios = useMemo(() => desktopBiosConfirmDialog(dialogHost.ask), [dialogHost.ask]);
 
-  const { biosStatus, biosLevel, readFailed, rereadBios, announceOwnBios, announceOwnCore } = useDesktopBiosReadState(
-    appId,
-    detail.romId,
-    detail.platformSlug,
-    detail.platformFolder,
-    isStranded,
-  );
+  const { biosStatus, biosLevel, readFailed, rereadBios, rereadCurrentBios, announceOwnBios, announceOwnCore } =
+    useDesktopBiosReadState(appId, detail.romId, detail.platformSlug, detail.platformFolder, isStranded);
 
   const [busyFolder, setBusyFolder] = useState<string | null>(null);
   const [pressedKey, setPressedKey] = useState<string | null>(null);
   const [status, setStatus] = useState<BiosStatusLine | null>(null);
-
-  const handleSetBusy = useCallback((folder: string | null) => {
-    setBusyFolder(folder);
-    if (folder === null) setPressedKey(null);
-  }, []);
 
   const platform = useMemo<PlatformKey>(
     () => ({ slug: detail.platformSlug, folder: detail.platformFolder ?? "" }),
     [detail.platformSlug, detail.platformFolder],
   );
 
+  // `useBiosActions` captures `reread` when a download/replace/delete starts;
+  // reading `romIdRef.current` via `rereadCurrentBios` refreshes whichever ROM
+  // version is currently shown if the user switched versions mid-action.
   const handleActionReread = useCallback(async () => {
-    if (detail.romId === null) return;
-    await Promise.all([rereadBios(detail.romId), refreshBiosStatus(appId)]);
-  }, [appId, detail.romId, rereadBios]);
+    await Promise.all([rereadCurrentBios(), refreshBiosStatus(appId)]);
+  }, [appId, rereadCurrentBios]);
 
   const biosActions = useBiosActions({
-    setBusy: handleSetBusy,
+    setBusy: setBusyFolder,
     setStatus,
     reread: handleActionReread,
     announce: announceOwnBios,
@@ -1178,10 +1176,15 @@ export const EmulationSettings: FC<EmulationSettingsProps> = ({ appId, detail })
 
   if (detail.romId === null || isStranded) return null;
 
-  const held = biosStatus !== null;
-  const biosState = biosReadState(held, readFailed);
+  const biosState = biosReadState(biosStatus !== null, readFailed);
   let biosBody: ReactNode;
-  if (held) {
+  if (biosState === "failed") {
+    biosBody = (
+      <div data-testid="bios-read-failed" style={MUTED_TEXT_STYLE}>
+        {failedBiosMessage(detail)}
+      </div>
+    );
+  } else if (biosState === "answered" && biosStatus !== null) {
     biosBody = (
       <DesktopBiosAnsweredContent
         biosStatus={biosStatus}
@@ -1197,12 +1200,6 @@ export const EmulationSettings: FC<EmulationSettingsProps> = ({ appId, detail })
         confirmBios={confirmBios}
       />
     );
-  } else if (biosState === "failed") {
-    biosBody = (
-      <div data-testid="bios-read-failed" style={MUTED_TEXT_STYLE}>
-        {failedBiosMessage(detail)}
-      </div>
-    );
   } else {
     biosBody = (
       <div data-testid="bios-checking" style={INLINE_ROW_STYLE}>
@@ -1217,8 +1214,8 @@ export const EmulationSettings: FC<EmulationSettingsProps> = ({ appId, detail })
       <h3 style={HEADING_STYLE}>Emulation</h3>
       <DesktopEmulatorSection
         appId={appId}
+        romId={detail.romId}
         detail={detail}
-        isStranded={isStranded}
         leaseOwner={leaseOwner}
         rereadBios={rereadBios}
         announceOwnCore={announceOwnCore}

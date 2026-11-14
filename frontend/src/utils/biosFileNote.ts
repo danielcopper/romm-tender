@@ -543,10 +543,29 @@ function rowWords(row: BiosNoteRow, emulator: string | null): BiosFileWords {
  */
 const LIBRARY_MARK: BiosMark = { glyph: "⊘", color: BIOS_LIBRARY_VIOLET, title: "not in your RomM library" };
 
+/**
+ * What each mark means — the row's own tooltip AND the legend's line for it, one
+ * string serving both.
+ *
+ * They are the mark's IDENTITY, which is what the legend filters and keys on.
+ * Glyph plus colour cannot be: a one-of group's options are a state of their
+ * own, so red `✗` is two different sentences (a required file that is absent,
+ * an option of a group whose region has nothing in place) and so is green `✓`.
+ * Keyed on the pair, the legend would show one of each and give the second
+ * React's duplicate key; keyed on the sentence, it shows every state present.
+ */
+// A `✗` says what the file IS where its verdict is not met — missing, the wrong
+// file, or refused (`unmetWord`, off the row's `checked`) — so the mark never
+// contradicts the Contents words beside it.
 const markRequiredUnmet = (word: string) => `required, ${word}`;
 const MARK_REQUIRED_HERE = "required, here";
 const MARK_HERE = "here, not required";
 const markUnmet = (word: string) => `${word}, not required`;
+// The `?` glyph's word, true of every way a verdict is withheld — including a
+// file the emulator READ and does not recognise. "could not be checked" is
+// untrue there: DuckStation reads such an image, boots it, and calls it an
+// unknown BIOS. So the mark states only that nothing settled either way, and
+// WHY stays in the row's own note (`biosFileNote`).
 const MARK_UNCHECKED = "nothing could establish this either way";
 const MARK_HERE_NEED_UNKNOWN = "here; nothing could say whether this is wanted";
 const MARK_MISSING_NEED_UNKNOWN = "missing; nothing could say whether this is wanted";
@@ -620,6 +639,10 @@ export function biosLibraryMark(file: BiosTableRow): BiosMark | null {
 /**
  * The folder the emulator declared this file in, with its trailing slash, or
  * `null` for a file that belongs at the root of the BIOS directory.
+ *
+ * The row's own name is a basename, so without this the table cannot answer
+ * which subdirectory a hand-placed file belongs in (`dc/dc_boot.bin`,
+ * `ep128emu/roms/exos21.rom`) when the packager's description omits it.
  */
 export function declaredFolder(file: BiosTableRow): string | null {
   const declared = file.declared_path;

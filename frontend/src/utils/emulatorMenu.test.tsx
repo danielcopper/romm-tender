@@ -333,7 +333,10 @@ describe("shared emulator row helpers", () => {
     );
     expect(emulatorEntryNotes(missing)).toBe(" — emulator not installed");
     expect(emulatorEntryNotes(def)).toBe("");
-    expect(isEmulatorEntryActive([def, missing], null, def)).toBe(true);
-    expect(isEmulatorEntryActive([def, missing], null, def, false)).toBe(false);
+    expect(isEmulatorEntryActive(null, def)).toBe(true);
+    expect(isEmulatorEntryActive(null, missing)).toBe(false);
+    expect(isEmulatorEntryActive("Vita3K", missing)).toBe(true);
+    expect(isEmulatorEntryActive("Vita3K", def)).toBe(false);
+    expect(isEmulatorEntryActive(null, def, false)).toBe(false);
   });
 });

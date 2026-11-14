@@ -156,6 +156,7 @@ export function biosRowAction(
   if (file.replace_offered && file.local_path) {
     return { kind: "replace", place: file.local_path, fileName: file.file_name };
   }
+  // A row from a payload that states no `delete_name` is deleted by its own name.
   const name = file.delete_name === undefined ? file.file_name : file.delete_name;
   if (name === null || (file.deletable_count ?? 0) === 0) return null;
   return { kind: "delete", name };
@@ -194,7 +195,11 @@ interface BiosBulkOffer {
  * Compute the bulk BIOS button offer from the answer and the shown emulator tab.
  *
  * The download affordances key off what is missing AND fetchable (`isFetchable`
- * and `fetchedAsRequired`), never the readiness verdict.
+ * and `fetchedAsRequired`), reading the readiness verdict nowhere: what the
+ * resolver could establish is the emulator's demand, while what is fetchable is
+ * what the RomM library holds. `Download required` counts the shown emulator's
+ * rows marked `fetch_for_required`, and `Download all` stops at the library's
+ * own finished ratio.
  */
 export function biosBulkOffer(
   answer: BiosAnswerFields,
@@ -205,19 +210,27 @@ export function biosBulkOffer(
 ): BiosBulkOffer {
   const files = answer.files ?? [];
   const otherTab = tab !== null && !tab.launching;
+  // The emulator a download from this table is for: the shown one's identity on
+  // another emulator's view; on the launching one's, the platform's own pick
+  // (`null`) on the platform page and the entry's own emulator on a game page.
   const shownEmulator = otherTab || launching === "shown" ? (tab?.emulator ?? null) : null;
   const shownLabel = tab ? tabLabel(tab) : null;
   const requiredLabel = shownLabel === null ? null : `Download required for ${shownLabel}`;
+  // The library's own progress, counted over what the library holds rather than
+  // over every declared row — rows no library holds cannot be fetched.
   const total = answer.server_count ?? files.filter((f) => f.on_server).length;
   const done = answer.local_count ?? files.filter((f) => f.on_server && f.downloaded).length;
   const requiredMissing = shownRows.filter(isFetchable).filter(fetchedAsRequired).length;
+  // What the delete removes is a record count, with no local fallback: the rows
+  // say nothing about who placed a file, so an absent count offers no delete.
+  const deletable = answer.deletable_count ?? 0;
   return {
     shownEmulator,
     requiredLabel,
     requiredMissing,
     canDownloadRequired: requiredMissing > 0 && !serverOffline,
     canDownloadAll: done !== total && files.some(isFetchable) && !serverOffline,
-    deletable: answer.deletable_count ?? 0,
+    deletable,
   };
 }
 
@@ -291,7 +304,9 @@ export function useBiosActions({
   // What the latest attempt did to a row, by `folder|place:…` and `folder|file:…`.
   const [attempts, setAttempts] = useState<Record<string, RowAttempt>>({});
   // Cleared on unmount, so a page left during the window cannot set state on a
-  // gone component.
+  // gone component. A plain timer is the right tool here: the injected-clock
+  // rule is scoped to `backend/services/**`, and sibling hooks hold UI timers
+  // in a ref this way.
   const failedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
     () => () => {
@@ -335,6 +350,9 @@ export function useBiosActions({
     [setBusy],
   );
 
+  // Success says itself: the spinner ends and the rows come back re-read. Only
+  // what failed gets words — and a batch in which every file it tried failed is
+  // a failure to the reader, whatever the answer's `success` says.
   const finishDownloadSuccess = useCallback(
     async (platform: PlatformKey, pending: string, result: FirmwareDownloadResult) => {
       const { slug, folder } = platform;

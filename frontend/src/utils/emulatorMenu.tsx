@@ -44,20 +44,23 @@ export function entryLaunchVerdictLine(launch: GameLaunch, source: AnsweringSour
   return entryLaunchLine(launch, source, verdict.tenderStarts, verdict.line);
 }
 
-/** Whether *entry* is the active emulator row in *emulators*. */
-export function isEmulatorEntryActive(
-  emulators: readonly EmulatorOption[],
-  activeLabel: string | null,
-  entry: EmulatorOption,
-  markActive = true,
-): boolean {
+/** Whether *entry* is the active emulator row. */
+export function isEmulatorEntryActive(activeLabel: string | null, entry: EmulatorOption, markActive = true): boolean {
   if (!markActive) return false;
-  const defaultEntry = emulators.find((e) => e.is_default);
-  const activeIsDefault = !activeLabel || defaultEntry?.label === activeLabel;
-  return activeIsDefault ? entry.is_default : entry.label === activeLabel;
+  // The active marker sits on the ACTIVE emulator: the default-marked entry
+  // when nothing overrides (no active label), otherwise the one the active
+  // label names.
+  return !activeLabel ? entry.is_default : entry.label === activeLabel;
 }
 
-/** Label for the game-level "Use System Override" reset option. */
+/**
+ * Label for the game-level "Use System Override" reset option.
+ *
+ * The core the game falls back to with no per-game pin: the per-platform
+ * override when set, else the default. ✓ sits here when the game already
+ * follows the system (no per-game pin). "System Override" stays distinct from
+ * the "(default)" marker so the menu never shows two defaults.
+ */
 function followSystemLabel(
   emulators: readonly EmulatorOption[],
   platformCoreLabel: string | null,
@@ -195,7 +198,7 @@ export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
 
   for (const e of emulators) {
     const key = `emu-${e.label}`;
-    const isActive = isEmulatorEntryActive(emulators, activeLabel, e, config.markActive !== false);
+    const isActive = isEmulatorEntryActive(activeLabel, e, config.markActive !== false);
     const isPlatformCore = platformCore === e;
     const text = withLaunch(
       entryText(`${emulatorEntryLabel(e, isActive, isPlatformCore)}${emulatorEntryNotes(e)}`, isActive),

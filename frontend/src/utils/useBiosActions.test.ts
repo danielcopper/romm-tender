@@ -1,4 +1,6 @@
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import * as backend from "../api/backend";
 import type { BiosFileStatus, EmulatorTab } from "../types";
 import {
   announceBiosChange,
@@ -8,6 +10,7 @@ import {
   deleteBiosFileConfirmCopy,
   deletePlatformBiosConfirmCopy,
   replaceBiosConfirmCopy,
+  useBiosActions,
 } from "./useBiosActions";
 
 function libMatch(fileName: string, firmwareId: number, md5: string): NonNullable<BiosFileStatus["library"]> {
@@ -173,6 +176,112 @@ describe("biosBulkOffer", () => {
     const otherTab: EmulatorTab = { ...tab, emulator: "duckstation", label: "DuckStation", launching: false };
     expect(biosBulkOffer({ files: [] }, tab, [], false, "pick").shownEmulator).toBeNull();
     expect(biosBulkOffer({ files: [] }, otherTab, [], false, "pick").shownEmulator).toBe("duckstation");
+  });
+
+  it("falls back to counting on_server and on_server && downloaded rows when aggregate counts are omitted", () => {
+    const serverHeld = row({ file_name: "a.bin", on_server: true, downloaded: true });
+    const localOnly = row({ file_name: "b.bin", on_server: false, downloaded: true });
+    const fetchableMissing = row({
+      file_name: "c.bin",
+      on_server: true,
+      downloaded: false,
+      library: libMatch("c.bin", 3, "3"),
+    });
+
+    // When all on_server rows are already downloaded (even with a local-only row beside them), done === total -> false.
+    expect(
+      biosBulkOffer(
+        { files: [serverHeld, localOnly, row({ file_name: "d.bin", on_server: false, downloaded: false })] },
+        tab,
+        [],
+        false,
+        "shown",
+      ).canDownloadAll,
+    ).toBe(false);
+
+    // When an on_server row is not downloaded yet (even though localOnly has downloaded: true), done !== total -> true.
+    expect(biosBulkOffer({ files: [localOnly, fetchableMissing] }, tab, [], false, "shown").canDownloadAll).toBe(true);
+  });
+});
+
+describe("useBiosActions hook", () => {
+  const platform = { slug: "psx", folder: "psx" };
+
+  it("records link failures before awaiting reread and clears downloadPending once finished", async () => {
+    vi.spyOn(backend, "downloadPlatformFirmwareFile").mockResolvedValueOnce({
+      success: true,
+      message: "ok",
+      downloaded: 1,
+      link_failures: [{ file_name: "scph5501.bin", place: "/bios/scph5501.bin", reason: "permission_denied" }],
+    });
+
+    let finishReread!: () => void;
+    const reread = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishReread = resolve;
+        }),
+    );
+
+    const { result } = renderHook(() =>
+      useBiosActions({
+        setBusy: vi.fn(),
+        setStatus: vi.fn(),
+        reread,
+        announce: vi.fn(),
+        romId: 42,
+      }),
+    );
+
+    act(() => {
+      result.current.downloadOne(platform, "scph5501.bin", 19);
+    });
+
+    await waitFor(() => expect(reread).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(result.current.attemptFor("psx", "/bios/scph5501.bin", "scph5501.bin").linkFailure).toBe(
+        "permission_denied",
+      ),
+    );
+    expect(result.current.downloadPending).toBe("scph5501.bin");
+
+    await act(async () => {
+      finishReread();
+    });
+    await waitFor(() => expect(result.current.downloadPending).toBeNull());
+  });
+
+  it("logs unexpected throws with the action tag and target across download, replace, and delete calls", async () => {
+    const logSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => undefined);
+    vi.spyOn(backend, "downloadPlatformFirmwareFile").mockRejectedValueOnce(new Error("net down"));
+    vi.spyOn(backend, "replaceBiosFile").mockRejectedValueOnce(new Error("disk full"));
+    vi.spyOn(backend, "deletePlatformBios").mockRejectedValueOnce(new Error("busy"));
+    vi.spyOn(backend, "deleteBiosFile").mockRejectedValueOnce(new Error("locked"));
+
+    const setStatus = vi.fn();
+    const { result, unmount } = renderHook(() =>
+      useBiosActions({
+        setBusy: vi.fn(),
+        setStatus,
+        reread: vi.fn().mockResolvedValue(undefined),
+        announce: vi.fn(),
+        romId: 42,
+      }),
+    );
+
+    act(() => {
+      result.current.downloadOne(platform, "scph5501.bin", 19);
+      result.current.replaceBios(platform, "/bios/scph5501.bin");
+      result.current.deleteBios(platform);
+      result.current.deleteBiosFile(platform, "scph5501.bin");
+    });
+
+    await waitFor(() => expect(logSpy).toHaveBeenCalledTimes(4));
+    expect(logSpy).toHaveBeenCalledWith("useBiosActions: download (scph5501.bin) failed: Error: net down");
+    expect(logSpy).toHaveBeenCalledWith("useBiosActions: replaceBios (/bios/scph5501.bin) failed: Error: disk full");
+    expect(logSpy).toHaveBeenCalledWith("useBiosActions: deleteBios (psx) failed: Error: busy");
+    expect(logSpy).toHaveBeenCalledWith("useBiosActions: deleteBiosFile (scph5501.bin) failed: Error: locked");
+    unmount();
   });
 });
 

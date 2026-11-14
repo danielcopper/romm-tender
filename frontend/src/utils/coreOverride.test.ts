@@ -183,9 +183,10 @@ describe("coreOverride — executeGameCoreChange", () => {
       romId: 42,
       coreLabel: "Snes9x",
       leaseOwner,
+      logTag: "customCoreTag",
     });
     expect(result).toEqual({ status: "failed", message: "Failed to set core" });
-    expect(backend.logWarn).toHaveBeenCalledWith(expect.stringContaining("RPC failed"));
+    expect(backend.logWarn).toHaveBeenCalledWith("customCoreTag: unexpected error: Error: RPC failed");
     expect(toaster.toast).toHaveBeenCalledWith(expect.objectContaining({ body: "Failed to set core" }));
   });
 });

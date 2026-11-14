@@ -354,8 +354,8 @@ alike, and `adapters/atlas_catalogue.py` reads it:
 - **startable** — whether it starts a game is the command's answer (above).
 - **not installed** — reason `not_installed`, whichever of the resolver's causes it states (no find rule matched, the
   program or its launcher script is missing, or the core is). It stands in place of any command: no command is asked for
-  it, the picker shows it disabled as "emulator not installed" (`entryNotes`, `frontend/src/utils/emulatorMenu.tsx`),
-  and as the default or a stored pick it cannot start.
+  it, the picker shows it disabled as "emulator not installed" (`emulatorEntryNotes`,
+  `frontend/src/utils/emulatorMenu.tsx`), and as the default or a stored pick it cannot start.
 - **not established** — the resolver cannot tell. The entry carries a note (`EmulatorOption.not_established`, sent as
   the entry's `reason`) naming the cause where the reading knows it: `no_find_rule` (ES-DE has no rule for the emulator
   or the core), `find_rules_unread`, `lookup_unsupported` (the resolver does not follow this lookup yet — the
