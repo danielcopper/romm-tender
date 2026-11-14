@@ -12,7 +12,7 @@ import { formatBytes } from "../../utils/formatters";
 import type { GameDetailState } from "../../utils/gameDetailStore";
 import { useGamePlaytime } from "../../utils/playtimeReconcile";
 import { saveSyncBadge, type SaveSyncBadgeTone } from "../../utils/saveSyncBadge";
-import { PLAY_BAR_ROW_HEIGHT } from "./styles";
+import { DOT_STYLE, PLAY_BAR_ROW_HEIGHT } from "./styles";
 
 interface PlayButtonBadgesProps {
   appId: number;
@@ -71,14 +71,6 @@ const VALUE_STYLE: CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: "6px",
-};
-
-const DOT_STYLE: CSSProperties = {
-  display: "inline-block",
-  width: "8px",
-  height: "8px",
-  borderRadius: "50%",
-  flexShrink: 0,
 };
 
 const TONE_COLOR: Record<SaveSyncBadgeTone, string> = {

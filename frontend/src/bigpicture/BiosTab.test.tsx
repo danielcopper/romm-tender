@@ -2339,6 +2339,113 @@ describe("BiosTab", () => {
       expect(Object.keys(bulk).sort()).toEqual(["Delete downloads", "Download all", "Download required"]);
       for (const style of Object.values(bulk)) expect(style).toMatchObject({ width: "auto", flex: "0 1 auto" });
     });
+
+    it("mutes the Failed label on a disabled sibling row or an offline bulk button while the notice lasts", async () => {
+      vi.useFakeTimers();
+      try {
+        const sharedLib = { file_name: "psx-bios.bin", firmware_id: 7, md5: "aaa", sha1: null };
+        const twoRows = psx({
+          files: [
+            psxFile("scph5501.bin", { fetch_for_required: true, library: sharedLib }),
+            psxFile("scph5501_alt.bin", {
+              declared_path: "sub/scph5501_alt.bin",
+              required_by_active: false,
+              wanted: "optional",
+              library: sharedLib,
+            }),
+          ],
+        });
+        vi.mocked(backend.downloadPlatformFirmwareFile).mockResolvedValueOnce({
+          success: false,
+          reason: "bios_download_failed",
+          message: "boom",
+        });
+        vi.mocked(backend.downloadRequiredFirmware).mockResolvedValueOnce({
+          success: false,
+          reason: "bios_download_failed",
+          message: "boom",
+        });
+        vi.mocked(backend.downloadAllFirmware).mockResolvedValueOnce({
+          success: false,
+          reason: "bios_download_failed",
+          message: "boom",
+        });
+
+        const { container, rerender } = render(
+          <BiosTabWithState
+            biosStatus={twoRows}
+            biosLevel="missing"
+            coreInfo={coreInfo}
+            platformName="PlayStation"
+            platformSlug="psx"
+            platformFolder="psx"
+            romId={42}
+          />,
+        );
+        const rows = [...container.querySelectorAll<HTMLElement>('[data-testid="bios-file-row"]')];
+        await act(async () => {
+          fireEvent.click(rows[0]!.querySelector("button")!);
+        });
+        expect(rows[0]!.querySelector("button span")?.textContent).toBe("Failed");
+        expect(rows[1]!.querySelector("button")?.textContent).toBe("Failed");
+        expect(rows[1]!.querySelector("button span")).toBeNull();
+
+        act(() => {
+          vi.advanceTimersByTime(2000);
+        });
+
+        await act(async () => {
+          fireEvent.click(button(container, "Download required for DuckStation (1)")!);
+        });
+        expect(button(container, "Failed")?.querySelector("span")?.textContent).toBe("Failed");
+        rerender(
+          <BiosTabWithState
+            biosStatus={{ ...twoRows, server_offline: true }}
+            biosLevel="missing"
+            coreInfo={coreInfo}
+            platformName="PlayStation"
+            platformSlug="psx"
+            platformFolder="psx"
+            romId={42}
+          />,
+        );
+        expect(button(container, "Failed")?.querySelector("span")).toBeNull();
+
+        act(() => {
+          vi.advanceTimersByTime(2000);
+        });
+        rerender(
+          <BiosTabWithState
+            biosStatus={twoRows}
+            biosLevel="missing"
+            coreInfo={coreInfo}
+            platformName="PlayStation"
+            platformSlug="psx"
+            platformFolder="psx"
+            romId={42}
+          />,
+        );
+
+        await act(async () => {
+          fireEvent.click(button(container, "Download all")!);
+        });
+        expect(button(container, "Failed")?.querySelector("span")?.textContent).toBe("Failed");
+        rerender(
+          <BiosTabWithState
+            biosStatus={{ ...twoRows, server_offline: true }}
+            biosLevel="missing"
+            coreInfo={coreInfo}
+            platformName="PlayStation"
+            platformSlug="psx"
+            platformFolder="psx"
+            romId={42}
+          />,
+        );
+        expect(button(container, "Failed")?.querySelector("span")).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });
 

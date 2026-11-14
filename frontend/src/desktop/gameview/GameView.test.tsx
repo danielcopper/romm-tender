@@ -82,8 +82,18 @@ describe("GameView", () => {
 
     render(<GameView appId={APP_ID} />);
 
-    expect(screen.getByRole("heading", { name: "Mario Golf: Advance Tour" })).toBeInTheDocument();
-    expect(screen.getByTestId("desktop-emulation-card")).toBeInTheDocument();
+    const heading = screen.getByRole("heading", { name: "Mario Golf: Advance Tour" });
+    const emulationCard = screen.getByTestId("desktop-emulation-card");
+    expect(heading).toBeInTheDocument();
+    expect(emulationCard).toBeInTheDocument();
+    const leftColumn = emulationCard.parentElement!;
+    const columnsGrid = leftColumn.parentElement!;
+    expect(columnsGrid.children).toHaveLength(2);
+    expect(columnsGrid.children[0]).toBe(leftColumn);
+    expect(leftColumn.children).toHaveLength(2);
+    expect(leftColumn.children[0]).toContainElement(heading);
+    expect(leftColumn.children[1]).toBe(emulationCard);
+    expect(columnsGrid.children[1]).toBeEmptyDOMElement();
     expect(screen.getByText("Game Boy Advance")).toBeInTheDocument();
     expect(screen.getByRole("img")).toHaveAttribute(
       "src",

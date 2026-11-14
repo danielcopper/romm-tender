@@ -7,9 +7,6 @@ import {
   biosBulkOffer,
   biosDownloadButtonState,
   biosRowAction,
-  deleteBiosFileConfirmCopy,
-  deletePlatformBiosConfirmCopy,
-  replaceBiosConfirmCopy,
   useBiosActions,
 } from "./useBiosActions";
 
@@ -199,7 +196,13 @@ describe("biosBulkOffer", () => {
       ).canDownloadAll,
     ).toBe(false);
 
-    // When an on_server row is not downloaded yet (even though localOnly has downloaded: true), done !== total -> true.
+    // Single fetchable row (`on_server: true, downloaded: false`) has `done = 0` vs `total = 1` -> true.
+    expect(biosBulkOffer({ files: [fetchableMissing] }, tab, [], false, "shown").canDownloadAll).toBe(true);
+
+    // When `server_count` is supplied without `local_count`, `done` counts `on_server && downloaded` rows.
+    expect(
+      biosBulkOffer({ files: [serverHeld, fetchableMissing], server_count: 1 }, tab, [], false, "shown").canDownloadAll,
+    ).toBe(false);
     expect(biosBulkOffer({ files: [localOnly, fetchableMissing] }, tab, [], false, "shown").canDownloadAll).toBe(true);
   });
 });
@@ -277,38 +280,151 @@ describe("useBiosActions hook", () => {
     });
 
     await waitFor(() => expect(logSpy).toHaveBeenCalledTimes(4));
-    expect(logSpy).toHaveBeenCalledWith("useBiosActions: download (scph5501.bin) failed: Error: net down");
-    expect(logSpy).toHaveBeenCalledWith("useBiosActions: replaceBios (/bios/scph5501.bin) failed: Error: disk full");
-    expect(logSpy).toHaveBeenCalledWith("useBiosActions: deleteBios (psx) failed: Error: busy");
-    expect(logSpy).toHaveBeenCalledWith("useBiosActions: deleteBiosFile (scph5501.bin) failed: Error: locked");
+    expect(logSpy).toHaveBeenCalledWith(
+      "useBiosActions: download (scph5501.bin, slug=psx folder=psx romId=42) failed: Error: net down",
+    );
+    expect(logSpy).toHaveBeenCalledWith(
+      "useBiosActions: replaceBios (/bios/scph5501.bin, slug=psx folder=psx romId=42) failed: Error: disk full",
+    );
+    expect(logSpy).toHaveBeenCalledWith(
+      "useBiosActions: deleteBios (psx, slug=psx folder=psx romId=42) failed: Error: busy",
+    );
+    expect(logSpy).toHaveBeenCalledWith(
+      "useBiosActions: deleteBiosFile (scph5501.bin, slug=psx folder=psx romId=42) failed: Error: locked",
+    );
     unmount();
   });
-});
 
-describe("BIOS confirmation copy builders", () => {
-  it("names the file, place, and backup folder when confirming a replacement", () => {
-    expect(replaceBiosConfirmCopy("scph5501.bin", "/bios/scph5501.bin", "/backups/bios")).toEqual({
-      title: "Replace scph5501.bin?",
-      description: "The file at /bios/scph5501.bin goes to /backups/bios, and Tender's copy is linked in its place.",
-      confirmLabel: "Replace",
+  it("logs refused (!result.success) responses across download, replace, and delete calls", async () => {
+    const logSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => undefined);
+    vi.spyOn(backend, "downloadPlatformFirmwareFile").mockResolvedValueOnce({
+      success: false,
+      reason: "bios_download_failed",
+      message: "checksum mismatch",
     });
-    expect(replaceBiosConfirmCopy("scph5501.bin", "/bios/scph5501.bin", undefined).description).toContain(
-      "the backup folder",
+    vi.spyOn(backend, "replaceBiosFile").mockResolvedValueOnce({
+      success: false,
+      reason: "backup_failed",
+      message: "backup failed",
+    });
+    vi.spyOn(backend, "deletePlatformBios").mockResolvedValueOnce({
+      success: false,
+      reason: "delete_incomplete",
+      message: "store locked",
+    });
+    vi.spyOn(backend, "deleteBiosFile").mockResolvedValueOnce({
+      success: false,
+      reason: "not_found",
+      message: "record missing",
+    });
+
+    const { result, unmount } = renderHook(() =>
+      useBiosActions({
+        setBusy: vi.fn(),
+        setStatus: vi.fn(),
+        reread: vi.fn().mockResolvedValue(undefined),
+        announce: vi.fn(),
+        romId: null,
+      }),
     );
+
+    act(() => {
+      result.current.downloadOne(platform, "scph5501.bin", 19);
+      result.current.replaceBios(platform, "/bios/scph5501.bin");
+      result.current.deleteBios(platform);
+      result.current.deleteBiosFile(platform, "scph5501.bin");
+    });
+
+    await waitFor(() => expect(logSpy).toHaveBeenCalledTimes(4));
+    expect(logSpy).toHaveBeenCalledWith(
+      "useBiosActions: download (scph5501.bin, slug=psx folder=psx) failed: checksum mismatch",
+    );
+    expect(logSpy).toHaveBeenCalledWith(
+      "useBiosActions: replaceBios (/bios/scph5501.bin, slug=psx folder=psx) failed: backup failed",
+    );
+    expect(logSpy).toHaveBeenCalledWith("useBiosActions: deleteBios (psx, slug=psx folder=psx) failed: store locked");
+    expect(logSpy).toHaveBeenCalledWith(
+      "useBiosActions: deleteBiosFile (scph5501.bin, slug=psx folder=psx) failed: record missing",
+    );
+    unmount();
   });
 
-  it("states that user-placed files stay for per-file and per-platform deletes", () => {
-    expect(deleteBiosFileConfirmCopy("scph5501.bin")).toEqual({
-      title: "Delete scph5501.bin?",
-      description: "Tender removes it from its firmware store and every link to it. Files you placed yourself stay.",
-      confirmLabel: "Delete",
+  it("logs zero-downloaded batch failures with romId, and stays quiet while joining kept lines on successful deletes", async () => {
+    const logSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => undefined);
+    vi.spyOn(backend, "downloadPlatformFirmwareFile").mockResolvedValueOnce({
+      success: true,
+      downloaded: 0,
+      failed: ["scph5501.bin"],
+      message: "hash mismatch",
     });
-    expect(deletePlatformBiosConfirmCopy("PlayStation")).toEqual({
-      title: "Delete Tender's BIOS downloads for PlayStation?",
-      description:
-        "Tender removes every BIOS file it downloaded for PlayStation and every link to them. Files you placed yourself stay.",
-      confirmLabel: "Delete",
+    vi.spyOn(backend, "deletePlatformBios").mockResolvedValueOnce({
+      success: true,
+      deleted_count: 1,
+      message: "Removed 1 file.",
     });
+    vi.spyOn(backend, "deleteBiosFile").mockResolvedValueOnce({
+      success: true,
+      deleted_count: 1,
+      message: "Removed scph5501.bin.",
+      kept: [
+        { kind: "link", source: "retrodeck", place: "/bios/psx/scph5501.bin", folder: "/bios/psx" },
+        {
+          kind: "file",
+          source: "retrodeck",
+          place: "/bios/psx/old.bin",
+          file_name: "old.bin",
+          folder: "/bios/psx",
+          why: "not_installed",
+        },
+      ],
+    });
+
+    const setStatus = vi.fn();
+    const { result, unmount } = renderHook(() =>
+      useBiosActions({
+        setBusy: vi.fn(),
+        setStatus,
+        reread: vi.fn().mockResolvedValue(undefined),
+        announce: vi.fn(),
+        romId: 42,
+      }),
+    );
+
+    act(() => {
+      result.current.downloadOne(platform, "scph5501.bin", 19);
+    });
+    await waitFor(() =>
+      expect(logSpy).toHaveBeenCalledWith(
+        "useBiosActions: download (scph5501.bin, slug=psx folder=psx romId=42) failed: hash mismatch",
+      ),
+    );
+
+    logSpy.mockClear();
+    setStatus.mockClear();
+    act(() => {
+      result.current.deleteBios(platform);
+    });
+    await waitFor(() =>
+      expect(setStatus).toHaveBeenCalledWith({ folder: "psx", scope: "bios", text: "Removed 1 file." }),
+    );
+    expect(logSpy).not.toHaveBeenCalled();
+
+    setStatus.mockClear();
+    act(() => {
+      result.current.deleteBiosFile(platform, "scph5501.bin");
+    });
+    await waitFor(() =>
+      expect(setStatus).toHaveBeenCalledWith({
+        folder: "psx",
+        scope: "bios",
+        text: [
+          "Left a link in /bios/psx: RetroDECK's settings could not be read. Tender removes it once they can be read.",
+          "Left old.bin in /bios/psx: RetroDECK is not installed. Delete it again once it is.",
+        ].join("\n"),
+      }),
+    );
+    expect(logSpy).not.toHaveBeenCalled();
+    unmount();
   });
 });
 

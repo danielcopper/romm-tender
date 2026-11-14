@@ -20,10 +20,10 @@ import type { BiosLevel } from "../types";
  *  the spelling is what keeps that badge and the tab's red dot the same red. */
 export const BIOS_MISSING_RED = "#d94126";
 export const BIOS_OK_GREEN = "#5ba32b";
-/** The BIOS table's verdict mark for a file that is present and that the core
- *  the platform launches with does not require — green's quieter twin, so
- *  "there and needed" and "there and spare" are one glance apart rather than one
- *  reading apart. */
+/** The BIOS table's verdict mark for a row whose verdict is met (`satisfied`,
+ *  with known `wanted`) and that the launching emulator neither requires nor
+ *  lists as a one-of group option — green's quieter twin, so "met and needed"
+ *  and "met and spare" are one glance apart rather than one reading apart. */
 export const BIOS_SPARE_GREEN = "#8fc46b";
 export const BIOS_MUTED_GREY = "#8f98a0";
 /** The BIOS table's library mark, deliberately outside the verdict palette's

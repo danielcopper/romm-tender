@@ -17,7 +17,7 @@ import type {
 import { resolveConflictsSequentially, type SyncConflictResolution } from "../../../utils/saveConflictFlow";
 import type { LaunchPrompts } from "../../../utils/launchVerdict";
 import type { SyncFinish, SyncWaitChoice, SyncWaitReason } from "../../../utils/launchGate";
-import type { BiosConfirmCopy } from "../../../utils/useBiosActions";
+import type { BiosConfirmCopy } from "../../../utils/biosConfirmWording";
 import type { UnsyncedSavesChoice, UnsyncedSavesPrompt } from "../../../utils/versionSwitch";
 import type { SyncConflict } from "../../../types";
 import type { AskDialog } from "./askDialog";

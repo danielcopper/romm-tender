@@ -34,12 +34,14 @@ import { DOWNLOAD_DAMAGED, IDENTIFYING, biosPlaceLines, libraryRowLines } from "
 import { isUnclaimedLibraryRow, selectedTab, tabLabel, tabRows } from "../../utils/biosTabs";
 import { useIdentifications } from "../../utils/firmwareIdentifications";
 import {
-  biosBulkOffer,
-  biosDownloadButtonState,
-  biosRowAction,
   deleteBiosFileConfirmCopy,
   deletePlatformBiosConfirmCopy,
   replaceBiosConfirmCopy,
+} from "../../utils/biosConfirmWording";
+import {
+  biosBulkOffer,
+  biosDownloadButtonState,
+  biosRowAction,
   type BiosActions,
   type BiosAnswerFields,
   type PlatformKey,
@@ -102,16 +104,14 @@ const BiosTableHeader: FC = () => (
 );
 
 /**
- * What a row says under itself: its note, and the images a folder holds.
+ * The secondary lines rendered full-width beneath a BIOS table or library row:
+ * its note, folder image list, configured-image lines, placement lines, or
+ * library identification lines.
  *
- * Full width, because the alternative is a 48px cell wrapping one sentence
- * across three lines — the cost the marks were introduced to stop paying.
- *
- * Each image string is the resolver's verbatim, and `pre-wrap` keeps the column
- * padding PCSX2 puts in its own option labels — that alignment is what makes a
- * line matchable against the emulator's own picker. They sit under the row
- * rather than in the Contents cell because the cell is 84px and one of these
- * labels is not; the cell counts them instead.
+ * Full width keeps long sentences out of narrow status cells, and `pre-wrap`
+ * preserves the column padding PCSX2 puts in its own option labels so each
+ * folder image line stays matchable against the emulator's picker while the
+ * 84px Contents cell shows the count instead.
  */
 const BiosRowLines: FC<{ lines: string[]; busyLine: string | null }> = ({ lines, busyLine }) =>
   lines.length === 0 ? null : (
@@ -242,14 +242,14 @@ const BiosFileRow: FC<{
           // With the folder in front of it what gets cut is the NAME rather
           // than the description that used to sit here —
           // `scummvm/extra/hadesch_translations.dat` does not fit the platform
-          // pane's ~202px name cell in any arrangement. The title is the mouse's
-          // way back to it; a reader on the controller has none, and the only
-          // real fix is width the list column currently holds.
+          // pane's ~202px name cell in any arrangement. The title is the mouse's way back to it; a reader on
+          // the controller has none, and the only real fix is width the list
+          // column currently holds.
           //
           // What the shown emulator needs of the file stands under the name in
-          // the same cell: the mark's colour alone does not tell a met required
-          // file from a met optional one, and a two-line cell is what the row's
-          // button is centred against.
+          // the same cell: the mark's colour alone does not tell a
+          // met required file from a met optional one, and a two-line cell is
+          // what the row's button is centred against.
           content: (
             <>
               <span data-testid="bios-file-name" style={NAME_LINE}>
@@ -325,9 +325,8 @@ function downloadLabel(part: BiosPart, id: string, label: string, size: number, 
 }
 
 /**
- * A BIOS row's one action: fetch it, replace what lies at its place, or remove
- * the copy Tender holds — or nothing, which is a `null` the row needs in order
- * to make itself a focus stop.
+ * Render the `DialogButton` for {@link biosRowAction}'s offer, or `null` when
+ * the row offers nothing to press (leaving the row itself as the focus stop).
  */
 function rowAction(part: BiosPart, file: BiosTableRow, fetchable: Set<string>, key: string): ReactNode | null {
   const { platform, busyFolder, serverOffline, actions, answer } = part.input;
@@ -513,6 +512,11 @@ export const BiosShownTable: FC<{ part: BiosPart }> = ({ part }) => {
 /**
  * "Download required for <emulator>", then under "For all of <platform>"
  * "Download all" and the delete, and the line their presses leave.
+ *
+ * Every button stays rendered and disables when there is nothing to do rather
+ * than vanishing: a disabled `DialogButton` remains a focus stop, so the row
+ * stays walkable. The one exception is "Download required" when `requiredLabel`
+ * is `null` (no emulator has an entry, so there is no requirement to fetch).
  */
 export const BiosButtons: FC<{ part: BiosPart; status: ScopedStatus | null }> = ({ part, status }) => {
   const { input, tab, shownRows, focus } = part;

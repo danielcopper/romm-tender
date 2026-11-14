@@ -1,7 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { deleteBiosFileConfirmCopy, replaceBiosConfirmCopy } from "../../../utils/useBiosActions";
+import { deleteBiosFileConfirmCopy, replaceBiosConfirmCopy } from "../../../utils/biosConfirmWording";
 import { DesktopBiosConfirmDialog } from "./DesktopBiosConfirmDialog";
 
 describe("DesktopBiosConfirmDialog", () => {

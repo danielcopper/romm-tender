@@ -198,8 +198,15 @@ interface BiosBulkOffer {
  * and `fetchedAsRequired`), reading the readiness verdict nowhere: what the
  * resolver could establish is the emulator's demand, while what is fetchable is
  * what the RomM library holds. `Download required` counts the shown emulator's
- * rows marked `fetch_for_required`, and `Download all` stops at the library's
- * own finished ratio.
+ * rows marked `fetch_for_required` — its required files and the options of its
+ * one-of group's uncovered regions, the rule the download itself applies — and
+ * `Download all` stops at the library's own finished ratio. So neither is a
+ * readiness gate: platforms such as PS2, GameCube, and PSP launch standalone
+ * emulators the resolver holds no card for, so their readiness verdict declines
+ * even while the RomM library holds files the user can fetch.
+ *
+ * Which rows are fetchable at all — the library's side of it, including why a
+ * declared folder is out — is `isFetchable`.
  */
 export function biosBulkOffer(
   answer: BiosAnswerFields,
@@ -234,41 +241,6 @@ export function biosBulkOffer(
   };
 }
 
-/** Copy for a destructive or replacing BIOS confirmation dialog. */
-export interface BiosConfirmCopy {
-  title: string;
-  description: string;
-  confirmLabel: string;
-}
-
-export function replaceBiosConfirmCopy(
-  fileName: string,
-  place: string,
-  backupRoot: string | undefined,
-): BiosConfirmCopy {
-  return {
-    title: `Replace ${fileName}?`,
-    description: `The file at ${place} goes to ${backupRoot ?? "the backup folder"}, and Tender's copy is linked in its place.`,
-    confirmLabel: "Replace",
-  };
-}
-
-export function deleteBiosFileConfirmCopy(name: string): BiosConfirmCopy {
-  return {
-    title: `Delete ${name}?`,
-    description: "Tender removes it from its firmware store and every link to it. Files you placed yourself stay.",
-    confirmLabel: "Delete",
-  };
-}
-
-export function deletePlatformBiosConfirmCopy(platformName: string): BiosConfirmCopy {
-  return {
-    title: `Delete Tender's BIOS downloads for ${platformName}?`,
-    description: `Tender removes every BIOS file it downloaded for ${platformName} and every link to them. Files you placed yourself stay.`,
-    confirmLabel: "Delete",
-  };
-}
-
 /**
  * Tell open game-detail surfaces that this platform's firmware changed, so they
  * re-read their BIOS requirement instead of leaving the pre-change one standing.
@@ -289,6 +261,19 @@ function downloadStatusLines(result: FirmwareDownloadResult): string[] {
   const failed = result.failed ?? [];
   return [failed.length > 0 ? result.message : null, placedSentence(result), ...backupLines(result.backups)].filter(
     (line): line is string => line !== null,
+  );
+}
+
+function logBiosActionFailure(
+  action: string,
+  target: string,
+  platform: PlatformKey,
+  romId: number | null,
+  detail: unknown,
+): void {
+  const romPart = romId === null ? "" : ` romId=${romId}`;
+  logWarn(
+    `useBiosActions: ${action} (${target}, slug=${platform.slug} folder=${platform.folder}${romPart}) failed: ${detail}`,
   );
 }
 
@@ -362,13 +347,14 @@ export function useBiosActions({
       const lines = downloadStatusLines(result);
       if (lines.length > 0) setStatus({ folder, scope: "bios", text: lines.join("\n") });
       if ((result.failed ?? []).length > 0 && result.downloaded === 0) {
+        logBiosActionFailure("download", pending, platform, romId, result.message);
         reportFailure(pending);
         return;
       }
       setDownloadPending(null);
       setBusy(null);
     },
-    [announce, noteLinkFailures, reportFailure, reread, setBusy, setStatus],
+    [announce, noteLinkFailures, reportFailure, reread, romId, setBusy, setStatus],
   );
 
   const runDownload = useCallback(
@@ -387,6 +373,7 @@ export function useBiosActions({
               await finishDownloadSuccess(platform, pending, result);
               return;
             }
+            logBiosActionFailure("download", pending, platform, romId, result.message);
             if (result.reason === "bios_download_damaged") {
               setAttempts((prev) => ({
                 ...prev,
@@ -396,14 +383,14 @@ export function useBiosActions({
             setStatus({ folder, scope: "bios", text: result.message });
             reportFailure(pending);
           } catch (e) {
-            logWarn(`useBiosActions: download (${pending}) failed: ${e}`);
+            logBiosActionFailure("download", pending, platform, romId, e);
             setStatus({ folder, scope: "bios", text: `Download failed: ${e}` });
             reportFailure(pending);
           }
         })(),
       );
     },
-    [finishDownloadSuccess, reportFailure, setBusy, setStatus],
+    [finishDownloadSuccess, reportFailure, romId, setBusy, setStatus],
   );
 
   const downloadRequired = useCallback(
@@ -444,6 +431,7 @@ export function useBiosActions({
           try {
             const result = await replaceBiosFile(slug, folder, place, romId);
             if (!result.success) {
+              logBiosActionFailure("replaceBios", place, platform, romId, result.message);
               setStatus({ folder, scope: "bios", text: `Failed to replace the file: ${result.message}` });
               return;
             }
@@ -457,7 +445,7 @@ export function useBiosActions({
             await reread(platform);
             announce(slug, folder);
           } catch (e) {
-            logWarn(`useBiosActions: replaceBios (${place}) failed: ${e}`);
+            logBiosActionFailure("replaceBios", place, platform, romId, e);
             setStatus({ folder, scope: "bios", text: `Failed to replace the file: ${e}` });
           } finally {
             setBusy(null);
@@ -484,6 +472,7 @@ export function useBiosActions({
         (async () => {
           try {
             const result = await deletePlatformBios(slug, folder);
+            if (!result.success) logBiosActionFailure("deleteBios", folder, platform, romId, result.message);
             const kept = result.success ? keptLines(result.kept) : [];
             setStatus({ folder, scope: "bios", text: [result.message, ...kept].join("\n") });
             // A `delete_incomplete` may have removed files or dropped records
@@ -494,7 +483,7 @@ export function useBiosActions({
               if ((result.deleted_count ?? 0) > 0) announce(slug, folder);
             }
           } catch (e) {
-            logWarn(`useBiosActions: deleteBios (${folder}) failed: ${e}`);
+            logBiosActionFailure("deleteBios", folder, platform, romId, e);
             setStatus({ folder, scope: "bios", text: `Failed to delete BIOS files: ${e}` });
           } finally {
             setBusy(null);
@@ -502,7 +491,7 @@ export function useBiosActions({
         })(),
       );
     },
-    [announce, reread, setBusy, setStatus],
+    [announce, reread, romId, setBusy, setStatus],
   );
 
   /** One row's Delete. A success is said by the rows coming back re-read; only
@@ -518,14 +507,16 @@ export function useBiosActions({
           try {
             const result = await work();
             const kept = result.success ? keptLines(result.kept) : [];
-            if (!result.success) setStatus({ folder, scope: "bios", text: result.message });
-            else if (kept.length > 0) setStatus({ folder, scope: "bios", text: kept.join("\n") });
+            if (!result.success) {
+              logBiosActionFailure("deleteBiosFile", what, platform, romId, result.message);
+              setStatus({ folder, scope: "bios", text: result.message });
+            } else if (kept.length > 0) setStatus({ folder, scope: "bios", text: kept.join("\n") });
             if (result.success || result.reason === "delete_incomplete") {
               await reread(platform);
               if ((result.deleted_count ?? 0) > 0) announce(slug, folder);
             }
           } catch (e) {
-            logWarn(`useBiosActions: deleteBiosFile (${what}) failed: ${e}`);
+            logBiosActionFailure("deleteBiosFile", what, platform, romId, e);
             setStatus({ folder, scope: "bios", text: `Failed to delete ${what}: ${e}` });
           } finally {
             setBusy(null);
@@ -533,7 +524,7 @@ export function useBiosActions({
         })(),
       );
     },
-    [announce, reread, setBusy, setStatus],
+    [announce, reread, romId, setBusy, setStatus],
   );
 
   const deleteBiosFile = useCallback(

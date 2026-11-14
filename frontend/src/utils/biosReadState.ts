@@ -1,7 +1,8 @@
 /**
- * Where a BIOS answer stands on a page that reads one: the platform page for a
- * platform, a game's BIOS tab for its ROM. Both pages word the three states, and
- * both derive them here, so the two cannot come to tell them apart differently.
+ * Where a BIOS answer stands on a surface that reads one: a platform pane for a
+ * platform, or a game's BIOS section for its ROM. Every surface words the three
+ * states and derives them here, so they cannot come to tell them apart
+ * differently.
  *
  * `pending` is the state this exists to keep separate: the answer has been asked
  * for and has not arrived, which is NOT "nothing could be established".
@@ -36,10 +37,10 @@ export function biosAnswerStale(held: boolean, failed: boolean): boolean {
   return held && failed;
 }
 
-/** What a game-detail BIOS answer carries when the requirement could not be
- *  established — overlaid over an answer that ran and reported the `"unknown"`
- *  level: no file rows, while keeping the answer's emulator entries and delete
- *  counts intact. */
+/** The status flags {@link biosFieldsFromCache} overlays onto an answer whose
+ *  requirement could not be established (`bios_status_unknown` with the
+ *  `"unknown"` level), alongside `files: []` so no file rows render while the
+ *  answer's own emulator tabs and delete counts stand. */
 const UNKNOWN_REQUIREMENT_STATUS: BiosStatus = { needs_bios: false, bios_status_unknown: true };
 
 /** Project a game-detail BIOS answer — from a cached game detail or a live
@@ -48,10 +49,11 @@ const UNKNOWN_REQUIREMENT_STATUS: BiosStatus = { needs_bios: false, bios_status_
  *  answer at all (`BiosAnswer` in `api/backend.ts`). The `"unknown"` level is
  *  an answer and is shown as one.
  *
- *  What a `null` does is each caller's: a live read marks itself failed and
- *  keeps any shown status, a core change keeps the shown status and reads
- *  again, and a version switch or initial open waits for the live read instead,
- *  because what was shown is another ROM's or nothing.
+ *  What a `null` does is each caller's: a live BIOS read marks `readFailed`
+ *  and keeps any held status (`panelState.ts::foldBiosRead`,
+ *  `EmulationSettings.tsx::foldBiosAnswer`), a core change keeps any shown
+ *  status and re-reads (`panelEvents.ts`, `gameDetailStore.ts`), and an initial
+ *  open or version switch holds no status for the new ROM until a read answers.
  *
  *  `bios_level` is computed by the backend (`compute_bios_level`) and threaded
  *  straight through, never re-derived. */

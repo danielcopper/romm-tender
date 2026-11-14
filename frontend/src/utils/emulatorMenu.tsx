@@ -1,8 +1,7 @@
 /**
  * Shared helpers and context-menu builder for emulator selection (#1210).
  *
- * Every emulator surface — the game-detail core menu, the desktop game page's
- * Emulation card, and the Library page's per-platform menu — renders the same
+ * Every emulator picker — per-game and per-platform alike — renders the same
  * list: every ES-DE `<command>`, each one choosable but an entry the resolver
  * states not installed (#2195 D9, D23, D31). On a game's page, an entry the
  * resolver gives no complete start command for says so under it, so a pick of

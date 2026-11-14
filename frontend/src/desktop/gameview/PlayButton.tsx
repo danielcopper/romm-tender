@@ -39,7 +39,7 @@ import { readGameRunning } from "../../utils/sessionManager";
 import { hasAnySaveConflict } from "../../utils/saveStatus";
 import { usePruneLeaseOwner } from "../../utils/pruneLease";
 import { useStrandedAnswer } from "../../utils/strandedPanelStore";
-import { startRefusal } from "../../utils/emulatorStart";
+import { gameCanPickAnother, startRefusal } from "../../utils/emulatorStart";
 import { detach } from "../../utils/detach";
 import type {
   DownloadCompleteEvent,
@@ -388,11 +388,11 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
 
   const startCheckFailed = detail.startCheck?.state === "failed";
   const startChecking = detail.startCheck?.state === "checking";
-  // The desktop game page has no emulator menu, so the sentence points at none.
+  const canPick = gameCanPickAnother(detail.emulators, detail.activeCoreLabel) ? "page" : false;
   const playRefusal =
     startCheckFailed || detail.emulatorStart === null
       ? null
-      : startRefusal(detail.emulatorStart, detail.gameLaunch ?? null, false);
+      : startRefusal(detail.emulatorStart, detail.gameLaunch ?? null, canPick);
   const { handlePlayClick, handleResolveConflictClick, handleStopClick, handleUninstallClick, uninstallingRomId } =
     usePlayLaunch({
       appId,

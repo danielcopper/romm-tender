@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { isValidElement, type ReactNode } from "react";
-import { desktopAdoptionDialogs, desktopLaunchPrompts, desktopUnsyncedSavesDialog } from "./desktopDialogs";
+import {
+  desktopAdoptionDialogs,
+  desktopBiosConfirmDialog,
+  desktopLaunchPrompts,
+  desktopUnsyncedSavesDialog,
+} from "./desktopDialogs";
+import { DesktopBiosConfirmDialog } from "./DesktopBiosConfirmDialog";
 import { DesktopAdoptCandidatesDialog } from "./DesktopAdoptCandidatesDialog";
 import { DesktopAdoptCollisionsDialog } from "./DesktopAdoptCollisionsDialog";
 import { DesktopAdoptExistingDialog } from "./DesktopAdoptExistingDialog";
@@ -218,4 +224,27 @@ describe("desktopAdoptionDialogs", () => {
     const { dialog } = first(asked);
     expect(isValidElement(dialog) && dialog.props).toMatchObject({ vanished });
   });
+});
+
+describe("desktopBiosConfirmDialog", () => {
+  it.each([
+    ["primary", true],
+    ["danger", false],
+  ] as const)(
+    "asks through DesktopBiosConfirmDialog with %s tone, dismissed as false (answered %s)",
+    async (tone, answered) => {
+      const copy = {
+        title: "Delete scph5501.bin?",
+        description: "Tender removes it from its firmware store.",
+        confirmLabel: "Delete",
+      };
+      const { ask, asked } = scriptedAsk([answered]);
+
+      expect(await desktopBiosConfirmDialog(ask)(copy, tone)).toBe(answered);
+      expect(first(asked).dismissed).toBe(false);
+      expect(typeOf(first(asked).dialog)).toBe(DesktopBiosConfirmDialog);
+      const { dialog } = first(asked);
+      expect(isValidElement(dialog) && dialog.props).toMatchObject({ copy, tone });
+    },
+  );
 });

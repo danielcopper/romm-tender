@@ -128,7 +128,7 @@ export function usePlayLaunch({
       // What asking again answers: docs/architecture/backend-architecture.md,
       // "Launch-target validation".
       if (startCheckFailed) {
-        const refusal = await recheckStart(appId, romId, false);
+        const refusal = await recheckStart(appId, romId, "page");
         if (refusal !== null) {
           showToast(refusal);
           setPressState(null);

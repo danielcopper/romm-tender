@@ -19,12 +19,10 @@ import type {
   VanishedPick,
 } from "../types";
 import { installationSentence, isNotEstablished, notEstablishedCause } from "./emulatorInstallation";
-import { launchRefusal } from "./gameLaunch";
+import { chooseAnotherPointer, launchRefusal, type PickPointer } from "./gameLaunch";
 import { cannotStartSentence, sourceName } from "./emulatorSourceWording";
 import { LOCAL_CALL_LIMIT_MS } from "./launchGate";
 import { withTimeout } from "./withTimeout";
-
-const CHOOSE_ANOTHER = " Choose another emulator in the emulator menu.";
 
 /**
  * Whether the emulator menu offers *entry* as a pick: every entry but one the
@@ -35,14 +33,17 @@ export function isChoosable(entry: EmulatorOption): boolean {
 }
 
 /**
- * Whether the emulator menu offers an entry to pick other than the one in
- * effect — what a sentence may point the reader at.
+ * Whether an entry can be picked other than the one in effect — what a
+ * sentence may point the reader at.
  */
 export function canPickAnother(emulators: readonly EmulatorOption[], activeLabel: string | null): boolean {
   return emulators.some((entry) => isChoosable(entry) && entry.label !== activeLabel);
 }
 
-/** {@link canPickAnother} for a game's page, whose emulator menu is offered only with more than one emulator. */
+/**
+ * {@link canPickAnother} for a game's page, where a choice is offered only
+ * when more than one emulator is listed.
+ */
 export function gameCanPickAnother(emulators: readonly EmulatorOption[], activeLabel: string | null): boolean {
   return emulators.length > 1 && canPickAnother(emulators, activeLabel);
 }
@@ -124,12 +125,12 @@ export function startRemarkSentences(remarks: readonly StartRemark[] | undefined
 /**
  * Why a start with this answer is refused, as one sentence about `subject`
  * ("this game", "these games"), or `null` where nothing stands in its way.
- * `canPick` says the emulator menu offers another entry; only then does the
- * sentence point at it.
+ * `canPick` says whether another entry can be chosen (`true` in the emulator
+ * menu, `"page"` on the game page); only then does the sentence point at it.
  */
-export function emulatorStartRefusal(start: EmulatorStart, subject: string, canPick: boolean): string | null {
+export function emulatorStartRefusal(start: EmulatorStart, subject: string, canPick: PickPointer): string | null {
   const entry = start.entry ?? "The emulator";
-  if (start.state === "cannot_start") return cannotStartRefusal(start, entry, subject, canPick ? CHOOSE_ANOTHER : "");
+  if (start.state === "cannot_start") return cannotStartRefusal(start, entry, subject, chooseAnotherPointer(canPick));
   if (start.state === "choose") return noDefaultRefusal(start.reason, entry, canPick);
   return null;
 }
@@ -144,12 +145,17 @@ function cannotStartRefusal(start: EmulatorStart, entry: string, subject: string
   return `${entry} cannot start ${subject}.${pointer}`;
 }
 
+function chooseAnEmulatorPointer(canPick: PickPointer): string {
+  if (!canPick) return "";
+  if (canPick === "page") return " Choose an emulator.";
+  return " Choose an emulator in the emulator menu.";
+}
+
 /** {@link emulatorStartRefusal} for a `choose` answer: no default, the shipped entry's installation not established. */
-function noDefaultRefusal(reason: string | null, entry: string, canPick: boolean): string {
+function noDefaultRefusal(reason: string | null, entry: string, canPick: PickPointer): string {
   const cause = notEstablishedCause(reason);
   const why = cause === null ? "" : ` (${cause})`;
-  const choose = canPick ? " Choose an emulator in the emulator menu." : "";
-  return `No emulator is the default, because whether ${entry} is installed could not be established${why}.${choose}`;
+  return `No emulator is the default, because whether ${entry} is installed could not be established${why}.${chooseAnEmulatorPointer(canPick)}`;
 }
 
 /** Whether this answer refuses a start. */
@@ -205,7 +211,7 @@ export const NO_EMULATOR_STARTS = "No emulator starts this game.";
  * no emulator starts says so. The one composition the game page and a refused
  * start both say.
  */
-export function startRefusal(start: EmulatorStart, launch: GameLaunch | null, canPick: boolean): string | null {
+export function startRefusal(start: EmulatorStart, launch: GameLaunch | null, canPick: PickPointer): string | null {
   if (start.state === "no_entry") return NO_EMULATOR_STARTS;
   const emulator = emulatorStartRefusal(start, "this game", canPick);
   const file = launchRefusal(launch, canPick);
@@ -215,11 +221,13 @@ export function startRefusal(start: EmulatorStart, launch: GameLaunch | null, ca
 
 /**
  * Why a game cannot start, from its core read ({@link startRefusal}), or `null`.
- * `canPick` says the page offers an emulator menu for the sentence to point at; absent, it is read off the entries.
+ * `canPick` says whether and how the sentence points at choosing another
+ * emulator; absent, it defaults to the emulator menu when another entry is
+ * choosable.
  */
 export function gameStartRefusal(
   info: CoreInfo,
-  canPick = gameCanPickAnother(info.emulators, info.active_core_label),
+  canPick: PickPointer = gameCanPickAnother(info.emulators, info.active_core_label),
 ): string | null {
   return startRefusal(info.start, info.launch ?? null, canPick);
 }

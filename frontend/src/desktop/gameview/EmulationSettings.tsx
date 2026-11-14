@@ -51,23 +51,25 @@ import { refreshBiosStatus, refreshCoreAndBios, type GameDetailState } from "../
 import { usePruneLeaseOwner } from "../../utils/pruneLease";
 import { useStrandedAnswer } from "../../utils/strandedPanelStore";
 import {
+  deleteBiosFileConfirmCopy,
+  deletePlatformBiosConfirmCopy,
+  replaceBiosConfirmCopy,
+  type BiosConfirmCopy,
+} from "../../utils/biosConfirmWording";
+import {
   announceBiosChange,
   biosBulkOffer,
   biosDownloadButtonState,
   biosRowAction,
-  deleteBiosFileConfirmCopy,
-  deletePlatformBiosConfirmCopy,
-  replaceBiosConfirmCopy,
   useBiosActions,
   type BiosActions,
-  type BiosConfirmCopy,
   type BiosStatusLine,
   type PlatformKey,
 } from "../../utils/useBiosActions";
 import { desktopBiosConfirmDialog } from "./dialogs/desktopDialogs";
 import { useDialogHost } from "./dialogs/useDialogHost";
 import { SvgThrobber } from "./SvgThrobber";
-import { BUTTON_STYLE, CARD_STYLE } from "./styles";
+import { BUTTON_STYLE, CARD_STYLE, DOT_STYLE } from "./styles";
 
 interface EmulationSettingsProps {
   appId: number;
@@ -136,14 +138,6 @@ const INLINE_ROW_STYLE: CSSProperties = {
   gap: "8px",
   fontSize: "13px",
   color: BODY_COLOR,
-};
-
-const DOT_STYLE: CSSProperties = {
-  display: "inline-block",
-  width: "8px",
-  height: "8px",
-  borderRadius: "50%",
-  flexShrink: 0,
 };
 
 const INLINE_SPINNER_STYLE: CSSProperties = {
@@ -286,6 +280,7 @@ function useDesktopBiosReadState(
 ) {
   const [biosState, setBiosState] = useState<RomBiosState | null>(null);
   const mountedRef = useRef(true);
+  const appIdRef = useRef(appId);
   const romIdRef = useRef(romId);
   const slugRef = useRef(platformSlug);
   const folderRef = useRef(platformFolder);
@@ -295,6 +290,7 @@ function useDesktopBiosReadState(
   const ownCoreDispatch = useRef(false);
 
   useEffect(() => {
+    appIdRef.current = appId;
     romIdRef.current = romId;
     slugRef.current = platformSlug;
     folderRef.current = platformFolder;
@@ -313,7 +309,7 @@ function useDesktopBiosReadState(
     try {
       answer = await reader(targetRomId);
     } catch (e) {
-      logWarn(`EmulationSettings: BIOS read for romId=${targetRomId} failed: ${e}`);
+      logWarn(`DesktopEmulationSettings: BIOS read for appId=${appIdRef.current} romId=${targetRomId} failed: ${e}`);
     }
     if (!mountedRef.current) return;
     if (romIdRef.current !== targetRomId || readSeqRef.current !== ticket) return;
@@ -384,18 +380,34 @@ function useSettledEntryLaunches(romId: number, enabled: boolean): EntryLaunches
 
   useEffect(() => {
     if (!enabled) return;
-    let active = true;
-    const launches = askEntryLaunches(romId, () => active);
-    const unsubscribe = launches.subscribe(() => {
-      if (active) setSettled({ romId, launches });
-    });
+    let cancelCurrent = () => {};
+    const startAsk = () => {
+      cancelCurrent();
+      let active = true;
+      const launches = askEntryLaunches(romId, () => active);
+      const unsubscribe = launches.subscribe(() => {
+        if (active) setSettled({ romId, launches });
+      });
+      cancelCurrent = () => {
+        active = false;
+        unsubscribe();
+      };
+    };
+    startAsk();
+    const onDataChanged = (e: WindowEventMap["romm_data_changed"]) => {
+      if (e.detail.type !== "emulator_sources") return;
+      setSettled(null);
+      startAsk();
+    };
+    globalThis.addEventListener("romm_data_changed", onDataChanged);
     return () => {
-      active = false;
-      unsubscribe();
+      cancelCurrent();
+      setSettled(null);
+      globalThis.removeEventListener("romm_data_changed", onDataChanged);
     };
   }, [romId, enabled]);
 
-  return enabled && settled?.romId === romId ? settled.launches : null;
+  return settled?.romId === romId ? settled.launches : null;
 }
 
 const DesktopEmulatorEntryButton: FC<{
@@ -506,7 +518,7 @@ const DesktopEmulatorSection: FC<{
         rereadBios,
         announceOwnCore,
       });
-      if (errorMessage !== null) setFailure({ romId: targetRomId, message: errorMessage });
+      setFailure(errorMessage === null ? null : { romId: targetRomId, message: errorMessage });
     } finally {
       setBusyRomId((prev) => (prev === targetRomId ? null : prev));
     }
@@ -982,20 +994,9 @@ const DesktopBiosAnsweredContent: FC<{
   onPressKey: (key: string) => void;
   actions: BiosActions;
   status: BiosStatusLine | null;
-  confirmBios: ConfirmBiosFn;
-}> = ({
-  biosStatus,
-  biosLevel,
-  readFailed,
-  detail,
-  platform,
-  busyFolder,
-  pressedKey,
-  onPressKey,
-  actions,
-  status,
-  confirmBios,
-}) => {
+}> = ({ biosStatus, biosLevel, readFailed, detail, platform, busyFolder, pressedKey, onPressKey, actions, status }) => {
+  const dialogHost = useDialogHost();
+  const confirmBios = desktopBiosConfirmDialog(dialogHost.ask);
   const [tabKey, setTabKey] = useState<string | null>(null);
   const files = biosStatus.files ?? [];
   const tabs = biosStatus.emulator_tabs;
@@ -1116,6 +1117,7 @@ const DesktopBiosAnsweredContent: FC<{
           ))}
         </div>
       )}
+      {dialogHost.element}
     </div>
   );
 };
@@ -1132,9 +1134,6 @@ export const EmulationSettings: FC<EmulationSettingsProps> = ({ appId, detail })
   const isStranded = useStrandedAnswer() !== null;
   const leaseOwner = `desktop-emulation-card:${appId}`;
   usePruneLeaseOwner(leaseOwner);
-
-  const dialogHost = useDialogHost();
-  const confirmBios = useMemo(() => desktopBiosConfirmDialog(dialogHost.ask), [dialogHost.ask]);
 
   const { biosStatus, biosLevel, readFailed, rereadBios, rereadCurrentBios, announceOwnBios, announceOwnCore } =
     useDesktopBiosReadState(appId, detail.romId, detail.platformSlug, detail.platformFolder, isStranded);
@@ -1184,9 +1183,10 @@ export const EmulationSettings: FC<EmulationSettingsProps> = ({ appId, detail })
         {failedBiosMessage(detail)}
       </div>
     );
-  } else if (biosState === "answered" && biosStatus !== null) {
+  } else if (biosStatus !== null) {
     biosBody = (
       <DesktopBiosAnsweredContent
+        key={detail.romId}
         biosStatus={biosStatus}
         biosLevel={biosLevel}
         readFailed={readFailed}
@@ -1197,7 +1197,6 @@ export const EmulationSettings: FC<EmulationSettingsProps> = ({ appId, detail })
         onPressKey={setPressedKey}
         actions={biosActions}
         status={status}
-        confirmBios={confirmBios}
       />
     );
   } else {
@@ -1226,7 +1225,6 @@ export const EmulationSettings: FC<EmulationSettingsProps> = ({ appId, detail })
         </div>
         {biosBody}
       </div>
-      {dialogHost.element}
     </div>
   );
 };

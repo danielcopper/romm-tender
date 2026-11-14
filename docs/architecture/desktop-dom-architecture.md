@@ -23,13 +23,13 @@ active, vanished and frontend-choice notes, writing through `executeGameCoreChan
 `frontend/src/utils/coreOverride.ts`) above its BIOS / firmware readiness, group blocks, emulator tab pills, file table,
 unclaimed RomM library rows (`useIdentifications`, `frontend/src/utils/firmwareIdentifications.ts`), legend
 (`frontend/src/utils/biosFileNote.ts`) and BIOS download, replace and delete presses (`useBiosActions`,
-`frontend/src/utils/useBiosActions.ts`), whose confirmations open in the desktop dialogs
-(`frontend/src/desktop/gameview/dialogs/DesktopBiosConfirmDialog.tsx`). Emulation shares the page-open BIOS collapse
-(`getBiosStatusShared`, `frontend/src/api/sharedReads.ts`) on first open for an `appId` and calls `getBiosStatus`
-directly on a version switch or re-read, tags its held answer by `romId` and orders reads for the same ROM by sequence,
-and draws nothing before the ROM identity is known or on a stranded panel ([invariant register](invariants/panel.md)).
-While `GameView` is drawn it holds two things `RomMPlaySection` holds on Big Picture's game page: the connection
-heartbeat, and the automatic artwork, whose apply in flight it cancels on leaving.
+`frontend/src/utils/useBiosActions.ts`), whose confirmation copy (`frontend/src/utils/biosConfirmWording.ts`) opens in
+the desktop dialogs (`frontend/src/desktop/gameview/dialogs/DesktopBiosConfirmDialog.tsx`). Emulation reads BIOS status
+through `frontend/src/api/sharedReads.ts`, tags its held answer by `romId` and orders reads for the same ROM by
+sequence, and draws nothing before the ROM identity is known or on a stranded panel
+([invariant register](invariants/panel.md)). While `GameView` is drawn it holds two things `RomMPlaySection` holds on
+Big Picture's game page: the connection heartbeat, and the automatic artwork, whose apply in flight it cancels on
+leaving.
 
 While a RetroDECK migration is pending it draws the migration card
 (`frontend/src/desktop/gameview/MigrationBlockedCard.tsx`) in place of the columns, as the game page's section does on
@@ -73,12 +73,14 @@ one. What a download, an adoption or an uninstall puts on the button — STARTIN
 carries the transfer, READY!, UNINSTALLING..., the verdict it holds after — stays with the version it was pressed for,
 so a version switch while it runs leaves it behind and the button draws the new version's own state. Where the game
 cannot start — its emulator cannot, or its file does not start with it — PLAY is disabled with the sentence
-`startRefusal` (`frontend/src/utils/emulatorStart.ts`) answers. While the page checks whether the game can start, and
-where that check went wrong, PLAY does what Big Picture's does
-([Launch-target validation](backend-architecture.md#launch-target-validation)), and reads CHECKING... where Big
-Picture's shows its throbber. On a stranded panel it gates as the [invariant register](invariants/panel.md)'s
-stranded-panel entry says. Steam's Play button and the badges beside it are hidden as soon as the button's root has
-rendered, also while it draws nothing — before the page's detail names the ROM, and on a stranded panel.
+`startRefusal` (`frontend/src/utils/emulatorStart.ts`) answers, pointing at choosing another emulator (without naming
+the emulator menu) when another entry is choosable, and `recheckStart` (`frontend/src/utils/gameDetailStore.ts`) words a
+recheck on the page the same way. While the page checks whether the game can start, and where that check went wrong,
+PLAY does what Big Picture's does ([Launch-target validation](backend-architecture.md#launch-target-validation)), and
+reads CHECKING... where Big Picture's shows its throbber. On a stranded panel it gates as the
+[invariant register](invariants/panel.md)'s stranded-panel entry says. Steam's Play button and the badges beside it are
+hidden as soon as the button's root has rendered, also while it draws nothing — before the page's detail names the ROM,
+and on a stranded panel.
 
 `DiscSelector` (`frontend/src/desktop/gameview/DiscSelector.tsx`) sits beside the Play button, one control where Big
 Picture has two beside `CustomPlayButton`, `frontend/src/bigpicture/DiscSelector.tsx` and

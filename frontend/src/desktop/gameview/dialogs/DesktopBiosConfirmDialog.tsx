@@ -6,7 +6,7 @@
 
 import type { FC } from "react";
 import { CANCEL_LABEL } from "../../../utils/launchPromptWording";
-import type { BiosConfirmCopy } from "../../../utils/useBiosActions";
+import type { BiosConfirmCopy } from "../../../utils/biosConfirmWording";
 import { DIALOG_ACTIONS_STYLE, DIALOG_TEXT_STYLE, DesktopDialog, dialogButtonStyle } from "./DesktopDialog";
 
 interface DesktopBiosConfirmDialogProps {

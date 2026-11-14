@@ -31,7 +31,9 @@ When you open a RomM game in the Steam Library, you'll see the Tender panel belo
 **Coming soon:** **on the desktop client's game page** the **Last Played**, **Playtime** and **Space Required** cells
 stand beside the Play button, with a **BIOS** cell where required BIOS files are missing, and one more: **Save Sync**
 says when the game's saves last synced, or what is keeping them from it. Playtime reads as on Steam's own game pages:
-**Play Time**, in minutes up to two hours and in hours from there, and no cell for a game with none.
+**Play Time**, in minutes up to two hours and in hours from there, and no cell for a game with none. Below the play row,
+the **Emulation** card lets you pick or unpin an emulator for the game and check, download, replace or delete its BIOS
+files — and pressing **BIOS** in the play row scrolls straight to it.
 
 Below the play row stand the panel's tabs — **GAME INFO**, **ACHIEVEMENTS**, **SAVES**, **BIOS** and **ARTWORK** — on
 Steam's own tab row, the one a Steam game's page has. **ACHIEVEMENTS** is there for a game RetroAchievements knows;

@@ -1,12 +1,16 @@
 /**
- * What one BIOS file row says about itself — its marks, its note and its
- * description, which the BIOS tables on a platform's page and on a game's page
- * put in the row's cells and on the lines under it.
+ * What one BIOS file row says about itself — its marks, legend entries,
+ * Contents cell, note, secondary lines, and description — shared across the
+ * platform and game BIOS tables (alongside placement/attempt lines in
+ * `biosPlaceWords.ts` and need/group wording in `biosGroup.ts`).
  *
- * What a row SAYS is decided only here; the table frames it, stating plain
- * absence in the row's On-disk cell rather than in words. What it hands over is
- * a sentence and a list of lines ({@link BiosFileWords}), plus the row's
- * description ({@link biosFileDescription}).
+ * Plain absence is stated by the On-disk mark ({@link biosDiskMark}, paired
+ * with {@link biosLibraryMark} and explained by {@link biosLegendEntries})
+ * rather than in prose; the `Contents` cell ({@link contentsWords}) words the
+ * byte/folder check, {@link biosFileNote} and {@link biosTableRowLines} produce
+ * the row's note and secondary lines, {@link declaredFolder} extracts any
+ * declared subdirectory prefix, and {@link biosFileDescription} cleans the
+ * packager's `.info` description.
  *
  * **A row is headed by the file the emulator DECLARED, never by its
  * description** — `declared_path`, folder and all, which the table splits into
@@ -16,20 +20,18 @@
  * identity — and it routinely spells the name into its own words besides, which
  * is what {@link biosFileDescription} takes back out.
  *
- * Precedence is deliberate. A file the distribution itself put there is not a
- * gap in the RomM library — it is not the library's file at all, and telling
- * the user it is missing from RomM is true and useless — so that note wins.
- * What the reading established about the row comes next, because a folder's
- * contents and a destination something else occupies are neither "missing" nor
- * "present". Only then does the library note stand, which is honest for every
- * row nothing else was established for.
+ * Precedence in {@link biosFileNote} is deliberate. A file the distribution
+ * itself put there is not a gap in the RomM library — it is not the library's
+ * file at all, and telling the user it is missing from RomM is true and
+ * useless — so that note wins. What the reading established about the row comes
+ * next, because a folder's contents and a destination something else occupies
+ * are neither "missing" nor "present". Only then does the library note stand,
+ * which is honest for every row nothing else was established for.
  *
- * The CAUSE of a verdict comes from the resolver's own caveat codes, because
- * `satisfied` is deliberately the verdict alone and carries none of it. What the
- * verdict does decide is which family of codes can apply — with the declaration
- * kind, since a folder's findings and a destination's are different families —
- * and what to say when no code in that family is recognised, which is the one
- * sentence written off the verdict itself.
+ * The CAUSE of a verdict comes from the resolver's caveat codes and `checked`,
+ * because `satisfied` is the verdict alone and carries none of it: `verdictNote`
+ * branches on `declared_kind` (`"directory"` reads `satisfied` plus folder
+ * caveats; a declared file reads `checked` and file caveats).
  */
 
 import type { BiosFileStatus, FirmwarePlatformExt } from "../types";
@@ -380,22 +382,24 @@ export function biosFileDescription(file: BiosDescriptionRow): string | null {
 export type ContentsRow = Pick<BiosFileStatus, "declared_kind" | "satisfied" | "images" | "checked">;
 
 /**
- * The platform detail's Contents cell — the resolver's check of what is at the
- * row's place, in words, never Tender's own judgement.
+ * A BIOS table row's `Contents` cell — what the check found at the row's place,
+ * in words.
  *
  * A declared FOLDER answers with what it holds: how many images, none, or that
- * nothing established it. A declared FILE answers with `checked`, the resolver's
- * own word for what comparing its bytes established; the em dash means nothing
- * was asked — the ordinary answer for a file that is not there — and must never
- * come to mean "asked and found nothing". *emulator* names the emulator whose
- * image the file is checked as, or the role where the pick has no name.
+ * nothing established it. A declared FILE answers off `checked` (the resolver's
+ * word for what comparing its bytes established, plus `"rejected"`, Tender's
+ * word for a file in a declared folder the emulator read and turned down); the
+ * em dash means nothing was asked — the ordinary answer for a file that is not
+ * there — and must never come to mean "asked and found nothing". *emulator* is
+ * the shown or launching emulator's label, or `null` when unnamed (defaulting
+ * to `"the emulator"`).
  *
  * The cell's colour is the row's mark beside it, so these words explain that
  * colour and never contradict it: a wrong image is a `✗` and "wrong file" — red
  * where the file is required, the muted grey of a missing optional file where
  * it is not — and one that could not be compared a grey `?` and "not
  * comparable". The word "unknown" is never one of them — it would read as the
- * need column's word.
+ * need word under the file's name (`needWords`).
  */
 export function contentsWords(row: ContentsRow, emulator: string | null): string {
   if (row.declared_kind === "directory") {
@@ -432,17 +436,17 @@ export function contentsWords(row: ContentsRow, emulator: string | null): string
 
 const CONTENTS_NOT_ESTABLISHED = "not established — the resolver could not tell";
 
-/** A file the emulator will not open on its size, in the one wording both pages use. */
+/** A file the emulator will not open on its size, in the shared table wording. */
 function refusedFile(emulator: string | null): string {
   return `refused — ${emulator ?? "the emulator"} does not accept a file of this size`;
 }
 
-/** A wrong image, in the one wording both pages use — naming the emulator whose image it is not. */
+/** A wrong image, in the shared table wording — naming the emulator whose image it is not. */
 function wrongFile(emulator: string | null): string {
   return `wrong file — not the image ${emulator ?? "the emulator"} expects`;
 }
 
-/** A file in a declared folder the emulator's own test read and turned down, in the one wording both pages use. */
+/** A file in a declared folder the emulator's own test read and turned down, in the shared table wording. */
 function rejectedFile(emulator: string | null): string {
   return `wrong file — not an image ${emulator ?? "the emulator"} accepts`;
 }
@@ -539,7 +543,12 @@ function rowWords(row: BiosNoteRow, emulator: string | null): BiosFileWords {
  * It sits BESIDE the verdict mark and never in place of it — the two are
  * different questions, and a row that is present but unfetchable ("you have it,
  * but you could not fetch it again") is exactly the combination a single
- * channel would lose.
+ * channel would lose. Which is why it carries no need axis of its own: the
+ * verdict mark beside it already says whether the file is wanted.
+ *
+ * `⊘` is not one of the verdict shapes and reads as "not available" rather than
+ * as a degree of wrong; DejaVu Sans carries U+2298, the same SteamOS fontconfig
+ * fallback the `✓`/`✗` glyphs rely on in this table.
  */
 const LIBRARY_MARK: BiosMark = { glyph: "⊘", color: BIOS_LIBRARY_VIOLET, title: "not in your RomM library" };
 
@@ -579,7 +588,8 @@ const UNMET_WORDS = [unmetWord(null), unmetWord("mismatch"), unmetWord("refused"
  * A folder's verdict is what it HOLDS, never that the folder is there — the
  * register's rule (`docs/architecture/invariants/firmware.md`) — so a payload
  * carrying no verdict for one leaves the row unestablished rather than falling
- * back to presence.
+ * back to presence; only a declared file without `satisfied` falls back to
+ * `downloaded`.
  */
 function rowVerdict(file: BiosTableRow): boolean | null {
   const isFolder = file.declared_kind === "directory";
@@ -609,9 +619,21 @@ function unmetDiskMark(file: BiosTableRow, required: boolean, option: boolean): 
 /**
  * The first mark in one row's `On disk` cell, as a glyph, colour and tooltip.
  *
- * The glyph is the verdict (`✓` met, `✗` not met, `?` nothing could establish
- * it — `BiosFileEntry.satisfied`, never presence), and the colour is the need
- * (`required_by_active`, plus options of a one-of group).
+ * Two facts, two channels:
+ * - **Glyph (verdict):** `✓` met, `✗` not met, `?` unestablished, from
+ *   {@link rowVerdict} (`BiosFileEntry.satisfied`, falling back to `downloaded`
+ *   only for a non-directory row with `satisfied` absent — never folder
+ *   presence, since RetroDECK links `pcsx2/bios` onto the BIOS root).
+ * - **Every unestablished verdict or need is a grey `?`:** when `wanted` is
+ *   `"unknown"`, the glyph is forced to grey `?` while its tooltip still states
+ *   whether the row's verdict is met (`MARK_HERE_NEED_UNKNOWN`) or missing
+ *   (`MARK_MISSING_NEED_UNKNOWN`) rather than calling the row not required.
+ * - **Colour (need):** keyed on `required_by_active` rather than `wanted`,
+ *   matching `biosSummary`'s count (`not_needed` and `optional` share muted
+ *   grey when unmet and `BIOS_SPARE_GREEN` when met; amber is never a row mark,
+ *   because `partial` is a group-level level). A one-of group option
+ *   (`one_of` when `!required_by_active`) is the fifth state: strong green or
+ *   red under its own words, checked after the `?` marks.
  */
 export function biosDiskMark(file: BiosTableRow): BiosMark {
   const verdict = rowVerdict(file);
@@ -629,8 +651,14 @@ export function biosDiskMark(file: BiosTableRow): BiosMark {
 }
 
 /**
- * The row's second mark, or `null` where the library holds the file or the row
- * declares a directory.
+ * The row's second mark, or `null` where the library holds the file, where the
+ * payload is silent about `on_server`, or where the row declares a directory.
+ *
+ * Appears beside `✓` and `✗` alike (a file downloaded before leaving the RomM
+ * library still cannot be fetched again). `on_server === undefined` carries no
+ * mark rather than a claim, and declared directories are excluded because no
+ * RomM library holds a directory (so backend firmware rows stamp directory
+ * entries `on_server: false`).
  */
 export function biosLibraryMark(file: BiosTableRow): BiosMark | null {
   return file.on_server === false && file.declared_kind !== "directory" ? LIBRARY_MARK : null;
@@ -651,10 +679,16 @@ export function declaredFolder(file: BiosTableRow): string | null {
 }
 
 /**
- * The legend entries explaining the marks present across *files*, in reading
- * order: unmet required and group-option marks first, then met marks,
- * unestablished marks, spare marks, and the second channel (`⊘`) when any row
- * carries it.
+ * The legend entries explaining the marks present across *files*.
+ *
+ * Filters to states present in *files* so absent states take no space, and
+ * emits a single `⊘` entry at the end when any row carries
+ * {@link biosLibraryMark} (since `⊘` means the same beside every verdict).
+ * Ordered with unmet required and unmet group-option marks (`✗`) first, then
+ * met required and met group-option marks (`✓`), unestablished marks (`?`),
+ * met non-required (`✓` `"here, not required"`), unmet non-required (`✗`), and
+ * `⊘` last — keeping each group-option mark beside the ordinary mark that
+ * shares its colour.
  */
 export function biosLegendEntries(files: readonly BiosTableRow[]): BiosLegendEntry[] {
   const marks = files.map((file) => biosDiskMark(file));

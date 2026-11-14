@@ -486,7 +486,7 @@ describe("usePlayLaunch", () => {
         await result.current.handlePlayClick();
       });
 
-      expect(gameDetailStore.recheckStart).toHaveBeenCalledWith(12345, 100, false);
+      expect(gameDetailStore.recheckStart).toHaveBeenCalledWith(12345, 100, "page");
       expect(toast.showToast).toHaveBeenCalledWith(REFUSED);
       expect(backend.probeReachability).not.toHaveBeenCalled();
       expect(runGame).not.toHaveBeenCalled();
@@ -501,7 +501,7 @@ describe("usePlayLaunch", () => {
         await result.current.handlePlayClick();
       });
 
-      expect(gameDetailStore.recheckStart).toHaveBeenCalledWith(12345, 100, false);
+      expect(gameDetailStore.recheckStart).toHaveBeenCalledWith(12345, 100, "page");
       expect(runGame).toHaveBeenCalledWith("12345", "", -1, 100);
       expect(toast.showToast).not.toHaveBeenCalled();
     });
