@@ -447,6 +447,19 @@ describe("PlayButton", () => {
       );
       rerender(<PlayButton appId={APP_ID} />);
       expect(play).toHaveAttribute("title", "DuckStation is not installed, so this game cannot start.");
+
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(
+        detailState({
+          emulatorStart: { state: "choose", reason: "no_find_rule", entry: "BlastEm" },
+          emulators: [{ label: "BlastEm", reason: "no_find_rule" }] as never,
+          activeCoreLabel: null,
+        }),
+      );
+      rerender(<PlayButton appId={APP_ID} />);
+      expect(play).toHaveAttribute(
+        "title",
+        "No emulator is the default, because whether BlastEm is installed could not be established (ES-DE has no rule for finding it). Choose an emulator.",
+      );
     });
 
     it("is disabled with the file's refusal as its title where the file does not start with its emulator", () => {

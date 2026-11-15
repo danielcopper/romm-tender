@@ -659,19 +659,22 @@ detail page:
 
 ### Per-game (`CoreService`)
 
-The frontend CPU-button menu on the game detail page drives two backend endpoints:
+The game detail page's emulator pickers — the `Emulator Core` menu in `frontend/src/bigpicture/RomMPlaySection.tsx` and,
+in the desktop dev build, the Emulation card in `frontend/src/desktop/gameview/EmulationSettings.tsx` — share
+`executeGameCoreChange` (`frontend/src/utils/coreOverride.ts`) and drive two backend endpoints:
 
 - **`set_game_core(rom_id, label)`** checks the LABEL **first** against the ROM platform's classified command list. A
   label the list does not carry, or one whose emulator the resolver states not installed, is refused with
   `core_unavailable` and **nothing is written**; an entry the resolver gives no complete command for is pinned like any
   other, and its start is then refused at Play. On success it `pin`s the override.
-- **`clear_game_core(rom_id)`** (triggered by picking the **default-marked core** in the menu) `clear`s the override to
-  `NULL`, so the ROM follows the per-platform core or the default from its next start. There is no separate "Reset" item
-  — selecting the default-marked entry is the clear path; any other entry pins that core.
+- **`clear_game_core(rom_id)`** (triggered by `Use System Override (<entry>)` in the Big Picture menu, or by pressing
+  the `(pinned)` entry again on the desktop Emulation card) `clear`s the override to `NULL`, so the ROM follows the
+  per-platform core or the default from its next start; picking any unpinned entry pins that core.
 
 Both refuse a ROM Tender does not track with `not_found`; a pin also refuses with `not_found` when the ROM is retired
 while its label is resolved, and with `core_unavailable` when its platform changed meanwhile. Both answer
-`{success: true}` and write nothing to the shortcut, so the panel toasts success once the backend has answered.
+`{success: true}` and write nothing to the shortcut, so `executeGameCoreChange` toasts success once the backend has
+answered and returns `{ status: "applied" | "cancelled" | "failed" }` for callers that render inline state.
 
 ### Per-platform (`CoreService.set_system_core`)
 

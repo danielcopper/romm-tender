@@ -2343,7 +2343,15 @@ describe("BiosTab", () => {
     it("mutes the Failed label on a disabled sibling row or an offline bulk button while the notice lasts", async () => {
       vi.useFakeTimers();
       try {
-        const sharedLib = { file_name: "psx-bios.bin", firmware_id: 7, md5: "aaa", sha1: null };
+        const sharedLib: NonNullable<BiosFileStatus["library"]> = {
+          file_name: "psx-bios.bin",
+          firmware_id: 7,
+          platform_slug: "psx",
+          matched: "content",
+          md5: "aaa",
+          size: 512,
+          no_checksum: false,
+        };
         const twoRows = psx({
           files: [
             psxFile("scph5501.bin", { fetch_for_required: true, library: sharedLib }),

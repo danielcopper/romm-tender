@@ -1,6 +1,5 @@
 /**
- * User-facing confirmation copy for destructive or replacing BIOS actions
- * shared across the gamepad modals and the desktop confirmation dialog.
+ * User-facing confirmation copy for replacing or deleting BIOS files.
  */
 
 /** Copy for a destructive or replacing BIOS confirmation dialog. */

@@ -39,9 +39,6 @@ export async function executeGameCoreChange({
       showToast(message);
       return { status: "failed", message };
     }
-    showToast(isClear ? "Now following the system core" : `Core set to ${coreName ?? coreLabel}`);
-    await onSuccess?.();
-    return { status: "applied" };
   } catch (e) {
     // Leaving the page cancels the change; the pin may already be persisted, so
     // that teardown is not a "failed to set core" the user must see.
@@ -53,4 +50,16 @@ export async function executeGameCoreChange({
     showToast(failureMessage);
     return { status: "failed", message: failureMessage };
   }
+
+  showToast(isClear ? "Now following the system core" : `Core set to ${coreName ?? coreLabel}`);
+  try {
+    await onSuccess?.();
+  } catch (e) {
+    if (isPruneLeaseCancellation(e, admission)) {
+      detach(debugLog(`${logTag}: continuation was cancelled: ${e}`));
+      return { status: "cancelled" };
+    }
+    logWarn(`${logTag}: post-change refresh error: ${e}`);
+  }
+  return { status: "applied" };
 }

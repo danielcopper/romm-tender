@@ -13,6 +13,7 @@
  */
 
 import type { BiosLevel } from "../types";
+import type { GroupLineTone } from "./biosGroup";
 
 /** The red a requirement the resolver says is not met is drawn in. Named
  *  because one surface needs the colour WITHOUT the level: the play row's badge
@@ -30,6 +31,15 @@ export const BIOS_MUTED_GREY = "#8f98a0";
  *  traffic light: what it reports — that the RomM library does not hold the
  *  file — is not a degree of wrongness. */
 export const BIOS_LIBRARY_VIOLET = "#a48fd4";
+
+/** The dot beside one line of a one-of group block. */
+export const GROUP_TONE_COLOR: Readonly<Record<GroupLineTone, string>> = {
+  here: BIOS_OK_GREEN,
+  missing: BIOS_MISSING_RED,
+  other: BIOS_MUTED_GREY,
+  // Not established is grey, never amber.
+  unchecked: BIOS_MUTED_GREY,
+};
 
 /** Map a backend BIOS level to the status-dot hex color.
  *  - `ok` (met) → green

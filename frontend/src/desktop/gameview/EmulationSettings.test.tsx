@@ -237,6 +237,54 @@ describe("EmulationSettings", () => {
       expect(screen.getByTestId("desktop-emulator-unavailable")).toHaveTextContent(/RetroDECK/);
     });
 
+    it("renders Checking, startCheck failure, or No emulator starts this game when emulatorDataAvailable has no entries", async () => {
+      const { rerender } = render(
+        <EmulationSettings
+          appId={APP_ID}
+          detail={makeDetail({
+            emulatorDataAvailable: true,
+            emulators: [],
+            activeCoreLabel: null,
+            startCheck: { state: "checking" },
+          })}
+        />,
+      );
+      await screen.findByTestId("bios-table-header");
+
+      expect(screen.getByTestId("emulator-checking")).toHaveTextContent("Checking…");
+      expect(screen.queryByText("Switching cores may affect save compatibility")).not.toBeInTheDocument();
+
+      rerender(
+        <EmulationSettings
+          appId={APP_ID}
+          detail={makeDetail({
+            emulatorDataAvailable: true,
+            emulators: [],
+            activeCoreLabel: null,
+            startCheck: { state: "failed", why: "Could not check whether this game can start." },
+          })}
+        />,
+      );
+      expect(screen.getByTestId("desktop-emulator-unavailable")).toHaveTextContent(
+        "Could not check whether this game can start.",
+      );
+      expect(screen.queryByText("Switching cores may affect save compatibility")).not.toBeInTheDocument();
+
+      rerender(
+        <EmulationSettings
+          appId={APP_ID}
+          detail={makeDetail({
+            emulatorDataAvailable: true,
+            emulators: [],
+            activeCoreLabel: null,
+            startCheck: { state: "answered" },
+          })}
+        />,
+      );
+      expect(screen.getByTestId("desktop-emulator-unavailable")).toHaveTextContent("No emulator starts this game.");
+      expect(screen.queryByText("Switching cores may affect save compatibility")).not.toBeInTheDocument();
+    });
+
     it("renders entry markers without a Use System Override row, installation notes, and disables uninstalled entries", async () => {
       const missing = makeEntry("PCSX ReARMed", { reason: "not_installed" });
       const unest = makeEntry("SwanStation", { reason: "no_find_rule" });
@@ -266,7 +314,7 @@ describe("EmulationSettings", () => {
       expect(screen.getByRole("button", { name: /PCSX ReARMed — emulator not installed/ })).toBeDisabled();
       expect(screen.getByRole("button", { name: /SwanStation — installation not established/ })).toBeEnabled();
       expect(
-        screen.getByText(/Beetle PSX HW is chosen in ES-DE; Tender starts this game with the emulator chosen/),
+        screen.getByText("Beetle PSX HW is chosen in ES-DE; Tender starts this game with the emulator chosen here."),
       ).toBeInTheDocument();
     });
 
@@ -347,6 +395,7 @@ describe("EmulationSettings", () => {
           detail={makeDetail({ activeCoreLabel: "Beetle PSX HW", hasGameOverride: true })}
         />,
       );
+      expect(screen.queryByText(/is chosen in ES-DE; Tender starts/)).not.toBeInTheDocument();
       expect(screen.getByRole("button", { name: "DuckStation (default)" })).toHaveAttribute("aria-pressed", "false");
       const pinnedOther = screen.getByRole("button", {
         name: "Beetle PSX HW (pinned) (chosen in ES-DE) (system) ✓",
@@ -381,6 +430,35 @@ describe("EmulationSettings", () => {
       });
       fireEvent.click(screen.getByRole("button", { name: /Beetle PSX HW \(chosen in ES-DE\)/ }));
       expect(await screen.findByTestId("desktop-core-error")).toHaveTextContent("Prune is running");
+    });
+
+    it("still re-reads BIOS and announces core_changed when refreshCoreAndBios throws after saving the pin", async () => {
+      const logSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => undefined);
+      vi.mocked(gameDetailStore.refreshCoreAndBios).mockRejectedValueOnce(new Error("core info timeout"));
+      vi.mocked(coreOverride.executeGameCoreChange).mockImplementationOnce(async ({ onSuccess }) => {
+        await onSuccess?.();
+        return { status: "applied" };
+      });
+      const events: CustomEvent[] = [];
+      const onChanged = (e: Event) => events.push(e as CustomEvent);
+      globalThis.addEventListener("romm_data_changed", onChanged);
+
+      try {
+        render(<EmulationSettings appId={APP_ID} detail={makeDetail()} />);
+        await screen.findByTestId("bios-table-header");
+        vi.mocked(backend.getBiosStatus).mockClear();
+
+        fireEvent.click(screen.getByRole("button", { name: /Beetle PSX HW \(chosen in ES-DE\)/ }));
+        await waitFor(() => expect(backend.getBiosStatus).toHaveBeenCalledWith(ROM_ID));
+        expect(logSpy).toHaveBeenCalledWith(
+          "DesktopEmulationSettings: core refresh failed for appId=12345 romId=42: Error: core info timeout",
+        );
+        expect(events.map((e) => e.detail)).toContainEqual({ type: "core_changed", platform_fs_slug: "psx" });
+        expect(screen.queryByTestId("desktop-core-error")).not.toBeInTheDocument();
+      } finally {
+        globalThis.removeEventListener("romm_data_changed", onChanged);
+        logSpy.mockRestore();
+      }
     });
 
     it("asks per-entry launch verdicts for an installed game and renders Active / Vanished notes", async () => {
@@ -962,6 +1040,7 @@ describe("EmulationSettings", () => {
             makeBiosFile("scph5501.bin", {
               fetch_for_required: true,
               library: makeLibMatch("scph5501.bin", 51, "5501"),
+              missing_configured_image: { emulator_label: null, file_name: "scph10000.bin" },
             }),
           ],
           ...overrides,
@@ -984,6 +1063,11 @@ describe("EmulationSettings", () => {
       expect(beetlePill.style.backgroundColor).toContain("rgba(255, 255, 255");
       expect(within(beetlePill).getByText("Beetle PSX HW").getAttribute("style")).toBeNull();
       expect(within(rearmedPill).getByText("PCSX ReARMed")).toHaveStyle({ color: BIOS_MISSING_RED });
+      expect(
+        screen.getByText(
+          "ℹ DuckStation's settings name scph10000.bin, which is not here — it uses another BIOS from this folder instead.",
+        ),
+      ).toBeInTheDocument();
 
       // On the launching tab, Download required passes the launching emulator's identity (`"shown"`).
       const duckReqBtn = screen.getByRole("button", { name: "Download required for DuckStation (1)" });
@@ -1600,7 +1684,7 @@ describe("EmulationSettings", () => {
       unmountFailed();
 
       // Fresh mount: initial shared read runs, optional sections stay hidden when empty,
-      // and mounted false -> true -> false stranded transitions detach/reattach listeners and re-read.
+      // romm_tab_switch scrolls the card into view, and stranding unmounts the card cleanly.
       vi.clearAllMocks();
       const emptyOkAnswer = makeBiosAnswer(
         {

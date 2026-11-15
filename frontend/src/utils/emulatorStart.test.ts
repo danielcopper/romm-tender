@@ -137,6 +137,9 @@ describe("the choice made in ES-DE", () => {
     expect(frontendChoiceSentence(emulators, "Genesis Plus GX")).toBe(
       "Gearsystem is chosen in ES-DE; Tender starts this game with the emulator chosen in its emulator menu.",
     );
+    expect(frontendChoiceSentence(emulators, "Genesis Plus GX", "page")).toBe(
+      "Gearsystem is chosen in ES-DE; Tender starts this game with the emulator chosen here.",
+    );
   });
 
   it("is not said where Tender starts the game with it, or where there is none", () => {

@@ -50,10 +50,9 @@ const UNKNOWN_REQUIREMENT_STATUS: BiosStatus = { needs_bios: false, bios_status_
  *  an answer and is shown as one.
  *
  *  What a `null` does is each caller's: a live BIOS read marks `readFailed`
- *  and keeps any held status (`panelState.ts::foldBiosRead`,
- *  `EmulationSettings.tsx::foldBiosAnswer`), a core change keeps any shown
- *  status and re-reads (`panelEvents.ts`, `gameDetailStore.ts`), and an initial
- *  open or version switch holds no status for the new ROM until a read answers.
+ *  and keeps any held status, a core change keeps any shown status and
+ *  re-reads, and an initial open or version switch holds no status for the new
+ *  ROM until a read answers.
  *
  *  `bios_level` is computed by the backend (`compute_bios_level`) and threaded
  *  straight through, never re-derived. */

@@ -394,12 +394,13 @@ export type ContentsRow = Pick<BiosFileStatus, "declared_kind" | "satisfied" | "
  * the shown or launching emulator's label, or `null` when unnamed (defaulting
  * to `"the emulator"`).
  *
- * The cell's colour is the row's mark beside it, so these words explain that
- * colour and never contradict it: a wrong image is a `✗` and "wrong file" — red
- * where the file is required, the muted grey of a missing optional file where
- * it is not — and one that could not be compared a grey `?` and "not
- * comparable". The word "unknown" is never one of them — it would read as the
- * need word under the file's name (`needWords`).
+ * Colour sits on the mark beside this muted cell ({@link biosDiskMark}), and
+ * these words explain that mark without contradicting it: a wrong image is a
+ * `✗` and "wrong file" — red where the file is required or a one-of group
+ * option, the muted grey of a missing optional file otherwise — and one that
+ * could not be compared a grey `?` and "not comparable". The word "unknown" is
+ * never one of them — it would read as the need word under the file's name
+ * (`needWords`).
  */
 export function contentsWords(row: ContentsRow, emulator: string | null): string {
   if (row.declared_kind === "directory") {

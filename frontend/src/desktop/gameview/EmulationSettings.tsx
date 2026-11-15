@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { getBiosStatus, logWarn, type BiosAnswer } from "../../api/backend";
 import { getBiosStatusShared } from "../../api/sharedReads";
 import type { AnsweringSource, BiosLevel, BiosStatus, EmulatorOption, EmulatorTab } from "../../types";
-import { BIOS_MISSING_RED, BIOS_MUTED_GREY, BIOS_OK_GREEN, biosColorForLevel } from "../../utils/biosColor";
+import { BIOS_MISSING_RED, GROUP_TONE_COLOR, biosColorForLevel } from "../../utils/biosColor";
 import { downloadName, isFetchable } from "../../utils/biosFetchable";
 import {
   biosDiskMark,
@@ -19,7 +19,7 @@ import {
   declaredFolder,
   type BiosTableRow,
 } from "../../utils/biosFileNote";
-import { needWords, type GroupLineTone } from "../../utils/biosGroup";
+import { needWords } from "../../utils/biosGroup";
 import { biosHeldRatio } from "../../utils/biosHeldRatio";
 import {
   DOWNLOAD_DAMAGED,
@@ -45,7 +45,12 @@ import {
   isEmulatorEntryActive,
 } from "../../utils/emulatorMenu";
 import { emulatorDataReasonSentence } from "../../utils/emulatorSourceWording";
-import { frontendChoiceSentence, isChoosable, vanishedPickSentence } from "../../utils/emulatorStart";
+import {
+  NO_EMULATOR_STARTS,
+  frontendChoiceSentence,
+  isChoosable,
+  vanishedPickSentence,
+} from "../../utils/emulatorStart";
 import { useIdentifications } from "../../utils/firmwareIdentifications";
 import { refreshBiosStatus, refreshCoreAndBios, type GameDetailState } from "../../utils/gameDetailStore";
 import { usePruneLeaseOwner } from "../../utils/pruneLease";
@@ -195,13 +200,6 @@ const TABLE_CELLS_STYLE: CSSProperties = {
   gridTemplateColumns: TABLE_COLUMNS,
   gap: "8px",
   alignItems: "center",
-};
-
-const GROUP_DOT_COLOR: Readonly<Record<GroupLineTone, string>> = {
-  here: BIOS_OK_GREEN,
-  missing: BIOS_MISSING_RED,
-  other: BIOS_MUTED_GREY,
-  unchecked: BIOS_MUTED_GREY,
 };
 
 function pickerButtonStyle(active: boolean, disabled: boolean): CSSProperties {
@@ -456,7 +454,7 @@ function emulatorExtraLines(detail: GameDetailState): string[] {
   return [
     activeEmulatorNote(detail.emulators, detail.activeCoreLabel),
     detail.vanishedPick === null ? null : vanishedPickSentence(detail.vanishedPick),
-    frontendChoiceSentence(detail.emulators, detail.activeCoreLabel),
+    frontendChoiceSentence(detail.emulators, detail.activeCoreLabel, "page"),
   ].filter((line): line is string => line !== null);
 }
 
@@ -479,8 +477,13 @@ async function performDesktopCorePick(params: {
     onSuccess: async () => {
       // `refreshCoreAndBios` places the new emulator's store links before reading
       // BIOS status; `rereadBios` runs after it so the table does not race link
-      // placement.
-      await refreshCoreAndBios(appId);
+      // placement, and still runs alongside `announceOwnCore` when `checkStart`
+      // rejects after the pin has already been saved.
+      try {
+        await refreshCoreAndBios(appId);
+      } catch (e) {
+        logWarn(`DesktopEmulationSettings: core refresh failed for appId=${appId} romId=${romId}: ${e}`);
+      }
       await rereadBios(romId);
       announceOwnCore(platformFolder);
     },
@@ -527,40 +530,66 @@ const DesktopEmulatorSection: FC<{
   const platformCore = entryForLabel(detail.emulators, detail.platformCoreLabel);
   const extraLines = emulatorExtraLines(detail);
 
+  let emulatorBody: ReactNode;
+  if (!detail.emulatorDataAvailable) {
+    emulatorBody = (
+      <div data-testid="desktop-emulator-unavailable" style={MUTED_TEXT_STYLE}>
+        {emulatorDataReasonSentence(detail.emulatorDataReason, detail.emulatorSource, detail.emulatorPlatformSystem)}
+      </div>
+    );
+  } else if (detail.emulators.length > 0) {
+    emulatorBody = (
+      <>
+        <div style={MUTED_TEXT_STYLE}>{CORE_SWITCH_COMPAT_NOTE}</div>
+        <div style={PICKER_LIST_STYLE}>
+          {detail.emulators.map((entry) => {
+            const isPinned = detail.hasGameOverride && detail.activeCoreLabel === entry.label;
+            return (
+              <DesktopEmulatorEntryButton
+                key={entry.label}
+                entry={entry}
+                isActive={isEmulatorEntryActive(detail.activeCoreLabel, entry)}
+                isPinned={isPinned}
+                isPlatformCore={platformCore === entry}
+                coreBusy={coreBusy}
+                launchesAsked={launchesAsked}
+                settledLaunches={settledLaunches}
+                source={detail.emulatorSource}
+                onToggle={() => detach(runCorePick(isPinned ? null : entry.label))}
+              />
+            );
+          })}
+        </div>
+      </>
+    );
+  } else if (detail.startCheck?.state === "checking") {
+    emulatorBody = (
+      <div data-testid="emulator-checking" style={INLINE_ROW_STYLE}>
+        <SvgThrobber style={INLINE_SPINNER_STYLE} />
+        <span style={MUTED_TEXT_STYLE}>Checking…</span>
+      </div>
+    );
+  } else if (detail.startCheck?.state === "failed") {
+    emulatorBody = (
+      <div data-testid="desktop-emulator-unavailable" style={MUTED_TEXT_STYLE}>
+        {detail.startCheck.why}
+      </div>
+    );
+  } else {
+    emulatorBody = (
+      <div data-testid="desktop-emulator-unavailable" style={MUTED_TEXT_STYLE}>
+        {NO_EMULATOR_STARTS}
+      </div>
+    );
+  }
+
   return (
     <div>
       <div style={SUBHEADING_ROW_STYLE}>
         <span style={SUBHEADING_STYLE}>EMULATOR / CORE</span>
         {coreBusy && <SvgThrobber style={INLINE_SPINNER_STYLE} />}
       </div>
-      {detail.emulatorDataAvailable ? (
-        <>
-          <div style={MUTED_TEXT_STYLE}>{CORE_SWITCH_COMPAT_NOTE}</div>
-          <div style={PICKER_LIST_STYLE}>
-            {detail.emulators.map((entry) => {
-              const isPinned = detail.hasGameOverride && detail.activeCoreLabel === entry.label;
-              return (
-                <DesktopEmulatorEntryButton
-                  key={entry.label}
-                  entry={entry}
-                  isActive={isEmulatorEntryActive(detail.activeCoreLabel, entry)}
-                  isPinned={isPinned}
-                  isPlatformCore={platformCore === entry}
-                  coreBusy={coreBusy}
-                  launchesAsked={launchesAsked}
-                  settledLaunches={settledLaunches}
-                  source={detail.emulatorSource}
-                  onToggle={() => detach(runCorePick(isPinned ? null : entry.label))}
-                />
-              );
-            })}
-          </div>
-        </>
-      ) : (
-        <div data-testid="desktop-emulator-unavailable" style={MUTED_TEXT_STYLE}>
-          {emulatorDataReasonSentence(detail.emulatorDataReason, detail.emulatorSource, detail.emulatorPlatformSystem)}
-        </div>
-      )}
+      {emulatorBody}
       {extraLines.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginTop: "8px" }}>
           {extraLines.map((line) => (
@@ -765,7 +794,7 @@ const DesktopBiosGroupSection: FC<{ biosStatus: BiosStatus }> = ({ biosStatus })
               key={line.text}
               style={{ display: "flex", alignItems: "center", gap: "8px", paddingLeft: "6px", fontSize: "12px" }}
             >
-              <span style={{ ...DOT_STYLE, backgroundColor: GROUP_DOT_COLOR[line.tone] }} />
+              <span style={{ ...DOT_STYLE, backgroundColor: GROUP_TONE_COLOR[line.tone] }} />
               <span style={{ color: BODY_COLOR }}>{line.text}</span>
             </div>
           ))}

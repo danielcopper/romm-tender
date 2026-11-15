@@ -26,8 +26,7 @@
 import { FC, useMemo, useState, type FocusEvent, type ReactElement } from "react";
 import { Focusable } from "@decky/ui";
 import type { BiosLevel, BiosStatus, CoreInfo } from "../types";
-import { biosColorForLevel } from "../utils/biosColor";
-import { type GroupLineTone } from "../utils/biosGroup";
+import { GROUP_TONE_COLOR, biosColorForLevel } from "../utils/biosColor";
 import { biosHeldRatio } from "../utils/biosHeldRatio";
 import { biosAnswerStale, biosReadState } from "../utils/biosReadState";
 import { storeOnlySentence } from "../utils/biosPlaceWords";
@@ -239,15 +238,6 @@ function unansweredTab(failed: boolean): ReactElement {
     ),
   );
 }
-
-/** The dot beside one line of the group block. */
-const GROUP_TONE_COLOR: Readonly<Record<GroupLineTone, string>> = {
-  here: "#5ba32b",
-  missing: "#d94126",
-  other: "#8f98a0",
-  // Not established is grey, never amber.
-  unchecked: "#8f98a0",
-};
 
 // A subheading under the BIOS heading: the section label's own class, which
 // upper-cases it, with room above to set it off from what precedes it.

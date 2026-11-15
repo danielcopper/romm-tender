@@ -189,4 +189,40 @@ describe("coreOverride — executeGameCoreChange", () => {
     expect(backend.logWarn).toHaveBeenCalledWith("customCoreTag: unexpected error: Error: RPC failed");
     expect(toaster.toast).toHaveBeenCalledWith(expect.objectContaining({ body: "Failed to set core" }));
   });
+
+  it("keeps status applied without a false failure toast when post-commit onSuccess throws", async () => {
+    vi.mocked(backend.setGameCore).mockResolvedValue({ success: true });
+    vi.mocked(backend.logWarn).mockClear();
+
+    const result = await executeGameCoreChange({
+      romId: 42,
+      coreLabel: "Snes9x",
+      leaseOwner,
+      logTag: "customCoreTag",
+      onSuccess: () => Promise.reject(new Error("refresh boom")),
+    });
+
+    expect(result).toEqual({ status: "applied" });
+    expect(toaster.toast).toHaveBeenCalledTimes(1);
+    expect(toaster.toast).toHaveBeenCalledWith(expect.objectContaining({ body: "Core set to Snes9x" }));
+    expect(backend.logWarn).toHaveBeenCalledWith("customCoreTag: post-change refresh error: Error: refresh boom");
+  });
+
+  it("returns cancelled quietly when post-commit onSuccess hits prune lease cancellation", async () => {
+    const { PruneLeaseAdmissionCancelled } = await import("./pruneLease");
+    vi.mocked(backend.setGameCore).mockResolvedValue({ success: true });
+    vi.mocked(backend.logWarn).mockClear();
+
+    const result = await executeGameCoreChange({
+      romId: 42,
+      coreLabel: "Snes9x",
+      leaseOwner,
+      logTag: "handleChangeGameCore",
+      onSuccess: () => Promise.reject(new PruneLeaseAdmissionCancelled("unmounted")),
+    });
+
+    expect(result).toEqual({ status: "cancelled" });
+    expect(backend.logWarn).not.toHaveBeenCalled();
+    expect(backend.debugLog).toHaveBeenCalledWith("handleChangeGameCore: continuation was cancelled: Error: unmounted");
+  });
 });

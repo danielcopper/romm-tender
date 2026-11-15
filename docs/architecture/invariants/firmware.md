@@ -53,10 +53,10 @@ groups, the emulator a set of answers is about, and when it is asked. Files, lin
   platform's own library files (`domain/firmware_rows.py::platform_library`) — its `store_file`, its `link` and its
   `place_refusal`, called from `frontend/src/utils/useBiosActions.ts` (`biosBulkOffer`, for the bulk download buttons)
   and from `frontend/src/bigpicture/bios/BiosFiles.tsx` and `frontend/src/desktop/gameview/EmulationSettings.tsx` (for
-  the per-row Download button's filtered set, handed to `biosRowAction` in `useBiosActions.ts`). A fifth reader in
-  `frontend/src/utils/biosFileNote.ts` (`biosLibraryMark`, shared by both BIOS table surfaces) reads `on_server` for the
-  On-disk cell's second mark (`⊘`), and that one is display alone: it neither counts nor gates, which is what keeps it
-  out of all three folds below. Every BIOS surface lists every row of the shown emulator
+  the per-row Download button's filtered set, handed to `biosRowAction` in `frontend/src/utils/useBiosActions.ts`). A
+  fifth reader in `frontend/src/utils/biosFileNote.ts` (`biosLibraryMark`, shared by both BIOS table surfaces) reads
+  `on_server` for the On-disk cell's second mark (`⊘`), and that one is display alone: it neither counts nor gates,
+  which is what keeps it out of all three folds below. Every BIOS surface lists every row of the shown emulator
   ([#2429](https://github.com/danielcopper/romm-tender/issues/2429) D3) and call one predicate, `isFetchable`, through
   one module rather than spelling its clauses twice: a second copy would let one page point at a download button the
   other does not offer. Each fold has its own quiet failure: drop the row from the required counts and a sentence reads

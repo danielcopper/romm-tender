@@ -67,8 +67,6 @@ import {
 } from "../layout/pane";
 import { useBiosFocus, type BiosFocus } from "./useBiosFocus";
 
-export type { BiosAnswerFields, BiosTableRow };
-
 // File, On disk, Contents, and the row's own button. Every column but the first
 // is sized for the widest thing it can hold, measured on the device at the
 // Deck's scale: the `On disk` heading is 38.7px and two marks are ~34px; the

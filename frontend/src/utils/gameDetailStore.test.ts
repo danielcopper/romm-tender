@@ -2628,8 +2628,25 @@ describe("gameDetailStore — the page's check of whether the game can start (#2
         active_core_label: "DuckStation",
       }),
     );
+    expect(await recheckStart(nextAppId, 42)).toBe(
+      "Whether DuckStation is installed could not be established: ES-DE has no rule for finding it.",
+    );
     expect(await recheckStart(nextAppId, 42, "page")).toBe(
       "Whether DuckStation is installed could not be established: ES-DE has no rule for finding it.",
+    );
+
+    vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(
+      coreInfoFixture({
+        start: { state: "choose", reason: "no_find_rule", entry: "BlastEm" },
+        emulators: [{ ...standaloneEmu("BlastEm", false), reason: "no_find_rule" }],
+        active_core_label: null,
+      }),
+    );
+    expect(await recheckStart(nextAppId, 42)).toBe(
+      "No emulator is the default, because whether BlastEm is installed could not be established (ES-DE has no rule for finding it).",
+    );
+    expect(await recheckStart(nextAppId, 42, "page")).toBe(
+      "No emulator is the default, because whether BlastEm is installed could not be established (ES-DE has no rule for finding it). Choose an emulator.",
     );
   });
 

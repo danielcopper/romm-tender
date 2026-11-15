@@ -41,8 +41,8 @@ export function canPickAnother(emulators: readonly EmulatorOption[], activeLabel
 }
 
 /**
- * {@link canPickAnother} for a game's page, where a choice is offered only
- * when more than one emulator is listed.
+ * {@link canPickAnother} for the emulator menu, which opens on a game's page
+ * only when more than one emulator is listed.
  */
 export function gameCanPickAnother(emulators: readonly EmulatorOption[], activeLabel: string | null): boolean {
   return emulators.length > 1 && canPickAnother(emulators, activeLabel);
@@ -190,15 +190,18 @@ export function frontendChoiceLines(sources: readonly SourceDefault[]): string[]
 /**
  * The game page's line where the user chose an emulator for the game inside
  * ES-DE that is not the one Tender starts it with, or `null`. What is set in
- * ES-DE is ES-DE's; Tender's own choice is made in its emulator menu (#2195 D7).
+ * ES-DE is ES-DE's; Tender's own choice is made in its emulator menu (`"menu"`)
+ * or on the page itself (`"page"`, #2195 D7).
  */
 export function frontendChoiceSentence(
   emulators: readonly EmulatorOption[],
   activeLabel: string | null,
+  surface: "menu" | "page" = "menu",
 ): string | null {
   const chosen = emulators.find((entry) => entry.chosen_in_frontend);
   if (chosen === undefined || chosen.label === activeLabel) return null;
-  return `${chosen.label} is chosen in ES-DE; Tender starts this game with the emulator chosen in its emulator menu.`;
+  const where = surface === "page" ? "here" : "in its emulator menu";
+  return `${chosen.label} is chosen in ES-DE; Tender starts this game with the emulator chosen ${where}.`;
 }
 
 /** The sentence for a game no emulator starts: no entry is in effect, or its system lists none (#2221 D20). */

@@ -42,7 +42,7 @@ import type { CoreInfo, DownloadCompleteEvent, SaveStatus, SaveSyncDisplay } fro
 import type { RommDataChangedDetail } from "../types/events";
 import { coreChangeIsFor } from "./coreChangedEvent";
 import { detach } from "./detach";
-import { gameCanPickAnother, gameStartRefusal } from "./emulatorStart";
+import { canPickAnother, gameCanPickAnother, gameStartRefusal } from "./emulatorStart";
 import { startCheckFailureSentence, type PickPointer } from "./gameLaunch";
 import { LOCAL_CALL_LIMIT_MS } from "./launchGate";
 import { showToast } from "./toast";
@@ -574,13 +574,13 @@ async function updateLinksOnOpen(appId: number, entry: Entry): Promise<void> {
 }
 
 /** Re-read the BIOS answer after a firmware action that went through — a
- *  download, a delete, or a Replace… on the BIOS tab or the desktop Emulation
- *  card — and after a link update that changed something. Leaves what is shown
- *  alone when the read fails, when `bios_level === "unknown"`, when it reports
- *  no BIOS need, or when a version switch re-keyed the entry while the read
- *  was open. Nothing done to firmware removes a requirement, which is the
- *  emulator's own demand — it fills one, empties one, or reveals one the cache
- *  had not seen — so this path adopts a refreshed answer and never clears one.
+ *  download, a delete, or a Replace… on a BIOS view — and after a link update
+ *  that changed something. Leaves what is shown alone when the read fails, when
+ *  `bios_level === "unknown"`, when it reports no BIOS need, or when a version
+ *  switch re-keys the entry while the read is open. Nothing done to firmware
+ *  removes a requirement, which is the emulator's own demand — it fills one,
+ *  empties one, or reveals one the cache had not seen — so this path adopts a
+ *  refreshed answer and never clears one.
  */
 export async function refreshBiosStatus(appId: number): Promise<void> {
   const entry = _entries.get(appId);
@@ -671,7 +671,7 @@ export async function refreshCoreAndBios(appId: number): Promise<void> {
  * Which surface is rechecking a start: `"menu"` names `"in the emulator menu"`,
  * `"page"` omits it.
  */
-export type RecheckSurface = "menu" | "page";
+type RecheckSurface = "menu" | "page";
 
 /**
  * Ask again, at a press on Play, whether the ROM `romId` on the page for
@@ -698,7 +698,10 @@ export async function recheckStart(
   }
   const entry = _entries.get(appId);
   if (entry) writerForRom(entry, entry.generation, romId)((prev) => ({ ...prev, ...extractCoreInfo(info) }));
-  const hasOther = gameCanPickAnother(info.emulators, info.active_core_label);
+  const hasOther =
+    surface === "page"
+      ? canPickAnother(info.emulators, info.active_core_label)
+      : gameCanPickAnother(info.emulators, info.active_core_label);
   const where: PickPointer = surface === "page" ? "page" : true;
   return gameStartRefusal(info, hasOther ? where : false);
 }
