@@ -8,9 +8,12 @@ describe("BIOS confirmation copy builders", () => {
       description: "The file at /bios/scph5501.bin goes to /backups/bios, and Tender's copy is linked in its place.",
       confirmLabel: "Replace",
     });
-    expect(replaceBiosConfirmCopy("scph5501.bin", "/bios/scph5501.bin", undefined).description).toContain(
-      "the backup folder",
-    );
+    expect(replaceBiosConfirmCopy("scph5501.bin", "/bios/scph5501.bin", undefined)).toEqual({
+      title: "Replace scph5501.bin?",
+      description:
+        "The file at /bios/scph5501.bin goes to the backup folder, and Tender's copy is linked in its place.",
+      confirmLabel: "Replace",
+    });
   });
 
   it("states that user-placed files stay for per-file and per-platform deletes", () => {

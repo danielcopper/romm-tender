@@ -2197,6 +2197,62 @@ describe("BiosTab", () => {
       expect(backend.deletePlatformBios).toHaveBeenCalledWith("psx", "ps");
     });
 
+    it("ignores a second press on Replace…, Delete, or Delete downloads while its confirmed work is running", async () => {
+      let finishReplace!: (v: Awaited<ReturnType<typeof backend.replaceBiosFile>>) => void;
+      vi.mocked(backend.replaceBiosFile).mockReturnValueOnce(new Promise((r) => (finishReplace = r)));
+      let finishDeleteFile!: (v: Awaited<ReturnType<typeof backend.deleteBiosFile>>) => void;
+      vi.mocked(backend.deleteBiosFile).mockReturnValueOnce(new Promise((r) => (finishDeleteFile = r)));
+      let finishDeletePlatform!: (v: Awaited<ReturnType<typeof backend.deletePlatformBios>>) => void;
+      vi.mocked(backend.deletePlatformBios).mockReturnValueOnce(new Promise((r) => (finishDeletePlatform = r)));
+
+      const { container } = renderPsx();
+
+      vi.mocked(showModal).mockClear();
+      fireEvent.click(button(container, "Replace…") as HTMLElement);
+      expect(showModal).toHaveBeenCalledTimes(1);
+      await confirm();
+      vi.mocked(showModal).mockClear();
+      fireEvent.click(button(container, "Replace…") as HTMLElement);
+      await new Promise((r) => setTimeout(r, 0));
+      expect(showModal).not.toHaveBeenCalled();
+      await act(async () => {
+        finishReplace({
+          success: true,
+          placed: 1,
+          left_in_place: 0,
+          removed: 0,
+          link_failures: [],
+          backup_path: "/data/backups/bios/x/scph5500.bin",
+        });
+      });
+
+      fireEvent.click(button(container, "Delete") as HTMLElement);
+      expect(showModal).toHaveBeenCalledTimes(1);
+      await confirm();
+      vi.mocked(showModal).mockClear();
+      fireEvent.click(button(container, "Delete") as HTMLElement);
+      await new Promise((r) => setTimeout(r, 0));
+      expect(showModal).not.toHaveBeenCalled();
+      await act(async () => {
+        finishDeleteFile({ success: true, deleted_count: 1, message: "Deleted" });
+      });
+
+      fireEvent.click(button(container, "Delete downloads (2)") as HTMLElement);
+      expect(showModal).toHaveBeenCalledTimes(1);
+      await confirm();
+      vi.mocked(showModal).mockClear();
+      fireEvent.click(button(container, "Delete downloads (2)") as HTMLElement);
+      await new Promise((r) => setTimeout(r, 0));
+      expect(showModal).not.toHaveBeenCalled();
+      await act(async () => {
+        finishDeletePlatform({
+          success: true,
+          message: "Deleted 2 BIOS files",
+          deleted_count: 2,
+        } as Awaited<ReturnType<typeof backend.deletePlatformBios>>);
+      });
+    });
+
     it("withdraws the downloads while RomM's listing could not be read, and keeps the deletes", () => {
       const { container } = renderPsx(psx({ server_offline: true }));
       expect(button(container, "Download")).toBeUndefined();

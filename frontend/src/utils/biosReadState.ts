@@ -1,19 +1,23 @@
 /**
- * Where a BIOS answer stands on a surface that reads one: a platform pane for a
- * platform, or a game's BIOS section for its ROM. Every surface words the three
- * states and derives them here, so they cannot come to tell them apart
+ * Where a BIOS answer stands on a surface that reads one — a platform pane for
+ * a platform, or a game's BIOS section for its ROM ({@link BiosReadState},
+ * {@link biosReadState}, {@link biosAnswerStale}) — plus the game-detail
+ * answer projection ({@link biosFieldsFromCache}). Every surface words the
+ * three states and derives them here, so they cannot come to tell them apart
  * differently.
  *
- * `pending` is the state this exists to keep separate: the answer has been asked
- * for and has not arrived, which is NOT "nothing could be established".
+ * `pending` is the state this exists to keep separate: the answer has been
+ * asked for and has not arrived, which is NOT "nothing could be established".
  * Rendering the two alike is how a reader takes an answer where none has come
  * yet.
  *
  * - `pending` — asked for, not back yet.
- * - `answered` — the page holds an answer. Every finished read answers, a
- *   reading that did not happen included: its verdict is the one that says
- *   nothing could be established.
- * - `failed` — the read did not come back and there is nothing behind it.
+ * - `answered` — the page holds an answer. Every read carrying a BIOS answer
+ *   is `answered`, a reading that did not happen included (`"unknown"` level):
+ *   its verdict is the one that says nothing could be established.
+ * - `failed` — the read did not come back, or returned a payload carrying no
+ *   BIOS answer ({@link biosFieldsFromCache} returning `null`), and there is
+ *   nothing behind it.
  *
  * An answer already held outranks a failure, so a failed RE-read leaves the
  * state at `answered` and is reported beside it ({@link biosAnswerStale}):

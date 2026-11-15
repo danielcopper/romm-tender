@@ -37,6 +37,7 @@ import {
   deleteBiosFileConfirmCopy,
   deletePlatformBiosConfirmCopy,
   replaceBiosConfirmCopy,
+  type BiosConfirmCopy,
 } from "../../utils/biosConfirmWording";
 import {
   biosBulkOffer,
@@ -322,6 +323,34 @@ function downloadLabel(part: BiosPart, id: string, label: string, size: number, 
   return showing === "failed" ? redWhileEnabled("Failed", disabled) : label;
 }
 
+/** Open a BIOS confirmation modal guarded by `busy` and tracked on `focus` under `key`. */
+function confirmBiosAction(
+  busy: boolean,
+  focus: BiosFocus,
+  key: string,
+  copy: BiosConfirmCopy,
+  run: () => void,
+): () => void {
+  return () => {
+    if (busy) return;
+    focus.hold(key);
+    showModal(
+      <ConfirmModal
+        strTitle={copy.title}
+        strDescription={copy.description}
+        strOKButtonText={copy.confirmLabel}
+        strCancelButtonText="Cancel"
+        onOK={() => {
+          focus.mark(key);
+          run();
+          focus.refocus(key);
+        }}
+        onCancel={() => focus.refocus(key)}
+      />,
+    );
+  };
+}
+
 /**
  * Render the `DialogButton` for {@link biosRowAction}'s offer, or `null` when
  * the row offers nothing to press (leaving the row itself as the focus stop).
@@ -354,51 +383,23 @@ function rowAction(part: BiosPart, file: BiosTableRow, fetchable: Set<string>, k
   }
   if (offer.kind === "replace") {
     const copy = replaceBiosConfirmCopy(offer.fileName, offer.place, answer.backup_root);
-    const confirmReplace = () => {
-      if (busy) return;
-      focus.hold(key);
-      showModal(
-        <ConfirmModal
-          strTitle={copy.title}
-          strDescription={copy.description}
-          strOKButtonText={copy.confirmLabel}
-          strCancelButtonText="Cancel"
-          onOK={() => {
-            focus.mark(key);
-            actions.replaceBios(platform, offer.place);
-            focus.refocus(key);
-          }}
-          onCancel={() => focus.refocus(key)}
-        />,
-      );
-    };
     return (
-      <DialogButton style={ROW_BUTTON} disabled={disabled} onClick={confirmReplace}>
+      <DialogButton
+        style={ROW_BUTTON}
+        disabled={disabled}
+        onClick={confirmBiosAction(busy, focus, key, copy, () => actions.replaceBios(platform, offer.place))}
+      >
         Replace…
       </DialogButton>
     );
   }
   const copy = deleteBiosFileConfirmCopy(offer.name);
-  const confirm = () => {
-    if (busy) return;
-    focus.hold(key);
-    showModal(
-      <ConfirmModal
-        strTitle={copy.title}
-        strDescription={copy.description}
-        strOKButtonText={copy.confirmLabel}
-        strCancelButtonText="Cancel"
-        onOK={() => {
-          focus.mark(key);
-          actions.deleteBiosFile(platform, offer.name);
-          focus.refocus(key);
-        }}
-        onCancel={() => focus.refocus(key)}
-      />,
-    );
-  };
   return (
-    <DialogButton style={ROW_BUTTON} disabled={disabled} onClick={confirm}>
+    <DialogButton
+      style={ROW_BUTTON}
+      disabled={disabled}
+      onClick={confirmBiosAction(busy, focus, key, copy, () => actions.deleteBiosFile(platform, offer.name))}
+    >
       {redWhileEnabled("Delete", disabled)}
     </DialogButton>
   );
@@ -522,22 +523,6 @@ export const BiosButtons: FC<{ part: BiosPart; status: ScopedStatus | null }> = 
   const busy = busyFolder !== null;
   const offer = biosBulkOffer(answer, tab, shownRows, serverOffline, input.launching);
   const copy = deletePlatformBiosConfirmCopy(platformName);
-
-  const confirmDeleteBios = () =>
-    showModal(
-      <ConfirmModal
-        strTitle={copy.title}
-        strDescription={copy.description}
-        strOKButtonText={copy.confirmLabel}
-        strCancelButtonText="Cancel"
-        onOK={() => {
-          focus.mark(BULK_DELETE);
-          actions.deleteBios(platform);
-          focus.refocus(BULK_DELETE);
-        }}
-        onCancel={() => focus.refocus(BULK_DELETE)}
-      />,
-    );
   /** A bulk button's state: the pressed one stays enabled while its own work runs. */
   const bulkDisabled = (key: string, idle: boolean) => !idle || (busy && focus.pressed !== key);
   const pressBulk = (key: string, work: () => void) => () => {
@@ -586,11 +571,7 @@ export const BiosButtons: FC<{ part: BiosPart; status: ScopedStatus | null }> = 
           <DialogButton
             style={BULK_BUTTON}
             disabled={delDisabled}
-            onClick={() => {
-              if (busy) return;
-              focus.hold(BULK_DELETE);
-              confirmDeleteBios();
-            }}
+            onClick={confirmBiosAction(busy, focus, BULK_DELETE, copy, () => actions.deleteBios(platform))}
           >
             {redWhileEnabled(`Delete downloads (${offer.deletable})`, delDisabled)}
           </DialogButton>

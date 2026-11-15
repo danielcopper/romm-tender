@@ -123,10 +123,10 @@ export function startRemarkSentences(remarks: readonly StartRemark[] | undefined
 }
 
 /**
- * Why a start with this answer is refused, as one sentence about `subject`
- * ("this game", "these games"), or `null` where nothing stands in its way.
- * `canPick` says whether another entry can be chosen (`true` in the emulator
- * menu, `"page"` on the game page); only then does the sentence point at it.
+ * Why a `cannot_start` or `choose` answer refuses a start (`subject` is "this
+ * game" or "these games" where the reason names it), or `null` for `starts`
+ * and `no_entry` (handled by {@link startRefusal}). `canPick`
+ * ({@link PickPointer}) appends the pointer when another entry is choosable.
  */
 export function emulatorStartRefusal(start: EmulatorStart, subject: string, canPick: PickPointer): string | null {
   const entry = start.entry ?? "The emulator";

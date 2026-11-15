@@ -194,19 +194,11 @@ interface BiosBulkOffer {
 /**
  * Compute the bulk BIOS button offer from the answer and the shown emulator tab.
  *
- * The download affordances key off what is missing AND fetchable (`isFetchable`
- * and `fetchedAsRequired`), reading the readiness verdict nowhere: what the
- * resolver could establish is the emulator's demand, while what is fetchable is
- * what the RomM library holds. `Download required` counts the shown emulator's
- * rows marked `fetch_for_required` — its required files and the options of its
- * one-of group's uncovered regions, the rule the download itself applies — and
- * `Download all` stops at the library's own finished ratio. So neither is a
- * readiness gate: platforms such as PS2, GameCube, and PSP launch standalone
- * emulators the resolver holds no card for, so their readiness verdict declines
- * even while the RomM library holds files the user can fetch.
- *
- * Which rows are fetchable at all — the library's side of it, including why a
- * declared folder is out — is `isFetchable`.
+ * Download affordances read `isFetchable` and `fetchedAsRequired` (the shown
+ * emulator's `fetch_for_required` rows for `Download required`, and the
+ * library's `local_count` / `server_count` ratio for `Download all`) rather
+ * than the readiness verdict (`docs/architecture/backend-architecture.md`),
+ * while `deletable` reads `deletable_count` with no local fallback.
  */
 export function biosBulkOffer(
   answer: BiosAnswerFields,

@@ -28,10 +28,8 @@
  * are neither "missing" nor "present". Only then does the library note stand,
  * which is honest for every row nothing else was established for.
  *
- * The CAUSE of a verdict comes from the resolver's caveat codes and `checked`,
- * because `satisfied` is the verdict alone and carries none of it: `verdictNote`
- * branches on `declared_kind` (`"directory"` reads `satisfied` plus folder
- * caveats; a declared file reads `checked` and file caveats).
+ * How `verdictNote` derives a row's cause from `declared_kind`, `checked`, and
+ * caveat codes: `docs/architecture/backend-architecture.md`.
  */
 
 import type { BiosFileStatus, FirmwarePlatformExt } from "../types";

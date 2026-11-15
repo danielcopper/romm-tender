@@ -102,11 +102,14 @@ describe("coreOverride — executeGameCoreChange", () => {
       onSuccess,
     });
     expect(result).toEqual({ status: "failed", message: "Core binary missing" });
+    expect(backend.logWarn).toHaveBeenCalledWith(
+      "Core selection: refused for romId=42 (coreLabel=Snes9x): reason=core_unavailable message=Core binary missing",
+    );
     expect(toaster.toast).toHaveBeenCalledWith(expect.objectContaining({ body: "Core binary missing" }));
     expect(onSuccess).not.toHaveBeenCalled();
   });
 
-  it("toasts 'Failed to set core' on a refused clear without message", async () => {
+  it("toasts 'Failed to reset core' on a refused clear without message", async () => {
     vi.mocked(backend.clearGameCore).mockResolvedValue({
       success: false,
       reason: "not_found",
@@ -120,8 +123,11 @@ describe("coreOverride — executeGameCoreChange", () => {
       leaseOwner,
       onSuccess,
     });
-    expect(result).toEqual({ status: "failed", message: "Failed to set core" });
-    expect(toaster.toast).toHaveBeenCalledWith(expect.objectContaining({ body: "Failed to set core" }));
+    expect(result).toEqual({ status: "failed", message: "Failed to reset core" });
+    expect(backend.logWarn).toHaveBeenCalledWith(
+      "Core selection: refused for romId=42 (clear): reason=not_found message=Failed to reset core",
+    );
+    expect(toaster.toast).toHaveBeenCalledWith(expect.objectContaining({ body: "Failed to reset core" }));
     expect(onSuccess).not.toHaveBeenCalled();
   });
 
@@ -131,7 +137,7 @@ describe("coreOverride — executeGameCoreChange", () => {
     const result = await executeGameCoreChange({ romId: 42, coreLabel: null, leaseOwner });
 
     expect(result).toEqual({ status: "failed", message: "Failed to reset core" });
-    expect(backend.logWarn).toHaveBeenCalledWith(expect.stringContaining("RPC failed"));
+    expect(backend.logWarn).toHaveBeenCalledWith("Core selection: unexpected error: Error: RPC failed");
     expect(toaster.toast).toHaveBeenCalledWith(expect.objectContaining({ body: "Failed to reset core" }));
   });
 
@@ -153,7 +159,10 @@ describe("coreOverride — executeGameCoreChange", () => {
     });
 
     expect(setResult).toEqual({ status: "applied" });
-    expect(clearResult).toEqual({ status: "failed", message: "Failed to set core" });
+    expect(clearResult).toEqual({ status: "failed", message: "Failed to reset core" });
+    expect(backend.logWarn).toHaveBeenCalledWith(
+      "handleResetGameCore: refused for romId=42 (clear): reason=not_found message=Failed to reset core",
+    );
     expect(vi.mocked(backend.debugLog).mock.calls.map(([line]) => line)).toEqual([
       "handleChangeGameCore: romId=42 coreLabel=Snes9x",
       "handleChangeGameCore: result success=true",

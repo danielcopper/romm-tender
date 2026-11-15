@@ -220,7 +220,9 @@ describe("EmulationSettings", () => {
       );
 
       await screen.findByText(/DuckStation/);
-      expect(screen.getByTestId("desktop-emulator-unavailable")).toHaveTextContent(/emulator source/i);
+      expect(screen.getByTestId("desktop-emulator-unavailable")).toHaveTextContent(
+        "No emulator source was found, so Tender cannot tell which emulators this platform offers.",
+      );
       expect(screen.queryByRole("button", { name: /Use System Override/ })).not.toBeInTheDocument();
 
       rerender(
@@ -234,7 +236,9 @@ describe("EmulationSettings", () => {
           })}
         />,
       );
-      expect(screen.getByTestId("desktop-emulator-unavailable")).toHaveTextContent(/RetroDECK/);
+      expect(screen.getByTestId("desktop-emulator-unavailable")).toHaveTextContent(
+        "RetroDECK: ES-DE's systems file is broken, so its emulators are not established.",
+      );
     });
 
     it("renders Checking, startCheck failure, or No emulator starts this game when emulatorDataAvailable has no entries", async () => {
@@ -555,7 +559,9 @@ describe("EmulationSettings", () => {
         );
       });
 
-      expect(await screen.findByTestId("bios-stale")).toHaveTextContent("Could not re-read the BIOS state");
+      expect((await screen.findByTestId("bios-stale")).textContent).toBe(
+        "Could not re-read the BIOS state, so what is below may be out of date. Open the game page again to retry.",
+      );
       expect(screen.getByTestId("bios-table-header")).toBeInTheDocument();
     });
 
@@ -763,7 +769,9 @@ describe("EmulationSettings", () => {
 
       fireEvent.click(screen.getByRole("button", { name: "Replace…" }));
       const replaceDialog = await screen.findByRole("dialog", { name: "Replace wrong.bin?" });
-      expect(replaceDialog).toHaveTextContent("/backups");
+      expect(replaceDialog).toHaveTextContent(
+        "The file at /bios/wrong.bin goes to /backups, and Tender's copy is linked in its place.",
+      );
       fireEvent.click(within(replaceDialog).getByRole("button", { name: "Cancel" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
       await flushMacrotask();
@@ -1156,8 +1164,9 @@ describe("EmulationSettings", () => {
       const replaceBtn = screen.getByRole("button", { name: "Replace…" });
       fireEvent.click(replaceBtn);
       const repDialog = await screen.findByRole("dialog", { name: "Replace replace.bin?" });
-      expect(repDialog).toHaveTextContent("/bios/sub/replace.bin");
-      expect(repDialog).toHaveTextContent("the backup folder");
+      expect(repDialog).toHaveTextContent(
+        "The file at /bios/sub/replace.bin goes to the backup folder, and Tender's copy is linked in its place.",
+      );
       const repConfirm = within(repDialog).getByRole("button", { name: "Replace" });
       expect(repConfirm.style.backgroundImage).toContain("#1a9fff");
       fireEvent.click(repConfirm);

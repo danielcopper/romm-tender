@@ -359,8 +359,8 @@ export function launchRefused(launch: GameLaunch | null): boolean {
 /**
  * Why the game cannot start with its entry, or `null` where the verdict lets it
  * start: the refusal's sentence, then what the resolver says beside it.
- * `canPick` says whether another entry can be chosen (`true` in the emulator
- * menu, `"page"` on the game page); only then does the text point at it.
+ * `canPick` ({@link PickPointer}) says whether and where another entry can be
+ * chosen; only then does the text point at it.
  */
 export function launchRefusal(launch: GameLaunch | null, canPick: PickPointer): string | null {
   if (launch === null) return null;

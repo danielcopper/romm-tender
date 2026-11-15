@@ -35,7 +35,9 @@ export async function executeGameCoreChange({
     const result = isClear ? await clearGameCore(romId) : await setGameCore(romId, coreLabel);
     detach(debugLog(`${logTag}: result success=${result.success}`));
     if (!result.success) {
-      const message = result.message || "Failed to set core";
+      const message = result.message || failureMessage;
+      const target = isClear ? "clear" : `coreLabel=${coreLabel}`;
+      logWarn(`${logTag}: refused for romId=${romId} (${target}): reason=${result.reason} message=${message}`);
       showToast(message);
       return { status: "failed", message };
     }
