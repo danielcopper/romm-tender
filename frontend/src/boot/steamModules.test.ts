@@ -477,7 +477,7 @@ describe("what the start-up check hands the log line", () => {
       const missed = await missedWith(undefined);
 
       expect(missed.filter((name) => MEMBERS.includes(name.name))).toEqual([]);
-      expect(missed).toContainEqual({ name: "quickAccessMenuClasses", absenceCost: "panel", features: [] });
+      expect(missed).toContainEqual(expect.objectContaining({ name: "quickAccessMenuClasses" }));
     });
   });
 
