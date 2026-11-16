@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Hold the invariant register to its size, and every entry to one home.
+"""Hold the invariant register to its size, every entry to one home, and every area file to the map.
 
 The register's entries live in one file per area under
-``docs/architecture/invariants/``; ``CLAUDE.md`` keeps a register section with
-the map from area to file and the few rules its criterion keeps there. Three
-limits (#2757 D4):
+``docs/architecture/invariants/``, whose ``index.md`` holds the map from area
+to file under its ``## The areas`` heading; ``CLAUDE.md`` keeps a register
+section with the few rules its criterion keeps there. Three limits (#2757 D4):
 
 * the register section of ``CLAUDE.md`` — from its ``## Invariant register``
   heading to the next ``## `` heading — at most ``SECTION_LIMIT`` characters;
@@ -14,7 +14,10 @@ limits (#2757 D4):
   split.
 
 Beside them it holds the one-home rule: no headline stands twice across the
-area files, and no area file's headline stands anywhere in ``CLAUDE.md``. A
+area files, and no area file's headline stands anywhere in ``CLAUDE.md``. And
+it holds the map: every area file but ``index.md`` is the target of a link in
+the map section of ``index.md`` — from its heading to the next ``## ``
+heading — and a missing ``index.md`` or map section fails. A
 second ``## Invariant register`` heading in ``CLAUDE.md`` fails, and so does an
 entry-shaped item anywhere outside the section: a bold list item at the left
 margin, under any marker, whose headline is followed by `` — `` (or `` (…) — ``)
@@ -51,6 +54,8 @@ ROOT = Path(__file__).resolve().parent.parent
 CLAUDE_MD = "CLAUDE.md"
 AREA_DIR = "docs/architecture/invariants"
 SECTION_HEADING = "## Invariant register"
+INDEX = "index.md"
+MAP_HEADING = "## The areas"
 
 SECTION_LIMIT = 6_000
 HEADLINE_LIMIT = 300
@@ -65,6 +70,7 @@ _CLOSE_CANDIDATE = re.compile(r"\*\*(?= — | \(|$)")
 _ITEM = re.compile(r"^(?P<marker>[-*+]|\d+[.)]) (?=\*\*)")
 _TIER_AFTER = re.compile(r"^(?: \([^)]*\))? — (?:check|test|prompt-only)\b")
 _FENCE_OPEN = re.compile(r"^ {0,3}(?P<run>`{3,}|~{3,})")
+_LINK_TARGET = re.compile(r"\]\((?P<target>[^)\s#]+)")
 
 
 @dataclass(frozen=True)
@@ -108,20 +114,34 @@ def _close(joined: str) -> int | None:
     return None
 
 
-def register_sections(text: str) -> list[tuple[int, str]]:
-    """Every register section of ``CLAUDE.md``, each with its first line number."""
+def sections(text: str, heading: str) -> list[tuple[int, str]]:
+    """Every section of ``text`` under a level-two ``heading``, each with its first line number."""
     lines = text.splitlines(keepends=True)
     outside, _ = _unfenced([line.rstrip("\n") for line in lines])
-    sections: list[tuple[int, str]] = []
+    found: list[tuple[int, str]] = []
     for start, line in enumerate(lines):
-        if not (outside[start] and line.startswith(SECTION_HEADING)):
+        if not (outside[start] and line.startswith(heading)):
             continue
         end = next(
             (i for i in range(start + 1, len(lines)) if outside[i] and lines[i].startswith("## ")),
             len(lines),
         )
-        sections.append((start + 1, "".join(lines[start:end])))
-    return sections
+        found.append((start + 1, "".join(lines[start:end])))
+    return found
+
+
+def register_sections(text: str) -> list[tuple[int, str]]:
+    """Every register section of ``CLAUDE.md``, each with its first line number."""
+    return sections(text, SECTION_HEADING)
+
+
+def unmapped(index_text: str, area_files: list[str]) -> list[str] | None:
+    """The area files no link in the index's map section targets, or ``None`` when it has no map section."""
+    maps = sections(index_text, MAP_HEADING)
+    if not maps:
+        return None
+    targets = {match.group("target") for _, section in maps for match in _LINK_TARGET.finditer(section)}
+    return [name for name in area_files if name != INDEX and name not in targets]
 
 
 def _items(text: str, place: str, first_line: int) -> tuple[list[tuple[Entry | None, str, int]], list[str]]:
@@ -192,6 +212,23 @@ def _claude_findings(claude_text: str) -> tuple[list[Entry], list[str], int]:
     return found, failures, len(section)
 
 
+def _map_findings(folder: Path, area_files: list[Path]) -> list[str]:
+    """What is wrong with the map from area to file in the folder's index."""
+    if not folder.is_dir():
+        return []
+    index = folder / INDEX
+    if not index.is_file():
+        return [f"{AREA_DIR}/{INDEX}: no such file — the map from area to file has no home."]
+    missing = unmapped(index.read_text(encoding="utf-8"), [path.name for path in area_files])
+    if missing is None:
+        return [f"{AREA_DIR}/{INDEX}: no '{MAP_HEADING}' section — the map from area to file has no home."]
+    return [
+        f"{AREA_DIR}/{name}: no link to it in the map ('{MAP_HEADING}' in {AREA_DIR}/{INDEX}) — every area file "
+        f"is mapped."
+        for name in missing
+    ]
+
+
 def main() -> int:
     failures: list[str] = []
 
@@ -220,8 +257,8 @@ def main() -> int:
         if len(text) > AREA_FILE_LIMIT:
             failures.append(
                 f"{place}: {len(text):,} characters, over the {AREA_FILE_LIMIT:,}-character limit for one "
-                f"area file. Split the area into two files, and name both in CLAUDE.md's map, in "
-                f"{AREA_DIR}/index.md and in mkdocs.yml's nav."
+                f"area file. Split the area into two files, and name both in the map in {AREA_DIR}/{INDEX} "
+                f"and in mkdocs.yml's nav."
             )
         found, malformed = entries(text, place)
         area_entries.extend(found)
@@ -229,6 +266,7 @@ def main() -> int:
     if folder.is_dir() and not area_entries:
         failures.append(f"{AREA_DIR}/: no register entries found — the gate has nothing to measure.")
     every_entry.extend(area_entries)
+    failures.extend(_map_findings(folder, area_files))
 
     for entry in every_entry:
         if len(entry.headline) > HEADLINE_LIMIT:
@@ -269,7 +307,7 @@ def main() -> int:
     print(
         f"OK: register section {section_length:,}/{SECTION_LIMIT:,} characters, {len(every_entry)} entries "
         f"each in one place with a headline within {HEADLINE_LIMIT}, {len(area_files)} files in {AREA_DIR}/ "
-        f"within {AREA_FILE_LIMIT:,}"
+        f"within {AREA_FILE_LIMIT:,}, each in the map"
     )
     return 0
 
