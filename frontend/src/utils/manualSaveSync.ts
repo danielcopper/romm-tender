@@ -11,7 +11,7 @@ import type { SaveSyncDisplay } from "../types";
 const CONFLICT_DISPLAY: SaveSyncDisplay = { status: "conflict", label: "Conflict", last_sync_check_at: null };
 
 function syncedJustNowDisplay(): SaveSyncDisplay {
-  return { status: "synced", label: "Just now", last_sync_check_at: new Date().toISOString() };
+  return { status: "synced", label: null, last_sync_check_at: new Date().toISOString() };
 }
 
 export async function executeManualSaveSync(appId: number, romId: number): Promise<void> {

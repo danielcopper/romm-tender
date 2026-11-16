@@ -1993,13 +1993,14 @@ describe("gameDetailStore", () => {
       subscribe(nextAppId);
       await flush();
 
-      noteSaveSyncDisplay(nextAppId, 42, {
-        status: "synced",
-        label: "Just now",
-        last_sync_check_at: "2026-11-01T00:00:00Z",
-      });
+      const at = new Date().toISOString();
+      noteSaveSyncDisplay(nextAppId, 42, { status: "synced", label: null, last_sync_check_at: at });
 
-      expect(getGameDetail(nextAppId)).toMatchObject({ saveSyncStatus: "synced", saveSyncLabel: "Just now" });
+      expect(getGameDetail(nextAppId)).toMatchObject({
+        saveSyncStatus: "synced",
+        saveSyncLabel: "Just now",
+        saveSyncCheckedAt: at,
+      });
     });
 
     it("keeps the time a time-ago label was worded from, and drops it for a label the caller was told", async () => {

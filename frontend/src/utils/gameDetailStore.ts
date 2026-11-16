@@ -535,7 +535,7 @@ function applySaveStatus(entry: Entry, generation: number, status: SaveStatus): 
 }
 
 /** Record a save-sync display a surface already knows to be true about `romId` —
- *  the "Just now" after a manual sync, the "No saves" after a local delete —
+ *  a manual sync's fresh time, the "No saves" after a local delete —
  *  without waiting for a round-trip to confirm it. Refused once the entry has
  *  moved on to another ROM: every caller reaches this after an await, so a
  *  version switch landing in that window would otherwise put a display on the
