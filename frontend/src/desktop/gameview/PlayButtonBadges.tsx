@@ -8,7 +8,7 @@ import { getSaveSetupInfo, getSaveSyncAvailability, isSaveTrackingConfigured, lo
 import type { SaveSetupInfo, SaveStatus } from "../../types";
 import { BIOS_MISSING_RED } from "../../utils/biosColor";
 import { detach } from "../../utils/detach";
-import { formatBytes, formatTimeAgo } from "../../utils/formatters";
+import { formatBytes } from "../../utils/formatters";
 import type { GameDetailState } from "../../utils/gameDetailStore";
 import { useGamePlaytime } from "../../utils/playtimeReconcile";
 import { saveSyncBadge, type SaveSyncBadgeTone } from "../../utils/saveSyncBadge";
@@ -174,13 +174,12 @@ export const PlayButtonBadges: FC<PlayButtonBadgesProps> = ({ appId, detail, sav
   const setupInfo = useRomAnswer(romId, readsSaves, "save setup", readSlotSetup);
   const saveSyncAnswer = useRomAnswer(romId, readsSaves, "save sync availability", getSaveSyncAvailability);
   useMinuteTick(saveSyncEnabled);
-  const label = saveSyncCheckedAt === null ? saveSyncLabel : (formatTimeAgo(saveSyncCheckedAt) ?? saveSyncLabel);
   const saveSync = saveSyncBadge({
     enabled: saveSyncEnabled,
     offline: isOffline,
     installed,
     status: saveSyncStatus,
-    label,
+    label: saveSyncLabel,
     checkedAt: saveSyncCheckedAt,
     saveStatus,
     setupInfo,

@@ -3,8 +3,6 @@ import { resolveSaveSyncLabel } from "./playSection";
 import { saveSyncBadge } from "./saveSyncBadge";
 import type { SaveFileStatus, SaveSetupInfo, SaveStatus, SaveSyncAvailability, SyncConflict } from "../types";
 
-const CHECKED_AT = "2026-11-01T00:00:00Z";
-
 const INPUT: Parameters<typeof saveSyncBadge>[0] = {
   enabled: true,
   offline: false,
@@ -78,7 +76,7 @@ describe("saveSyncBadge", () => {
     it("is read off the save status's conflicts", () => {
       const saveStatus = status({ conflicts: [{} as SyncConflict] });
       expect(
-        saveSyncBadge({ ...INPUT, status: "synced", label: "3d ago", checkedAt: CHECKED_AT, saveStatus }).label,
+        saveSyncBadge({ ...INPUT, status: "synced", label: "3d ago", checkedAt: daysAgo(3), saveStatus }).label,
       ).toBe("Save conflict");
     });
 
@@ -138,10 +136,18 @@ describe("saveSyncBadge", () => {
       expect(saveSyncBadge({ ...INPUT, offline: true, saveSyncAnswer: refused() }).label).toBe("RomM unavailable");
     });
 
-    it("says when a local save last synced, in the attention tone", () => {
-      expect(saveSyncBadge({ ...OFFLINE, status: "synced", label: "3d ago", checkedAt: CHECKED_AT })).toEqual({
+    it("says when a local save last synced, worded from its time, in the attention tone", () => {
+      expect(saveSyncBadge({ ...OFFLINE, status: "synced", label: "5m ago", checkedAt: daysAgo(3) })).toEqual({
         tone: "attention",
         label: "Synced 3d ago",
+      });
+    });
+
+    it("claims no sync for a local save whose time cannot be read", () => {
+      const label = resolveSaveSyncLabel({ status: "synced", label: null, last_sync_check_at: "nope" });
+      expect(saveSyncBadge({ ...OFFLINE, status: "synced", label, checkedAt: "nope" })).toEqual({
+        tone: "attention",
+        label: "Not synced",
       });
     });
 
@@ -319,16 +325,32 @@ describe("saveSyncBadge", () => {
     it("gives way to a local save at rest", () => {
       const saveStatus = status({ server_has_saves: true });
       expect(
-        saveSyncBadge({ ...INPUT, status: "synced", label: "3d ago", checkedAt: CHECKED_AT, saveStatus }).label,
+        saveSyncBadge({ ...INPUT, status: "synced", label: "3d ago", checkedAt: daysAgo(3), saveStatus }).label,
       ).toBe("Synced 3d ago");
     });
   });
 
   describe("the store's verdict", () => {
     it("reads a recent sync after its verb", () => {
-      expect(saveSyncBadge({ ...INPUT, status: "synced", label: "Just now", checkedAt: CHECKED_AT })).toEqual({
+      const checkedAt = new Date().toISOString();
+      expect(saveSyncBadge({ ...INPUT, status: "synced", label: "Just now", checkedAt })).toEqual({
         tone: "ok",
         label: "Synced just now",
+      });
+    });
+
+    it("words the time it is given, not the label worded from it before", () => {
+      expect(saveSyncBadge({ ...INPUT, status: "synced", label: "5m ago", checkedAt: daysAgo(3) })).toEqual({
+        tone: "ok",
+        label: "Synced 3d ago",
+      });
+    });
+
+    it("draws a synced verdict whose time cannot be read in the attention tone, as the store words it", () => {
+      const label = resolveSaveSyncLabel({ status: "synced", label: null, last_sync_check_at: "nope" });
+      expect(saveSyncBadge({ ...INPUT, status: "synced", label, checkedAt: "nope" })).toEqual({
+        tone: "attention",
+        label: "Not synced",
       });
     });
 

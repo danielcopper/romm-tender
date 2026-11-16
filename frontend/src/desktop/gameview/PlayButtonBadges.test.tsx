@@ -439,20 +439,22 @@ describe("PlayButtonBadges", () => {
       expect(vi.getTimerCount()).toBe(0);
     });
 
-    it("keeps the store's label where its time cannot be read", async () => {
+    it("keeps the store's label, in amber, where its time cannot be read", async () => {
       render(
         draw(
           detail({
             saveSyncEnabled: true,
             saveSyncStatus: "synced",
-            saveSyncLabel: "3d ago",
+            saveSyncLabel: "Not synced",
             saveSyncCheckedAt: "not a time",
           }),
         ),
       );
       await act(async () => {});
 
-      expect(screen.getByText("Synced 3d ago")).toBeInTheDocument();
+      const badge = screen.getByText("SAVE SYNC").closest(".tender-desktop-save-sync")!;
+      expect(badge).toHaveTextContent(/^SAVE SYNCNot synced$/);
+      expect(badge.querySelector(".tender-desktop-badge-dot")).toHaveStyle({ backgroundColor: "#d4a72c" });
     });
 
     it("keeps a label the store was told, with no time behind it", async () => {

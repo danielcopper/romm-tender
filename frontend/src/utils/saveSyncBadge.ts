@@ -53,12 +53,18 @@ function lastSyncedAt(saveStatus: SaveStatus | null): string | null {
   );
 }
 
+function timeAgo(time: string | null): string | null {
+  return time === null ? null : formatTimeAgo(time);
+}
+
 function offlineLabel({ status, label, checkedAt, saveStatus }: SaveSyncBadgeInput): string {
   if (status === "pending") return label;
-  if (status === "synced") return checkedAt === null ? label : syncedLabel(label);
+  if (status === "synced") {
+    const ago = timeAgo(checkedAt);
+    return ago === null ? label : syncedLabel(ago);
+  }
   // A status read that could not reach RomM carries no verdict, but its rows still know when this save last synced.
-  const lastSync = lastSyncedAt(saveStatus);
-  const ago = lastSync ? formatTimeAgo(lastSync) : null;
+  const ago = timeAgo(lastSyncedAt(saveStatus));
   return ago === null ? NOT_SYNCED_LABEL : syncedLabel(ago);
 }
 
@@ -70,7 +76,8 @@ function offlineBadge(input: SaveSyncBadgeInput): SaveSyncBadge {
 
 function reachableBadge({ installed, status, label, checkedAt, saveStatus }: SaveSyncBadgeInput): SaveSyncBadge {
   if (status === "synced") {
-    return checkedAt === null ? { tone: "attention", label } : { tone: "ok", label: syncedLabel(label) };
+    const ago = timeAgo(checkedAt);
+    return ago === null ? { tone: "attention", label } : { tone: "ok", label: syncedLabel(ago) };
   }
   if (status === "pending") return { tone: "attention", label };
   if (saveStatus?.server_query_failed) return { tone: "attention", label: COULD_NOT_CHECK_LABEL };
