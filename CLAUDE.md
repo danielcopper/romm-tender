@@ -49,7 +49,8 @@ in `docs/adr/`, linked from the issue. Every `## Done when` item becomes a test 
 "(device)". The PR body repeats the decisions and becomes the squash commit. The `decisions` CI check enforces this
 ([rules](https://github.com/danielcopper/.github#the-decisions-check)).
 
-An issue someone else opened stays as they wrote it; the work gets its own issue that links it.
+An issue someone else opened stays as they wrote it; the work gets its own issue that links it, and the pull request
+closes both.
 
 ## Traps — non-obvious rules that bite silently
 
