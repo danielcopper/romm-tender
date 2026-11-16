@@ -199,17 +199,17 @@ const truthyUnexported = (
  * there: a missing map is its own entry's miss, and counting its members as
  * well would charge a search of `@decky/ui`'s to Tender ({@link searchOwner}).
  */
-const classMapMember = (
+const classMapMember = <M extends object>(
   mapName: string,
-  map: () => object | undefined,
-  member: string,
+  map: () => M | undefined,
+  member: Extract<keyof M, string>,
   absenceCost: AbsenceCost,
   ...features: SteamFeature[]
 ): SteamLookup => ({
   name: `${mapName}.${member}`,
   found: () => {
     const classes = map();
-    return classes === undefined || Boolean((classes as Readonly<Record<string, unknown>>)[member]);
+    return classes === undefined || Boolean(classes[member]);
   },
   deckyUiExport: false,
   absenceCost,

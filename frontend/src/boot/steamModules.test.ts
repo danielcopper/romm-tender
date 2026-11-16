@@ -437,17 +437,20 @@ describe("what the start-up check hands the log line", () => {
   describe("the class map's two classes the wide pages' wrapper reads", () => {
     const MEMBERS = ["quickAccessMenuClasses.ViewPlaceholder", "quickAccessMenuClasses.Expanded"];
 
-    /** The check as it evaluates with *classes* for the QAM's class map. */
-    const checkWith = async (classes: Record<string, string> | undefined) => {
+    /** Every name the check misses with *classes* for the QAM's class map. */
+    const missedWith = async (classes: Record<string, string> | undefined) => {
       vi.resetModules();
       vi.doMock("../utils/deckyUiInternals", async (importOriginal) => ({
         ...(await importOriginal<typeof import("../utils/deckyUiInternals")>()),
         quickAccessMenuClasses: classes,
       }));
       const check = await import("./steamModules");
-      const report = check.checkSteamModules();
-      return check.describeMissedLookups(report).missed.filter((name) => MEMBERS.includes(name.name));
+      return check.describeMissedLookups(check.checkSteamModules()).missed;
     };
+
+    /** The check's misses among the two members with *classes* for the QAM's class map. */
+    const checkWith = async (classes: Record<string, string> | undefined) =>
+      (await missedWith(classes)).filter((name) => MEMBERS.includes(name.name));
 
     afterEach(() => {
       vi.doUnmock("../utils/deckyUiInternals");
@@ -471,7 +474,10 @@ describe("what the start-up check hands the log line", () => {
     });
 
     it("leaves a missing class map to its own entry rather than counting its members as Tender's misses", async () => {
-      expect(await checkWith(undefined)).toEqual([]);
+      const missed = await missedWith(undefined);
+
+      expect(missed.filter((name) => MEMBERS.includes(name.name))).toEqual([]);
+      expect(missed).toContainEqual({ name: "quickAccessMenuClasses", absenceCost: "panel", features: [] });
     });
   });
 
