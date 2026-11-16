@@ -3038,7 +3038,7 @@ status.
   rejects it, the error is logged at debug and swallowed (the content is already durable via the temp-file fsync).
 - **Corrupt-file quarantine (never silently factory-reset)**: a `FileNotFoundError` on read is a legitimate first run —
   defaults are returned silently, no backup, no flag. An **unparseable** `settings.json` (a `JSONDecodeError`, e.g. a
-  truncated file from a prior crash, or a `UnicodeDecodeError` for bytes that are not text,
+  truncated file from a prior crash; or a `UnicodeDecodeError`, bytes that are not text —
   [#2452](https://github.com/danielcopper/romm-tender/issues/2452) D30) is the data-loss hazard: returning defaults
   silently would let the immediate bootstrap save overwrite the corrupt file, wiping the user's RomM URL, API token,
   SGDB key, and platform/collection selections with no trace. Instead the adapter logs the corruption loudly at error
