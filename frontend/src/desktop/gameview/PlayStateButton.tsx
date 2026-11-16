@@ -61,7 +61,7 @@ interface PlayStateButtonProps {
   /** Whether a version switch is under way. */
   switching?: boolean;
   /** Whether a removal the page started for another version still runs. */
-  uninstallUnderWay?: boolean;
+  uninstallElsewhere?: boolean;
   onPlay: () => void;
   onUninstall: () => void;
 }
@@ -77,7 +77,7 @@ export const PlayStateButton: FC<PlayStateButtonProps> = ({
   refusal,
   checkFailed,
   switching = false,
-  uninstallUnderWay = false,
+  uninstallElsewhere = false,
   onPlay,
   onUninstall,
 }) => {
@@ -87,9 +87,9 @@ export const PlayStateButton: FC<PlayStateButtonProps> = ({
   useOutsideClick(groupRef, closeMenu, menuOpen);
   // No Uninstall mid-start or mid-switch, nor while another version's removal runs,
   // which takes no second one.
-  const menuRefused = pressState !== null || switching || uninstallUnderWay;
+  const menuRefused = pressState !== null || switching || uninstallElsewhere;
   if (menuRefused && menuOpen) setMenuOpen(false);
-  const menuTitle = uninstallUnderWay ? UNINSTALL_ELSEWHERE_TITLE : "Game Options";
+  const menuTitle = uninstallElsewhere ? UNINSTALL_ELSEWHERE_TITLE : "Game Options";
 
   return (
     <div

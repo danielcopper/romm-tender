@@ -592,7 +592,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
         refusal={playRefusal}
         checkFailed={startCheckFailed}
         switching={switching}
-        uninstallUnderWay={uninstallingRomId !== null}
+        uninstallElsewhere={uninstallingRomId !== null && uninstallingRomId !== romId}
         onPlay={() => detach(handlePlayClick())}
         onUninstall={uninstall}
       />
