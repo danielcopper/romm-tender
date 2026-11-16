@@ -149,7 +149,8 @@ carries no Big Picture tree until Big Picture has been opened. A reading of it w
 answers for a moment nobody chose, and refusing to mount the panel on that answer reports a fault that does not exist —
 which is what happened in the desktop client, measured on the device (#1945). So it is classified as asked-live instead,
 and its consumers ask it when they need it and do nothing when it answers nothing: the two in `utils/styleInjector.ts`
-when the play button mounts and unmounts on a game page, and `utils/qamWidthPatch.ts` when a wide page widens the panel.
+when the play button mounts and unmounts on a game page, and `utils/installQamWidthPatch.ts` when a wide page widens the
+panel.
 
 That is also why no mode question arises in the check at all. Every entry is answered by something that does not differ
 between Steam's two modes; `findSP` was the only one that did, and it has left the list. (Measured in the desktop client
@@ -172,11 +173,13 @@ renders whole and [Steam's game page](#tenders-section-on-steams-game-page) carr
 `QuickAccessMenuBrowserView`, the module Steam draws its Quick Access menu from and Tender's entry is installed into
 (`qam/installEntry.tsx`, the search in `utils/deckyUiInternals.ts`): without it the panel is built and cannot be
 reached, while the game page's section, the launch check and the save sync around a game still run — the fallback page
-would take those away and be just as unreachable. So does `FriendsUIStore`, the store whose flag the wrapper on Steam's
-QAM host reads (`utils/qamWidthPatch.ts`, [two widths](qam-panel.md#two-widths)): without it the wrapper is never
-installed, every page renders and works, and the wide pages stay at Steam's narrow width with their right-hand part
-off-screen. `ReactClient`, the desktop surface's search for React's client module (`desktop/desktopWindow.ts`), costs a
-feature too, and is in the list only in the build that carries that surface
+would take those away and be just as unreachable. So do the three things the wrapper on Steam's QAM host reads
+(`utils/installQamWidthPatch.ts`, [two widths](qam-panel.md#two-widths)): `FriendsUIStore`, the store whose flag it
+widens on, and `quickAccessMenuClasses.ViewPlaceholder` and `quickAccessMenuClasses.Expanded`, the two classes it reads
+off that map, asked after only while the map itself is there. Without any of the three the wrapper is never installed,
+every page renders and works, and the wide pages stay at Steam's narrow width with their right-hand part off-screen.
+`ReactClient`, the desktop surface's search for React's client module (`desktop/desktopWindow.ts`), costs a feature too,
+and is in the list only in the build that carries that surface
 ([the desktop dev build](#the-desktop-dev-build-dev-build-only)).
 
 **Only one of the four costs decides anything.** `checkSteamModules`'s `!== "panel"` decides whether the panel mounts;
