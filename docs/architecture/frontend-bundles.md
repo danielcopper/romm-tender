@@ -228,11 +228,11 @@ the page names no update at all: nothing that missed is a `@decky/ui` export, so
 makes itself, and a newer Tender is the repair. The page asks for a report there instead because the three `SP_*`
 globals reach its `none` (below); they cannot reach the log line, because their absence costs the panel. **That is the
 property `steamModules.test.ts` locks** — a non-blocking name `@decky/ui` does not export must be one Tender resolves
-for itself, in one of the three shapes such a lookup is written in: a `find(?:Module|ClassModule)\w*` call, a direct
-read of a global off `window`, or a `searchSteamFactories` scan over Steam's module factories — rather than the short
-set of names it produces today, which would go stale the moment a second name moved. `mixed` is the other place they
-differ: the log line names a repair covering both programs, where the page names Decky's and asks for a report about the
-rest, for the same reason.
+for itself, in one of the four shapes such a lookup is written in: a `find(?:Module|ClassModule)\w*` call, a direct read
+of a global off `window`, a `searchSteamFactories` scan over Steam's module factories, or a member read by name off a
+class map (`classMapMember`) — rather than the short set of names it produces today, which would go stale the moment a
+second name moved. `mixed` is the other place they differ: the log line names a repair covering both programs, where the
+page names Decky's and asks for a report about the rest, for the same reason.
 
 The page names every search that came back empty, and distinguishes **some** of them missing from **all** of them. All
 means something more basic than a stale predicate: the React bootstrap never ran, or Steam's module registry was read
