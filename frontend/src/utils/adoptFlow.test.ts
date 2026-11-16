@@ -348,7 +348,7 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
     expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
   });
 
-  it("a refused adoption toasts its message and leaves the flags alone", async () => {
+  it("a refused adoption toasts its message, is logged as a warning and leaves the flags alone", async () => {
     vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
     vi.mocked(backend.adoptExistingRom).mockResolvedValue({
       success: false,
@@ -361,6 +361,9 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
     await expect(runDownloadWithAdoption(flow)).resolves.toBe("failed");
 
     expect(toastBodies()).toEqual(["The files are no longer there — nothing was adopted"]);
+    expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+      "test: the backend refused to adopt romId=42: nothing_to_adopt: The files are no longer there — nothing was adopted",
+    );
     expect(log).toEqual(["busy:true", "occupied:true", "busy:false", "busy:true", "busy:false"]);
   });
 
@@ -373,6 +376,9 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
     await runDownloadWithAdoption(flow);
 
     expect(toastBodies()).toEqual(["Couldn't use the existing files"]);
+    expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+      "test: the backend refused to adopt romId=42: nothing_to_adopt: ",
+    );
   });
 
   it("a thrown adoption is toasted, logged as an error and busy cleared", async () => {

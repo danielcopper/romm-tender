@@ -301,6 +301,7 @@ async function adopt(
       return await adopt(flow, candidatePath, answer);
     }
     if (!result.success) {
+      logRefusal(flow.logContext, "adopt", romId, result);
       showToast(result.message || ADOPT_REFUSED_TOAST);
       return "failed";
     }
