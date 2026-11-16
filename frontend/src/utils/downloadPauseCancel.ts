@@ -20,21 +20,24 @@ export function executeDownloadPause(romId: number, tag: string): Promise<void> 
 /**
  * Cancel the ROM's download; the cancelled frame is what ends it. A refusal
  * with `no_active_download` gets no frame (`cancel_download`,
- * backend/services/downloads/service.py), so while the download is still under
- * way the ROM is dropped from the download store and `onNothingToCancel` ends
- * the caller's own bar. One that ended meanwhile is left as its last frame put
- * it: `DownloadTransfer.run` (backend/services/downloads/transfer.py) sends that
- * frame before it lets the download go, so a cancel crossing the end is refused
- * after it.
+ * backend/services/downloads/service.py), so the ROM is dropped from the
+ * download store and `onNothingToCancel` ends the caller's own bar — unless the
+ * store took the download as ended while the cancel was out: `DownloadTransfer.run`
+ * (backend/services/downloads/transfer.py) sends a download's last frame
+ * before it lets the download go, so a cancel crossing the end is refused after
+ * that frame. An ended entry already there at the send is an earlier attempt's,
+ * and says nothing about this one.
  */
 export function executeDownloadCancel(romId: number, tag: string, onNothingToCancel: () => void): Promise<void> {
+  const entryOf = () => getDownloadState().find((d) => d.rom_id === romId);
+  const sentAgainst = entryOf();
   return cancelDownload(romId)
     .then((result) => {
       if (result.success) return;
       logRefusal(tag, "cancel the download of", romId, result);
       if (result.reason !== "no_active_download") return;
-      const entry = getDownloadState().find((d) => d.rom_id === romId);
-      if (entry !== undefined && !isDownloadUnderWay(entry)) return;
+      const entry = entryOf();
+      if (entry !== undefined && entry !== sentAgainst && !isDownloadUnderWay(entry)) return;
       removeDownload(romId);
       onNothingToCancel();
     })

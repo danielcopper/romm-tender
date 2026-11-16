@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { executeDownloadCancel, executeDownloadPause } from "./downloadPauseCancel";
 import * as backend from "../api/backend";
-import { getDownloadState, setDownloads } from "./downloadStore";
+import { getDownloadState, setDownloads, updateDownload } from "./downloadStore";
 import type { DownloadItem } from "../types";
 
 vi.mock("../api/backend", async (importOriginal) => ({
@@ -90,21 +90,57 @@ describe("executeDownloadCancel", () => {
     );
   });
 
-  it("leaves a finished download and the bar alone when the cancel crossed its end", async () => {
-    const finished = { rom_id: 7, status: "completed" } as DownloadItem;
-    setDownloads([finished, entry(8)]);
-    vi.mocked(backend.cancelDownload).mockResolvedValueOnce({
-      success: false,
-      reason: "no_active_download",
-      message: "No active download",
-    });
+  /** A cancel whose answer is held until `answer` is called, with a store write landing before it. */
+  function cancelAnsweredAfter(write: () => void) {
+    let answer!: (value: backend.BackendResult) => void;
+    vi.mocked(backend.cancelDownload).mockReturnValueOnce(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
     const onNothingToCancel = vi.fn();
+    const sent = executeDownloadCancel(7, "Tag", onNothingToCancel);
+    write();
+    answer({ success: false, reason: "no_active_download", message: "No active download" });
+    return { sent, onNothingToCancel };
+  }
 
-    await executeDownloadCancel(7, "Tag", onNothingToCancel);
+  it.each(["completed", "failed", "cancelled"] as const)(
+    "leaves a download that ended %s while the cancel was out, and the bar, alone",
+    async (status) => {
+      const ended = { rom_id: 7, status } as DownloadItem;
+      const { sent, onNothingToCancel } = cancelAnsweredAfter(() => updateDownload(ended));
 
-    expect(onNothingToCancel).not.toHaveBeenCalled();
-    expect(getDownloadState()[0]).toBe(finished);
-    expect(getDownloadState()).toHaveLength(2);
+      await sent;
+
+      expect(onNothingToCancel).not.toHaveBeenCalled();
+      expect(getDownloadState()[0]).toBe(ended);
+      expect(getDownloadState()).toHaveLength(2);
+    },
+  );
+
+  it.each(["queued", "paused", "extracting"] as const)(
+    "drops a download that moved to %s while the cancel was out, and ends the bar",
+    async (status) => {
+      const { sent, onNothingToCancel } = cancelAnsweredAfter(() =>
+        updateDownload({ rom_id: 7, status } as DownloadItem),
+      );
+
+      await sent;
+
+      expect(onNothingToCancel).toHaveBeenCalledOnce();
+      expect(getDownloadState().map((d) => d.rom_id)).toEqual([8]);
+    },
+  );
+
+  it("drops an earlier attempt's ended entry and ends the new press's bar", async () => {
+    setDownloads([{ rom_id: 7, status: "failed" } as DownloadItem, entry(8)]);
+    const { sent, onNothingToCancel } = cancelAnsweredAfter(() => undefined);
+
+    await sent;
+
+    expect(onNothingToCancel).toHaveBeenCalledOnce();
+    expect(getDownloadState().map((d) => d.rom_id)).toEqual([8]);
   });
 
   it("logs a caller's bar that throws on ending rather than dropping it", async () => {
