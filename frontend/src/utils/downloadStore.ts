@@ -8,8 +8,9 @@
  *   - DownloadQueue.tsx, which seeds the store from the backend queue on mount
  *     and drops the terminal entries after a successful "Clear Completed"
  *   - the desktop client's Play button, which adds its ROM's download from the
- *     backend queue when the store has none of it (utils/downloadRehydrate.ts),
- *     and drops its ROM's entry when a cancel finds no download to cancel
+ *     backend queue when the store has none of it (utils/downloadRehydrate.ts)
+ *   - both game pages' Play buttons, which drop their ROM's entry when a cancel
+ *     finds no download to cancel (utils/downloadPauseCancel.ts)
  *
  * Read by:
  *   - MainPage.tsx, DownloadQueue.tsx and the desktop client's Play button, all

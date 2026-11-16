@@ -29,8 +29,6 @@ import { hasAnySaveConflict } from "../utils/saveStatus";
 import {
   getCachedGameDetail,
   invalidateCachedGameDetail,
-  cancelDownload,
-  pauseDownload,
   getDownloadQueue,
   forgetDownload,
   debugLog,
@@ -50,10 +48,10 @@ import { isBoundVanished, onBoundAvailabilityChange } from "../utils/vanishedBin
 import { scrollToTop } from "../utils/scrollHelpers";
 import { getEventTarget } from "../utils/events";
 import { handleButtonDownloadFailure } from "../utils/downloadFailure";
-import { logFailure, logRefusal } from "../utils/backendLog";
 import { runDownloadWithAdoption } from "../utils/adoptFlow";
 import { executeDownloadResume } from "../utils/downloadResume";
-import { isDownloadUnderWay, removeDownload } from "../utils/downloadStore";
+import { executeDownloadCancel, executeDownloadPause } from "../utils/downloadPauseCancel";
+import { isDownloadUnderWay } from "../utils/downloadStore";
 import { downloadAnswers, downloadTakesNoPress } from "../utils/downloadPress";
 import {
   DOWNLOAD_AGAIN_LABEL,
@@ -781,41 +779,22 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
     });
   };
 
-  // A refused cancel gets no cancelled frame, so the bar stays up; only one
-  // refused with `no_active_download`, which the backend answers where it holds
-  // neither a transfer nor a paused entry for the ROM, ends it here.
   const handleCancelDownload = () => {
     if (romId == null) return;
     const rid = romId;
     detach(
-      cancelDownload(rid).then(
-        (result) => {
-          if (result.success) return;
-          logRefusal("CustomPlayButton", "cancel the download of", rid, result);
-          if (result.reason !== "no_active_download") return;
-          removeDownload(rid);
-          if (rid !== romIdRef.current) return;
-          enterDownloadState();
-          setActionPending(false);
-          setDlProgress(null);
-        },
-        (e: unknown) => logFailure("CustomPlayButton", "cancel the download of", rid, e),
-      ),
+      executeDownloadCancel(rid, "CustomPlayButton", () => {
+        if (rid !== romIdRef.current) return;
+        enterDownloadState();
+        setActionPending(false);
+        setDlProgress(null);
+      }),
     );
   };
 
-  // A refused pause gets no paused frame, so the bar stays as it is.
   const handlePause = () => {
     if (romId == null) return;
-    const rid = romId;
-    detach(
-      pauseDownload(rid).then(
-        (result) => {
-          if (!result.success) logRefusal("CustomPlayButton", "pause the download of", rid, result);
-        },
-        (e: unknown) => logFailure("CustomPlayButton", "pause the download of", rid, e),
-      ),
-    );
+    detach(executeDownloadPause(romId, "CustomPlayButton"));
   };
 
   // Resume a paused download; `executeDownloadResume` says why when it is refused.

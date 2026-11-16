@@ -15,10 +15,9 @@ import {
   type MouseEvent,
 } from "react";
 import { addEventListener, removeEventListener } from "../../api/host";
-import { cancelDownload, getCachedGameDetail, logWarn, pauseDownload, type BackendResult } from "../../api/backend";
-import { logFailure, logRefusal } from "../../utils/backendLog";
+import { getCachedGameDetail, logWarn } from "../../api/backend";
 import { useGameDetail, type GameDetailState } from "../../utils/gameDetailStore";
-import { isDownloadUnderWay, removeDownload, useDownloads } from "../../utils/downloadStore";
+import { isDownloadUnderWay, useDownloads } from "../../utils/downloadStore";
 import { READY_FLASH_MS } from "../../utils/downloadProgress";
 import { PLAY_GRADIENT } from "../../utils/playGradient";
 import { seedDownloadFromQueue } from "../../utils/downloadRehydrate";
@@ -32,6 +31,7 @@ import { useRommConnectionState } from "../../utils/connectionState";
 import { isBoundVanished, onBoundAvailabilityChange } from "../../utils/vanishedBinding";
 import { runDownloadWithAdoption } from "../../utils/adoptFlow";
 import { executeDownloadResume } from "../../utils/downloadResume";
+import { executeDownloadCancel, executeDownloadPause } from "../../utils/downloadPauseCancel";
 import { handleButtonDownloadFailure } from "../../utils/downloadFailure";
 import { NO_FILE_ON_ROMM_LABEL } from "../../utils/noFileOnRommWording";
 import { readGameRunning } from "../../utils/sessionManager";
@@ -453,30 +453,13 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
     e.stopPropagation();
     if (!romId) return;
     const rid = romId;
-    const onAnswer = (result: BackendResult) => {
-      if (result.success) return;
-      logRefusal(TAG, "cancel the download of", rid, result);
-      // The backend holds neither a transfer nor a paused entry for the ROM, so no frame will end the bar.
-      if (result.reason === "no_active_download") {
-        endAction("downloading", rid);
-        removeDownload(rid);
-      }
-    };
-    detach(cancelDownload(rid).then(onAnswer, (err: unknown) => logFailure(TAG, "cancel the download of", rid, err)));
+    detach(executeDownloadCancel(rid, TAG, () => endAction("downloading", rid)));
   };
 
   const handlePauseResumeClick = (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     if (!romId || !activeDownload) return;
-    const rid = romId;
-    if (activeDownload.status === "paused") {
-      detach(executeDownloadResume(rid, TAG));
-      return;
-    }
-    const onAnswer = (result: BackendResult) => {
-      if (!result.success) logRefusal(TAG, "pause the download of", rid, result);
-    };
-    detach(pauseDownload(rid).then(onAnswer, (err: unknown) => logFailure(TAG, "pause the download of", rid, err)));
+    detach(activeDownload.status === "paused" ? executeDownloadResume(romId, TAG) : executeDownloadPause(romId, TAG));
   };
 
   if (romId === null) return null;
