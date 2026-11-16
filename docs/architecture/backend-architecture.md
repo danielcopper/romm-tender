@@ -101,9 +101,9 @@ failing `success` outside `main.py`.
 16 MiB on the connection's frames, judged on the **announced** length before a byte is buffered, whose breach closes the
 socket. Breaking the second rejects every call in flight, which is why one oversized cover image may not reach it. So a
 bulk payload is chunked rather than sent whole: per-item endpoints, and bulk lists paged — the library apply emits
-shortcuts in batches, and the metadata cache loads page by page. Both numbers were chosen: the reference library's
-largest cover is 5,869,834 bytes, 7,826,448 (7.46 MiB) once base64-encoded, so a 4 MiB cap would have refused it
-silently.
+shortcuts in batches, and the metadata cache loads page by page. The answer cap is set above the largest cover measured
+(`host/dispatch.py` keeps the measurement); the frame cap is a memory guard, set far above any answer the first cap lets
+through.
 
 **No reply store.** A call whose answer was in flight when the socket went is not redelivered — its task is cancelled,
 and the caller's own pending register answers it `connection_lost`. A lost answer fails visibly; it never disappears.
@@ -2917,29 +2917,6 @@ metadata CDN, so its ladder is entered with `romm_origin=False` and takes no par
 must not degrade every RomM call, and reaching the CDN is no evidence that RomM came back. It also keeps its full ladder
 while RomM is down, because it is a different host.
 
-#### The outgoing User-Agent
-
-The three adapters that talk to a server off this machine — `adapters/romm/http.py`, `adapters/steamgriddb.py` and
-`adapters/github_releases.py` — take a `user_agent: str` constructor parameter, and bootstrap hands each
-`<package name>/<version>`, both halves from `domain/identity.py`. SteamGridDB, and RomM behind a Cloudflare Tunnel,
-answer the default `Python-urllib` User-Agent with 403, and GitHub's API refuses a request that carries none. No adapter
-spells a name or a version of its own, so the User-Agent comes from that one module rather than from two literals that
-could drift. It is everything `PACKAGE_NAME` reaches: neither the folder the program ships as nor the recovery bundles'
-root (`recovery/` inside Tender's folder) is decided by it. It has no fallback and no failure mode — both halves are
-constants, so a User-Agent naming anything but this program is a code change, never a deployment accident. `VERSION` is
-stamped by release-please (the `x-release-please-version` marker on its line) and never edited by hand.
-`adapters/renderer_gc.py` speaks HTTP too, to Steam's debugger on `localhost`, and takes none.
-
-#### RommApiAdapter notes: what a list call sends
-
-RomM's ROM filter is `platform_ids`, plural. A list endpoint answers one page, `{"items": [...], "total": N}`; list
-calls page through `lib/romm_paging.py`, and every one appends `&with_char_index=false&with_filter_values=false`, which
-turns off two aggregations RomM otherwise computes on every request and Tender reads neither of
-(`_LIST_AGGREGATIONS_DISABLED` in `adapters/romm/romm_api.py`). Every `/api/roms` walk that pages with `offset` also
-sends `order_by=id`: in RomM's default order a concurrent scan shifts every later page, so one row comes back twice and
-another not at all (`_WALK_ORDER`, same module). The cover URLs RomM answers with carry unencoded spaces, so a cover
-fetch URL-encodes the path before it requests it.
-
 #### RommHttpAdapter notes: the headers every RomM-origin request carries
 
 `_apply_origin_headers` is the one place that attaches what a request carries by virtue of its DESTINATION rather than
@@ -3043,6 +3020,29 @@ different body shape (no JSON content type, no `detail` string), every entity-40
 is dropped. That is the fail-open direction by design — if a user on such a server reports exactly that symptom set,
 this paragraph is the explanation, and the fix is a version-aware entity check, never a return to trusting the bare
 status.
+
+#### The outgoing User-Agent
+
+The three adapters that talk to a server off this machine — `adapters/romm/http.py`, `adapters/steamgriddb.py` and
+`adapters/github_releases.py` — take a `user_agent: str` constructor parameter, and bootstrap hands each
+`<package name>/<version>`, both halves from `domain/identity.py`. SteamGridDB, and RomM behind a Cloudflare Tunnel,
+answer the default `Python-urllib` User-Agent with 403, and GitHub's API refuses a request that carries none. No adapter
+spells a name or a version of its own, so the User-Agent comes from that one module rather than from two literals that
+could drift; why it is composed from constants rather than read at boot is
+[`.claude/rules/bootstrap-wiring.md`](https://github.com/danielcopper/romm-tender/blob/main/.claude/rules/bootstrap-wiring.md).
+`adapters/renderer_gc.py` speaks HTTP too, to Steam's debugger on `localhost`, and takes none.
+
+#### RommApiAdapter notes: what a list call sends
+
+RomM's ROM filter is `platform_ids`, plural. An `/api/roms` list call answers one page, `{"items": [...], "total": N}`,
+and takes its page size from `lib/romm_paging.py` (`LIST_PAGE_SIZE`); the loops that walk the pages are in
+`services/library/fetcher.py` and `collection_fetcher.py`. Every `/api/roms` list request appends
+`&with_char_index=false&with_filter_values=false`, which turns off two aggregations RomM otherwise computes on every
+request and Tender reads neither of (`_LIST_AGGREGATIONS_DISABLED` in `adapters/romm/romm_api.py`); the platform and
+collection listings (`_request_listing`) are plain lists and send neither flag. Every `/api/roms` walk that pages with
+`offset` also sends `order_by=id`: in RomM's default order a concurrent scan shifts every later page, so one row comes
+back twice and another not at all (`_WALK_ORDER`, same module). The cover URLs RomM answers with carry unencoded spaces,
+so a cover fetch URL-encodes the path before it requests it.
 
 #### PersistenceAdapter notes
 

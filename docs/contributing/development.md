@@ -1,6 +1,7 @@
 # Development
 
-Guide for setting up a development environment and contributing to Tender.
+Guide for setting up a development environment and contributing to Tender. Open work is on the
+[project board](https://github.com/users/danielcopper/projects/2).
 
 ## Prerequisites
 
@@ -34,12 +35,12 @@ therefore runs whatever global `pre-commit` you have installed first and aborts 
 `commit-msg`, `pre-merge-commit` and `pre-push` hooks likewise hand over to a global hook of the same name and adopt its
 verdict, so a guard you rely on in your other repos keeps working here too. If you have no global hook, nothing changes.
 
-The pre-commit hook only formats what is staged — `ruff format` and `ruff check` for Python, `prettier --write` for
-TS/TSX, `deno fmt` for Markdown — and stays under about two seconds; heavy validation belongs to CI, not to the hook. It
-re-stages what it formatted, but only for a file with no unstaged changes: `git add` stages the whole file, so re-adding
-one staged in part with `git add -p` would commit the hunks left out. Such a file is named on stdout and its index entry
-left alone, so the commit can carry unformatted content — loudly, since CI says so, where the other direction was
-silent.
+The pre-commit hook formats what is staged — `ruff format` and `ruff check` for Python, `prettier --write` for TS/TSX,
+`deno fmt` for Markdown — and stops a commit Ruff can't fix. It stays under about two seconds; heavy validation belongs
+to CI, not to the hook. It re-stages what it formatted, but only for a file with no unstaged changes: `git add` stages
+the whole file, so re-adding one staged in part with `git add -p` would commit the hunks left out. Such a file is named
+on stdout and its index entry is left as staged, so the commit can carry unformatted content — loudly, since CI says so,
+where the other direction was silent.
 
 Python dependencies are installed from `requirements-dev.lock` — fully-pinned versions compiled from
 `requirements-dev.txt` by uv. After changing a source (`requirements-dev.txt` / `docs/requirements.txt`) or bumping a
@@ -244,8 +245,8 @@ bash install.sh --from build/romm-tender-<V>.tar.gz
 
 That is the same path a release takes, with the download skipped — `install.sh --uninstall` takes it back out, and
 leaves the database, the settings and the launcher where they are. Neither the packager nor the installer is ever run
-against your own machine from a test: every execution in `tests/scripts/` happens under a `tmp_path` HOME with a stub
-`PATH`.
+against your own machine from a test: `tests/scripts/` runs under a throwaway HOME (the suite's autouse fixture), and
+the installer's tests also under a stub `PATH`.
 
 Literally the same path: the release workflow's second job runs those same two steps on the tagged tree and attaches
 what comes out, so there is one producer for a local build and a published one. What it attaches is held to
@@ -571,11 +572,10 @@ Outside `ci.yml`, a pull request runs more checks, and the gate runs none of the
 itself on GitHub: `decisions` (`.github/workflows/decisions.yml`), which checks that the pull request links an issue
 whose decisions are settled — the rules, the exemptions and the opt-outs are in the
 [shared workflow's README](https://github.com/danielcopper/.github#the-decisions-check); `Docs updated in same PR`
-(`docs-check.yml`), which fails a pull request that changes source without touching `docs/` unless it carries the
-`no-docs-change` label or a `docs: N/A` line; `commitlint` (`pr-title.yml`), which holds the pull request's title to
-Conventional Commits; and `label` (`labeler.yml`), which only sets labels. A pull request that touches `docs/**` or
-`mkdocs.yml` also builds the documentation site (`docs.yml`, `mkdocs build --strict`), which `mise run docs:build` runs
-locally.
+(`docs-check.yml`), which holds the rule under [Documentation](#documentation); `commitlint` (`pr-title.yml`), which
+holds the pull request's title to Conventional Commits; and `label` (`labeler.yml`), which only sets labels. A pull
+request that touches `docs/**` or `mkdocs.yml` also builds the documentation site (`docs.yml`, `mkdocs build --strict`),
+which `mise run docs:build` runs locally.
 
 `steam-internals.yml` is no pull-request check, and the gate does not run it either: once a day and by hand it looks for
 every listed Steam internal in the client Valve publishes, and puts a finding on the issue labelled `steam-internals`
@@ -638,22 +638,17 @@ A pull request with genuinely nothing to document — a pure refactor with no us
 tooling or CI change, a dependency bump — opts out with the `no-docs-change` label or a `docs: N/A` line, with a
 one-line reason, in its description. Opting out is an explicit acknowledgement, not a silent omission.
 
-One opt-out is automatic: a pull request from a `release-please--*` branch. Its diff stamps `version.txt` and
-`backend/domain/identity.py`'s `VERSION` line, so every release pull request touches source and would fail the check
-forever. It is skipped by branch rather than by exempting those two paths, because `identity.py` is a real source file
-whose docstring is load-bearing — exempting it by name would drop the docs requirement from every hand-written change to
-it as well.
+One opt-out is automatic: a pull request from a `release-please--*` branch, for the reason the comment above that branch
+test in `docs-check.yml` gives.
 
-The site is Material for MkDocs, published to GitHub Pages by `.github/workflows/docs.yml` on every push to `main`;
-`mise run docs` previews it locally.
+The site is Material for MkDocs, published to GitHub Pages by `.github/workflows/docs.yml` on a push to `main` that
+touches the site; `mise run docs` previews it locally.
 
 ## Releasing
 
-Releases are cut by release-please, configured as `release-type: simple` (`release-please-config.json`). A second job in
-`.github/workflows/release.yml` builds the tagged tree, packs it with `scripts/package.sh`, checks the result and
-attaches `romm-tender-<V>.tar.gz` and its `.sha256` to the release — it builds from the tag rather than carrying an
-artifact over from CI. The latest release and what it shipped are `git tag --sort=-v:refname` and the GitHub Releases
-page; open work is on the [project board](https://github.com/users/danielcopper/projects/2).
+Releases are cut by release-please, configured as `release-type: simple` (`release-please-config.json`). What the
+release workflow builds and attaches is under [Running an installed one](#running-an-installed-one). The latest release
+and what it shipped are `git tag --sort=-v:refname` and the GitHub Releases page.
 
 What a release proposes is normally computed from `.release-please-manifest.json` and the commits since, but
 `release-as: "1.0.0"` in the config overrides that on every run, so every release pull request proposes 1.0.0 until the
@@ -686,8 +681,8 @@ repository and its issues. The `decisions` check enforces what its
 
 Three places, split by how often they apply:
 
-- **`CLAUDE.md`** (repo root) — the traps, the two invariants whose breach loses user data, and the workflow. Everything
-  here applies no matter which file you touch, so it is read up front.
+- **`CLAUDE.md`** (repo root) — what applies no matter which file you touch, read up front; what it holds is the
+  paragraph below.
 - **`docs/architecture/invariants/`** — the invariant register's entries, one file per area; the map in its
   [index](../architecture/invariants/index.md) names each area's paths and file.
 - **`.claude/rules/*.md`** — the per-area conventions (services, adapters/domain, Python naming and docstrings, endpoint

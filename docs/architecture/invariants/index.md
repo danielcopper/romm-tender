@@ -2,21 +2,19 @@
 
 The cross-cutting safety rules — the ones that span files, so no diff-scoped review (human or agent) sees the whole rule
 — each with its enforcement tier. It is a **map of the enforcement surface, not the enforcement itself**: the checks
-that hold a cross-cutting rule are listed with the rule, and nowhere else.
+that hold a cross-cutting rule are listed with the rule.
 
 A `check` or `test` rule is enforced by the artifact its entry names; a `prompt-only` rule is held by review alone until
-a check exists, and moves to the `check` tier once one does. A rule is never weakened to stay green, and a real drift is
-a finding to triage, never an exemption.
+a check exists, and moves to the `check` tier once one does. A real drift is a finding to triage, never an exemption.
 
-**Before implementing or reviewing in an area, read that area's file** — every file whose area a change touches. When a
-change applies a guard, sanitize, backup or grouping pattern, sweep for sibling sites of the same pattern; the area
-files are what that sweep checks against.
+When a change applies a guard, sanitize, backup or grouping pattern, sweep for sibling sites of the same pattern; the
+area files are what that sweep checks against.
 
 Two rules stand in the register section of the repository's `CLAUDE.md` instead of here: backup-or-confirm, and
 server-supplied paths through `safe_join`. A breach of either loses user data for good, any area can break them, and no
-check holds them fully; their long form is in [Cross-cutting](cross-cutting.md#backup-or-confirm). Every other entry
-stands once, in the file of the area it belongs to; an entry that concerns two areas stands in one of them, and the
-other points to it.
+check holds them fully. Their long form is in Cross-cutting: [backup or confirm](cross-cutting.md#backup-or-confirm) and
+[server-supplied paths](cross-cutting.md#server-supplied-paths). Every other entry stands once, in the file of the area
+it belongs to; an entry that concerns two areas stands in one of them, and the other points to it.
 
 ## How an entry reads
 
