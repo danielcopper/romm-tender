@@ -102,7 +102,7 @@ failing `success` outside `main.py`.
 socket. Breaking the second rejects every call in flight, which is why one oversized cover image may not reach it. So a
 bulk payload is chunked rather than sent whole: per-item endpoints, and bulk lists paged — the library apply emits
 shortcuts in batches, and the metadata cache loads page by page. The answer cap is set above the largest cover measured
-(`host/dispatch.py` keeps the measurement); the frame cap is a memory guard, set far above any answer the first cap lets
+(`host/dispatch.py` keeps the measurement); the frame cap is a memory guard, set above any answer the first cap lets
 through.
 
 **No reply store.** A call whose answer was in flight when the socket went is not redelivered — its task is cancelled,
