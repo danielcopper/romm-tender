@@ -302,27 +302,22 @@ export const ToastRenderer: SteamToastRenderer | undefined = findModuleExport((e
 
 /** Steam's FriendsUI store, reduced to the flag the wide pages read. */
 export interface SteamFriendsUIStore {
-  /** Set by the `QamFriendsExpanded` message and cleared by `QamFriendsHidden`. */
   readonly qamFriendsExpanded?: unknown;
 }
 
 /**
- * Steam's FriendsUI store: the object whose `OnMessage` sets
- * `m_bQamFriendsExpanded` from the two messages a wide page posts, and whose
- * `qamFriendsExpanded` getter Steam's QAM host reads (`steamui/sp.js`).
+ * Steam's FriendsUI store, whose flag the wide pages set and read
+ * (`docs/architecture/qam-panel.md`, "Two widths").
  *
- * Found by that field rather than by its export name, which is minified
- * ({@link ControllerGlyph} has the rule for those names).
+ * Found by the field its message handler sets and the getter the wrapper reads
+ * rather than by its export name, which is minified ({@link ControllerGlyph}
+ * has the rule for those names). The predicate needs no `try`:
+ * `findModuleExport` catches a throwing one itself and logs it
+ * (`dist/webpack.js`).
  */
-export const FriendsUIStore: SteamFriendsUIStore | undefined = findModuleExport((e: unknown) => {
-  // Run against every export in Steam's registry, so one that throws on `in`
-  // must answer `false` rather than end the search.
-  try {
-    return typeof e === "object" && e !== null && "m_bQamFriendsExpanded" in e;
-  } catch {
-    return false;
-  }
-});
+export const FriendsUIStore: SteamFriendsUIStore | undefined = findModuleExport(
+  (e: unknown) => typeof e === "object" && e !== null && "m_bQamFriendsExpanded" in e && "qamFriendsExpanded" in e,
+);
 
 /**
  * Steam's notification store, which owns the toast queue and the tray.

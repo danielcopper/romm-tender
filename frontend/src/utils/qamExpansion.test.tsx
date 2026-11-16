@@ -17,10 +17,12 @@ import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } fr
 import { render, act } from "@testing-library/react";
 import { useRef, useSyncExternalStore, type FC } from "react";
 
+import type { QamWidthInstall } from "./qamWidthPatch";
+
 // --- The QAM's own visibility, backed by a store the tests flip. It keeps its
 // own stub rather than taking test-setup.ts's, whose `() => true` cannot drive
 // the clear-on-close path. Every first-party import of the module under test
-// that reaches Steam is mocked here — this one, qamWidthPatch and
+// that reaches Steam is mocked here — this one, installQamWidthPatch and
 // deckyUiInternals — so nothing in this graph reaches @decky/ui.
 let qamVisible = true;
 const visibilityListeners = new Set<() => void>();
@@ -35,10 +37,10 @@ vi.mock("./quickAccessVisible", () => ({
   useQuickAccessVisible: () => useSyncExternalStore(subscribeVisibility, () => qamVisible),
 }));
 
-// The wrapper on Steam's QAM host reaches Steam's live tree, which
-// `qamWidthPatch.test.ts` builds for itself; here only its install is watched.
-const installQamWidthPatch = vi.hoisted(() => vi.fn(() => true));
-vi.mock("./qamWidthPatch", () => ({ installQamWidthPatch }));
+// The install of the wrapper on Steam's QAM host reaches Steam's live tree;
+// here only what the page does around it is watched.
+const installQamWidthPatch = vi.hoisted(() => vi.fn((): QamWidthInstall => "wrapped"));
+vi.mock("./installQamWidthPatch", () => ({ installQamWidthPatch }));
 
 const ACTIVE_TAB_CLASS = "ActiveTab_hash";
 const TAB_PANEL_CLASS = "TabGroupPanel_hash";
@@ -144,7 +146,8 @@ describe("useWideQamPanel", () => {
   beforeEach(() => {
     qamVisible = true;
     visibilityListeners.clear();
-    installQamWidthPatch.mockClear();
+    installQamWidthPatch.mockReset();
+    installQamWidthPatch.mockReturnValue("wrapped");
     post = vi.spyOn(window, "postMessage").mockImplementation(() => {});
   });
 
@@ -162,6 +165,52 @@ describe("useWideQamPanel", () => {
 
     expect(installQamWidthPatch).toHaveBeenCalledTimes(1);
     expect(post.mock.calls).toEqual([[{ message: "QamFriendsExpanded" }, window.origin]]);
+  });
+
+  it("still posts the expand message and lifts the cap where the install wrapped nothing", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    installQamWidthPatch.mockReturnValue("no-host");
+    const mod = await loadQamExpansion(PROBE_CLASSES);
+    const { host } = mountQamDom();
+
+    renderWidePage(mod, host);
+
+    expect(post.mock.calls).toEqual([[{ message: "QamFriendsExpanded" }, window.origin]]);
+    expect(wideStyles(mod.WIDE_ROOT_CLASS)).toHaveLength(1);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("still posts the expand message and lifts the cap where the install throws", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    installQamWidthPatch.mockImplementation(() => {
+      throw new Error("no fiber");
+    });
+    const mod = await loadQamExpansion(PROBE_CLASSES);
+    const { host } = mountQamDom();
+
+    renderWidePage(mod, host);
+
+    expect(post.mock.calls).toEqual([[{ message: "QamFriendsExpanded" }, window.origin]]);
+    expect(wideStyles(mod.WIDE_ROOT_CLASS)).toHaveLength(1);
+    expect(String(warn.mock.calls[0]?.[0])).toContain("no fiber");
+  });
+
+  it("tries the install again the next time the page widens after one that wrapped nothing", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    installQamWidthPatch.mockReturnValueOnce("no-host");
+    const mod = await loadQamExpansion(PROBE_CLASSES);
+    const { host, panelParent } = mountQamDom();
+    renderWidePage(mod, host);
+
+    await act(async () => {
+      panelParent.classList.remove(ACTIVE_TAB_CLASS);
+    });
+    await act(async () => {
+      panelParent.classList.add(ACTIVE_TAB_CLASS);
+    });
+
+    expect(installQamWidthPatch).toHaveBeenCalledTimes(2);
+    expect(lastMessage()).toBe("QamFriendsExpanded");
   });
 
   it("expands and injects the rule while the page is mounted", async () => {

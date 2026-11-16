@@ -127,35 +127,44 @@ describe("ControllerGlyph", () => {
 });
 
 describe("FriendsUIStore", () => {
-  /** This module as it evaluates with `findModuleExport` asking *exports* in order. */
+  /** This module as it evaluates with `findModuleExport` asking *exports* in order, catching a throw as it does. */
   const storeIn = async (exports: unknown[]): Promise<unknown> => {
     vi.resetModules();
     const decky = await import("@decky/ui");
-    vi.mocked(decky.findModuleExport).mockImplementation((filter: (e: unknown) => boolean) => exports.find(filter));
+    vi.mocked(decky.findModuleExport).mockImplementation((filter: (e: unknown) => boolean) =>
+      exports.find((e) => {
+        try {
+          return filter(e);
+        } catch {
+          return false;
+        }
+      }),
+    );
     return (await import("./deckyUiInternals")).FriendsUIStore;
   };
+
+  /** The store as Steam's class makes it: the field on the instance, the getter on its prototype. */
+  class Store {
+    m_bQamFriendsExpanded = false;
+    get qamFriendsExpanded(): boolean {
+      return this.m_bQamFriendsExpanded;
+    }
+  }
 
   afterEach(() => {
     vi.resetModules();
   });
 
-  it("finds the store by the field its message handler sets", async () => {
-    const store = { m_bQamFriendsExpanded: false, qamFriendsExpanded: false };
+  it("finds the store by the field its message handler sets and the getter the wrapper reads", async () => {
+    const store = new Store();
 
     expect(await storeIn([{ qamFriendsExpanded: false }, () => null, store])).toBe(store);
   });
 
-  it("goes on searching past an export that throws on being asked", async () => {
-    const store = { m_bQamFriendsExpanded: false };
-    const throwing = new Proxy(
-      {},
-      {
-        has: () => {
-          throw new Error("export evaluation failed");
-        },
-      },
-    );
+  it("does not take an export that has the field but not the getter", async () => {
+    const store = new Store();
 
-    expect(await storeIn([throwing, store])).toBe(store);
+    expect(await storeIn([{ m_bQamFriendsExpanded: false }, store])).toBe(store);
+    expect(await storeIn([{ m_bQamFriendsExpanded: false }])).toBeUndefined();
   });
 });

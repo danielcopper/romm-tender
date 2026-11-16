@@ -72,6 +72,7 @@ export default defineConfig({
         "src/bigpicture/patches/gameDetailPatch.tsx",
         "src/bigpicture/patches/installGamePagePatch.ts",
         "src/qam/installEntry.tsx",
+        "src/utils/installQamWidthPatch.ts",
         "src/utils/styleInjector.ts",
       ],
     },
