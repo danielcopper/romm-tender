@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { executeDownloadCancel, executeDownloadPause } from "./downloadPauseCancel";
 import * as backend from "../api/backend";
-import { getDownloadState, setDownloads, updateDownload } from "./downloadStore";
+import { getDownloadState, removeDownload, setDownloads, updateDownload } from "./downloadStore";
 import type { DownloadItem } from "../types";
 
 vi.mock("../api/backend", async (importOriginal) => ({
@@ -155,6 +155,29 @@ describe("executeDownloadCancel", () => {
       expect(getDownloadState().map((d) => d.rom_id)).toEqual([8]);
     },
   );
+
+  it.each(["completed", "failed"] as const)(
+    "leaves this attempt's %s frame alone when an earlier attempt's ended entry was there at the send",
+    async (status) => {
+      setDownloads([{ rom_id: 7, status: "failed" } as DownloadItem, entry(8)]);
+      const ended = { rom_id: 7, status } as DownloadItem;
+      const { sent, onNothingToCancel } = cancelAnsweredAfter(() => updateDownload(ended));
+
+      await sent;
+
+      expect(onNothingToCancel).not.toHaveBeenCalled();
+      expect(getDownloadState()[0]).toBe(ended);
+    },
+  );
+
+  it("ends the bar when the entry left the store while the cancel was out", async () => {
+    const { sent, onNothingToCancel } = cancelAnsweredAfter(() => removeDownload(7));
+
+    await sent;
+
+    expect(onNothingToCancel).toHaveBeenCalledOnce();
+    expect(getDownloadState().map((d) => d.rom_id)).toEqual([8]);
+  });
 
   it("drops an earlier attempt's ended entry and ends the new press's bar", async () => {
     setDownloads([{ rom_id: 7, status: "failed" } as DownloadItem, entry(8)]);
