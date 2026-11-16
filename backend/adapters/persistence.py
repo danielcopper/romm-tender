@@ -277,10 +277,10 @@ class PersistenceAdapter:
 
     @property
     def corrupt_reset(self) -> dict[str, Any] | None:
-        """The corrupt-settings reset recorded by the last ``load_settings``.
+        """The corrupt-settings reset recorded by ``load_settings``.
 
-        ``None`` when the file parsed cleanly (or was a legitimate first run);
-        otherwise ``{"backed_up_to": <basename>}`` naming the quarantine backup.
+        ``{"backed_up_to": <basename>}`` once an unparseable file was moved to
+        its quarantine backup; ``None`` otherwise.
         Bootstrap reads this once after migration to fold the reset into the
         persistent ``_settings_reset_notice`` settings marker.
         """
