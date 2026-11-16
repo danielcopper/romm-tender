@@ -95,9 +95,22 @@ starting with `SP Desktop` (`findDesktopWindow`, `frontend/src/desktop/desktopWi
 window when it starts, on a poll, and whenever Steam reports a popup created or destroyed; it detaches from a window
 that closed or was replaced, and attaches to the new one. A window it could not attach to is not tried again.
 
-That window's document is a realm of its own, as the Quick Access view's is. What that means for `instanceof` and for a
-constructor such as `MutationObserver` or `ResizeObserver` is the trap in `CLAUDE.md`, "`instanceof` against a DOM
-global is false in QAM and desktop-client code".
+That window's document is a realm of its own, as the Quick Access view's is: the panel's code runs in the
+SharedJSContext window while the nodes it renders belong to another document — the QAM view's own, or the desktop
+client's window ([#1866](https://github.com/danielcopper/romm-tender/issues/1866)). Two realms, confirmed live for the
+QAM view: the two documents do not share a URL, and neither can see the other's elements.
+
+What is **measured** is `instanceof`: a test against a DOM global is false for **every** node such code will ever see,
+so a guard written that way rejects everything and the feature is simply inert. Whether a constructor that takes the
+node as an argument — `new ResizeObserver(...)`, `new MutationObserver(...)` — also misbehaves across realms is **not**
+established in either direction; those are named because taking the constructor from the node costs a property read, so
+the question need not be answered. Take the constructor from the node — `el.ownerDocument.defaultView` — as `WidePage`
+and `ScrollRegion` do, or from the window the code was handed, as the navigation watcher does.
+
+**The frontend suite cannot see the `instanceof` half**: two happy-dom windows answer it alike. A `MutationObserver`
+taken from the wrong window it can see — each happy-dom `Window` has its own, and a document's `defaultView` is its
+window — but not a `ResizeObserver`, which every happy-dom `Window` shares (`new Window().ResizeObserver` is the same
+class twice), and neither over a document built with `createHTMLDocument`, whose `defaultView` is null.
 
 ### Which window is Steam's main UI
 

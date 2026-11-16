@@ -99,7 +99,11 @@ failing `success` outside `main.py`.
 
 **Two size caps, two purposes.** ~12 MiB on one call's encoded answer, refused as an ordinary error for that call alone;
 16 MiB on the connection's frames, judged on the **announced** length before a byte is buffered, whose breach closes the
-socket. Breaking the second rejects every call in flight, which is why one oversized cover image may not reach it.
+socket. Breaking the second rejects every call in flight, which is why one oversized cover image may not reach it. So a
+bulk payload is chunked rather than sent whole: per-item endpoints, and bulk lists paged — the library apply emits
+shortcuts in batches, and the metadata cache loads page by page. Both numbers were chosen: the reference library's
+largest cover is 5,869,834 bytes, 7,826,448 (7.46 MiB) once base64-encoded, so a 4 MiB cap would have refused it
+silently.
 
 **No reply store.** A call whose answer was in flight when the socket went is not redelivered — its task is cancelled,
 and the caller's own pending register answers it `connection_lost`. A lost answer fails visibly; it never disappears.
@@ -2314,8 +2318,9 @@ else is a bug.
 **The minimum-version gate is SemVer-aware on `SYSTEM.VERSION`.** `domain.version.meets_min_version` compares the
 numeric core against `MIN_ROMM_VERSION` (`domain/identity.py`); when the core equals the floor, a `-alpha` / `-beta`
 suffix (case-insensitive, optional `.N` build number) ranks **below** the release and is rejected — so `5.3.0-beta.1`
-fails at floor `5.3.0` while `5.3.1-beta` passes. `development` and a missing version bypass the gate. The floor was
-raised to 5.3 by [ADR-0040](../adr/0040-1-0-raises-the-romm-floor-to-5-3.md), and to 5.4.1 by
+fails at floor `5.3.0` while `5.3.1-beta` passes. `development` and a missing version bypass the gate. A server below
+the floor is refused at `test_connection()`, so Tender stays inert until the server is updated. The floor was raised to
+5.3 by [ADR-0040](../adr/0040-1-0-raises-the-romm-floor-to-5-3.md), and to 5.4.1 by
 [#2223](https://github.com/danielcopper/romm-tender/issues/2223) D29, when a download began to read the category RomM
 files each of a game's files under.
 
@@ -2911,6 +2916,29 @@ The state is about the configured RomM server only. `download_external` fetches 
 metadata CDN, so its ladder is entered with `romm_origin=False` and takes no part in either direction: a dead cover CDN
 must not degrade every RomM call, and reaching the CDN is no evidence that RomM came back. It also keeps its full ladder
 while RomM is down, because it is a different host.
+
+#### The outgoing User-Agent
+
+The three adapters that talk to a server off this machine — `adapters/romm/http.py`, `adapters/steamgriddb.py` and
+`adapters/github_releases.py` — take a `user_agent: str` constructor parameter, and bootstrap hands each
+`<package name>/<version>`, both halves from `domain/identity.py`. SteamGridDB, and RomM behind a Cloudflare Tunnel,
+answer the default `Python-urllib` User-Agent with 403, and GitHub's API refuses a request that carries none. No adapter
+spells a name or a version of its own, so the User-Agent comes from that one module rather than from two literals that
+could drift. It is everything `PACKAGE_NAME` reaches: neither the folder the program ships as nor the recovery bundles'
+root (`recovery/` inside Tender's folder) is decided by it. It has no fallback and no failure mode — both halves are
+constants, so a User-Agent naming anything but this program is a code change, never a deployment accident. `VERSION` is
+stamped by release-please (the `x-release-please-version` marker on its line) and never edited by hand.
+`adapters/renderer_gc.py` speaks HTTP too, to Steam's debugger on `localhost`, and takes none.
+
+#### RommApiAdapter notes: what a list call sends
+
+RomM's ROM filter is `platform_ids`, plural. A list endpoint answers one page, `{"items": [...], "total": N}`; list
+calls page through `lib/romm_paging.py`, and every one appends `&with_char_index=false&with_filter_values=false`, which
+turns off two aggregations RomM otherwise computes on every request and Tender reads neither of
+(`_LIST_AGGREGATIONS_DISABLED` in `adapters/romm/romm_api.py`). Every `/api/roms` walk that pages with `offset` also
+sends `order_by=id`: in RomM's default order a concurrent scan shifts every later page, so one row comes back twice and
+another not at all (`_WALK_ORDER`, same module). The cover URLs RomM answers with carry unencoded spaces, so a cover
+fetch URL-encodes the path before it requests it.
 
 #### RommHttpAdapter notes: the headers every RomM-origin request carries
 
