@@ -6,9 +6,9 @@
 // SyncConflictModal.handleResolve's inline `.catch(() => {})` is the
 // documented truly-ignored boundary catch (see the source comment "onResolve
 // owns its own error handling; swallow rejections at the event-handler
-// boundary so React doesn't see an unhandled promise"). Per the
-// CATCH-REJECTION rule in CLAUDE.md, truly-ignored catches with no
-// observable side effect can stay assertion-free. We still cover both legs
+// boundary so React doesn't see an unhandled promise"). A truly-ignored
+// catch has no observable side effect, so there is no post-catch state to
+// assert and it stays assertion-free. We still cover both legs
 // (onResolve resolves vs. rejects) to keep the call site exercised.
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
