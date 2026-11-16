@@ -5,7 +5,9 @@
  * Steam ships no API for either. Both are internals with no compatibility
  * promise, measured on the device rather than read from documentation; the
  * decision to use them, and what it rests on, is
- * `docs/adr/0029-wide-qam-pages-drive-steams-friends-expansion.md`.
+ * `docs/adr/0029-wide-qam-pages-drive-steams-friends-expansion.md`. The first
+ * lever reaches the panel's width only through the wrapper `qamWidthPatch.ts`
+ * installs on Steam's own render of the menu.
  *
  * The flag the first lever sets is Steam's own and global, so whoever sets it
  * clears it: a wide page that leaks it leaves Steam's QAM expanded until the
@@ -23,6 +25,7 @@
 import { useEffect, type RefObject } from "react";
 import { quickAccessMenuClasses } from "./deckyUiInternals";
 import { setOwningQamTabActive } from "./owningQamTab";
+import { installQamWidthPatch } from "./qamWidthPatch";
 import { useQuickAccessVisible } from "./quickAccessVisible";
 
 /** Marker class on a wide page's root, matched by the injected `:has()` rule. */
@@ -117,8 +120,10 @@ let injectedStyle: HTMLStyleElement | null = null;
 
 /**
  * Drive Steam's Friends-tab expansion. The FriendsUI store listens for `message`
- * events on the window the panel's code runs in and flips one MobX observable, which
- * carries the `Expanded` class that un-shifts the QAM's placeholder.
+ * events on the window the panel's code runs in and flips one MobX observable.
+ * Steam's QAM host re-renders when it changes and gives the QAM's placeholder
+ * its `Expanded` class from it on the Friends tab only; on any other tab that
+ * class comes from the wrapper `qamWidthPatch.ts` installs.
  *
  * The target origin is `window.origin`: it addresses the message to the one
  * window meant to receive it, and always matches, so the message is always
@@ -145,6 +150,7 @@ function collapseWidePanel(): void {
 
 function expandWidePanel(root: HTMLElement): void {
   if (injectedStyle) return;
+  installQamWidthPatch();
   setQamExpanded(true);
   const doc = root.ownerDocument;
   const style = doc.createElement("style");

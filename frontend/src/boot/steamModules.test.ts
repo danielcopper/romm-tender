@@ -24,6 +24,8 @@ import { describe, expect, it } from "vitest";
 
 import { declaredFunctions, divisionSlashes } from "../test-utils/jsFunctionScanner";
 import { type SearchingCopy, readSearchingCopy } from "./searchingCopy";
+import { noticeFeatures } from "./startupMiss";
+import { STEAM_FEATURES } from "./steamInternals";
 import {
   ASKED_LIVE,
   NOTIFICATION_LOOKUPS,
@@ -407,6 +409,19 @@ describe("what the start-up check hands the log line", () => {
       ],
       asked: 2,
     });
+  });
+
+  it("reports the FriendsUI store's search, when it finds nothing, with a loss that names the wide pages", () => {
+    // The suite's `findModuleExport` answers nothing, which is the store's
+    // search missing on a Steam that moved it.
+    const report = checkSteamModules();
+    const missed = describeMissedLookups(report).missed.filter((name) => name.name === "FriendsUIStore");
+
+    expect(missed).toEqual([{ name: "FriendsUIStore", absenceCost: "feature", features: ["widePages"] }]);
+    expect(noticeFeatures(missed)).toEqual([STEAM_FEATURES.widePages]);
+    for (const page of ["Settings", "Sync", "Library", "Data Management"]) {
+      expect(STEAM_FEATURES.widePages).toContain(page);
+    }
   });
 
   it("tells whether the Quick Access entry's search missed", () => {

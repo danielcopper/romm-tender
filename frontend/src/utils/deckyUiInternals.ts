@@ -46,7 +46,13 @@ export const basicAppDetailsSectionStylerClasses: typeof _basicAppDetailsSection
   _basicAppDetailsSectionStylerClasses;
 export const appDetailsClasses: typeof _appDetailsClasses | undefined = _appDetailsClasses;
 export const playSectionClasses: typeof _playSectionClasses | undefined = _playSectionClasses;
-export const quickAccessMenuClasses: typeof _quickAccessMenuClasses | undefined = _quickAccessMenuClasses;
+/**
+ * Steam's runtime map also carries `Expanded`, the class its QAM host puts on
+ * the placeholder the QAM's view tracks; upstream's type names `ViewPlaceholder`
+ * beside it but not `Expanded`.
+ */
+export const quickAccessMenuClasses: (typeof _quickAccessMenuClasses & { readonly Expanded?: string }) | undefined =
+  _quickAccessMenuClasses;
 
 /**
  * What the tabbed page accepts beyond the four props `@decky/ui` declares.
@@ -289,6 +295,30 @@ export const ToastRenderer: SteamToastRenderer | undefined = findModuleExport((e
   try {
     const source = (e as { toString?: () => unknown } | undefined)?.toString?.();
     return typeof source === "string" && source.includes('controller:"notification",method:');
+  } catch {
+    return false;
+  }
+});
+
+/** Steam's FriendsUI store, reduced to the flag the wide pages read. */
+export interface SteamFriendsUIStore {
+  /** Set by the `QamFriendsExpanded` message and cleared by `QamFriendsHidden`. */
+  readonly qamFriendsExpanded?: unknown;
+}
+
+/**
+ * Steam's FriendsUI store: the object whose `OnMessage` sets
+ * `m_bQamFriendsExpanded` from the two messages a wide page posts, and whose
+ * `qamFriendsExpanded` getter Steam's QAM host reads (`steamui/sp.js`).
+ *
+ * Found by that field rather than by its export name, which is minified
+ * ({@link ControllerGlyph} has the rule for those names).
+ */
+export const FriendsUIStore: SteamFriendsUIStore | undefined = findModuleExport((e: unknown) => {
+  // Run against every export in Steam's registry, so one that throws on `in`
+  // must answer `false` rather than end the search.
+  try {
+    return typeof e === "object" && e !== null && "m_bQamFriendsExpanded" in e;
   } catch {
     return false;
   }

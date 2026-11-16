@@ -19,9 +19,9 @@ import { useRef, useSyncExternalStore, type FC } from "react";
 
 // --- The QAM's own visibility, backed by a store the tests flip. It keeps its
 // own stub rather than taking test-setup.ts's, whose `() => true` cannot drive
-// the clear-on-close path. The module under test has two first-party imports
-// and both are mocked here — this one and deckyUiInternals — so nothing in this
-// graph reaches @decky/ui.
+// the clear-on-close path. Every first-party import of the module under test
+// that reaches Steam is mocked here — this one, qamWidthPatch and
+// deckyUiInternals — so nothing in this graph reaches @decky/ui.
 let qamVisible = true;
 const visibilityListeners = new Set<() => void>();
 const subscribeVisibility = (onChange: () => void) => {
@@ -34,6 +34,11 @@ const subscribeVisibility = (onChange: () => void) => {
 vi.mock("./quickAccessVisible", () => ({
   useQuickAccessVisible: () => useSyncExternalStore(subscribeVisibility, () => qamVisible),
 }));
+
+// The wrapper on Steam's QAM host reaches Steam's live tree, which
+// `qamWidthPatch.test.ts` builds for itself; here only its install is watched.
+const installQamWidthPatch = vi.hoisted(() => vi.fn(() => true));
+vi.mock("./qamWidthPatch", () => ({ installQamWidthPatch }));
 
 const ACTIVE_TAB_CLASS = "ActiveTab_hash";
 const TAB_PANEL_CLASS = "TabGroupPanel_hash";
@@ -139,6 +144,7 @@ describe("useWideQamPanel", () => {
   beforeEach(() => {
     qamVisible = true;
     visibilityListeners.clear();
+    installQamWidthPatch.mockClear();
     post = vi.spyOn(window, "postMessage").mockImplementation(() => {});
   });
 
@@ -146,6 +152,16 @@ describe("useWideQamPanel", () => {
     vi.restoreAllMocks();
     document.body.replaceChildren();
     document.head.replaceChildren();
+  });
+
+  it("installs the wrapper on Steam's QAM host on mount and still posts the expand message", async () => {
+    const mod = await loadQamExpansion(PROBE_CLASSES);
+    const { host } = mountQamDom();
+
+    renderWidePage(mod, host);
+
+    expect(installQamWidthPatch).toHaveBeenCalledTimes(1);
+    expect(post.mock.calls).toEqual([[{ message: "QamFriendsExpanded" }, window.origin]]);
   });
 
   it("expands and injects the rule while the page is mounted", async () => {

@@ -125,3 +125,37 @@ describe("ControllerGlyph", () => {
     expect(await glyphIn([throwingModule("WD"), { XH: memo(), WD: glyph, Nq: () => false }])).toBe(glyph);
   });
 });
+
+describe("FriendsUIStore", () => {
+  /** This module as it evaluates with `findModuleExport` asking *exports* in order. */
+  const storeIn = async (exports: unknown[]): Promise<unknown> => {
+    vi.resetModules();
+    const decky = await import("@decky/ui");
+    vi.mocked(decky.findModuleExport).mockImplementation((filter: (e: unknown) => boolean) => exports.find(filter));
+    return (await import("./deckyUiInternals")).FriendsUIStore;
+  };
+
+  afterEach(() => {
+    vi.resetModules();
+  });
+
+  it("finds the store by the field its message handler sets", async () => {
+    const store = { m_bQamFriendsExpanded: false, qamFriendsExpanded: false };
+
+    expect(await storeIn([{ qamFriendsExpanded: false }, () => null, store])).toBe(store);
+  });
+
+  it("goes on searching past an export that throws on being asked", async () => {
+    const store = { m_bQamFriendsExpanded: false };
+    const throwing = new Proxy(
+      {},
+      {
+        has: () => {
+          throw new Error("export evaluation failed");
+        },
+      },
+    );
+
+    expect(await storeIn([throwing, store])).toBe(store);
+  });
+});
