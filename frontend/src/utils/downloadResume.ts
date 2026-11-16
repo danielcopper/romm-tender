@@ -1,6 +1,6 @@
 /**
  * Resuming a paused download from a game page's button, and saying why when it
- * is refused.
+ * is refused. A throw while the answer is handled is only logged, as such.
  */
 
 import { isTargetOccupied, resumeDownload } from "../api/backend";
@@ -19,13 +19,16 @@ import { showToast } from "./toast";
  */
 export function executeDownloadResume(romId: number, tag: string): Promise<void> {
   return resumeDownload(romId)
-    .then((result) => {
-      if (result.success) return;
-      logRefusal(tag, "resume the download of", romId, result);
-      showToast(isTargetOccupied(result) ? RESUME_TARGET_OCCUPIED_TOAST : result.message || RESUME_REFUSED_TOAST);
-    })
-    .catch((e: unknown) => {
-      logFailure(tag, "resume the download of", romId, e);
-      showToast(RESUME_THREW_TOAST);
-    });
+    .then(
+      (result) => {
+        if (result.success) return;
+        logRefusal(tag, "resume the download of", romId, result);
+        showToast(isTargetOccupied(result) ? RESUME_TARGET_OCCUPIED_TOAST : result.message || RESUME_REFUSED_TOAST);
+      },
+      (e: unknown) => {
+        logFailure(tag, "resume the download of", romId, e);
+        showToast(RESUME_THREW_TOAST);
+      },
+    )
+    .catch((e: unknown) => logFailure(tag, "handle the resume answer for", romId, e));
 }
