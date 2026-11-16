@@ -1,19 +1,17 @@
 import { useEffect, FC, Fragment } from "react";
 import { PanelSection, PanelSectionRow, ButtonItem, Field } from "@decky/ui";
 import { showToast } from "../utils/toast";
-import {
-  getDownloadQueue,
-  cancelDownload,
-  pauseDownload,
-  resumeDownload,
-  clearCompletedDownloads,
-} from "../api/backend";
+import { getDownloadQueue, cancelDownload, resumeDownload, clearCompletedDownloads } from "../api/backend";
+import { logFailure, logRefusal } from "../utils/backendLog";
+import { executeDownloadPause } from "../utils/downloadPauseCancel";
 import { isDownloadUnderWay, setDownloads, removeTerminalDownloads, useDownloads } from "../utils/downloadStore";
 import { formatBytes } from "../utils/formatters";
 import { scrollToTop } from "../utils/scrollHelpers";
 import { detach } from "../utils/detach";
 import { DownloadProgressRow } from "./DownloadProgressRow";
 import type { DownloadItem } from "../types";
+
+const TAG = "DownloadQueue";
 
 interface DownloadQueueProps {
   onBack: () => void;
@@ -51,26 +49,23 @@ export const DownloadQueue: FC<DownloadQueueProps> = ({ onBack }) => {
     try {
       const result = await cancelDownload(romId);
       if (!result.success) {
+        logRefusal(TAG, "cancel the download of", romId, result);
         showToast(result.message || "Could not cancel the download");
       }
-    } catch {
+    } catch (e) {
+      logFailure(TAG, "cancel the download of", romId, e);
       showToast("Could not cancel the download");
     }
   };
 
-  const handlePause = async (romId: number) => {
-    try {
-      await pauseDownload(romId);
-    } catch {
-      // ignore
-    }
-  };
+  const handlePause = (romId: number) => executeDownloadPause(romId, TAG);
 
   const handleResume = async (romId: number) => {
     try {
-      await resumeDownload(romId);
-    } catch {
-      // ignore
+      const result = await resumeDownload(romId);
+      if (!result.success) logRefusal(TAG, "resume the download of", romId, result);
+    } catch (e) {
+      logFailure(TAG, "resume the download of", romId, e);
     }
   };
 

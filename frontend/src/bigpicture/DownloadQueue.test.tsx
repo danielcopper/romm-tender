@@ -1,9 +1,13 @@
 // CATCH-REJECTION ASSERTION RULE:
-// DownloadQueue has 2 catch sites:
+// DownloadQueue has 4 catch sites:
 //   - handleCancel `try/catch`. Both the failure RESULT (success: false) and a
 //     rejection now surface a toast — a cancel is never a silent no-op (#149
 //     downloads-round). Asserted in "a failing cancel result surfaces a toast"
-//     and "a cancelDownload rejection surfaces a toast".
+//     and "a cancelDownload rejection surfaces a toast"; both are logged too,
+//     asserted in "a refused or unanswered cancel is logged".
+//   - handlePause and handleResume. Neither toasts; a refusal is logged as a
+//     warning and a rejection as an error, asserted in "a refused or unanswered
+//     pause is logged" and "a refused or unanswered resume is logged".
 //   - handleClearCompleted's `try/catch { return }`. This catch HAS an
 //     observable side effect: on a failed clear it returns BEFORE
 //     removeTerminalDownloads(), so the finished rows stay visible and the
@@ -103,6 +107,15 @@ function buttonByExactText(container: HTMLElement, text: string): HTMLButtonElem
 // without advancing real time. Works under both real and fake timers.
 async function flushMount(): Promise<void> {
   await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
+async function clickAndSettle(button: HTMLButtonElement | null): Promise<void> {
+  expect(button).not.toBeNull();
+  await act(async () => {
+    fireEvent.click(button!);
     await Promise.resolve();
     await Promise.resolve();
   });
@@ -369,6 +382,37 @@ describe("DownloadQueue", () => {
       expect(container.querySelector('[data-testid="dl-caption"]')?.textContent).toBe("Cancellable (Genesis)");
     });
 
+    it("a refused or unanswered cancel is logged", async () => {
+      vi.mocked(backend.getDownloadQueue).mockResolvedValue({
+        downloads: [makeItem({ rom_id: 5, rom_name: "Cancellable" })],
+      });
+      const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+      const logErrorSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+      try {
+        const { container } = render(<DownloadQueue onBack={() => {}} />);
+        await flushMount();
+
+        vi.mocked(backend.cancelDownload).mockResolvedValueOnce({
+          success: false,
+          reason: "no_active_download",
+          message: "No active download for this ROM",
+        });
+        await clickAndSettle(buttonByText(container, "Cancel Cancellable"));
+        expect(logWarnSpy).toHaveBeenCalledExactlyOnceWith(
+          "DownloadQueue: the backend refused to cancel the download of romId=5: no_active_download: No active download for this ROM",
+        );
+
+        vi.mocked(backend.cancelDownload).mockRejectedValueOnce(new Error("nope"));
+        await clickAndSettle(buttonByText(container, "Cancel Cancellable"));
+        expect(logErrorSpy).toHaveBeenCalledExactlyOnceWith(
+          "DownloadQueue: could not cancel the download of romId=5: Error: nope",
+        );
+      } finally {
+        logWarnSpy.mockRestore();
+        logErrorSpy.mockRestore();
+      }
+    });
+
     it("a paused download cancelled + removed from the store disappears at once (#149 downloads-round)", async () => {
       // The row drops via the backend's terminal cancelled frame → the index.tsx
       // store listener's removeDownload (stood in for here) → DownloadQueue's
@@ -444,6 +488,37 @@ describe("DownloadQueue", () => {
         await Promise.resolve();
       });
       expect(backend.resumeDownload).toHaveBeenCalledWith(90);
+    });
+
+    it.each([
+      ["pause", "Pause", "downloading", () => vi.mocked(backend.pauseDownload)],
+      ["resume", "Resume", "paused", () => vi.mocked(backend.resumeDownload)],
+    ] as const)("a refused or unanswered %s is logged", async (verb, label, status, call) => {
+      vi.mocked(backend.getDownloadQueue).mockResolvedValue({
+        downloads: [makeItem({ rom_id: 91, rom_name: "Kirby", status, resumable: true })],
+      });
+      const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+      const logErrorSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+      try {
+        const { container } = render(<DownloadQueue onBack={() => {}} />);
+        await flushMount();
+
+        call().mockResolvedValueOnce({ success: false, reason: "no_active_download", message: "Nothing there" });
+        await clickAndSettle(buttonByText(container, `${label} Kirby`));
+        expect(logWarnSpy).toHaveBeenCalledExactlyOnceWith(
+          `DownloadQueue: the backend refused to ${verb} the download of romId=91: no_active_download: Nothing there`,
+        );
+
+        call().mockRejectedValueOnce(new Error("nope"));
+        await clickAndSettle(buttonByText(container, `${label} Kirby`));
+        expect(logErrorSpy).toHaveBeenCalledExactlyOnceWith(
+          `DownloadQueue: could not ${verb} the download of romId=91: Error: nope`,
+        );
+        expect(toaster.toast).not.toHaveBeenCalled();
+      } finally {
+        logWarnSpy.mockRestore();
+        logErrorSpy.mockRestore();
+      }
     });
   });
 
