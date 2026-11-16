@@ -22,7 +22,7 @@ register's `docs/architecture/invariants/desktop.md` with what checks them; the 
    `pagehide` / `unload` listeners are gone; a write to anything else is on you.
 3. **Fiber is read, never written** ("Fiber, read-only").
 4. **A constructor used on the desktop window's nodes comes from that window**, and from the global scope only where
-   that window has none ("Two windows, two realms"); why is `CLAUDE.md`'s trap on `instanceof` and realms.
+   that window has none ("Two windows, two realms").
 5. **The adaptations in `pass()` run before the mount guard**, and another game's page is given back and a stale
    `GameView` torn down before them ("The pass order"). The guard gates only the `GameView` mount; a pass runs on a RomM
    page even when everything is mounted. Passes run on what Steam reports, never on a timer; a change that follows sizes

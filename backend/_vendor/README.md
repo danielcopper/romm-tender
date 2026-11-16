@@ -5,7 +5,7 @@ pinned by the provenance below, excluded from our own linters and gates, and red
 each copy keeps its upstream licence (inside the package directory, or beside it as `<package>.LICENSE` where the copy
 is pinned against upstream's own file manifest). That, and not any one import mechanism, is what puts something here;
 keeping the copies under one root is what lets a single set of exclusions cover them all. See the `_vendor/` rules in
-[`CLAUDE.md`](../../CLAUDE.md).
+[`.claude/rules/vendored-assets.md`](../../.claude/rules/vendored-assets.md).
 
 Everything here today is a third-party runtime dependency, imported as `from _vendor import <package>` — the zstd
 backport alone by its dotted name through `importlib` ([backports](#backports)) — and only adapters import `_vendor.*`.
