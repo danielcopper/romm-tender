@@ -53,7 +53,7 @@ import { handleButtonDownloadFailure } from "../utils/downloadFailure";
 import { logFailure, logRefusal } from "../utils/backendLog";
 import { runDownloadWithAdoption } from "../utils/adoptFlow";
 import { executeDownloadResume } from "../utils/downloadResume";
-import { isDownloadUnderWay } from "../utils/downloadStore";
+import { isDownloadUnderWay, removeDownload } from "../utils/downloadStore";
 import { downloadAnswers, downloadTakesNoPress } from "../utils/downloadPress";
 import {
   DOWNLOAD_AGAIN_LABEL,
@@ -781,25 +781,30 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
     });
   };
 
-  // Cancel an in-flight download: the backend emits a cancelled
-  // download_progress frame that the progress listener reacts to (resets to
-  // "download").
+  // A refused cancel gets no cancelled frame, so the bar stays up; only one
+  // refused with `no_active_download`, which the backend answers where it holds
+  // neither a transfer nor a paused entry for the ROM, ends it here.
   const handleCancelDownload = () => {
     if (romId == null) return;
     const rid = romId;
     detach(
       cancelDownload(rid).then(
         (result) => {
-          if (!result.success) logRefusal("CustomPlayButton", "cancel the download of", rid, result);
+          if (result.success) return;
+          logRefusal("CustomPlayButton", "cancel the download of", rid, result);
+          if (result.reason !== "no_active_download") return;
+          removeDownload(rid);
+          if (rid !== romIdRef.current) return;
+          enterDownloadState();
+          setActionPending(false);
+          setDlProgress(null);
         },
         (e: unknown) => logFailure("CustomPlayButton", "cancel the download of", rid, e),
       ),
     );
   };
 
-  // Pause an in-flight (resumable) download: the backend freezes the transfer
-  // and emits a "paused" download_progress frame the listener reacts to (sets
-  // dlProgress.paused).
+  // A refused pause gets no paused frame, so the bar stays as it is.
   const handlePause = () => {
     if (romId == null) return;
     const rid = romId;

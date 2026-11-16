@@ -26,6 +26,7 @@ import type { ReactElement } from "react";
 import { CustomPlayButton } from "./CustomPlayButton";
 import { emitHostEvent, hostEventListenerCount } from "../test-utils/host-event-bus";
 import { setStrandedAnswer } from "../test-utils/stranded-panel";
+import { getDownloadState, setDownloads, updateDownload } from "../utils/downloadStore";
 import * as backend from "../api/backend";
 import type { CachedGameDetail } from "../api/backend";
 import type {
@@ -619,8 +620,8 @@ describe("CustomPlayButton — cancel X on active download (#1049)", () => {
 
       vi.mocked(backend.cancelDownload).mockResolvedValueOnce({
         success: false,
-        reason: "no_active_download",
-        message: "No active download",
+        reason: "server_unreachable",
+        message: "RomM cannot be reached",
       });
 
       await act(async () => {
@@ -630,7 +631,7 @@ describe("CustomPlayButton — cancel X on active download (#1049)", () => {
       });
 
       expect(logWarnSpy).toHaveBeenCalledExactlyOnceWith(
-        "CustomPlayButton: the backend refused to cancel the download of romId=42: no_active_download: No active download",
+        "CustomPlayButton: the backend refused to cancel the download of romId=42: server_unreachable: RomM cannot be reached",
       );
 
       vi.mocked(backend.cancelDownload).mockRejectedValueOnce(new Error("nope"));
@@ -649,6 +650,37 @@ describe("CustomPlayButton — cancel X on active download (#1049)", () => {
     } finally {
       logWarnSpy.mockRestore();
       logErrorSpy.mockRestore();
+    }
+  });
+
+  it("ends the bar and drops the game from the download store when the backend holds no download to cancel", async () => {
+    const { findByLabelText, findByText, queryByLabelText } = await renderDownloading(42);
+    updateDownload({ rom_id: 42, status: "downloading" } as DownloadItem);
+    updateDownload({ rom_id: 7, status: "downloading" } as DownloadItem);
+    const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+    try {
+      vi.mocked(backend.cancelDownload).mockResolvedValueOnce({
+        success: false,
+        reason: "no_active_download",
+        message: "No active download",
+      });
+
+      const cancelX = await findByLabelText("Cancel download");
+      await act(async () => {
+        cancelX.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(logWarnSpy).toHaveBeenCalledExactlyOnceWith(
+        "CustomPlayButton: the backend refused to cancel the download of romId=42: no_active_download: No active download",
+      );
+      expect(await findByText("Download")).toBeInTheDocument();
+      expect(queryByLabelText("Cancel download")).toBeNull();
+      expect(getDownloadState().map((d) => d.rom_id)).toEqual([7]);
+    } finally {
+      logWarnSpy.mockRestore();
+      setDownloads([]);
     }
   });
 });
