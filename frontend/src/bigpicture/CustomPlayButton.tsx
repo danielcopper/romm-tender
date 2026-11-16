@@ -183,6 +183,11 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
   const romIdRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Whether the download bar is drawn, for an answer that lands after a render.
+  const downloadShownRef = useRef(false);
+  useEffect(() => {
+    downloadShownRef.current = state === "download" && actionPending && dlProgress !== null;
+  });
 
   /**
    * Enter the download state, restating what the backend found on disk for this
@@ -786,9 +791,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
     const rid = romId;
     detach(
       executeDownloadCancel(rid, "CustomPlayButton", () => {
-        if (rid !== romIdRef.current) return;
-        // Not `enterDownloadState()`: nothing was removed, so what was found on disk stays.
-        setState("download");
+        if (rid !== romIdRef.current || !downloadShownRef.current) return;
         setActionPending(false);
         setDlProgress(null);
       }),

@@ -70,6 +70,7 @@ describe("executeDownloadCancel", () => {
     expect(onNothingToCancel).not.toHaveBeenCalled();
     expect(getDownloadState().map((d) => d.rom_id)).toEqual([7, 8]);
     expect(backend.logWarn).not.toHaveBeenCalled();
+    expect(backend.logError).not.toHaveBeenCalled();
   });
 
   it("drops the ROM from the store and ends the bar when there is no download to cancel", async () => {
@@ -87,6 +88,23 @@ describe("executeDownloadCancel", () => {
     expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
       "Tag: the backend refused to cancel the download of romId=7: no_active_download: No active download",
     );
+  });
+
+  it("leaves a finished download and the bar alone when the cancel crossed its end", async () => {
+    const finished = { rom_id: 7, status: "completed" } as DownloadItem;
+    setDownloads([finished, entry(8)]);
+    vi.mocked(backend.cancelDownload).mockResolvedValueOnce({
+      success: false,
+      reason: "no_active_download",
+      message: "No active download",
+    });
+    const onNothingToCancel = vi.fn();
+
+    await executeDownloadCancel(7, "Tag", onNothingToCancel);
+
+    expect(onNothingToCancel).not.toHaveBeenCalled();
+    expect(getDownloadState()[0]).toBe(finished);
+    expect(getDownloadState()).toHaveLength(2);
   });
 
   it("keeps the store and the bar on a refusal for another reason", async () => {
