@@ -13,15 +13,16 @@ and the fourth says which servers it will talk to at all.
   is meant as one: the other half of that User-Agent, the ``plugin_version``
   recorded in a recovery bundle's manifest, the running version the update
   check compares the last available release a check saw against, the version
-  the update outcome records as this start's and announces an update to, the
-  version an update install starts from and judges a release and a refusal
-  against, the version the update output asks whether a recorded update
-  failure still stands for, the ``client_version`` a registered device carries
-  on the user's own RomM server (``bootstrap/saves.py`` hands it to
-  ``DeviceRegistry``), the injection's crash-record fingerprint (``main.py``),
-  and the pre-install check's report of what it built (``check.py``). The first
-  seven are reached from ``bootstrap/``; the last two are not, which is why they
-  are easy to miss when reading the composition root alone.
+  the update outcome records as this start's and announces as the one updated
+  to or gone back on, the version an update install starts from and judges a
+  release and a refusal against, the version the update output asks whether a
+  recorded update failure still stands for, the ``client_version`` a
+  registered device carries on the user's own RomM server
+  (``bootstrap/saves.py`` hands it to ``DeviceRegistry``), the injection's
+  crash-record fingerprint (``main.py``), and the pre-install check's report of
+  whether it built (``check.py``). The first seven are reached from
+  ``bootstrap/``; the last two are not, which is why they are easy to miss when
+  reading the composition root alone.
 - :data:`MIN_ROMM_VERSION` is the oldest RomM release this program accepts. It
   has one consumer, ``ConnectionService``, which rejects a server below it, so
   the program is inert until the server is updated. It is handed there by
