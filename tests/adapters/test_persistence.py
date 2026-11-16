@@ -85,8 +85,8 @@ class TestLocking:
 class TestSettingsSchema:
     """Schema-level expectations for the settings defaults + version stamp."""
 
-    def test_settings_version_is_14(self):
-        assert _SETTINGS_VERSION == 14
+    def test_settings_version_is_15(self):
+        assert _SETTINGS_VERSION == 15
 
     def test_default_settings_default_slot_is_autosave(self):
         # New ROMs adopt "autosave" (the slot name the official RomM clients use),
@@ -180,7 +180,7 @@ class TestVersionStampingOnSave:
         with open(settings_path) as f:
             loaded = json.load(f)
         assert loaded["version"] == _SETTINGS_VERSION
-        assert loaded["version"] == 14
+        assert loaded["version"] == 15
 
 
 # ── Loading edge cases ─────────────────────────────────────────────────────────
@@ -207,6 +207,21 @@ class TestLoadingEdgeCases:
         result = adapter.load_settings()
         for key, default_value in DEFAULT_SETTINGS.items():
             assert result[key] == default_value
+
+    def test_a_corrupt_file_leaves_the_toggles_as_those_of_an_installation_that_never_touched_them(self, adapter):
+        """#2452 D29: the next read of RomM's listing switches every listed platform on."""
+        settings_path = os.path.join(adapter._settings_dir, "settings.json")
+        with open(settings_path, "w") as f:
+            f.write("NOT_VALID_JSON{{{")
+
+        result = adapter.load_settings()
+
+        assert result["enabled_platform_ids"] == {}
+        assert result["enabled_platforms"] == {}
+
+    def test_a_first_run_keeps_no_toggles_by_id(self, adapter):
+        """#2452 D24: a fresh setup starts with every platform off."""
+        assert "enabled_platform_ids" not in adapter.load_settings()
 
     def test_load_settings_applies_defaults_for_missing_keys(self, adapter):
         settings_path = os.path.join(adapter._settings_dir, "settings.json")
@@ -241,9 +256,21 @@ class TestASettingsFileItDoesNotRead:
         with caplog.at_level(logging.WARNING, logger="test_persistence"):
             result = adapter.load_settings()
 
-        assert result == {**DEFAULT_SETTINGS, "version": _SETTINGS_VERSION}
+        assert result == {**DEFAULT_SETTINGS, "enabled_platform_ids": {}, "version": _SETTINGS_VERSION}
         assert [r.levelno for r in caplog.records] == [logging.WARNING]
         assert "settings.json is not read" in caplog.records[0].getMessage()
+
+    @pytest.mark.parametrize("content", [{"version": 12, "enabled_platforms": {"1": False}}, {"version": "13"}, []])
+    def test_its_toggles_are_those_of_an_installation_that_never_touched_them(self, adapter, content):
+        """#2452 D29: the next read of RomM's listing switches every listed platform on."""
+        settings_path = os.path.join(adapter._settings_dir, "settings.json")
+        with open(settings_path, "w") as f:
+            json.dump(content, f)
+
+        result = adapter.load_settings()
+
+        assert result["enabled_platform_ids"] == {}
+        assert result["enabled_platforms"] == {}
 
     def test_it_is_neither_backed_up_nor_flagged(self, adapter):
         settings_path = os.path.join(adapter._settings_dir, "settings.json")
@@ -498,6 +525,26 @@ class TestCorruptQuarantine:
         with caplog.at_level(logging.ERROR):
             adapter.load_settings()
         assert any("corrupt" in r.message.lower() for r in caplog.records)
+
+    def test_a_file_that_is_not_readable_text_is_set_aside_like_a_corrupt_one(self, tmp_path, logger, caplog):
+        """#2452 D30: Tender starts from its defaults (D29) rather than failing to start."""
+        clock = FakeClock(now=datetime(2026, 6, 13, 12, 0, 0, tzinfo=UTC))
+        adapter = self._make_adapter(tmp_path, logger, clock)
+        settings_path = os.path.join(adapter._settings_dir, "settings.json")
+        not_text = b'{"romm_url": "\xff\xfe"}'
+        with open(settings_path, "wb") as f:
+            f.write(not_text)
+
+        with caplog.at_level(logging.WARNING):
+            result = adapter.load_settings()
+
+        backup_name = f"settings.json.corrupt-{int(clock.time())}"
+        with open(os.path.join(adapter._settings_dir, backup_name), "rb") as f:
+            assert f.read() == not_text
+        assert not os.path.exists(settings_path)
+        assert adapter.corrupt_reset == {"backed_up_to": backup_name}
+        assert result == {**DEFAULT_SETTINGS, "enabled_platform_ids": {}, "version": _SETTINGS_VERSION}
+        assert [r.levelno for r in caplog.records] == [logging.ERROR]
 
     def test_first_run_missing_file_no_backup_no_flag(self, tmp_path, logger):
         adapter = self._make_adapter(tmp_path, logger, FakeClock())

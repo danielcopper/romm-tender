@@ -119,16 +119,15 @@ other areas: [the register's index](index.md).
   every later run. A row with no recorded route falls back to the collection records, read before the run's first unit
   rewrites any of them (`LocalLibraryReader.do_read_collection_listed_rom_ids`). A platform RomM no longer lists is read
   off the run's own platform listing (`LibrarySyncStateBox.run_listed_platform_folders`), never off the kept ids under
-  `platform_ids`, which a game page's read can widen during the run; which platforms are on in Tender is keyed by a RomM
-  id such a platform no longer has, so the route stands in for it. Only a 404 is evidence of absence, so every other
-  answer keeps the shortcut. The apply's finalize writes what it established onto the row
-  (`StaleSort.gone_from_romm_marks`, written by `RunFinalizer.finalize_per_unit_run`), which is the only evidence the
-  removed-game cleanup has for a version reached through a collection or kept on a platform RomM no longer lists, since
-  no platform stamp names either; `tests/domain/test_sync_diff.py::TestGoneFromRommMarks` pins which answer writes what,
-  and `tests/contract/test_gone_from_romm_mark.py` that the apply marks, a later delivery clears, and a preview writes
-  nothing. A bound row a collection's skip rebuilt is counted as synced, so the sort never sees it; where its platform
-  was read whole without returning it, `domain/sync_diff.py::rebuilt_rows_filed_as_kept` files it as a kept row, which
-  is where the sort would put it had the collection been fetched instead;
+  `platform_ids`, which a game page's read can widen during the run; whether such a platform was on is read off the
+  route. Only a 404 is evidence of absence, so every other answer keeps the shortcut. The apply's finalize writes what
+  it established onto the row (`StaleSort.gone_from_romm_marks`, written by `RunFinalizer.finalize_per_unit_run`), which
+  is the only evidence the removed-game cleanup has for a version reached through a collection or kept on a platform
+  RomM no longer lists, since no platform stamp names either; `tests/domain/test_sync_diff.py::TestGoneFromRommMarks`
+  pins which answer writes what, and `tests/contract/test_gone_from_romm_mark.py` that the apply marks, a later delivery
+  clears, and a preview writes nothing. A bound row a collection's skip rebuilt is counted as synced, so the sort never
+  sees it; where its platform was read whole without returning it, `domain/sync_diff.py::rebuilt_rows_filed_as_kept`
+  files it as a kept row, which is where the sort would put it had the collection been fetched instead;
   `tests/domain/test_sync_diff.py::TestRebuiltRowsFiledAsKept` pins the rule and
   `tests/services/library/test_sync_orchestrator.py::TestAHiddenVersionKeepsItsPlatformCollectionWhetherItsCollectionIsSkippedOrFetched`
   the preview and the apply agreeing, skipped or fetched, a platform the run did not read, and a stopped run, and

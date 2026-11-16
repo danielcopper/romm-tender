@@ -257,7 +257,7 @@ class TestSyncPreview:
                 {"id": 3, "name": "Game C", "fs_name": "c.z64"},
             ],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         # Baseline in roms: rom 1 unchanged, rom 2 changed name. The
         # display name resolves from the live work-queue (slug n64 → "N64").
@@ -305,7 +305,7 @@ class TestSyncPreview:
             slug="n64",
             roms=[{"id": 1, "name": "Game A", "fs_name": "a.z64"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         result = await library.sync.sync_preview()
         assert result["success"] is True
@@ -336,7 +336,7 @@ class TestSyncPreview:
             slug="n64",
             roms=[{"id": 1, "name": "Game A", "fs_name": "a.z64"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         result = await library.sync.sync_preview()
         assert library.sync._box.pending_delta is not None
@@ -365,7 +365,7 @@ class TestSyncPreview:
             slug="n64",
             roms=[{"id": 1, "name": "Game A", "fs_name": "a.z64", "metadatum": {"genres": ["RPG"]}}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         await library.sync.sync_preview()
 
@@ -394,7 +394,7 @@ class TestSyncPreview:
             slug="n64",
             roms=[{"id": 1, "name": "Game A", "fs_name": "a.z64"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         # rom 1 bound + present on the server (unchanged); rom 99 unbound
         # leftover on a now-absent platform (would look stale if leaked).
@@ -431,7 +431,7 @@ class TestSyncPreview:
             slug="n64",
             roms=[{"id": 1, "name": "Game A", "fs_name": "a.z64"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         await library.sync.sync_preview()
         assert library.sync._box.sync_state == SyncState.IDLE
@@ -574,7 +574,7 @@ class TestPreviewCollectionDiff:
             slug="n64",
             roms=[{"id": 1, "name": "Game A", "fs_name": "a.z64"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_rom_row(library, 1, app_id=1001, platform_slug="n64", name="Game A", fs_name="a.z64")
         _seed_completed_run(library, at="2026-01-01T00:00:00", platforms=["NINTENDO 64"])
 
@@ -610,7 +610,7 @@ class TestPreviewCoverRefreshCount:
             slug="n64",
             roms=[{"id": 10, "name": "Keep", "fs_name": "keep.z64", "path_cover_large": self._NEW}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_rom_row(
             library, 10, app_id=1010, platform_slug="n64", name="Keep", fs_name="keep.z64", cover_source=self._OLD
         )
@@ -639,7 +639,7 @@ class TestPreviewCoverRefreshCount:
             slug="n64",
             roms=[{"id": 10, "name": "Keep", "fs_name": "keep.z64", "path_cover_large": self._NEW}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_rom_row(
             library, 10, app_id=1010, platform_slug="n64", name="Keep", fs_name="keep.z64", cover_source=self._OLD
         )
@@ -668,7 +668,7 @@ class TestPreviewCoverRefreshCount:
         }
         fake_romm_api.platforms.append({"id": 2, "name": "GBA", "slug": "gba", "rom_count": 1})
         _seed_collection(fake_romm_api, collection_id=7, name="Favorites", rom_ids=[20], is_favorite=True)
-        library.settings["enabled_platforms"] = {"2": False}
+        library.settings["enabled_platforms"] = {"gba": False}
         library.settings["enabled_collections"] = {"standard": {"7": True}}
         _seed_rom_row(
             library, 20, app_id=2020, platform_slug="gba", name="CGame", fs_name="cgame.gba", cover_source=self._OLD
@@ -697,7 +697,7 @@ class TestPreviewCoverRefreshCount:
                 {"id": 2, "name": "Null", "fs_name": "null.z64", "path_cover_large": self._NEW},
             ],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_rom_row(
             library, 1, app_id=1001, platform_slug="n64", name="Same", fs_name="same.z64", cover_source=self._NEW
         )
@@ -735,7 +735,7 @@ class TestPreviewRestampPlatformCount:
             slug="n64",
             roms=[{"id": 10, "name": "Keep", "fs_name": "keep.z64"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="Keep", fs_name="keep.z64")
 
         result = await library.sync.sync_preview()
@@ -761,7 +761,7 @@ class TestPreviewRestampPlatformCount:
             slug="n64",
             roms=[{"id": 10, "name": "Keep", "fs_name": "keep.z64", "updated_at": _OLD_UPDATED_AT}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="Keep", fs_name="keep.z64")
         _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00", rom_count=1, rom_ids=(10,))
 
@@ -788,7 +788,7 @@ class TestPreviewRestampPlatformCount:
         _seed_platform(
             fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 20, "name": "B", "fs_name": "b.gba"}]
         )
-        library.settings["enabled_platforms"] = {"1": True, "2": True}
+        library.settings["enabled_platforms"] = {"n64": True, "gba": True}
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="A", fs_name="a.z64")
         _seed_rom_row(library, 20, app_id=2020, platform_slug="gba", name="B", fs_name="b.gba")
         # Only n64 carries a stamp; gba is the unstamped late-ack survivor.
@@ -813,7 +813,7 @@ class TestPreviewRestampPlatformCount:
             slug="n64",
             roms=[{"id": 10, "name": "Keep", "fs_name": "keep.z64"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="Keep", fs_name="keep.z64")
         _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00", rom_count=1)
         with library.uow as uow:
@@ -855,7 +855,7 @@ class TestPreviewOverASkippedUnit:
         # The platform lists no ROMs, so a full fetch would read the game as
         # removed: only the skip keeps it in the preview.
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         self._installed_game(library, shortcut_applied=False)
         _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00Z", rom_count=1)
 
@@ -880,7 +880,7 @@ class TestPreviewOverASkippedUnit:
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
         _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[10])
         fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00+00:00"
-        library.settings["enabled_platforms"] = {"1": False}
+        library.settings["enabled_platforms"] = {"n64": False}
         library.settings["enabled_collections"] = {"standard": {"7": True}}
         self._installed_game(library, shortcut_applied=False)
         with library.uow as uow:
@@ -916,7 +916,7 @@ class TestPreviewOverASkippedUnit:
         # still be counted.
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         self._installed_game(library, shortcut_applied=False)
         rebuilt = {
             "id": 10,
@@ -944,7 +944,7 @@ class TestPreviewOverASkippedUnit:
         _seed_platform(
             fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A", "fs_name": "a.z64"}]
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         self._installed_game(library, shortcut_applied=False)
 
         result = await library.sync.sync_preview()
@@ -972,7 +972,7 @@ class TestPreviewOverASkippedUnit:
         )
         _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[10])
         fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00+00:00"
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.settings["enabled_collections"] = {"standard": {"7": True}}
         self._installed_game(library, shortcut_applied=False)
         with library.uow as uow:
@@ -1187,7 +1187,7 @@ class TestGetPendingPreview:
             slug="n64",
             roms=[{"id": 1, "name": "Game A", "fs_name": "a.z64"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
     @pytest.mark.asyncio
     async def test_returns_none_when_nothing_pending(self, library):
@@ -1565,7 +1565,7 @@ class TestRunKindOnTheWire:
             slug="n64",
             roms=[{"id": 1, "name": "Game A", "fs_name": "a.z64"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         assert (await library.sync.sync_preview())["success"] is True
 
@@ -1587,7 +1587,7 @@ class TestRunKindOnTheWire:
             slug="n64",
             roms=[{"id": 1, "name": "Game A", "fs_name": "a.z64"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         assert library.sync._box.try_begin_run("run-apply", kind=SyncRunKind.APPLY) is True
@@ -1630,7 +1630,7 @@ class TestRunKindOnTheWire:
             slug="n64",
             roms=[{"id": 1, "name": "Game A", "fs_name": "a.z64"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         # Blow up inside the unit loop, after the plan — that path's ERROR frame
         # comes from ``SyncProgress.write_error_frame``, not ``emit_progress``.
         library.unit_applier.apply_unit = AsyncMock(side_effect=RuntimeError("boom"))
@@ -1654,7 +1654,7 @@ class TestRunKindOnTheWire:
             slug="n64",
             roms=[{"id": 1, "name": "Game A", "fs_name": "a.z64"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         assert (await library.sync.sync_preview())["success"] is True
 
@@ -1673,7 +1673,6 @@ class TestSyncPreviewErrorHandling:
         # mid-paginate RomM failure would in production.
         failure = RuntimeError("Something broke")
         fake_romm_api.list_platforms_side_effect = failure
-        library.settings["enabled_platforms"] = {"1": True}
         call = library.sync.sync_preview()
 
         with pytest.raises(RuntimeError) as excinfo:
@@ -1699,7 +1698,7 @@ class TestSyncPreviewErrorHandling:
         """A collection listing that fails fails the preview as a failed platform listing does (#2112)."""
         library = make_library(romm_api=fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.settings["enabled_collections"] = {kind: {"7": True}}
         setattr(fake_romm_api, failing_listing, RommConnectionError("Connection refused"))
         call = library.sync.sync_preview()
@@ -1733,7 +1732,6 @@ class TestSyncPreviewErrorHandling:
         library = make_library(romm_api=fake_romm_api)
 
         fake_romm_api.list_platforms = MagicMock(side_effect=SyncCancelled("Sync cancelled"))
-        library.settings["enabled_platforms"] = {"1": True}
 
         # sync_preview only runs from IDLE — guard against a leaked non-IDLE state.
         assert library.sync._box.sync_state == SyncState.IDLE
@@ -1773,7 +1771,6 @@ class TestSyncPreviewErrorHandling:
     ):
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.list_platforms_side_effect = failure
-        library.settings["enabled_platforms"] = {"1": True}
         self._stage_an_earlier_preview(library)
         call = library.sync.sync_preview()
 
@@ -1794,7 +1791,6 @@ class TestSyncPreviewErrorHandling:
 
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.list_platforms = MagicMock(side_effect=SyncCancelled("Sync cancelled"))
-        library.settings["enabled_platforms"] = {"1": True}
         self._stage_an_earlier_preview(library)
         call = library.sync.sync_preview()
 
@@ -1832,7 +1828,7 @@ class TestBuildWorkQueue:
             {"id": 2, "name": "SNES", "slug": "snes", "rom_count": 99},
             {"id": 3, "name": "GBA", "slug": "gba", "rom_count": 5},
         ]
-        library.settings["enabled_platforms"] = {"1": True, "2": False, "3": True}
+        library.settings["enabled_platforms"] = {"n64": True, "snes": False, "gba": True}
         library.settings["enabled_collections"] = {}
 
         units = await library.sync._fetcher.build_work_queue()
@@ -1847,7 +1843,7 @@ class TestBuildWorkQueue:
         fake_romm_api.collections = [{"id": 7, "name": "Favorites", "rom_count": 3, "is_favorite": True}]
         fake_romm_api.smart_collections = [{"id": 5, "name": "Filter", "rom_count": 2}]
         fake_romm_api.virtual_collections["franchise"] = [{"id": 9, "name": "Metroid", "rom_count": 8}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.settings["enabled_collections"] = {
             "standard": {"7": True},
             "smart": {"5": True},
@@ -2028,7 +2024,7 @@ class TestDoSyncPerUnit:
         library = make_library(romm_api=fake_romm_api)
 
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 2}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
@@ -2061,7 +2057,7 @@ class TestDoSyncPerUnit:
             {"id": 1, "name": "N64", "slug": "n64", "rom_count": 2},
             {"id": 2, "name": "GBA", "slug": "gba", "rom_count": 5},
         ]
-        library.settings["enabled_platforms"] = {"1": True, "2": True}
+        library.settings["enabled_platforms"] = {"n64": True, "gba": True}
         _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00", rom_count=2)
         _seed_rom_row(library, 10, app_id=1001, platform_slug="n64", sibling_group_key="igdb:100:1")
         _seed_rom_row(library, 11, app_id=None, platform_slug="n64", sibling_group_key="igdb:100:1")
@@ -2154,7 +2150,7 @@ class TestDoSyncPerUnit:
             slug="n64",
             roms=[{"id": 10, "name": "Keep", "fs_name": "keep.z64"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         # Bound + content-unchanged → empty delta. NO completion stamp: the
         # complete-but-unstamped residue a heartbeat-timeout's late ack leaves.
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="Keep", fs_name="keep.z64")
@@ -2204,7 +2200,7 @@ class TestDoSyncPerUnit:
             slug="gba",
             roms=[{"id": 20, "name": "B"}],
         )
-        library.settings["enabled_platforms"] = {"1": True, "2": True}
+        library.settings["enabled_platforms"] = {"n64": True, "gba": True}
 
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
@@ -2248,7 +2244,7 @@ class TestDoSyncPerUnit:
             slug="gba",
             roms=[{"id": 20, "name": "B"}],
         )
-        library.settings["enabled_platforms"] = {"1": True, "2": True}
+        library.settings["enabled_platforms"] = {"n64": True, "gba": True}
 
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
@@ -2275,7 +2271,7 @@ class TestDoSyncPerUnit:
             slug="n64",
             roms=[{"id": 10, "name": "Installed"}, {"id": 11, "name": "NotInstalled"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         # rom 10 has an install record; rom 11 does not.
         _seed_install(library, 10, file_path="/roms/n64/installed.z64", platform_slug="n64")
 
@@ -2310,7 +2306,7 @@ class TestDoSyncPerUnit:
         _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00Z", rom_count=1)
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="A", fs_name="a.z64")
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         download_artwork = AsyncMock(return_value={})
         library.cover_preparer._download_artwork = download_artwork
@@ -2367,7 +2363,7 @@ class TestDoSyncPerUnit:
             {"id": 1, "name": "N64", "slug": "n64", "rom_count": 1},
             {"id": 2, "name": "GBA", "slug": "gba", "rom_count": 0},
         ]
-        library.settings["enabled_platforms"] = {"1": True, "2": False}
+        library.settings["enabled_platforms"] = {"n64": True, "gba": False}
 
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.chunk_dispatcher._wait_for_unit_complete = AsyncMock(return_value={})
@@ -2421,7 +2417,7 @@ class TestDoSyncPerUnit:
             {"id": 1, "name": "N64", "slug": "n64", "rom_count": 1},
             {"id": 2, "name": "GBA", "slug": "gba", "rom_count": 0},
         ]
-        library.settings["enabled_platforms"] = {"1": True, "2": False}
+        library.settings["enabled_platforms"] = {"n64": True, "gba": False}
 
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.chunk_dispatcher._wait_for_unit_complete = AsyncMock(return_value={})
@@ -2460,7 +2456,7 @@ class TestDoSyncPerUnit:
             slug="n64",
             roms=[{"id": 2, "name": "A"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
@@ -2508,7 +2504,7 @@ class TestDoSyncPerUnit:
             roms=[{"id": 2, "name": "A"}],
         )
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[])
-        library.settings["enabled_platforms"] = {"1": True, "2": False}
+        library.settings["enabled_platforms"] = {"n64": True, "gba": False}
 
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
@@ -2550,7 +2546,7 @@ class TestDoSyncPerUnit:
                 {"id": 20, "name": "Mario", "igdb_id": 200, "fs_name_no_ext": "mario"},
             ],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def ack_reps(_unit, event):
@@ -2579,7 +2575,7 @@ class TestDoSyncPerUnit:
         """Seed a single-platform sibling group, run one apply unit, return the
         emitted ``sync_apply_unit`` shortcut dicts. Shared by the region tests."""
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=roms)
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def ack_reps(_unit, event):
@@ -2649,7 +2645,7 @@ class TestDoSyncPerUnit:
                 {"id": 11, "name": "Zelda (USA)", "igdb_id": 100, "fs_name_no_ext": "zelda_usa", "regions": ["USA"]},
             ],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         result = await library.sync.sync_preview()
         assert result["success"] is True
@@ -2692,7 +2688,7 @@ class TestDoSyncPerUnit:
                 },
             ],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"saturn": True}
 
     @pytest.mark.asyncio
     async def test_a_bound_rom_without_a_file_rebinds_onto_its_rescanned_folder(
@@ -2757,7 +2753,7 @@ class TestDoSyncPerUnit:
         if server_usa_id is not None:
             served.append({"id": server_usa_id, "name": "Zelda (USA)", "igdb_id": 100, "fs_name_no_ext": "zelda_usa"})
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=served)
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def ack_reuse(_unit, event):
@@ -2812,7 +2808,7 @@ class TestDoSyncPerUnit:
         _seed_rom_row(library, 1, app_id=5000, platform_slug="n64", name="Zelda (USA)", sibling_group_key="igdb:100:1")
         _seed_rom_row(library, 9, app_id=5009, platform_slug="n64", name="Mario", sibling_group_key="igdb:200:1")
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 9, "name": "Mario"}])
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.settings["collection_create_platform_groups"] = False
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
@@ -2873,7 +2869,7 @@ class TestDoSyncPerUnit:
         )
         # The collection holds ONLY the unbound sibling.
         _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[11], is_favorite=True)
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.settings["enabled_collections"] = {"standard": {"7": True}}
 
         _seed_completed_run(library, at="2025-01-01T00:00:00Z")
@@ -2953,7 +2949,7 @@ class TestDoSyncPerUnit:
             roms=[{"id": 11, "name": "Zelda (JP)", "igdb_id": 100, "fs_name_no_ext": "zelda_jp"}],
         )
         _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[11], is_favorite=True)
-        library.settings["enabled_platforms"] = {"1": False}
+        library.settings["enabled_platforms"] = {"n64": False}
         library.settings["enabled_collections"] = {"standard": {"7": True}}
 
         _seed_rom_row(
@@ -3008,7 +3004,7 @@ class TestDoSyncPerUnit:
             slug="n64",
             roms=[{"id": 10, "name": "A"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         download_artwork = AsyncMock(return_value={10: "/grid/a.png"})
         library.cover_preparer._download_artwork = download_artwork
@@ -3046,7 +3042,7 @@ class TestDoSyncPerUnit:
             slug="gba",
             roms=[{"id": 20, "name": "B"}],
         )
-        library.settings["enabled_platforms"] = {"1": True, "2": True}
+        library.settings["enabled_platforms"] = {"n64": True, "gba": True}
 
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
@@ -3081,7 +3077,7 @@ class TestDoSyncPerUnit:
             slug="n64",
             roms=[{"id": 10, "name": "A"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
@@ -3126,7 +3122,7 @@ class TestDoSyncPerUnit:
             slug="gba",
             roms=[{"id": 20, "name": "B"}],
         )
-        library.settings["enabled_platforms"] = {"1": True, "2": True}
+        library.settings["enabled_platforms"] = {"n64": True, "gba": True}
 
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
@@ -3170,7 +3166,7 @@ class TestSyncRunLifecycle:
         library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def fake_wait(_u, event):
@@ -3227,7 +3223,7 @@ class TestSyncRunLifecycle:
 
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 20, "name": "B"}])
-        library.settings["enabled_platforms"] = {"1": True, "2": True}
+        library.settings["enabled_platforms"] = {"n64": True, "gba": True}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def fake_wait(_u, event):
@@ -3258,7 +3254,7 @@ class TestSyncRunLifecycle:
         library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         # Heartbeat timeout: the wait gives up (None) while the box is still
@@ -3286,7 +3282,7 @@ class TestSyncRunLifecycle:
         # build_work_queue succeeds, then list_roms raises during the unit fetch.
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
         fake_romm_api.list_roms_side_effect = RuntimeError("boom")
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-error"
 
@@ -3322,7 +3318,7 @@ class TestSyncRunLifecycle:
         library = make_library(romm_api=fake_romm_api)
 
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def fake_wait(_u, event):
@@ -3703,7 +3699,7 @@ class TestRealOrchestratorLateAckRecovery:
             slug="n64",
             roms=[{"id": 1, "name": "A", "fs_name": "a.z64"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         # The frontend never acks, so the REAL _wait_for_unit_complete runs; the
@@ -3764,7 +3760,7 @@ class TestRealOrchestratorLateAckRecovery:
             slug="n64",
             roms=[{"id": 1, "name": "A", "fs_name": "a.z64"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         orch = library.sync._orchestrator
@@ -3900,7 +3896,7 @@ class TestTheRunIsHeldUntilItEnds:
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
         fake_romm_api.list_roms_side_effect = RuntimeError("boom")
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.sync._box.sync_state = SyncState.RUNNING
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -3968,7 +3964,6 @@ class TestDoSyncPerUnitErrors:
         # ``list_platforms`` runs in the executor; the fake raises
         # CancelledError exactly like an asyncio cancel would propagate.
         fake_romm_api.list_platforms_side_effect = asyncio.CancelledError()
-        library.settings["enabled_platforms"] = {"1": True}
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "sync-cancel-build"
 
@@ -3989,7 +3984,6 @@ class TestDoSyncPerUnitErrors:
 
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.list_platforms_side_effect = RuntimeError("RomM down")
-        library.settings["enabled_platforms"] = {"1": True}
         library.sync._box.sync_state = SyncState.RUNNING
 
         # Should NOT raise — outer flow swallows the exception after emitting an error.
@@ -4014,7 +4008,7 @@ class TestDoSyncPerUnitErrors:
         # list_roms blows up when the unit is fetched.
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
         fake_romm_api.list_roms_side_effect = RuntimeError("boom")
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.sync._box.sync_state = SyncState.RUNNING
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -4053,7 +4047,7 @@ class TestDoSyncPerUnitErrors:
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
         # Mid-pagination failure — the bug scenario from #630.
         fake_romm_api.list_roms_side_effect = RuntimeError("HTTP 500 on page 2")
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.sync._box.sync_state = SyncState.RUNNING
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -4110,7 +4104,7 @@ class TestDoSyncPerUnitErrors:
             slug="n64",
             roms=[{"id": 10, "name": "A"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         # The per-unit ROM fetch raises SyncCancelled mid-flight — exactly how
         # ``fetcher._check_cancelling`` now signals a cooperative cancel that
@@ -4175,7 +4169,7 @@ class TestDoSyncPerUnitErrors:
             slug="n64",
             roms=[{"id": 10, "name": "A"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         # A genuine asyncio task cancellation lands mid-fetch — NOT the
         # cooperative SyncCancelled signal. A tracked MagicMock guarantees a
@@ -4222,7 +4216,6 @@ class TestDoSyncPerUnitErrors:
         library = make_library(romm_api=fake_romm_api)
 
         fake_romm_api.list_platforms = MagicMock(side_effect=asyncio.CancelledError("real task cancel"))
-        library.settings["enabled_platforms"] = {"1": True}
 
         # sync_preview only runs from IDLE — guard against a leaked non-IDLE state
         # that would short-circuit it to "sync_in_progress" before the fetch.
@@ -4248,7 +4241,7 @@ class TestDoSyncPerUnitErrors:
             {"id": 1, "name": "N64", "slug": "n64", "rom_count": 1},
             {"id": 2, "name": "GBA", "slug": "gba", "rom_count": 1},
         ]
-        library.settings["enabled_platforms"] = {"1": True, "2": True}
+        library.settings["enabled_platforms"] = {"n64": True, "gba": True}
 
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.sync._box.sync_state = SyncState.CANCELLING
@@ -5325,7 +5318,7 @@ class TestCollectionTurnedOffAndBackOn:
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
         _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[1, 2])
         fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00+00:00"
-        library.settings["enabled_platforms"] = {"1": False, "2": True}
+        library.settings["enabled_platforms"] = {"n64": False, "gba": True}
 
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
@@ -5405,12 +5398,12 @@ class TestCollectionTurnedOffAndBackOn:
                 return {rom_id: uow.roms.get(rom_id).shortcut_app_id for rom_id in (1, 2, 3)}
 
         # Run 1: N64 and the collection are on.
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         await complete_a_run("run-1")
         assert bindings() == {1: 5001, 2: 5002, 3: 5003}
 
         # Run 2: N64 is off; the stale removal removes the shortcuts of the two games the collection does not hold.
-        library.settings["enabled_platforms"] = {"1": False}
+        library.settings["enabled_platforms"] = {"n64": False}
         await complete_a_run("run-2")
         assert bindings() == {1: 5001, 2: None, 3: None}
         with library.uow as uow:
@@ -5455,12 +5448,12 @@ class TestCollectionTurnedOffAndBackOn:
                 return {rom_id: uow.roms.get(rom_id).shortcut_app_id for rom_id in (1, 2, 3)}
 
         # Run 1: N64 and the collection are on.
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         await complete_a_run("run-1")
         assert bindings() == {1: 5001, 2: 5002, 3: 5003}
 
         # Run 2: N64 is off, and RomM moved the collection's updated_at, so it full-fetches and is stamped again.
-        library.settings["enabled_platforms"] = {"1": False}
+        library.settings["enabled_platforms"] = {"n64": False}
         fake_romm_api.collections[0]["updated_at"] = "2025-02-01T00:00:00+00:00"
         await complete_a_run("run-2")
         assert bindings() == {1: 5001, 2: None, 3: None}
@@ -5505,7 +5498,7 @@ class TestFailedCollectionListing:
             fake_romm_api.virtual_collections["franchise"] = [entry]
         for rom_id in (1, 2):
             fake_romm_api.roms[rom_id].setdefault(membership_key, []).append(collection_id)
-        library.settings["enabled_platforms"] = {"1": False, "2": True}
+        library.settings["enabled_platforms"] = {"n64": False, "gba": True}
         library.settings["enabled_collections"] = {kind: {str(collection_id): True}}
 
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
@@ -5614,7 +5607,7 @@ class TestPlatformListingThatIsNotAList:
         )
         for rom_id in (1, 2):
             fake_romm_api.roms[rom_id].setdefault("collection_ids", []).append(7)
-        library.settings["enabled_platforms"] = {"1": False, "2": True}
+        library.settings["enabled_platforms"] = {"n64": False, "gba": True}
         library.settings["enabled_collections"] = {"standard": {"7": True}}
 
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
@@ -5690,7 +5683,7 @@ class TestStoppedRunLeavesNoHiddenStaleRow:
             slug="gba",
             roms=[{"id": 20, "name": "Z", "updated_at": _OLD_UPDATED_AT}],
         )
-        library.settings["enabled_platforms"] = {"1": True, "2": True}
+        library.settings["enabled_platforms"] = {"n64": True, "gba": True}
         _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00", rom_count=3, fetch_id="run-0")
         for rom_id, name in ((1, "A"), (2, "B"), (3, "V")):
             _seed_rom_row(library, rom_id, app_id=5000 + rom_id, platform_slug="n64", name=name)
@@ -5780,7 +5773,7 @@ class TestOnlyAFreshStampRestoresTheSkip:
                 for rom_id in roms
             ],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         for rom_id in roms:
             _seed_rom_row(
                 library, rom_id, app_id=5000 + rom_id, platform_slug="n64", name=f"G{rom_id}", fs_name=f"g{rom_id}.z64"
@@ -5956,7 +5949,7 @@ class TestOnlyAFreshCollectionStampRestoresTheSkip:
             _seed_rom_row(
                 library, rom_id, app_id=5000 + rom_id, platform_slug="n64", name=f"G{rom_id}", fs_name=f"g{rom_id}.z64"
             )
-        library.settings["enabled_platforms"] = {"1": False}
+        library.settings["enabled_platforms"] = {"n64": False}
         library.settings["enabled_collections"] = {kind: {"7": True}}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
@@ -6156,7 +6149,7 @@ class TestPlatformTurnedOffAndBackOn:
                 return {rom_id: uow.roms.get(rom_id).shortcut_app_id for rom_id in (1, 2, 3)}
 
         # Run 1: N64 and the collection are on.
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         await complete_a_run("run-1")
         assert bindings() == {1: 5001, 2: 5002, 3: 5003}
         with library.uow as uow:
@@ -6165,7 +6158,7 @@ class TestPlatformTurnedOffAndBackOn:
         assert (stamp.rom_count, stamp.fetch_id) == (3, "run-1")
 
         # Run 2: N64 is off; the collection keeps its one game bound.
-        library.settings["enabled_platforms"] = {"1": False}
+        library.settings["enabled_platforms"] = {"n64": False}
         await complete_a_run("run-2")
         assert bindings() == {1: 5001, 2: None, 3: None}
         with library.uow as uow:
@@ -6174,7 +6167,7 @@ class TestPlatformTurnedOffAndBackOn:
         assert (stamp.fetch_id, stamp.skip_revoked) == ("run-1", True)
 
         # Run 3: N64 is back on and nothing changed on RomM.
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         await complete_a_run("run-3")
         assert bindings() == {1: 5001, 2: 5002, 3: 5003}
         with library.uow as uow:
@@ -6190,7 +6183,7 @@ class TestPlatformTurnedOffAndBackOn:
         _seed_platform(
             fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
@@ -6231,7 +6224,7 @@ class TestPlatformTurnedOffAndBackOn:
         library = make_library(romm_api=fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
-        library.settings["enabled_platforms"] = {"1": True, "2": True}
+        library.settings["enabled_platforms"] = {"n64": True, "gba": True}
 
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
@@ -6274,7 +6267,7 @@ class TestPlatformTurnedOffAndBackOn:
         # A name that does not fold equal to its slug, so a collection keyed by the slug reads as a change.
         _seed_platform(fake_romm_api, platform_id=1, name="Nintendo 64", slug="n64", roms=[{"id": 1, "name": "A"}])
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
-        library.settings["enabled_platforms"] = {"1": True, "2": True}
+        library.settings["enabled_platforms"] = {"n64": True, "gba": True}
 
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
@@ -6311,7 +6304,7 @@ class TestPlatformTurnedOffAndBackOn:
         library = make_library(romm_api=fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
-        library.settings["enabled_platforms"] = {"1": True, "2": True}
+        library.settings["enabled_platforms"] = {"n64": True, "gba": True}
 
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
@@ -6356,7 +6349,7 @@ class TestPlatformTurnedOffAndBackOn:
         library = make_library(romm_api=fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
-        library.settings["enabled_platforms"] = {"1": True, "2": True}
+        library.settings["enabled_platforms"] = {"n64": True, "gba": True}
         refiling = FakeListingRefiler()
         platform_systems = PlatformSystemService(
             config=PlatformSystemServiceConfig(
@@ -6420,7 +6413,7 @@ class TestAVersionReachedOnlyThroughACollection:
         )
         _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[20, 21])
         fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00"
-        library.settings["enabled_platforms"] = {"2": False}
+        library.settings["enabled_platforms"] = {"gba": False}
         library.settings["enabled_collections"] = {"standard": {"7": True}}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
@@ -6599,7 +6592,7 @@ class TestAVersionSwitchedOffTheCollectionsMember:
         )
         _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[20])
         fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00"
-        library.settings["enabled_platforms"] = {"2": False}
+        library.settings["enabled_platforms"] = {"gba": False}
         library.settings["enabled_collections"] = {"standard": {"7": True}}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
@@ -6860,7 +6853,7 @@ class TestAGameOnlyACollectionReachesIsCountedAsItsApplyCollapsesIt:
                 cls._golf(23, "Japan"),
             ],
         )
-        library.settings["enabled_platforms"] = {"2": gba_synced}
+        library.settings["enabled_platforms"] = {"gba": gba_synced}
         _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[20])
         fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00"
         library.settings["enabled_collections"] = {"standard": {"7": True}}
@@ -7021,7 +7014,7 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
         )
         _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[20])
         fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00"
-        library.settings["enabled_platforms"] = {"2": True}
+        library.settings["enabled_platforms"] = {"gba": True}
         library.settings["enabled_collections"] = {"standard": {"7": True}}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
@@ -7336,7 +7329,7 @@ class TestThePreviewNamesAPlatformCollectionAsTheApplyDoes:
         )
         _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[20])
         fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00"
-        library.settings["enabled_platforms"] = {"4": n64_synced}
+        library.settings["enabled_platforms"] = {"n64": n64_synced}
         library.settings["enabled_collections"] = {"standard": {"7": True}}
         library.settings["collection_create_platform_groups"] = True
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
@@ -7414,7 +7407,7 @@ class TestThePreviewNamesAPlatformCollectionAsTheApplyDoes:
         """N64's sync is off for the second run; to cache a name, the first run syncs N64, which RomM renames after."""
         library = make_library(romm_api=fake_romm_api)
         await self._bind_20(library, fake_romm_api, n64_synced=name_cached)
-        library.settings["enabled_platforms"] = {"4": False}
+        library.settings["enabled_platforms"] = {"n64": False}
         if name_cached:
             for rom_id in (20, 22, 23):
                 fake_romm_api.roms[rom_id]["platform_name"] = "Nintendo 64 (N64)"
@@ -7449,7 +7442,7 @@ class TestThePreviewFilesAGameRommDidNotConfirmAsTheApplyDoes:
         _seed_platform(fake_romm_api, platform_id=3, name="Super Nintendo", slug="snes", roms=[{"id": 30, "name": "S"}])
         _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[20, 30])
         fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00"
-        library.settings["enabled_platforms"] = {"2": False, "3": False}
+        library.settings["enabled_platforms"] = {"gba": False, "snes": False}
         library.settings["enabled_collections"] = {"standard": {"7": True}}
         library.settings["collection_create_platform_groups"] = platform_groups
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
@@ -7584,7 +7577,7 @@ class TestThePerPlatformTableLabelsAPlatformAsTheApplyNamesIt:
         _seed_collection(fake_romm_api, collection_id=8, name="Old", rom_ids=[30])
         for collection in fake_romm_api.collections:
             collection["updated_at"] = "2025-01-01T00:00:00"
-        library.settings["enabled_platforms"] = {"4": n64_synced}
+        library.settings["enabled_platforms"] = {"n64": n64_synced}
         library.settings["enabled_collections"] = {"standard": {"7": True, "8": True}}
         library.settings["collection_create_platform_groups"] = True
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
@@ -7608,7 +7601,7 @@ class TestThePerPlatformTableLabelsAPlatformAsTheApplyNamesIt:
     ):
         library = make_library(romm_api=fake_romm_api)
         await self._bind_20_and_30(library, fake_romm_api, n64_synced=n64_synced_first)
-        library.settings["enabled_platforms"] = {"4": False}
+        library.settings["enabled_platforms"] = {"n64": False}
         library.settings["enabled_collections"] = {"standard": {"7": True, "8": False}}
         if not faves_skipped:
             fake_romm_api.collections[0]["updated_at"] = "2030-01-01T00:00:00"
@@ -7735,7 +7728,7 @@ class TestRegression738CacheCorruption:
         # Server reports the platform exists with 3 ROMs and ZERO updates.
         # No ROMs seeded on the fake → the probe answers no ROM and no id.
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
 
@@ -7768,7 +7761,7 @@ class TestFetchNarrationInterplay:
     async def test_unit_anchor_is_fetching_stage(self, make_library, fake_romm_api, emit):
         library = make_library(romm_api=fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
@@ -7794,7 +7787,7 @@ class TestFetchNarrationInterplay:
             slug="n64",
             roms=[{"id": 10, "name": "A"}, {"id": 11, "name": "B"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
@@ -7844,7 +7837,7 @@ class TestComponentGroupKeyStamping:
                 {"id": 11, "name": "Game (EU)", "ss_id": 2002, "sibling_roms": [{"id": 10}]},
             ],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
@@ -7905,7 +7898,7 @@ class TestAPlatformUnitIsKeyedAsThePreviewKeysIt:
                 cls._golf(31, "Europe", [30], igdb_id=300, ss_id=7),
             ],
         )
-        library.settings["enabled_platforms"] = {"2": True}
+        library.settings["enabled_platforms"] = {"gba": True}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
@@ -8044,7 +8037,7 @@ class TestAGameKeepsItsKeyWhenTheVersionCarryingItIsNotListed:
     async def _bind(cls, library, fake_romm_api, emit, tmp_path, roms, *, installed=(), faves=()):
         """Run the first apply over *roms*, the first RomM's default; install *installed*; *faves* in a collection."""
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=roms)
-        library.settings["enabled_platforms"] = {"2": True}
+        library.settings["enabled_platforms"] = {"gba": True}
         if faves:
             _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=list(faves))
             fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00"
@@ -8396,7 +8389,7 @@ class TestAGameWithSeveralShortcutsConverges:
                 cls._golf(31, "Europe", [30], igdb_id=300),
             ],
         )
-        library.settings["enabled_platforms"] = {"2": True}
+        library.settings["enabled_platforms"] = {"gba": True}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
@@ -8771,7 +8764,7 @@ class TestARemovalThePanelDidNotReport:
             {"id": 1, "name": "N64", "slug": "n64", "rom_count": 1},
             {"id": 2, "name": "GBA", "slug": "gba", "rom_count": 0},
         ]
-        library.settings["enabled_platforms"] = {"1": True, "2": False}
+        library.settings["enabled_platforms"] = {"n64": True, "gba": False}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.chunk_dispatcher._wait_for_unit_complete = AsyncMock(return_value={})
 
@@ -8935,14 +8928,14 @@ class TestAReportThatLandsBeforeTheFinalize:
             with library.uow as uow:
                 return {rom_id: uow.roms.get(rom_id).shortcut_app_id for rom_id in (1, 2, 3)}
 
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         await complete_a_run("run-1")
-        library.settings["enabled_platforms"] = {"1": False}
+        library.settings["enabled_platforms"] = {"n64": False}
         await complete_a_run("run-2")
         bindings_while_off = bindings()
         with library.uow as uow:
             stamp = uow.platform_sync_state.get("n64")
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         await complete_a_run("run-3")
 
         assert bindings_while_off == {1: 5001, 2: None, 3: None}
@@ -8959,7 +8952,7 @@ class TestAReportThatLandsBeforeTheFinalize:
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
         _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[1, 2])
         fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00+00:00"
-        library.settings["enabled_platforms"] = {"1": False, "2": True}
+        library.settings["enabled_platforms"] = {"n64": False, "gba": True}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
 
@@ -9027,7 +9020,7 @@ class TestDeltaRestrictedApply:
                 {"id": 11, "name": "New Name", "fs_name": "changed.z64"},
             ],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="Keep", fs_name="keep.z64")
         _seed_rom_row(library, 11, app_id=1011, platform_slug="n64", name="Old Name", fs_name="changed.z64")
 
@@ -9065,7 +9058,7 @@ class TestDeltaRestrictedApply:
                 {"id": 11, "name": "B", "fs_name": "b.z64"},
             ],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="A", fs_name="a.z64")
         _seed_rom_row(library, 11, app_id=1011, platform_slug="n64", name="B", fs_name="b.z64")
 
@@ -9089,7 +9082,7 @@ class TestDeltaRestrictedApply:
         _seed_platform(
             fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A", "fs_name": "a.z64"}]
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="A", fs_name="a.z64", shortcut_applied=False)
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -9116,7 +9109,7 @@ class TestSessionBudgetGate:
             slug="n64",
             roms=[{"id": 10, "name": "Alpha"}, {"id": 11, "name": "Beta"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 1)
 
@@ -9168,7 +9161,7 @@ class TestSessionBudgetGate:
         from services.library import chunk_dispatcher
 
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "Solo"}])
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 1)
 
@@ -9250,7 +9243,7 @@ class TestSessionBudgetGate:
     async def test_preview_flags_pause_likely_when_run_would_cross(self, make_library, fake_romm_api, emit):
         library = make_library(romm_api=fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.renderer_rss.rss_kb = 2_199_000  # 1 planned create (+2500) crosses 2.2M ceiling
 
         result = await library.sync.sync_preview()
@@ -9262,7 +9255,7 @@ class TestSessionBudgetGate:
     async def test_preview_pause_likely_false_with_headroom(self, make_library, fake_romm_api, emit):
         library = make_library(romm_api=fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.renderer_rss.rss_kb = 440_000  # fresh baseline
 
         result = await library.sync.sync_preview()
@@ -9273,7 +9266,7 @@ class TestSessionBudgetGate:
     async def test_preview_pause_likely_false_when_rss_unavailable(self, make_library, fake_romm_api, emit):
         library = make_library(romm_api=fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.renderer_rss.rss_kb = None  # fail-open → no warning
 
         result = await library.sync.sync_preview()
@@ -9298,7 +9291,7 @@ class TestSessionBudgetGate:
                 {"id": 3, "name": "C", "fs_name": "c.z64"},
             ],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         # Matching bound baseline rows → all three classify as unchanged.
         _seed_rom_row(library, 1, app_id=1001, platform_slug="n64", name="A", fs_name="a.z64")
         _seed_rom_row(library, 2, app_id=1002, platform_slug="n64", name="B", fs_name="b.z64")
@@ -9319,7 +9312,7 @@ class TestSessionBudgetGate:
     async def test_completed_run_recommends_restart_when_rss_high(self, make_library, fake_romm_api, emit):
         library = make_library(romm_api=fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.renderer_rss.rss_kb = 1_900_000  # > 1.8M post-run advisory floor
 
@@ -9421,7 +9414,7 @@ class TestSessionBudgetGate:
         _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00Z", rom_count=1)
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="A", fs_name="a.z64")
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.renderer_rss.rss_kb = 1_200_000  # below the GC-skip floor → raw both ends
         # A stale delta from a prior run — the fresh no-op run must overwrite it, not
@@ -9525,7 +9518,7 @@ class TestRunProgressCounters:
             slug="n64",
             roms=[{"id": 10, "name": "Alpha"}, {"id": 11, "name": "Beta"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 1)
         self._acks(library, {"10": 1010}, {"11": 1011})
 
@@ -9550,7 +9543,7 @@ class TestRunProgressCounters:
             slug="n64",
             roms=[{"id": 10, "name": "Alpha"}, {"id": 11, "name": "Beta"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 1)
         box = library.sync._box
 
@@ -9581,7 +9574,7 @@ class TestRunProgressCounters:
             slug="n64",
             roms=[{"id": 10, "name": "Alpha"}, {"id": 11, "name": "Beta"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 1)
         self._acks(library, {"10": 1010}, {"11": 1011})
         library.renderer_gc.result = True
@@ -9611,7 +9604,7 @@ class TestRunProgressCounters:
                 {"id": 11, "name": "New Name", "fs_name": "changed.z64"},
             ],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="Keep", fs_name="keep.z64")
         _seed_rom_row(library, 11, app_id=1011, platform_slug="n64", name="Old Name", fs_name="changed.z64")
         self._acks(library, {"11": 1011})
@@ -9633,7 +9626,7 @@ class TestRunProgressCounters:
         _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00Z", rom_count=1)
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="A", fs_name="a.z64")
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         self._acks(library)
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -9648,7 +9641,7 @@ class TestRunProgressCounters:
         library = make_library(romm_api=fake_romm_api)
         self._arm(library, fake_romm_api, run_id="run-reset")
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "Alpha"}])
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         self._acks(library, {"10": 1010})
         box = library.sync._box
         box.run_done_items = 5000
@@ -9671,7 +9664,7 @@ class TestRunProgressCounters:
             slug="n64",
             roms=[{"id": 10, "name": "Alpha"}, {"id": 11, "name": "Beta"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         self._acks(library, {"10": 1010, "11": 1011})
 
         await library.sync._orchestrator._do_sync_per_unit()
@@ -9722,7 +9715,7 @@ class TestProcessedGamesNumerator:
                 {"id": 11, "name": "New Name", "fs_name": "changed.z64"},
             ],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="Keep", fs_name="keep.z64")
         _seed_rom_row(library, 11, app_id=1011, platform_slug="n64", name="Old Name", fs_name="changed.z64")
 
@@ -9774,7 +9767,7 @@ class TestProcessedGamesNumerator:
         _seed_rom_row(library, 20, app_id=1020, platform_slug="gba", name="Keep", fs_name="keep.gba")
         _seed_rom_row(library, 21, app_id=1021, platform_slug="gba", name="Old Name", fs_name="changed.gba")
         _seed_rom_row(library, 22, app_id=1022, platform_slug="gba", name="Old Other", fs_name="other.gba")
-        library.settings["enabled_platforms"] = {"1": True, "2": True}
+        library.settings["enabled_platforms"] = {"n64": True, "gba": True}
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 1)
 
         acks: list[dict[str, int] | None] = [{"21": 1021}, None]
@@ -9824,7 +9817,6 @@ class TestTheShortcutArtworkJobAfterARun:
     async def test_an_apply_run_that_failed_asks_for_it_too(self, make_library, fake_romm_api):
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.list_platforms_side_effect = RuntimeError("boom")
-        library.settings["enabled_platforms"] = {"1": True}
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-fails"
 
@@ -9872,7 +9864,7 @@ class TestAGameSplitAcrossCollections:
             if rom["id"] == main:
                 rom["rom_user"] = {"is_main_sibling": True}
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=golf)
-        library.settings["enabled_platforms"] = {**library.settings.get("enabled_platforms", {}), "2": False}
+        library.settings["enabled_platforms"] = {**library.settings.get("enabled_platforms", {}), "gba": False}
         for cid, name, rom_ids in collections:
             _seed_collection(fake_romm_api, collection_id=cid, name=name, rom_ids=rom_ids)
             fake_romm_api.collections[-1]["updated_at"] = "2025-01-01T00:00:00"
@@ -10030,7 +10022,7 @@ class TestAGameSplitAcrossCollections:
         """D3: cancelled during the second collection's fetch, no collection applies; the platform unit stays."""
         library = make_library(romm_api=fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "Tennis"}])
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         self._seed(library, fake_romm_api, [(7, "First", [23]), (8, "Second", [22])])
         box = library.sync._box
         walk = fake_romm_api.list_roms_by_collection
@@ -10149,7 +10141,7 @@ class TestAGameACollectionBringsInConverges:
         if roms is None:
             roms = [cls._golf(rom_id, main=main) for rom_id in _GOLF_REGIONS]
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=roms)
-        library.settings["enabled_platforms"] = {"2": False}
+        library.settings["enabled_platforms"] = {"gba": False}
         enabled = {}
         for collection_id, name, rom_ids in ((7, "Faves", faves), (8, "Mine", mine)):
             if rom_ids is not None:
@@ -10582,7 +10574,7 @@ class TestAGameTheUserHidInRomm:
             {"id": 40, "name": "Tetris", "fs_name": "Tetris.zip", "updated_at": "2025-01-01T00:00:00+00:00"},
         ]
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=roms)
-        library.settings["enabled_platforms"] = {"2": route == "platform"}
+        library.settings["enabled_platforms"] = {"gba": route == "platform"}
         if route == "collection":
             _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[30, 31, 40])
             fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00"

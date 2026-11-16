@@ -936,7 +936,7 @@ class TestSmartCollectionOwnership:
             2: _member(2, 2, smart_collection_ids=[9]),
         }
         fake_romm_api.smart_collections = [{"id": 9, "name": "Played", "rom_count": 2, "user_id": 5}]
-        library.settings["enabled_platforms"] = {"1": True, "2": False}
+        library.settings["enabled_platforms"] = {"n64": True, "gba": False}
         library.settings["enabled_collections"] = {"standard": {}, "smart": {"9": True}, "virtual": {}}
         library.settings["collection_owner_scope"] = "all"
         if romm_user_id is None:

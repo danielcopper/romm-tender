@@ -109,7 +109,7 @@ async def _bind_both_through_faves_then_romm_deletes_21(harness) -> None:
             "updated_at": "2025-01-01T00:00:00",
         }
     )
-    harness.settings["enabled_platforms"] = {str(_GBA_ID): False}
+    harness.settings["enabled_platforms"] = {"gba": False}
     harness.settings["enabled_collections"] = {"standard": {str(_FAVES_ID): True}}
     _ack_every_shortcut(harness)
     await _apply(harness, "run-1")
@@ -203,7 +203,7 @@ async def _bind_n64_then_romm_stops_listing_it(harness) -> None:
     ]
     harness.romm.roms[1] = _server_rom(1, platform_id=_N64_ID, slug="n64", name="N")
     harness.romm.roms[4] = _server_rom(4, platform_id=_GBA_ID, slug="gba", name="G")
-    harness.settings["enabled_platforms"] = {str(_N64_ID): True, str(_GBA_ID): True}
+    harness.settings["enabled_platforms"] = {"n64": True, "gba": True}
     _ack_every_shortcut(harness)
     await _apply(harness, "run-1")
     harness.romm.platforms = [p for p in harness.romm.platforms if p["slug"] != "n64"]

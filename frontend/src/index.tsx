@@ -653,11 +653,8 @@ const tender = definePanel(() => {
     })(),
   );
 
-  // Surface a corrupt-settings reset that happened at boot. The backend backs
-  // up an unparseable settings.json to settings.json.corrupt-<ts>, resets to
-  // defaults, and persists a marker that survives reloads. The QAM banner and
-  // game-detail card surface this to the user — no toast needed; the notice
-  // stays up until the next successful sign-in clears the marker.
+  // Surface a corrupt-settings reset that happened at boot
+  // (docs/architecture/backend-architecture.md, "Corrupt-file quarantine").
   detach(
     (async () => {
       try {

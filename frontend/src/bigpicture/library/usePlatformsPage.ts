@@ -90,7 +90,6 @@ export type FirmwareState = BiosReadState;
 
 /** One platform as the list and the detail read it — the three reads joined. */
 export interface PlatformRow {
-  id: number;
   slug: string;
   /** The folder RomM keeps the platform in, which names it on this page: two
    *  listed platforms can share a slug, and each is a row of its own (#2452). */
@@ -565,7 +564,6 @@ export function usePlatformsPage(): PlatformsPageState {
     platforms.map((p) => [
       p.fs_slug,
       {
-        id: p.id,
         slug: p.slug,
         folder: p.fs_slug,
         name: p.name,
@@ -634,7 +632,7 @@ export function usePlatformsPage(): PlatformsPageState {
       };
       show(enabled);
       detach(
-        savePlatformSync(row.id, enabled)
+        savePlatformSync(row.folder, enabled)
           .then((result) => {
             if (result.success) {
               write.stored();

@@ -8,14 +8,18 @@ per-method ``*_side_effect`` attributes (persistent) — no
 ``run_in_executor`` patching, no ``MagicMock(romm_api)``.
 """
 
+import asyncio
 import base64
 import json
 import logging
+import threading
 from dataclasses import replace
+from typing import Any, ClassVar
 from unittest.mock import MagicMock
 
 import pytest
 from _romm_platforms import LISTED_GAMECUBE
+from fakes.fake_settings_persister import FakeSettingsPersister
 
 from domain.platform_system import PLATFORM_IDS_KEY, KeptPlatform, decode_platform_ids
 from domain.sync_diff import ExactAnswers
@@ -56,7 +60,7 @@ class TestFetchEnabledPlatforms:
             {"id": 2, "name": "SNES", "slug": "snes"},
             {"id": 3, "name": "GBA", "slug": "gba"},
         ]
-        library.settings["enabled_platforms"] = {"1": True, "2": False, "3": True}
+        library.settings["enabled_platforms"] = {"n64": True, "snes": False, "gba": True}
 
         result, _unwalked = await library.sync._fetcher._fetch_enabled_platforms()
         assert len(result) == 2
@@ -64,18 +68,6 @@ class TestFetchEnabledPlatforms:
         assert "N64" in names
         assert "GBA" in names
         assert "SNES" not in names
-
-    @pytest.mark.asyncio
-    async def test_all_enabled_when_no_prefs(self, make_library, fake_romm_api):
-        library = make_library(romm_api=fake_romm_api)
-        fake_romm_api.platforms = [
-            {"id": 1, "name": "N64", "slug": "n64"},
-            {"id": 2, "name": "SNES", "slug": "snes"},
-        ]
-        library.settings["enabled_platforms"] = {}
-
-        result, _unwalked = await library.sync._fetcher._fetch_enabled_platforms()
-        assert len(result) == 2
 
     @pytest.mark.asyncio
     async def test_a_listing_that_is_not_a_list_raises(self, make_library):
@@ -91,123 +83,216 @@ class TestFetchEnabledPlatforms:
         assert not isinstance(exc_info.value, RommNotFoundError)
 
 
-class TestAPlatformUnitCarriesItsFsSlug:
-    """A platform unit carries the listing's ``fs_slug``, and none where the listing gives a blank one (#2452 D1)."""
+class TestTheTogglesAreKeptByFolder:
+    """Each listed platform is synced and shown by its own toggle, kept by its fs_slug (#2452 D8, D24, D26)."""
+
+    _SHARING_A_SLUG: ClassVar[list[dict[str, Any]]] = [
+        {"id": 1, "name": "Super Nintendo", "slug": "snes", "fs_slug": "snes", "rom_count": 2},
+        {"id": 2, "name": "Super Nintendo", "slug": "snes", "fs_slug": "snes-hacks", "rom_count": 1},
+    ]
 
     @pytest.mark.asyncio
-    async def test_each_unit_carries_its_own_fs_slug_and_a_blank_one_counts_as_none(self, make_library, fake_romm_api):
+    async def test_the_sync_reads_only_the_platforms_whose_own_toggle_is_on(self, make_library, fake_romm_api):
         library = make_library(romm_api=fake_romm_api)
-        fake_romm_api.platforms = [
-            {"id": 1, "name": "SNES", "slug": "snes", "fs_slug": "snes"},
-            {"id": 2, "name": "SNES", "slug": "snes", "fs_slug": "snes-hacks"},
-            {"id": 3, "name": "GBA", "slug": "gba", "fs_slug": "   "},
-        ]
-        library.settings["enabled_platforms"] = {}
-        library.settings["enabled_collections"] = {"standard": {}, "smart": {}, "virtual": {}}
+        fake_romm_api.platforms = list(self._SHARING_A_SLUG)
+        library.settings["enabled_platforms"] = {"snes": False, "snes-hacks": True}
 
-        units = await library.sync._fetcher.build_work_queue()
+        result, unwalked = await library.sync._fetcher._fetch_enabled_platforms()
 
-        assert {u.id: u.platform_folder for u in units} == {1: "snes", 2: "snes-hacks", 3: ""}
-
-
-class TestGetPlatformsMaterialization:
-    """Tests for get_platforms() — the #1007 empty-map → full-map self-heal."""
+        assert [p["id"] for p in result] == [2]
+        assert unwalked == (1,)
 
     @pytest.mark.asyncio
-    async def test_materializes_full_all_true_map_when_empty(self, make_library, fake_romm_api):
-        """Empty map + shown platforms → persisted full all-True map (one save)."""
+    async def test_a_fresh_setup_syncs_no_platform(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.platforms = list(self._SHARING_A_SLUG)
+        library.settings["enabled_platforms"] = {}
+
+        result, unwalked = await library.sync._fetcher._fetch_enabled_platforms()
+
+        assert result == []
+        assert unwalked == (1, 2)
+
+    @pytest.mark.asyncio
+    async def test_a_platform_without_an_fs_slug_is_never_synced(self, make_library, fake_romm_api):
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [
-            {"id": 1, "name": "N64", "slug": "n64", "rom_count": 3},
-            {"id": 2, "name": "SNES", "slug": "snes", "rom_count": 5},
+            {"id": 1, "name": "GBA", "slug": "gba", "fs_slug": "gba"},
+            {"id": 2, "name": "Arcade", "slug": "arcade", "fs_slug": "  "},
         ]
-        library.settings["enabled_platforms"] = {}
+        library.settings["enabled_platforms"] = {"gba": True, "  ": True, "arcade": True}
+
+        result, unwalked = await library.sync._fetcher._fetch_enabled_platforms()
+
+        assert [p["id"] for p in result] == [1]
+        assert unwalked == (2,)
+
+    @pytest.mark.asyncio
+    async def test_the_tab_shows_each_platform_by_its_own_toggle(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.platforms = list(self._SHARING_A_SLUG)
+        library.settings["enabled_platforms"] = {"snes-hacks": True}
 
         result = await library.sync._fetcher.get_platforms()
 
-        assert result["success"] is True
-        assert library.settings["enabled_platforms"] == {"1": True, "2": True}
-        assert library.settings_persister.save_count == 1
-        assert all(p["sync_enabled"] is True for p in result["platforms"])
+        assert [(p["fs_slug"], p["sync_enabled"]) for p in result["platforms"]] == [
+            ("snes", False),
+            ("snes-hacks", True),
+        ]
 
     @pytest.mark.asyncio
-    async def test_excludes_zero_rom_platforms_from_materialized_map(self, make_library, fake_romm_api):
-        """A rom_count==0 platform is neither shown nor materialized."""
+    async def test_a_fresh_setup_shows_every_platform_off_and_writes_nothing(self, make_library, fake_romm_api):
+        """#2452 D24: nothing is switched on when the Platforms tab first opens."""
         library = make_library(romm_api=fake_romm_api)
-        fake_romm_api.platforms = [
-            {"id": 1, "name": "N64", "slug": "n64", "rom_count": 3},
-            {"id": 2, "name": "Empty", "slug": "empty", "rom_count": 0},
-        ]
-        library.settings["enabled_platforms"] = {}
-
-        result = await library.sync._fetcher.get_platforms()
-
-        assert library.settings["enabled_platforms"] == {"1": True}
-        assert [p["slug"] for p in result["platforms"]] == ["n64"]
-
-    @pytest.mark.asyncio
-    async def test_does_not_re_materialize_when_map_non_empty(self, make_library, fake_romm_api):
-        """A non-empty stored map is read literally — no re-write, no save."""
-        library = make_library(romm_api=fake_romm_api)
-        fake_romm_api.platforms = [
-            {"id": 1, "name": "N64", "slug": "n64", "rom_count": 3},
-            {"id": 2, "name": "SNES", "slug": "snes", "rom_count": 5},
-        ]
-        library.settings["enabled_platforms"] = {"1": False}
-
-        result = await library.sync._fetcher.get_platforms()
-
-        assert library.settings["enabled_platforms"] == {"1": False}
-        assert library.settings_persister.save_count == 0
-        by_id = {p["id"]: p["sync_enabled"] for p in result["platforms"]}
-        # Absent id 2 resolves False once any pref exists (the literal-map read).
-        assert by_id == {1: False, 2: False}
-
-    @pytest.mark.asyncio
-    async def test_does_not_persist_when_no_shown_platforms(self, make_library, fake_romm_api):
-        """Empty map + zero shown platforms → sentinel survives, no save."""
-        library = make_library(romm_api=fake_romm_api)
-        fake_romm_api.platforms = [
-            {"id": 1, "name": "Empty", "slug": "empty", "rom_count": 0},
-        ]
+        fake_romm_api.platforms = list(self._SHARING_A_SLUG)
         library.settings["enabled_platforms"] = {}
 
         result = await library.sync._fetcher.get_platforms()
 
-        assert result["success"] is True
-        assert result["platforms"] == []
+        assert [p["sync_enabled"] for p in result["platforms"]] == [False, False]
         assert library.settings["enabled_platforms"] == {}
         assert library.settings_persister.save_count == 0
 
+    @pytest.mark.parametrize(
+        ("by_id", "synced"),
+        [({"1": False, "2": True}, [2]), ({"1": True}, [1]), ({}, [1, 2])],
+        ids=["switched", "one-saved", "never-touched"],
+    )
     @pytest.mark.asyncio
-    async def test_one_off_toggle_after_materialization_keeps_others_enabled(self, make_library, fake_romm_api):
-        """#1007 regression: get_platforms → save one OFF → other platforms still sync.
+    async def test_toggles_that_have_not_moved_sync_exactly_the_platforms_switched_on_before(
+        self, make_library, fake_romm_api, caplog, by_id, synced
+    ):
+        """#2452 D27: the harness's refiling moves nothing, as a move that failed."""
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.platforms = list(self._SHARING_A_SLUG)
+        library.settings["enabled_platforms"] = {}
+        library.settings["enabled_platform_ids"] = by_id
 
-        Reproduces the data-loss path end-to-end at the fetcher seam: open the
-        Platforms page (materialize), un-toggle exactly ONE platform, then run
-        the sync-time filter and assert every OTHER platform survives.
-        """
+        with caplog.at_level(logging.WARNING):
+            result, _unwalked = await library.sync._fetcher._fetch_enabled_platforms()
+        shown = await library.sync._fetcher.get_platforms()
+
+        assert [p["id"] for p in result] == synced
+        assert [p["id"] for p in shown["platforms"] if p["sync_enabled"]] == synced
+        assert "toggles kept by RomM's platform ids have not moved" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_a_platform_switched_while_the_move_is_pending_is_synced_as_switched(
+        self, make_library, fake_romm_api
+    ):
+        """#2452 D27: the user's own toggle wins over the one still kept by RomM id."""
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.platforms = list(self._SHARING_A_SLUG)
+        library.settings["enabled_platforms"] = {}
+        library.settings["enabled_platform_ids"] = {"1": True, "2": True}
+
+        await library.sync._fetcher.save_platform_sync("snes", False)
+        result, _unwalked = await library.sync._fetcher._fetch_enabled_platforms()
+
+        assert [p["id"] for p in result] == [2]
+
+    @staticmethod
+    async def _cancel_the_call_while_it_saves(make_library, caplog, *, fails: bool, ended: str) -> Any:
+        """Cancel ``save_platform_sync("snes", False)`` while its write is saving; then let the save end."""
+        saving = threading.Event()
+        release = threading.Event()
+
+        class _SlowPersister(FakeSettingsPersister):
+            def save_settings(self) -> None:
+                saving.set()
+                release.wait(5)
+                if fails:
+                    raise OSError("disk full")
+
+        library = make_library(settings_persister=_SlowPersister())
+        library.settings["enabled_platforms"] = {"snes": True}
+        call = asyncio.create_task(library.sync._fetcher.save_platform_sync("snes", False))
+        await asyncio.to_thread(saving.wait, 5)
+
+        call.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await call
+        with caplog.at_level(logging.INFO):
+            release.set()
+            for _ in range(200):
+                if ended in caplog.text:
+                    break
+                await asyncio.sleep(0.01)
+        return library
+
+    @pytest.mark.asyncio
+    async def test_a_save_whose_call_was_cancelled_still_says_it_failed(self, make_library, caplog):
+        """A panel that disconnects cancels its calls; the write it asked for goes on in its thread."""
+        failed = "Saving the per-platform sync toggles failed after the call that asked for it ended: disk full"
+
+        library = await self._cancel_the_call_while_it_saves(make_library, caplog, fails=True, ended=failed)
+
+        errors = [r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR]
+        assert errors == [failed]
+        assert library.settings["enabled_platforms"] == {"snes": True}
+
+    @pytest.mark.asyncio
+    async def test_a_save_whose_call_was_cancelled_and_that_succeeds_keeps_the_toggle_and_says_so(
+        self, make_library, caplog
+    ):
+        saved = "Saved the per-platform sync toggles after the call that asked for it ended"
+
+        library = await self._cancel_the_call_while_it_saves(make_library, caplog, fails=False, ended=saved)
+
+        assert [r for r in caplog.records if r.levelno >= logging.ERROR] == []
+        assert saved in caplog.text
+        assert library.settings["enabled_platforms"] == {"snes": False}
+
+    @pytest.mark.asyncio
+    async def test_toggles_that_have_moved_are_read_without_a_warning(self, make_library, fake_romm_api, caplog):
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.platforms = list(self._SHARING_A_SLUG)
+        library.settings["enabled_platforms"] = {"snes": True}
+        library.settings["enabled_platform_ids"] = None
+
+        with caplog.at_level(logging.WARNING):
+            result, _unwalked = await library.sync._fetcher._fetch_enabled_platforms()
+
+        assert [p["id"] for p in result] == [1]
+        assert "have not moved" not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_switching_one_off_after_enable_all_keeps_the_others_on(self, make_library, fake_romm_api):
+        """#1007: switching exactly ONE platform off leaves every other platform synced."""
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [
             {"id": 1, "name": "N64", "slug": "n64", "rom_count": 3},
             {"id": 2, "name": "SNES", "slug": "snes", "rom_count": 5},
             {"id": 3, "name": "GBA", "slug": "gba", "rom_count": 7},
         ]
-        library.settings["enabled_platforms"] = {}
+        await library.sync._fetcher.set_all_platforms_sync(True)
 
-        # 1. Platforms page mount materializes the full all-True map.
-        await library.sync._fetcher.get_platforms()
-        assert library.settings["enabled_platforms"] == {"1": True, "2": True, "3": True}
-
-        # 2. Un-toggle exactly one platform (single-key write).
-        library.sync._fetcher.save_platform_sync(2, False)
-
-        # 3. Sync-time filter: every OTHER platform must survive (pre-fix this
-        #    returned only the never-touched platforms, dropping the rest).
+        await library.sync._fetcher.save_platform_sync("snes", False)
         filtered, _unwalked = await library.sync._fetcher._fetch_enabled_platforms()
-        kept = {p["name"] for p in filtered}
-        assert kept == {"N64", "GBA"}
-        assert "SNES" not in kept
+
+        assert {p["name"] for p in filtered} == {"N64", "GBA"}
+
+
+class TestAPlatformUnitCarriesItsFsSlug:
+    """A platform unit carries the listing's ``fs_slug``, and a platform whose fs_slug is blank builds none
+    (#2452 D1, D26)."""
+
+    @pytest.mark.asyncio
+    async def test_each_unit_carries_its_own_fs_slug_and_a_platform_without_one_builds_no_unit(
+        self, make_library, fake_romm_api
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.platforms = [
+            {"id": 1, "name": "SNES", "slug": "snes", "fs_slug": "snes"},
+            {"id": 2, "name": "SNES", "slug": "snes", "fs_slug": "snes-hacks"},
+            {"id": 3, "name": "GBA", "slug": "gba", "fs_slug": "   "},
+        ]
+        library.settings["enabled_platforms"] = {"snes": True, "snes-hacks": True}
+        library.settings["enabled_collections"] = {"standard": {}, "smart": {}, "virtual": {}}
+
+        units = await library.sync._fetcher.build_work_queue()
+
+        assert {u.id: u.platform_folder for u in units} == {1: "snes", 2: "snes-hacks"}
 
 
 class TestBuildWorkQueueErrorPaths:
@@ -494,14 +579,14 @@ class TestPlatformListingThatIsNotAList:
     @pytest.mark.asyncio
     async def test_set_all_platforms_sync_fails_and_writes_nothing(self, make_library):
         library = self._library_over_a_malformed_listing(make_library)
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         call = library.sync._fetcher.set_all_platforms_sync(False)
 
         with pytest.raises(RommApiError) as excinfo:
             await call
 
         assert classify_error(excinfo.value) == ("server_unreachable", "Unexpected response from /api/platforms: dict")
-        assert library.settings["enabled_platforms"] == {"1": True}
+        assert library.settings["enabled_platforms"] == {"n64": True}
 
 
 class TestSaveCollectionsSync:
@@ -1439,7 +1524,7 @@ class TestAGroupWithSeveralShortcutsIsFetchedInFull:
         library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 2}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2)
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
         _seed_persisted_rom(uow, 11, app_id=1002, group_key="igdb:100:1")
@@ -1582,7 +1667,7 @@ class TestTheWorkQueueNamesThePlatformsLeftOff:
             {"id": 2, "name": "SNES", "slug": "snes"},
             {"id": 3, "name": "GBA", "slug": "gba"},
         ]
-        library.settings["enabled_platforms"] = {"1": True, "2": False, "3": False}
+        library.settings["enabled_platforms"] = {"n64": True, "snes": False, "gba": False}
 
         _enabled, unwalked = await library.sync._fetcher._fetch_enabled_platforms()
 
@@ -1599,7 +1684,7 @@ class TestTheWorkQueueNamesThePlatformsLeftOff:
         ]
         fake_romm_api.collections = [{"id": 7, "name": "Faves", "rom_count": 2, "rom_ids": [10, 11]}]
         fake_romm_api.virtual_collections = {"franchise": [{"id": "fr-1", "name": "Mario", "rom_ids": [12]}]}
-        library.settings["enabled_platforms"] = {"1": True, "2": False}
+        library.settings["enabled_platforms"] = {"n64": True, "gba": False}
         library.settings["enabled_collections"] = {"standard": {"7": True}, "smart": {}, "virtual": {"fr-1": True}}
 
         units = await library.sync._fetcher.build_work_queue()
@@ -1709,7 +1794,7 @@ class TestPlanEstimates:
         library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=3)
         # A 3-sibling group: one bound representative + two unbound siblings —
         # collapses to ONE shortcut.
@@ -1729,7 +1814,7 @@ class TestPlanEstimates:
         library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=3)
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
         _seed_persisted_rom(uow, 11, app_id=None, group_key="igdb:100:1")
@@ -1749,7 +1834,7 @@ class TestPlanEstimates:
         library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 2}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2, fetch_id="run-new")
         _seed_persisted_rom(uow, 1, app_id=5001, group_key="igdb:1:1", fetch_id="run-new")
         _seed_persisted_rom(uow, 2, app_id=5002, group_key="igdb:2:1", fetch_id="run-new")
@@ -1765,7 +1850,7 @@ class TestPlanEstimates:
         library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 2}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2, fetch_id="run-new")
         _seed_persisted_rom(uow, 1, app_id=5001, group_key="igdb:1:1", fetch_id="run-new")
         _seed_persisted_rom(uow, 2, app_id=5002, group_key="igdb:2:1", fetch_id="run-new")
@@ -1782,7 +1867,7 @@ class TestPlanEstimates:
         library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=3)
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
         _seed_persisted_rom(uow, 11, app_id=1002, group_key="igdb:100:1")
@@ -1796,7 +1881,7 @@ class TestPlanEstimates:
     async def test_never_synced_platform_predicts_no_skip_and_no_collapsed_count(self, make_library, fake_romm_api):
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         units = await library.sync._fetcher.build_work_queue()
 
@@ -1815,7 +1900,7 @@ class TestPlanEstimates:
         # A big platform whose only local rows are a couple of favorited siblings
         # (ADR-0021) — no stamp, because it was never synced as a platform.
         fake_romm_api.platforms = [{"id": 1, "name": "SNES", "slug": "snes", "rom_count": 3344}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"snes": True}
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1", platform_slug="snes")
         _seed_persisted_rom(uow, 11, app_id=1002, group_key="igdb:101:1", platform_slug="snes")
 
@@ -1834,7 +1919,7 @@ class TestPlanEstimates:
         library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=3)
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
         _seed_persisted_rom(uow, 11, app_id=1002, group_key="igdb:101:1")
@@ -1850,7 +1935,7 @@ class TestPlanEstimates:
         nothing, so every planned item really is a create."""
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         units = await library.sync._fetcher.build_work_queue()
 
@@ -1866,7 +1951,7 @@ class TestPlanEstimates:
         library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 2}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         # No stamp — exactly what clear_sync_cache leaves behind — but the rows
         # keep their shortcut_app_id.
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
@@ -1890,7 +1975,7 @@ class TestPlanEstimates:
         library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 4}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         # No stamp — what clear_sync_cache leaves behind. Two sibling groups
         # (ADR-0021), each a bound representative plus an unbound duplicate.
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
@@ -1915,7 +2000,7 @@ class TestPlanEstimates:
         library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "SNES", "slug": "snes", "rom_count": 100}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"snes": True}
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1", platform_slug="snes")
         _seed_persisted_rom(uow, 11, app_id=1002, group_key="igdb:101:1", platform_slug="snes")
         _seed_persisted_rom(uow, 12, app_id=None, group_key="igdb:102:1", platform_slug="snes")
@@ -1932,7 +2017,7 @@ class TestPlanEstimates:
         """Nothing persisted, nothing bound — the whole platform is new work."""
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         units = await library.sync._fetcher.build_work_queue()
 
@@ -1946,7 +2031,7 @@ class TestPlanEstimates:
         library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 4}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=4)
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
         _seed_persisted_rom(uow, 11, app_id=None, group_key="igdb:100:1")
@@ -1970,7 +2055,7 @@ class TestPlanEstimates:
         # count (#743 D2), so neither does the estimate, and the persisted rows
         # still collapse to a displayable count.
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 4}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=3)
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
         _seed_persisted_rom(uow, 11, app_id=None, group_key="igdb:100:1")
@@ -1986,7 +2071,7 @@ class TestPlanEstimates:
         library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=1)
         # A legacy row with no group key forces the gate's backfill full fetch;
         # the keyless row is a singleton for the collapsed count.
@@ -2004,7 +2089,7 @@ class TestPlanEstimates:
         library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=1, fetch_id="run-new")
         _seed_persisted_rom(uow, 25135, app_id=1001, group_key="igdb:100:1", fetch_id="run-new")
         _seed_persisted_rom(uow, 4375, app_id=None, group_key=None, fetch_id="run-old")
@@ -2018,7 +2103,7 @@ class TestPlanEstimates:
         library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 2}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2)
         # Mass delete left unbind-only rows (ADR-0007) — the gate re-fetches.
         _seed_persisted_rom(uow, 10, app_id=None, group_key="igdb:100:1")
@@ -2204,7 +2289,7 @@ class TestPlanEstimates:
         library = make_library(romm_api=fake_romm_api)
         uow = library.uow
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=1)
         _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
         # A stamped collection with one bound member. Its member row sits on
@@ -2254,7 +2339,7 @@ class TestPlanEstimates:
         """Fail-open: a DB failure degrades the estimate, never the plan."""
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         def _boom():
             raise RuntimeError("db down")
@@ -2285,7 +2370,7 @@ def _seed_unchanged_collection(library, fake_romm_api, *, kind="standard", listi
         {"id": 1, "name": "N64", "slug": "n64", "rom_count": 0},
         {"id": 2, "name": "GBA", "slug": "gba", "rom_count": 0},
     ]
-    library.settings["enabled_platforms"] = {"1": True, "2": False}
+    library.settings["enabled_platforms"] = {"n64": True, "gba": False}
     if kind == "virtual":
         fake_romm_api.virtual_collections = {"franchise": [entry]}
     else:
@@ -2379,7 +2464,7 @@ class TestTheSyncKeepsThePlatformsIds:
             {"id": 1, "name": "N64", "slug": "n64", "fs_slug": "n64", "rom_count": 3, "igdb_id": 4},
             {"id": 2, "name": "SNES", "slug": "snes", "fs_slug": "sfc", "rom_count": 2, "igdb_id": 19, "tgdb_id": 6},
         ]
-        library.settings["enabled_platforms"] = {"1": True, "2": False}
+        library.settings["enabled_platforms"] = {"n64": True, "sfc": False}
 
         await library.sync._fetcher.build_work_queue()
 
@@ -2405,7 +2490,7 @@ class TestTheSyncKeepsThePlatformsIds:
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.set_version("5.4.1")
         fake_romm_api.platforms = [LISTED_GAMECUBE, {**LISTED_GAMECUBE, "id": 13, "fs_slug": "gamecube", "newdb_id": 7}]
-        library.settings["enabled_platforms"] = {"12": True, "13": True}
+        library.settings["enabled_platforms"] = {"gc": True, "gamecube": True}
 
         await library.sync._fetcher.build_work_queue()
 
@@ -2437,7 +2522,7 @@ class TestTheSyncKeepsThePlatformsIds:
     async def test_a_record_kept_before_the_folder_was_is_filled_by_the_next_sync(self, make_library, fake_romm_api):
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [LISTED_GAMECUBE]
-        library.settings["enabled_platforms"] = {"12": True}
+        library.settings["enabled_platforms"] = {"gc": True}
         with library.sync._fetcher._uow_factory() as uow:
             uow.kv_config.set(PLATFORM_IDS_KEY, '{"ngc": {"igdb_id": 21, "name": "Nintendo GameCube"}}')
 
@@ -2453,7 +2538,7 @@ class TestTheSyncKeepsThePlatformsIds:
     async def test_a_write_that_fails_leaves_the_plan_and_says_so(self, make_library, fake_romm_api, caplog):
         library = make_library(romm_api=fake_romm_api)
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
 
         def _boom():
             raise RuntimeError("db down")
@@ -2605,7 +2690,7 @@ class TestTheHiddenSet:
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 2}]
         fake_romm_api.roms = {rid: {"id": rid, "platform_id": 1, "collection_ids": [7]} for rid in (10, 11)}
         fake_romm_api.collections = [{"id": 7, "name": "Faves", "rom_count": 2}]
-        library.settings["enabled_platforms"] = {"1": False}
+        library.settings["enabled_platforms"] = {"n64": False}
         library.settings["enabled_collections"] = {"standard": {"7": True}, "smart": {}, "virtual": {}}
 
     @pytest.mark.asyncio

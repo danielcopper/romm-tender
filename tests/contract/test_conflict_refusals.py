@@ -136,7 +136,7 @@ _ARGS: dict[str, tuple[Any, ...]] = {
     "save_collection_sync": ("7", "standard", True),
     "save_collections_sync": (["7"], "standard", True),
     "save_custom_headers": ([],),
-    "save_platform_sync": (7, True),
+    "save_platform_sync": ("snes", True),
     "save_server_url": ("https://server.example", False),
     "save_shortcut_icon": (_APP_ID, 41),
     "saves_rollback_to_version": (41, "default", 7),

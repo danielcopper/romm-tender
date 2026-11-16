@@ -7,12 +7,13 @@ import threading
 import time
 from typing import Any
 
-from fakes.fake_settings_persister import FakeSettingsPersister
+from fakes.fake_settings_persister import FailingSettingsPersister, FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from domain.bios_file import BiosFile
 from services.platform_picks import PlatformPicks, PlatformPicksConfig
 from services.platform_refiling import PlatformRefiling, PlatformRefilingConfig
+from services.platform_switches import PlatformSwitches, PlatformSwitchesConfig
 
 # RomM keeps PlayStation in ``ps``; two platforms share the slug ``gamecube``;
 # ``snes`` is a slug and a folder at once, beside ``snes-hacks`` of the same slug.
@@ -92,6 +93,11 @@ class _Harness:
                 platform_picks=PlatformPicks(
                     config=PlatformPicksConfig(
                         settings=self.settings, settings_persister=self.persister, lock=self.picks_lock
+                    )
+                ),
+                platform_switches=PlatformSwitches(
+                    config=PlatformSwitchesConfig(
+                        settings=self.settings, settings_persister=self.persister, lock=threading.Lock()
                     )
                 ),
                 refile_lock=threading.Lock(),
@@ -517,3 +523,158 @@ def _other_platform() -> dict[str, Any]:
         "fs_slug": "other",
         "firmware": [{"id": 10, "file_name": "other.bin", "platform_id": 6}],
     }
+
+
+class TestPerPlatformSyncToggles:
+    """The toggles kept by RomM id move to the listed platforms' fs_slug at a refile (#2452 D8)."""
+
+    @staticmethod
+    def _kept_by_id(by_id: dict[str, Any], persister: FakeSettingsPersister | None = None) -> _Harness:
+        harness = _Harness(persister=persister)
+        harness.settings["enabled_platforms"] = {}
+        harness.settings["enabled_platform_ids"] = by_id
+        return harness
+
+    def test_each_toggle_moves_to_its_platform_s_folder_and_is_saved(self):
+        harness = self._kept_by_id({"4": False, "5": True})
+
+        harness.refile()
+
+        assert harness.settings["enabled_platforms"] == {
+            "ps": False,
+            "gc": False,
+            "ngc": False,
+            "snes": False,
+            "snes-hacks": True,
+        }
+        assert harness.settings["enabled_platform_ids"] is None
+        assert harness.persister.save_count == 1
+
+    def test_a_toggle_of_a_platform_rom_m_no_longer_lists_is_dropped(self):
+        """#2452 D21."""
+        harness = self._kept_by_id({"5": True, "99": True})
+
+        harness.refile()
+
+        assert [folder for folder, on in harness.settings["enabled_platforms"].items() if on] == ["snes-hacks"]
+
+    def test_toggles_never_touched_switch_every_listed_platform_on(self):
+        """#2452 D24: an existing installation whose toggles were never touched keeps every platform on."""
+        harness = self._kept_by_id({})
+
+        harness.refile()
+
+        assert harness.settings["enabled_platforms"] == dict.fromkeys(("ps", "gc", "ngc", "snes", "snes-hacks"), True)
+
+    def test_running_again_saves_nothing(self):
+        harness = self._kept_by_id({"5": True})
+        harness.refile()
+
+        harness.refile()
+
+        assert harness.persister.save_count == 1
+
+    def test_a_listing_that_names_no_folder_leaves_them_kept_by_id(self):
+        harness = self._kept_by_id({"5": True})
+
+        harness.refiling.do_refile([{"id": 5, "slug": "snes", "fs_slug": None, "firmware": []}])
+
+        assert harness.settings["enabled_platform_ids"] == {"5": True}
+        assert harness.settings["enabled_platforms"] == {}
+        assert harness.persister.save_count == 0
+
+    def test_a_save_that_fails_is_logged_and_leaves_the_toggles_moved(self, caplog):
+        """#2452 D23: the run filters by the moved toggles."""
+        harness = self._kept_by_id({"5": True}, persister=FailingSettingsPersister())
+
+        with caplog.at_level(logging.WARNING):
+            harness.refile()
+
+        [failure] = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert failure.getMessage() == (
+            "Moved the per-platform sync toggles to the platforms' folders, but saving them failed: OSError: disk full"
+        )
+        assert failure.exc_info
+        assert harness.settings["enabled_platforms"]["snes-hacks"] is True
+        assert harness.settings["enabled_platform_ids"] is None
+
+    def test_a_move_whose_save_fails_still_names_the_ids_it_dropped(self, caplog):
+        """#2452 D21, D23: the toggles have moved, so the ids the move dropped are said too."""
+        harness = self._kept_by_id({"5": True, "99": True}, persister=FailingSettingsPersister())
+
+        with caplog.at_level(logging.INFO):
+            harness.refile()
+
+        assert (
+            "Dropped the sync toggles of RomM platform ids the listing does not name with a folder: 99" in caplog.text
+        )
+
+    def test_a_move_that_fails_before_anything_moved_is_logged_as_a_failed_move(self, caplog):
+        harness = self._kept_by_id({"5": True})
+
+        with caplog.at_level(logging.WARNING):
+            harness.refiling.do_refile([*_PLATFORMS, None])  # type: ignore[list-item]
+
+        [failure] = [r.getMessage() for r in caplog.records if "per-platform sync toggles" in r.getMessage()]
+        assert failure == (
+            "Failed to move the per-platform sync toggles to their platforms: "
+            "AttributeError: 'NoneType' object has no attribute 'get'"
+        )
+        assert harness.settings["enabled_platform_ids"] == {"5": True}
+
+    def test_the_toggles_move_where_the_listed_platforms_cannot_be_worked_out(self, caplog):
+        """#2452 D27: the toggles need only the listing as read, so a failure there does not hold them back."""
+        harness = self._kept_by_id({"5": True})
+        unreadable_firmware = {"id": 9, "slug": "arcade", "fs_slug": "arcade", "firmware": [None]}
+
+        with caplog.at_level(logging.WARNING):
+            harness.refiling.do_refile([*_PLATFORMS, unreadable_firmware])
+
+        assert harness.settings["enabled_platforms"]["snes-hacks"] is True
+        assert harness.settings["enabled_platform_ids"] is None
+        assert "Failed to read where older entries belong: AttributeError" in caplog.text
+
+    def test_the_toggles_move_where_the_records_fail(self, monkeypatch):
+        harness = self._kept_by_id({"5": True})
+        harness.uow.bios_files.save(_record("psx"))
+
+        def _fail() -> list[BiosFile]:
+            raise OSError("db locked")
+
+        monkeypatch.setattr(harness.uow.bios_files, "iter_all", _fail)
+        harness.refile()
+
+        assert harness.settings["enabled_platforms"]["snes-hacks"] is True
+
+    def test_the_toggles_move_where_the_picks_fail(self, caplog):
+        harness = self._kept_by_id({"5": True})
+        # A pick that cannot be copied fails the picks' move.
+        uncopyable = threading.Lock()
+        harness.settings["platform_cores"] = {"psx": uncopyable}
+
+        with caplog.at_level(logging.WARNING):
+            harness.refile()
+
+        assert harness.settings["enabled_platforms"]["snes-hacks"] is True
+        assert harness.settings["platform_cores"] == {"psx": uncopyable}
+        assert "Failed to move older per-platform picks to their platforms: TypeError" in caplog.text
+
+    def test_the_ids_the_listing_drops_are_named(self, caplog):
+        """#2452 D21, D26: a toggle dropped with its id — not listed, or listed without a folder — is said."""
+        harness = self._kept_by_id({"5": True, "99": False, "7": True})
+
+        with caplog.at_level(logging.INFO):
+            harness.refiling.do_refile([*_PLATFORMS, {"id": 7, "slug": "arcade", "fs_slug": None, "firmware": []}])
+
+        assert (
+            "Dropped the sync toggles of RomM platform ids the listing does not name with a folder: 7, 99"
+            in caplog.text
+        )
+
+    def test_a_move_says_so(self, caplog):
+        harness = self._kept_by_id({"5": True})
+
+        with caplog.at_level(logging.INFO):
+            harness.refile()
+
+        assert "Moved the per-platform sync toggles from RomM's platform ids to the platforms' folders" in caplog.text

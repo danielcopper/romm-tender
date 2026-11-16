@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from lib.errors import Refused, require_platform_folder
+
 if TYPE_CHECKING:
     from services.library._state import LibrarySyncStateBox
     from services.library.fetcher import LibraryFetcher
@@ -96,11 +98,14 @@ class LibraryService:
     async def get_platforms(self):
         return await self._fetcher.get_platforms()
 
-    async def save_platform_sync(self, platform_id, enabled):
+    async def save_platform_sync(self, platform_folder, enabled):
+        require_platform_folder(platform_folder)
+        _require_switch_state(enabled)
         async with self._rules.hold("save_platform_sync", update=True, migration=True):
-            return self._fetcher.save_platform_sync(platform_id, enabled)
+            return await self._fetcher.save_platform_sync(platform_folder, enabled)
 
     async def set_all_platforms_sync(self, enabled):
+        _require_switch_state(enabled)
         async with self._rules.hold("set_all_platforms_sync", update=True, migration=True):
             return await self._fetcher.set_all_platforms_sync(enabled)
 
@@ -170,3 +175,9 @@ class LibraryService:
 
     def get_sync_runs(self):
         return self._views.get_sync_runs()
+
+
+def _require_switch_state(enabled: object) -> None:
+    """Refuse ``invalid_value`` for a sync toggle's state that is not ``True`` or ``False``."""
+    if not isinstance(enabled, bool):
+        raise Refused("invalid_value", f"{enabled!r} is not a sync toggle's state")

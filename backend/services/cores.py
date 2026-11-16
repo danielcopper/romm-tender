@@ -38,7 +38,7 @@ from domain.emulator_pick import game_platform_pick, pick_for, platform_pick_val
 from domain.platform_names import PLATFORM_NAMES_KEY, platform_display_name
 from domain.rom_files import asked_path
 from domain.start_command import source_refusal, start_verdict
-from lib.errors import Refused
+from lib.errors import Refused, require_platform_folder
 
 if TYPE_CHECKING:
     import asyncio
@@ -588,8 +588,7 @@ def _require_platform(platform_slug: object, platform_folder: object) -> None:
     """
     if not isinstance(platform_slug, str) or not platform_slug:
         raise Refused("invalid_value", f"{platform_slug!r} is not a RomM platform slug")
-    if not isinstance(platform_folder, str) or not platform_folder:
-        raise Refused("invalid_value", f"{platform_folder!r} is not a RomM platform folder")
+    require_platform_folder(platform_folder)
 
 
 def _asked_path(install: RomInstall, rom: Rom, disc_resolver: DiscResolver) -> str:

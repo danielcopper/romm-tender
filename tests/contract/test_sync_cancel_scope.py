@@ -66,7 +66,7 @@ async def test_cancel_sync_stale_run_does_not_abort_fresh_run(harness):
         "platform_name": "N64",
         "platform_slug": "n64",
     }
-    harness.settings["enabled_platforms"] = {"1": True}
+    harness.settings["enabled_platforms"] = {"n64": True}
 
     orch = _orchestrator(harness)
     _dispatcher(harness)._wait_for_unit_complete = _ack_immediately
@@ -143,7 +143,7 @@ async def test_apply_rejected_while_run_in_flight_emits_single_complete(harness)
         "platform_name": "N64",
         "platform_slug": "n64",
     }
-    harness.settings["enabled_platforms"] = {"1": True}
+    harness.settings["enabled_platforms"] = {"n64": True}
 
     orch = _orchestrator(harness)
     _dispatcher(harness)._wait_for_unit_complete = _ack_immediately
@@ -183,7 +183,7 @@ async def test_preview_cancel_after_unit_loop_returns_cancelled(harness):
         "platform_name": "N64",
         "platform_slug": "n64",
     }
-    harness.settings["enabled_platforms"] = {"1": True}
+    harness.settings["enabled_platforms"] = {"n64": True}
 
     preview = _preview(harness)
     box = harness.app.services.sync_service._box

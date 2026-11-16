@@ -16,3 +16,14 @@ class FakeSettingsPersister:
 
     def save_settings(self) -> None:
         self.save_count += 1
+
+
+class FailingSettingsPersister(FakeSettingsPersister):
+    """A ``SettingsPersister`` whose every save raises *error* — ``OSError("disk full")`` where none is given."""
+
+    def __init__(self, error: BaseException | None = None) -> None:
+        super().__init__()
+        self.error = error if error is not None else OSError("disk full")
+
+    def save_settings(self) -> None:
+        raise self.error

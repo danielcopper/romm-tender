@@ -37,7 +37,7 @@ def _seed_two_platforms(harness) -> None:
         "platform_name": "SNES",
         "platform_slug": "snes",
     }
-    harness.settings["enabled_platforms"] = {"1": True, "2": True}
+    harness.settings["enabled_platforms"] = {"n64": True, "snes": True}
 
 
 async def test_a_run_cancelled_at_shutdown_in_the_middle_of_a_chunk_leaves_the_resume_offer(harness):

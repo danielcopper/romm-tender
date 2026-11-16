@@ -56,16 +56,18 @@ class TestMigrateSettings:
         }
         assert migrate_settings(data) == {
             **data,
-            "version": 14,
+            "version": 15,
             "platform_cores": {"snes": {"label": "bsnes", "source": "retrodeck"}},
+            "enabled_platforms": {},
+            "enabled_platform_ids": {},
         }
 
     def test_a_value_that_names_no_pick_is_dropped(self):
         data = {"version": 13, "platform_cores": {"snes": "bsnes", "gba": "", "nes": 7}}
         assert migrate_settings(data)["platform_cores"] == {"snes": {"label": "bsnes", "source": "retrodeck"}}
 
-    def test_a_file_at_version_14_is_returned_unchanged(self):
-        data = {"version": 14, "platform_cores": {"snes": {"label": "bsnes", "source": "retrodeck"}}}
+    def test_a_file_at_version_15_is_returned_unchanged(self):
+        data = {"version": 15, "platform_cores": {"snes": {"label": "bsnes", "source": "retrodeck"}}}
         assert migrate_settings(data) == data
 
     def test_running_it_twice_changes_nothing_more(self):
@@ -78,3 +80,42 @@ class TestMigrateSettings:
         result = migrate_settings(data)
         result["romm_url"] = "http://other.example"
         assert data == {"version": 13, "romm_url": "http://example.com"}
+
+
+class TestTheTogglesKeptByRommId:
+    """Version 15 keeps the per-platform sync toggles by fs_slug; those kept by RomM id wait (#2452 D8, D24)."""
+
+    @pytest.mark.parametrize("version", [13, 14])
+    def test_the_toggles_kept_by_id_move_aside_and_the_new_map_starts_empty(self, version):
+        data = {"version": version, "enabled_platforms": {"1": True, "2": False}}
+
+        migrated = migrate_settings(data)
+
+        assert migrated["version"] == 15
+        assert migrated["enabled_platform_ids"] == {"1": True, "2": False}
+        assert migrated["enabled_platforms"] == {}
+
+    def test_a_map_never_touched_moves_aside_too(self):
+        """An empty map meant every platform on, which the move keeps (#2452 D24)."""
+        migrated = migrate_settings({"version": 14, "enabled_platforms": {}})
+
+        assert migrated["enabled_platform_ids"] == {}
+        assert migrated["enabled_platforms"] == {}
+
+    @pytest.mark.parametrize("value", [None, [], "1", 7])
+    def test_a_value_that_is_no_map_moves_aside_as_no_toggle_saved(self, value):
+        """No toggle can be read from it, so every listed platform is switched on at the move (#2452 D22, D24)."""
+        migrated = migrate_settings({"version": 14, "enabled_platforms": value})
+
+        assert migrated["enabled_platform_ids"] == {}
+        assert migrated["enabled_platforms"] == {}
+
+    def test_a_file_at_version_15_keeps_its_toggles(self):
+        data = {"version": 15, "enabled_platforms": {"snes": True}}
+
+        assert migrate_settings(data) == data
+
+    def test_running_it_twice_moves_nothing_more(self):
+        once = migrate_settings({"version": 14, "enabled_platforms": {"1": True}})
+
+        assert migrate_settings(once) == once
