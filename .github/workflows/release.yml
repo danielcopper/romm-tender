@@ -77,7 +77,7 @@ jobs:
 
       # Why `package_json_file` is set rather than left to the default: the same
       # step in ci.yml.
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
         with:
           package_json_file: frontend/package.json
 
