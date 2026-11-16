@@ -131,7 +131,11 @@ export type AdoptionOutcome = "download_started" | "adopted" | "cancelled" | "fa
  */
 export function runDownloadWithAdoption(flow: DownloadWithAdoption): Promise<AdoptionOutcome> {
   return download(flow, false, undefined, null).catch((e: unknown) => {
-    flow.hooks.setBusy(false);
+    try {
+      flow.hooks.setBusy(false);
+    } catch (handBack) {
+      logFailure(flow.logContext, "hand busy back for", flow.romId, handBack);
+    }
     throw e;
   });
 }
@@ -328,20 +332,29 @@ async function adopt(
       showToast(result.message || ADOPT_REFUSED_TOAST);
       return "failed";
     }
-    try {
-      hooks.setTargetOccupied(false);
-      hooks.setCandidatePresent(false);
-      hooks.onAdopted();
-    } finally {
-      // The adoption is recorded whatever the caller's hooks do with it.
-      globalThis.dispatchEvent(
-        new CustomEvent("romm_data_changed", { detail: { type: "rom_adopted", rom_id: romId } }),
-      );
-      showToast(adoptedToast(flow.romName));
-    }
+    announceAdoption(flow);
     return "adopted";
   } finally {
     hooks.setBusy(false);
+  }
+}
+
+/**
+ * Tell the page, the rest of the panel and the user of an adoption the backend
+ * has recorded. The panel and the user hear of it whatever the page's hooks do;
+ * a hook that throws rejects with an error that says the adoption was recorded.
+ */
+function announceAdoption(flow: DownloadWithAdoption): void {
+  const { romId, hooks } = flow;
+  try {
+    hooks.setTargetOccupied(false);
+    hooks.setCandidatePresent(false);
+    hooks.onAdopted();
+  } catch (e) {
+    throw Object.assign(new Error(`adopted, but the page's hooks threw: ${String(e)}`), { cause: e });
+  } finally {
+    globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "rom_adopted", rom_id: romId } }));
+    showToast(adoptedToast(flow.romName));
   }
 }
 

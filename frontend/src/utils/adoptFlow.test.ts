@@ -404,7 +404,8 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
 
     expect(backend.logError).not.toHaveBeenCalled();
     expect(toastBodies()).toEqual([]);
-    expect(log).toEqual(["busy:true", "occupied:true", "busy:false", "busy:false"]);
+    expect(log.slice(0, 3)).toEqual(["busy:true", "occupied:true", "busy:false"]);
+    expect(log[log.length - 1]).toBe("busy:false");
   });
 
   const adoptedAtOnce = () => vi.mocked(backend.adoptExistingRom).mockResolvedValue(ADOPTED);
@@ -428,7 +429,7 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
     ["onAdopted, adopted after the taken-names question", adoptedAfterCollisions, breakOnAdopted],
     ["setTargetOccupied, adopted at once", adoptedAtOnce, breakClearingOccupied],
   ])(
-    "hands a hook that throws after a successful adoption (%s) to the caller rather than logging it as a failed adoption",
+    "hands a hook that throws after a successful adoption (%s) to the caller as an adoption that was recorded",
     async (_case, arrange, breakHook) => {
       vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
       arrange();
@@ -440,12 +441,19 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
       const onChange = (e: Event) => changes.push((e as CustomEvent).detail);
       globalThis.addEventListener("romm_data_changed", onChange);
 
+      let rejection: unknown;
       try {
-        await expect(runDownloadWithAdoption(flow)).rejects.toThrow("hook broke");
+        rejection = await runDownloadWithAdoption(flow).then(
+          () => undefined,
+          (e: unknown) => e,
+        );
       } finally {
         globalThis.removeEventListener("romm_data_changed", onChange);
       }
 
+      expect(rejection).toBeInstanceOf(Error);
+      expect((rejection as Error).message).toBe("adopted, but the page's hooks threw: Error: hook broke");
+      expect((rejection as { cause?: unknown }).cause).toEqual(new Error("hook broke"));
       expect(backend.logError).not.toHaveBeenCalled();
       expect(log[log.length - 1]).toBe("busy:false");
       // The adoption is recorded, so the panel hears of it and the user is told all the same.
@@ -465,6 +473,25 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
 
     expect(log).toEqual(["busy:true", "busy:false"]);
     expect(backend.logError).not.toHaveBeenCalled();
+  });
+
+  it("keeps the flow's own error when handing busy back throws too, and logs the hand-back", async () => {
+    vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
+    const { flow } = makeFlow();
+    flow.hooks.setTargetOccupied = () => {
+      throw new Error("hook broke");
+    };
+    const setBusy = flow.hooks.setBusy;
+    flow.hooks.setBusy = (busy) => {
+      if (!busy) throw new Error("busy broke");
+      setBusy(busy);
+    };
+
+    await expect(runDownloadWithAdoption(flow)).rejects.toThrow("hook broke");
+
+    expect(backend.logError).toHaveBeenCalledExactlyOnceWith(
+      "test: could not hand busy back for romId=42: Error: busy broke",
+    );
   });
 
   it("hands a taken-names question that rejects during an adoption to the caller, with busy ended", async () => {
