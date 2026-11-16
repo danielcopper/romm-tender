@@ -446,11 +446,8 @@ export const ASKED_LIVE: Readonly<Record<string, string>> = {
     "answers `window` when `document.title` is `SP` and otherwise searches the focus " +
     "controller's active (else last active) context for the `GamepadUI_Full_Root` / " +
     "`root_1_` navigation tree (`dist/utils/index.js`) — a context that carries no Big " +
-    "Picture tree until Big Picture has been opened. Its consumers, " +
-    "`utils/styleInjector.ts`'s `hideNativePlaySection` and `showNativePlaySection`, ask " +
-    "it when the play button mounts and unmounts on a game page, and " +
-    "`utils/installQamWidthPatch.ts`'s `installQamWidthPatch` when a wide page widens the panel; " +
-    "each does nothing when it answers nothing",
+    "Picture tree until Big Picture has been opened. Its consumers, and what each does when " +
+    'it answers nothing, are on `docs/architecture/frontend-bundles.md`, "The start-up check"',
   getGamepadNavigationTrees:
     "the trees themselves: the focus controller's active (else last active) context carries " +
     "them, and answers `undefined` while it carries none (`dist/utils/index.js`) — the state " +
