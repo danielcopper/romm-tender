@@ -53,6 +53,11 @@ function mountedHost(shape: "simple" | "memo" = "simple"): { memo: SimpleMemo; h
   return { memo, host };
 }
 
+/** A getter or proxy trap that throws, as one on a value from a module whose evaluation failed does. */
+const unreadable = (): never => {
+  throw new Error("unreadable");
+};
+
 /** What `afterPatch` does to the memo: its `type` replaced by one that hands the original's result to *handler*. */
 const patchAfter = (handler: (args: unknown[], rendered: unknown) => unknown) =>
   vi.fn((memo: SimpleMemo) => {
@@ -147,6 +152,53 @@ describe("the wrapper's handler on Steam's QAM host", () => {
     expect(warn.mock.calls).toEqual([
       ["[Tender] the wide pages stay at Steam's narrow width: the wrapper on the QAM host threw", thrown],
     ]);
+  });
+
+  it("still says so where a later throw is a different error, and not where it is the same one again", () => {
+    let next: unknown;
+    const handler = mod.widenWhileExpanded(() => {
+      throw next;
+    }, EXPANDED);
+    const first = new Error("store moved");
+    const renamed = new TypeError("store moved");
+    const reworded = new Error("store gone");
+
+    for (const thrown of [first, new Error("store moved"), renamed, reworded, new TypeError("store moved")]) {
+      next = thrown;
+      handler([], hostRender());
+    }
+
+    const line = "[Tender] the wide pages stay at Steam's narrow width: the wrapper on the QAM host threw";
+    expect(warn.mock.calls).toEqual([
+      [line, first],
+      [line, renamed],
+      [line, reworded],
+    ]);
+  });
+
+  it.each([
+    [
+      "an error whose message getter throws",
+      () => Object.defineProperty(new Error("x"), "message", { get: unreadable }),
+    ],
+    ["a proxy whose every read throws", () => new Proxy({}, { get: unreadable })],
+    ["null", () => null],
+    ["a string", () => "store moved"],
+    ["a symbol", () => Symbol("store moved")],
+  ])("returns Steam's result and says so where the thrown value is %s", (_value, make) => {
+    const thrown = make();
+    const handler = mod.widenWhileExpanded(() => {
+      throw thrown;
+    }, EXPANDED);
+    const steam = hostRender();
+
+    expect(handler([], steam)).toBe(steam);
+    // Compared by identity: a deep comparison would read the proxy and throw.
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[0]).toBe(
+      "[Tender] the wide pages stay at Steam's narrow width: the wrapper on the QAM host threw",
+    );
+    expect(warn.mock.calls[0]?.[1]).toBe(thrown);
   });
 
   it.each([
@@ -334,6 +386,23 @@ describe("tryQamWidthInstall", () => {
     ]);
   });
 
+  it("still says so where a later install throws a different error, and not where it is the same one again", () => {
+    const first = new Error("no fiber");
+    const other = new RangeError("no fiber");
+    for (const thrown of [first, new Error("no fiber"), other]) {
+      mod.tryQamWidthInstall(() => {
+        throw thrown;
+      });
+    }
+
+    const line =
+      "[Tender] the wide pages stay at Steam's narrow width: the install of the wrapper on the QAM host threw";
+    expect(warn.mock.calls).toEqual([
+      [line, first],
+      [line, other],
+    ]);
+  });
+
   it("says nothing where the host was wrapped", () => {
     mod.tryQamWidthInstall(() => "wrapped");
 
@@ -346,7 +415,7 @@ describe("tryQamWidthInstall", () => {
     }, EXPANDED);
     const empty = mod.widenWhileExpanded(() => true, EXPANDED);
     const installThrowing = (): QamWidthInstall => {
-      throw new Error("y");
+      throw new Error("x");
     };
 
     for (let pass = 0; pass < 2; pass++) {

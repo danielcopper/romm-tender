@@ -252,8 +252,9 @@ How a page gets wide, measured on the device rather than read from documentation
   for each distinct reason: the install wrapped nothing (with the reason, Big Picture's window not being found among
   them — the install runs only from a wide page inside the Quick Access panel, where that window exists, so not finding
   it is a failed lookup), the flag was set and the host rendered no element to widen (with the part of the render that
-  was not as expected), and the wrapper's or the install's own work threw (with the error itself, so its stack is kept).
-  What the start-up check asks on its behalf, and what each miss costs, is under
+  was not as expected), and the wrapper's or the install's own work threw (with the error itself, so its stack is kept;
+  a throw's reason is where it was thrown and its error's name and message, so a second, different error from the same
+  place is written too). What the start-up check asks on its behalf, and what each miss costs, is under
   [the start-up check](frontend-bundles.md#the-start-up-check).
 - Every tab's content panel carries `max-width: 300px`; only Steam's Friends panel lifts it. A wide page injects one
   stylesheet whose `:has()` rule lifts the cap for a marker class on the panel's own subtree. Class names come from

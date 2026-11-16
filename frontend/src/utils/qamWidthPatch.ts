@@ -78,13 +78,37 @@ export function wrapFirstQamHost(
   return refusal;
 }
 
-/** The keys the console has been told this load: one per case and reason. */
-const noted = new Set<string>();
+/** Where the wrapper's or the install's own work threw, and what was thrown. */
+type ThrowKey = `threw:${"wrapper" | "install"}:${string}`;
 
-function noteOnce(key: string, line: string, ...error: [] | [unknown]): void {
+/** One case the console is told about, with its reason. */
+type NoteKey = `render:${RenderMiss}` | `install:${Exclude<QamWidthInstall, "wrapped">}` | ThrowKey;
+
+/** The keys the console has been told this load. */
+const noted = new Set<NoteKey>();
+
+function noteOnce(key: NoteKey, line: string, ...error: [] | [unknown]): void {
   if (noted.has(key)) return;
   noted.add(key);
   console.warn(`[Tender] the wide pages stay at Steam's narrow width: ${line}`, ...error);
+}
+
+/**
+ * The key of a throw at *site*: what was thrown, told apart by its name and
+ * message, read so that the reading cannot throw out of the catch it runs in.
+ * A value whose name or message cannot be read is told by that alone.
+ */
+function throwKey(site: "wrapper" | "install", thrown: unknown): ThrowKey {
+  try {
+    if ((typeof thrown !== "object" && typeof thrown !== "function") || thrown === null) {
+      return `threw:${site}:${typeof thrown} ${String(thrown)}`;
+    }
+    const { name, message } = thrown as { name?: unknown; message?: unknown };
+    const read = (part: unknown): string => (typeof part === "string" ? part : typeof part);
+    return `threw:${site}:${read(name)}: ${read(message)}`;
+  } catch {
+    return `threw:${site}:unreadable`;
+  }
 }
 
 /** Which part of one render of the QAM host was not as the wrapper expects it. */
@@ -134,7 +158,7 @@ export const widenWhileExpanded =
       noteOnce(`render:${result}`, `the QAM host rendered no element to widen (${result})`);
       return rendered;
     } catch (error) {
-      noteOnce("threw:wrapper", "the wrapper on the QAM host threw", error);
+      noteOnce(throwKey("wrapper", error), "the wrapper on the QAM host threw", error);
       return rendered;
     }
   };
@@ -148,7 +172,7 @@ export function tryQamWidthInstall(install: () => QamWidthInstall): void {
   try {
     answer = install();
   } catch (error) {
-    noteOnce("threw:install", "the install of the wrapper on the QAM host threw", error);
+    noteOnce(throwKey("install", error), "the install of the wrapper on the QAM host threw", error);
     return;
   }
   if (answer !== "wrapped") noteOnce(`install:${answer}`, `the width patch wrapped nothing (${answer})`);
