@@ -107,6 +107,22 @@ describe("executeDownloadCancel", () => {
     expect(getDownloadState()).toHaveLength(2);
   });
 
+  it("logs a caller's bar that throws on ending rather than dropping it", async () => {
+    vi.mocked(backend.cancelDownload).mockResolvedValueOnce({
+      success: false,
+      reason: "no_active_download",
+      message: "No active download",
+    });
+
+    await executeDownloadCancel(7, "Tag", () => {
+      throw new Error("bar broke");
+    });
+
+    expect(backend.logError).toHaveBeenCalledExactlyOnceWith(
+      "Tag: could not cancel the download of romId=7: Error: bar broke",
+    );
+  });
+
   it("keeps the store and the bar on a refusal for another reason", async () => {
     vi.mocked(backend.cancelDownload).mockResolvedValueOnce({
       success: false,

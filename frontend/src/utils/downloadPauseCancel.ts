@@ -11,12 +11,11 @@ import { getDownloadState, isDownloadUnderWay, removeDownload } from "./download
 
 /** Pause the ROM's download; the paused frame is what shows it. */
 export function executeDownloadPause(romId: number, tag: string): Promise<void> {
-  return pauseDownload(romId).then(
-    (result) => {
+  return pauseDownload(romId)
+    .then((result) => {
       if (!result.success) logRefusal(tag, "pause the download of", romId, result);
-    },
-    (e: unknown) => logFailure(tag, "pause the download of", romId, e),
-  );
+    })
+    .catch((e: unknown) => logFailure(tag, "pause the download of", romId, e));
 }
 
 /**
@@ -30,8 +29,8 @@ export function executeDownloadPause(romId: number, tag: string): Promise<void> 
  * after it.
  */
 export function executeDownloadCancel(romId: number, tag: string, onNothingToCancel: () => void): Promise<void> {
-  return cancelDownload(romId).then(
-    (result) => {
+  return cancelDownload(romId)
+    .then((result) => {
       if (result.success) return;
       logRefusal(tag, "cancel the download of", romId, result);
       if (result.reason !== "no_active_download") return;
@@ -39,7 +38,6 @@ export function executeDownloadCancel(romId: number, tag: string, onNothingToCan
       if (entry !== undefined && !isDownloadUnderWay(entry)) return;
       removeDownload(romId);
       onNothingToCancel();
-    },
-    (e: unknown) => logFailure(tag, "cancel the download of", romId, e),
-  );
+    })
+    .catch((e: unknown) => logFailure(tag, "cancel the download of", romId, e));
 }
