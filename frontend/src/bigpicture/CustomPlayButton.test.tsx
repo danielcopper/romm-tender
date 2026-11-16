@@ -27,7 +27,6 @@ import { CustomPlayButton } from "./CustomPlayButton";
 import { emitHostEvent, hostEventListenerCount } from "../test-utils/host-event-bus";
 import { setStrandedAnswer } from "../test-utils/stranded-panel";
 import { getDownloadState, setDownloads, updateDownload } from "../utils/downloadStore";
-import * as adoptFlow from "../utils/adoptFlow";
 import * as backend from "../api/backend";
 import type { CachedGameDetail } from "../api/backend";
 import type {
@@ -5752,35 +5751,6 @@ describe("CustomPlayButton — content already on disk (#260)", () => {
       );
       expect(vi.mocked(toaster.toast)).not.toHaveBeenCalled();
     } finally {
-      logErrorSpy.mockRestore();
-    }
-  });
-
-  it("ends Starting... when the download press rejects while it is busy", async () => {
-    mockCachedDetail({ rom_id: 42, installed: false });
-    vi.mocked(backend.getDownloadQueue).mockResolvedValue({ downloads: [] });
-    const flowSpy = vi.spyOn(adoptFlow, "runDownloadWithAdoption").mockImplementation(async (flow) => {
-      flow.hooks.setBusy(true);
-      throw new Error("hook broke");
-    });
-    const logErrorSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
-    try {
-      const utils = render(<CustomPlayButton appId={100} />);
-      const btn = await utils.findByText("Download");
-
-      await act(async () => {
-        btn.click();
-      });
-
-      await waitFor(() =>
-        expect(logErrorSpy).toHaveBeenCalledExactlyOnceWith(
-          "CustomPlayButton: could not run the download press for romId=42: Error: hook broke",
-        ),
-      );
-      expect(utils.queryByText("Starting...")).toBeNull();
-      expect(utils.getByText("Download")).toBeInTheDocument();
-    } finally {
-      flowSpy.mockRestore();
       logErrorSpy.mockRestore();
     }
   });

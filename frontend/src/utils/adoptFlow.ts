@@ -127,10 +127,13 @@ export type AdoptionOutcome = "download_started" | "adopted" | "cancelled" | "fa
  * Run one Download press to its end. The caller's own "already busy" guard is
  * for the press alone: every re-send this makes is the user's answer to a
  * refusal and is always admitted. A dialog or a hook that throws rejects the
- * returned promise.
+ * returned promise, with busy handed back first.
  */
 export function runDownloadWithAdoption(flow: DownloadWithAdoption): Promise<AdoptionOutcome> {
-  return download(flow, false, undefined, null);
+  return download(flow, false, undefined, null).catch((e: unknown) => {
+    flow.hooks.setBusy(false);
+    throw e;
+  });
 }
 
 async function download(

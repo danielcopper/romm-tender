@@ -404,7 +404,7 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
 
     expect(backend.logError).not.toHaveBeenCalled();
     expect(toastBodies()).toEqual([]);
-    expect(log).toEqual(["busy:true", "occupied:true", "busy:false"]);
+    expect(log).toEqual(["busy:true", "occupied:true", "busy:false", "busy:false"]);
   });
 
   it.each([
@@ -441,6 +441,19 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
       expect(changes).toEqual([{ type: "rom_adopted", rom_id: ROM_ID }]);
     },
   );
+
+  it("hands busy back when a hook throws while a request held it", async () => {
+    vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
+    const { flow } = makeFlow();
+    flow.hooks.setTargetOccupied = () => {
+      throw new Error("hook broke");
+    };
+
+    await expect(runDownloadWithAdoption(flow)).rejects.toThrow("hook broke");
+
+    expect(log).toEqual(["busy:true", "busy:false"]);
+    expect(backend.logError).not.toHaveBeenCalled();
+  });
 
   it("hands a taken-names question that rejects during an adoption to the caller, with busy ended", async () => {
     vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);

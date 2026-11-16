@@ -6,7 +6,6 @@ import { DiscSelector } from "./DiscSelector";
 import * as gameDetailStore from "../../utils/gameDetailStore";
 import * as downloadStore from "../../utils/downloadStore";
 import * as downloadRehydrate from "../../utils/downloadRehydrate";
-import * as adoptFlow from "../../utils/adoptFlow";
 import * as sessionManager from "../../utils/sessionManager";
 import * as backend from "../../api/backend";
 import * as toast from "../../utils/toast";
@@ -1633,27 +1632,6 @@ describe("PlayButton", () => {
         ),
       );
       await pressEnded();
-    });
-
-    it("ends STARTING... when the download press rejects while it is busy", async () => {
-      const flowSpy = vi.spyOn(adoptFlow, "runDownloadWithAdoption").mockImplementation(async (flow) => {
-        flow.hooks.setBusy(true);
-        throw new Error("hook broke");
-      });
-      try {
-        render(<PlayButton appId={APP_ID} />);
-        fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
-
-        await waitFor(() =>
-          expect(backend.logError).toHaveBeenCalledExactlyOnceWith(
-            "DesktopPlayButton: could not run the download press for romId=100: Error: hook broke",
-          ),
-        );
-        expect(screen.queryByRole("button", { name: "STARTING..." })).not.toBeInTheDocument();
-        expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
-      } finally {
-        flowSpy.mockRestore();
-      }
     });
 
     it("reads STARTING..., with the ring, while the adoption's request is in flight", async () => {
