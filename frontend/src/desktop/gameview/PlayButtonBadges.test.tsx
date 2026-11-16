@@ -209,7 +209,7 @@ describe("PlayButtonBadges", () => {
 
     it.each([
       ["the emulator sources changing", { type: "emulator_sources" }],
-      ["a platform's core changing", { type: "core_changed", platform_slug: "psx" }],
+      ["a platform's core changing", { type: "core_changed", platform_fs_slug: "psx" }],
       ["this ROM's save sync", { type: "save_sync", rom_id: ROM_ID }],
       ["a save sync that names no ROM", { type: "save_sync" }],
     ])("is asked again on %s", async (_name, eventDetail) => {
@@ -238,12 +238,19 @@ describe("PlayButtonBadges", () => {
       expect(backend.getSaveSyncAvailability).toHaveBeenCalledTimes(1);
     });
 
-    it("does not stand for a game since uninstalled", async () => {
+    it("does not stand for a game since uninstalled, or after a reinstall before the new read lands", async () => {
       vi.mocked(backend.getSaveSyncAvailability).mockResolvedValue(REFUSED);
       const { rerender } = render(draw(ENABLED));
       await screen.findByText("Shared save");
 
       rerender(draw({ ...ENABLED, installed: false }));
+
+      expect(screen.queryByText("Shared save")).not.toBeInTheDocument();
+      expect(screen.getByText("No saves")).toBeInTheDocument();
+
+      vi.mocked(backend.getSaveSyncAvailability).mockReturnValue(new Promise<SaveSyncAvailability>(() => undefined));
+      rerender(draw(ENABLED));
+      await act(async () => {});
 
       expect(screen.queryByText("Shared save")).not.toBeInTheDocument();
       expect(screen.getByText("No saves")).toBeInTheDocument();
@@ -344,7 +351,7 @@ describe("PlayButtonBadges", () => {
       vi.mocked(backend.getSaveSyncAvailability).mockRejectedValue(new Error("gone"));
       act(() => {
         globalThis.dispatchEvent(
-          new CustomEvent("romm_data_changed", { detail: { type: "core_changed", platform_slug: "psx" } }),
+          new CustomEvent("romm_data_changed", { detail: { type: "core_changed", platform_fs_slug: "psx" } }),
         );
       });
 
@@ -510,7 +517,7 @@ describe("PlayButtonBadges", () => {
       await waitFor(() => expect(backend.isSaveTrackingConfigured).toHaveBeenCalledTimes(2));
     });
 
-    it("does not lend its local-save answer to the offline badge once RomM goes offline", async () => {
+    it("does not lend its local-save answer to the offline badge once RomM goes offline, or when back online before the new read lands", async () => {
       vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
         configured: false,
         active_slot: null,
@@ -522,6 +529,15 @@ describe("PlayButtonBadges", () => {
       rerender(draw(ENABLED, { isOffline: true }));
 
       expect(screen.getByText("RomM unavailable")).toBeInTheDocument();
+
+      vi.mocked(backend.isSaveTrackingConfigured).mockReturnValue(
+        new Promise<{ configured: boolean; active_slot: string | null; setup_needed: boolean }>(() => undefined),
+      );
+      rerender(draw(ENABLED, { isOffline: false }));
+      await act(async () => {});
+
+      expect(screen.queryByText("Slot not confirmed")).not.toBeInTheDocument();
+      expect(screen.getByText("Not checked")).toBeInTheDocument();
     });
 
     it("is asked again on this ROM's save sync, and on one that names no ROM", async () => {
@@ -537,7 +553,7 @@ describe("PlayButtonBadges", () => {
 
     it.each([
       ["the emulator sources changing", { type: "emulator_sources" }],
-      ["a platform's core changing", { type: "core_changed", platform_slug: "psx" }],
+      ["a platform's core changing", { type: "core_changed", platform_fs_slug: "psx" }],
     ])("is asked again on %s", async (_name, eventDetail) => {
       render(draw(ENABLED));
       await waitFor(() => expect(backend.isSaveTrackingConfigured).toHaveBeenCalledTimes(1));

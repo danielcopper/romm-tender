@@ -1993,7 +1993,11 @@ describe("gameDetailStore", () => {
       subscribe(nextAppId);
       await flush();
 
-      noteSaveSyncDisplay(nextAppId, 42, { status: "synced", label: "Just now", last_sync_check_at: null });
+      noteSaveSyncDisplay(nextAppId, 42, {
+        status: "synced",
+        label: "Just now",
+        last_sync_check_at: "2026-11-01T00:00:00Z",
+      });
 
       expect(getGameDetail(nextAppId)).toMatchObject({ saveSyncStatus: "synced", saveSyncLabel: "Just now" });
     });
@@ -2008,7 +2012,7 @@ describe("gameDetailStore", () => {
       await flush();
       expect(getGameDetail(nextAppId).saveSyncCheckedAt).toBe(at);
 
-      noteSaveSyncDisplay(nextAppId, 42, { status: "synced", label: "Just now", last_sync_check_at: null });
+      noteSaveSyncDisplay(nextAppId, 42, { status: "none", label: "No saves", last_sync_check_at: null });
 
       expect(getGameDetail(nextAppId).saveSyncCheckedAt).toBeNull();
     });

@@ -62,6 +62,9 @@ describe("executeManualSaveSync", () => {
       label: "Just now",
       last_sync_check_at: expect.any(String),
     });
+    expect(dispatchSpy.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(gameDetailStore.noteSaveSyncDisplay).mock.invocationCallOrder[0]!,
+    );
     const recorded = vi.mocked(gameDetailStore.noteSaveSyncDisplay).mock.calls[0]![2];
     expect(Date.parse(recorded.last_sync_check_at!)).not.toBeNaN();
   });

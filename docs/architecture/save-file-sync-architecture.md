@@ -1117,8 +1117,8 @@ endpoints (rollback, slot switch, conflict resolve, the slot choice with or with
 with the same reason. The game's SAVES tab says so like every other refusal, marked beside its title, and names
 RetroArch's setting under the sentence, only as the usual cause
 ([#2149](https://github.com/danielcopper/romm-tender/issues/2149) D2); nothing above the play row says it.
-`get_save_status` carries the additive `savefiles_in_content_dir` flag, which only `saveSyncBadge` (desktop dev build)
-reads.
+`get_save_status` carries the additive `savefiles_in_content_dir` flag, which only `saveSyncBadge`
+(`frontend/src/utils/saveSyncBadge.ts`, desktop dev build) reads.
 
 **Why this is easy to confuse**: "Write Saves to **Content Directory**" controls the **destination** (next to the ROM vs
 the saves directory), while "Sort Saves **Into Folders by Content Directory**" controls the **layout within** the saves
