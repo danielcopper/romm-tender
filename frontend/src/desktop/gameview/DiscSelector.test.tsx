@@ -10,6 +10,7 @@ import * as backend from "../../api/backend";
 import type { CachedGameDetail, DiscSelection, VersionInfo, VersionList } from "../../api/backend";
 import { emitHostEvent, hostEventListenerCount } from "../../test-utils/host-event-bus";
 import { throbberIn } from "../../test-utils/throbber";
+import { flushMacrotask } from "../../test-utils/flush";
 import {
   domListenerCount,
   installDomEventListenerSpy,
@@ -166,11 +167,6 @@ function vanishedVersionList(): VersionList {
   };
 }
 
-const flushAsync = () =>
-  act(async () => {
-    await new Promise((r) => setTimeout(r, 0));
-  });
-
 async function renderAndOpen(appId = 100, fileMissing = false) {
   const r = render(<Selector appId={appId} fileMissing={fileMissing} />);
   await r.findByTestId("disc-btn");
@@ -204,7 +200,7 @@ describe("Desktop DiscSelector — render gate", () => {
 
     const { container } = render(<Selector appId={100} />);
 
-    await flushAsync();
+    await flushMacrotask();
     expect(vi.mocked(backend.getDiscSelection)).not.toHaveBeenCalled();
     expect(container.querySelector('[data-testid="disc-btn"]')).toBeNull();
   });
@@ -214,7 +210,7 @@ describe("Desktop DiscSelector — render gate", () => {
 
     const { container } = render(<Selector appId={100} />);
 
-    await flushAsync();
+    await flushMacrotask();
     expect(vi.mocked(backend.getDiscSelection)).not.toHaveBeenCalled();
     expect(container.querySelector('[data-testid="disc-btn"]')).toBeNull();
   });
@@ -738,7 +734,7 @@ describe("Desktop DiscSelector — what a version row offers", () => {
 
     const { container } = render(<Selector appId={100} />);
     await waitFor(() => expect(backend.getVersionList).toHaveBeenCalled());
-    await flushAsync();
+    await flushMacrotask();
 
     expect(container).toBeEmptyDOMElement();
   });
@@ -885,7 +881,7 @@ describe("Desktop DiscSelector — while a switch is under way", () => {
     const admission = capturePruneLeaseAdmission("desktop-version-picker:100");
 
     r.rerender(<Selector appId={100} onSwitchingChange={(s) => calls.push(s)} />);
-    await flushAsync();
+    await flushMacrotask();
 
     expect(isPruneLeaseAdmissionCurrent(admission)).toBe(true);
     expect(r.getByTestId("disc-btn")).toBeDisabled();
@@ -958,7 +954,7 @@ describe("Desktop DiscSelector — a missing file", () => {
 
     const { container } = render(<Selector appId={100} fileMissing />);
     await waitFor(() => expect(backend.getDiscSelection).toHaveBeenCalled());
-    await flushAsync();
+    await flushMacrotask();
 
     expect(container).toBeEmptyDOMElement();
   });
@@ -1109,7 +1105,7 @@ describe("Desktop DiscSelector — what it asks for", () => {
 
     const { container } = render(<Selector appId={100} />);
     await waitFor(() => expect(backend.getDiscSelection).toHaveBeenCalled());
-    await flushAsync();
+    await flushMacrotask();
 
     expect(container).toBeEmptyDOMElement();
     expect(logError).not.toHaveBeenCalledWith(expect.stringContaining("init error"));
@@ -1121,7 +1117,7 @@ describe("Desktop DiscSelector — what it asks for", () => {
 
     render(<Selector appId={100} />);
     await waitFor(() => expect(getCachedGameDetail).toHaveBeenCalled());
-    await flushAsync();
+    await flushMacrotask();
 
     expect(backend.getDiscSelection).not.toHaveBeenCalled();
   });
@@ -1131,7 +1127,7 @@ describe("Desktop DiscSelector — what it asks for", () => {
 
     render(<Selector appId={100} />);
     await waitFor(() => expect(getCachedGameDetail).toHaveBeenCalled());
-    await flushAsync();
+    await flushMacrotask();
 
     expect(backend.getDiscSelection).not.toHaveBeenCalled();
   });
@@ -1165,7 +1161,7 @@ describe("Desktop DiscSelector — which events it asks again for", () => {
       } as DownloadCompleteEvent);
       await Promise.resolve();
     });
-    await flushAsync();
+    await flushMacrotask();
 
     expect(backend.getDiscSelection).toHaveBeenCalledTimes(1);
     expect(backend.getVersionList).toHaveBeenCalledTimes(1);
@@ -1202,7 +1198,7 @@ describe("Desktop DiscSelector — which events it asks again for", () => {
     await drawn();
 
     await dataChanged({ type: "version_switched", app_id: 999, rom_id: 5 });
-    await flushAsync();
+    await flushMacrotask();
 
     expect(getCachedGameDetail).toHaveBeenCalledTimes(1);
     expect(backend.getVersionList).toHaveBeenCalledTimes(1);
@@ -1232,7 +1228,7 @@ describe("Desktop DiscSelector — which events it asks again for", () => {
     await drawn();
 
     await dataChanged({ type: "rom_pruned", app_ids: [7], rom_ids: [99] });
-    await flushAsync();
+    await flushMacrotask();
 
     expect(backend.getVersionList).toHaveBeenCalledTimes(1);
   });
@@ -1241,7 +1237,7 @@ describe("Desktop DiscSelector — which events it asks again for", () => {
     await drawn();
 
     await syncFrame({ running: false, stage: "fetching" });
-    await flushAsync();
+    await flushMacrotask();
 
     expect(backend.getVersionList).toHaveBeenCalledTimes(1);
   });
@@ -1290,7 +1286,7 @@ describe("Desktop DiscSelector — lists that land out of order", () => {
       first.reject(new Error("late"));
       await Promise.resolve();
     });
-    await flushAsync();
+    await flushMacrotask();
 
     expect(logError).not.toHaveBeenCalled();
     logError.mockRestore();
@@ -1345,7 +1341,7 @@ describe("Desktop DiscSelector — lists that land out of order", () => {
       before.resolve(multiVersionList());
       await Promise.resolve();
     });
-    await flushAsync();
+    await flushMacrotask();
     expect(r.getByTestId("disc-btn")).toBeDisabled();
 
     await act(async () => {
@@ -1379,7 +1375,7 @@ describe("Desktop DiscSelector — what a row and the trigger draw", () => {
     vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: "" });
 
     const r = await renderAndOpen();
-    await flushAsync();
+    await flushMacrotask();
 
     const row = within(r.getByTestId("disc-menu")).getByText("Japan").closest("button")!;
     expect(row.querySelector("img")).toBeNull();
@@ -1448,7 +1444,7 @@ describe("Desktop DiscSelector — after it is gone", () => {
       refusal.resolve({ success: false, reason: "version_vanished", message: "gone" } as never);
       await Promise.resolve();
     });
-    await flushAsync();
+    await flushMacrotask();
 
     expect(backend.getVersionList).toHaveBeenCalledTimes(1);
     expect(logError).not.toHaveBeenCalled();
@@ -1479,7 +1475,7 @@ describe("Desktop DiscSelector — a list read that fails after it is gone", () 
       read.reject(new Error("down"));
       await Promise.resolve();
     });
-    await flushAsync();
+    await flushMacrotask();
 
     expect(logError).not.toHaveBeenCalled();
     logError.mockRestore();
@@ -1504,7 +1500,7 @@ describe("Desktop DiscSelector — the discs across a switch", () => {
 
     vi.mocked(getCachedGameDetail).mockRejectedValue(new Error("socket"));
     await dataChanged({ type: "version_switched", app_id: 100, rom_id: 43 });
-    await flushAsync();
+    await flushMacrotask();
 
     expect(r.getByTestId("disc-btn")).toHaveAttribute("aria-label", "Select Version");
     fireEvent.click(r.getByTestId("disc-btn"));
@@ -1525,7 +1521,7 @@ describe("Desktop DiscSelector — the discs across a switch", () => {
       oldRead.resolve(m3uSelection);
       await Promise.resolve();
     });
-    await flushAsync();
+    await flushMacrotask();
 
     expect(r.getByTestId("disc-btn")).toHaveAttribute("aria-label", "Select Version");
   });
@@ -1587,7 +1583,7 @@ describe("Desktop DiscSelector — a reload during a switch", () => {
     });
     await syncFrame({ running: false, stage: "done" });
     await waitFor(() => expect(backend.getVersionList).toHaveBeenCalledTimes(2));
-    await flushAsync();
+    await flushMacrotask();
     expect(r.getByTestId("disc-btn")).toBeDisabled();
 
     await act(async () => {
@@ -1628,7 +1624,7 @@ describe("Desktop DiscSelector — what clears the guard", () => {
     await pressJapan(r);
     await dataChanged({ type: "rom_pruned", app_ids: [100], rom_ids: [] });
     await waitFor(() => expect(backend.getVersionList).toHaveBeenCalledTimes(2));
-    await flushAsync();
+    await flushMacrotask();
 
     expect(r.getByTestId("disc-btn")).toBeDisabled();
   });
@@ -1644,7 +1640,7 @@ describe("Desktop DiscSelector — what clears the guard", () => {
 
     await pressJapan(r);
     await waitFor(() => expect(backend.getVersionList).toHaveBeenCalledTimes(2));
-    await flushAsync();
+    await flushMacrotask();
     expect(r.getByTestId("disc-btn")).toBeDisabled();
 
     await act(async () => {
@@ -1662,7 +1658,7 @@ describe("Desktop DiscSelector — what clears the guard", () => {
 
     await pressJapan(r);
     await waitFor(() => expect(applyCommittedVersionSwitch).toHaveBeenCalled());
-    await flushAsync();
+    await flushMacrotask();
 
     expect(backend.getVersionList).toHaveBeenCalledTimes(1);
     expect(r.getByTestId("disc-btn")).toBeDisabled();
@@ -1722,7 +1718,7 @@ describe("Desktop DiscSelector — the binding and the guard across a switch", (
       mountRead.resolve({ found: true, rom_id: 42, rom_name: "Final Fantasy VII", installed: true });
       await Promise.resolve();
     });
-    await flushAsync();
+    await flushMacrotask();
     fireEvent.click(r.getByTestId("disc-btn"));
     await act(async () => {
       fireEvent.click(within(r.getByTestId("disc-menu")).getByText("Disc 2"));
@@ -1750,7 +1746,7 @@ describe("Desktop DiscSelector — the binding and the guard across a switch", (
       } as DownloadCompleteEvent);
       await Promise.resolve();
     });
-    await flushAsync();
+    await flushMacrotask();
 
     expect(r.getByTestId("disc-btn")).toHaveAttribute("aria-label", "Select Version");
     logError.mockRestore();
@@ -1860,7 +1856,7 @@ describe("Desktop DiscSelector — a change of game and a late read", () => {
     expect(onSwitchingChange).toHaveBeenCalledExactlyOnceWith(true);
 
     r.rerender(<Selector appId={101} onSwitchingChange={onSwitchingChange} />);
-    await flushAsync();
+    await flushMacrotask();
 
     expect(r.getByTestId("disc-btn")).toBeEnabled();
     expect(onSwitchingChange.mock.calls).toEqual([[true], [false]]);
@@ -1880,14 +1876,14 @@ describe("Desktop DiscSelector — a change of game and a late read", () => {
       await Promise.resolve();
     });
     r.rerender(<Selector appId={101} onSwitchingChange={onSwitchingChange} />);
-    await flushAsync();
+    await flushMacrotask();
     const readsBefore = vi.mocked(backend.getVersionList).mock.calls.length;
 
     await act(async () => {
       answer.resolve({ success: false, reason: "version_vanished", message: "gone" });
       await Promise.resolve();
     });
-    await flushAsync();
+    await flushMacrotask();
 
     expect(toaster.toast).not.toHaveBeenCalled();
     expect(backend.getVersionList).toHaveBeenCalledTimes(readsBefore);
@@ -1905,7 +1901,7 @@ describe("Desktop DiscSelector — a change of game and a late read", () => {
       read.resolve({ found: true, rom_id: 42, rom_name: "Final Fantasy VII", installed: true });
       await Promise.resolve();
     });
-    await flushAsync();
+    await flushMacrotask();
 
     expect(backend.getDiscSelection).not.toHaveBeenCalled();
   });

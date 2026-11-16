@@ -26,12 +26,14 @@ import type { ReactElement } from "react";
 import { CustomPlayButton } from "./CustomPlayButton";
 import { emitHostEvent, hostEventListenerCount } from "../test-utils/host-event-bus";
 import { setStrandedAnswer } from "../test-utils/stranded-panel";
+import { getDownloadState, setDownloads, updateDownload } from "../utils/downloadStore";
 import * as backend from "../api/backend";
 import type { CachedGameDetail } from "../api/backend";
 import type {
   AdoptResult,
   DownloadCompleteEvent,
   DownloadFailedEvent,
+  DownloadItem,
   DownloadProgressEvent,
   PreLaunchSyncStartedEvent,
 } from "../types";
@@ -603,21 +605,293 @@ describe("CustomPlayButton — cancel X on active download (#1049)", () => {
     expect(backend.cancelDownload).toHaveBeenCalledWith(42);
   });
 
-  it("swallows a cancelDownload rejection without crashing the button", async () => {
-    vi.mocked(backend.cancelDownload).mockRejectedValue(new Error("nope"));
+  it("logs a cancelDownload refusal or rejection and keeps the button up", async () => {
     const { findByLabelText } = await renderDownloading(42);
     const cancelX = await findByLabelText("Cancel download");
+    const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+    const logErrorSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+    try {
+      await act(async () => {
+        cancelX.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(logWarnSpy).not.toHaveBeenCalled();
 
+      vi.mocked(backend.cancelDownload).mockResolvedValueOnce({
+        success: false,
+        reason: "server_unreachable",
+        message: "RomM cannot be reached",
+      });
+
+      await act(async () => {
+        cancelX.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(logWarnSpy).toHaveBeenCalledExactlyOnceWith(
+        "CustomPlayButton: the backend refused to cancel the download of romId=42: server_unreachable: RomM cannot be reached",
+      );
+
+      vi.mocked(backend.cancelDownload).mockRejectedValueOnce(new Error("nope"));
+      await act(async () => {
+        cancelX.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // Post-catch state: the X is still rendered (button did not crash); the
+      // backend cancellation frame, not this catch, is what tears the row down.
+      expect(logErrorSpy).toHaveBeenCalledExactlyOnceWith(
+        "CustomPlayButton: could not cancel the download of romId=42: Error: nope",
+      );
+      expect(await findByLabelText("Cancel download")).toBeInTheDocument();
+    } finally {
+      logWarnSpy.mockRestore();
+      logErrorSpy.mockRestore();
+    }
+  });
+
+  it("ends the bar and drops the game from the download store when the backend holds no download to cancel", async () => {
+    const { findByLabelText, findByText, queryByLabelText } = await renderDownloading(42);
+    updateDownload({ rom_id: 42, status: "downloading" } as DownloadItem);
+    updateDownload({ rom_id: 7, status: "downloading" } as DownloadItem);
+    const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+    try {
+      vi.mocked(backend.cancelDownload).mockResolvedValueOnce({
+        success: false,
+        reason: "no_active_download",
+        message: "No active download",
+      });
+
+      const cancelX = await findByLabelText("Cancel download");
+      await act(async () => {
+        cancelX.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(logWarnSpy).toHaveBeenCalledExactlyOnceWith(
+        "CustomPlayButton: the backend refused to cancel the download of romId=42: no_active_download: No active download",
+      );
+      expect(await findByText("Download")).toBeInTheDocument();
+      expect(queryByLabelText("Cancel download")).toBeNull();
+      expect(getDownloadState().map((d) => d.rom_id)).toEqual([7]);
+    } finally {
+      logWarnSpy.mockRestore();
+      setDownloads([]);
+    }
+  });
+
+  it("leaves Ready! and the finished entry alone when a cancel crosses the download's completion", async () => {
+    const { findByLabelText, findByText, getByText } = await renderDownloading(42);
+    updateDownload({ rom_id: 42, status: "downloading" } as DownloadItem);
+    let answerCancel!: (value: backend.BackendResult) => void;
+    vi.mocked(backend.cancelDownload).mockReturnValueOnce(
+      new Promise((resolve) => {
+        answerCancel = resolve;
+      }),
+    );
+    const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+    try {
+      const cancelX = await findByLabelText("Cancel download");
+      await act(async () => {
+        cancelX.click();
+        await Promise.resolve();
+      });
+      act(() => {
+        emitHostEvent<DownloadCompleteEvent>("download_complete", {
+          rom_id: 42,
+          rom_name: "Test ROM",
+          platform_name: "PSX",
+          file_path: "/roms/psx/test.chd",
+        });
+        // What index.tsx's listener writes for the frame.
+        updateDownload({ rom_id: 42, status: "completed" } as DownloadItem);
+      });
+      expect(getByText("Ready!")).toBeInTheDocument();
+
+      await act(async () => {
+        answerCancel({ success: false, reason: "no_active_download", message: "No active download" });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(getByText("Ready!")).toBeInTheDocument();
+      expect(getDownloadState()).toEqual([{ rom_id: 42, status: "completed" }]);
+      expect(await findByText("Play", undefined, { timeout: 3000 })).toBeInTheDocument();
+    } finally {
+      logWarnSpy.mockRestore();
+      setDownloads([]);
+    }
+  });
+
+  it("leaves a new press's Starting... alone when a cancel answered after the bar ended finds no download", async () => {
+    const utils = await renderDownloading(42);
+    let answerCancel!: (value: backend.BackendResult) => void;
+    vi.mocked(backend.cancelDownload).mockReturnValueOnce(
+      new Promise((resolve) => {
+        answerCancel = resolve;
+      }),
+    );
+    const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+    try {
+      const cancelX = await utils.findByLabelText("Cancel download");
+      await act(async () => {
+        cancelX.click();
+        await Promise.resolve();
+      });
+      act(() => {
+        emitHostEvent<DownloadProgressEvent>("download_progress", {
+          rom_id: 42,
+          rom_name: "Test ROM",
+          platform_name: "PSX",
+          file_name: "test.chd",
+          status: "failed",
+          progress: 0.3,
+          bytes_downloaded: 300,
+          total_bytes: 1000,
+        });
+      });
+      vi.mocked(backend.startDownload).mockReturnValueOnce(new Promise(() => {}));
+      const downloadBtn = await utils.findByText("Download");
+      await act(async () => {
+        downloadBtn.click();
+        await Promise.resolve();
+      });
+      expect(utils.getByText("Starting...")).toBeInTheDocument();
+
+      await act(async () => {
+        answerCancel({ success: false, reason: "no_active_download", message: "No active download" });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(utils.getByText("Starting...")).toBeInTheDocument();
+    } finally {
+      logWarnSpy.mockRestore();
+    }
+  });
+
+  it("leaves the bar of the game the page moved to when a cancel for the previous one finds no download", async () => {
+    vi.mocked(getCachedGameDetail).mockImplementation(async (appId: number) => ({
+      found: true,
+      rom_id: appId === 100 ? 42 : 43,
+      rom_name: appId === 100 ? "Test ROM" : "Other Game",
+      installed: false,
+    }));
+    vi.mocked(backend.getDownloadQueue)
+      .mockResolvedValueOnce({ downloads: [] })
+      .mockResolvedValue({
+        downloads: [
+          {
+            rom_id: 43,
+            rom_name: "Other Game",
+            platform_name: "PSX",
+            file_name: "other.chd",
+            status: "downloading",
+            progress: 0.5,
+            bytes_downloaded: 500,
+            total_bytes: 1000,
+            resumable: false,
+          },
+        ],
+      });
+    updateDownload({ rom_id: 42, status: "downloading" } as DownloadItem);
+    updateDownload({ rom_id: 43, status: "downloading" } as DownloadItem);
+    let answerCancel!: (value: backend.BackendResult) => void;
+    vi.mocked(backend.cancelDownload).mockReturnValueOnce(
+      new Promise((resolve) => {
+        answerCancel = resolve;
+      }),
+    );
+    const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+    try {
+      const utils = render(<CustomPlayButton appId={100} />);
+      const downloadBtn = await utils.findByText("Download");
+      await act(async () => {
+        downloadBtn.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      act(() => {
+        emitHostEvent<DownloadProgressEvent>("download_progress", {
+          rom_id: 42,
+          rom_name: "Test ROM",
+          platform_name: "PSX",
+          file_name: "test.chd",
+          status: "downloading",
+          progress: 0.3,
+          bytes_downloaded: 300,
+          total_bytes: 1000,
+        });
+      });
+      const cancelX = await utils.findByLabelText("Cancel download");
+      await act(async () => {
+        cancelX.click();
+        await Promise.resolve();
+      });
+      expect(backend.cancelDownload).toHaveBeenCalledWith(42);
+
+      utils.rerender(<CustomPlayButton appId={200} />);
+      await waitFor(() => expect(utils.getByText("500 / 1000 B")).toBeInTheDocument());
+
+      await act(async () => {
+        answerCancel({ success: false, reason: "no_active_download", message: "No active download" });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(utils.getByLabelText("Cancel download")).toBeInTheDocument();
+      expect(getDownloadState().map((d) => d.rom_id)).toEqual([43]);
+    } finally {
+      logWarnSpy.mockRestore();
+      setDownloads([]);
+    }
+  });
+
+  it("keeps what it found on disk when the backend holds no download to cancel", async () => {
+    mockCachedDetail({ rom_id: 42, installed: false, target_path_occupied: true });
+    const utils = render(<CustomPlayButton appId={100} />);
+    const useExisting = await utils.findByText("Use Existing Files");
     await act(async () => {
-      cancelX.click();
+      useExisting.click();
       await Promise.resolve();
       await Promise.resolve();
     });
+    act(() => {
+      emitHostEvent<DownloadProgressEvent>("download_progress", {
+        rom_id: 42,
+        rom_name: "Test ROM",
+        platform_name: "PSX",
+        file_name: "test.chd",
+        status: "downloading",
+        progress: 0.3,
+        bytes_downloaded: 300,
+        total_bytes: 1000,
+      });
+    });
+    const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+    try {
+      vi.mocked(backend.cancelDownload).mockResolvedValueOnce({
+        success: false,
+        reason: "no_active_download",
+        message: "No active download",
+      });
 
-    // Post-catch state: the X is still rendered (button did not crash); the
-    // backend cancellation frame, not this catch, is what tears the row down.
-    expect(backend.cancelDownload).toHaveBeenCalledWith(42);
-    expect(await findByLabelText("Cancel download")).toBeInTheDocument();
+      const cancelX = await utils.findByLabelText("Cancel download");
+      await act(async () => {
+        cancelX.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(await utils.findByText("Use Existing Files")).toBeInTheDocument();
+      expect(utils.queryByLabelText("Cancel download")).toBeNull();
+    } finally {
+      logWarnSpy.mockRestore();
+    }
   });
 });
 
@@ -694,6 +968,52 @@ describe("CustomPlayButton — pause/resume on active download (#1124)", () => {
 
     // Non-vacuous: the exact rom_id was paused.
     expect(backend.pauseDownload).toHaveBeenCalledWith(42);
+  });
+
+  it("logs a pauseDownload refusal or rejection", async () => {
+    const { findByLabelText } = await renderActive(42, { status: "downloading", resumable: true });
+    const dropdownBtn = await findByLabelText("Download actions");
+    const { findByText } = openMenu(dropdownBtn);
+    const pauseItem = await findByText("Pause");
+    const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+    const logErrorSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+    try {
+      await act(async () => {
+        pauseItem.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(logWarnSpy).not.toHaveBeenCalled();
+
+      vi.mocked(backend.pauseDownload).mockResolvedValueOnce({
+        success: false,
+        reason: "no_active_download",
+        message: "No active download",
+      });
+      await act(async () => {
+        pauseItem.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(logWarnSpy).toHaveBeenCalledExactlyOnceWith(
+        "CustomPlayButton: the backend refused to pause the download of romId=42: no_active_download: No active download",
+      );
+
+      vi.mocked(backend.pauseDownload).mockRejectedValueOnce(new Error("socket closed"));
+      await act(async () => {
+        pauseItem.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(logErrorSpy).toHaveBeenCalledExactlyOnceWith(
+        "CustomPlayButton: could not pause the download of romId=42: Error: socket closed",
+      );
+    } finally {
+      logWarnSpy.mockRestore();
+      logErrorSpy.mockRestore();
+    }
   });
 
   it("downloading + NOT resumable renders the bare cancel X and no actions dropdown", async () => {
@@ -843,6 +1163,51 @@ describe("CustomPlayButton — pause/resume on active download (#1124)", () => {
     expect(backend.resumeDownload).toHaveBeenCalledWith(42);
   });
 
+  it("drops a queue answer that lands after the page moved to another game", async () => {
+    vi.mocked(getCachedGameDetail).mockImplementation(async (appId: number) => ({
+      found: true,
+      rom_id: appId === 100 ? 42 : 43,
+      rom_name: appId === 100 ? "Test ROM" : "Other Game",
+      installed: false,
+    }));
+    let answerA!: (value: { downloads: DownloadItem[] }) => void;
+    vi.mocked(backend.getDownloadQueue)
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          answerA = resolve;
+        }),
+      )
+      .mockResolvedValue({ downloads: [] });
+
+    const { findByText, queryByText, rerender } = render(<CustomPlayButton appId={100} />);
+    await waitFor(() => expect(backend.getDownloadQueue).toHaveBeenCalledTimes(1));
+    rerender(<CustomPlayButton appId={200} />);
+    await waitFor(() => expect(backend.getDownloadQueue).toHaveBeenCalledTimes(2));
+    expect(await findByText("Download")).toBeInTheDocument();
+
+    await act(async () => {
+      answerA({
+        downloads: [
+          {
+            rom_id: 42,
+            rom_name: "Test ROM",
+            platform_name: "PSX",
+            file_name: "test.chd",
+            status: "paused",
+            progress: 0.3,
+            bytes_downloaded: 300,
+            total_bytes: 1000,
+            resumable: true,
+          },
+        ],
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(queryByText("Paused")).toBeNull();
+    expect(queryByText("Download")).toBeInTheDocument();
+  });
+
   it("rehydrates a plain downloading (non-paused) download on mount from the queue (#145 / #1126)", async () => {
     // Sibling of the paused-rehydration case above: a plain "downloading" entry
     // in the queue at mount must rehydrate the button straight into its active
@@ -943,6 +1308,12 @@ describe("CustomPlayButton — extraction phase on a multi-file download", () =>
     const { findByText } = await renderWithFrames([downloadingFrame, extractingFrame]);
     // 4200 / 10000 = 42% — the label reads the uncompressed-byte fraction.
     expect(await findByText("Extracting… 42%")).toBeInTheDocument();
+  });
+
+  it("takes no press on its main part while its download runs", async () => {
+    const { container } = await renderWithFrames([downloadingFrame]);
+
+    expect(container.querySelector<HTMLButtonElement>("button.romm-btn-download")?.disabled).toBe(true);
   });
 
   it("removes the cancel control during extraction and surfaces a disabled throbber instead", async () => {
@@ -2923,35 +3294,43 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
     await findByText("Resolve Conflict");
   });
 
-  it("a verdict modal helper that THROWS → resets to play (never frozen on its throbber)", async () => {
+  it("a verdict modal helper that THROWS → logs an error and resets to play (never frozen on its throbber)", async () => {
     // The pre-launch sync answers with a conflict, the gate returns a
     // conflict verdict, then the shared handleConflicts REJECTS at the framework
     // level. Without the outer try/catch the button would stay stuck on its
     // throbber; with it, handlePlay recovers to "play".
-    vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
-    vi.mocked(backend.preLaunchSync).mockResolvedValue({
-      success: false,
-      message: "conflict",
-      synced: 0,
-      conflicts: [conflict()],
-    });
-    vi.mocked(handleConflicts).mockRejectedValue(new Error("modal blew up"));
+    const logErrorSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+    try {
+      vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
+      vi.mocked(backend.preLaunchSync).mockResolvedValue({
+        success: false,
+        message: "conflict",
+        synced: 0,
+        conflicts: [conflict()],
+      });
+      vi.mocked(handleConflicts).mockRejectedValue(new Error("modal blew up"));
 
-    mockCachedDetail();
-    const { findByText } = render(<CustomPlayButton appId={100} />);
-    const playBtn = await findByText("Play");
-    await act(async () => {
-      playBtn.click();
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+      mockCachedDetail();
+      const { findByText } = render(<CustomPlayButton appId={100} />);
+      const playBtn = await findByText("Play");
+      await act(async () => {
+        playBtn.click();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
 
-    // Recovered: the Play label is back (NOT stuck on the throbber) and no
-    // launch happened.
-    expect(await findByText("Play")).toBeInTheDocument();
-    expect(vi.mocked(SteamClient.Apps.RunGame)).not.toHaveBeenCalled();
+      // Recovered: the Play label is back (NOT stuck on the throbber) and no
+      // launch happened.
+      expect(await findByText("Play")).toBeInTheDocument();
+      expect(logErrorSpy).toHaveBeenCalledExactlyOnceWith(
+        "CustomPlayButton: Play's launch check of romId=42 threw — resetting to play: Error: modal blew up",
+      );
+      expect(vi.mocked(SteamClient.Apps.RunGame)).not.toHaveBeenCalled();
+    } finally {
+      logErrorSpy.mockRestore();
+    }
   });
 
   it("migration pending → blocks: no sync, no modal, no launch", async () => {
@@ -5313,6 +5692,28 @@ describe("CustomPlayButton — content already on disk (#260)", () => {
     expect(await utils.findByText("Use Existing Files")).toBeTruthy();
   });
 
+  it("a version switch takes the incoming ROM's answer on whether RomM holds a file", async () => {
+    mockCachedDetail({ rom_id: 42, installed: false, has_file_on_disk: true });
+    const utils = render(<CustomPlayButton appId={100} />);
+    expect(await utils.findByText("Download")).toBeTruthy();
+
+    vi.mocked(getCachedGameDetail).mockResolvedValue({
+      found: true,
+      rom_id: 43,
+      rom_name: "Other version",
+      installed: false,
+      has_file_on_disk: false,
+    });
+    await act(async () => {
+      globalThis.dispatchEvent(
+        new CustomEvent("romm_data_changed", { detail: { type: "version_switched", app_id: 100, rom_id: 43 } }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(await utils.findByText("No file on RomM")).toBeTruthy();
+  });
+
   it("opens the dialog on a target_occupied refusal instead of toasting a failure", async () => {
     mockCachedDetail({ rom_id: 42, installed: false });
     vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
@@ -5327,6 +5728,31 @@ describe("CustomPlayButton — content already on disk (#260)", () => {
     expect(vi.mocked(showAdoptExistingModal)).toHaveBeenCalledWith(42, OCCUPIED);
     expect(vi.mocked(toaster.toast)).not.toHaveBeenCalled();
     await utils.findByText("Use Existing Files");
+  });
+
+  it("logs a download press whose dialog rejects as an error, not as a failed start", async () => {
+    mockCachedDetail({ rom_id: 42, installed: false });
+    vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
+    vi.mocked(showAdoptExistingModal).mockRejectedValue(new Error("modal broke"));
+    vi.mocked(backend.getDownloadQueue).mockResolvedValue({ downloads: [] });
+    const logErrorSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+    try {
+      const utils = render(<CustomPlayButton appId={100} />);
+      const btn = await utils.findByText("Download");
+
+      await act(async () => {
+        btn.click();
+      });
+
+      await waitFor(() =>
+        expect(logErrorSpy).toHaveBeenCalledExactlyOnceWith(
+          "CustomPlayButton: could not run the download press for romId=42: Error: modal broke",
+        ),
+      );
+      expect(vi.mocked(toaster.toast)).not.toHaveBeenCalled();
+    } finally {
+      logErrorSpy.mockRestore();
+    }
   });
 
   it("replace re-runs the download with the replace flag set", async () => {

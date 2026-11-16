@@ -19,6 +19,12 @@ import type {
   UnusableNamesakeResult,
 } from "../types";
 
+vi.mock("../api/backend", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../api/backend")>()),
+  logWarn: vi.fn(),
+  logError: vi.fn(),
+}));
+
 vi.mock("./steamShortcuts", () => ({
   setLaunchOptionsConfirmed: vi.fn().mockResolvedValue(true),
 }));
@@ -127,6 +133,8 @@ beforeEach(() => {
   vi.mocked(backend.startDownload).mockReset();
   vi.mocked(backend.adoptExistingRom).mockReset();
   vi.mocked(backend.releasePruneConflictLease).mockClear();
+  vi.mocked(backend.logWarn).mockClear();
+  vi.mocked(backend.logError).mockClear();
   vi.mocked(setLaunchOptionsConfirmed).mockClear();
   vi.mocked(toaster.toast).mockClear();
   mountPruneLeaseOwner(OWNER);
@@ -158,13 +166,20 @@ describe("runDownloadWithAdoption — a plain download", () => {
     expect(vi.mocked(backend.startDownload).mock.calls[0]).toEqual([ROM_ID, false, null, null, true]);
   });
 
-  it("toasts a refusal's message and clears busy", async () => {
-    vi.mocked(backend.startDownload).mockResolvedValue({ success: false, message: "Not enough space" });
+  it("toasts a refusal's message, logs its reason and clears busy", async () => {
+    vi.mocked(backend.startDownload).mockResolvedValue({
+      success: false,
+      reason: "insufficient_space",
+      message: "Not enough space",
+    });
     const { flow } = makeFlow();
 
     await expect(runDownloadWithAdoption(flow)).resolves.toBe("failed");
 
     expect(toastBodies()).toEqual(["Not enough space"]);
+    expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+      "test: the backend refused to start the download of romId=42: insufficient_space: Not enough space",
+    );
     expect(log).toEqual(["busy:true", "busy:false"]);
   });
 
@@ -175,15 +190,21 @@ describe("runDownloadWithAdoption — a plain download", () => {
     await runDownloadWithAdoption(flow);
 
     expect(toastBodies()).toEqual(["Download failed"]);
+    expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+      "test: the backend refused to start the download of romId=42: no reason: ",
+    );
   });
 
-  it("toasts a thrown request rather than swallowing it", async () => {
+  it("toasts and logs a thrown request rather than swallowing it", async () => {
     vi.mocked(backend.startDownload).mockRejectedValue(new Error("bridge down"));
     const { flow } = makeFlow();
 
     await expect(runDownloadWithAdoption(flow)).resolves.toBe("failed");
 
     expect(toastBodies()).toEqual(["Download failed — is RomM server running?"]);
+    expect(backend.logError).toHaveBeenCalledExactlyOnceWith(
+      "test: could not start the download of romId=42: Error: bridge down",
+    );
     expect(log).toEqual(["busy:true", "busy:false"]);
   });
 });
@@ -327,7 +348,7 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
     expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
   });
 
-  it("a refused adoption toasts its message and leaves the flags alone", async () => {
+  it("a refused adoption toasts its message, is logged as a warning and leaves the flags alone", async () => {
     vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
     vi.mocked(backend.adoptExistingRom).mockResolvedValue({
       success: false,
@@ -340,6 +361,9 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
     await expect(runDownloadWithAdoption(flow)).resolves.toBe("failed");
 
     expect(toastBodies()).toEqual(["The files are no longer there — nothing was adopted"]);
+    expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+      "test: the backend refused to adopt romId=42: nothing_to_adopt: The files are no longer there — nothing was adopted",
+    );
     expect(log).toEqual(["busy:true", "occupied:true", "busy:false", "busy:true", "busy:false"]);
   });
 
@@ -352,9 +376,12 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
     await runDownloadWithAdoption(flow);
 
     expect(toastBodies()).toEqual(["Couldn't use the existing files"]);
+    expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+      "test: the backend refused to adopt romId=42: nothing_to_adopt: ",
+    );
   });
 
-  it("a thrown adoption is toasted and busy cleared", async () => {
+  it("a thrown adoption is toasted, logged as an error and busy cleared", async () => {
     vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
     vi.mocked(backend.adoptExistingRom).mockRejectedValue(new Error("bridge down"));
     const { flow, dialogs } = makeFlow();
@@ -363,8 +390,122 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
     await expect(runDownloadWithAdoption(flow)).resolves.toBe("failed");
 
     expect(toastBodies()).toEqual(["Couldn't use the existing files — is RomM server running?"]);
+    expect(backend.logError).toHaveBeenCalledExactlyOnceWith("test: could not adopt romId=42: Error: bridge down");
     expect(log[log.length - 1]).toBe("busy:false");
     expect(log).not.toContain("adopted");
+  });
+
+  it("hands a dialog that rejects to the caller rather than logging it as a failed start", async () => {
+    vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
+    const { flow, dialogs } = makeFlow();
+    dialogs.showExisting.mockRejectedValue(new Error("dialog broke"));
+
+    await expect(runDownloadWithAdoption(flow)).rejects.toThrow("dialog broke");
+
+    expect(backend.logError).not.toHaveBeenCalled();
+    expect(toastBodies()).toEqual([]);
+    expect(log.slice(0, 3)).toEqual(["busy:true", "occupied:true", "busy:false"]);
+    expect(log[log.length - 1]).toBe("busy:false");
+  });
+
+  const adoptedAtOnce = () => vi.mocked(backend.adoptExistingRom).mockResolvedValue(ADOPTED);
+  const adoptedAfterCollisions = () =>
+    vi.mocked(backend.adoptExistingRom).mockResolvedValueOnce(COLLISIONS).mockResolvedValue(ADOPTED);
+  const breakOnAdopted = (hooks: AdoptionFlowHooks) => {
+    hooks.onAdopted = () => {
+      throw new Error("hook broke");
+    };
+  };
+  const breakClearingOccupied = (hooks: AdoptionFlowHooks) => {
+    const set = hooks.setTargetOccupied;
+    hooks.setTargetOccupied = (occupied) => {
+      if (!occupied) throw new Error("hook broke");
+      set(occupied);
+    };
+  };
+
+  it.each([
+    ["onAdopted, adopted at once", adoptedAtOnce, breakOnAdopted],
+    ["onAdopted, adopted after the taken-names question", adoptedAfterCollisions, breakOnAdopted],
+    ["setTargetOccupied, adopted at once", adoptedAtOnce, breakClearingOccupied],
+  ])(
+    "hands a hook that throws after a successful adoption (%s) to the caller as an adoption that was recorded",
+    async (_case, arrange, breakHook) => {
+      vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
+      arrange();
+      const { flow, dialogs } = makeFlow();
+      dialogs.showExisting.mockResolvedValue("adopt");
+      dialogs.showCollisions.mockResolvedValue("keep");
+      breakHook(flow.hooks);
+      const changes: unknown[] = [];
+      const onChange = (e: Event) => changes.push((e as CustomEvent).detail);
+      globalThis.addEventListener("romm_data_changed", onChange);
+
+      let rejection: unknown;
+      try {
+        rejection = await runDownloadWithAdoption(flow).then(
+          () => undefined,
+          (e: unknown) => e,
+        );
+      } finally {
+        globalThis.removeEventListener("romm_data_changed", onChange);
+      }
+
+      expect(rejection).toBeInstanceOf(Error);
+      expect((rejection as Error).message).toBe("adopted, but the page's hooks threw: Error: hook broke");
+      expect((rejection as { cause?: unknown }).cause).toEqual(new Error("hook broke"));
+      expect(backend.logError).not.toHaveBeenCalled();
+      expect(log[log.length - 1]).toBe("busy:false");
+      // The adoption is recorded, so the panel hears of it and the user is told all the same.
+      expect(changes).toEqual([{ type: "rom_adopted", rom_id: ROM_ID }]);
+      expect(toastBodies()).toEqual(["Test ROM is ready to play"]);
+    },
+  );
+
+  it("hands busy back when a hook throws while a request held it", async () => {
+    vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
+    const { flow } = makeFlow();
+    flow.hooks.setTargetOccupied = () => {
+      throw new Error("hook broke");
+    };
+
+    await expect(runDownloadWithAdoption(flow)).rejects.toThrow("hook broke");
+
+    expect(log).toEqual(["busy:true", "busy:false"]);
+    expect(backend.logError).not.toHaveBeenCalled();
+  });
+
+  it("keeps the flow's own error when handing busy back throws too, and logs the hand-back", async () => {
+    vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
+    const { flow } = makeFlow();
+    flow.hooks.setTargetOccupied = () => {
+      throw new Error("hook broke");
+    };
+    const setBusy = flow.hooks.setBusy;
+    flow.hooks.setBusy = (busy) => {
+      if (!busy) throw new Error("busy broke");
+      setBusy(busy);
+    };
+
+    await expect(runDownloadWithAdoption(flow)).rejects.toThrow("hook broke");
+
+    expect(backend.logError).toHaveBeenCalledExactlyOnceWith(
+      "test: could not hand busy back for romId=42: Error: busy broke",
+    );
+  });
+
+  it("hands a taken-names question that rejects during an adoption to the caller, with busy ended", async () => {
+    vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
+    vi.mocked(backend.adoptExistingRom).mockResolvedValue(COLLISIONS);
+    const { flow, dialogs } = makeFlow();
+    dialogs.showExisting.mockResolvedValue("adopt");
+    dialogs.showCollisions.mockRejectedValue(new Error("dialog broke"));
+
+    await expect(runDownloadWithAdoption(flow)).rejects.toThrow("dialog broke");
+
+    expect(backend.logError).not.toHaveBeenCalled();
+    expect(toastBodies()).toEqual([]);
+    expect(log[log.length - 1]).toBe("busy:false");
   });
 });
 

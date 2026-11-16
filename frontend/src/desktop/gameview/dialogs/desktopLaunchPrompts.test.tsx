@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { isValidElement, type ReactNode } from "react";
-import { desktopLaunchPrompts, desktopUnsyncedSavesDialog } from "./desktopDialogs";
+import { desktopAdoptionDialogs, desktopLaunchPrompts, desktopUnsyncedSavesDialog } from "./desktopDialogs";
+import { DesktopAdoptCandidatesDialog } from "./DesktopAdoptCandidatesDialog";
+import { DesktopAdoptCollisionsDialog } from "./DesktopAdoptCollisionsDialog";
+import { DesktopAdoptExistingDialog } from "./DesktopAdoptExistingDialog";
+import { DesktopAdoptUnusableDialog } from "./DesktopAdoptUnusableDialog";
+import { DesktopAdoptVanishedDialog } from "./DesktopAdoptVanishedDialog";
 import { DesktopCoreChangeDialog } from "./DesktopCoreChangeDialog";
 import { DesktopFallbackLaunchDialog } from "./DesktopFallbackLaunchDialog";
 import { DesktopOfflineDriftDialog } from "./DesktopOfflineDriftDialog";
@@ -9,7 +14,14 @@ import { DesktopSyncWaitDialog } from "./DesktopSyncWaitDialog";
 import { DesktopUncheckedSourceDialog } from "./DesktopUncheckedSourceDialog";
 import { DesktopUnsyncedSavesDialog } from "./DesktopUnsyncedSavesDialog";
 import type { AskDialog } from "./askDialog";
-import type { SyncConflict } from "../../../types";
+import type {
+  CandidatesFoundResult,
+  CandidateVanishedResult,
+  RenameCollision,
+  SyncConflict,
+  TargetOccupiedResult,
+  UnusableNamesakeResult,
+} from "../../../types";
 
 /**
  * An `ask` that answers each question the way its dialog would: it calls the
@@ -143,5 +155,67 @@ describe("desktopUnsyncedSavesDialog", () => {
     expect(typeOf(first(asked).dialog)).toBe(DesktopUnsyncedSavesDialog);
     const { dialog } = first(asked);
     expect(isValidElement(dialog) && dialog.props).toMatchObject(args);
+  });
+});
+
+describe("desktopAdoptionDialogs", () => {
+  it("asks the comparison through its dialog with the ROM, what is there and the candidate, dismissed as a cancel", async () => {
+    const { ask, asked } = scriptedAsk(["adopt"]);
+    const occupied = { reason: "target_occupied" } as TargetOccupiedResult;
+
+    expect(await desktopAdoptionDialogs(ask).showExisting(7, occupied, "/roms/snes/Game.sfc")).toBe("adopt");
+    expect(asked).toHaveLength(1);
+    expect(first(asked).dismissed).toBe("cancel");
+    expect(typeOf(first(asked).dialog)).toBe(DesktopAdoptExistingDialog);
+    const { dialog } = first(asked);
+    expect(isValidElement(dialog) && dialog.props).toMatchObject({
+      romId: 7,
+      occupied,
+      candidatePath: "/roms/snes/Game.sfc",
+    });
+  });
+
+  it("asks which candidate through its dialog, dismissed as a cancel", async () => {
+    const found = { reason: "adoption_candidates", candidates: [] } as unknown as CandidatesFoundResult;
+    const { ask, asked } = scriptedAsk([{ kind: "download" }]);
+
+    expect(await desktopAdoptionDialogs(ask).showCandidates(found)).toEqual({ kind: "download" });
+    expect(first(asked).dismissed).toEqual({ kind: "cancel" });
+    expect(typeOf(first(asked).dialog)).toBe(DesktopAdoptCandidatesDialog);
+    const { dialog } = first(asked);
+    expect(isValidElement(dialog) && dialog.props).toMatchObject({ found });
+  });
+
+  it("asks about the taken names through its dialog, dismissed as a cancel", async () => {
+    const collisions = [{ name: "Game.srm", path: "/saves/Game.srm", kind: "save" }] as unknown as RenameCollision[];
+    const { ask, asked } = scriptedAsk(["keep"]);
+
+    expect(await desktopAdoptionDialogs(ask).showCollisions(collisions)).toBe("keep");
+    expect(first(asked).dismissed).toBe("cancel");
+    expect(typeOf(first(asked).dialog)).toBe(DesktopAdoptCollisionsDialog);
+    const { dialog } = first(asked);
+    expect(isValidElement(dialog) && dialog.props).toMatchObject({ collisions });
+  });
+
+  it("asks about a namesake it cannot use through its dialog, dismissed as a cancel", async () => {
+    const unusable = { reason: "unusable_namesake", existing: [] } as unknown as UnusableNamesakeResult;
+    const { ask, asked } = scriptedAsk(["download"]);
+
+    expect(await desktopAdoptionDialogs(ask).showUnusable(unusable)).toBe("download");
+    expect(first(asked).dismissed).toBe("cancel");
+    expect(typeOf(first(asked).dialog)).toBe(DesktopAdoptUnusableDialog);
+    const { dialog } = first(asked);
+    expect(isValidElement(dialog) && dialog.props).toMatchObject({ namesake: unusable });
+  });
+
+  it("asks about a copy that is gone through its dialog, dismissed as a cancel", async () => {
+    const vanished = { reason: "candidate_vanished" } as unknown as CandidateVanishedResult;
+    const { ask, asked } = scriptedAsk(["download"]);
+
+    expect(await desktopAdoptionDialogs(ask).showVanished(vanished)).toBe("download");
+    expect(first(asked).dismissed).toBe("cancel");
+    expect(typeOf(first(asked).dialog)).toBe(DesktopAdoptVanishedDialog);
+    const { dialog } = first(asked);
+    expect(isValidElement(dialog) && dialog.props).toMatchObject({ vanished });
   });
 });

@@ -9,6 +9,8 @@ vi.mock("../api/backend", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api/backend")>()),
   removeRom: vi.fn(),
   debugLog: vi.fn(),
+  logWarn: vi.fn(),
+  logError: vi.fn(),
 }));
 
 vi.mock("./steamShortcuts", () => ({
@@ -91,7 +93,20 @@ describe("executeRomUninstall", () => {
     expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
     expect(uninstalls.romIds).toEqual([]);
     expect(toast.showToast).toHaveBeenCalledWith("Server disk is read-only");
+    expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+      "handleUninstall: the backend refused to remove romId=42: no reason: Server disk is read-only",
+    );
     uninstalls.stop();
+  });
+
+  it("logs a refusal's reason under the caller's tag", async () => {
+    vi.mocked(backend.removeRom).mockResolvedValueOnce({ success: false, reason: "in_progress", message: "Busy" });
+
+    await executeRomUninstall({ romId: 42, leaseOwner: "test-owner", tag: "testTag" });
+
+    expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+      "testTag: the backend refused to remove romId=42: in_progress: Busy",
+    );
   });
 
   it("logs a cancelled continuation and says nothing failed when the page is left before the removal's lease is taken", async () => {
@@ -145,5 +160,8 @@ describe("executeRomUninstall", () => {
 
     expect(removed).toBe(false);
     expect(toast.showToast).toHaveBeenCalledWith("Uninstall failed");
+    expect(backend.logError).toHaveBeenCalledExactlyOnceWith(
+      "handleUninstall: could not remove romId=42: Error: Network failure",
+    );
   });
 });

@@ -7,7 +7,7 @@ import { formatTimeAgo } from "../utils/formatters";
 import { pluralize } from "../utils/pluralize";
 import { getSyncProgress, setSyncProgress as setStoredSyncProgress } from "../utils/syncProgress";
 import { useSyncRunView } from "../utils/syncRunView";
-import { useDownloads } from "../utils/downloadStore";
+import { isDownloadUnderWay, useDownloads } from "../utils/downloadStore";
 import { usePendingPreview, getPendingPreviewSnapshot, refreshPendingPreview } from "../utils/pendingPreviewStore";
 import { previewSecondsLeft } from "../utils/previewState";
 import { refreshSyncStats, refreshSyncStatsAfterChange, useSyncStats } from "../utils/syncStatsStore";
@@ -538,9 +538,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
   };
 
   const activeDownloads = downloads.filter((d) => d.status === "queued" || d.status === "downloading");
-  const completedDownloads = downloads.filter(
-    (d) => d.status === "completed" || d.status === "failed" || d.status === "cancelled",
-  );
+  const completedDownloads = downloads.filter((d) => !isDownloadUnderWay(d));
   const hasDownloads = activeDownloads.length > 0 || completedDownloads.length > 0;
 
   // The conditional slot, absent unless the Sync page has something to report.
