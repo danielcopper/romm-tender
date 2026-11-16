@@ -5,8 +5,8 @@
  * console is told.
  *
  * What happy-dom cannot show is Steam moving the view once the class is there,
- * nor `@decky/ui`'s patcher reaching a live host: *patch* below is a stand-in
- * that does to the memo what `afterPatch` does.
+ * nor `@decky/ui`'s patcher reaching a live host: `patchAfter` below is a
+ * stand-in that does to the memo what `afterPatch` does.
  *
  * Each test loads a fresh copy of the module, because which lines the console
  * has been told is module state, kept for the life of the JS context.
