@@ -1,6 +1,6 @@
 /**
  * Resuming a paused download from a game page's button, and saying why when it
- * is refused. A throw while the answer is handled is only logged, as such.
+ * is refused.
  */
 
 import { isTargetOccupied, resumeDownload } from "../api/backend";

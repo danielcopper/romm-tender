@@ -342,7 +342,7 @@ async function adopt(
 /**
  * Tell the page, the rest of the panel and the user of an adoption the backend
  * has recorded. The panel and the user hear of it whatever the page's hooks do;
- * a hook that throws rejects with an error that says the adoption was recorded.
+ * a hook that throws is rethrown as an error that says the adoption was recorded.
  */
 function announceAdoption(flow: DownloadWithAdoption): void {
   const { romId, hooks } = flow;
