@@ -107,7 +107,7 @@ class TestTheSectionLimit:
         code, out = _run(capsys)
         assert code == 1
         assert "the register section is 6,001 characters" in out
-        assert "meets the criterion CLAUDE.md's register section states" in out
+        assert "meets the criterion docs/architecture/invariants/index.md states stays in CLAUDE.md" in out
 
     def test_the_section_ends_at_the_next_level_two_heading(self) -> None:
         text = _claude_md("Body.\n\n### A subheading stays inside\n\nMore.\n\n")

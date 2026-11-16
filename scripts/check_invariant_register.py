@@ -62,8 +62,8 @@ HEADLINE_LIMIT = 300
 AREA_FILE_LIMIT = 40_000
 
 CRITERION_POINTER = (
-    "Only a rule that meets the criterion CLAUDE.md's register section states stays there; every other entry "
-    "goes to its area's file under docs/architecture/invariants/."
+    "Only a rule that meets the criterion docs/architecture/invariants/index.md states stays in CLAUDE.md; every "
+    "other entry goes to its area's file under docs/architecture/invariants/."
 )
 
 _CLOSE_CANDIDATE = re.compile(r"\*\*(?= — | \(|$)")
@@ -185,13 +185,13 @@ def entries(text: str, place: str, first_line: int = 1) -> tuple[list[Entry], li
 def _claude_findings(claude_text: str) -> tuple[list[Entry], list[str], int]:
     """The section's entries, the findings about CLAUDE.md itself, and the section's length."""
     failures: list[str] = []
-    sections = register_sections(claude_text)
-    if not sections:
+    found_sections = register_sections(claude_text)
+    if not found_sections:
         return [], [f"{CLAUDE_MD}: no '{SECTION_HEADING}' section — the gate has nothing to measure."], 0
-    first_line, section = sections[0]
+    first_line, section = found_sections[0]
     failures.extend(
         f"{CLAUDE_MD}:{line}: a second register section — the register has one section in CLAUDE.md."
-        for line, _ in sections[1:]
+        for line, _ in found_sections[1:]
     )
     if len(section) > SECTION_LIMIT:
         failures.append(
