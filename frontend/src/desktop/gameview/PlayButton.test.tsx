@@ -1450,6 +1450,32 @@ describe("PlayButton", () => {
       expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
     });
 
+    it("reads UNINSTALLING... on the version being removed while another version's start is under way", async () => {
+      let removed!: (value: unknown) => void;
+      vi.mocked(backend.removeRom).mockReturnValueOnce(
+        new Promise((resolve) => {
+          removed = resolve;
+        }) as never,
+      );
+      const { rerender } = render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "Game Options" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "Uninstall" }));
+      await screen.findByRole("button", { name: "UNINSTALLING..." });
+
+      otherVersion();
+      rerender(<PlayButton appId={APP_ID} />);
+      pressPlay();
+      await screen.findByRole("button", { name: /LAUNCHING\.\.\./ });
+      await waitFor(() => expect(mockRunGame).toHaveBeenCalled());
+
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ romId: 100 }));
+      rerender(<PlayButton appId={APP_ID} />);
+      expect(screen.getByRole("button", { name: "UNINSTALLING..." })).toBeDisabled();
+      expect(screen.queryByRole("button", { name: /LAUNCHING\.\.\./ })).not.toBeInTheDocument();
+
+      await act(async () => removed({ success: true, message: "", prune_lease_token: null }));
+    });
+
     it("disables the chevron of the version switched to, saying why, until the other version's removal answers", async () => {
       let removed!: (value: unknown) => void;
       vi.mocked(backend.removeRom).mockReturnValueOnce(

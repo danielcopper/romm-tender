@@ -531,6 +531,12 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
     // No RESUME: docs/architecture/desktop-dom-architecture.md says why.
     if (sessionRunning) return <StopButton pending={stopPending} onStop={() => detach(handleStopClick())} />;
 
+    // Before the press: a press belongs to no ROM, so a start of another version
+    // must not draw over this version's removal.
+    if (uninstallingRomId === romId) {
+      return placeholder(uninstallingLabel(uninstallProgress, romId), undefined, UNINSTALLING_BUTTON_STYLE, true);
+    }
+
     if (pressState !== null) {
       return (
         <PlayStateButton
@@ -541,10 +547,6 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
           onUninstall={uninstall}
         />
       );
-    }
-
-    if (uninstallingRomId === romId) {
-      return placeholder(uninstallingLabel(uninstallProgress, romId), undefined, UNINSTALLING_BUTTON_STYLE, true);
     }
     if (actionState === "dl_complete") return placeholder("READY!", undefined, READY_BUTTON_STYLE);
     if (downloading) {
