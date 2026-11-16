@@ -10,7 +10,8 @@
  *   - the desktop client's Play button, which adds its ROM's download from the
  *     backend queue when the store has none of it (utils/downloadRehydrate.ts)
  *   - both game pages' Play buttons, which drop their ROM's entry when a cancel
- *     finds no download to cancel (utils/downloadPauseCancel.ts)
+ *     finds no download to cancel, under the condition executeDownloadCancel
+ *     (utils/downloadPauseCancel.ts) states
  *
  * Read by:
  *   - MainPage.tsx, DownloadQueue.tsx and the desktop client's Play button, all
