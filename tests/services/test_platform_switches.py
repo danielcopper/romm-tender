@@ -58,9 +58,10 @@ class TestReplace:
         """#2452 D28: the Platforms tab, its message and the next sync agree on the toggle."""
         before = {"snes": True}
         settings: dict[str, Any] = {"enabled_platforms": before}
+        writer = _switches(settings, FailingSettingsPersister())
 
         with pytest.raises(OSError, match="disk full"):
-            _switches(settings, FailingSettingsPersister()).replace(lambda switches: {"snes": False})
+            writer.replace(lambda switches: {"snes": False})
 
         assert settings["enabled_platforms"] is before
 
@@ -139,9 +140,10 @@ class TestCarryOver:
     def test_a_save_that_fails_keeps_the_moved_toggles_and_raises(self):
         """#2452 D23: the run filters by the moved toggles; the next save writes them."""
         settings: dict[str, Any] = {"enabled_platforms": {}, "enabled_platform_ids": {"1": True}}
+        writer = _switches(settings, FailingSettingsPersister())
 
         with pytest.raises(OSError, match="disk full"):
-            _switches(settings, FailingSettingsPersister()).carry_over(_moved)
+            writer.carry_over(_moved)
 
         assert settings == {"enabled_platforms": {"folder-1": True}, "enabled_platform_ids": None}
 
