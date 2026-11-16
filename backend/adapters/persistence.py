@@ -14,9 +14,9 @@ from typing import Any, Protocol
 
 from adapters.system_clock import SystemClock
 from domain.emulator_pick import StoredPick, platform_pick
-from domain.state_migrations import unreadable_settings
+from domain.state_migrations import SWITCHES_BY_ID_SETTING, SWITCHES_SETTING, unreadable_settings
 
-_SETTINGS_VERSION = 14
+_SETTINGS_VERSION = 15
 _LOCK_EXT = ".lock"
 
 # The settings file's name, and the only spelling of it in the codebase.
@@ -62,7 +62,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # the order they were entered. Values are proxy credentials: never sent to the
     # frontend, never logged.
     "romm_custom_headers": [],
-    "enabled_platforms": {},
+    SWITCHES_SETTING: {},
     "enabled_collections": {"standard": {}, "smart": {}, "virtual": {}},
     "collection_create_platform_groups": False,
     # QAM collection owner-scope: ``"all"`` (default — every collection the
@@ -202,31 +202,34 @@ class PersistenceAdapter:
         is not converted: a warning names what was found and the defaults are
         returned, which the immediate bootstrap save writes over the file with
         no backup, since everything such a file held can be entered again. An
-        *unparseable* file is the data-loss hazard: rather than silently
+        *unparseable* file — not JSON, or not text at all (#2452 D30) — is the data-loss hazard: rather than silently
         returning defaults (which the immediate bootstrap save would then write
         over the corrupt file, destroying the user's server URL, token, and
         selections), the unparseable file is backed up to
         ``settings.json.corrupt-<ts>`` and a transient :attr:`_corrupt_reset`
         flag is set so bootstrap can persist the reset marker. The error is logged loudly. If the backup rename
         itself fails, the error is logged and defaults are still returned so
-        boot never crashes.
+        boot never crashes. The defaults returned for a file that is not read —
+        either kind — keep an empty map of per-platform sync toggles by RomM id
+        (#2452 D29); a first run's keep none.
         """
         settings_path = os.path.join(self._settings_dir, SETTINGS_FILENAME)
+        settings: dict[str, Any]
         try:
             with open(settings_path) as f:
                 settings = json.load(f)
         except FileNotFoundError:
             # Legitimate first run: no file, no backup, no reset flag.
             settings = {}
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, UnicodeDecodeError):
             self._logger.error("settings.json is corrupt/unparseable — backing up and resetting to defaults")
             self._quarantine_corrupt_settings(settings_path)
-            settings = {}
+            settings = {SWITCHES_BY_ID_SETTING: {}}
         else:
             unreadable = unreadable_settings(settings)
             if unreadable is not None:
                 self._logger.warning("settings.json is not read, because %s — starting on the defaults", unreadable)
-                settings = {}
+                settings = {SWITCHES_BY_ID_SETTING: {}}
 
         for key, default in DEFAULT_SETTINGS.items():
             # deepcopy so a mutable default (e.g. the ``platform_cores`` / enabled-*
@@ -274,10 +277,10 @@ class PersistenceAdapter:
 
     @property
     def corrupt_reset(self) -> dict[str, Any] | None:
-        """The corrupt-settings reset recorded by the last ``load_settings``.
+        """The corrupt-settings reset recorded by ``load_settings``.
 
-        ``None`` when the file parsed cleanly (or was a legitimate first run);
-        otherwise ``{"backed_up_to": <basename>}`` naming the quarantine backup.
+        ``{"backed_up_to": <basename>}`` once an unparseable file was moved to
+        its quarantine backup; ``None`` otherwise.
         Bootstrap reads this once after migration to fold the reset into the
         persistent ``_settings_reset_notice`` settings marker.
         """

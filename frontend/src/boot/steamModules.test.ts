@@ -20,10 +20,12 @@
 
 import { globSync, readFileSync } from "node:fs";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { declaredFunctions, divisionSlashes } from "../test-utils/jsFunctionScanner";
 import { type SearchingCopy, readSearchingCopy } from "./searchingCopy";
+import { noticeFeatures } from "./startupMiss";
+import { STEAM_FEATURES } from "./steamInternals";
 import {
   ASKED_LIVE,
   NOTIFICATION_LOOKUPS,
@@ -85,7 +87,7 @@ function importedValueNames(): string[] {
 }
 
 /**
- * Every name shipped source resolves off Steam FOR ITSELF, in the three shapes
+ * Every name shipped source resolves off Steam FOR ITSELF, in the four shapes
  * one is written in today.
  *
  * The first is `export const X = findModule…(`. `findModule` and its siblings
@@ -106,6 +108,12 @@ function importedValueNames(): string[] {
  * own asks the loaded exports — so both the search and the predicate are
  * Tender's in both bundles, which is the same property the first shape carries
  * and is why the repair is the same.
+ *
+ * The fourth is `classMapMember("map", () => map, "Member", …)`, an entry of
+ * the check itself for a member Tender reads by name off a class map. Whose
+ * search found the map does not matter to it: the member's name is the one
+ * this version of Tender knows, so a newer Tender is the repair. The name the
+ * entry gives must match the map it reads, or the entry is about another map.
  *
  * **What the regexes see is narrower than those sentences**: a probe behind a
  * wrapper, one assigned to a non-exported const, one re-exported from another
@@ -130,6 +138,9 @@ function tenderOwnSearchNames(): string[] {
     }
     for (const match of source.matchAll(/export\s+const\s+(\w+)\s*(?::[^=]*?)?=\s*searchSteamFactories\s*\(/g)) {
       names.add(match[1]!);
+    }
+    for (const match of source.matchAll(/classMapMember\(\s*"(\w+)",\s*\(\)\s*=>\s*(\w+),\s*"(\w+)"/g)) {
+      if (match[1] === match[2]) names.add(`${match[1]}.${match[3]}`);
     }
   }
   return [...names].sort();
@@ -320,15 +331,16 @@ describe("the start-up check's coverage of what the panel imports", () => {
     expect(wrong.map((lookup) => lookup.name)).toEqual([]);
   });
 
-  it("sweeps all three shapes a lookup of Tender's own is written in, so none can stop matching in silence", () => {
+  it("sweeps all four shapes a lookup of Tender's own is written in, so none can stop matching in silence", () => {
     // The guard the sweep above needs for itself: it answers a set, and an
     // empty one passes that filter for every name there is. One name per shape,
-    // because the three regexes fail independently — a probe read, a global
-    // read and a scan over Steam's module factories.
+    // because the four regexes fail independently — a probe read, a global
+    // read, a scan over Steam's module factories and a class map's member.
     const ownSearches = new Set(tenderOwnSearchNames());
     expect(ownSearches).toContain("ControllerGlyph");
     expect(ownSearches).toContain("NotificationStore");
     expect(ownSearches).toContain("AppDetailsRoute");
+    expect(ownSearches).toContain("quickAccessMenuClasses.Expanded");
   });
 
   it("has a name at every absence cost, so none of the four is a value nothing uses", () => {
@@ -406,6 +418,66 @@ describe("what the start-up check hands the log line", () => {
         { name: "ControllerGlyph", absenceCost: "appearance", features: ["buttonPictures"] },
       ],
       asked: 2,
+    });
+  });
+
+  it("reports the FriendsUI store's search, when it finds nothing, with a loss that names the wide pages", () => {
+    // The suite's `findModuleExport` answers nothing, which is the store's
+    // search missing on a Steam that moved it.
+    const report = checkSteamModules();
+    const missed = describeMissedLookups(report).missed.filter((name) => name.name === "FriendsUIStore");
+
+    expect(missed).toEqual([{ name: "FriendsUIStore", absenceCost: "feature", features: ["widePages"] }]);
+    expect(noticeFeatures(missed)).toEqual([STEAM_FEATURES.widePages]);
+    for (const page of ["Settings", "Sync", "Library", "Data Management"]) {
+      expect(STEAM_FEATURES.widePages).toContain(page);
+    }
+  });
+
+  describe("the class map's two classes the wide pages' wrapper reads", () => {
+    const MEMBERS = ["quickAccessMenuClasses.ViewPlaceholder", "quickAccessMenuClasses.Expanded"];
+
+    /** Every name the check misses with *classes* for the QAM's class map. */
+    const missedWith = async (classes: Record<string, string> | undefined) => {
+      vi.resetModules();
+      vi.doMock("../utils/deckyUiInternals", async (importOriginal) => ({
+        ...(await importOriginal<typeof import("../utils/deckyUiInternals")>()),
+        quickAccessMenuClasses: classes,
+      }));
+      const check = await import("./steamModules");
+      return check.describeMissedLookups(check.checkSteamModules()).missed;
+    };
+
+    /** The check's misses among the two members with *classes* for the QAM's class map. */
+    const checkWith = async (classes: Record<string, string> | undefined) =>
+      (await missedWith(classes)).filter((name) => MEMBERS.includes(name.name));
+
+    afterEach(() => {
+      vi.doUnmock("../utils/deckyUiInternals");
+      vi.resetModules();
+    });
+
+    it.each([
+      ["Expanded", { Title: "t", ViewPlaceholder: "v" }],
+      ["ViewPlaceholder", { Title: "t", Expanded: "e" }],
+    ])("reports a class map without %s with a loss that names the wide pages", async (member, classes) => {
+      const missed = await checkWith(classes);
+
+      expect(missed).toEqual([
+        { name: `quickAccessMenuClasses.${member}`, absenceCost: "feature", features: ["widePages"] },
+      ]);
+      expect(noticeFeatures(missed)).toEqual([STEAM_FEATURES.widePages]);
+    });
+
+    it("finds both in a class map that carries them", async () => {
+      expect(await checkWith({ Title: "t", ViewPlaceholder: "v", Expanded: "e" })).toEqual([]);
+    });
+
+    it("leaves a missing class map to its own entry rather than counting its members as Tender's misses", async () => {
+      const missed = await missedWith(undefined);
+
+      expect(missed.filter((name) => MEMBERS.includes(name.name))).toEqual([]);
+      expect(missed).toContainEqual(expect.objectContaining({ name: "quickAccessMenuClasses" }));
     });
   });
 

@@ -49,6 +49,7 @@ from fakes.fake_listing_refiler import FakeListingRefiler
 from fakes.fake_listing_replacer import FakeListingReplacer
 from fakes.fake_migration_file_store import FakeMigrationFileStore
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
+from fakes.fake_platform_switches import FakePlatformSwitches
 from fakes.fake_platform_systems import FakePlatformSystems
 from fakes.fake_release_download import FakeReleaseDownload
 from fakes.fake_renderer_gc import FakeRendererGc
@@ -1274,6 +1275,7 @@ def _dispatcher_over_library(romm_api: FakeRommApi, events: FakeEventSink, home:
             running_rom_ids=FakeRunningRomIds(),
             refiling=FakeListingRefiler(),
             platform_listing=FakeListingReplacer(),
+            platform_switches=FakePlatformSwitches(),
         ),
     ).service
     endpoints = Endpoints(_make_application(_make_services_bundle(sync_service=service)), HostStatus())

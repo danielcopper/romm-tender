@@ -10,6 +10,7 @@ from lib.errors import (
     NamedRefused,
     NotConfigured,
     NotInstalled,
+    Refused,
     RommAcknowledgementNotTaken,
     RommApiError,
     RommAuthError,
@@ -28,6 +29,7 @@ from lib.errors import (
     TokenHostMismatchError,
     VersionUnsupported,
     classify_error,
+    require_platform_folder,
     romm_error_log_level,
 )
 
@@ -415,3 +417,19 @@ class TestARommErrorsUrlCarriesNoLogin:
 
     def test_no_url_stays_none(self):
         assert RommApiError("no url").url is None
+
+
+class TestRequirePlatformFolder:
+    """A platform folder is a name RomM keeps the platform in; anything else is refused as ``invalid_value``."""
+
+    @pytest.mark.parametrize("folder", ["snes", "snes-hacks", "gc"])
+    def test_a_name_passes(self, folder):
+        require_platform_folder(folder)
+
+    @pytest.mark.parametrize("folder", ["", "   ", "\t", None, 3, ["snes"], {"fs_slug": "snes"}])
+    def test_anything_but_a_name_is_refused(self, folder):
+        with pytest.raises(Refused) as excinfo:
+            require_platform_folder(folder)
+
+        assert excinfo.value.reason == "invalid_value"
+        assert excinfo.value.message == f"{folder!r} is not a RomM platform folder"

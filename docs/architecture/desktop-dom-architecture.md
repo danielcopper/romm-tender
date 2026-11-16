@@ -47,11 +47,12 @@ title. DOWNLOAD's press and the bar's own are the button's. When the page shows 
 the button reads that game's download from the backend's queue into the download store, as Big Picture's reads it when
 its page opens (`seedDownloadFromQueue`, `frontend/src/utils/downloadRehydrate.ts`): a paused download sends no frames,
 nor a queued one until it starts, so after Steam's interface reloads the bar would otherwise be missing and DOWNLOAD
-would start a paused one from nothing. A press of cancel or pause moves nothing on the button, as Big Picture's moves
-nothing: the bar, and what the cached detail found on disk, go with the backend's cancelled or failed frame, since a
-press that is refused or gets no answer leaves the transfer running. Such a press is logged, and a cancel the backend
-refuses because it holds no download of the game, running or paused, ends the press's own bar and drops the game from
-the download store, since no frame will. The chevron beside PLAY opens the game's menu, whose one entry is Uninstall
+would start a paused one from nothing. A press of cancel or pause moves nothing on either button before the backend
+answers: the bar, and what the cached detail found on disk, go with the backend's cancelled or failed frame, since a
+press with no answer may still have reached the backend. Such a press is logged, as is a refused one. A cancel refused
+with `no_active_download` gets no frame, so both buttons end the press's own bar and drop the game from the download
+store, keeping what was found on disk; `executeDownloadCancel` (`frontend/src/utils/downloadPauseCancel.ts`) states when
+that answer is left alone instead. The chevron beside PLAY opens the game's menu, whose one entry is Uninstall
 (`executeRomUninstall`, `frontend/src/utils/romUninstall.ts`), which, like Big Picture's, asks nothing first. The
 chevron is disabled while a press or a version switch is under way, an open menu closing when one starts, and, with a
 title that says why, while a removal the page started for another version still runs, since the button takes no second

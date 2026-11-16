@@ -15,19 +15,13 @@ import {
   type MouseEvent,
 } from "react";
 import { addEventListener, removeEventListener } from "../../api/host";
-import {
-  cancelDownload,
-  getCachedGameDetail,
-  logError,
-  logWarn,
-  pauseDownload,
-  type BackendResult,
-} from "../../api/backend";
+import { getCachedGameDetail, logWarn } from "../../api/backend";
+import { logFailure } from "../../utils/backendLog";
 import { useGameDetail, type GameDetailState } from "../../utils/gameDetailStore";
-import { removeDownload, useDownloads } from "../../utils/downloadStore";
+import { isDownloadUnderWay, useDownloads } from "../../utils/downloadStore";
 import { READY_FLASH_MS } from "../../utils/downloadProgress";
 import { PLAY_GRADIENT } from "../../utils/playGradient";
-import { isDownloadUnderWay, seedDownloadFromQueue } from "../../utils/downloadRehydrate";
+import { seedDownloadFromQueue } from "../../utils/downloadRehydrate";
 import {
   NO_DOWNLOAD_ANSWERS,
   downloadAnswers,
@@ -38,6 +32,7 @@ import { useRommConnectionState } from "../../utils/connectionState";
 import { isBoundVanished, onBoundAvailabilityChange } from "../../utils/vanishedBinding";
 import { runDownloadWithAdoption } from "../../utils/adoptFlow";
 import { executeDownloadResume } from "../../utils/downloadResume";
+import { executeDownloadCancel, executeDownloadPause } from "../../utils/downloadPauseCancel";
 import { handleButtonDownloadFailure } from "../../utils/downloadFailure";
 import { NO_FILE_ON_ROMM_LABEL } from "../../utils/noFileOnRommWording";
 import { readGameRunning } from "../../utils/sessionManager";
@@ -63,7 +58,9 @@ import { DownloadingButton } from "./DownloadingButton";
 import { PlayButtonBadges } from "./PlayButtonBadges";
 import { PlayStateButton } from "./PlayStateButton";
 import { SvgThrobber } from "./SvgThrobber";
-import { usePlayLaunch, type ActionState, type HeldState, type PressState } from "./usePlayLaunch";
+import { usePlayLaunch, type HeldState, type PressState } from "./usePlayLaunch";
+
+const TAG = "DesktopPlayButton";
 
 interface PlayButtonProps {
   appId: number;
@@ -91,8 +88,17 @@ interface CachedAnswers extends DownloadAnswers {
 const NO_ANSWERS: CachedAnswers = { romId: null, ...NO_DOWNLOAD_ANSWERS };
 
 /**
- * What a download press, a download's completion or an uninstall put on the
- * button, and the ROM it is for; another ROM's reads as none.
+ * What the button reads for one ROM's download, ended by an event of its own
+ * rather than by the shared detail: a download this button started, until the
+ * download's first frame, its end, a switch to another version or a cancel the
+ * backend answers with no download to cancel; the moment a download completed,
+ * for `READY_FLASH_MS`.
+ */
+type ActionState = "downloading" | "dl_complete";
+
+/**
+ * What a download press or a download's completion put on the button, and the
+ * ROM it is for; another ROM's reads as none.
  */
 interface PressedAction {
   state: ActionState;
@@ -182,19 +188,6 @@ function actionStateFor(action: PressedAction | null, romId: number | null): Act
 // occupied target is compared where it lies, a candidate is renamed into place.
 function answersFor(answers: CachedAnswers, romId: number | null, installed: boolean): CachedAnswers {
   return answers.romId !== null && answers.romId === romId && !installed ? answers : NO_ANSWERS;
-}
-
-/** What a press of the bar's Cancel or Pause asked the backend for. */
-type BarPress = "cancel" | "pause";
-
-function logBarRefusal(what: BarPress, romId: number, result: BackendResult): void {
-  logWarn(
-    `DesktopPlayButton: the backend refused to ${what} the download of romId=${romId}: ${result.reason ?? "no reason"}: ${result.message}`,
-  );
-}
-
-function logBarFailure(what: BarPress, romId: number, e: unknown): void {
-  logError(`DesktopPlayButton: could not ${what} the download of romId=${romId}: ${String(e)}`);
 }
 
 function downloadRatio(download: DownloadItem | undefined): number {
@@ -302,7 +295,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
         setCachedAnswers({ romId, ...downloadAnswers(cached) });
       })
       .catch((e) => {
-        logWarn(`DesktopPlayButton: could not read what is on disk for romId=${romId}: ${e}`);
+        logWarn(`${TAG}: could not read what is on disk for romId=${romId}: ${e}`);
       });
     return () => {
       cancelled = true;
@@ -310,7 +303,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
   }, [appId, romId, detail.installed]);
 
   useEffect(() => {
-    if (romId) detach(seedDownloadFromQueue(romId, "DesktopPlayButton"));
+    if (romId) detach(seedDownloadFromQueue(romId, TAG));
   }, [romId]);
 
   const saveStatus = saveStatusOf(detail);
@@ -400,7 +393,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
     startCheckFailed || detail.emulatorStart === null
       ? null
       : startRefusal(detail.emulatorStart, detail.gameLaunch ?? null, false);
-  const { handlePlayClick, handleResolveConflictClick, handleStopClick, handleUninstallClick, uninstallUnderWay } =
+  const { handlePlayClick, handleResolveConflictClick, handleStopClick, handleUninstallClick, uninstallingRomId } =
     usePlayLaunch({
       appId,
       romId,
@@ -410,8 +403,6 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
       ask,
       leaseOwner,
       setPressState,
-      startAction,
-      endAction,
       clearSessionRunning: () => {
         if (romId !== null) setSessionSeen({ romId, running: false });
       },
@@ -438,7 +429,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
         romId: rid,
         romName: detail.romName,
         pageSawCandidate: candidatePresent,
-        logContext: "DesktopPlayButton",
+        logContext: TAG,
         dialogs: desktopAdoptionDialogs(ask),
         hooks: {
           setBusy: (busy) => {
@@ -455,6 +446,8 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
         startAction("downloading", rid);
         clearPendingFor(rid);
       }
+    } catch (e) {
+      logFailure(TAG, "run the download press for", rid, e);
     } finally {
       setDownloadFlowUnderWay(false);
     }
@@ -465,30 +458,13 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
     e.stopPropagation();
     if (!romId) return;
     const rid = romId;
-    const onAnswer = (result: BackendResult) => {
-      if (result.success) return;
-      logBarRefusal("cancel", rid, result);
-      // The backend holds neither a transfer nor a paused entry for the ROM, so no frame will end the bar.
-      if (result.reason === "no_active_download") {
-        endAction("downloading", rid);
-        removeDownload(rid);
-      }
-    };
-    detach(cancelDownload(rid).then(onAnswer, (err: unknown) => logBarFailure("cancel", rid, err)));
+    detach(executeDownloadCancel(rid, TAG, () => endAction("downloading", rid)));
   };
 
   const handlePauseResumeClick = (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     if (!romId || !activeDownload) return;
-    const rid = romId;
-    if (activeDownload.status === "paused") {
-      detach(executeDownloadResume(rid, "DesktopPlayButton"));
-      return;
-    }
-    const onAnswer = (result: BackendResult) => {
-      if (!result.success) logBarRefusal("pause", rid, result);
-    };
-    detach(pauseDownload(rid).then(onAnswer, (err: unknown) => logBarFailure("pause", rid, err)));
+    detach(activeDownload.status === "paused" ? executeDownloadResume(romId, TAG) : executeDownloadPause(romId, TAG));
   };
 
   if (romId === null) return null;
@@ -560,6 +536,12 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
     // No RESUME: docs/architecture/desktop-dom-architecture.md says why.
     if (sessionRunning) return <StopButton pending={stopPending} onStop={() => detach(handleStopClick())} />;
 
+    // Before the press: a press belongs to no ROM, so a start of another version
+    // must not draw over this version's removal.
+    if (uninstallingRomId === romId) {
+      return placeholder(uninstallingLabel(uninstallProgress, romId), undefined, UNINSTALLING_BUTTON_STYLE, true);
+    }
+
     if (pressState !== null) {
       return (
         <PlayStateButton
@@ -570,10 +552,6 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
           onUninstall={uninstall}
         />
       );
-    }
-
-    if (actionState === "uninstalling") {
-      return placeholder(uninstallingLabel(uninstallProgress, romId), undefined, UNINSTALLING_BUTTON_STYLE, true);
     }
     if (actionState === "dl_complete") return placeholder("READY!", undefined, READY_BUTTON_STYLE);
     if (downloading) {
@@ -619,7 +597,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
         refusal={playRefusal}
         checkFailed={startCheckFailed}
         switching={switching}
-        uninstallUnderWay={uninstallUnderWay}
+        uninstallElsewhere={uninstallingRomId !== null && uninstallingRomId !== romId}
         onPlay={() => detach(handlePlayClick())}
         onUninstall={uninstall}
       />

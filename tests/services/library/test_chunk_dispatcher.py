@@ -442,7 +442,7 @@ class TestWholeUnitStaging:
                 {"id": 11, "name": "New Name", "fs_name": "changed.z64", "path_cover_large": "cover-11.png"},
             ],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="Keep", fs_name="keep.z64")
         _seed_rom_row(library, 11, app_id=1011, platform_slug="n64", name="Old Name", fs_name="changed.z64")
         library.cover_preparer._download_artwork = AsyncMock(return_value={11: "/covers/11.png"})
@@ -866,7 +866,7 @@ class TestInterChunkCancelGuard:
             slug="n64",
             roms=[{"id": 10, "name": "Alpha"}, {"id": 11, "name": "Beta"}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 1)
         library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event

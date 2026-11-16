@@ -86,8 +86,6 @@ describe("usePlayLaunch", () => {
   const holdVerdict = vi.fn();
   const clearSessionRunning = vi.fn();
   const setStopPending = vi.fn();
-  const startAction = vi.fn();
-  const endAction = vi.fn();
   const runGame = vi.fn();
 
   type LaunchOptions = Partial<Parameters<typeof usePlayLaunch>[0]>;
@@ -105,8 +103,6 @@ describe("usePlayLaunch", () => {
           ask,
           leaseOwner: "desktop-play-button:12345",
           setPressState,
-          startAction,
-          endAction,
           clearSessionRunning,
           holdVerdict,
           setStopPending,
@@ -532,19 +528,18 @@ describe("usePlayLaunch", () => {
   });
 
   describe("Uninstall", () => {
-    it("reads UNINSTALLING..., then holds DOWNLOAD once the game is removed", async () => {
+    it("removes the game and holds DOWNLOAD once it is removed", async () => {
       const result = renderLaunch();
 
       await act(async () => {
         await result.current.handleUninstallClick();
       });
 
-      expect(startAction).toHaveBeenCalledWith("uninstalling", 100);
       expect(backend.removeRom).toHaveBeenCalledWith(100);
       expect(backend.debugLog).toHaveBeenCalledWith("DesktopPlayButton: uninstalling romId=100");
       expect(toast.showToast).toHaveBeenCalledWith("Test Game uninstalled");
       expect(holdVerdict).toHaveBeenCalledWith("download", 100);
-      expect(endAction).toHaveBeenCalledWith("uninstalling", 100);
+      expect(result.current.uninstallingRomId).toBeNull();
     });
 
     it("returns the button to its own state when the removal fails, saying why", async () => {
@@ -555,10 +550,9 @@ describe("usePlayLaunch", () => {
         await result.current.handleUninstallClick();
       });
 
-      expect(startAction).toHaveBeenCalledWith("uninstalling", 100);
       expect(toast.showToast).toHaveBeenCalledWith("Failed");
       expect(holdVerdict).not.toHaveBeenCalled();
-      expect(endAction).toHaveBeenCalledWith("uninstalling", 100);
+      expect(result.current.uninstallingRomId).toBeNull();
     });
 
     it("takes the next press once a refused removal has come back", async () => {
@@ -599,27 +593,29 @@ describe("usePlayLaunch", () => {
       expect(holdVerdict).toHaveBeenCalledWith("download", 100);
     });
 
-    it("says an uninstall is under way from the press until the removal answers", async () => {
+    it("holds the ROM being removed from the press until the removal answers", async () => {
       let finish!: (value: unknown) => void;
       vi.mocked(backend.removeRom).mockReturnValueOnce(
         new Promise((resolve) => {
           finish = resolve;
         }) as never,
       );
-      const result = renderLaunch();
-      expect(result.current.uninstallUnderWay).toBe(false);
+      const { result, rerender } = renderSwitchable({ romId: 100 });
+      expect(result.current.uninstallingRomId).toBeNull();
 
       let removal!: Promise<void>;
       act(() => {
         removal = result.current.handleUninstallClick();
       });
-      expect(result.current.uninstallUnderWay).toBe(true);
+      expect(result.current.uninstallingRomId).toBe(100);
+      rerender({ romId: 101 });
+      expect(result.current.uninstallingRomId).toBe(100);
 
       await act(async () => {
         finish({ success: false, message: "In use" });
         await removal;
       });
-      expect(result.current.uninstallUnderWay).toBe(false);
+      expect(result.current.uninstallingRomId).toBeNull();
     });
 
     it("does nothing before the page's detail names a ROM", async () => {
@@ -629,7 +625,7 @@ describe("usePlayLaunch", () => {
         await result.current.handleUninstallClick();
       });
 
-      expect(startAction).not.toHaveBeenCalled();
+      expect(result.current.uninstallingRomId).toBeNull();
       expect(backend.removeRom).not.toHaveBeenCalled();
     });
   });

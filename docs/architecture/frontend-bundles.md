@@ -148,8 +148,9 @@ resolves it from `document.title`, or failing that from the focus controller's a
 carries no Big Picture tree until Big Picture has been opened. A reading of it when the injector evaluates the bundle
 answers for a moment nobody chose, and refusing to mount the panel on that answer reports a fault that does not exist —
 which is what happened in the desktop client, measured on the device (#1945). So it is classified as asked-live instead,
-and its two consumers in `utils/styleInjector.ts` ask it when the play button mounts and unmounts on a game page, and do
-nothing when it answers nothing.
+and its consumers ask it when they need it and do nothing when it answers nothing: the two in `utils/styleInjector.ts`
+when the play button mounts and unmounts on a game page, and `utils/installQamWidthPatch.ts` when a wide page widens the
+panel.
 
 That is also why no mode question arises in the check at all. Every entry is answered by something that does not differ
 between Steam's two modes; `findSP` was the only one that did, and it has left the list. (Measured in the desktop client
@@ -172,8 +173,13 @@ renders whole and [Steam's game page](#tenders-section-on-steams-game-page) carr
 `QuickAccessMenuBrowserView`, the module Steam draws its Quick Access menu from and Tender's entry is installed into
 (`qam/installEntry.tsx`, the search in `utils/deckyUiInternals.ts`): without it the panel is built and cannot be
 reached, while the game page's section, the launch check and the save sync around a game still run — the fallback page
-would take those away and be just as unreachable. `ReactClient`, the desktop surface's search for React's client module
-(`desktop/desktopWindow.ts`), costs a feature too, and is in the list only in the build that carries that surface
+would take those away and be just as unreachable. So do the three things the wrapper on Steam's QAM host reads
+(`utils/installQamWidthPatch.ts`, [two widths](qam-panel.md#two-widths)): `FriendsUIStore`, the store whose flag it
+widens on, and `quickAccessMenuClasses.ViewPlaceholder` and `quickAccessMenuClasses.Expanded`, the two classes it reads
+off that map, asked after only while the map itself is there. Without any of the three the wrapper is never installed,
+every page renders and works, and the wide pages stay at Steam's narrow width with their right-hand part off-screen.
+`ReactClient`, the desktop surface's search for React's client module (`desktop/desktopWindow.ts`), costs a feature too,
+and is in the list only in the build that carries that surface
 ([the desktop dev build](#the-desktop-dev-build-dev-build-only)).
 
 **Only one of the four costs decides anything.** `checkSteamModules`'s `!== "panel"` decides whether the panel mounts;
@@ -222,11 +228,11 @@ the page names no update at all: nothing that missed is a `@decky/ui` export, so
 makes itself, and a newer Tender is the repair. The page asks for a report there instead because the three `SP_*`
 globals reach its `none` (below); they cannot reach the log line, because their absence costs the panel. **That is the
 property `steamModules.test.ts` locks** — a non-blocking name `@decky/ui` does not export must be one Tender resolves
-for itself, in one of the three shapes such a lookup is written in: a `find(?:Module|ClassModule)\w*` call, a direct
-read of a global off `window`, or a `searchSteamFactories` scan over Steam's module factories — rather than the short
-set of names it produces today, which would go stale the moment a second name moved. `mixed` is the other place they
-differ: the log line names a repair covering both programs, where the page names Decky's and asks for a report about the
-rest, for the same reason.
+for itself, in one of the four shapes such a lookup is written in: a `find(?:Module|ClassModule)\w*` call, a direct read
+of a global off `window`, a `searchSteamFactories` scan over Steam's module factories, or a member read by name off a
+class map (`classMapMember`) — rather than the short set of names it produces today, which would go stale the moment a
+second name moved. `mixed` is the other place they differ: the log line names a repair covering both programs, where the
+page names Decky's and asks for a report about the rest, for the same reason.
 
 The page names every search that came back empty, and distinguishes **some** of them missing from **all** of them. All
 means something more basic than a stale predicate: the React bootstrap never ran, or Steam's module registry was read
@@ -371,7 +377,8 @@ Three things are not on it, because each has a home of its own:
 - Steam's React tree and DOM: the desktop surface's fiber reads
   ([Fiber, read-only](desktop-dom-architecture.md#fiber-read-only-frontendsrcdesktopwatcherfiberinspectorts)), its
   selectors and the game page's `renderFunc`, which the invariant register covers in entries of their own
-  ([desktop](invariants/desktop.md), [panel](invariants/panel.md)).
+  ([desktop](invariants/desktop.md), [panel](invariants/panel.md)), and the render of Steam's QAM host the wide pages
+  wrap ([two widths](qam-panel.md#two-widths)).
 - Every search into Steam's module registry, `@decky/ui`'s and Tender's own: the start-up check's lists classify them —
   `STEAM_LOOKUPS` asks after each it can answer for, the Quick Access entry's search for `QuickAccessMenuBrowserView`
   (`utils/deckyUiInternals.ts`) and, in the desktop dev build, the desktop surface's `ReactClient`

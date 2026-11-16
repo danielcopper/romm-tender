@@ -101,7 +101,7 @@ describe("PlayStateButton", () => {
   });
 
   it("disables the chevron, saying why, while an uninstall of another version runs", () => {
-    renderButton({ uninstallUnderWay: true });
+    renderButton({ uninstallElsewhere: true });
 
     const toggle = screen.getByRole("button", { name: "Game Options" });
     expect(toggle).toBeDisabled();
@@ -114,7 +114,7 @@ describe("PlayStateButton", () => {
   it.each([
     ["a version switch", { switching: true }],
     ["a press", { pressState: "checking" as const }],
-    ["another version's removal", { uninstallUnderWay: true }],
+    ["another version's removal", { uninstallElsewhere: true }],
   ])("leaves a menu that %s closed shut once it ends", (_, refusing) => {
     const props = { pressState: null, refusal: null, checkFailed: false, onPlay: vi.fn(), onUninstall: vi.fn() };
     const { rerender } = render(<PlayStateButton {...props} />);

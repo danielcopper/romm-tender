@@ -59,7 +59,7 @@ def _seed_library(harness) -> None:
         "platform_name": "N64",
         "platform_slug": "n64",
     }
-    harness.settings["enabled_platforms"] = {"1": True}
+    harness.settings["enabled_platforms"] = {"n64": True}
 
 
 async def _run_sync(harness, run_id: str) -> None:

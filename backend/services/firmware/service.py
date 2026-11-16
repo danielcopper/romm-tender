@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from lib.errors import Refused
+from lib.errors import Refused, require_platform_folder
 from services.firmware.deletion import FirmwareDeletionIncomplete, PlatformBiosDeleter, PlatformBiosDeleterConfig
 from services.firmware.demand import FirmwareDemand, FirmwareDemandConfig
 from services.firmware.downloads import FirmwareDownloader, FirmwareDownloaderConfig
@@ -193,7 +193,7 @@ class FirmwareService:
 
     async def get_platform_firmware_status(self, platform_slug, platform_folder) -> dict[str, Any]:
         """Return one platform's whole BIOS entry."""
-        _require_folder(platform_folder)
+        require_platform_folder(platform_folder)
         return await self._status.get_platform_firmware_status(platform_slug, platform_folder)
 
     async def check_platform_bios(
@@ -209,7 +209,7 @@ class FirmwareService:
         *rom_regions* narrows a one-of group to the game's own regions; an
         *install* is asked about the system it records.
         """
-        _require_folder(platform_folder)
+        require_platform_folder(platform_folder)
         return await self._status.check_platform_bios(
             platform_slug, platform_folder, launching_emulator, rom_regions, install
         )
@@ -228,7 +228,7 @@ class FirmwareService:
 
     async def download_all_firmware(self, platform_slug, platform_folder, rom_id: int | None = None) -> dict[str, Any]:
         """Download every firmware file RomM lists for a platform into the store, and link it."""
-        _require_folder(platform_folder)
+        require_platform_folder(platform_folder)
         async with self._rules.hold("download_all_firmware", update=True, folder=True, migration=True):
             with self._downloads.downloading():
                 return await self._downloads.download_all_firmware(platform_slug, platform_folder, rom_id)
@@ -240,7 +240,7 @@ class FirmwareService:
 
         With *rom_id*, the links follow the system the game's install record holds.
         """
-        _require_folder(platform_folder)
+        require_platform_folder(platform_folder)
         async with self._rules.hold("download_platform_firmware_file", update=True, folder=True, migration=True):
             with self._downloads.downloading():
                 return await self._downloads.download_platform_firmware_file(
@@ -254,7 +254,7 @@ class FirmwareService:
 
         With *rom_id*, the requirement is read, and the links placed, for the system the game's install record holds.
         """
-        _require_folder(platform_folder)
+        require_platform_folder(platform_folder)
         async with self._rules.hold("download_required_firmware", update=True, folder=True, migration=True):
             with self._downloads.downloading():
                 return await self._downloads.download_required_firmware(
@@ -270,7 +270,7 @@ class FirmwareService:
         points at nothing where a store copy exists, removes it where none does,
         and downloads nothing.
         """
-        _require_folder(platform_folder)
+        require_platform_folder(platform_folder)
         async with self._rules.hold("update_bios_links", update=True, folder=True, migration=True):
             system = await self._downloads.platform_system(platform_slug, rom_id)
             outcome = await self._config.loop.run_in_executor(
@@ -285,7 +285,7 @@ class FirmwareService:
 
         With *rom_id*, the place is read, and the links placed, for the system the game's install record holds.
         """
-        _require_folder(platform_folder)
+        require_platform_folder(platform_folder)
         async with self._rules.hold("replace_bios_file", update=True, folder=True, migration=True):
             with self._downloads.downloading():
                 system = await self._downloads.platform_system(platform_slug, rom_id)
@@ -293,7 +293,7 @@ class FirmwareService:
 
     async def delete_platform_bios(self, platform_slug, platform_folder) -> dict[str, Any] | FirmwareDeletionIncomplete:
         """Delete every BIOS file Tender put on the machine for a platform, and its links."""
-        _require_folder(platform_folder)
+        require_platform_folder(platform_folder)
         async with self._rules.hold("delete_platform_bios", update=True, folder=True, migration=True):
             return await self._deletion.delete_platform_bios(platform_slug, platform_folder)
 
@@ -301,17 +301,6 @@ class FirmwareService:
         self, platform_slug, platform_folder, file_name
     ) -> dict[str, Any] | FirmwareDeletionIncomplete:
         """Delete one BIOS file Tender put on the machine for a platform, by its name in RomM, and its links."""
-        _require_folder(platform_folder)
+        require_platform_folder(platform_folder)
         async with self._rules.hold("delete_bios_file", update=True, folder=True, migration=True):
             return await self._deletion.delete_bios_file(platform_slug, platform_folder, file_name)
-
-
-def _require_folder(platform_folder: object) -> None:
-    """Refuse ``invalid_value`` for a platform folder that is not a non-empty name.
-
-    Every platform use case here is keyed by the folder RomM keeps the
-    platform in; without one there is no store folder to read or write, and
-    the slug is never taken in its place.
-    """
-    if not isinstance(platform_folder, str) or not platform_folder:
-        raise Refused("invalid_value", f"{platform_folder!r} is not a RomM platform folder")

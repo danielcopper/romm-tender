@@ -217,7 +217,7 @@ class TestCoverRefreshPass:
             roms=[{"id": 10, "name": "Keep", "fs_name": "keep.z64", "path_cover_large": self._NEW}],
         )
         fake_romm_api.download_payloads[f"cover:{self._NEW}"] = b"fresh cover bytes"
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_rom_row(
             library, 10, app_id=1010, platform_slug="n64", name="Keep", fs_name="keep.z64", cover_source=self._OLD
         )
@@ -246,7 +246,7 @@ class TestCoverRefreshPass:
             slug="n64",
             roms=[{"id": 10, "name": "Keep", "fs_name": "keep.z64", "path_cover_large": self._NEW}],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="Keep", fs_name="keep.z64", cover_source=None)
         cache = self._cache_file(library, 10)
         cache.parent.mkdir(parents=True, exist_ok=True)
@@ -286,7 +286,7 @@ class TestCoverRefreshPass:
                 for i in range(1, 5)
             ],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         for i in range(1, 5):
             # Old names → every item classifies "changed" and is emitted.
             _seed_rom_row(
@@ -327,7 +327,7 @@ class TestCoverRefreshPass:
                 {"id": 2, "name": "B", "fs_name": "b.z64", "path_cover_large": "/b.png?ts=2026-07-11 12:00:00"},
             ],
         )
-        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_platforms"] = {"n64": True}
         _seed_rom_row(
             library, 1, app_id=1001, platform_slug="n64", name="A", fs_name="a.z64", cover_source="/a.png?ts=old"
         )

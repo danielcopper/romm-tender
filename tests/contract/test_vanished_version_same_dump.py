@@ -65,7 +65,7 @@ async def test_the_shortcut_follows_the_same_dump_and_its_page_offers_the_instal
     harness.romm.roms[_SAME_DUMP_ID] = _server_rom(_SAME_DUMP_ID, _FS_NAME)
     # Another version RomM ranks first: the move must not take it.
     harness.romm.roms[_OTHER_VERSION_ID] = _server_rom(_OTHER_VERSION_ID, "game (europe).gba", is_main_sibling=True)
-    harness.settings["enabled_platforms"] = {str(_PLATFORM_ID): True}
+    harness.settings["enabled_platforms"] = {"gba": True}
 
     sync = harness.app.services.sync_service
 

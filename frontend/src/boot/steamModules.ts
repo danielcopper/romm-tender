@@ -80,6 +80,7 @@ import { ReactClient } from "../desktop/desktopWindow";
 import {
   ControllerGlyph,
   ErrorBoundary,
+  FriendsUIStore,
   NotificationStore,
   QuickAccessMenuBrowserView,
   ToastRenderer,
@@ -193,6 +194,28 @@ const truthyUnexported = (
   deckyUiExport: false,
 });
 
+/**
+ * A member Tender reads by name off a class map, asked only of a map that is
+ * there: a missing map is its own entry's miss, and counting its members as
+ * well would charge a search of `@decky/ui`'s to Tender ({@link searchOwner}).
+ */
+const classMapMember = <M extends object>(
+  mapName: string,
+  map: () => M | undefined,
+  member: Extract<keyof M, string>,
+  absenceCost: AbsenceCost,
+  ...features: SteamFeature[]
+): SteamLookup => ({
+  name: `${mapName}.${member}`,
+  found: () => {
+    const classes = map();
+    return classes === undefined || Boolean(classes[member]);
+  },
+  deckyUiExport: false,
+  absenceCost,
+  ...(features.length > 0 ? { features } : {}),
+});
+
 /** The search Tender's Quick Access entry rests on, named once for the check and for the toast its miss raises. */
 export const QUICK_ACCESS_LOOKUP = "QuickAccessMenuBrowserView";
 
@@ -276,8 +299,8 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
 
   // The class maps and the glyph, which `deckyUiInternals.ts` already types
   // honestly. A missing class map does not throw: every read is either
-  // optional-chained or guarded by one that is — `qamExpansion.ts:45` is a
-  // plain member read, reached only from the true arm of line 44's `?.` test.
+  // optional-chained or guarded by one that is — `qamExpansion.ts:50` is a
+  // plain member read, reached only from the true arm of line 49's `?.` test.
   //
   // What the absence costs is per map and is a table rather than a paragraph,
   // because a paragraph is summarised and a cell is checked. Every row below
@@ -288,10 +311,10 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // | Map | Read at | Falls back to | What its absence costs |
   // | --- | --- | --- | --- |
   // | `appActionButtonClasses` | every button branch of `CustomPlayButton` (`bigpicture/CustomPlayButton.tsx`), for `PlayButtonContainer` / `PlayButton` / `Green` / `Throbber` | the class is simply absent — dropped from the list (`.filter(Boolean)`), replaced by `""`, or left undefined where it is the whole of the prop | our own play and download buttons keep their shape and lose Steam's, so a box of ours no longer matches the ones beside it |
-  // | `appDetailsClasses` | `InnerContainer` in `findInsertionPoint` (`bigpicture/patches/gameDetailPatch.tsx:91`); `AppDetailsOverviewPanel` in the patch handler `registerGameDetailPatch` installs (`:223`, and its debug line `:232`) | `findInsertionPoint` returns `undefined`; the wrapper takes `""` | `InnerContainer` is a mark on a node of STEAM's, so without it the handler finds no insertion point and returns the tree untouched — no Tender section on the game page at all. Without `AppDetailsOverviewPanel` the wrapper is still inserted, outside `InnerContainer`'s flex and scroll layout |
-  // | `basicAppDetailsSectionStylerClasses` | `PlaySection` in an unnamed `useEffect` of `CustomPlayButton` (`CustomPlayButton.tsx:220`) and on our own row in `RomMPlaySection` (`bigpicture/RomMPlaySection.tsx:1048`); also `dumpTree` (`gameDetailPatch.tsx:148-157`) | the effect does not call `hideNativePlaySection`; the row takes `""`; the dump prints `UNDEFINED` | the same member is both kinds at once: it names a node of Steam's for the hide, so Steam's own play section stays on screen beside ours, and a node of ours for the row's styling |
-  // | `playSectionClasses` | `Container` in `dumpTree` alone (`gameDetailPatch.tsx:136-144`) | the dump prints `UNDEFINED` and skips the tree search it guards | one line of a debug dump that runs at most once per load names no class. Nothing a user can see |
-  // | `quickAccessMenuClasses` | `TabGroupPanel` at module scope (`utils/qamExpansion.ts:44-46`), read into the selectors of the injected sheet (`:100-101`); `ActiveTab` in `useWideQamPanel`'s effect (`:182`); `Title` in `buildEntry` (`qam/quickAccessEntry.tsx:130`), as the entry's heading | `TAB_PANEL_SELECTOR` becomes `PANEL_ID_SELECTOR`, the panel's id; `owningTabActive` defaults to true (`:189`, the default argued just above it) and the `MutationObserver` guarded at `:198` is never constructed; the heading's `className` is `undefined` | the sheet matches the panel by id instead of by class, and the expansion is taken whether or not the page's own tab is the active one and is not re-synced on a tab switch — a leaked expansion the QAM-close and unmount paths still clear; and Settings › Updates counts its release as seen on whichever tab is active, while the menu is open. The heading is still drawn, unstyled, at body size |
+  // | `appDetailsClasses` | `InnerContainer` in `findInsertionPoint` (`bigpicture/patches/gameDetailPatch.tsx:90`); `AppDetailsOverviewPanel` in the patch handler `registerGameDetailPatch` installs (`:217`, and its debug line `:222`) | `findInsertionPoint` returns `undefined`; the wrapper takes `""` | `InnerContainer` is a mark on a node of STEAM's, so without it the handler finds no insertion point and returns the tree untouched — no Tender section on the game page at all. Without `AppDetailsOverviewPanel` the wrapper is still inserted, outside `InnerContainer`'s flex and scroll layout |
+  // | `basicAppDetailsSectionStylerClasses` | `PlaySection` in an unnamed `useEffect` of `CustomPlayButton` (`CustomPlayButton.tsx:253`) and on our own row in `RomMPlaySection` (`bigpicture/RomMPlaySection.tsx:991`); also `dumpTree` (`gameDetailPatch.tsx:147-156`) | the effect does not call `hideNativePlaySection`; the row takes `""`; the dump prints `UNDEFINED` | the same member is both kinds at once: it names a node of Steam's for the hide, so Steam's own play section stays on screen beside ours, and a node of ours for the row's styling |
+  // | `playSectionClasses` | `Container` in `dumpTree` alone (`gameDetailPatch.tsx:135-143`) | the dump prints `UNDEFINED` and skips the tree search it guards | one line of a debug dump that runs at most once per load names no class. Nothing a user can see |
+  // | `quickAccessMenuClasses` | `TabGroupPanel` at module scope (`utils/qamExpansion.ts:49-51`), read into the selectors of the injected sheet (`:104-105`); `ActiveTab` in `useWideQamPanel`'s effect (`:188`); `ViewPlaceholder` and `Expanded` in `installQamWidthPatch` (`utils/installQamWidthPatch.ts:29-30`); `Title` in `buildEntry` (`qam/quickAccessEntry.tsx:151`), as the entry's heading | `TAB_PANEL_SELECTOR` becomes `PANEL_ID_SELECTOR`, the panel's id; `owningTabActive` defaults to true (`:195`, the default argued just above it) and the `MutationObserver` guarded at `:209` is never constructed; `installQamWidthPatch` wraps nothing; the heading's `className` is `undefined` | the sheet matches the panel by id instead of by class, and the expansion is taken whether or not the page's own tab is the active one and is not re-synced on a tab switch — a leaked expansion the QAM-close and unmount paths still clear; the wide pages stay at Steam's narrow width, their right-hand part off-screen; and Settings › Updates counts its release as seen on whichever tab is active, while the menu is open. The heading is still drawn, unstyled, at body size |
   //
   // Three of the five block the panel, and that is the status quo rather than a
   // reading of the table: see {@link AbsenceCost} for what moving one off it
@@ -360,6 +383,14 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // (#2509 D10).
   truthyUnexported(QUICK_ACCESS_LOOKUP, "feature", () => QuickAccessMenuBrowserView, "quickAccess"),
 
+  // What the wrapper on Steam's QAM host reads (`utils/installQamWidthPatch.ts`):
+  // the store whose flag it widens on, a search of ours in both bundles, and the
+  // two classes it reads off the QAM's class map. What losing any of them costs
+  // is on `docs/architecture/frontend-bundles.md`, "The start-up check".
+  truthyUnexported("FriendsUIStore", "feature", () => FriendsUIStore, "widePages"),
+  classMapMember("quickAccessMenuClasses", () => quickAccessMenuClasses, "ViewPlaceholder", "feature", "widePages"),
+  classMapMember("quickAccessMenuClasses", () => quickAccessMenuClasses, "Expanded", "feature", "widePages"),
+
   // React's client module in Steam's registry, which the desktop surface
   // mounts its own trees with (`desktop/desktopWindow.ts`). Asked only in the
   // build that carries that surface: in every other build the stamp folds this
@@ -415,10 +446,8 @@ export const ASKED_LIVE: Readonly<Record<string, string>> = {
     "answers `window` when `document.title` is `SP` and otherwise searches the focus " +
     "controller's active (else last active) context for the `GamepadUI_Full_Root` / " +
     "`root_1_` navigation tree (`dist/utils/index.js`) — a context that carries no Big " +
-    "Picture tree until Big Picture has been opened. Its two consumers, " +
-    "`utils/styleInjector.ts`'s `hideNativePlaySection` and `showNativePlaySection`, ask " +
-    "it when the play button mounts and unmounts on a game page, and do nothing when it " +
-    "answers nothing",
+    "Picture tree until Big Picture has been opened. Its consumers, and what each does when " +
+    'it answers nothing, are on `docs/architecture/frontend-bundles.md`, "The start-up check"',
   getGamepadNavigationTrees:
     "the trees themselves: the focus controller's active (else last active) context carries " +
     "them, and answers `undefined` while it carries none (`dist/utils/index.js`) — the state " +
@@ -444,6 +473,8 @@ export const PACKAGE_OWN: Readonly<Record<string, string>> = {
   findModule: "the module-cache reader itself",
   findModuleByExport: "the module-cache reader itself, asked by export",
   findModuleExport: "the module-cache reader itself, asked about exports rather than modules",
+  findInTree: "the package's own walk over any object graph, here a fiber's `return` chain",
+  getReactInstance: "the package's own reader of the fiber a DOM element is mounted from",
   getReactRoot: "the package's own reader of a mounted React root",
   GamepadButton: "a TypeScript enum, compiled into the bundle",
   injectFCTrampoline: "the package's own function-component patcher; it searches for nothing",

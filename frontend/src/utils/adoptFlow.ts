@@ -10,7 +10,6 @@
 
 import {
   adoptExistingRom,
-  debugLog,
   isCandidateVanished,
   isCandidatesFound,
   isRenameCollisions,
@@ -18,7 +17,7 @@ import {
   isUnusableNamesake,
   startDownload,
 } from "../api/backend";
-import { detach } from "./detach";
+import { logFailure, logRefusal } from "./backendLog";
 import { showToast } from "./toast";
 import {
   ADOPT_REFUSED_TOAST,
@@ -109,7 +108,7 @@ export interface DownloadWithAdoption {
    * when its search finds nothing.
    */
   pageSawCandidate: boolean;
-  /** Prefix for this flow's debug log lines. */
+  /** Prefix for this flow's log lines. */
   logContext: string;
   dialogs: AdoptionDialogs;
   hooks: AdoptionFlowHooks;
@@ -120,17 +119,25 @@ export interface DownloadWithAdoption {
  * - `adopted` — what was on disk is now the install.
  * - `cancelled` — nothing started: the user took a dialog's cancel exit, or
  *   there was nothing to offer.
- * - `failed` — refused or thrown; a toast has said so.
+ * - `failed` — a request refused or unanswered; a toast has said so.
  */
 export type AdoptionOutcome = "download_started" | "adopted" | "cancelled" | "failed";
 
 /**
  * Run one Download press to its end. The caller's own "already busy" guard is
  * for the press alone: every re-send this makes is the user's answer to a
- * refusal and is always admitted.
+ * refusal and is always admitted. A dialog or a hook that throws rejects the
+ * returned promise, with busy handed back first.
  */
 export function runDownloadWithAdoption(flow: DownloadWithAdoption): Promise<AdoptionOutcome> {
-  return download(flow, false, undefined, null);
+  return download(flow, false, undefined, null).catch((e: unknown) => {
+    try {
+      flow.hooks.setBusy(false);
+    } catch (handBack) {
+      logFailure(flow.logContext, "hand busy back for", flow.romId, handBack);
+    }
+    throw e;
+  });
 }
 
 async function download(
@@ -142,74 +149,92 @@ async function download(
 ): Promise<AdoptionOutcome> {
   const { romId, dialogs, hooks } = flow;
   hooks.setBusy(true);
-  try {
-    // Only a FIRST press reports what the page found. Every re-entry carries
-    // `replace`, which is the user's answer to a refusal the page's report
-    // already produced — reporting it again would ask the backstop to fire on
-    // an answer it just received.
-    const answers = [
-      romId,
-      replaceExisting,
-      discardPath ?? null,
-      collisionChoice,
-      !replaceExisting && flow.pageSawCandidate,
-    ] as const;
-    const result = await (confirmedPaths === undefined
-      ? startDownload(...answers)
-      : startDownload(...answers, confirmedPaths));
-    if (isRenameCollisions(result)) {
-      // Carrying the discarded candidate's saves would land on names that are
-      // taken. Nothing has been removed or moved; the one answer covers the
-      // whole set, exactly as it does on the adopt exit.
-      hooks.setBusy(false);
-      const answer = await dialogs.showCollisions(result.collisions);
-      if (answer === "cancel") return "cancelled";
-      return await download(flow, replaceExisting, discardPath, answer, confirmedPaths);
-    }
-    if (isTargetOccupied(result)) {
-      // Nothing was written and no transfer started — the backend refused so
-      // the user can choose (#260). Back to idle before the dialog opens,
-      // because Cancel returns to the caller with nothing else to re-enable
-      // it; adopt and replace each re-claim busy on their own path.
-      hooks.setTargetOccupied(true);
-      hooks.setBusy(false);
-      return await resolveOccupiedTarget(flow, result, confirmedPaths ?? []);
-    }
-    if (isCandidatesFound(result)) {
-      // Same refusal contract, different subject: the target path was free and
-      // the game is on disk under another name. Recorded, because the backend
-      // just proved it — without this a cancelled dialog leaves the caller
-      // reading "Download" for content it has confirmed is there.
-      hooks.setCandidatePresent(true);
-      hooks.setBusy(false);
-      return await resolveCandidates(flow, result);
-    }
-    if (isUnusableNamesake(result)) {
-      // A namesake nothing can adopt — the other shape, or a link. Neither
-      // flag moves: no content occupies this ROM's own path, and nothing here
-      // is a candidate — what the page said stands, and the honest answer to
-      // "is this game here" is the dialog the user is about to get.
-      hooks.setBusy(false);
-      return await resolveUnusable(flow, result);
-    }
-    if (isCandidateVanished(result)) {
-      // The backstop fired: this page said a copy was here and the search can
-      // name nothing. The flag goes, because the one thing now known is that
-      // what the page found is not there to be used.
-      hooks.setCandidatePresent(false);
-      hooks.setBusy(false);
-      return await resolveVanished(flow, result);
-    }
-    if (!result.success) {
-      showToast(result.message || DOWNLOAD_REFUSED_TOAST);
-      hooks.setBusy(false);
-      return "failed";
-    }
-    return "download_started";
-  } catch {
-    showToast(DOWNLOAD_THREW_TOAST);
+  // Only a FIRST press reports what the page found. Every re-entry carries
+  // `replace`, which is the user's answer to a refusal the page's report
+  // already produced — reporting it again would ask the backstop to fire on
+  // an answer it just received.
+  const answers = [
+    romId,
+    replaceExisting,
+    discardPath ?? null,
+    collisionChoice,
+    !replaceExisting && flow.pageSawCandidate,
+  ] as const;
+  const result = await answerOf(flow, "start the download of", DOWNLOAD_THREW_TOAST, () =>
+    confirmedPaths === undefined ? startDownload(...answers) : startDownload(...answers, confirmedPaths),
+  );
+  if (result === null) {
     hooks.setBusy(false);
     return "failed";
+  }
+  if (isRenameCollisions(result)) {
+    // Carrying the discarded candidate's saves would land on names that are
+    // taken. Nothing has been removed or moved; the one answer covers the
+    // whole set, exactly as it does on the adopt exit.
+    hooks.setBusy(false);
+    const answer = await dialogs.showCollisions(result.collisions);
+    if (answer === "cancel") return "cancelled";
+    return await download(flow, replaceExisting, discardPath, answer, confirmedPaths);
+  }
+  if (isTargetOccupied(result)) {
+    // Nothing was written and no transfer started — the backend refused so
+    // the user can choose (#260). Back to idle before the dialog opens,
+    // because Cancel returns to the caller with nothing else to re-enable
+    // it; adopt and replace each re-claim busy on their own path.
+    hooks.setTargetOccupied(true);
+    hooks.setBusy(false);
+    return await resolveOccupiedTarget(flow, result, confirmedPaths ?? []);
+  }
+  if (isCandidatesFound(result)) {
+    // Same refusal contract, different subject: the target path was free and
+    // the game is on disk under another name. Recorded, because the backend
+    // just proved it — without this a cancelled dialog leaves the caller
+    // reading "Download" for content it has confirmed is there.
+    hooks.setCandidatePresent(true);
+    hooks.setBusy(false);
+    return await resolveCandidates(flow, result);
+  }
+  if (isUnusableNamesake(result)) {
+    // A namesake nothing can adopt — the other shape, or a link. Neither
+    // flag moves: no content occupies this ROM's own path, and nothing here
+    // is a candidate — what the page said stands, and the honest answer to
+    // "is this game here" is the dialog the user is about to get.
+    hooks.setBusy(false);
+    return await resolveUnusable(flow, result);
+  }
+  if (isCandidateVanished(result)) {
+    // The backstop fired: this page said a copy was here and the search can
+    // name nothing. The flag goes, because the one thing now known is that
+    // what the page found is not there to be used.
+    hooks.setCandidatePresent(false);
+    hooks.setBusy(false);
+    return await resolveVanished(flow, result);
+  }
+  if (!result.success) {
+    logRefusal(flow.logContext, "start the download of", romId, result);
+    showToast(result.message || DOWNLOAD_REFUSED_TOAST);
+    hooks.setBusy(false);
+    return "failed";
+  }
+  return "download_started";
+}
+
+/**
+ * The backend's answer to one of the flow's requests, or `null` once a request
+ * that got none has been logged and toasted. Only the request is caught.
+ */
+async function answerOf<R>(
+  flow: DownloadWithAdoption,
+  what: string,
+  threwToast: string,
+  send: () => Promise<R>,
+): Promise<R | null> {
+  try {
+    return await send();
+  } catch (e) {
+    logFailure(flow.logContext, what, flow.romId, e);
+    showToast(threwToast);
+    return null;
   }
 }
 
@@ -291,7 +316,10 @@ async function adopt(
   const { romId, dialogs, hooks } = flow;
   hooks.setBusy(true);
   try {
-    const result = await adoptExistingRom(romId, candidatePath ?? null, collisionChoice);
+    const result = await answerOf(flow, "adopt", ADOPT_THREW_TOAST, () =>
+      adoptExistingRom(romId, candidatePath ?? null, collisionChoice),
+    );
+    if (result === null) return "failed";
     if (isRenameCollisions(result)) {
       // Nothing has moved. The one answer covers the whole set, and a dismissed
       // dialog leaves the game exactly as it was.
@@ -300,21 +328,33 @@ async function adopt(
       return await adopt(flow, candidatePath, answer);
     }
     if (!result.success) {
+      logRefusal(flow.logContext, "adopt", romId, result);
       showToast(result.message || ADOPT_REFUSED_TOAST);
       return "failed";
     }
+    announceAdoption(flow);
+    return "adopted";
+  } finally {
+    hooks.setBusy(false);
+  }
+}
+
+/**
+ * Tell the page, the rest of the panel and the user of an adoption the backend
+ * has recorded. The panel and the user hear of it whatever the page's hooks do;
+ * a hook that throws is rethrown as an error that says the adoption was recorded.
+ */
+function announceAdoption(flow: DownloadWithAdoption): void {
+  const { romId, hooks } = flow;
+  try {
     hooks.setTargetOccupied(false);
     hooks.setCandidatePresent(false);
     hooks.onAdopted();
+  } catch (e) {
+    throw Object.assign(new Error(`adopted, but the page's hooks threw: ${String(e)}`), { cause: e });
+  } finally {
     globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "rom_adopted", rom_id: romId } }));
     showToast(adoptedToast(flow.romName));
-    return "adopted";
-  } catch (e) {
-    detach(debugLog(`${flow.logContext}: adopt failed: ${e}`));
-    showToast(ADOPT_THREW_TOAST);
-    return "failed";
-  } finally {
-    hooks.setBusy(false);
   }
 }
 

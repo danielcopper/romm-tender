@@ -62,13 +62,13 @@ vi.mock("./PlayButtonBadges", () => ({
   PlayButtonBadges: vi.fn(() => <div data-testid="play-bar-badges" />),
 }));
 
-vi.mock("../../utils/downloadStore", () => ({
+vi.mock("../../utils/downloadStore", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../utils/downloadStore")>()),
   useDownloads: vi.fn(),
   removeDownload: vi.fn(),
 }));
 
-vi.mock("../../utils/downloadRehydrate", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../utils/downloadRehydrate")>()),
+vi.mock("../../utils/downloadRehydrate", () => ({
   seedDownloadFromQueue: vi.fn(async () => {}),
 }));
 
@@ -1428,6 +1428,60 @@ describe("PlayButton", () => {
       expect(screen.queryByRole("button", { name: "DOWNLOAD" })).not.toBeInTheDocument();
     });
 
+    it("keeps an uninstall's state on its version when another version downloads and completes meanwhile", async () => {
+      let removed!: (value: unknown) => void;
+      vi.mocked(backend.removeRom).mockReturnValueOnce(
+        new Promise((resolve) => {
+          removed = resolve;
+        }) as never,
+      );
+      const { rerender } = render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "Game Options" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "Uninstall" }));
+      await screen.findByRole("button", { name: "UNINSTALLING..." });
+
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ romId: 101, installed: false }));
+      rerender(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+      await screen.findByRole("progressbar");
+      act(() => emitHostEvent<Partial<DownloadCompleteEvent>>("download_complete", { rom_id: 101 }));
+      expect(screen.getByRole("button", { name: "READY!" })).toBeInTheDocument();
+
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ romId: 100 }));
+      rerender(<PlayButton appId={APP_ID} />);
+      expect(screen.getByRole("button", { name: "UNINSTALLING..." })).toBeDisabled();
+      expect(screen.queryByRole("button", { name: "Game Options" })).not.toBeInTheDocument();
+
+      await act(async () => removed({ success: true, message: "", prune_lease_token: null }));
+      expect(screen.getByRole("button", { name: "DOWNLOAD" })).toBeEnabled();
+    });
+
+    it("reads UNINSTALLING... on the version being removed while another version's start is under way", async () => {
+      let removed!: (value: unknown) => void;
+      vi.mocked(backend.removeRom).mockReturnValueOnce(
+        new Promise((resolve) => {
+          removed = resolve;
+        }) as never,
+      );
+      const { rerender } = render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "Game Options" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "Uninstall" }));
+      await screen.findByRole("button", { name: "UNINSTALLING..." });
+
+      otherVersion();
+      rerender(<PlayButton appId={APP_ID} />);
+      pressPlay();
+      await screen.findByRole("button", { name: /LAUNCHING\.\.\./ });
+      await waitFor(() => expect(mockRunGame).toHaveBeenCalled());
+
+      vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ romId: 100 }));
+      rerender(<PlayButton appId={APP_ID} />);
+      expect(screen.getByRole("button", { name: "UNINSTALLING..." })).toBeDisabled();
+      expect(screen.queryByRole("button", { name: /LAUNCHING\.\.\./ })).not.toBeInTheDocument();
+
+      await act(async () => removed({ success: true, message: "", prune_lease_token: null }));
+    });
+
     it("disables the chevron of the version switched to, saying why, until the other version's removal answers", async () => {
       let removed!: (value: unknown) => void;
       vi.mocked(backend.removeRom).mockReturnValueOnce(
@@ -1566,6 +1620,26 @@ describe("PlayButton", () => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
+    it("logs a download press that throws after the adoption as an error, not as a failed adoption", async () => {
+      vi.mocked(backend.startDownload).mockResolvedValueOnce(OCCUPIED as never);
+      vi.mocked(backend.adoptExistingRom).mockResolvedValueOnce(ADOPTED);
+      vi.mocked(toast.showToast).mockImplementationOnce(() => {
+        throw new Error("toast broke");
+      });
+
+      render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+      await screen.findByRole("dialog", { name: "This Game Is Already on Your Device" });
+      fireEvent.click(screen.getByRole("button", { name: "Use These Files" }));
+
+      await waitFor(() =>
+        expect(backend.logError).toHaveBeenCalledExactlyOnceWith(
+          "DesktopPlayButton: could not run the download press for romId=100: Error: toast broke",
+        ),
+      );
+      await pressEnded();
+    });
+
     it("reads STARTING..., with the ring, while the adoption's request is in flight", async () => {
       let adopted!: (value: AdoptResult) => void;
       vi.mocked(backend.startDownload).mockResolvedValueOnce(OCCUPIED as never);
@@ -1691,6 +1765,28 @@ describe("PlayButton", () => {
 
         await waitFor(() => expect(backend.logError).toHaveBeenCalled());
         expect(screen.getByRole("progressbar")).toBeInTheDocument();
+
+        act(() =>
+          emitHostEvent<Partial<DownloadProgressEvent>>("download_progress", { rom_id: 100, status: "downloading" }),
+        );
+        expect(screen.getByRole("button", { name: "USE EXISTING FILES" })).toBeInTheDocument();
+      });
+
+      it("keeps the bar and the files it found when the cancel is refused with another reason", async () => {
+        vi.mocked(backend.cancelDownload).mockResolvedValueOnce({
+          success: false,
+          reason: "server_unreachable",
+          message: "No.",
+        } as never);
+        await pressUseExistingFiles();
+
+        await waitFor(() =>
+          expect(backend.logWarn).toHaveBeenCalledExactlyOnceWith(
+            "DesktopPlayButton: the backend refused to cancel the download of romId=100: server_unreachable: No.",
+          ),
+        );
+        expect(screen.getByRole("progressbar")).toBeInTheDocument();
+        expect(downloadStore.removeDownload).not.toHaveBeenCalled();
 
         act(() =>
           emitHostEvent<Partial<DownloadProgressEvent>>("download_progress", { rom_id: 100, status: "downloading" }),
@@ -2075,16 +2171,40 @@ describe("PlayButton", () => {
       expect(download()).toHaveStyle({ cursor: "pointer" });
     });
 
-    it("keeps an OFFLINE DOWNLOAD's cursor while the selector is switching, and its throbber", () => {
+    it("keeps an OFFLINE or blocked DOWNLOAD's style while the selector is switching, and its throbber", async () => {
       vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detailState({ installed: false }));
       setRommConnectionState("offline");
-      render(<PlayButton appId={APP_ID} />);
-
+      const { unmount } = render(<PlayButton appId={APP_ID} />);
       act(() => selectorProps()!.onSwitchingChange(true));
+      const offline = screen.getByRole("button", { name: "OFFLINE" });
+      expect(throbberIn(offline)).not.toBeNull();
+      expect(offline).toHaveStyle({
+        background: "linear-gradient(90deg, #4a5968 0%, #3a4754 100%)",
+        cursor: "not-allowed",
+        opacity: "0.7",
+      });
+      unmount();
 
-      const download = screen.getByRole("button", { name: "OFFLINE" });
-      expect(throbberIn(download)).not.toBeNull();
-      expect(download).toHaveStyle({ cursor: "not-allowed" });
+      setRommConnectionState("connected");
+      vi.mocked(backend.getCachedGameDetail).mockResolvedValueOnce({
+        found: true,
+        rom_id: 100,
+        installed: false,
+        has_file_on_disk: false,
+      });
+      const noFileRender = render(<PlayButton appId={APP_ID} />);
+      const noFile = await screen.findByRole("button", { name: "NO FILE ON ROMM" });
+      act(() => selectorProps()!.onSwitchingChange(true));
+      expect(throbberIn(noFile)).not.toBeNull();
+      expect(noFile).toHaveStyle({ cursor: "not-allowed", opacity: "0.7" });
+      noFileRender.unmount();
+
+      setBoundAvailability(APP_ID, "version_gone");
+      render(<PlayButton appId={APP_ID} />);
+      act(() => selectorProps()!.onSwitchingChange(true));
+      const vanished = screen.getByRole("button", { name: "DOWNLOAD" });
+      expect(throbberIn(vanished)).not.toBeNull();
+      expect(vanished).toHaveStyle({ cursor: "not-allowed", opacity: "0.7" });
     });
 
     it("is told the press is over once the download has started", async () => {

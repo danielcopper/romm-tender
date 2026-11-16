@@ -420,8 +420,7 @@ def bootstrap(
     # If load_settings quarantined a corrupt file this boot, fold the reset into
     # the settings dict as a persistent marker. Set AFTER migration and BEFORE
     # the save so it lands in the fresh settings.json and survives a backend
-    # restart — the frontend surfaces it as a banner (QAM + game detail) until the
-    # next successful sign-in clears it (ConnectionService pops it on persist).
+    # restart.
     if persistence.corrupt_reset is not None:
         settings["_settings_reset_notice"] = {"backed_up_to": persistence.corrupt_reset["backed_up_to"]}
     persistence.save_settings(settings)

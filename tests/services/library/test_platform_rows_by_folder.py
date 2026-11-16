@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import threading
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -22,6 +23,7 @@ from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 from domain.rom import Rom
 from services.library._state import LibrarySyncStateBox
 from services.library.fetcher import LibraryFetcher, LibraryFetcherConfig
+from services.platform_switches import PlatformSwitches, PlatformSwitchesConfig
 
 
 def _platform(platform_id: int, name: str, slug: str, fs_slug: str | None, rom_count: int = 1) -> dict[str, Any]:
@@ -29,13 +31,15 @@ def _platform(platform_id: int, name: str, slug: str, fs_slug: str | None, rom_c
 
 
 def _fetcher(api: FakeRommApi, refiling: FakeListingRefiler, settings: dict[str, Any] | None = None) -> LibraryFetcher:
+    settings = settings if settings is not None else {"enabled_platforms": {}}
+    persister = FakeSettingsPersister()
     return LibraryFetcher(
         config=LibraryFetcherConfig(
             romm_api=api,
-            settings=settings if settings is not None else {"enabled_platforms": {}},
+            settings=settings,
             loop=asyncio.get_running_loop(),
             logger=logging.getLogger("test"),
-            settings_persister=FakeSettingsPersister(),
+            settings_persister=persister,
             log_debug=lambda msg: None,
             uow_factory=FakeUnitOfWorkFactory(),
             sync_state_box=LibrarySyncStateBox(),
@@ -43,6 +47,9 @@ def _fetcher(api: FakeRommApi, refiling: FakeListingRefiler, settings: dict[str,
             local_library_reader=MagicMock(),
             refiling=refiling,
             platform_listing=FakeListingReplacer(),
+            platform_switches=PlatformSwitches(
+                config=PlatformSwitchesConfig(settings=settings, settings_persister=persister, lock=threading.Lock())
+            ),
         )
     )
 

@@ -1,16 +1,18 @@
 """Moving Tender's older per-platform entries to the platforms RomM's listing names.
 
-Download records and per-platform emulator picks are kept under a platform's
-``fs_slug`` (#2452 D6, D7). Each reader that keeps or uses RomM's platform
-listing hands what it read here, and an entry kept under another key — a slug,
-as both were before, or a server folder name — is moved to the platform the
-listing places it with, where it places it at all. Which entries that is, and
-which stay, is ``domain/firmware_platforms.py``'s; an entry already under a
-listed ``fs_slug`` is never moved, so every later reading moves nothing.
+Download records, per-platform emulator picks and per-platform sync toggles are
+kept under a platform's ``fs_slug`` (#2452 D6, D7, D8). Each reader that keeps or
+uses RomM's platform listing hands what it read here, and an entry kept under
+another key — a slug, as records and picks were before, a server folder name,
+or RomM's platform id, as the toggles were — is moved to the platform the
+listing places it with, where it places it at all. Which records and picks that
+is, and which stay, is ``domain/firmware_platforms.py``'s, and the toggles'
+``domain/platform_prefs.py``'s; an entry already under a listed ``fs_slug`` is
+never moved, so every later reading moves nothing.
 
-This is the one place a failed move is reported: the records and the picks are
-moved independently, a failure of either is logged here, and no reader of the
-listing ever sees one.
+This is the one place a failed move is reported: the records, the picks and the
+toggles are moved independently, a failure of any is logged here, and no reader
+of the listing ever sees one.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.firmware_platforms import ListedPlatforms, listed_platforms, pick_moves, refiled_record_folder
+from domain.platform_prefs import SwitchesMove, switches_by_folder
 
 if TYPE_CHECKING:
     import logging
@@ -32,6 +35,7 @@ if TYPE_CHECKING:
         DebugLogger,
         ListingKeeperProvider,
         PlatformPicksWriter,
+        PlatformSwitchesWriter,
         UnitOfWork,
         UnitOfWorkFactory,
     )
@@ -42,7 +46,8 @@ class PlatformRefilingConfig:
     """Frozen wiring bundle handed to ``PlatformRefiling.__init__``.
 
     Holds the Unit-of-Work factory the download records are read and moved
-    through, the writer of the per-platform picks, the lock one refile at a
+    through, the writers of the per-platform picks and of the per-platform sync
+    toggles, the lock one refile at a
     time holds — the readers of the listing run in executor threads of their
     own — the keeper of the listed platforms (bound late: it hands its own
     listing reads here), the logger and the debug logger.
@@ -50,6 +55,7 @@ class PlatformRefilingConfig:
 
     uow_factory: UnitOfWorkFactory
     platform_picks: PlatformPicksWriter
+    platform_switches: PlatformSwitchesWriter
     refile_lock: AbstractContextManager[object]
     listing_keeper: ListingKeeperProvider
     logger: logging.Logger
@@ -57,11 +63,12 @@ class PlatformRefilingConfig:
 
 
 class PlatformRefiling:
-    """Moves download records and per-platform picks kept under another key to their platform's ``fs_slug``."""
+    """Moves download records, picks and sync toggles kept under another key to their platform's ``fs_slug``."""
 
     def __init__(self, *, config: PlatformRefilingConfig) -> None:
         self._uow_factory = config.uow_factory
         self._platform_picks = config.platform_picks
+        self._platform_switches = config.platform_switches
         self._logger = config.logger
         self._log_debug = config.log_debug
         self._lock = config.refile_lock
@@ -77,20 +84,29 @@ class PlatformRefiling:
     def do_refile(self, platforms: Sequence[Mapping[str, Any]]) -> None:
         """Move every entry the read *platforms* place elsewhere. Blocking; never raises.
 
-        The listed platforms are kept first, then the download records and the
-        picks are moved: each step on its own, so a failure of one is logged,
-        gives back what that step had changed, and the others still run.
+        The listed platforms are kept first, then the download records, the
+        picks and the sync toggles are moved: each step on its own, so a failure
+        of one is logged and the others still run, and the toggles move even
+        where the platforms the records and picks belong with cannot be worked
+        out. A failed step gives back what it had changed, except the toggles'
+        save, whose moved toggles stay (#2452 D23).
         """
         with self._lock:
             listed = self._run("Failed to read where older entries belong", lambda: listed_platforms(platforms))
-            if listed is None:
-                return
-            self._listed_folders = listed.folders
-            self._run("Failed to keep the listed platforms", lambda: self._listing_keeper().keep_listing(platforms))
+            if listed is not None:
+                self._listed_folders = listed.folders
+                self._run("Failed to keep the listed platforms", lambda: self._listing_keeper().keep_listing(platforms))
+                self._run(
+                    "Failed to move older BIOS download records to their platforms",
+                    lambda: self._refile_records(listed),
+                )
+                self._run(
+                    "Failed to move older per-platform picks to their platforms", lambda: self._refile_picks(listed)
+                )
             self._run(
-                "Failed to move older BIOS download records to their platforms", lambda: self._refile_records(listed)
+                "Failed to move the per-platform sync toggles to their platforms",
+                lambda: self._refile_switches(platforms),
             )
-            self._run("Failed to move older per-platform picks to their platforms", lambda: self._refile_picks(listed))
 
     def _run[T](self, failed: str, step: Callable[[], T]) -> T | None:
         """*step*'s answer, or ``None`` where it raised; the same failure's traceback is logged once per process.
@@ -186,4 +202,42 @@ class PlatformRefiling:
         if dropped:
             self._logger.info(
                 f"Dropped older per-platform picks every platform of their slug has its own of: {', '.join(dropped)}"
+            )
+
+    def _refile_switches(self, platforms: Sequence[Mapping[str, Any]]) -> None:
+        """Hand the toggles writer the toggles kept by RomM id moved onto the listed platforms' ``fs_slug``.
+
+        A failure once ``built`` holds the move is its save's, after the toggles
+        moved; a failure before propagates to the step's own log line.
+        """
+        built: list[SwitchesMove] = []
+
+        def moved_switches(by_id: Mapping[str, Any], switches: Mapping[str, Any]) -> dict[str, Any] | None:
+            move = switches_by_folder(by_id, switches, platforms)
+            if move is None:
+                return None
+            built.append(move)
+            return move.switches
+
+        try:
+            moved = self._platform_switches.carry_over(moved_switches)
+        except Exception as e:
+            if not built:
+                raise
+            self._logger.warning(
+                f"Moved the per-platform sync toggles to the platforms' folders, but saving them failed: "
+                f"{type(e).__name__}: {e}",
+                exc_info=True,
+            )
+            self._log_dropped_switches(built[0].dropped)
+            return
+        if moved:
+            self._logger.info("Moved the per-platform sync toggles from RomM's platform ids to the platforms' folders")
+            self._log_dropped_switches(built[0].dropped)
+
+    def _log_dropped_switches(self, dropped: Sequence[str]) -> None:
+        if dropped:
+            self._logger.info(
+                "Dropped the sync toggles of RomM platform ids the listing does not name with a folder: "
+                f"{', '.join(dropped)}"
             )

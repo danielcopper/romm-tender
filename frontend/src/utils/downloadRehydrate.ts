@@ -5,18 +5,7 @@
 
 import { getDownloadQueue, logWarn } from "../api/backend";
 import type { DownloadItem } from "../types";
-import { getDownloadState, updateDownload } from "./downloadStore";
-
-/** Whether a download is under way: queued, downloading, paused or unpacking. */
-export function isDownloadUnderWay(download: DownloadItem | undefined): download is DownloadItem {
-  return (
-    download !== undefined &&
-    (download.status === "queued" ||
-      download.status === "downloading" ||
-      download.status === "paused" ||
-      download.status === "extracting")
-  );
-}
+import { getDownloadState, isDownloadUnderWay, updateDownload } from "./downloadStore";
 
 /**
  * Put a ROM's download from the backend's queue into the download store, when it

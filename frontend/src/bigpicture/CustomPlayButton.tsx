@@ -29,8 +29,6 @@ import { hasAnySaveConflict } from "../utils/saveStatus";
 import {
   getCachedGameDetail,
   invalidateCachedGameDetail,
-  cancelDownload,
-  pauseDownload,
   getDownloadQueue,
   forgetDownload,
   debugLog,
@@ -51,8 +49,10 @@ import { scrollToTop } from "../utils/scrollHelpers";
 import { getEventTarget } from "../utils/events";
 import { handleButtonDownloadFailure } from "../utils/downloadFailure";
 import { runDownloadWithAdoption } from "../utils/adoptFlow";
+import { logFailure } from "../utils/backendLog";
 import { executeDownloadResume } from "../utils/downloadResume";
-import { isDownloadUnderWay } from "../utils/downloadRehydrate";
+import { executeDownloadCancel, executeDownloadPause } from "../utils/downloadPauseCancel";
+import { isDownloadUnderWay } from "../utils/downloadStore";
 import { downloadAnswers, downloadTakesNoPress } from "../utils/downloadPress";
 import {
   DOWNLOAD_AGAIN_LABEL,
@@ -183,6 +183,12 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
   const romIdRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const downloadShown = state === "download" && actionPending && dlProgress !== null;
+  // For an answer that lands after a render.
+  const downloadShownRef = useRef(false);
+  useEffect(() => {
+    downloadShownRef.current = downloadShown;
+  });
 
   /**
    * Enter the download state, restating what the backend found on disk for this
@@ -266,11 +272,11 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
     };
   }, []);
 
-  // Rehydrate an in-flight or paused download on remount: nothing in the cached
-  // detail says a download is under way, so without this a paused one shows a
-  // plain "Download" button, whose press calls `start_download` rather than
-  // resuming it (#1124). Seeding from the live queue keeps Pause/Resume across
-  // navigating away and back.
+  // Rehydrate an in-flight or paused download: nothing in the cached detail
+  // says a download is under way, so without this a paused one shows a plain
+  // "Download" button, whose press calls `start_download` rather than resuming
+  // it. Seeding from the live queue keeps Pause/Resume across navigating away
+  // and back.
   // The button stays mounted when the page moves to another game, so a read that
   // answers after its init was cleaned up is dropped: it may be the old game's.
   const rehydrateInflightDownload = async (rid: number, stale: () => boolean): Promise<void> => {
@@ -670,7 +676,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
         onRetry: () => setState("checking"),
       });
     } catch (e) {
-      detach(debugLog(`CustomPlayButton: handlePlay unexpected error — resetting to play: ${e}`));
+      logError(`CustomPlayButton: Play's launch check of romId=${romId} threw — resetting to play: ${e}`);
       if (startCheckFailed) showToast(startFailedSentence(e));
       setState("play");
     }
@@ -759,8 +765,9 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
 
   const handleDownload = async () => {
     if (!romId || actionPending) return;
+    const rid = romId;
     await runDownloadWithAdoption({
-      romId,
+      romId: rid,
       romName,
       pageSawCandidate: candidatePresent,
       logContext: "CustomPlayButton",
@@ -777,23 +784,24 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
         setCandidatePresent,
         onAdopted: () => setState("play"),
       },
-    });
+    }).catch((e: unknown) => logFailure("CustomPlayButton", "run the download press for", rid, e));
   };
 
-  // Cancel an in-flight download. Fire-and-forget: the backend emits a
-  // cancelled download_progress frame that the progress listener reacts to
-  // (resets to "download"). The inline .catch keeps the click non-throwing.
   const handleCancelDownload = () => {
     if (romId == null) return;
-    detach(cancelDownload(romId).catch(() => {}));
+    const rid = romId;
+    detach(
+      executeDownloadCancel(rid, "CustomPlayButton", () => {
+        if (rid !== romIdRef.current || !downloadShownRef.current) return;
+        setActionPending(false);
+        setDlProgress(null);
+      }),
+    );
   };
 
-  // Pause an in-flight (resumable) download. Fire-and-forget: the backend
-  // freezes the transfer and emits a "paused" download_progress frame the
-  // listener reacts to (sets dlProgress.paused). .catch keeps the click safe.
   const handlePause = () => {
     if (romId == null) return;
-    detach(pauseDownload(romId).catch(() => {}));
+    detach(executeDownloadPause(romId, "CustomPlayButton"));
   };
 
   // Resume a paused download; `executeDownloadResume` says why when it is refused.
@@ -1134,30 +1142,29 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
 
   if (state === "download") {
     const t = dlProgress && dlProgress.totalBytes > 0 ? dlProgress.bytesDownloaded / dlProgress.totalBytes : 0;
-    const downloading = actionPending && dlProgress;
-    const paused = downloading ? dlProgress.paused : false;
-    const resumable = downloading ? dlProgress.resumable : false;
+    const paused = downloadShown ? dlProgress.paused : false;
+    const resumable = downloadShown ? dlProgress.resumable : false;
     // Post-transfer ZIP unpack for a multi-file ROM — bytes climb 0→100 again
     // over the uncompressed total. Not cancellable: the right-side action is a
     // disabled throbber rather than the cancel X / Pause-Resume chevron.
-    const extracting = downloading ? dlProgress.extracting : false;
+    const extracting = downloadShown ? dlProgress.extracting : false;
 
     // Fill color shifts from blue to green as download progresses. Extraction
     // begins right after the transfer hit 100% green, so it keeps the solid
     // green fill for visual continuity.
-    const fillColor = getDownloadFillGradient(t, { extracting, downloading: Boolean(downloading) });
+    const fillColor = getDownloadFillGradient(t, { extracting, downloading: downloadShown });
 
     // Pulse color shifts from blue to green with progress; a paused download
     // freezes to a dim amber so the whole group reads as "halted, not running".
     // Extraction holds the green pulse — it just finished the transfer.
-    const pulseColor = getDownloadPulseColor(t, { paused, extracting, downloading: Boolean(downloading) });
+    const pulseColor = getDownloadPulseColor(t, { paused, extracting, downloading: downloadShown });
 
     let dlLabel: string;
     if (extracting) {
       dlLabel = `Extracting… ${Math.round(t * 100)}%`;
     } else if (paused) {
       dlLabel = "Paused";
-    } else if (downloading) {
+    } else if (downloadShown) {
       dlLabel = formatProgress(dlProgress.bytesDownloaded, dlProgress.totalBytes);
     } else if (actionPending) {
       dlLabel = "Starting...";
@@ -1188,7 +1195,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
 
     // Unfilled portion: darker shade of the current fill color. Extraction
     // keeps a dim green base (the transfer just completed green).
-    const baseBg = getDownloadBaseBackground(t, { isOffline, extracting, downloading: Boolean(downloading) });
+    const baseBg = getDownloadBaseBackground(t, { isOffline, extracting, downloading: downloadShown });
 
     // While a download is actively running, the main button shares the row
     // with a right-side action section (the cancel X or a Pause/Resume
@@ -1209,12 +1216,12 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
         // only correct for the idle/starting button (blue base). The active button
         // (downloading/paused/extracting) omits it so its dark baseBg + green fill
         // aren't repainted blue when focused — the rehydrated-paused device bug.
-        className={[appActionButtonClasses?.PlayButton, "romm-btn-download", !downloading && "romm-btn-download-idle"]
+        className={[appActionButtonClasses?.PlayButton, "romm-btn-download", !downloadShown && "romm-btn-download-idle"]
           .filter(Boolean)
           .join(" ")}
         style={{
           ...mainBtnStyle,
-          borderRadius: downloading ? "2px 0 0 2px" : "2px",
+          borderRadius: downloadShown ? "2px 0 0 2px" : "2px",
           background: baseBg,
         }}
         onClick={() => {
@@ -1223,7 +1230,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
         disabled={downloadRefused(actionPending)}
       >
         {/* Progress fill bar — kept at its frozen width while paused. */}
-        {downloading && (
+        {downloadShown && (
           <div
             className="romm-dl-fill"
             style={{
@@ -1233,12 +1240,12 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
           />
         )}
         <span className="romm-dl-label">
-          <ThrobberLabel busy={!downloading && Boolean(actionPending)}>{dlLabel}</ThrobberLabel>
+          <ThrobberLabel busy={!downloadShown && Boolean(actionPending)}>{dlLabel}</ThrobberLabel>
         </span>
       </DialogButton>
     );
 
-    if (missingPath !== null && !downloading && !actionPending) {
+    if (missingPath !== null && !downloadShown && !actionPending) {
       // The Play button's shape — a split of main action and chevron — so the
       // play row keeps its height and its stats their width. The note sits out
       // of the flow, under the button, so it adds no height either.
@@ -1310,7 +1317,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
       );
     }
 
-    if (!downloading) {
+    if (!downloadShown) {
       // Idle ("Download") or "Starting..." — single full-width button, no action.
       return (
         <Focusable ref={containerRef} className={appActionButtonClasses?.PlayButtonContainer} style={btnContainerStyle}>

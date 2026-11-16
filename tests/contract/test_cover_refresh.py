@@ -80,7 +80,7 @@ def _seed_library(harness, *, cover: str, updated_at: str = _OLD_UPDATED_AT) -> 
         "updated_at": updated_at,
     }
     harness.romm.roms[10] = rom
-    harness.settings["enabled_platforms"] = {"1": True}
+    harness.settings["enabled_platforms"] = {"n64": True}
 
 
 def _make_grid_resolvable(harness) -> None:

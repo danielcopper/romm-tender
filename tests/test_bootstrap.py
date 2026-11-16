@@ -545,9 +545,15 @@ class TestBootstrapReadsOnlySettingsAtTheOldestVersionOrNewer:
         with caplog.at_level(logging.WARNING):
             result = _bootstrap_for(tmp_path)
 
-        expected = {**content, "version": 14, "platform_cores": {"snes": {"label": "bsnes", "source": "retrodeck"}}}
-        assert {key: result.stores.settings[key] for key in content} == expected
-        assert {key: json.loads(path.read_text())[key] for key in content} == expected
+        expected = {
+            **content,
+            "version": 15,
+            "enabled_platforms": {},
+            "enabled_platform_ids": {"3": True},
+            "platform_cores": {"snes": {"label": "bsnes", "source": "retrodeck"}},
+        }
+        assert {key: result.stores.settings[key] for key in expected} == expected
+        assert {key: json.loads(path.read_text())[key] for key in expected} == expected
         assert not [r for r in caplog.records if "settings.json" in r.getMessage()]
 
     @pytest.mark.parametrize(
@@ -568,8 +574,10 @@ class TestBootstrapReadsOnlySettingsAtTheOldestVersionOrNewer:
         with caplog.at_level(logging.WARNING):
             result = _bootstrap_for(tmp_path / "old")
 
-        assert result.stores.settings == fresh
-        assert json.loads(path.read_text()) == fresh
+        # The platforms are those of an installation that never touched a toggle (#2452 D29).
+        expected = {**fresh, "enabled_platform_ids": {}}
+        assert result.stores.settings == expected
+        assert json.loads(path.read_text()) == expected
         warnings = [r for r in caplog.records if "settings.json" in r.getMessage()]
         assert len(warnings) == 1
         assert warnings[0].levelno == logging.WARNING

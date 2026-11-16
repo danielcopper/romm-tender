@@ -63,7 +63,7 @@ def _romm_lists_n64_and_faves_reaches_20(harness) -> None:
             "updated_at": "2025-01-01T00:00:00",
         }
     )
-    harness.settings["enabled_platforms"] = {str(_N64_ID): False}
+    harness.settings["enabled_platforms"] = {"n64": False}
     harness.settings["enabled_collections"] = {"standard": {str(_FAVES_ID): True}}
     harness.settings["collection_create_platform_groups"] = True
 

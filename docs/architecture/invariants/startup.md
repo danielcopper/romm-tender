@@ -168,29 +168,29 @@ what the start-up check asks, logs and shows. How an entry reads and binds, and 
   newer Tender" unconditionally, which held only while nothing reaching it was a name the package exports, and
   `playSectionClasses` is one. What `frontend/src/boot/steamModules.test.ts` locks is the property the line's remaining
   own answer rests on — a non-blocking name `@decky/ui` does NOT export must be one Tender resolves for itself, swept
-  from the source in the three shapes one is written in (a `find(?:Module|ClassModule)\w*` call, a direct cast of
-  `window` whose exported name equals the property read, and a `searchSteamFactories` scan over Steam's module
-  factories) — so the three `SP_*` globals, which the frontend cannot attribute to a program from inside the page, fail
-  there the moment one is made non-blocking, instead of shipping a repair aimed at whichever program did not install
-  them. **`!== "panel"` is the only reading of `absenceCost` that decides anything** (prompt-only), so `feature`,
-  `appearance` and `diagnostic` record why a name is off blocking; the log line prints each missing name's cost and
-  losses and the notice on Main names the losses of a survived miss — both read the cost and the losses only to word a
-  miss — which is why every lookup at `feature` or `appearance`, and no other, must name a loss (`steamModules.test.ts`)
-  — a loss the reader sees cannot then go unnamed. The two things that answer for the toasts are prompt-only and read
-  NAMES: `notificationsMissing` over `NOTIFICATION_LOOKUPS` records what the toaster can do
-  (`utils/notificationsHealth.ts`) — from those names, never from a `feature` cost — and `describeSurvivedMiss` puts the
-  fact in the log as a sentence stating the loss and naming NO repair of its own — the verdict sentence beside it names
-  one that is right under every answer, which it has to be, since `ErrorBoundary` is a `@decky/ui` export and a miss of
-  it alone in the coexistence bundle is `decky`. So a `feature` entry added for something else cannot make either claim
-  the notifications are what went missing, and a second spelling of any of the three cannot leave them answering for a
-  lookup nobody asked about. Both directions fail quietly: call a real dependency cosmetic and the panel mounts and
-  renders a hole, which is the fault the whole check exists to tell apart from a backend that is not running; call a
-  decoration blocking and one missing glyph costs the user their entire interface, which is what this entry removed.
-  Prompt-only: `checkSteamModules` derives `panelMayMount`, and `index.tsx` gates the fallback page on it; `!== "panel"`
-  is the only reading of `absenceCost` that decides anything — the log line and the notice read the cost and the losses
-  only to word a miss; what the toaster can do (`utils/notificationsHealth.ts`) is recorded from `notificationsMissing`
-  over `NOTIFICATION_LOOKUPS` names, never from a `feature` cost; a name leaves `panel` only once its every consumer is
-  read
+  from the source in the four shapes one is written in (a `find(?:Module|ClassModule)\w*` call, a direct cast of
+  `window` whose exported name equals the property read, a `searchSteamFactories` scan over Steam's module factories,
+  and a `classMapMember` entry for a member read by name off a class map, whose name equals the map it reads) — so the
+  three `SP_*` globals, which the frontend cannot attribute to a program from inside the page, fail there the moment one
+  is made non-blocking, instead of shipping a repair aimed at whichever program did not install them. **`!== "panel"` is
+  the only reading of `absenceCost` that decides anything** (prompt-only), so `feature`, `appearance` and `diagnostic`
+  record why a name is off blocking; the log line prints each missing name's cost and losses and the notice on Main
+  names the losses of a survived miss — both read the cost and the losses only to word a miss — which is why every
+  lookup at `feature` or `appearance`, and no other, must name a loss (`steamModules.test.ts`) — a loss the reader sees
+  cannot then go unnamed. The two things that answer for the toasts are prompt-only and read NAMES:
+  `notificationsMissing` over `NOTIFICATION_LOOKUPS` records what the toaster can do (`utils/notificationsHealth.ts`) —
+  from those names, never from a `feature` cost — and `describeSurvivedMiss` puts the fact in the log as a sentence
+  stating the loss and naming NO repair of its own — the verdict sentence beside it names one that is right under every
+  answer, which it has to be, since `ErrorBoundary` is a `@decky/ui` export and a miss of it alone in the coexistence
+  bundle is `decky`. So a `feature` entry added for something else cannot make either claim the notifications are what
+  went missing, and a second spelling of any of the three cannot leave them answering for a lookup nobody asked about.
+  Both directions fail quietly: call a real dependency cosmetic and the panel mounts and renders a hole, which is the
+  fault the whole check exists to tell apart from a backend that is not running; call a decoration blocking and one
+  missing glyph costs the user their entire interface, which is what this entry removed. Prompt-only:
+  `checkSteamModules` derives `panelMayMount`, and `index.tsx` gates the fallback page on it; `!== "panel"` is the only
+  reading of `absenceCost` that decides anything — the log line and the notice read the cost and the losses only to word
+  a miss; what the toaster can do (`utils/notificationsHealth.ts`) is recorded from `notificationsMissing` over
+  `NOTIFICATION_LOOKUPS` names, never from a `feature` cost; a name leaves `panel` only once its every consumer is read
 - **Every start-up check that misses something writes ONE warning to the backend log — which check, then every missing
   name with its cost and losses — whether the panel mounts or the fallback page stands in its place; every miss the
   panel survives reaches the one notice on Main** — check + test + prompt-only

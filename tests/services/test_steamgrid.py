@@ -20,6 +20,7 @@ from _vendor import vdf
 from fakes.fake_cover_slot_reader import FakeCoverSlotReader
 from fakes.fake_listing_refiler import FakeListingRefiler
 from fakes.fake_listing_replacer import FakeListingReplacer
+from fakes.fake_platform_switches import FakePlatformSwitches
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_running_rom_ids import FakeRunningRomIds
@@ -126,6 +127,7 @@ def steamgrid(sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, uow, emi
             running_rom_ids=FakeRunningRomIds(),
             refiling=FakeListingRefiler(),
             platform_listing=FakeListingReplacer(),
+            platform_switches=FakePlatformSwitches(),
         ),
     ).service
 
@@ -1183,6 +1185,7 @@ class TestDebugLoggerProtocolSeam:
                 running_rom_ids=FakeRunningRomIds(),
                 refiling=FakeListingRefiler(),
                 platform_listing=FakeListingReplacer(),
+                platform_switches=FakePlatformSwitches(),
             ),
         ).service
 

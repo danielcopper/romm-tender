@@ -820,7 +820,7 @@ describe("Library › Platforms", () => {
       );
     });
 
-    it("toggles a platform optimistically through its own id", async () => {
+    it("toggles a platform optimistically through its own folder", async () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -830,7 +830,7 @@ describe("Library › Platforms", () => {
         await Promise.resolve();
       });
 
-      expect(vi.mocked(backend.savePlatformSync)).toHaveBeenCalledWith(1, false);
+      expect(vi.mocked(backend.savePlatformSync)).toHaveBeenCalledWith("gba", false);
       expect(toggle.checked).toBe(false);
     });
 
@@ -6333,7 +6333,7 @@ describe("Library › Platforms › two platforms sharing a slug", () => {
 
     await press(rowToggle(container, "Super Nintendo (snes-hacks)"));
 
-    expect(vi.mocked(backend.savePlatformSync)).toHaveBeenCalledWith(2, false);
+    expect(vi.mocked(backend.savePlatformSync)).toHaveBeenCalledWith("snes-hacks", false);
     expect(rowToggle(container, "Super Nintendo (snes-hacks)").checked).toBe(false);
     expect(rowToggle(container, "Super Nintendo").checked).toBe(true);
   });

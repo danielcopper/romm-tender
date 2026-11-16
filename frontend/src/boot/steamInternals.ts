@@ -38,6 +38,7 @@ export const STEAM_FEATURES = {
   gamePage: "Tender's section on a game page",
   buttonPictures: "controller button icons",
   quickAccess: "Tender's Quick Access entry",
+  widePages: "the full width of Settings, Sync, Library and Data Management",
   desktop: "the desktop surface (dev build)",
 } as const;
 

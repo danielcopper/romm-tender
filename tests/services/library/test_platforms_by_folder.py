@@ -78,7 +78,7 @@ class TestTwoPlatformsSharingASlugKeepAStampEach:
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         _seed_folder(fake_romm_api, platform_id=1, folder="snes", roms=[1, 2])
         _seed_folder(fake_romm_api, platform_id=2, folder="snes-hacks", roms=[3])
-        library.settings["enabled_platforms"] = {"1": True, "2": True}
+        library.settings["enabled_platforms"] = {"snes": True, "snes-hacks": True}
         for rom_id, folder in ((1, "snes"), (2, "snes"), (3, "snes-hacks")):
             _seed_bound_row(library, rom_id, folder=folder)
 
@@ -113,7 +113,7 @@ class TestTwoPlatformsSharingASlugGetASteamCollectionEach:
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         _seed_folder(fake_romm_api, platform_id=1, folder="snes", roms=[1])
         _seed_folder(fake_romm_api, platform_id=2, folder="snes-hacks", roms=[3])
-        library.settings["enabled_platforms"] = {"1": True, "2": True}
+        library.settings["enabled_platforms"] = {"snes": True, "snes-hacks": True}
         _seed_bound_row(library, 1, folder="snes")
         _seed_bound_row(library, 3, folder="snes-hacks")
 
@@ -137,7 +137,7 @@ class TestAGameWithoutARecordedFolder:
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         _seed_folder(fake_romm_api, platform_id=1, folder="snes", roms=[1])
         _seed_folder(fake_romm_api, platform_id=2, folder="snes-hacks", roms=[3])
-        library.settings["enabled_platforms"] = {"1": False, "2": True}
+        library.settings["enabled_platforms"] = {"snes": False, "snes-hacks": True}
         _seed_bound_row(library, 1, folder=None)
         _seed_bound_row(library, 3, folder="snes-hacks")
 
@@ -185,3 +185,23 @@ class TestAGameWithoutARecordedFolder:
         breakdown = summary["platform_breakdown"]
         removing = [(row["fs_slug"], row["remove_count"]) for row in breakdown if row["remove_count"]]
         assert removing == [("snes", 1)], "counted under the fs_slug RomM answered, as the apply records it"
+
+
+class TestTwoPlatformsSharingASlugAreSwitchedEachOnItsOwn:
+    """Done when: of two platforms that share a slug, switching one off syncs only the other (#2452 D8)."""
+
+    @pytest.mark.asyncio
+    async def test_switching_one_off_syncs_only_the_other(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        _seed_folder(fake_romm_api, platform_id=1, folder="snes", roms=[1])
+        _seed_folder(fake_romm_api, platform_id=2, folder="snes-hacks", roms=[3])
+        await library.sync.set_all_platforms_sync(True)
+
+        await library.sync.save_platform_sync("snes-hacks", False)
+        await _run(library, "run-1")
+
+        assert _walked_platforms(fake_romm_api) == {1}
+        with library.uow as uow:
+            assert uow.platform_sync_state.get("snes") is not None
+            assert uow.platform_sync_state.get("snes-hacks") is None

@@ -8,8 +8,10 @@
  *   - DownloadQueue.tsx, which seeds the store from the backend queue on mount
  *     and drops the terminal entries after a successful "Clear Completed"
  *   - the desktop client's Play button, which adds its ROM's download from the
- *     backend queue when the store has none of it (utils/downloadRehydrate.ts),
- *     and drops its ROM's entry when a cancel finds no download to cancel
+ *     backend queue when the store has none of it (utils/downloadRehydrate.ts)
+ *   - both game pages' Play buttons, which drop their ROM's entry when a cancel
+ *     finds no download to cancel, under the condition executeDownloadCancel
+ *     (utils/downloadPauseCancel.ts) states
  *
  * Read by:
  *   - MainPage.tsx, DownloadQueue.tsx and the desktop client's Play button, all
@@ -19,6 +21,9 @@
  *     to carry forward the fields their event frame does not carry
  *   - seedDownloadFromQueue (utils/downloadRehydrate.ts), which reads
  *     {@link getDownloadState} to see whether the store already holds the ROM
+ *   - executeDownloadCancel (utils/downloadPauseCancel.ts), which reads the
+ *     ROM's entry when a cancel is sent and again when it is refused with
+ *     no_active_download, and compares the two by identity
  *
  * The state is held immutably: every mutation that changes something installs a
  * NEW array and notifies, and one that changes nothing does neither. That is
@@ -83,13 +88,24 @@ export function getDownloadState(): readonly DownloadItem[] {
   return _downloads;
 }
 
-// Drop every terminal (completed/failed/cancelled) entry from the store,
-// mirroring the backend's "Clear Completed" eviction (#149). Active, queued,
-// paused, and extracting entries stay. Called after clear_completed_downloads
-// succeeds so the store matches the freshly-evicted backend queue immediately,
-// rather than waiting for the next mount fetch.
+export function isDownloadUnderWay(
+  download: DownloadItem | undefined,
+): download is DownloadItem & { status: "queued" | "downloading" | "paused" | "extracting" } {
+  return (
+    download !== undefined &&
+    (download.status === "queued" ||
+      download.status === "downloading" ||
+      download.status === "paused" ||
+      download.status === "extracting")
+  );
+}
+
+// Drop every entry whose download is no longer under way, as the backend's
+// "Clear Completed" evicts them. Called after clear_completed_downloads succeeds
+// so the store matches the backend queue at once, rather than at the next
+// mount fetch.
 export function removeTerminalDownloads(): void {
-  const next = _downloads.filter((d) => d.status !== "completed" && d.status !== "failed" && d.status !== "cancelled");
+  const next = _downloads.filter(isDownloadUnderWay);
   if (next.length === _downloads.length) return;
   _downloads = next;
   notify();

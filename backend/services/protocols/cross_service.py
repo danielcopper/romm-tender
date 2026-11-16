@@ -35,9 +35,11 @@ class ListingRefiler(Protocol):
     """Moves Tender's older per-platform entries to the platforms a read of RomM's listing names.
 
     Every reader that keeps or uses RomM's platform listing hands what it read
-    here, so the download records and the per-platform picks follow the user's
-    current RomM (#2452 D6, D7). ``do_refile`` is blocking and never raises: a
-    failed move is reported by the refiling itself and costs the reader nothing.
+    here, so the download records, the per-platform picks and the per-platform
+    sync toggles follow the user's current RomM (#2452 D6, D7, D8). ``do_refile``
+    is blocking and never raises: a failed move is reported by the refiling
+    itself, and the reader goes on with the entries where they were — except
+    toggles whose move was saved in vain, which stay moved (D23).
     """
 
     def do_refile(self, platforms: Sequence[Mapping[str, Any]]) -> None: ...
@@ -90,6 +92,28 @@ class PlatformPicksWriter(Protocol):
     """
 
     def replace(self, build: Callable[[Mapping[str, Any]], dict[str, Any] | None]) -> bool: ...
+
+
+class PlatformSwitchesWriter(Protocol):
+    """The one writer of the per-platform sync toggles, consumed by the library fetcher and the refiling.
+
+    Both methods run *build* under the lock every change of the toggles is made
+    under and save the map it answers; where the save raises, the exception
+    propagates. Blocking.
+    """
+
+    def replace(self, build: Callable[[Mapping[str, Any]], dict[str, Any]]) -> None:
+        """Put *build*'s map of the current toggles in their place; a failed save puts the old map back."""
+        ...
+
+    def carry_over(self, build: Callable[[Mapping[str, Any], Mapping[str, Any]], dict[str, Any] | None]) -> bool:
+        """Put the toggles *build* moves from those kept by RomM id, and the current ones, in place of both.
+
+        *build* answers ``None`` to change nothing yet. Answers whether a map was
+        built; ``False`` too where nothing is kept by id. A failed save keeps the
+        moved map.
+        """
+        ...
 
 
 class RomInstallRecorder(Protocol):

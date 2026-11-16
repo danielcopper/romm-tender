@@ -79,4 +79,22 @@ describe("executeDownloadResume", () => {
       "Tag: could not resume the download of romId=7: Error: socket closed",
     );
   });
+
+  it("logs a throw while handling the answer as such, without asking about the server", async () => {
+    vi.mocked(backend.resumeDownload).mockResolvedValueOnce({
+      success: false,
+      reason: "not_found",
+      message: "No paused download",
+    } as never);
+    vi.mocked(toast.showToast).mockImplementationOnce(() => {
+      throw new Error("toast broke");
+    });
+
+    await executeDownloadResume(7, "Tag");
+
+    expect(backend.logError).toHaveBeenCalledExactlyOnceWith(
+      "Tag: could not handle the resume answer for romId=7: Error: toast broke",
+    );
+    expect(toast.showToast).toHaveBeenCalledExactlyOnceWith("No paused download");
+  });
 });

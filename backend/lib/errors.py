@@ -454,6 +454,17 @@ class DeviceSyncDisabled(NamedRefused):
     reason = "device_sync_disabled"
 
 
+def require_platform_folder(platform_folder: object) -> None:
+    """Refuse ``invalid_value`` for a platform folder that is not a name: not a string, or blank.
+
+    What Tender keeps per platform is keyed by the folder RomM keeps the
+    platform in (its ``fs_slug``); a folder is a name, so a number, RomM's
+    platform id among them, is refused rather than kept as one.
+    """
+    if not isinstance(platform_folder, str) or not platform_folder.strip():
+        raise Refused("invalid_value", f"{platform_folder!r} is not a RomM platform folder")
+
+
 class OperationAbortedError(Exception):
     """A cooperative worker stopped because its caller asked it to stop.
 
