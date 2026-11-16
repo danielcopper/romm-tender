@@ -783,7 +783,11 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
         setCandidatePresent,
         onAdopted: () => setState("play"),
       },
-    }).catch((e: unknown) => logFailure("CustomPlayButton", "run the download press for", rid, e));
+    }).catch((e: unknown) => {
+      // A hook that threw may have left the press busy.
+      setActionPending(false);
+      logFailure("CustomPlayButton", "run the download press for", rid, e);
+    });
   };
 
   const handleCancelDownload = () => {

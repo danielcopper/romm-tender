@@ -446,6 +446,8 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
         clearPendingFor(rid);
       }
     } catch (e) {
+      // A hook that threw may have left the press busy.
+      clearPendingFor(rid);
       logFailure(TAG, "run the download press for", rid, e);
     } finally {
       setDownloadFlowUnderWay(false);
