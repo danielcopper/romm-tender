@@ -51,11 +51,11 @@ would start a paused one from nothing. A press of cancel or pause moves nothing 
 answers: the bar, and what the cached detail found on disk, go with the backend's cancelled or failed frame, since a
 press with no answer may still have reached the backend. Such a press is logged, as is a refused one. A cancel refused
 with `no_active_download` gets no frame, so both buttons end the press's own bar and drop the game from the download
-store, keeping what was found on disk; when that answer is left alone instead is `executeDownloadCancel`'s
-(`frontend/src/utils/downloadPauseCancel.ts`). The chevron beside PLAY opens the game's menu, whose one entry is
-Uninstall (`executeRomUninstall`, `frontend/src/utils/romUninstall.ts`), which, like Big Picture's, asks nothing first.
-The chevron is disabled while a press or a version switch is under way, an open menu closing when one starts, and, with
-a title that says why, while a removal the page started for another version still runs, since the button takes no second
+store, keeping what was found on disk; `executeDownloadCancel` (`frontend/src/utils/downloadPauseCancel.ts`) states when
+that answer is left alone instead. The chevron beside PLAY opens the game's menu, whose one entry is Uninstall
+(`executeRomUninstall`, `frontend/src/utils/romUninstall.ts`), which, like Big Picture's, asks nothing first. The
+chevron is disabled while a press or a version switch is under way, an open menu closing when one starts, and, with a
+title that says why, while a removal the page started for another version still runs, since the button takes no second
 one. What a download, an adoption or an uninstall puts on the button — STARTING..., the bar before the download store
 carries the transfer, READY!, UNINSTALLING..., the verdict it holds after — stays with the version it was pressed for,
 so a version switch while it runs leaves it behind and the button draws the new version's own state. Where the game

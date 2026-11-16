@@ -21,6 +21,9 @@
  *     to carry forward the fields their event frame does not carry
  *   - seedDownloadFromQueue (utils/downloadRehydrate.ts), which reads
  *     {@link getDownloadState} to see whether the store already holds the ROM
+ *   - executeDownloadCancel (utils/downloadPauseCancel.ts), which reads the
+ *     ROM's entry when a cancel is sent and when it is answered, and compares
+ *     the two by identity
  *
  * The state is held immutably: every mutation that changes something installs a
  * NEW array and notifies, and one that changes nothing does neither. That is
