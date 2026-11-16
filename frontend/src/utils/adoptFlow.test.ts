@@ -394,6 +394,44 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
     expect(log[log.length - 1]).toBe("busy:false");
     expect(log).not.toContain("adopted");
   });
+
+  it("hands a dialog that rejects to the caller rather than logging it as a failed start", async () => {
+    vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
+    const { flow, dialogs } = makeFlow();
+    dialogs.showExisting.mockRejectedValue(new Error("dialog broke"));
+
+    await expect(runDownloadWithAdoption(flow)).rejects.toThrow("dialog broke");
+
+    expect(backend.logError).not.toHaveBeenCalled();
+    expect(toastBodies()).toEqual([]);
+    expect(log).toEqual(["busy:true", "occupied:true", "busy:false"]);
+  });
+
+  it.each([
+    ["adopted at once", () => vi.mocked(backend.adoptExistingRom).mockResolvedValue(ADOPTED)],
+    [
+      "adopted after the taken-names question",
+      () => vi.mocked(backend.adoptExistingRom).mockResolvedValueOnce(COLLISIONS).mockResolvedValue(ADOPTED),
+    ],
+  ])(
+    "hands a hook that throws after a successful adoption (%s) to the caller rather than logging it as a failed adoption",
+    async (_case, arrange) => {
+      vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
+      arrange();
+      const { flow, dialogs } = makeFlow();
+      dialogs.showExisting.mockResolvedValue("adopt");
+      dialogs.showCollisions.mockResolvedValue("keep");
+      flow.hooks.onAdopted = () => {
+        throw new Error("hook broke");
+      };
+
+      await expect(runDownloadWithAdoption(flow)).rejects.toThrow("hook broke");
+
+      expect(backend.logError).not.toHaveBeenCalled();
+      expect(toastBodies()).toEqual([]);
+      expect(log[log.length - 1]).toBe("busy:false");
+    },
+  );
 });
 
 describe("runDownloadWithAdoption — the same game under another name", () => {

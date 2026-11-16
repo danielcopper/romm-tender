@@ -49,6 +49,7 @@ import { scrollToTop } from "../utils/scrollHelpers";
 import { getEventTarget } from "../utils/events";
 import { handleButtonDownloadFailure } from "../utils/downloadFailure";
 import { runDownloadWithAdoption } from "../utils/adoptFlow";
+import { logFailure } from "../utils/backendLog";
 import { executeDownloadResume } from "../utils/downloadResume";
 import { executeDownloadCancel, executeDownloadPause } from "../utils/downloadPauseCancel";
 import { isDownloadUnderWay } from "../utils/downloadStore";
@@ -758,8 +759,9 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
 
   const handleDownload = async () => {
     if (!romId || actionPending) return;
+    const rid = romId;
     await runDownloadWithAdoption({
-      romId,
+      romId: rid,
       romName,
       pageSawCandidate: candidatePresent,
       logContext: "CustomPlayButton",
@@ -776,7 +778,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
         setCandidatePresent,
         onAdopted: () => setState("play"),
       },
-    });
+    }).catch((e: unknown) => logFailure("CustomPlayButton", "run the download press for", rid, e));
   };
 
   const handleCancelDownload = () => {

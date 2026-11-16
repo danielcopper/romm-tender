@@ -16,6 +16,7 @@ import {
 } from "react";
 import { addEventListener, removeEventListener } from "../../api/host";
 import { getCachedGameDetail, logWarn } from "../../api/backend";
+import { logFailure } from "../../utils/backendLog";
 import { useGameDetail, type GameDetailState } from "../../utils/gameDetailStore";
 import { isDownloadUnderWay, useDownloads } from "../../utils/downloadStore";
 import { READY_FLASH_MS } from "../../utils/downloadProgress";
@@ -444,6 +445,8 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
         startAction("downloading", rid);
         clearPendingFor(rid);
       }
+    } catch (e) {
+      logFailure(TAG, "run the download press for", rid, e);
     } finally {
       setDownloadFlowUnderWay(false);
     }

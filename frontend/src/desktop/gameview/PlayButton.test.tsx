@@ -1614,6 +1614,26 @@ describe("PlayButton", () => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
+    it("logs a download press that throws after the adoption as an error, not as a failed adoption", async () => {
+      vi.mocked(backend.startDownload).mockResolvedValueOnce(OCCUPIED as never);
+      vi.mocked(backend.adoptExistingRom).mockResolvedValueOnce(ADOPTED);
+      vi.mocked(toast.showToast).mockImplementationOnce(() => {
+        throw new Error("toast broke");
+      });
+
+      render(<PlayButton appId={APP_ID} />);
+      fireEvent.click(screen.getByRole("button", { name: "DOWNLOAD" }));
+      await screen.findByRole("dialog", { name: "This Game Is Already on Your Device" });
+      fireEvent.click(screen.getByRole("button", { name: "Use These Files" }));
+
+      await waitFor(() =>
+        expect(backend.logError).toHaveBeenCalledExactlyOnceWith(
+          "DesktopPlayButton: could not run the download press for romId=100: Error: toast broke",
+        ),
+      );
+      await pressEnded();
+    });
+
     it("reads STARTING..., with the ring, while the adoption's request is in flight", async () => {
       let adopted!: (value: AdoptResult) => void;
       vi.mocked(backend.startDownload).mockResolvedValueOnce(OCCUPIED as never);

@@ -5563,6 +5563,31 @@ describe("CustomPlayButton — content already on disk (#260)", () => {
     await utils.findByText("Use Existing Files");
   });
 
+  it("logs a download press whose dialog rejects as an error, not as a failed start", async () => {
+    mockCachedDetail({ rom_id: 42, installed: false });
+    vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
+    vi.mocked(showAdoptExistingModal).mockRejectedValue(new Error("modal broke"));
+    vi.mocked(backend.getDownloadQueue).mockResolvedValue({ downloads: [] });
+    const logErrorSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+    try {
+      const utils = render(<CustomPlayButton appId={100} />);
+      const btn = await utils.findByText("Download");
+
+      await act(async () => {
+        btn.click();
+      });
+
+      await waitFor(() =>
+        expect(logErrorSpy).toHaveBeenCalledExactlyOnceWith(
+          "CustomPlayButton: could not run the download press for romId=42: Error: modal broke",
+        ),
+      );
+      expect(vi.mocked(toaster.toast)).not.toHaveBeenCalled();
+    } finally {
+      logErrorSpy.mockRestore();
+    }
+  });
+
   it("replace re-runs the download with the replace flag set", async () => {
     mockCachedDetail({ rom_id: 42, installed: false });
     vi.mocked(backend.startDownload)
