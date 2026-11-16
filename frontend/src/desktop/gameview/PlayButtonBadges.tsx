@@ -115,12 +115,10 @@ function useRomAnswer<T>(
   ask: (romId: number) => Promise<T>,
 ): T | null {
   const [answer, setAnswer] = useState<{ romId: number; value: T } | null>(null);
+  if (!wanted && answer !== null) setAnswer(null);
 
   useEffect(() => {
-    if (romId === null || !wanted) {
-      setAnswer(null);
-      return;
-    }
+    if (romId === null || !wanted) return;
     let cancelled = false;
     let latestRead = 0;
     const read = async () => {
@@ -145,7 +143,7 @@ function useRomAnswer<T>(
     };
   }, [romId, wanted, what, ask]);
 
-  return wanted && answer !== null && answer.romId === romId ? answer.value : null;
+  return answer !== null && answer.romId === romId ? answer.value : null;
 }
 
 /**
