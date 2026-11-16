@@ -327,10 +327,16 @@ async function adopt(
       showToast(result.message || ADOPT_REFUSED_TOAST);
       return "failed";
     }
-    hooks.setTargetOccupied(false);
-    hooks.setCandidatePresent(false);
-    hooks.onAdopted();
-    globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "rom_adopted", rom_id: romId } }));
+    try {
+      hooks.setTargetOccupied(false);
+      hooks.setCandidatePresent(false);
+      hooks.onAdopted();
+    } finally {
+      // The adoption is recorded whatever the caller's hooks do with it.
+      globalThis.dispatchEvent(
+        new CustomEvent("romm_data_changed", { detail: { type: "rom_adopted", rom_id: romId } }),
+      );
+    }
     showToast(adoptedToast(flow.romName));
     return "adopted";
   } finally {

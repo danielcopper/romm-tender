@@ -424,14 +424,37 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
       flow.hooks.onAdopted = () => {
         throw new Error("hook broke");
       };
+      const changes: unknown[] = [];
+      const onChange = (e: Event) => changes.push((e as CustomEvent).detail);
+      globalThis.addEventListener("romm_data_changed", onChange);
 
-      await expect(runDownloadWithAdoption(flow)).rejects.toThrow("hook broke");
+      try {
+        await expect(runDownloadWithAdoption(flow)).rejects.toThrow("hook broke");
+      } finally {
+        globalThis.removeEventListener("romm_data_changed", onChange);
+      }
 
       expect(backend.logError).not.toHaveBeenCalled();
       expect(toastBodies()).toEqual([]);
       expect(log[log.length - 1]).toBe("busy:false");
+      // The adoption is recorded, so the rest of the panel hears of it all the same.
+      expect(changes).toEqual([{ type: "rom_adopted", rom_id: ROM_ID }]);
     },
   );
+
+  it("hands a taken-names question that rejects during an adoption to the caller, with busy ended", async () => {
+    vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
+    vi.mocked(backend.adoptExistingRom).mockResolvedValue(COLLISIONS);
+    const { flow, dialogs } = makeFlow();
+    dialogs.showExisting.mockResolvedValue("adopt");
+    dialogs.showCollisions.mockRejectedValue(new Error("dialog broke"));
+
+    await expect(runDownloadWithAdoption(flow)).rejects.toThrow("dialog broke");
+
+    expect(backend.logError).not.toHaveBeenCalled();
+    expect(toastBodies()).toEqual([]);
+    expect(log[log.length - 1]).toBe("busy:false");
+  });
 });
 
 describe("runDownloadWithAdoption — the same game under another name", () => {
