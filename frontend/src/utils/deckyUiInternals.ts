@@ -277,6 +277,24 @@ export interface SteamToastRenderer {
 }
 
 /**
+ * *predicate* as a `findModuleExport` filter that answers no, and says so,
+ * where it throws. `@decky/ui` catches a throwing filter only from 4.11.1 on,
+ * and the coexistence bundle searches with Decky Loader's copy: under a loader
+ * built against an older one, a throw would end the search, and with it the
+ * evaluation of this module and the whole panel.
+ */
+const passingOverThrows =
+  (searchedFor: string, predicate: (e: unknown) => boolean) =>
+  (e: unknown): boolean => {
+    try {
+      return predicate(e);
+    } catch (error) {
+      console.warn(`[Tender] the search for ${searchedFor} passed over an export that threw`, error);
+      return false;
+    }
+  };
+
+/**
  * Steam's toast renderer, the component every notification is drawn through.
  *
  * Found by the string its own body contains — it opens its result with
@@ -288,10 +306,12 @@ export interface SteamToastRenderer {
  * puts a drawing in front of it, is on the docs page
  * (`docs/architecture/frontend-bundles.md`).
  */
-export const ToastRenderer: SteamToastRenderer | undefined = findModuleExport((e: unknown) => {
-  const source = (e as { toString?: () => unknown } | undefined)?.toString?.();
-  return typeof source === "string" && source.includes('controller:"notification",method:');
-});
+export const ToastRenderer: SteamToastRenderer | undefined = findModuleExport(
+  passingOverThrows("Steam's toast renderer", (e) => {
+    const source = (e as { toString?: () => unknown } | undefined)?.toString?.();
+    return typeof source === "string" && source.includes('controller:"notification",method:');
+  }),
+);
 
 /** Steam's FriendsUI store, reduced to the flag the wide pages read. */
 export interface SteamFriendsUIStore {
@@ -304,12 +324,13 @@ export interface SteamFriendsUIStore {
  *
  * Found by the field its message handler sets and the getter the wrapper reads
  * rather than by its export name, which is minified ({@link ControllerGlyph}
- * has the rule for those names). The predicate needs no `try`:
- * `findModuleExport` catches a throwing one itself and logs it
- * (`dist/webpack.js`).
+ * has the rule for those names).
  */
 export const FriendsUIStore: SteamFriendsUIStore | undefined = findModuleExport(
-  (e: unknown) => typeof e === "object" && e !== null && "m_bQamFriendsExpanded" in e && "qamFriendsExpanded" in e,
+  passingOverThrows(
+    "Steam's FriendsUI store",
+    (e) => typeof e === "object" && e !== null && "m_bQamFriendsExpanded" in e && "qamFriendsExpanded" in e,
+  ),
 );
 
 /**
