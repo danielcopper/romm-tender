@@ -407,23 +407,35 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
     expect(log).toEqual(["busy:true", "occupied:true", "busy:false", "busy:false"]);
   });
 
+  const adoptedAtOnce = () => vi.mocked(backend.adoptExistingRom).mockResolvedValue(ADOPTED);
+  const adoptedAfterCollisions = () =>
+    vi.mocked(backend.adoptExistingRom).mockResolvedValueOnce(COLLISIONS).mockResolvedValue(ADOPTED);
+  const breakOnAdopted = (hooks: AdoptionFlowHooks) => {
+    hooks.onAdopted = () => {
+      throw new Error("hook broke");
+    };
+  };
+  const breakClearingOccupied = (hooks: AdoptionFlowHooks) => {
+    const set = hooks.setTargetOccupied;
+    hooks.setTargetOccupied = (occupied) => {
+      if (!occupied) throw new Error("hook broke");
+      set(occupied);
+    };
+  };
+
   it.each([
-    ["adopted at once", () => vi.mocked(backend.adoptExistingRom).mockResolvedValue(ADOPTED)],
-    [
-      "adopted after the taken-names question",
-      () => vi.mocked(backend.adoptExistingRom).mockResolvedValueOnce(COLLISIONS).mockResolvedValue(ADOPTED),
-    ],
+    ["onAdopted, adopted at once", adoptedAtOnce, breakOnAdopted],
+    ["onAdopted, adopted after the taken-names question", adoptedAfterCollisions, breakOnAdopted],
+    ["setTargetOccupied, adopted at once", adoptedAtOnce, breakClearingOccupied],
   ])(
     "hands a hook that throws after a successful adoption (%s) to the caller rather than logging it as a failed adoption",
-    async (_case, arrange) => {
+    async (_case, arrange, breakHook) => {
       vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
       arrange();
       const { flow, dialogs } = makeFlow();
       dialogs.showExisting.mockResolvedValue("adopt");
       dialogs.showCollisions.mockResolvedValue("keep");
-      flow.hooks.onAdopted = () => {
-        throw new Error("hook broke");
-      };
+      breakHook(flow.hooks);
       const changes: unknown[] = [];
       const onChange = (e: Event) => changes.push((e as CustomEvent).detail);
       globalThis.addEventListener("romm_data_changed", onChange);
@@ -435,10 +447,10 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
       }
 
       expect(backend.logError).not.toHaveBeenCalled();
-      expect(toastBodies()).toEqual([]);
       expect(log[log.length - 1]).toBe("busy:false");
-      // The adoption is recorded, so the rest of the panel hears of it all the same.
+      // The adoption is recorded, so the panel hears of it and the user is told all the same.
       expect(changes).toEqual([{ type: "rom_adopted", rom_id: ROM_ID }]);
+      expect(toastBodies()).toEqual(["Test ROM is ready to play"]);
     },
   );
 

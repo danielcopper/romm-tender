@@ -337,8 +337,8 @@ async function adopt(
       globalThis.dispatchEvent(
         new CustomEvent("romm_data_changed", { detail: { type: "rom_adopted", rom_id: romId } }),
       );
+      showToast(adoptedToast(flow.romName));
     }
-    showToast(adoptedToast(flow.romName));
     return "adopted";
   } finally {
     hooks.setBusy(false);
