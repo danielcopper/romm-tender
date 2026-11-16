@@ -49,18 +49,20 @@ its page opens (`seedDownloadFromQueue`, `frontend/src/utils/downloadRehydrate.t
 nor a queued one until it starts, so after Steam's interface reloads the bar would otherwise be missing and DOWNLOAD
 would start a paused one from nothing. A press of cancel or pause moves nothing on the button, as Big Picture's moves
 nothing: the bar, and what the cached detail found on disk, go with the backend's cancelled or failed frame, since a
-press with no answer may still have reached the backend. Such a press is logged, as is a refused one, and a cancel the
-backend refuses because it holds no download of the game, running or paused, ends the press's own bar and drops the game
-from the download store, since no frame will. The chevron beside PLAY opens the game's menu, whose one entry is
-Uninstall (`executeRomUninstall`, `frontend/src/utils/romUninstall.ts`), which, like Big Picture's, asks nothing first.
-The chevron is disabled while a press or a version switch is under way, an open menu closing when one starts, and, with
-a title that says why, while a removal the page started for another version still runs, since the button takes no second
-one. What a download, an adoption or an uninstall puts on the button — STARTING..., the bar before the download store
-carries the transfer, READY!, UNINSTALLING..., the verdict it holds after — stays with the version it was pressed for,
-so a version switch while it runs leaves it behind and the button draws the new version's own state. Where the game
-cannot start — its emulator cannot, or its file does not start with it — PLAY is disabled with the sentence
-`startRefusal` (`frontend/src/utils/emulatorStart.ts`) answers. While the page checks whether the game can start, and
-where that check went wrong, PLAY does what Big Picture's does
+press with no answer may still have reached the backend. Such a press is logged, as is a refused one. A cancel the
+backend refuses because it holds no download of the game, running or paused, gets no frame, so on both buttons it ends
+the press's own bar and drops the game from the download store (`executeDownloadCancel`,
+`frontend/src/utils/downloadPauseCancel.ts`); the desktop's keeps what the cached detail found on disk. The chevron
+beside PLAY opens the game's menu, whose one entry is Uninstall (`executeRomUninstall`,
+`frontend/src/utils/romUninstall.ts`), which, like Big Picture's, asks nothing first. The chevron is disabled while a
+press or a version switch is under way, an open menu closing when one starts, and, with a title that says why, while a
+removal the page started for another version still runs, since the button takes no second one. What a download, an
+adoption or an uninstall puts on the button — STARTING..., the bar before the download store carries the transfer,
+READY!, UNINSTALLING..., the verdict it holds after — stays with the version it was pressed for, so a version switch
+while it runs leaves it behind and the button draws the new version's own state. Where the game cannot start — its
+emulator cannot, or its file does not start with it — PLAY is disabled with the sentence `startRefusal`
+(`frontend/src/utils/emulatorStart.ts`) answers. While the page checks whether the game can start, and where that check
+went wrong, PLAY does what Big Picture's does
 ([Launch-target validation](backend-architecture.md#launch-target-validation)), and reads CHECKING... where Big
 Picture's shows its throbber. On a stranded panel it gates as the [invariant register](invariants/panel.md)'s
 stranded-panel entry says. Steam's Play button and the badges beside it are hidden as soon as the button's root has

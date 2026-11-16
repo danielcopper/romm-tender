@@ -84,7 +84,6 @@ export function getDownloadState(): readonly DownloadItem[] {
   return _downloads;
 }
 
-/** Whether a download is under way: queued, downloading, paused or unpacking. */
 export function isDownloadUnderWay(
   download: DownloadItem | undefined,
 ): download is DownloadItem & { status: "queued" | "downloading" | "paused" | "extracting" } {

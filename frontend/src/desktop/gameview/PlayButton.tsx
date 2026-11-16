@@ -88,8 +88,9 @@ const NO_ANSWERS: CachedAnswers = { romId: null, ...NO_DOWNLOAD_ANSWERS };
 /**
  * What the button reads for one ROM's download, ended by an event of its own
  * rather than by the shared detail: a download this button started, until the
- * download's first frame, its end or a switch to another version; the moment a
- * download completed, for `READY_FLASH_MS`.
+ * download's first frame, its end, a switch to another version or a cancel the
+ * backend answers with no download to cancel; the moment a download completed,
+ * for `READY_FLASH_MS`.
  */
 type ActionState = "downloading" | "dl_complete";
 
