@@ -46,7 +46,13 @@ export const basicAppDetailsSectionStylerClasses: typeof _basicAppDetailsSection
   _basicAppDetailsSectionStylerClasses;
 export const appDetailsClasses: typeof _appDetailsClasses | undefined = _appDetailsClasses;
 export const playSectionClasses: typeof _playSectionClasses | undefined = _playSectionClasses;
-export const quickAccessMenuClasses: typeof _quickAccessMenuClasses | undefined = _quickAccessMenuClasses;
+/**
+ * Steam's runtime map also carries `Expanded`, the class its QAM host puts on
+ * the placeholder the QAM's view tracks; upstream's type names `ViewPlaceholder`
+ * beside it but not `Expanded`.
+ */
+export const quickAccessMenuClasses: (typeof _quickAccessMenuClasses & { readonly Expanded?: string }) | undefined =
+  _quickAccessMenuClasses;
 
 /**
  * What the tabbed page accepts beyond the four props `@decky/ui` declares.
@@ -271,6 +277,24 @@ export interface SteamToastRenderer {
 }
 
 /**
+ * *predicate* as a `findModuleExport` filter that answers no, and says so,
+ * where it throws. `@decky/ui` catches a throwing filter only from 4.11.1 on,
+ * and the coexistence bundle searches with Decky Loader's copy: under a loader
+ * built against an older one, a throw would end the search, and with it the
+ * evaluation of this module and the whole panel.
+ */
+const passingOverThrows =
+  (searchedFor: string, predicate: (e: unknown) => boolean) =>
+  (e: unknown): boolean => {
+    try {
+      return predicate(e);
+    } catch (error) {
+      console.warn(`[Tender] the search for ${searchedFor} passed over an export that threw`, error);
+      return false;
+    }
+  };
+
+/**
  * Steam's toast renderer, the component every notification is drawn through.
  *
  * Found by the string its own body contains — it opens its result with
@@ -282,17 +306,32 @@ export interface SteamToastRenderer {
  * puts a drawing in front of it, is on the docs page
  * (`docs/architecture/frontend-bundles.md`).
  */
-export const ToastRenderer: SteamToastRenderer | undefined = findModuleExport((e: unknown) => {
-  // The predicate is run against every export in Steam's registry, so one
-  // whose `toString` is not a function, or throws, must answer `false` rather
-  // than end the search.
-  try {
+export const ToastRenderer: SteamToastRenderer | undefined = findModuleExport(
+  passingOverThrows("Steam's toast renderer", (e) => {
     const source = (e as { toString?: () => unknown } | undefined)?.toString?.();
     return typeof source === "string" && source.includes('controller:"notification",method:');
-  } catch {
-    return false;
-  }
-});
+  }),
+);
+
+/** Steam's FriendsUI store, reduced to the flag the wide pages read. */
+export interface SteamFriendsUIStore {
+  readonly qamFriendsExpanded?: unknown;
+}
+
+/**
+ * Steam's FriendsUI store, whose flag the wide pages set and read
+ * (`docs/architecture/qam-panel.md`, "Two widths").
+ *
+ * Found by the field its message handler sets and the getter the wrapper reads
+ * rather than by its export name, which is minified ({@link ControllerGlyph}
+ * has the rule for those names).
+ */
+export const FriendsUIStore: SteamFriendsUIStore | undefined = findModuleExport(
+  passingOverThrows(
+    "Steam's FriendsUI store",
+    (e) => typeof e === "object" && e !== null && "m_bQamFriendsExpanded" in e && "qamFriendsExpanded" in e,
+  ),
+);
 
 /**
  * Steam's notification store, which owns the toast queue and the tray.

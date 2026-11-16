@@ -465,6 +465,11 @@ vi.mock("@decky/ui", () => {
     beforePatch: vi.fn(),
     getReactRoot: vi.fn(() => undefined),
     modules: new Map<string, unknown>(),
+    // What the wide pages' install reaches Steam's QAM host through, named for
+    // the same reason. Never called either: the install refuses before it reads
+    // a fiber wherever the class map is undefined, as it is above.
+    getReactInstance: vi.fn(() => undefined),
+    findInTree: vi.fn(() => null),
     // Steam's own React is not here either, and the real trampoline reads the
     // `SP_*` globals. Every test that cares about the toast renderer's patch
     // chain supplies its own install seam (`utils/steamToaster.tsx`), so this
