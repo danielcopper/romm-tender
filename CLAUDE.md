@@ -46,8 +46,9 @@ Work starts from an issue: open questions under `## To decide` (one checkbox eac
 `→ D1` once answered), decisions under `## Decisions` (appended; a changed one is struck through and re-added with its
 date). An epic holds its own; a sub-issue says "See epic #N". A hard-to-reverse, surprising trade-off also gets an ADR
 in `docs/adr/`, linked from the issue. Every `## Done when` item becomes a test seen failing first, or is marked
-"(device)". The PR body repeats the decisions and becomes the squash commit. The `decisions` CI check enforces this
-([rules](https://github.com/danielcopper/.github#the-decisions-check)).
+"(device)". The PR body repeats the decisions and becomes the squash commit. The `decisions` CI check enforces the issue
+sections and the ADR format ([rules](https://github.com/danielcopper/.github#the-decisions-check)); the rest is for
+review.
 
 An issue someone else opened stays as they wrote it; the work gets its own issue that links it, and the pull request
 closes both.
@@ -78,9 +79,9 @@ closes both.
 - **An endpoint is a public method on `Endpoints` with `@route` (topmost decorator), `def` or `async def` alike** —
   every public method there needs it. The frontend's `endpoint("name")` declarations decide what should be reachable;
   the gate checks both sides.
-- **RomM API:** the filter is `platform_ids` (plural); cover URLs need URL-encoding; list calls page through
-  `lib/romm_paging.py`, and every `offset` walk over `/api/roms` sends `order_by=id` (otherwise unstable under a running
-  scan). RomM below 5.4.1 is refused (`MIN_ROMM_VERSION`).
+- **RomM API:** the filter is `platform_ids` (plural); cover URLs need URL-encoding; list calls take their page size
+  from `lib/romm_paging.py`, and every `offset` walk over `/api/roms` sends `order_by=id` (otherwise unstable under a
+  running scan). RomM below 5.4.1 is refused (`MIN_ROMM_VERSION`).
 - **Every adapter talking to a remote server takes a `user_agent`** (`<package>/<version>` from `domain/identity.py`,
   wired in bootstrap) — SteamGridDB and RomM behind Cloudflare reject Python's default with 403, GitHub refuses none.
   Never hardcode it. `VERSION` is stamped by release-please, never edited by hand.
@@ -103,8 +104,8 @@ closes both.
 
 - **Setup** `mise run setup` · **Build** `pnpm -C frontend build` · **Tests** `mise run test` (backend),
   `mise run test:frontend` · **Coverage** `mise run test:frontend:coverage`, backend via
-  `pytest --cov=backend --cov-branch` · **Lint** `mise run lint` (Ruff and basedpyright run only inside the gate) ·
-  **Gate** `mise run gate` — the CI battery, slow, run once before pushing.
+  `pytest --cov=backend --cov-branch` · **Lint** `mise run lint` · **Gate** `mise run gate` — the CI battery, slow, run
+  once before pushing.
 - **Package** `mise run package` → `build/romm-tender-<V>.tar.gz`; `install.sh --from <tarball>` installs or updates
   (rolls back by itself on failure), `--rollback` / `--uninstall` by hand. Tests never run these against the real
   machine — always under a `tmp_path` HOME.
@@ -117,8 +118,8 @@ closes both.
   halves. Never start these on the owner's session without asking — they restart his Steam. Guide:
   `docs/contributing/frontend-dev-loop.md`.
 - **Dependencies** are pinned in lock files; after changing one, `mise run lock-update`.
-- **The pre-commit hook** only formats (keep it under ~2 s; no heavy checks there); a file staged in part with
-  `git add -p` is left unformatted and named.
+- **The pre-commit hook** formats and stops a commit Ruff can't fix (keep it under ~2 s; no heavy checks there); a file
+  staged in part with `git add -p` is left unformatted and named.
 
 ## Pipeline
 
