@@ -221,56 +221,14 @@ class DeviceRegistry:
         the registration without an id; anything the registration raises
         propagates.
         """
-        # Probe the RomM version when it has not been observed yet. Device
-        # registration is the entrypoint reached from background launchers
-        # that never call test_connection first, so the version on the API
-        # adapter would otherwise stay None and version-gated server-side
-        # features couldn't be enabled until the next manual connection
-        # test. Probe failures are non-fatal — the registration call below
-        # still proceeds and the adapter just retains its current version.
-        if not self._romm_api.get_version():
-            try:
-                heartbeat = await self._loop.run_in_executor(None, self._romm_api.heartbeat)
-                with contextlib.suppress(AttributeError, TypeError):
-                    version = heartbeat.get("SYSTEM", {}).get("VERSION")
-                    # SYSTEM.VERSION is server-controlled and untrusted: only cache
-                    # a real, non-empty version string. A truthy non-str (e.g. numeric
-                    # 4.9) is treated as absent — never cached — so the adapter's
-                    # version stays a real string or None. See _probe_version (#1275).
-                    if isinstance(version, str) and version:
-                        self._romm_api.set_version(version)
-            except Exception as e:
-                self._logger.debug(f"ensure_device_registered: version probe failed (non-fatal): {e}")
-
+        await self._probe_server_version()
         device_id = await self._loop.run_in_executor(None, self.get_device_id)
-        # Set only once the touch below proves the cached id dead — the
-        # registration path then re-addresses the play sessions still queued
-        # under it to the fresh id.
+        # Set only once the touch proves the cached id dead — the registration
+        # then re-addresses the play sessions still queued under it to the
+        # fresh id.
         dead_device_id: str | None = None
         if device_id:
-            server_id_str = str(device_id)
-            # Best-effort touch of the server-side client_version, with one
-            # exception peeled off: a definitive ``RommNotFoundError`` (404)
-            # means the server no longer has this device (its DB was wiped or
-            # restored), so the cached id is dead — forget it and fall through
-            # to the registration path below to mint a fresh one (#1560). Every
-            # OTHER failure is non-fatal (the device is still registered): keep
-            # the cached id and return it, logging at debug so the swallow
-            # leaves a breadcrumb. A transient server blip must NEVER throw away
-            # a valid id and churn a spurious re-registration.
-            try:
-                await self._loop.run_in_executor(
-                    None,
-                    lambda: self._romm_api.update_device(server_id_str, client_version=self._version),
-                )
-            except RommNotFoundError as e:
-                self._log_debug(
-                    f"ensure_device_registered: server no longer has device {server_id_str} (404), re-registering: {e}"
-                )
-                await self._loop.run_in_executor(None, self.forget_device)
-                dead_device_id = server_id_str
-            except Exception as e:
-                self._log_debug(f"ensure_device_registered: update_device failed (non-fatal): {e}")
+            dead_device_id = await self._touch_cached_id(str(device_id))
             if dead_device_id is None:
                 return {
                     "success": True,
@@ -278,9 +236,64 @@ class DeviceRegistry:
                     "device_name": self._get_device_name() or "",
                     "server_device_id": device_id,
                 }
-            # The cached id was dead and has been forgotten above; fall through to
+            # The cached id was dead and has been forgotten; fall through to
             # registration so a fresh id is minted and persisted.
+        return await self._register(dead_device_id)
 
+    async def _probe_server_version(self) -> None:
+        """Observe RomM's version on the API adapter where it has none yet; a failure is non-fatal."""
+        # Device registration is the entrypoint reached from background
+        # launchers that never call test_connection first, so the version on
+        # the API adapter would otherwise stay None and version-gated
+        # server-side features couldn't be enabled until the next manual
+        # connection test. Probe failures are non-fatal — the registration
+        # still proceeds and the adapter just retains its current version.
+        if self._romm_api.get_version():
+            return
+        try:
+            heartbeat = await self._loop.run_in_executor(None, self._romm_api.heartbeat)
+            with contextlib.suppress(AttributeError, TypeError):
+                version = heartbeat.get("SYSTEM", {}).get("VERSION")
+                # SYSTEM.VERSION is server-controlled and untrusted: only cache
+                # a real, non-empty version string. A truthy non-str (e.g. numeric
+                # 4.9) is treated as absent — never cached — so the adapter's
+                # version stays a real string or None. See _probe_version (#1275).
+                if isinstance(version, str) and version:
+                    self._romm_api.set_version(version)
+        except Exception as e:
+            self._logger.debug(f"ensure_device_registered: version probe failed (non-fatal): {e}")
+
+    async def _touch_cached_id(self, server_id_str: str) -> str | None:
+        """Touch the cached id's ``client_version`` on the server; ``None`` while the id stands.
+
+        Answers the id itself once the server has proven it dead and it has
+        been forgotten.
+        """
+        # Best-effort touch, with one exception peeled off: a definitive
+        # ``RommNotFoundError`` (404) means the server no longer has this
+        # device (its DB was wiped or restored), so the cached id is dead —
+        # forget it so a fresh one is registered (#1560). Every OTHER failure
+        # is non-fatal (the device is still registered): keep the cached id,
+        # logging at debug so the swallow leaves a breadcrumb. A transient
+        # server blip must NEVER throw away a valid id and churn a spurious
+        # re-registration.
+        try:
+            await self._loop.run_in_executor(
+                None,
+                lambda: self._romm_api.update_device(server_id_str, client_version=self._version),
+            )
+        except RommNotFoundError as e:
+            self._log_debug(
+                f"ensure_device_registered: server no longer has device {server_id_str} (404), re-registering: {e}"
+            )
+            await self._loop.run_in_executor(None, self.forget_device)
+            return server_id_str
+        except Exception as e:
+            self._log_debug(f"ensure_device_registered: update_device failed (non-fatal): {e}")
+        return None
+
+    async def _register(self, dead_device_id: str | None) -> dict[str, Any]:
+        """Register this device and record the id RomM answers; *dead_device_id* is the one a heal replaces."""
         hostname = self._hostname_provider.get()
         machine_id = self._machine_id_provider.get()
 
