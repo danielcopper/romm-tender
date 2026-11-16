@@ -214,9 +214,7 @@ async function download(
 
 /**
  * The backend's answer to one of the flow's requests, or `null` once a request
- * that got none has been logged and toasted. Only the request is caught: a
- * dialog or a hook that throws is no failure of the request, and reaches the
- * caller.
+ * that got none has been logged and toasted. Only the request is caught.
  */
 async function answerOf<R>(
   flow: DownloadWithAdoption,

@@ -1,8 +1,7 @@
 /**
- * Pausing and cancelling a download from a game page's button. What either moves
- * on the button comes with the backend's frame for it, so a refusal or a call
- * with no answer is only logged — except where a cancel is refused because
- * there is nothing to cancel.
+ * Pausing and cancelling a download. What either moves comes with the backend's
+ * frame for it, so a refusal or a call with no answer is only logged — except
+ * where a cancel is refused because there is nothing to cancel.
  */
 
 import { cancelDownload, pauseDownload } from "../api/backend";

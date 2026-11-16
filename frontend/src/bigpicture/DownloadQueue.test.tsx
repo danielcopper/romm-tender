@@ -1,5 +1,5 @@
 // CATCH-REJECTION ASSERTION RULE:
-// DownloadQueue has 4 catch sites:
+// DownloadQueue's catch sites:
 //   - handleCancel `try/catch`. Both the failure RESULT (success: false) and a
 //     rejection now surface a toast — a cancel is never a silent no-op (#149
 //     downloads-round). Asserted in "a failing cancel result surfaces a toast"
