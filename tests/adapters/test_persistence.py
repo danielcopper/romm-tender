@@ -526,6 +526,26 @@ class TestCorruptQuarantine:
             adapter.load_settings()
         assert any("corrupt" in r.message.lower() for r in caplog.records)
 
+    def test_a_file_that_is_not_readable_text_is_set_aside_like_a_corrupt_one(self, tmp_path, logger, caplog):
+        """#2452 D30: Tender starts from its defaults (D29) rather than failing to start."""
+        clock = FakeClock(now=datetime(2026, 6, 13, 12, 0, 0, tzinfo=UTC))
+        adapter = self._make_adapter(tmp_path, logger, clock)
+        settings_path = os.path.join(adapter._settings_dir, "settings.json")
+        not_text = b'{"romm_url": "\xff\xfe"}'
+        with open(settings_path, "wb") as f:
+            f.write(not_text)
+
+        with caplog.at_level(logging.WARNING):
+            result = adapter.load_settings()
+
+        backup_name = f"settings.json.corrupt-{int(clock.time())}"
+        with open(os.path.join(adapter._settings_dir, backup_name), "rb") as f:
+            assert f.read() == not_text
+        assert not os.path.exists(settings_path)
+        assert adapter.corrupt_reset == {"backed_up_to": backup_name}
+        assert result == {**DEFAULT_SETTINGS, "enabled_platform_ids": {}, "version": _SETTINGS_VERSION}
+        assert [r.levelno for r in caplog.records] == [logging.ERROR]
+
     def test_first_run_missing_file_no_backup_no_flag(self, tmp_path, logger):
         adapter = self._make_adapter(tmp_path, logger, FakeClock())
         result = adapter.load_settings()

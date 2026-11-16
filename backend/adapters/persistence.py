@@ -202,7 +202,7 @@ class PersistenceAdapter:
         is not converted: a warning names what was found and the defaults are
         returned, which the immediate bootstrap save writes over the file with
         no backup, since everything such a file held can be entered again. An
-        *unparseable* file is the data-loss hazard: rather than silently
+        *unparseable* file — not JSON, or not text at all (#2452 D30) — is the data-loss hazard: rather than silently
         returning defaults (which the immediate bootstrap save would then write
         over the corrupt file, destroying the user's server URL, token, and
         selections), the unparseable file is backed up to
@@ -221,7 +221,7 @@ class PersistenceAdapter:
         except FileNotFoundError:
             # Legitimate first run: no file, no backup, no reset flag.
             settings = {}
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, UnicodeDecodeError):
             self._logger.error("settings.json is corrupt/unparseable — backing up and resetting to defaults")
             self._quarantine_corrupt_settings(settings_path)
             settings = {SWITCHES_BY_ID_SETTING: {}}

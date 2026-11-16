@@ -99,11 +99,16 @@ async def test_a_sync_whose_move_could_not_be_saved_reads_the_platforms_switched
     assert _on_disk(harness)["enabled_platform_ids"] == by_id
 
 
-async def test_after_a_corrupt_settings_file_every_listed_platform_is_switched_on_at_the_next_listing_read(tmp_path):
-    """#2452 D29: the platforms are those of an installation that never touched a toggle."""
+@pytest.mark.parametrize(
+    "unreadable", [b"NOT_VALID_JSON{{{", b'{"romm_url": "\xff\xfe"}'], ids=["not-json", "not-text"]
+)
+async def test_after_a_corrupt_settings_file_every_listed_platform_is_switched_on_at_the_next_listing_read(
+    tmp_path, unreadable
+):
+    """#2452 D29, D30: the platforms are those of an installation that never touched a toggle."""
     config = tmp_path / "config"
     config.mkdir(parents=True, exist_ok=True)
-    (config / "settings.json").write_text("NOT_VALID_JSON{{{", encoding="utf-8")
+    (config / "settings.json").write_bytes(unreadable)
     harness = build_contract_harness(tmp_path)
     harness.romm.platforms = [dict(p) for p in _SHARING_A_SLUG]
 
