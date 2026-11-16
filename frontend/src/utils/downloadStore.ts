@@ -97,13 +97,12 @@ export function isDownloadUnderWay(
   );
 }
 
-// Drop every terminal (completed/failed/cancelled) entry from the store,
-// mirroring the backend's "Clear Completed" eviction (#149). Active, queued,
-// paused, and extracting entries stay. Called after clear_completed_downloads
-// succeeds so the store matches the freshly-evicted backend queue immediately,
-// rather than waiting for the next mount fetch.
+// Drop every entry whose download is no longer under way, as the backend's
+// "Clear Completed" evicts them. Called after clear_completed_downloads succeeds
+// so the store matches the backend queue at once, rather than at the next
+// mount fetch.
 export function removeTerminalDownloads(): void {
-  const next = _downloads.filter((d) => d.status !== "completed" && d.status !== "failed" && d.status !== "cancelled");
+  const next = _downloads.filter(isDownloadUnderWay);
   if (next.length === _downloads.length) return;
   _downloads = next;
   notify();

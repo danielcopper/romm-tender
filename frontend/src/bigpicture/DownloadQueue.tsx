@@ -86,9 +86,7 @@ export const DownloadQueue: FC<DownloadQueueProps> = ({ onBack }) => {
   // finished. Paused holds the partial transfer for resume; extracting is the
   // post-transfer ZIP unpack (not cancellable, no pause/resume offered).
   const active = downloads.filter(isDownloadUnderWay);
-  const finished = downloads.filter(
-    (d) => d.status === "completed" || d.status === "failed" || d.status === "cancelled",
-  );
+  const finished = downloads.filter((d) => !isDownloadUnderWay(d));
   const hasFinished = finished.length > 0;
 
   return (
