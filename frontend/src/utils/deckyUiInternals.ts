@@ -289,15 +289,8 @@ export interface SteamToastRenderer {
  * (`docs/architecture/frontend-bundles.md`).
  */
 export const ToastRenderer: SteamToastRenderer | undefined = findModuleExport((e: unknown) => {
-  // The predicate is run against every export in Steam's registry, so one
-  // whose `toString` is not a function, or throws, must answer `false` rather
-  // than end the search.
-  try {
-    const source = (e as { toString?: () => unknown } | undefined)?.toString?.();
-    return typeof source === "string" && source.includes('controller:"notification",method:');
-  } catch {
-    return false;
-  }
+  const source = (e as { toString?: () => unknown } | undefined)?.toString?.();
+  return typeof source === "string" && source.includes('controller:"notification",method:');
 });
 
 /** Steam's FriendsUI store, reduced to the flag the wide pages read. */
