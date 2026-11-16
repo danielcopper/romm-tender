@@ -15,7 +15,7 @@
 import { createElement, type FC, type ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
-import type { QamFiber, SimpleMemo } from "./qamWidthPatch";
+import type { QamFiber, QamWidthInstall, SimpleMemo } from "./qamWidthPatch";
 
 type QamWidthPatch = typeof import("./qamWidthPatch");
 
@@ -23,10 +23,10 @@ const EXPANDED = "Expanded_hash";
 const PLACEHOLDER = "ViewPlaceholder_hash";
 
 const BrowserViewHost: FC<{ className?: string | undefined; browser?: unknown }> = () => null;
-const Backdrop: FC = () => null;
+const Backdrop: FC<{ className?: string }> = () => null;
 
-const view = (className: string | undefined) =>
-  createElement(BrowserViewHost, { key: "view", className, browser: { SetBounds: () => {} } });
+const view = (className: string | undefined, browser: unknown = { SetBounds: () => {} }) =>
+  createElement(BrowserViewHost, { key: "view", className, browser });
 
 /** Steam's QAM host as one render returns it: a container whose children are an array, one of them handed the view. */
 const hostRender = (viewClass: string = PLACEHOLDER): ReactElement =>
@@ -86,6 +86,23 @@ describe("the wrapper's handler on Steam's QAM host", () => {
     expect((rendered.props as { className?: string }).className).toBe("Container");
   });
 
+  it("widens the element carrying the view, not an earlier sibling with a class of its own, and keeps its view", () => {
+    const browser = { SetBounds: () => {} };
+    const steam = createElement(
+      "div",
+      null,
+      createElement(Backdrop, { key: "backdrop", className: "Backdrop_hash" }),
+      view(PLACEHOLDER, browser),
+    );
+
+    const rendered = mod.widenWhileExpanded(() => true, EXPANDED)([], steam) as ReactElement;
+
+    const [backdrop, widenedView] = (rendered.props as { children: ReactElement[] }).children;
+    expect((backdrop?.props as { className?: string }).className).toBe("Backdrop_hash");
+    expect(viewClassOf(rendered)).toBe(`${PLACEHOLDER} ${EXPANDED}`);
+    expect((widenedView?.props as { browser?: unknown }).browser).toBe(browser);
+  });
+
   it("returns Steam's result untouched while the flag is not set", () => {
     const steam = hostRender();
 
@@ -117,9 +134,10 @@ describe("the wrapper's handler on Steam's QAM host", () => {
     expect(viewClassOf(rendered)).toBe(`${PLACEHOLDER} ${EXPANDED}Wide ${EXPANDED}`);
   });
 
-  it("returns Steam's result when its own work throws, and says so once", () => {
+  it("returns Steam's result when its own work throws, and says so once, with the error itself", () => {
+    const thrown = new Error("store moved");
     const handler = mod.widenWhileExpanded(() => {
-      throw new Error("store moved");
+      throw thrown;
     }, EXPANDED);
     const steam = hostRender();
 
@@ -127,29 +145,44 @@ describe("the wrapper's handler on Steam's QAM host", () => {
     handler([], hostRender());
 
     expect(warn.mock.calls).toEqual([
-      ["[Tender] the wide pages stay at Steam's narrow width: the wrapper on the QAM host threw: Error: store moved"],
+      ["[Tender] the wide pages stay at Steam's narrow width: the wrapper on the QAM host threw", thrown],
     ]);
   });
 
   it.each([
-    ["is not an element", null],
-    ["has children that are not an array", createElement("div", null, view(PLACEHOLDER))],
+    ["is not an element", null, "not-an-element"],
+    ["has children that are not an array", createElement("div", null, view(PLACEHOLDER)), "children-not-an-array"],
     [
       "hands the view to no child",
       createElement("div", null, createElement(Backdrop, { key: "a" }), createElement(Backdrop, { key: "b" })),
+      "no-child-handed-the-view",
     ],
     [
       "hands it to a child with no class to extend",
       createElement("div", null, createElement(Backdrop), view(undefined)),
+      "view-without-a-class",
     ],
-  ])("returns Steam's result, and says once that nothing was widened, where it %s", (_shape, steam) => {
+  ])("returns Steam's result, and says once which part was not as expected, where it %s", (_shape, steam, part) => {
     const handler = mod.widenWhileExpanded(() => true, EXPANDED);
 
     expect(handler([], steam)).toBe(steam);
     handler([], steam);
 
     expect(warn.mock.calls).toEqual([
-      ["[Tender] the wide pages stay at Steam's narrow width: the QAM host rendered no element its view is laid over"],
+      [`[Tender] the wide pages stay at Steam's narrow width: the QAM host rendered no element to widen (${part})`],
+    ]);
+  });
+
+  it("still says so where a later render misses in a different part", () => {
+    const handler = mod.widenWhileExpanded(() => true, EXPANDED);
+
+    handler([], null);
+    handler([], createElement("div", null, view(PLACEHOLDER)));
+    handler([], null);
+
+    expect(warn.mock.calls.map(([line]) => line)).toEqual([
+      "[Tender] the wide pages stay at Steam's narrow width: the QAM host rendered no element to widen (not-an-element)",
+      "[Tender] the wide pages stay at Steam's narrow width: the QAM host rendered no element to widen (children-not-an-array)",
     ]);
   });
 
@@ -255,6 +288,7 @@ describe("wrapFirstQamHost", () => {
 
 describe("tryQamWidthInstall", () => {
   it.each([
+    "no-big-picture-window",
     "class-map-incomplete",
     "no-friends-ui-store",
     "no-placeholder",
@@ -269,47 +303,59 @@ describe("tryQamWidthInstall", () => {
     ]);
   });
 
-  it("says once that the install threw, and does not throw itself", () => {
+  it("still says so where a later install wrapped nothing for a different reason", () => {
+    mod.tryQamWidthInstall(() => "no-big-picture-window");
+    mod.tryQamWidthInstall(() => "no-host");
+    mod.tryQamWidthInstall(() => "no-big-picture-window");
+
+    expect(warn.mock.calls).toEqual([
+      ["[Tender] the wide pages stay at Steam's narrow width: the width patch wrapped nothing (no-big-picture-window)"],
+      ["[Tender] the wide pages stay at Steam's narrow width: the width patch wrapped nothing (no-host)"],
+    ]);
+  });
+
+  it("says once that the install threw, with the error itself, and does not throw itself", () => {
+    const thrown = new Error("no fiber");
     const install = vi.fn((): "wrapped" => {
-      throw new Error("no fiber");
+      throw thrown;
     });
 
     expect(() => {
       mod.tryQamWidthInstall(install);
     }).not.toThrow();
-    mod.tryQamWidthInstall(() => "no-host");
+    mod.tryQamWidthInstall(install);
 
-    expect(install).toHaveBeenCalledTimes(1);
+    expect(install).toHaveBeenCalledTimes(2);
     expect(warn.mock.calls).toEqual([
       [
-        "[Tender] the wide pages stay at Steam's narrow width: the width patch wrapped nothing (the install threw: Error: no fiber)",
+        "[Tender] the wide pages stay at Steam's narrow width: the install of the wrapper on the QAM host threw",
+        thrown,
       ],
     ]);
   });
 
-  it("says nothing where Big Picture's window was not found, nor where the host was wrapped", () => {
-    mod.tryQamWidthInstall(() => "no-big-picture-window");
+  it("says nothing where the host was wrapped", () => {
     mod.tryQamWidthInstall(() => "wrapped");
 
     expect(warn).not.toHaveBeenCalled();
-
-    mod.tryQamWidthInstall(() => "no-host");
-
-    expect(warn).toHaveBeenCalledTimes(1);
   });
 
-  it("writes each of its three lines once, apart from the others", () => {
+  it("keeps each of its lines apart from the others, so one written does not silence another", () => {
     const throwing = mod.widenWhileExpanded(() => {
       throw new Error("x");
     }, EXPANDED);
     const empty = mod.widenWhileExpanded(() => true, EXPANDED);
+    const installThrowing = (): QamWidthInstall => {
+      throw new Error("y");
+    };
 
     for (let pass = 0; pass < 2; pass++) {
       mod.tryQamWidthInstall(() => "no-host");
+      mod.tryQamWidthInstall(installThrowing);
       empty([], null);
       throwing([], null);
     }
 
-    expect(warn).toHaveBeenCalledTimes(3);
+    expect(warn).toHaveBeenCalledTimes(4);
   });
 });

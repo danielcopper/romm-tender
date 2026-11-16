@@ -248,10 +248,12 @@ How a page gets wide, measured on the device rather than read from documentation
   context is rebuilt. The wrapper calls no hooks, because it joins a host that is already mounted, and where its own
   work throws it answers with Steam's result unchanged. **Nothing checks afterwards that the panel widened**, and the
   cap below is lifted either way, whatever the install answered or threw: a wrapper that stops applying leaves a wide
-  page cut off at its right edge. It leaves a trace in the console instead, once per load for each of three cases — the
-  install found nothing to wrap (with the reason; Big Picture's window not being there is an ordinary state and is not
-  reported), the flag was set and the host rendered no element to widen, and the wrapper's own work threw. What the
-  start-up check asks on its behalf, and what each miss costs, is under
+  page cut off at its right edge. It leaves a trace in the console instead, in three cases, each written once per load
+  for each distinct reason: the install wrapped nothing (with the reason, Big Picture's window not being found among
+  them — the install runs only from a wide page inside the Quick Access panel, where that window exists, so not finding
+  it is a failed lookup), the flag was set and the host rendered no element to widen (with the part of the render that
+  was not as expected), and the wrapper's or the install's own work threw (with the error itself, so its stack is kept).
+  What the start-up check asks on its behalf, and what each miss costs, is under
   [the start-up check](frontend-bundles.md#the-start-up-check).
 - Every tab's content panel carries `max-width: 300px`; only Steam's Friends panel lifts it. A wide page injects one
   stylesheet whose `:has()` rule lifts the cap for a marker class on the panel's own subtree. Class names come from

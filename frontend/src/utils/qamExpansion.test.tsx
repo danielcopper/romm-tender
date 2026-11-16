@@ -192,7 +192,7 @@ describe("useWideQamPanel", () => {
 
     expect(post.mock.calls).toEqual([[{ message: "QamFriendsExpanded" }, window.origin]]);
     expect(wideStyles(mod.WIDE_ROOT_CLASS)).toHaveLength(1);
-    expect(String(warn.mock.calls[0]?.[0])).toContain("no fiber");
+    expect((warn.mock.calls[0]?.[1] as Error | undefined)?.message).toBe("no fiber");
   });
 
   it("tries the install again the next time the page widens after one that wrapped nothing", async () => {

@@ -24,7 +24,7 @@ function hostAbove(placeholder: Element): QamFiber | undefined {
   return host ? (host as QamFiber) : undefined;
 }
 
-/** Install the wrapper on the QAM host mounted in Big Picture's main window, and answer whether it is on. */
+/** Install the wrapper on the QAM host in Big Picture's main window, and answer whether it is on, or why not. */
 export function installQamWidthPatch(): QamWidthInstall {
   const placeholderClass = quickAccessMenuClasses?.ViewPlaceholder;
   const expandedClass = quickAccessMenuClasses?.Expanded;
