@@ -683,6 +683,49 @@ describe("CustomPlayButton — cancel X on active download (#1049)", () => {
       setDownloads([]);
     }
   });
+
+  it("keeps what it found on disk when the backend holds no download to cancel", async () => {
+    mockCachedDetail({ rom_id: 42, installed: false, target_path_occupied: true });
+    const utils = render(<CustomPlayButton appId={100} />);
+    const useExisting = await utils.findByText("Use Existing Files");
+    await act(async () => {
+      useExisting.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    act(() => {
+      emitHostEvent<DownloadProgressEvent>("download_progress", {
+        rom_id: 42,
+        rom_name: "Test ROM",
+        platform_name: "PSX",
+        file_name: "test.chd",
+        status: "downloading",
+        progress: 0.3,
+        bytes_downloaded: 300,
+        total_bytes: 1000,
+      });
+    });
+    const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+    try {
+      vi.mocked(backend.cancelDownload).mockResolvedValueOnce({
+        success: false,
+        reason: "no_active_download",
+        message: "No active download",
+      });
+
+      const cancelX = await utils.findByLabelText("Cancel download");
+      await act(async () => {
+        cancelX.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(await utils.findByText("Use Existing Files")).toBeInTheDocument();
+      expect(utils.queryByLabelText("Cancel download")).toBeNull();
+    } finally {
+      logWarnSpy.mockRestore();
+    }
+  });
 });
 
 describe("CustomPlayButton — pause/resume on active download (#1124)", () => {

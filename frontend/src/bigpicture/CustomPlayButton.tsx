@@ -785,7 +785,8 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId, emulatorRef
     detach(
       executeDownloadCancel(rid, "CustomPlayButton", () => {
         if (rid !== romIdRef.current) return;
-        enterDownloadState();
+        // Not `enterDownloadState()`: nothing was removed, so what was found on disk stays.
+        setState("download");
         setActionPending(false);
         setDlProgress(null);
       }),
