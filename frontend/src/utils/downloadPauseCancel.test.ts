@@ -54,6 +54,29 @@ describe("executeDownloadPause", () => {
   });
 });
 
+describe("executeDownloadPause's answer handling", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("logs a throw while handling the answer as such, not as a pause with no answer", async () => {
+    vi.mocked(backend.pauseDownload).mockResolvedValueOnce({
+      success: false,
+      reason: "no_active_download",
+      message: "No active download",
+    });
+    vi.mocked(backend.logWarn).mockImplementationOnce(() => {
+      throw new Error("log broke");
+    });
+
+    await executeDownloadPause(7, "Tag");
+
+    expect(backend.logError).toHaveBeenCalledExactlyOnceWith(
+      "Tag: could not handle the pause answer for romId=7: Error: log broke",
+    );
+  });
+});
+
 describe("executeDownloadCancel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -143,7 +166,7 @@ describe("executeDownloadCancel", () => {
     expect(getDownloadState().map((d) => d.rom_id)).toEqual([8]);
   });
 
-  it("logs a caller's bar that throws on ending rather than dropping it", async () => {
+  it("logs a throw from the caller's bar-ending callback", async () => {
     vi.mocked(backend.cancelDownload).mockResolvedValueOnce({
       success: false,
       reason: "no_active_download",
@@ -155,7 +178,7 @@ describe("executeDownloadCancel", () => {
     });
 
     expect(backend.logError).toHaveBeenCalledExactlyOnceWith(
-      "Tag: could not cancel the download of romId=7: Error: bar broke",
+      "Tag: could not handle the cancel answer for romId=7: Error: bar broke",
     );
   });
 

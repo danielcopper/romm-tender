@@ -1,7 +1,8 @@
 /**
  * Pausing and cancelling a download. What either moves comes with the backend's
  * frame for it, so a refusal or a call with no answer is only logged — except
- * where a cancel is refused because there is nothing to cancel.
+ * where a cancel is refused because there is nothing to cancel. A throw while
+ * an answer is handled is logged as such, not as a call with no answer.
  */
 
 import { cancelDownload, pauseDownload } from "../api/backend";
@@ -11,10 +12,13 @@ import { getDownloadState, isDownloadUnderWay, removeDownload } from "./download
 /** Pause the ROM's download; the paused frame is what shows it. */
 export function executeDownloadPause(romId: number, tag: string): Promise<void> {
   return pauseDownload(romId)
-    .then((result) => {
-      if (!result.success) logRefusal(tag, "pause the download of", romId, result);
-    })
-    .catch((e: unknown) => logFailure(tag, "pause the download of", romId, e));
+    .then(
+      (result) => {
+        if (!result.success) logRefusal(tag, "pause the download of", romId, result);
+      },
+      (e: unknown) => logFailure(tag, "pause the download of", romId, e),
+    )
+    .catch((e: unknown) => logFailure(tag, "handle the pause answer for", romId, e));
 }
 
 /**
@@ -32,14 +36,17 @@ export function executeDownloadCancel(romId: number, tag: string, onNothingToCan
   const entryOf = () => getDownloadState().find((d) => d.rom_id === romId);
   const sentAgainst = entryOf();
   return cancelDownload(romId)
-    .then((result) => {
-      if (result.success) return;
-      logRefusal(tag, "cancel the download of", romId, result);
-      if (result.reason !== "no_active_download") return;
-      const entry = entryOf();
-      if (entry !== undefined && entry !== sentAgainst && !isDownloadUnderWay(entry)) return;
-      removeDownload(romId);
-      onNothingToCancel();
-    })
-    .catch((e: unknown) => logFailure(tag, "cancel the download of", romId, e));
+    .then(
+      (result) => {
+        if (result.success) return;
+        logRefusal(tag, "cancel the download of", romId, result);
+        if (result.reason !== "no_active_download") return;
+        const entry = entryOf();
+        if (entry !== undefined && entry !== sentAgainst && !isDownloadUnderWay(entry)) return;
+        removeDownload(romId);
+        onNothingToCancel();
+      },
+      (e: unknown) => logFailure(tag, "cancel the download of", romId, e),
+    )
+    .catch((e: unknown) => logFailure(tag, "handle the cancel answer for", romId, e));
 }
