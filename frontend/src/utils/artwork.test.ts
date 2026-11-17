@@ -176,12 +176,15 @@ describe("applyArtwork", () => {
     expect(vi.mocked(backend.saveShortcutIcon)).not.toHaveBeenCalled();
   });
 
-  it("per-asset fetch rejection is swallowed → treated as null (returns 0)", async () => {
+  it("a fetch rejected with an error that is no transport failure is logged and counts as no image", async () => {
     vi.mocked(backend.getSgdbArtworkBase64).mockRejectedValue(new Error("net"));
     vi.mocked(backend.getSgdbSlotArtwork).mockRejectedValue(new Error("net"));
     await expect(applyArtwork(42, 5000)).resolves.toBe(0);
     expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
     expect(vi.mocked(backend.saveShortcutIcon)).not.toHaveBeenCalled();
+    expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(
+      expect.stringContaining("applyArtwork: the image of asset type 1 for appId 5000 was not fetched: Error: net"),
+    );
   });
 });
 
@@ -710,6 +713,37 @@ describe("a refused artwork fetch", () => {
     vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
     vi.mocked(backend.debugLog).mockResolvedValue(undefined);
   });
+
+  it.each([
+    ["an image", "base64"],
+    ["the icon", "icon"],
+  ])(
+    "makes applyArtwork throw a transport failure of %s's fetch, apply nothing and give every lease back (#2776 D10)",
+    async (_which, failing) => {
+      const lost = new HostTransportError("connection_lost", "socket closed");
+      vi.mocked(backend.getSgdbArtworkBase64)
+        .mockResolvedValueOnce({ base64: "AA==", no_api_key: false, prune_lease_token: "lease-1" })
+        .mockImplementationOnce(() =>
+          failing === "base64"
+            ? Promise.reject(lost)
+            : Promise.resolve({ base64: "BB==", no_api_key: false, prune_lease_token: "lease-2" }),
+        )
+        .mockResolvedValueOnce({ base64: "CC==", no_api_key: false, prune_lease_token: "lease-3" });
+      if (failing === "icon") vi.mocked(backend.getSgdbSlotArtwork).mockRejectedValue(lost);
+      else vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "ready", prune_lease_token: "lease-4" });
+
+      await expect(applyArtwork(42, 5000)).rejects.toBe(lost);
+
+      expect(SteamClient.Apps.SetCustomArtworkForApp).not.toHaveBeenCalled();
+      expect(backend.saveShortcutIcon).not.toHaveBeenCalled();
+      expect(
+        vi
+          .mocked(backend.releasePruneConflictLease)
+          .mock.calls.map(([token]) => token)
+          .sort(),
+      ).toEqual(failing === "base64" ? ["lease-1", "lease-3", "lease-4"] : ["lease-1", "lease-2", "lease-3"]);
+    },
+  );
 
   it("makes applyArtwork answer the refusal, apply nothing and give every lease back", async () => {
     vi.mocked(backend.getSgdbArtworkBase64)

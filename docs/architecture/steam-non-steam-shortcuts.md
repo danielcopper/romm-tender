@@ -742,28 +742,31 @@ Tender's pick among SteamGridDB's covers until RomM's arrives ("The cover where 
 to a game's page in a session sets each of the four, and the cover, **only where the slot is not filled**
 (`fillEmptyArtwork` in `utils/artwork.ts`). **Refresh Artwork** and a change of SteamGridDB game are an explicit request
 and replace the slots on automatic only (`applyAutomaticArtwork`, which reads the ARTWORK tab's slots first and leaves a
-chosen slot and one set in Steam alone, [#2381](https://github.com/danielcopper/romm-tender/issues/2381) D6, D12). A
-version switch still replaces every slot (`applyArtwork`): once artwork was applied for one ROM of an app id, the newly
-bound ROM's is applied in the replacing mode, which sets Tender's image over one set by hand too; whether Steam then
-shows it over a hand-set file kept under another extension is not measured (the order Steam tries a slot's files in is
-under "The ARTWORK tab", below). A version switched back to brings back the images chosen for it: the replacing fetch
-serves the chosen image, downloading exactly that one where the cache lost it, and the switch sets a cover chosen for
-the version rather than RomM's — it asks `get_sgdb_artwork_base64(rom_id, 0)`, Steam's own number for the cover, which
-serves only a chosen cover, reports what Steam made of it, and sets RomM's cover only where that answers no image (D16,
-`setChosenCover` in `utils/artwork.ts`). Where `fetch_cover_base64` answers no RomM cover — RomM has none for the
-version, or it cannot be read at that moment — it sets that version's SteamGridDB pick through `get_sgdb_slot_artwork`
-with `replace` and reports it, as the fill does (`setSteamGridDbSwitchCover`); the next sync that reads RomM's cover
-replaces that pick (D24). Whenever a version becomes the one a shortcut is bound to — the switch's bind
-(`VersionSwitchService._rebind_local_io`) and the sync commit's (`SyncReporter._forget_cover_record_on_bind`: a rebind,
-a shortcut created anew after removal, an adopted orphan) — the same write forgets that version's cover record and
-hand-over unless the cover is chosen (`domain/artwork_slot_outcome.py`, `binding_forgets_cover_record`), so the cover
-written next is the one "Set in Steam" judges by, and a SteamGridDB cover Tender set for the version earlier never reads
-as set in Steam under another image (D28). The replacing mode records the hero, the wide grid, the logo and the icon it
-set, or Steam refused, under the ROM now bound, as the fill does below: what the report passes back — the image id, the
-hash of the bytes and the ROM's SteamGridDB id — comes with `get_sgdb_artwork_base64`'s answer for a hero, wide grid or
-logo, and with `save_shortcut_icon`'s for the icon. The shortcut artwork job fills the icon, the wide grid, the cover
-and the logo in the background by the same rules ([Shortcut artwork](#shortcut-artwork)), so a first visit usually finds
-them filled; the hero is the game page's alone. The icon is fetched only as a slot — on the game page through
+chosen slot and one set in Steam alone, [#2381](https://github.com/danielcopper/romm-tender/issues/2381) D6, D12). The
+replacing apply (`applySgdbArtwork`) throws a transport failure of any image's fetch to its caller, which words it by
+its reason, and applies nothing; any other failure of a fetch is logged and counts as no image
+([#2776](https://github.com/danielcopper/romm-tender/issues/2776) D9, D10). A version switch still replaces every slot
+(`applyArtwork`): once artwork was applied for one ROM of an app id, the newly bound ROM's is applied in the replacing
+mode, which sets Tender's image over one set by hand too; whether Steam then shows it over a hand-set file kept under
+another extension is not measured (the order Steam tries a slot's files in is under "The ARTWORK tab", below). A version
+switched back to brings back the images chosen for it: the replacing fetch serves the chosen image, downloading exactly
+that one where the cache lost it, and the switch sets a cover chosen for the version rather than RomM's — it asks
+`get_sgdb_artwork_base64(rom_id, 0)`, Steam's own number for the cover, which serves only a chosen cover, reports what
+Steam made of it, and sets RomM's cover only where that answers no image (D16, `setChosenCover` in `utils/artwork.ts`).
+Where `fetch_cover_base64` answers no RomM cover — RomM has none for the version, or it cannot be read at that moment —
+it sets that version's SteamGridDB pick through `get_sgdb_slot_artwork` with `replace` and reports it, as the fill does
+(`setSteamGridDbSwitchCover`); the next sync that reads RomM's cover replaces that pick (D24). Whenever a version
+becomes the one a shortcut is bound to — the switch's bind (`VersionSwitchService._rebind_local_io`) and the sync
+commit's (`SyncReporter._forget_cover_record_on_bind`: a rebind, a shortcut created anew after removal, an adopted
+orphan) — the same write forgets that version's cover record and hand-over unless the cover is chosen
+(`domain/artwork_slot_outcome.py`, `binding_forgets_cover_record`), so the cover written next is the one "Set in Steam"
+judges by, and a SteamGridDB cover Tender set for the version earlier never reads as set in Steam under another image
+(D28). The replacing mode records the hero, the wide grid, the logo and the icon it set, or Steam refused, under the ROM
+now bound, as the fill does below: what the report passes back — the image id, the hash of the bytes and the ROM's
+SteamGridDB id — comes with `get_sgdb_artwork_base64`'s answer for a hero, wide grid or logo, and with
+`save_shortcut_icon`'s for the icon. The shortcut artwork job fills the icon, the wide grid, the cover and the logo in
+the background by the same rules ([Shortcut artwork](#shortcut-artwork)), so a first visit usually finds them filled;
+the hero is the game page's alone. The icon is fetched only as a slot — on the game page through
 `get_sgdb_slot_artwork`, in the job through `do_fetch_slot_artwork` — and `get_sgdb_artwork_base64` refuses its asset
 type (4) with `invalid_payload`.
 

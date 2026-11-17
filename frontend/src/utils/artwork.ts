@@ -27,6 +27,7 @@ import {
   type SgdbArtworkSlot,
   type SgdbSlotArtwork,
 } from "../api/backend";
+import { HostTransportError } from "../api/host";
 import { writeSlotArtwork } from "./artworkSlotsStore";
 import { detach } from "./detach";
 import {
@@ -78,7 +79,9 @@ async function saveIcon(romId: number, appId: number, signal: AbortSignal): Prom
 /** Fetch SGDB artwork (hero, logo, wide grid, icon) and apply to Steam, replacing
  *  what each slot holds. Returns count of successfully applied images, -1
  *  when no SGDB API key is configured, or the refusal of an image's fetch, in
- *  which case nothing is applied. */
+ *  which case nothing is applied. A transport failure of an image's fetch is
+ *  thrown, and nothing is applied; any other failure of it is logged and counts
+ *  as no image. */
 export async function applyArtwork(romId: number, appId: number): Promise<number | EndpointFailure> {
   return whileInFlight(appId, () => applySgdbArtwork(romId, appId, ALL_SGDB_SLOTS));
 }
@@ -147,17 +150,25 @@ async function applySgdbArtwork(
   const superseded = claimGeneration(appId);
 
   const refusals: EndpointFailure[] = [];
+  // A transport failure is thrown on once every fetch has settled and its lease is given back (#2776 D10).
+  const lostCalls: HostTransportError[] = [];
   const fetchArtwork = async (assetType: number, slot: RecordedSlot): Promise<SgdbArtwork> => {
     if (!slots.has(slot)) return NO_IMAGE;
-    const answer = await getSgdbArtworkBase64(romId, assetType).catch(() => NO_IMAGE);
+    const answer = await getSgdbArtworkBase64(romId, assetType).catch((e: unknown): SgdbArtwork => {
+      if (e instanceof HostTransportError) lostCalls.push(e);
+      else
+        detach(debugLog(`applyArtwork: the image of asset type ${assetType} for appId ${appId} was not fetched: ${e}`));
+      return NO_IMAGE;
+    });
     if (!isEndpointFailure(answer)) return answer;
     refusals.push(answer);
     return NO_IMAGE;
   };
   const fetchIcon = async (): Promise<SgdbSlotArtwork> => {
     if (!slots.has("icon")) return { status: "skip" };
-    const answer = await getSgdbSlotArtwork(romId, appId, "icon", true).catch((e): SgdbSlotArtwork => {
-      detach(debugLog(`applyArtwork: icon fetch for appId ${appId} rejected: ${e}`));
+    const answer = await getSgdbSlotArtwork(romId, appId, "icon", true).catch((e: unknown): SgdbSlotArtwork => {
+      if (e instanceof HostTransportError) lostCalls.push(e);
+      else detach(debugLog(`applyArtwork: icon fetch for appId ${appId} rejected: ${e}`));
       return { status: "failed" };
     });
     if (!isEndpointFailure(answer)) return answer;
@@ -170,6 +181,10 @@ async function applySgdbArtwork(
   ]);
 
   const leaseTokens = [...results.map((result) => result.prune_lease_token), leaseOf(icon)];
+  const lost = lostCalls[0];
+  if (lost) {
+    return withPruneLeases(leaseTokens, "Artwork apply", () => Promise.reject(lost), leaseOwner, admission);
+  }
   if (results.some((r) => r.no_api_key) || icon.status === "no_api_key") {
     return withPruneLeases(leaseTokens, "Artwork apply", async () => -1, leaseOwner, admission);
   }
