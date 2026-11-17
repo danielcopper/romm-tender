@@ -6,6 +6,9 @@
 tarball and its checksum to every tag and checks the result on every pull request — and consequence 4 in part:
 `release.yml` is still read by no gate, so what is now guarded mechanically is the artifact, not the workflow.
 
+**One later Decky-form build exists:** `tender-v0.33.1`, a hotfix published from a branch off `tender-v0.33.0`, because
+Steam's client stopped widening the 0.33 plugin's wide pages. The install guide names the tag to use.
+
 Accepted. **Supersedes [ADR-0033](0033-the-shipped-folder-name-is-chosen-here.md)** — not its reasoning, which was
 sound, but its mechanism: the build directory that fed the Decky CLI's `FilenameSource::Directory` no longer exists,
 because the workflow no longer builds a Decky-shaped artifact at all.
