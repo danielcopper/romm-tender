@@ -151,11 +151,11 @@ async function applySgdbArtwork(
 
   const refusals: EndpointFailure[] = [];
   // A transport failure is thrown on once every fetch has settled and its lease is given back (#2776 D10).
-  const lostCalls: HostTransportError[] = [];
+  const transportFailures: HostTransportError[] = [];
   const fetchArtwork = async (assetType: number, slot: RecordedSlot): Promise<SgdbArtwork> => {
     if (!slots.has(slot)) return NO_IMAGE;
     const answer = await getSgdbArtworkBase64(romId, assetType).catch((e: unknown): SgdbArtwork => {
-      if (e instanceof HostTransportError) lostCalls.push(e);
+      if (e instanceof HostTransportError) transportFailures.push(e);
       else
         detach(debugLog(`applyArtwork: the image of asset type ${assetType} for appId ${appId} was not fetched: ${e}`));
       return NO_IMAGE;
@@ -167,7 +167,7 @@ async function applySgdbArtwork(
   const fetchIcon = async (): Promise<SgdbSlotArtwork> => {
     if (!slots.has("icon")) return { status: "skip" };
     const answer = await getSgdbSlotArtwork(romId, appId, "icon", true).catch((e: unknown): SgdbSlotArtwork => {
-      if (e instanceof HostTransportError) lostCalls.push(e);
+      if (e instanceof HostTransportError) transportFailures.push(e);
       else detach(debugLog(`applyArtwork: icon fetch for appId ${appId} rejected: ${e}`));
       return { status: "failed" };
     });
@@ -181,18 +181,19 @@ async function applySgdbArtwork(
   ]);
 
   const leaseTokens = [...results.map((result) => result.prune_lease_token), leaseOf(icon)];
-  // One failure answers the apply; a lost connection is the one a caller names a cause for (#2776 D9).
+  // One failure answers the apply: a lost connection before any other transport failure, since a caller names its
+  // cause (#2776 D9); the rest are logged.
   const setAside = (answered: HostTransportError | EndpointFailure | undefined): void => {
-    for (const failure of [...lostCalls, ...refusals]) {
+    for (const failure of [...transportFailures, ...refusals]) {
       if (failure === answered) continue;
-      const what = failure instanceof HostTransportError ? String(failure) : `${failure.reason}: ${failure.message}`;
+      const what = `${failure.reason}: ${failure.message}`;
       detach(debugLog(`applyArtwork: a further failure of the apply for appId ${appId} was set aside: ${what}`));
     }
   };
-  const lost = lostCalls.find(isConnectionLost) ?? lostCalls[0];
-  if (lost) {
-    setAside(lost);
-    return withPruneLeases(leaseTokens, "Artwork apply", () => Promise.reject(lost), leaseOwner, admission);
+  const thrown = transportFailures.find(isConnectionLost) ?? transportFailures[0];
+  if (thrown) {
+    setAside(thrown);
+    return withPruneLeases(leaseTokens, "Artwork apply", () => Promise.reject(thrown), leaseOwner, admission);
   }
   if (results.some((r) => r.no_api_key) || icon.status === "no_api_key") {
     setAside(undefined);

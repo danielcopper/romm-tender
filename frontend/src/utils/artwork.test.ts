@@ -725,19 +725,19 @@ describe("a refused artwork fetch", () => {
   ])(
     "makes applyArtwork throw a transport failure of %s's fetch (%s, %s), apply nothing and give every lease back (#2776 D10)",
     async (_which, failing, reason) => {
-      const lost = new HostTransportError(reason, "the call failed in transport");
+      const thrown = new HostTransportError(reason, "the call failed in transport");
       vi.mocked(backend.getSgdbArtworkBase64)
         .mockResolvedValueOnce({ base64: "AA==", no_api_key: false, prune_lease_token: "lease-1" })
         .mockImplementationOnce(() =>
           failing === "base64"
-            ? Promise.reject(lost)
+            ? Promise.reject(thrown)
             : Promise.resolve({ base64: "BB==", no_api_key: false, prune_lease_token: "lease-2" }),
         )
         .mockResolvedValueOnce({ base64: "CC==", no_api_key: false, prune_lease_token: "lease-3" });
-      if (failing === "icon") vi.mocked(backend.getSgdbSlotArtwork).mockRejectedValue(lost);
+      if (failing === "icon") vi.mocked(backend.getSgdbSlotArtwork).mockRejectedValue(thrown);
       else vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "ready", prune_lease_token: "lease-4" });
 
-      await expect(applyArtwork(42, 5000)).rejects.toBe(lost);
+      await expect(applyArtwork(42, 5000)).rejects.toBe(thrown);
 
       expect(SteamClient.Apps.SetCustomArtworkForApp).not.toHaveBeenCalled();
       expect(backend.saveShortcutIcon).not.toHaveBeenCalled();
@@ -762,7 +762,7 @@ describe("a refused artwork fetch", () => {
     await expect(applyArtwork(42, 5000)).rejects.toBe(lost);
 
     const logged = vi.mocked(backend.debugLog).mock.calls.map(([line]) => line);
-    expect(logged).toContainEqual(expect.stringContaining("KeyError: 'hero'"));
+    expect(logged).toContainEqual(expect.stringContaining("set aside: backend_exception: KeyError: 'hero'"));
     expect(logged).toContainEqual(expect.stringContaining(refusal.message));
     expect(logged).not.toContainEqual(expect.stringContaining("socket closed"));
   });
