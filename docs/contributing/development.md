@@ -654,11 +654,16 @@ What a release proposes is normally computed from `.release-please-manifest.json
 `release-as: "1.0.0"` in the config overrides that on every run, so every release pull request proposes 1.0.0 until the
 key is removed. It has to come out once 1.0.0 has shipped, or the version stops moving and nothing says so.
 
-`main` is always releasable, and there are no hotfix branches: a fault found after a merge — a database migration
-included, through a new rung — is fixed forward on `main` and ships as a normal patch release.
+`main` is always releasable: a fault found after a merge — a database migration included, through a new rung — is fixed
+forward on `main` and ships as a normal patch release. The one exception is an emergency: a published release is broken
+for its users in a way they cannot wait for the next release from `main` to fix — because that release is far off, or
+`main` no longer builds the artifact they install. Then the fix ships from a branch `release/X.Y` off that release's
+tag: one commit that carries its decisions, the version and changelog set by hand, the tag and release cut by hand, the
+asset built by the release workflow started manually on that branch. The same fix lands on `main` first or alongside,
+and the branch is deleted once the release is out; the tag holds it.
 
 Two files carry the version, each written by a different mechanism, and both are outputs of the release run that are
-never edited by hand: `version.txt` at the repository root is the `simple` strategy's own version file, and
+never edited by hand on `main`: `version.txt` at the repository root is the `simple` strategy's own version file, and
 `backend/domain/identity.py`'s `VERSION` line is an extra file, found by the `x-release-please-version` marker on that
 line (the `generic` entry reaches only `identity.py`). `version.txt` ends with a newline because that is what
 release-please writes (`DefaultUpdater.updateContent` returns `this.version + '\n'`); stripping it makes the next

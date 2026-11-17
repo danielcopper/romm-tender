@@ -111,7 +111,8 @@ opened by `> [!NOTE]` / `> Added by the maintainer.`
   machine — always under a `tmp_path` HOME.
 - **Release** is release-please: `version.txt` and `VERSION` in `domain/identity.py` are its output, never edited by
   hand. `release-as: "1.0.0"` pins every release PR to 1.0.0 — **remove it once 1.0.0 has shipped**. Fixes go forward on
-  `main`; no hotfix branches.
+  `main`. The one exception — a published release broken for its users in a way they cannot wait for `main` to fix —
+  ships from a branch `release/X.Y` off its tag, as `docs/contributing/development.md`, "Releasing", says.
 - **Run it** `mise run dev` builds the panel, **restarts Steam** and runs the backend (needs
   `~/.steam/steam/.cef-enable-remote-debugging`); no hot reload. `dev:bpm` / `dev:desktop` pick the window,
   `dev:*-reset` only restart Steam (the way out when a task refuses), `dev:backend` / `dev:frontend` split the two
