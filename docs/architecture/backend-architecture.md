@@ -1642,8 +1642,8 @@ the toggles even where it cannot work out where the records and picks belong, si
 read. Where the move fails all the same, the toggles stay kept by id, a warning says so, and the move is tried again at
 the next read: until then the Platforms tab and a sync go by the map the move would write
 (`domain/platform_prefs.py::switches_as_read`), so a sync reads exactly the platforms that were on before the update, as
-since switched on or off on the tab (D27). Until the move, the main page counts the platforms switched on from
-`enabled_platform_ids`, and a map kept there empty counts none, which the page leaves out (D25).
+since switched on or off on the tab (D27). The main page counts the platforms of the games bound to a shortcut, whatever
+the toggles say ([qam-panel](qam-panel.md), [#2776](https://github.com/danielcopper/romm-tender/issues/2776) D1).
 
 Where Tender starts from the defaults because it could not take the settings file over — one that cannot be parsed and
 is set aside, or one too old or not a settings object (`PersistenceAdapter`, below) — those defaults keep an empty

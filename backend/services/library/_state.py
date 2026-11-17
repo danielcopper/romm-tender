@@ -270,11 +270,8 @@ class LibrarySyncStateBox:
     # finalize of a run that was not stopped removes their shortcuts.
     # Reset by ``try_begin_run``.
     run_converged: dict[int, ConvergedBinding] = field(default_factory=dict)
-    # The preferred region every unit and collection delivery of the apply ranks
-    # its sibling groups by: read once at the run's start, or the staged
-    # preview's for an apply that consumes one, so a change of the setting
-    # during a run takes effect on the next one (#2776 D2). Set by the
-    # orchestrator at the run's start.
+    # The preferred region every unit and collection delivery of the run ranks
+    # its sibling groups by. Set by the orchestrator at the run's start.
     run_preferred_region: str = AUTO_REGION
     # Count of apply chunks emitted so far this run — the session-budget gate
     # skips its very first chunk (this counter still 0) so every run/resume makes

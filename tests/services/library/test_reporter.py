@@ -151,7 +151,7 @@ class TestGetSyncStatsCountsThePlatformsOfTheBoundGames:
 
     @pytest.mark.asyncio
     async def test_no_toggle_ever_saved_counts_the_platforms_of_the_bound_games(self, library):
-        """An empty map means every platform is on; the count is still the bound games' platforms."""
+        """No toggle saved: the count is still the bound games' platforms."""
         _seed_rom(library.uow, 10, app_id=1001, platform_slug="n64")
         _seed_rom(library.uow, 20, app_id=1002, platform_slug="snes")
         library.settings["enabled_platforms"] = {}

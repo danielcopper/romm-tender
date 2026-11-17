@@ -1120,8 +1120,7 @@ describe("SlotSetupWizard", () => {
       if (!modal) throw new Error("CustomSlotModal element not captured");
 
       const sub = render(<>{modal}</>);
-      // Don't type anything — a blank Enter must be a no-op (unlike the OK button,
-      // which sends "" straight to the backend guard).
+      // Don't type anything — a blank Enter must be a no-op, as the disabled OK is.
       await act(async () => {
         fireEvent.keyDown(sub.getByTestId("text-field"), { key: "Enter" });
         await Promise.resolve();

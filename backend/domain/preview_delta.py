@@ -36,8 +36,7 @@ class PreviewDelta:
     the first.
 
     ``preferred_region`` is the region the preview ranked every sibling group
-    by, which the apply that consumes the snapshot ranks by too, whatever the
-    setting holds by then.
+    by.
     """
 
     preview_id: str

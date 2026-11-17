@@ -331,10 +331,10 @@ error of its own, and when this device cannot write a save it downloads, a full 
 server error that does not come from RomM itself — the kind a proxy sends when RomM behind it is stopped — still counts
 as the server being unreachable, because it says nothing about RomM being up. This applies to both surfaces: the warning
 shown before launch and the "after exit" toast both name the actual cause rather than a generic "failed to sync"
-message. When more than one save file fails in the same sync, the toast shows the first file's reason followed by a "(+N
-more)" count so the message stays short; when only some fail, it counts the saves that did sync, uploaded and downloaded
-alike ("Synced 2 save(s), 1 error(s) — …"), before the first reason. If you see an authentication message, re-enter your
-server URL and sign in again in Tender's settings.
+message. When every save file fails, the toast leads with the first file's reason, followed by a "(+N more)" count where
+more than one failed, so the message stays short; when only some fail, it counts the saves that did sync, uploaded and
+downloaded alike ("Synced 2 save(s), 1 error(s) — …"), before the first reason. If you see an authentication message,
+re-enter your server URL and sign in again in Tender's settings.
 
 One more thing "Server offline" is never used for: syncs run one at a time on your Deck, so if you exit two games within
 moments of each other, the second one's sync waits for the first. If that wait runs long the second sync is skipped, and
