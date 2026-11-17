@@ -29,7 +29,7 @@ import { getMigrationState } from "./migrationStore";
 import { readStartingSource } from "./startingSource";
 import { announceSaveSync } from "./saveSyncEvents";
 import { saveSyncToastBody } from "./saveSyncToast";
-import { applyLaunchGateSetupOutcome, resolveSaveSetupOutcome } from "./saveSetup";
+import { applyLaunchGateSetupOutcome, resolveSaveSetupOutcome, type SaveSetupSurface } from "./saveSetup";
 import { showToast } from "./toast";
 import { TimeoutError, boundedOr, rethrowTimeout, withTimeout } from "./withTimeout";
 
@@ -219,8 +219,8 @@ function shapePreLaunchAnswer(settled: PreLaunchSyncSettled, options: PreLaunchS
 }
 
 /**
- * The tracking-setup step for a start pressed on Big Picture's game-detail
- * page. Nothing is set up where the backend answers that none is needed
+ * The tracking-setup step for a start pressed on a game-detail page (Big Picture
+ * or Desktop). Nothing is set up where the backend answers that none is needed
  * (`setup_needed`). What the backend's setup answer does to the start is
  * `applyLaunchGateSetupOutcome`'s. A read that throws proceeds; a read or slot
  * confirm that gets no answer in time is let through for the gate.
@@ -230,7 +230,10 @@ function shapePreLaunchAnswer(settled: PreLaunchSyncSettled, options: PreLaunchS
  * slot confirm) is not swallowed into "proceed" here; what a throw means is the
  * gate's.
  */
-export async function ensureTrackingConfiguredBigPicture(romId: number): Promise<"proceed" | "abort"> {
+async function ensureTrackingConfiguredForSurface(
+  romId: number,
+  surface: SaveSetupSurface,
+): Promise<"proceed" | "abort"> {
   const trackingResult = await boundedOr(isSaveTrackingConfigured(romId), LOCAL_CALL_LIMIT_MS, () => ({
     setup_needed: false,
   }));
@@ -241,10 +244,19 @@ export async function ensureTrackingConfiguredBigPicture(romId: number): Promise
 
   return applyLaunchGateSetupOutcome(resolveSaveSetupOutcome(setupInfo), {
     rid: romId,
+    surface,
     confirmSlotChoice: (...args) => withTimeout(confirmSlotChoice(...args), LOCAL_CALL_LIMIT_MS),
     toast: (body) => showToast(body),
     dispatchSavesTab: () => globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "saves" } })),
   });
+}
+
+export function ensureTrackingConfiguredBigPicture(romId: number): Promise<"proceed" | "abort"> {
+  return ensureTrackingConfiguredForSurface(romId, "bigpicture");
+}
+
+export function ensureTrackingConfiguredDesktop(romId: number): Promise<"proceed" | "abort"> {
+  return ensureTrackingConfiguredForSurface(romId, "desktop");
 }
 
 /**

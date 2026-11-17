@@ -70,6 +70,7 @@ describe("GameView", () => {
     vi.mocked(connectionHeartbeat.registerConnectionHeartbeat).mockReturnValue(releaseHeartbeat);
     clearMigration();
     vi.mocked(backend.refreshMigrationState).mockReturnValue(new Promise(() => {}));
+    vi.mocked(backend.getLocalSaveFiles).mockReturnValue(new Promise(() => {}));
     vi.stubGlobal("appStore", {
       GetAppOverviewByAppID: vi.fn(() => ({ appid: APP_ID, display_name: "Mario Golf: Advance Tour" })),
       GetCustomVerticalCapsuleURLs: vi.fn(() => [`/customimages/${APP_ID}p.jpg?v=9`]),
@@ -77,15 +78,17 @@ describe("GameView", () => {
     });
   });
 
-  it("draws the About card and Emulation card for the page's game", async () => {
+  it("draws the About, Emulation, and Saves cards for the page's game", async () => {
     vi.mocked(sharedReads.getRomMetadataShared).mockResolvedValue(METADATA);
 
     render(<GameView appId={APP_ID} />);
 
     const heading = screen.getByRole("heading", { name: "Mario Golf: Advance Tour" });
     const emulationCard = screen.getByTestId("desktop-emulation-card");
+    const savesCard = screen.getByTestId("desktop-saves-card");
     expect(heading).toBeInTheDocument();
     expect(emulationCard).toBeInTheDocument();
+    expect(savesCard).toBeInTheDocument();
     const leftColumn = emulationCard.parentElement!;
     const columnsGrid = leftColumn.parentElement!;
     expect(columnsGrid.children).toHaveLength(2);
@@ -93,7 +96,7 @@ describe("GameView", () => {
     expect(leftColumn.children).toHaveLength(2);
     expect(leftColumn.children[0]).toContainElement(heading);
     expect(leftColumn.children[1]).toBe(emulationCard);
-    expect(columnsGrid.children[1]).toBeEmptyDOMElement();
+    expect(columnsGrid.children[1]).toContainElement(savesCard);
     expect(screen.getByText("Game Boy Advance")).toBeInTheDocument();
     expect(screen.getByRole("img")).toHaveAttribute(
       "src",
@@ -144,14 +147,16 @@ describe("GameView", () => {
     expect(screen.getByRole("heading", { name: "Mario Golf (USA)" })).toBeInTheDocument();
   });
 
-  it("reads no record and draws no Emulation card before the page's ROM is known", () => {
+  it("reads no record and draws no Emulation or Saves cards before the page's ROM is known", () => {
     vi.mocked(gameDetailStore.useGameDetail).mockReturnValue(detail({ romId: null }));
 
     render(<GameView appId={APP_ID} />);
 
     expect(sharedReads.getRomMetadataShared).not.toHaveBeenCalled();
     expect(sharedReads.getBiosStatusShared).not.toHaveBeenCalled();
+    expect(backend.getLocalSaveFiles).not.toHaveBeenCalled();
     expect(screen.queryByTestId("desktop-emulation-card")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("desktop-saves-card")).not.toBeInTheDocument();
   });
 
   it("holds the connection heartbeat while it is drawn", () => {

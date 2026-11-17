@@ -18,8 +18,9 @@ import { resolveConflictsSequentially, type SyncConflictResolution } from "../..
 import type { LaunchPrompts } from "../../../utils/launchVerdict";
 import type { SyncFinish, SyncWaitChoice, SyncWaitReason } from "../../../utils/launchGate";
 import type { BiosConfirmCopy } from "../../../utils/biosConfirmWording";
+import { DELETE_LOCAL_SAVES_DESCRIPTION, DELETE_LOCAL_SAVES_TITLE } from "../../../utils/saveSlotWording";
 import type { UnsyncedSavesChoice, UnsyncedSavesPrompt } from "../../../utils/versionSwitch";
-import type { SyncConflict } from "../../../types";
+import type { SaveSlotSummary, SlotDeleteInfo, SyncConflict } from "../../../types";
 import type { AskDialog } from "./askDialog";
 import { DesktopAdoptCandidatesDialog } from "./DesktopAdoptCandidatesDialog";
 import { DesktopAdoptCollisionsDialog } from "./DesktopAdoptCollisionsDialog";
@@ -27,6 +28,8 @@ import { DesktopAdoptExistingDialog } from "./DesktopAdoptExistingDialog";
 import { DesktopAdoptUnusableDialog } from "./DesktopAdoptUnusableDialog";
 import { DesktopAdoptVanishedDialog } from "./DesktopAdoptVanishedDialog";
 import { DesktopBiosConfirmDialog } from "./DesktopBiosConfirmDialog";
+import { DesktopCopySlotDialog } from "./DesktopCopySlotDialog";
+import { DesktopDeleteSlotDialog } from "./DesktopDeleteSlotDialog";
 import { DesktopSaveConflictDialog } from "./DesktopSaveConflictDialog";
 import { DesktopOfflineDriftDialog } from "./DesktopOfflineDriftDialog";
 import { DesktopFallbackLaunchDialog } from "./DesktopFallbackLaunchDialog";
@@ -121,6 +124,45 @@ export function desktopBiosConfirmDialog(
 ): (copy: BiosConfirmCopy, tone: "primary" | "danger") => Promise<boolean> {
   return (copy, tone) =>
     ask<boolean>(false, (resolve) => <DesktopBiosConfirmDialog copy={copy} tone={tone} onChoice={resolve} />);
+}
+
+export function desktopSlotConflictDialog(ask: AskDialog): (conflict: SyncConflict) => Promise<SyncConflictResolution> {
+  return desktopSaveConflictDialog(ask, false);
+}
+
+export function desktopDeleteLocalSavesDialog(ask: AskDialog): () => Promise<boolean> {
+  const copy: BiosConfirmCopy = {
+    title: DELETE_LOCAL_SAVES_TITLE,
+    description: DELETE_LOCAL_SAVES_DESCRIPTION,
+    confirmLabel: "Delete",
+  };
+  return () =>
+    ask<boolean>(false, (resolve) => <DesktopBiosConfirmDialog copy={copy} tone="danger" onChoice={resolve} />);
+}
+
+export function desktopCopySlotDialog(
+  ask: AskDialog,
+): (sourceSlot: string, availableSlots: SaveSlotSummary[]) => Promise<string | null> {
+  return (sourceSlot, availableSlots) =>
+    ask<string | null>(null, (resolve) => (
+      <DesktopCopySlotDialog
+        sourceSlot={sourceSlot}
+        availableSlots={availableSlots}
+        onDismiss={() => resolve(null)}
+        onCopy={(target) => resolve(target)}
+      />
+    ));
+}
+
+export function desktopDeleteSlotDialog(ask: AskDialog): (deleteInfo: SlotDeleteInfo) => Promise<boolean> {
+  return (deleteInfo) =>
+    ask<boolean>(false, (resolve) => (
+      <DesktopDeleteSlotDialog
+        deleteInfo={deleteInfo}
+        onDismiss={() => resolve(false)}
+        onConfirm={() => resolve(true)}
+      />
+    ));
 }
 
 export function desktopLaunchPrompts(ask: AskDialog): LaunchPrompts {

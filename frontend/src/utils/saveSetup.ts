@@ -1,10 +1,11 @@
 /**
  * Pure decision logic and branch handlers for "what should the caller do with
- * a SaveSetupInfo response?". Three callers consume the same outcome: the
- * wizard (`SlotSetupWizard`), the launch gate
- * (`ensureTrackingConfiguredBigPicture` in `launchGateOps.ts`) and the launch
- * watcher's cold start (`launchInterceptor.ts`). Anything that lives
- * here can be unit-tested without rendering the component or stubbing React.
+ * a SaveSetupInfo response?". Callers consume the same outcome: the
+ * wizard (`SlotSetupWizard`), the launch gates
+ * (`ensureTrackingConfiguredBigPicture` and `ensureTrackingConfiguredDesktop`
+ * in `launchGateOps.ts`) and the launch watcher's cold start
+ * (`launchInterceptor.ts`). Anything that lives here can be unit-tested
+ * without rendering the component or stubbing React.
  *
  * The "server_unreachable", "not_found", "romm_refused" and
  * "device_not_registered" branches exist because `recommended_action` carries
@@ -82,6 +83,9 @@ export const SERVER_UNREACHABLE_WIZARD_MESSAGE =
 export const SERVER_UNREACHABLE_TOAST_BODY =
   "Cannot configure save slot — RomM server is not reachable. Open the Saves tab to retry.";
 
+export const SERVER_UNREACHABLE_DESKTOP_TOAST_BODY =
+  "Cannot configure save slot — RomM server is not reachable. Open Saves to retry.";
+
 /** Copy for the `not_found` branch. Deliberately does NOT say the game has no
  *  saves: the 404 can come from this device's registration (a RomM database
  *  reset drops it), so that would swap one lie for a more specific one. */
@@ -90,6 +94,9 @@ export const NOT_FOUND_WIZARD_MESSAGE =
 
 export const NOT_FOUND_TOAST_BODY =
   "Cannot configure save slot — RomM couldn't find the save data for this setup. Open the Saves tab.";
+
+export const NOT_FOUND_DESKTOP_TOAST_BODY =
+  "Cannot configure save slot — RomM couldn't find the save data for this setup. Open Saves.";
 
 /** Copy for the `romm_refused` branch: RomM answered the listing, with something
  *  that is neither a missing entity nor an outage (a 429, a refused request, an
@@ -111,17 +118,26 @@ export const DEVICE_NOT_REGISTERED_WIZARD_MESSAGE =
 export const DEVICE_NOT_REGISTERED_TOAST_BODY =
   "Cannot configure save slot — this device could not be registered with RomM. Open the Saves tab to retry.";
 
+export const DEVICE_NOT_REGISTERED_DESKTOP_TOAST_BODY =
+  "Cannot configure save slot — this device could not be registered with RomM. Open Saves to retry.";
+
 const NEEDS_USER_CHOICE_TOAST_BODY = "Configure save sync in the Saves tab first";
+const NEEDS_USER_CHOICE_DESKTOP_TOAST_BODY = "Configure save sync in Saves first";
 
 /** Fallback toast body when `confirmSlotChoice` resolves to `success: false`
  *  without a message — used by both automated setup paths. */
 const CONFIRM_FAILED_TOAST_BODY = "Couldn't configure save sync — open the Saves tab to finish setup.";
+const CONFIRM_FAILED_DESKTOP_TOAST_BODY = "Couldn't configure save sync — open Saves to finish setup.";
+
+export type SaveSetupSurface = "bigpicture" | "desktop";
 
 /** Side-effect bundle for the launch-gate handler. The component supplies
  *  Tender's `showToast` and the global event dispatch; tests pass spies. */
 export interface LaunchGateSetupDeps {
   /** ROM id passed to `confirmSlotChoice` on the auto-confirm branch. */
   rid: number;
+  /** Which game-page surface asked — chooses `"the Saves tab"` vs `"Saves"` in toast copy. Defaults to `"bigpicture"`. */
+  surface?: SaveSetupSurface;
   /** Resolves the user's chosen save slot on the backend. `slot` is a non-empty
    *  named slot — legacy `slot:null` confirmation is retired (#1276). The launch
    *  gate only ever auto-confirms (`migrate: false`), so `useServerOnConflict` is
@@ -135,30 +151,31 @@ export interface LaunchGateSetupDeps {
   ) => Promise<{ success?: boolean; message?: string } | undefined>;
   /** Shows a toast — wrapped as a callback so the helper is dispatch-agnostic. */
   toast: (body: string) => void;
-  /** Switches to the Saves tab — wrapped as a callback so the helper is
+  /** Switches to the Saves tab/card — wrapped as a callback so the helper is
    *  dispatch-agnostic (component dispatches a `CustomEvent`; tests pass a spy). */
   dispatchSavesTab: () => void;
 }
 
 /** Dispatch a resolved `SaveSetupOutcome` from the launch gate (`Play` button)
  *  — returns "proceed" when the launch may continue or "abort" when the user
- *  was routed to the saves tab. */
+ *  was routed to Saves. */
 export async function applyLaunchGateSetupOutcome(
   outcome: SaveSetupOutcome,
   deps: LaunchGateSetupDeps,
 ): Promise<"proceed" | "abort"> {
+  const isDesktop = deps.surface === "desktop";
   // No slot is set up for a game whose saves no sync carries, and nothing is
   // asked of the user: the start goes on (#2153 D1).
   if (outcome.kind === "sync_unavailable") return "proceed";
   if (outcome.kind === "server_unreachable") {
-    deps.toast(SERVER_UNREACHABLE_TOAST_BODY);
+    deps.toast(isDesktop ? SERVER_UNREACHABLE_DESKTOP_TOAST_BODY : SERVER_UNREACHABLE_TOAST_BODY);
     deps.dispatchSavesTab();
     return "abort";
   }
   // Same abort, honest cause — a 404 must not let the launch proceed with save
   // tracking unconfigured.
   if (outcome.kind === "not_found") {
-    deps.toast(NOT_FOUND_TOAST_BODY);
+    deps.toast(isDesktop ? NOT_FOUND_DESKTOP_TOAST_BODY : NOT_FOUND_TOAST_BODY);
     deps.dispatchSavesTab();
     return "abort";
   }
@@ -168,7 +185,7 @@ export async function applyLaunchGateSetupOutcome(
     return "abort";
   }
   if (outcome.kind === "device_not_registered") {
-    deps.toast(DEVICE_NOT_REGISTERED_TOAST_BODY);
+    deps.toast(isDesktop ? DEVICE_NOT_REGISTERED_DESKTOP_TOAST_BODY : DEVICE_NOT_REGISTERED_TOAST_BODY);
     deps.dispatchSavesTab();
     return "abort";
   }
@@ -177,16 +194,16 @@ export async function applyLaunchGateSetupOutcome(
     const result = await deps.confirmSlotChoice(deps.rid, outcome.slot, false, null, false);
     if (result?.success === false) {
       // A resolved failure (not a throw) must not let the launch proceed with
-      // save tracking unconfigured — route to the Saves tab like the other
+      // save tracking unconfigured — route to Saves like the other
       // abort branches (#1009).
-      deps.toast(result.message || CONFIRM_FAILED_TOAST_BODY);
+      deps.toast(result.message || (isDesktop ? CONFIRM_FAILED_DESKTOP_TOAST_BODY : CONFIRM_FAILED_TOAST_BODY));
       deps.dispatchSavesTab();
       return "abort";
     }
     return "proceed";
   }
-  // Server has saves — user must configure in saves tab.
-  deps.toast(NEEDS_USER_CHOICE_TOAST_BODY);
+  // Server has saves — user must configure in Saves.
+  deps.toast(isDesktop ? NEEDS_USER_CHOICE_DESKTOP_TOAST_BODY : NEEDS_USER_CHOICE_TOAST_BODY);
   deps.dispatchSavesTab();
   return "abort";
 }

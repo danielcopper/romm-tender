@@ -17,6 +17,7 @@ import { useMigrationRefresh } from "../../utils/migrationRefresh";
 import { AboutDetails } from "./AboutDetails";
 import { EmulationSettings } from "./EmulationSettings";
 import { MigrationBlockedCard } from "./MigrationBlockedCard";
+import { SaveManagementCard } from "./SaveManagementCard";
 import { CARD_STYLE } from "./styles";
 
 interface GameViewProps {
@@ -82,7 +83,9 @@ export const GameView: FC<GameViewProps> = ({ appId }) => {
           </div>
           <EmulationSettings appId={appId} detail={detail} />
         </div>
-        <div style={COLUMN_STYLE} />
+        <div style={COLUMN_STYLE}>
+          <SaveManagementCard appId={appId} detail={detail} />
+        </div>
       </div>
     </div>
   );

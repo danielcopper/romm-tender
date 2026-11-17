@@ -221,7 +221,14 @@ export const PlayButtonBadges: FC<PlayButtonBadgesProps> = ({ appId, detail, sav
           {playtime.steamPlaytime}
         </Badge>
       )}
-      <Badge name="save-sync" header="SAVE SYNC" color={saveSyncColor}>
+      <Badge
+        name="save-sync"
+        header="SAVE SYNC"
+        color={saveSyncColor}
+        onClick={() => {
+          globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "saves" } }));
+        }}
+      >
         <Dot color={saveSyncColor} />
         <span>{saveSync.label}</span>
       </Badge>

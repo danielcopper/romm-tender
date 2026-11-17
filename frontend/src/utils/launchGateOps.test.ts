@@ -3,9 +3,14 @@ import { toaster } from "../api/host";
 import * as backend from "../api/backend";
 import { reportServerReachable } from "./connectionState";
 import { getMigrationState } from "./migrationStore";
-import { SERVER_UNREACHABLE_TOAST_BODY } from "./saveSetup";
+import { SERVER_UNREACHABLE_DESKTOP_TOAST_BODY, SERVER_UNREACHABLE_TOAST_BODY } from "./saveSetup";
 import { LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS, SYNC_WAIT_MORE_MS } from "./launchGate";
-import { ensureTrackingConfiguredBigPicture, makeLaunchGateOps, runPreLaunchSync } from "./launchGateOps";
+import {
+  ensureTrackingConfiguredBigPicture,
+  ensureTrackingConfiguredDesktop,
+  makeLaunchGateOps,
+  runPreLaunchSync,
+} from "./launchGateOps";
 import { TimeoutError } from "./withTimeout";
 import type { LaunchPrompts } from "./launchVerdict";
 import type { PreLaunchSyncStartedEvent, SaveSetupInfo, SyncConflict } from "../types";
@@ -579,6 +584,66 @@ describe("ensureTrackingConfiguredBigPicture", () => {
       await outcome;
       expect(tabSwitch).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("ensureTrackingConfiguredDesktop", () => {
+  let tabSwitch: Mock<(e: Event) => void>;
+
+  beforeEach(() => {
+    tabSwitch = vi.fn();
+    globalThis.addEventListener("romm_tab_switch", tabSwitch);
+    return () => globalThis.removeEventListener("romm_tab_switch", tabSwitch);
+  });
+
+  it("aborts with Desktop 'Saves' wording and switches to saves when server is unreachable", async () => {
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: false,
+      active_slot: null,
+      setup_needed: true,
+    });
+    vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(setupInfo({ recommended_action: "server_unreachable" }));
+
+    expect(await ensureTrackingConfiguredDesktop(ROM_ID)).toBe("abort");
+    expect(toastBodies()).toEqual([SERVER_UNREACHABLE_DESKTOP_TOAST_BODY]);
+    expect(backend.confirmSlotChoice).not.toHaveBeenCalled();
+    expect((tabSwitch.mock.calls[0]?.[0] as CustomEvent | undefined)?.detail).toEqual({ tab: "saves" });
+  });
+
+  it("aborts with Desktop 'Saves' wording and switches to saves when user must choose a slot", async () => {
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: false,
+      active_slot: null,
+      setup_needed: true,
+    });
+    vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(
+      setupInfo({
+        recommended_action: "show_wizard",
+        server_slots: [{ slot: "default", saves: [], count: 1, latest_updated_at: "2026-01-01T00:00:00Z" }],
+      }),
+    );
+
+    expect(await ensureTrackingConfiguredDesktop(ROM_ID)).toBe("abort");
+    expect(toastBodies()).toEqual(["Configure save sync in Saves first"]);
+    expect((tabSwitch.mock.calls[0]?.[0] as CustomEvent | undefined)?.detail).toEqual({ tab: "saves" });
+  });
+
+  it("auto-adopts default slot and proceeds when safe", async () => {
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+      configured: false,
+      active_slot: null,
+      setup_needed: true,
+    });
+    vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(setupInfo());
+    vi.mocked(backend.confirmSlotChoice).mockResolvedValue({
+      success: true,
+      needs_conflict_resolution: false,
+      message: "",
+    });
+
+    expect(await ensureTrackingConfiguredDesktop(ROM_ID)).toBe("proceed");
+    expect(backend.confirmSlotChoice).toHaveBeenCalledWith(ROM_ID, "slot1", false, null, false);
+    expect(tabSwitch).not.toHaveBeenCalled();
   });
 });
 

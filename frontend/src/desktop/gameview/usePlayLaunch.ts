@@ -20,7 +20,7 @@ import {
 } from "../../utils/pruneLease";
 import { detach } from "../../utils/detach";
 import { markLaunchSkipped } from "../../utils/launchGate";
-import { ensureTrackingConfiguredSilently, makeLaunchGateOps } from "../../utils/launchGateOps";
+import { ensureTrackingConfiguredDesktop, makeLaunchGateOps } from "../../utils/launchGateOps";
 import { runGateLoop } from "../../utils/launchVerdict";
 import { recheckStart, refreshSaveStatus } from "../../utils/gameDetailStore";
 import { startFailedSentence } from "../../utils/gameLaunch";
@@ -140,10 +140,7 @@ export function usePlayLaunch({
         tag: TAG,
         toastSyncResult: true,
         onSyncStart: () => setPressState("syncing"),
-        ensureTrackingConfigured: async () => {
-          await ensureTrackingConfiguredSilently(romId, TAG);
-          return "proceed";
-        },
+        ensureTrackingConfigured: () => ensureTrackingConfiguredDesktop(romId),
         confirmCoreChange: prompts.confirmCoreChange,
         confirmUncheckedStartingSource: prompts.confirmUncheckedSource,
         askSyncWait: prompts.askSyncWait,

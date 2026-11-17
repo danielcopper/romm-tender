@@ -14,10 +14,13 @@ import {
   wizardMigrationOutcomeToastBody,
   SERVER_UNREACHABLE_WIZARD_MESSAGE,
   SERVER_UNREACHABLE_TOAST_BODY,
+  SERVER_UNREACHABLE_DESKTOP_TOAST_BODY,
   NOT_FOUND_WIZARD_MESSAGE,
   NOT_FOUND_TOAST_BODY,
+  NOT_FOUND_DESKTOP_TOAST_BODY,
   DEVICE_NOT_REGISTERED_WIZARD_MESSAGE,
   DEVICE_NOT_REGISTERED_TOAST_BODY,
+  DEVICE_NOT_REGISTERED_DESKTOP_TOAST_BODY,
   type LaunchGateSetupDeps,
   type SaveSetupOutcome,
   type WizardRetryDeps,
@@ -197,6 +200,45 @@ describe("applyLaunchGateSetupOutcome", () => {
       }),
     });
     await expect(applyLaunchGateSetupOutcome({ kind: "needs_user_choice" }, deps)).rejects.toThrow("dispatch boom");
+  });
+
+  describe("desktop surface wording", () => {
+    it.each([
+      ["server_unreachable", { kind: "server_unreachable" } as const, SERVER_UNREACHABLE_DESKTOP_TOAST_BODY, true],
+      ["not_found", { kind: "not_found" } as const, NOT_FOUND_DESKTOP_TOAST_BODY, true],
+      [
+        "romm_refused",
+        { kind: "romm_refused", message: "rate limited" } as const,
+        "Cannot configure save slot — RomM did not list this game's saves. rate limited",
+        false,
+      ],
+      [
+        "device_not_registered",
+        { kind: "device_not_registered" } as const,
+        DEVICE_NOT_REGISTERED_DESKTOP_TOAST_BODY,
+        true,
+      ],
+      ["needs_user_choice", { kind: "needs_user_choice" } as const, "Configure save sync in Saves first", true],
+    ])("uses desktop wording without 'the Saves tab' for %s", async (_name, outcome, expectedToast, mentionsSaves) => {
+      const deps = makeLaunchGateDeps({ surface: "desktop" });
+      const result = await applyLaunchGateSetupOutcome(outcome, deps);
+      expect(result).toBe("abort");
+      expect(deps.toast).toHaveBeenCalledWith(expectedToast);
+      if (mentionsSaves) expect(expectedToast).toContain("Saves");
+      expect(expectedToast).not.toContain("the Saves tab");
+      expect(deps.dispatchSavesTab).toHaveBeenCalledOnce();
+    });
+
+    it("uses desktop fallback toast when confirmSlotChoice fails without a message", async () => {
+      const deps = makeLaunchGateDeps({
+        surface: "desktop",
+        confirmSlotChoice: vi.fn().mockResolvedValue({ success: false }),
+      });
+      const result = await applyLaunchGateSetupOutcome({ kind: "auto_confirm", slot: "main" }, deps);
+      expect(result).toBe("abort");
+      expect(deps.toast).toHaveBeenCalledWith("Couldn't configure save sync — open Saves to finish setup.");
+      expect(deps.dispatchSavesTab).toHaveBeenCalledOnce();
+    });
   });
 });
 

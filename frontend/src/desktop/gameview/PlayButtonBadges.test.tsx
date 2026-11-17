@@ -163,6 +163,22 @@ describe("PlayButtonBadges", () => {
 
       expect(screen.getByText("Not checked")).toBeInTheDocument();
     });
+
+    it("dispatches romm_tab_switch for saves when pressed", async () => {
+      const events: unknown[] = [];
+      const onSwitch = (e: Event) => events.push((e as CustomEvent).detail);
+      globalThis.addEventListener("romm_tab_switch", onSwitch);
+      try {
+        render(draw(detail()));
+        await act(async () => {});
+
+        screen.getByRole("button", { name: /SAVE SYNC/ }).click();
+
+        expect(events).toEqual([{ tab: "saves" }]);
+      } finally {
+        globalThis.removeEventListener("romm_tab_switch", onSwitch);
+      }
+    });
   });
 
   describe("whether the game's saves sync", () => {
@@ -814,7 +830,7 @@ describe("PlayButtonBadges", () => {
     });
   });
 
-  it("offers a press on BIOS alone: no other badge has a button, tab stop, or React handler", async () => {
+  it("offers a press on SAVE SYNC and BIOS alone: plain badges have no button, tab stop, or React handler", async () => {
     const { container } = render(
       draw(
         detail({
@@ -832,10 +848,11 @@ describe("PlayButtonBadges", () => {
     const controls = container.querySelectorAll(
       "[tabindex],[role='button'],button,a[href],input,select,textarea,summary",
     );
+    const saveSyncButton = container.querySelector(".tender-desktop-save-sync");
     const biosButton = container.querySelector(".tender-desktop-bios");
-    expect(Array.from(controls)).toEqual([biosButton]);
+    expect(Array.from(controls)).toEqual([saveSyncButton, biosButton]);
     for (const element of container.querySelectorAll("*")) {
-      if (element === biosButton) continue;
+      if (element === saveSyncButton || element === biosButton) continue;
       const propsKey = Object.keys(element).find((key) => key.startsWith("__reactProps"));
       expect(propsKey).toBeDefined();
       const props = (element as unknown as Record<string, object>)[propsKey!]!;
