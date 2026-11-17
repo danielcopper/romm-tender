@@ -360,7 +360,7 @@ class TestARunningGameIsLeftOut:
 
         assert not isinstance(result, GroupPlan)
         assert result["status"] == "skipped"
-        assert result["reason"] == "running_unknown"
+        assert result["reason"] == "running_apps_unknown"
         assert result["name"] == "Game 1"
         assert result["message"] == (
             "Tender could not read which games Steam is running, so this game was left as it is. "

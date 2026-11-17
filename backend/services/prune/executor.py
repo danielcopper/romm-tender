@@ -452,7 +452,8 @@ class PruneExecutor:
             return self._results.group_result(
                 plan.rows,
                 "skipped",
-                *refusal,
+                refusal.reason,
+                refusal.message,
                 GroupOutcome(bundle_path=handle.bundle_path if handle else None),
             )
         guard = await self._reprove_liveness(plan)

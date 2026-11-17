@@ -3207,7 +3207,7 @@ async def test_a_removed_game_is_left_as_it_is_and_offered_again_without_a_readi
     await _start(harness, preview["preview_id"], remove_fully_vanished=True)
     complete = await _finish(harness)
 
-    assert complete["results"][0]["reason"] == "running_unknown"
+    assert complete["results"][0]["reason"] == "running_apps_unknown"
     assert not any(name == "prune_action_required" for name, _payload in harness.events.events)
     with harness.uow:
         row = harness.uow.roms.get(1)
