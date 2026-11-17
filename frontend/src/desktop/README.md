@@ -15,7 +15,9 @@ page, and the rules every change to that page follows, are in
   `stickyPlayBarController.ts` (the play bar's pinned and glass states).
 - `gameview/GameView.tsx` — what `index.ts` hands the watcher as the page's `gameView`: the page's cards in two columns,
   with the About card (`gameview/AboutDetails.tsx`) and the Emulation card (`gameview/EmulationSettings.tsx`, the
-  per-game emulator / core picker and the BIOS / firmware table and actions) in the left column, and
+  per-game emulator / core picker and the BIOS / firmware table and actions) in the left column, the Saves card
+  (`gameview/SaveManagementCard.tsx`, with `gameview/DesktopSlotPanel.tsx` and `gameview/DesktopVersionHistory.tsx`, for
+  save slots, version history, manual sync and local save files) in the right column, and
   `gameview/MigrationBlockedCard.tsx` taking the columns' place while a RetroDECK migration is pending.
 - `gameview/PlayButton.tsx` — what `index.ts` hands the watcher as the page's `playButton`: Tender's Play button, whose
   launch presses and Uninstall are `gameview/usePlayLaunch.ts`'s and DOWNLOAD's and the bar's its own, with PLAY and the
@@ -27,9 +29,11 @@ page, and the rules every change to that page follows, are in
 - `gameview/dialogs/` — those dialogs (`desktopLaunchPrompts`), the Play button's conflict walk and Stop dialog
   (`desktopResolveConflicts`, `desktopStopGameDialog`), the already-on-your-device dialogs a Download press opens
   (`desktopAdoptionDialogs`), the selector's unsynced-saves question (`desktopUnsyncedSavesDialog`), the Emulation
-  card's BIOS replace and delete confirmations (`desktopBiosConfirmDialog` / `DesktopBiosConfirmDialog`), the frame they
-  are drawn in (`DesktopDialog`), `AskDialog`, the shape of one question, and `useDialogHost`, which asks one from
-  inside a component.
+  card's BIOS replace and delete confirmations (`desktopBiosConfirmDialog` / `DesktopBiosConfirmDialog`), the Saves
+  card's new-slot, copy-to-slot, delete-slot, delete-local-saves and conflict dialogs (`DesktopNewSlotDialog`,
+  `DesktopCopySlotDialog` / `desktopCopySlotDialog`, `DesktopDeleteSlotDialog` / `desktopDeleteSlotDialog`,
+  `desktopDeleteLocalSavesDialog`, `desktopSlotConflictDialog`), the frame they are drawn in (`DesktopDialog`),
+  `AskDialog`, the shape of one question, and `useDialogHost`, which asks one from inside a component.
 - `gameview/styles.ts` — the play bar's glass and pinned colours, which `stickyPlayBarController.ts` applies, the cards'
   styles, the dialog frame's backdrop and buttons, the shapes the Play button's group and buttons start from, and the
   panel and entries of the menus that open under them, the game menu's and the selector's.

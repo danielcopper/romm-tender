@@ -910,10 +910,12 @@ emulator menu entry while whether that emulator can start the game is still bein
 
 The desktop client's disc and version selector, PLAY, RESOLVE CONFLICT and DOWNLOAD (dev build only) show the same ring
 while a version switch is under way, and its Play button shows it where Big Picture's shows its throbber on a download
-or an uninstall: on STARTING..., on UNINSTALLING... and in cancel's place while a download unpacks. They draw it without
-that class: `frontend/src/desktop/gameview/SvgThrobber.tsx` turns an SVG with SMIL, because the class's keyframes would
-be a stylesheet on Steam's page outside the restoration ledger
-([desktop-dom-architecture.md](desktop-dom-architecture.md)).
+or an uninstall: on STARTING..., on UNINSTALLING... and in cancel's place while a download unpacks. Its Saves card
+(`SaveManagementCard.tsx`, `DesktopSlotPanel.tsx`, `DesktopVersionHistory.tsx`, dev build only) shows it too when
+connecting to RomM, running a manual sync, deleting local saves, loading an inactive slot's saves, activating or
+deleting a slot, loading previous versions, and restoring a version. They draw it without that class:
+`frontend/src/desktop/gameview/SvgThrobber.tsx` turns an SVG with SMIL, because the class's keyframes would be a
+stylesheet on Steam's page outside the restoration ledger ([desktop-dom-architecture.md](desktop-dom-architecture.md)).
 
 The throbber puts its rules into the document it is drawn in (`Throbber.tsx`, with
 `frontend/src/utils/throbberStyle.ts`), because the panel's code runs in a different document from the ones it draws

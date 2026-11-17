@@ -95,9 +95,9 @@ entry reads and binds, and the other areas: [the register's index](index.md).
   `frontend/src/index.test.tsx`, `frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`,
   `frontend/src/bigpicture/RomMPlaySection.test.tsx`, `frontend/src/bigpicture/CustomPlayButton.test.tsx`,
   `frontend/src/utils/launchInterceptor.test.ts`, `frontend/src/boot/FallbackActions.test.tsx` and, in the desktop dev
-  build, `frontend/src/desktop/gameview/PlayButton.test.tsx` and
-  `frontend/src/desktop/gameview/EmulationSettings.test.tsx`, each in its stranded-panel `describe` block. They pin the
-  six shells a shipped bundle has that gate today: the Quick Access root (`QAMPanel` in `frontend/src/index.tsx`)
+  build, `frontend/src/desktop/gameview/PlayButton.test.tsx`, `frontend/src/desktop/gameview/EmulationSettings.test.tsx`
+  and `frontend/src/desktop/gameview/SaveManagementCard.test.tsx`, each in its stranded-panel `describe` block. They pin
+  the six shells a shipped bundle has that gate today: the Quick Access root (`QAMPanel` in `frontend/src/index.tsx`)
   renders the card above its page switch, so no page component runs; the game page's section (`RomMGameInfoPanel.tsx`)
   renders it ahead of every other card and of Loading; the play row (`RomMPlaySection.tsx`) drops its gears, its version
   and disc pickers and the two badges whose tabs the card replaced, and stays hidden under a version error or a pending
@@ -108,9 +108,11 @@ entry reads and binds, and the other areas: [the register's index](index.md).
   Restart Steam, which asks Steam rather than the backend — with the line that an update's result shows after the reload
   or restart that answer names. In the desktop dev build the desktop client's Play button
   (`frontend/src/desktop/gameview/PlayButton.tsx`) renders nothing, and the Emulation card
-  (`frontend/src/desktop/gameview/EmulationSettings.tsx`) renders nothing and issues no backend reads, since neither has
-  Resume and every press they offer needs the backend, pinned by the stranded-panel `describe` blocks of
-  `frontend/src/desktop/gameview/PlayButton.test.tsx` and `frontend/src/desktop/gameview/EmulationSettings.test.tsx`.
+  (`frontend/src/desktop/gameview/EmulationSettings.tsx`) and Saves card
+  (`frontend/src/desktop/gameview/SaveManagementCard.tsx`) render nothing and issue no backend reads, since none of
+  them has Resume and every press they offer needs the backend, pinned by the stranded-panel `describe` blocks of
+  `frontend/src/desktop/gameview/PlayButton.test.tsx`, `frontend/src/desktop/gameview/EmulationSettings.test.tsx` and
+  `frontend/src/desktop/gameview/SaveManagementCard.test.tsx`.
   **Why**: a stranded panel is never admitted again — it holds the token of a backend process that is gone — so every
   press that reaches the backend could only fail. Before #2275 each such press failed in a way of its own: some with the
   answer, some with a bare failure, some with a wrong reason, some with nothing at all, leaving a switch at a value that
@@ -133,31 +135,35 @@ entry reads and binds, and the other areas: [the register's index](index.md).
   `frontend/src/bigpicture/panelEvents.ts` and `frontend/src/bigpicture/panelTabContent.tsx` via `RomBinding`
   (`bindRom`, `bindRomInState`); `useAchievements` (`frontend/src/utils/achievements.ts`) by tagging each answer with
   the rom it was read for (`forRom`) and showing it only while that rom shows, and `useRomMetadata`
-  (`frontend/src/utils/useRomMetadata.ts`) and `EmulationSettings`
-  (`frontend/src/desktop/gameview/EmulationSettings.tsx`, in the desktop dev build) the same way. Two answers for the
-  SAME rom are ordered by a sequence taken at issue (`loadSeq`, `saveStatusSeq`, `takeReadTicket`, `EmulationSettings`'s
-  `readSeqRef`). Ordered but unbound: the two identity writes (the store's `loadDetail`, the panel's `loadData`) and the
-  panel's lazy SAVES-tab slot load (`frontend/src/bigpicture/panelSlotsLoad.ts`, raw setter, `slots` ticket); neither
-  bound nor ordered: the store's `cached.bios_status` fold. The panel's `rereadBiosAnswer`, which `handleBiosChange` and
-  a press on the BIOS tab both read through, is bound and ordered (`bios` ticket). The play button is NOT covered
+  (`frontend/src/utils/useRomMetadata.ts`), `EmulationSettings` (`frontend/src/desktop/gameview/EmulationSettings.tsx`,
+  in the desktop dev build) and `SaveManagementCard` (`frontend/src/desktop/gameview/SaveManagementCard.tsx`, in the
+  desktop dev build — keyed by `detail.romId` on `SaveManagementCardContent` so a version switch tears down its subtree
+  alongside `isCancelled()` and `mountedRef` guards across `SaveManagementCard.tsx`, `DesktopSlotPanel.tsx` and
+  `DesktopVersionHistory.tsx`) the same way. Two answers for the SAME rom are ordered by a sequence taken at issue
+  (`loadSeq`, `saveStatusSeq`, `takeReadTicket`, `EmulationSettings`'s `readSeqRef`, and `SaveManagementCard`'s /
+  `DesktopSlotPanel`'s / `DesktopVersionHistory`'s sequence counters). Ordered but unbound: the two identity writes (the
+  store's `loadDetail`, the panel's `loadData`) and the panel's lazy SAVES-tab slot load
+  (`frontend/src/bigpicture/panelSlotsLoad.ts`, raw setter, `slots` ticket); neither bound nor ordered: the store's
+  `cached.bios_status` fold. The panel's `rereadBiosAnswer`, which `handleBiosChange` and a press on the BIOS tab both
+  read through, is bound and ordered (`bios` ticket). The play button is NOT covered
 
   The panel component itself holds none of these writes. `RomBinding` is built by `bindRom` for a read a run of the
   `[appId]` effect issued and by `bindRomInState` for the active tab's panes, whose writer is built during render; the
-  achievements load's tagging means its state cannot outlive the identity it was read for; `useRomMetadata` and
-  `EmulationSettings` are the desktop game view's metadata and BIOS / launch-verdict reads. A version switch changes the
-  rom without closing, so neither the store's generation counter nor the panel's `[appId]` effect sees this class.
-  Binding answers the wrong-rom question only; the ordering of two answers for the SAME rom is #1717. Four writes are
-  unbound. Three are ordered: the two identity writes install what a binding would compare against, so ordering is all
-  they can have. The fourth, the store's `cached.bios_status` fold, has neither — it runs in the same synchronous run as
-  its guard. The event lane's `rereadBiosAnswer` re-reads `get_bios_status` for the rom it shows, whose emulator is
-  resolved per ROM — a per-game pin over the platform's pick — and takes the `bios` ticket the panel's other BIOS
-  re-reads take (#1718). The play button's exclusion is #1714. The panel's fourteen bound sites each carry a
-  version-switch test (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`), and `useRomMetadata`'s and
-  `EmulationSettings`'s bindings are pinned by `frontend/src/utils/useRomMetadata.test.ts` and
-  `frontend/src/desktop/gameview/EmulationSettings.test.tsx`; the store side and every new write site on either are
-  prompt-only, because a checker scoped to the store's own function bodies would be green on the case this rule was
-  written for. The reasons behind the two writer mechanisms live at `writerForRom` and `RomBinding` — do not restate
-  them here
+  achievements load's tagging means its state cannot outlive the identity it was read for; `useRomMetadata`,
+  `EmulationSettings` and `SaveManagementCard` are the desktop game view's metadata, BIOS / launch-verdict and save-sync
+  reads. A version switch changes the rom without closing, so neither the store's generation counter nor the panel's
+  `[appId]` effect sees this class. Binding answers the wrong-rom question only; the ordering of two answers for the
+  SAME rom is #1717. Four writes are unbound. Three are ordered: the two identity writes install what a binding would
+  compare against, so ordering is all they can have. The fourth, the store's `cached.bios_status` fold, has neither — it
+  runs in the same synchronous run as its guard. The event lane's `rereadBiosAnswer` re-reads `get_bios_status` for the
+  rom it shows, whose emulator is resolved per ROM — a per-game pin over the platform's pick — and takes the `bios`
+  ticket the panel's other BIOS re-reads take (#1718). The play button's exclusion is #1714. The panel's fourteen bound
+  sites each carry a version-switch test (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`), and `useRomMetadata`'s
+  and `EmulationSettings`'s bindings are pinned by `frontend/src/utils/useRomMetadata.test.ts` and
+  `frontend/src/desktop/gameview/EmulationSettings.test.tsx`; `SaveManagementCard`'s key/cancellation binding, the store
+  side and every new write site are prompt-only, because a checker scoped to the store's own function bodies would be
+  green on the case this rule was written for. The reasons behind the two writer mechanisms live at `writerForRom` and
+  `RomBinding` — do not restate them here
 - **Every row a reader must be able to reach on a QAM page is a row Steam can focus — a toggle, a button, or a
   `Focusable` declaring a stop of its own, including a table row with no action of its own** — check + prompt-only
 

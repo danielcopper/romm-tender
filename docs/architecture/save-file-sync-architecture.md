@@ -309,11 +309,12 @@ whitespace / `None` slot **name** is a different thing entirely: it is rejected 
 
 On the SAVES tab every slot is a collapsible panel, and the active slot's panel starts open. When the active slot
 changes — **Activate Slot**, or a copy that makes its target active — the new active slot's panel opens and the old
-one's closes, reading its files again when it is reopened. Every other panel keeps its state. Activate Slot and New Slot
-both switch through `executeSlotSwitch` in `frontend/src/utils/saveSlotFlow.ts`, which answers the new save status or
-the sentence the tab shows. On either partial answer, `switch_incomplete` or `switch_stopped`, it also announces the
-ROM's save sync, so the tab reads back the slot and the files the backend saved, and the surface shows the sentence as a
-toast rather than inline.
+one's closes, reading its files again when it is reopened. Every other panel keeps its state. In the desktop dev build
+the Saves card (`frontend/src/desktop/gameview/SaveManagementCard.tsx`, with `DesktopSlotPanel.tsx` and
+`DesktopVersionHistory.tsx`) draws the same collapsible slot panels. Activate Slot and New Slot both switch through
+`executeSlotSwitch` in `frontend/src/utils/saveSlotFlow.ts`, which answers the new save status or the sentence the tab
+shows. On either partial answer, `switch_incomplete` or `switch_stopped`, it also announces the ROM's save sync, so the
+surface reads back the slot and the files the backend saved, and shows the sentence as a toast rather than inline.
 
 #### Inside `.romm-backup` — naming and retention
 
@@ -1379,10 +1380,14 @@ any surface that shows a conflict:
   for a start whose questions go to the gamepad modals. It does not import the modal: `index.tsx` hands it
   `gamepadLaunchPrompts` (`frontend/src/shared/launchPrompts.ts`), whose `resolveConflicts` is `handleConflicts`, as the
   fallback of `launchPromptsForThisStart` ([Pre-launch sync](#pre-launch-sync)).
-- `VersionHistoryPanel.handleRestore` (in `SavesTab`), through `showSyncConflictModal` for the first conflict — when a
-  version-restore pre-flight returns `conflict_blocked`.
-- `useCopyToSlot` (the Saves tab's "Copy to slot…"), through `showSyncConflictModal` for the first conflict — when a
-  copy returns `conflict_blocked`.
+- `VersionHistoryPanel.handleRestore` (in `SavesTab`, through `executeVersionRestore`), through `showSyncConflictModal`
+  for the first conflict — when a version-restore pre-flight returns `conflict_blocked`.
+- `useCopyToSlot` (the Saves tab's "Copy to slot…", through `executeCopySaveToSlot`), through `showSyncConflictModal`
+  for the first conflict — when a copy returns `conflict_blocked`.
+- In the desktop dev build, `SaveManagementCard` (`DesktopVersionHistory.tsx` and `SaveManagementCard.tsx`) reaches the
+  same conflict dialog through `desktopSlotConflictDialog` (`DesktopSaveConflictDialog`,
+  `frontend/src/desktop/gameview/dialogs/DesktopSaveConflictDialog.tsx`) for both flows, while `PlayButton`
+  (`desktopResolveConflicts`) and `launchPromptHost` use `DesktopSaveConflictDialog` for launch-gate conflicts.
 
 After post-exit sync, `sessionManager` only fires a toast — the conflict re-surfaces in the modal at the next
 pre-launch.
@@ -1898,9 +1903,9 @@ rather than staying silent; the automatic surfaces (pre-launch, post-exit) keep 
 in exactly one place: the frontend helper `saveSyncToastBody` (`frontend/src/utils/saveSyncToast.ts`), which every
 surface renders through — pre-launch (`runPreLaunchSync`, for a start from the Play button), post-exit
 (`sessionManager`, from the counts on the `finalize_game_session` payload), and the manual per-game sync
-(`RomMPlaySection`, through `frontend/src/utils/manualSaveSync.ts`). The backend delivers the counts as data, never the
-directional copy (#1481); the offline/failure body it still owns rides a separate `failure_toast` field on
-`SessionFinalizeSyncResult`.
+(`RomMPlaySection`, and `SaveManagementCard` in the desktop dev build, through `frontend/src/utils/manualSaveSync.ts`).
+The backend delivers the counts as data, never the directional copy (#1481); the offline/failure body it still owns
+rides a separate `failure_toast` field on `SessionFinalizeSyncResult`.
 
 ### Pre-launch sync
 
@@ -1922,13 +1927,13 @@ parts are the migration check, the starting-source check, a fresh reachability p
 sync itself (`runPreLaunchSync`) and what each verdict means: a switched-off source toasts, resolved conflicts announce
 the save change to the page and then launch. A path supplies only what is its own:
 
-| Supplied by the path               | Big Picture's Play button                                                                                                        | Launch watcher                                                                     | Desktop Play button (dev build only)                                                |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Prompts (`LaunchPrompts`)          | `gamepadLaunchPrompts` (`frontend/src/shared/launchPrompts.ts`)                                                                  | chosen once per start (below)                                                      | `desktopLaunchPrompts` (`frontend/src/desktop/gameview/dialogs/desktopDialogs.tsx`) |
-| Tracking setup                     | `ensureTrackingConfiguredBigPicture` — an answer it cannot settle aborts and opens the Saves tab (`applyLaunchGateSetupOutcome`) | `ensureTrackingConfiguredSilently` — adopts a default silently and always proceeds | `ensureTrackingConfiguredSilently`, as the launch watcher's                         |
-| Toast for a sync that moved saves  | yes                                                                                                                              | no                                                                                 | yes                                                                                 |
-| A start that ends without a launch | the trigger returns to Play, or to Resolve Conflict after a cancelled conflict                                                   | nothing of its own; a pending migration is toasted                                 | the button returns to Play, or to Resolve Conflict after a cancelled conflict       |
-| Acting on a verdict throws         | the trigger returns to Play                                                                                                      | the start is refused, toasted in the error's own words                             | the button returns to Play                                                          |
+| Supplied by the path               | Big Picture's Play button                                                                                                        | Launch watcher                                                                     | Desktop Play button (dev build only)                                                                                                                               |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Prompts (`LaunchPrompts`)          | `gamepadLaunchPrompts` (`frontend/src/shared/launchPrompts.ts`)                                                                  | chosen once per start (below)                                                      | `desktopLaunchPrompts` (`frontend/src/desktop/gameview/dialogs/desktopDialogs.tsx`)                                                                                |
+| Tracking setup                     | `ensureTrackingConfiguredBigPicture` — an answer it cannot settle aborts and opens the Saves tab (`applyLaunchGateSetupOutcome`) | `ensureTrackingConfiguredSilently` — adopts a default silently and always proceeds | `ensureTrackingConfiguredDesktop` — an answer it cannot settle aborts, toasts naming "Saves", and scrolls the Saves card into view (`applyLaunchGateSetupOutcome`) |
+| Toast for a sync that moved saves  | yes                                                                                                                              | no                                                                                 | yes                                                                                                                                                                |
+| A start that ends without a launch | the trigger returns to Play, or to Resolve Conflict after a cancelled conflict                                                   | nothing of its own; a pending migration is toasted                                 | the button returns to Play, or to Resolve Conflict after a cancelled conflict                                                                                      |
+| Acting on a verdict throws         | the trigger returns to Play                                                                                                      | the start is refused, toasted in the error's own words                             | the button returns to Play                                                                                                                                         |
 
 The watcher has no surface of its own, so `index.tsx` hands it a function rather than a set of prompts:
 `() => launchPromptsForThisStart(gamepadLaunchPrompts)` (`frontend/src/utils/launchPromptRouter.ts`), which it calls
@@ -2042,11 +2047,13 @@ The Play button's path:
 4. Save tracking: `is_save_tracking_configured`. Its `setup_needed` decides whether there is a setup at all: true only
    while save sync is on and no slot is set up. With save sync off it is false whatever `configured` says, so the press
    goes on with no `get_save_setup_info`, no toast and no slot confirmed, whether RomM can be reached or holds slots for
-   the game ([#2527](https://github.com/danielcopper/romm-tender/issues/2527) D2, D4); the launch watcher and, in the
-   desktop dev build, the desktop Play button act on the same answer through `ensureTrackingConfiguredSilently`. Where a
-   setup is needed, `get_save_setup_info` decides between an automatic slot pick (`confirm_slot_choice`) and a toast
-   with a switch to the Saves tab, which ends the press — or, for a game whose saves no sync carries
-   (`sync_unavailable`), neither: the press goes on with nothing set up.
+   the game ([#2527](https://github.com/danielcopper/romm-tender/issues/2527) D2, D4); the launch watcher acts on the
+   same answer through `ensureTrackingConfiguredSilently`, and in the desktop dev build the desktop Play button acts on
+   it through `ensureTrackingConfiguredDesktop`. Where a setup is needed, `get_save_setup_info`
+   (`resolveSaveSetupOutcome` and `applyLaunchGateSetupOutcome` in `frontend/src/utils/saveSetup.ts`) decides between an
+   automatic slot pick (`confirm_slot_choice`) and a toast with a switch to the Saves tab (or, on the desktop Play
+   button, a toast naming "Saves" that scrolls the Saves card into view), which ends the press — or, for a game whose
+   saves no sync carries (`sync_unavailable`), neither: the press goes on with nothing set up.
 5. Core change: `check_core_change`. A changed core asks the user in the core-change dialog; Cancel ends the press.
 6. Reachability: `probe_reachability` decides between steps 7 and 8.
 7. Online: `pre_launch_sync` — past its limit, the "Waiting for Save Sync" question above. The button turns into
