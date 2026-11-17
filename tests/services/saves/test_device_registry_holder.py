@@ -3,12 +3,14 @@
 Every save operation takes the device id it sends to RomM from
 ``SyncEngine.live_device_id``; a service holding the registry itself can read the
 stored id around that entry. This reads the source of every module under
-``backend/services/saves/`` and fails where one could: an annotation naming
-``DeviceRegistry`` (a config field, a constructor parameter, an attribute)
-anywhere but in ``SyncEngineConfig``, and a ``DeviceRegistry(...)`` kept on an
-attribute of ``self``. ``SaveService`` builds the registry and hands it to the
-sync engine without keeping it. Not seen: an unannotated parameter or attribute
-holding one, and a registry reached through another object.
+``backend/services/saves/`` and of ``backend/bootstrap/saves.py``, which builds
+the registry and hands it to the sync engine without keeping it, and fails where
+one could: an annotation naming ``DeviceRegistry`` (a config field, a
+constructor parameter, an attribute, a field of ``SaveParts``) anywhere but in
+``SyncEngineConfig``, and a ``DeviceRegistry(...)`` kept on an attribute of
+``self``. Not seen: an unannotated parameter or attribute holding one, a
+registry reached through another object, and a holder anywhere else under
+``backend/bootstrap/``.
 """
 
 from __future__ import annotations
@@ -18,7 +20,9 @@ from pathlib import Path
 
 import pytest
 
-_SAVES = Path(__file__).resolve().parents[3] / "backend" / "services" / "saves"
+_BACKEND = Path(__file__).resolve().parents[3] / "backend"
+_SAVES = _BACKEND / "services" / "saves"
+_BUILDER = _BACKEND / "bootstrap" / "saves.py"
 _HOLDER = "SyncEngineConfig"
 _NAME = "DeviceRegistry"
 
@@ -69,9 +73,13 @@ def _is_self_attribute(target: ast.expr) -> bool:
 class TestOnlyTheSyncEngineHoldsTheRegistry:
     def test_no_save_service_but_the_sync_engine_holds_the_registry(self):
         found: list[str] = []
-        for path in sorted(_SAVES.rglob("*.py")):
-            found.extend(holders(path.read_text(encoding="utf-8"), str(path.relative_to(_SAVES))))
+        for path in [*sorted(_SAVES.rglob("*.py")), _BUILDER]:
+            found.extend(holders(path.read_text(encoding="utf-8"), str(path.relative_to(_BACKEND))))
         assert found == []
+
+    def test_the_builder_is_read(self):
+        tree = ast.parse(_BUILDER.read_text(encoding="utf-8"))
+        assert any(_builds_registry(n) for n in ast.walk(tree) if isinstance(n, ast.expr))
 
     def test_the_sync_engine_config_is_read(self):
         source = (_SAVES / "sync_engine" / "engine.py").read_text(encoding="utf-8")

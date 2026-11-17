@@ -129,7 +129,7 @@ def _first(fake, name: str) -> int:
     return indices[0]
 
 
-_TRANSFERS = ("upload_save", "download_save_content", "download_save", "delete_server_saves", "confirm_download")
+_TRANSFERS = ("upload_save", "download_save_content", "delete_server_saves", "confirm_download")
 
 
 class TestTheEntry:

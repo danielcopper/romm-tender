@@ -61,7 +61,6 @@ from services.rom_adoption import RomAdoptionService, RomAdoptionServiceConfig
 from services.rom_install_recorder import RomInstallRecorder, RomInstallRecorderConfig
 from services.rom_removal import RomRemovalService, RomRemovalServiceConfig
 from services.running_games import RunningGames, RunningGamesConfig
-from services.saves import SaveService, SaveServiceConfig
 from services.session_lifecycle import SessionLifecycleService, SessionLifecycleServiceConfig
 from services.settings import SettingsService, SettingsServiceConfig
 from services.shortcut_artwork import ShortcutArtworkService, ShortcutArtworkServiceConfig
@@ -78,6 +77,7 @@ from services.update_output import UpdateOutputService, UpdateOutputServiceConfi
 from services.version_switch import VersionSwitchService, VersionSwitchServiceConfig
 
 from .library import LibraryWiring, wire_library
+from .saves import SaveWiring, wire_saves
 
 if TYPE_CHECKING:
     from typing import Any
@@ -94,6 +94,7 @@ if TYPE_CHECKING:
         SaveDirectoriesRecorderFn,
         SiblingSupersedeFn,
     )
+    from services.saves import SaveService
 
     from .adapters import AdapterBundle, CallbackBundle, RuntimeBundle, StateBundle
 
@@ -402,32 +403,34 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         ),
     )
 
-    save_service_config = SaveServiceConfig(
-        romm_api=cfg.adapters.romm_api,
-        retry=cfg.adapters.http_adapter,
-        resolve_upload_conflict=cfg.adapters.resolve_upload_conflict,
-        compute_sync_action=cfg.adapters.compute_sync_action,
-        settings=cfg.stores.settings,
-        settings_persister=cfg.callbacks.settings_persister,
-        save_file_store=cfg.adapters.save_file_store,
-        loop=cfg.runtime.loop,
-        logger=cfg.runtime.logger,
-        clock=cfg.runtime.clock,
-        retrodeck_folders=cfg.callbacks.retrodeck_folders,
-        active_core=active_core_resolver,
-        save_locations=cfg.adapters.save_locations,
-        platform_systems=platform_systems,
-        hostname_provider=cfg.runtime.hostname_provider,
-        machine_id_provider=cfg.runtime.machine_id_provider,
-        log_debug=cfg.callbacks.log_debug,
-        emit=cfg.runtime.emit,
-        is_update_in_progress=update_in_progress_binding.get,
-        is_retrodeck_migration_pending=migration_service.is_retrodeck_migration_pending,
-        conflict_rules=conflict_rules,
-        running_rom_ids=running_games.running_rom_ids,
-        uow_factory=cfg.callbacks.uow_factory,
+    save_parts = wire_saves(
+        SaveWiring(
+            romm_api=cfg.adapters.romm_api,
+            retry=cfg.adapters.http_adapter,
+            resolve_upload_conflict=cfg.adapters.resolve_upload_conflict,
+            compute_sync_action=cfg.adapters.compute_sync_action,
+            settings=cfg.stores.settings,
+            settings_persister=cfg.callbacks.settings_persister,
+            save_file_store=cfg.adapters.save_file_store,
+            loop=cfg.runtime.loop,
+            logger=cfg.runtime.logger,
+            clock=cfg.runtime.clock,
+            retrodeck_folders=cfg.callbacks.retrodeck_folders,
+            active_core=active_core_resolver,
+            save_locations=cfg.adapters.save_locations,
+            platform_systems=platform_systems,
+            hostname_provider=cfg.runtime.hostname_provider,
+            machine_id_provider=cfg.runtime.machine_id_provider,
+            log_debug=cfg.callbacks.log_debug,
+            emit=cfg.runtime.emit,
+            is_update_in_progress=update_in_progress_binding.get,
+            is_retrodeck_migration_pending=migration_service.is_retrodeck_migration_pending,
+            conflict_rules=conflict_rules,
+            running_rom_ids=running_games.running_rom_ids,
+            uow_factory=cfg.callbacks.uow_factory,
+        )
     )
-    save_sync_service = SaveService(config=save_service_config)
+    save_sync_service = save_parts.service
     save_directories_binding.set(lambda: save_sync_service.rerecord_save_directories)
 
     playtime_service = PlaytimeService(
@@ -565,7 +568,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             romm_api=cfg.adapters.romm_api,
             download_file_store=cfg.adapters.download_file_store,
             adoption_move=cfg.adapters.adoption_move,
-            back_up_save=save_sync_service.save_backup.back_up_save_file,
+            back_up_save=save_parts.save_backup.back_up_save_file,
             platform_systems=platform_systems,
             retrodeck_folders=cfg.callbacks.retrodeck_folders,
             install_recorder=rom_install_recorder,
@@ -892,7 +895,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             prune_artifacts=cfg.adapters.prune_artifacts,
             steam_recovery=cfg.adapters.steam_recovery,
             retrodeck_folders=cfg.callbacks.retrodeck_folders,
-            save_coordinator=save_sync_service.prune_support,
+            save_coordinator=save_parts.prune_support,
             active_downloads=download_service.active_download_rom_ids,
             drift_probe=save_sync_service.check_local_drift,
             running_rom_ids=running_games.running_rom_ids,

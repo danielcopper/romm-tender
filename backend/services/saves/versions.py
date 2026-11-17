@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from services.saves.rom_info import RomInfoService
     from services.saves.save_transfer import SaveTransfer
     from services.saves.sync_engine import SyncEngine
+    from services.saves.sync_engine.matrix import MatrixExecutor
 
 
 @dataclass(frozen=True)
@@ -51,7 +52,7 @@ class VersionsServiceConfig:
     Unit-of-Work factory (the transactional seam over the SQLite
     repositories), the peer save sub-services consumed during rollback
     orchestration (sync_engine, whose ``live_device_id`` answers the device
-    id, and rom_info), the core
+    id, the matrix executor the pre-flight sync runs, and rom_info), the core
     resolver used to stamp the upload emulator tag, the Protocol-typed
     RomM adapter and retry strategy, the backend's event loop, the
     standard-library logger, the ``DebugLogger`` seam, and the save transfer
@@ -61,6 +62,7 @@ class VersionsServiceConfig:
     settings: dict[str, Any]
     uow_factory: UnitOfWorkFactory
     sync_engine: SyncEngine
+    matrix: MatrixExecutor
     rom_info: RomInfoService
     resolve_core: Callable[[int], str | None]
     romm_api: RommSaveApi
@@ -84,6 +86,7 @@ class VersionsService:
         self._settings = config.settings
         self._uow_factory = config.uow_factory
         self._sync_engine = config.sync_engine
+        self._matrix = config.matrix
         self._rom_info = config.rom_info
         self._resolve_core = config.resolve_core
         self._romm_api = config.romm_api
@@ -310,7 +313,7 @@ class VersionsService:
 
         Flow:
 
-        1. Run ``do_sync_rom_saves`` as a matrix pre-flight on the
+        1. Run ``MatrixExecutor.sync_rom_saves`` as a matrix pre-flight on the
            currently-tracked save. The matrix decides:
 
            - ``Skip(synced)`` / ``Skip(adopt_baseline=True)`` — proceed.
@@ -431,7 +434,7 @@ class VersionsService:
             # Matrix pre-flight: get the tracked save in sync first, or surface
             # a conflict that the user must resolve before any switch can run.
             _uploaded, _downloaded, errors, conflicts = await self._loop.run_in_executor(
-                None, self._sync_engine.do_sync_rom_saves, rom_id, save_state, device_id, core_so, default_slot
+                None, self._matrix.sync_rom_saves, rom_id, save_state, device_id, core_so, default_slot
             )
             if conflicts:
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
@@ -492,7 +495,7 @@ class VersionsService:
                     server_saves,
                 )
             finally:
-                # The pre-flight ``do_sync_rom_saves`` already performed real
+                # The pre-flight ``MatrixExecutor.sync_rom_saves`` already performed real
                 # uploads/downloads whose baselines/tracked-ids live only in the
                 # in-memory aggregate; persist them regardless of how the switch
                 # ends, or the next sync mis-classifies (#1012).

@@ -22,13 +22,11 @@ if TYPE_CHECKING:
     from domain.emulator_commands import EmulatorOption, LaunchingEmulator
     from domain.emulator_sources import SourcesReading
     from domain.rom_install import RomInstall
-    from domain.save_answer import SaveAnswer
     from domain.update_release import LatestRelease
     from lib.partial_failure import PartialFailure
     from models.prune import InstalledContentRemoval, PruneSaveBackup, SourceClaim
     from models.shortcut_artwork import SlotAnswer, WrittenIcon
     from models.state import ShortcutRegistryEntry
-    from models.sync import ClientSaveState
 
 
 class ListingRefiler(Protocol):
@@ -781,28 +779,6 @@ class UpdateInProgressFn(Protocol):
     """
 
     def __call__(self) -> bool: ...
-
-
-class SaveInventoryBuilderFn(Protocol):
-    """Scoped negotiate-inventory build consumed by SyncEngine.
-
-    The composition root satisfies this with ``SaveService.build_save_inventory``.
-    SyncEngine calls it to gather this device's local-save inventory for the
-    negotiate POST: ``rom_id=None`` builds the whole-device inventory (the bulk
-    ``sync_all_saves`` pre-negotiate), a concrete ``rom_id`` scopes it to that
-    one ROM (the single-ROM negotiate trigger). Only confirmed, non-legacy-slot
-    ROMs with local save files contribute entries — the wizard gate stays
-    upstream of negotiate (ADR-0016).
-
-    ``save_answer`` hands the scoped form a save reading the caller already took
-    in this operation, so a single-ROM sync reads the machine once rather than
-    once per layer. It is ignored for the whole-device form, which runs before
-    any per-ROM answer exists.
-    """
-
-    def __call__(
-        self, rom_id: int | None = None, *, save_answer: SaveAnswer | None = None
-    ) -> list[ClientSaveState]: ...
 
 
 class DeviceIdProvider(Protocol):

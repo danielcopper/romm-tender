@@ -13,7 +13,7 @@ from tests.services.saves._helpers import (
     _install_rom,
     _no_save_directory,
     _seed_rom,
-    make_service,
+    make_parts,
 )
 
 _UNANSWERED = "RetroDECK's folders could not be established, so Tender downloads into and removes from none of them."
@@ -28,8 +28,9 @@ def _folders(support) -> FakeRetroDeckFolders:
 
 class TestLockPruneRoms:
     async def test_locks_every_requested_rom_in_ascending_order(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        support = svc.prune_support
+        parts, _ = make_parts(tmp_path)
+        svc = parts.service
+        support = parts.prune_support
         acquired: list[int] = []
         original = svc._sync_engine.rom_lock
 
@@ -43,17 +44,17 @@ class TestLockPruneRoms:
             assert acquired == [3, 7, 9]
 
     async def test_empty_id_list_locks_nothing_and_still_yields(self, tmp_path):
-        svc, _ = make_service(tmp_path)
+        parts, _ = make_parts(tmp_path)
         entered = False
 
-        async with svc.prune_support.lock_prune_roms([]):
+        async with parts.prune_support.lock_prune_roms([]):
             entered = True
 
         assert entered is True
 
     async def test_releases_every_lock_when_the_body_raises(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        support = svc.prune_support
+        parts, _ = make_parts(tmp_path)
+        support = parts.prune_support
 
         locked = support.lock_prune_roms([4, 5])
         with pytest.raises(RuntimeError, match="body failed"):
@@ -67,8 +68,9 @@ class TestLockPruneRoms:
 
 class TestPruneSaveInventory:
     def test_persisted_known_filename_and_matching_history_are_recovery_artifacts(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        support = svc.prune_support
+        parts, _ = make_parts(tmp_path)
+        svc = parts.service
+        support = parts.prune_support
         _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="renamed.gba")
         saves_dir = tmp_path / "saves" / "gba"
         saves_dir.mkdir(parents=True)
@@ -91,8 +93,9 @@ class TestPruneSaveInventory:
         assert {item["path"] for item in inventory["exclusive"]} == {str(historical), *expected_current}
 
     def test_shared_save_expands_lock_owners_and_is_never_backed_up(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        support = svc.prune_support
+        parts, _ = make_parts(tmp_path)
+        svc = parts.service
+        support = parts.prune_support
         _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="shared.gba")
         _install_rom(svc, tmp_path, rom_id=2, system="gba", file_name="shared.gba")
         shared = _create_save(tmp_path, system="gba", rom_name="shared", content=b"shared")
@@ -111,8 +114,9 @@ class TestPruneSaveInventory:
         replacement will read it — backing it up would strand the live
         version's progress.
         """
-        svc, _ = make_service(tmp_path)
-        support = svc.prune_support
+        parts, _ = make_parts(tmp_path)
+        svc = parts.service
+        support = parts.prune_support
         _install_rom(svc, tmp_path, rom_id=4375, system="gba", file_name="game.gba")
         _seed_rom(svc, 25135, platform_slug="gba", fs_name="game.gba")
         shared = _create_save(tmp_path, system="gba", rom_name="game", content=b"live progress")
@@ -136,8 +140,9 @@ class TestPruneSaveInventory:
         It projects onto a different stem, so the purge row still owns its saves
         alone and they leave through the ``.romm-backup`` funnel, the save backup.
         """
-        svc, _ = make_service(tmp_path)
-        support = svc.prune_support
+        parts, _ = make_parts(tmp_path)
+        svc = parts.service
+        support = parts.prune_support
         _install_rom(svc, tmp_path, rom_id=4375, system="gba", file_name="game.gba")
         _seed_rom(svc, 25135, platform_slug="gba", fs_name="other-game.gba")
         owned = _create_save(tmp_path, system="gba", rom_name="game", content=b"only mine")
@@ -158,8 +163,9 @@ class TestPruneSaveInventory:
         assert [path.read_bytes() for path in backups] == [b"only mine"]
 
     def test_missing_exclusive_save_is_claimed_absent_and_late_creation_is_retained(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        support = svc.prune_support
+        parts, _ = make_parts(tmp_path)
+        svc = parts.service
+        support = parts.prune_support
         _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="late.gba")
         expected = str(tmp_path / "saves" / "gba" / "late.srm")
 
@@ -180,8 +186,9 @@ class TestPruneSaveInventory:
         assert Path(expected).read_bytes() == b"created by emulator"
 
     def test_expected_absence_is_rechecked_after_the_backup_before_cascade(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        support = svc.prune_support
+        parts, _ = make_parts(tmp_path)
+        svc = parts.service
+        support = parts.prune_support
         _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="late.gba")
         expected = Path(tmp_path / "saves" / "gba" / "late.srm")
         expected.parent.mkdir(parents=True)
@@ -197,8 +204,9 @@ class TestPruneSaveInventory:
         assert expected.read_bytes() == b"created after absence was consumed"
 
     def test_backed_up_present_save_is_rechecked_for_recreation_before_cascade(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        support = svc.prune_support
+        parts, _ = make_parts(tmp_path)
+        svc = parts.service
+        support = parts.prune_support
         _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="present.gba")
         expected = _create_save(tmp_path, system="gba", rom_name="present", content=b"sealed-current")
         inventory = support.inventory_prune_saves([42])
@@ -213,21 +221,23 @@ class TestPruneSaveInventory:
 
     def test_a_version_with_no_downloaded_files_leaves_no_warning(self, tmp_path):
         """It has no save files of its own for the cleanup to move, so there is nothing to warn about."""
-        svc, _ = make_service(tmp_path)
+        parts, _ = make_parts(tmp_path)
+        svc = parts.service
         _seed_rom(svc, 7, platform_slug="gba", fs_name="never-downloaded.gba")
 
-        inventory = svc.prune_support.inventory_prune_saves([7])
+        inventory = parts.prune_support.inventory_prune_saves([7])
 
         assert inventory["warnings"] == []
         assert inventory["artifacts"] == []
         assert inventory["exclusive"] == []
 
     def test_a_downloaded_version_whose_save_files_could_not_be_found_still_warns(self, tmp_path):
-        svc, _ = make_service(tmp_path)
+        parts, _ = make_parts(tmp_path)
+        svc = parts.service
         _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="game.gba")
         _no_save_directory(svc, "gba")
 
-        inventory = svc.prune_support.inventory_prune_saves([42])
+        inventory = parts.prune_support.inventory_prune_saves([42])
 
         assert inventory["warnings"] == ["ROM 42: save path could not be resolved; physical saves were left untouched"]
         assert inventory["exclusive"] == []
@@ -235,8 +245,9 @@ class TestPruneSaveInventory:
 
 class TestBackUpPruneSaves:
     def test_a_backup_that_raised_after_moving_a_save_is_ambiguous_and_names_it(self, tmp_path, monkeypatch):
-        svc, _ = make_service(tmp_path)
-        support = svc.prune_support
+        parts, _ = make_parts(tmp_path)
+        svc = parts.service
+        support = parts.prune_support
         _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="game.gba")
         first = _create_save(tmp_path, system="gba", rom_name="game", content=b"first", ext=".srm")
         second = _create_save(tmp_path, system="gba", rom_name="game", content=b"second", ext=".rtc")
@@ -257,8 +268,8 @@ class TestBackUpPruneSaves:
         assert second.read_bytes() == b"second"
 
     def test_nothing_to_back_up_asks_retrodeck_for_no_saves_root(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        support = svc.prune_support
+        parts, _ = make_parts(tmp_path)
+        support = parts.prune_support
         folders = _folders(support)
         folders.saves = ""
         folders.refusal = finding_refusal("marker-missing", {})
@@ -266,8 +277,9 @@ class TestBackUpPruneSaves:
         assert support.back_up_prune_saves([], {}) == PruneSaveBackup(moved=[], ambiguous=False)
 
     def test_saves_without_a_saves_root_fail_without_moving_anything(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        support = svc.prune_support
+        parts, _ = make_parts(tmp_path)
+        svc = parts.service
+        support = parts.prune_support
         _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="game.gba")
         save = _create_save(tmp_path, system="gba", rom_name="game", content=b"mine")
         inventory = support.inventory_prune_saves([42])
@@ -281,8 +293,9 @@ class TestBackUpPruneSaves:
         assert save.read_bytes() == b"mine"
 
     def test_saves_under_a_finding_fail_with_it_without_moving_anything(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        support = svc.prune_support
+        parts, _ = make_parts(tmp_path)
+        svc = parts.service
+        support = parts.prune_support
         _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="game.gba")
         save = _create_save(tmp_path, system="gba", rom_name="game", content=b"mine")
         inventory = support.inventory_prune_saves([42])
@@ -295,8 +308,9 @@ class TestBackUpPruneSaves:
         assert save.read_bytes() == b"mine"
 
     def test_saves_where_the_saves_root_could_not_be_established_fail_without_moving_anything(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        support = svc.prune_support
+        parts, _ = make_parts(tmp_path)
+        svc = parts.service
+        support = parts.prune_support
         _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="game.gba")
         save = _create_save(tmp_path, system="gba", rom_name="game", content=b"mine")
         inventory = support.inventory_prune_saves([42])
@@ -310,8 +324,8 @@ class TestBackUpPruneSaves:
 
 class TestValidatePruneAbsences:
     def test_with_nothing_claimed_absent_it_holds_without_a_saves_root(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        support = svc.prune_support
+        parts, _ = make_parts(tmp_path)
+        support = parts.prune_support
         _folders(support).saves = ""
 
         assert support.validate_prune_absences({}) is True

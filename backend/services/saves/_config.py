@@ -1,9 +1,4 @@
-"""Construction-time wiring bundle for ``SaveService``.
-
-Holds every dependency SaveService needs at construction time —
-Protocol-typed adapters, runtime infrastructure, live mutable state
-references, Tender's own metadata, and callbacks into other services.
-"""
+"""Construction-time wiring bundle for ``SaveService``."""
 
 from __future__ import annotations
 
@@ -15,136 +10,76 @@ if TYPE_CHECKING:
     import logging
 
     from services.protocols import (
-        ActiveCoreReader,
-        Clock,
-        ComputeSyncActionFn,
         ConflictRules,
-        DebugLogger,
-        EventEmitter,
-        HostnameReader,
-        MachineIdReader,
-        MigrationPendingFn,
-        PlatformSystems,
-        ResolveUploadConflictFn,
-        RetroDeckFolders,
-        RetryStrategy,
-        RommSyncApi,
-        RunningRomIdsFn,
         SaveFileStore,
         SaveLocationReader,
         SettingsPersister,
         UnitOfWorkFactory,
-        UpdateInProgressFn,
     )
+    from services.saves.copies import SaveCopyService
+    from services.saves.local_saves import LocalSaveFiles
+    from services.saves.rom_info import RomInfoService
+    from services.saves.slots import SetupWizard, SlotDeleter, SlotListing, SlotSwitcher
+    from services.saves.status import StatusService
+    from services.saves.sync_engine import SyncEngine
+    from services.saves.versions import VersionsService
 
 
 @dataclass(frozen=True)
 class SaveServiceConfig:
     """Frozen wiring bundle handed to ``SaveService.__init__``.
 
+    The parts the façade calls, each built once by the composition root and
+    shared with the parts that hold it too, beside what the façade reads and
+    writes itself.
+
     Parameters
     ----------
-    romm_api:
-        Protocol adapter for all RomM save/notes HTTP operations.
-    retry:
-        Retry strategy — provides ``with_retry`` and ``is_retryable``.
-    resolve_upload_conflict:
-        ``ResolveUploadConflictFn`` seam — the upload-409 resolution kernel,
-        backed at runtime by the compiled gavel native core. Threaded down to
-        the ``MatrixExecutor`` where the upload-409 backstop calls it to decide
-        ``"download"`` vs ``"conflict"`` purely from hashes.
-    compute_sync_action:
-        ``ComputeSyncActionFn`` seam — the per-``(rom, filename, slot)`` sync
-        decision, backed at runtime by the same compiled gavel native core.
-        Threaded down to the ``MatrixExecutor``, which calls it once per file to
-        pick ``Skip`` / ``Upload`` / ``Download`` / ``Conflict``.
     settings:
-        Live reference to Tender's main settings dict.
+        Live reference to Tender's main settings dict, home of the save-sync
+        feature toggles the façade reads and writes.
     settings_persister:
-        Protocol-typed zero-arg flush for ``settings.json``. SaveService
-        calls ``.save_settings()`` after mutating the save-sync feature
-        toggles or the device label in the live ``settings`` dict — those
-        values live in settings.json, not the save-sync aggregate.
+        Protocol-typed zero-arg flush for ``settings.json``, called after the
+        façade changes a save-sync toggle in the live ``settings`` dict.
     save_file_store:
-        Protocol-typed filesystem adapter for local save files. Owns the
-        raw POSIX, ``open()``, ``tempfile``, and ``hashlib``-on-file
-        calls SaveService and its sub-services use when reading,
-        writing, backing up, hashing, and removing local save files.
+        Protocol-typed filesystem adapter the bulk local-save deletion removes
+        files through.
+    uow_factory:
+        ``UnitOfWorkFactory`` Protocol seam — the deletion's state hygiene,
+        the platform's installed ROMs and the one-time ``kv_config`` marker of
+        the save-directory pass are each read or written in a narrow Unit of
+        Work of their own (ADR-0006).
     loop:
         The backend's ``asyncio`` event loop (for ``run_in_executor``).
     logger:
         Standard-library logger, injected rather than fetched.
-    retrodeck_folders:
-        RetroDECK's folders, as the resolver names them. The saves package
-        asks for a system's ROM folder (the path an uninstalled ROM would
-        occupy) and the saves root the removed-game cleanup's save backups
-        stay inside.
-    active_core:
-        ``ActiveCoreReader`` seam resolving the active RetroArch core for a
-        ROM by ``rom_id``. Returns ``(core_so, label)``; either may be None if
-        unresolved. Folds the per-game ``emulator_override`` pin over the
-        system-layer ES-DE resolution so the save answer / save-emulator tag /
-        core-change warning key off the same core the ROM launches with.
-    hostname_provider:
-        ``HostnameReader`` Protocol seam — supplies the local device
-        hostname used as the registered device name during initial
-        server-side device registration.
-    machine_id_provider:
-        ``MachineIdReader`` Protocol seam — supplies the stable
-        ``/etc/machine-id`` value sent as the RomM ``hostname``
-        fingerprint during initial server-side device registration so the
-        server dedupes this device across reinstalls. ``None`` when the
-        machine id is unreadable, which degrades registration to the
-        no-fingerprint path.
-    emit:
-        Event emitter for pushing save-sync progress to the frontend.
-    is_update_in_progress:
-        Callback returning ``True`` while an update of this program is being
-        installed; the sync engine refuses a pre-launch or post-exit sync and
-        does not follow a save directory on this signal, as it does below.
-    is_retrodeck_migration_pending:
-        Callback returning ``True`` when a RetroDECK migration is in
-        flight; the sync engine's own backstop — it refuses a pre-launch or
-        post-exit sync and does not follow a save directory on this signal.
     conflict_rules:
         ``ConflictRules`` seam — the rules a save use case checks at its
         entry under its endpoint's name, and the operation it holds until
         detached work ends.
-    running_rom_ids:
-        ``RunningRomIdsFn`` seam — the ROMs whose game Steam lists as running,
-        read afresh on every call.
-    log_debug:
-        ``DebugLogger`` Protocol seam — routes through the user's QAM
-        log-level filter. Injected directly into each sub-service that
-        needs it; not reached through the ``_save_service`` back-ref.
-    uow_factory:
-        ``UnitOfWorkFactory`` Protocol seam — opens a fresh transactional
-        Unit of Work over the SQLite repositories. The saves vertical
-        reads/writes the ``rom_save_sync_states`` aggregate + ``kv_config``
-        device id through it; each public use case owns a narrow
-        read→I/O→write bracket (ADR-0006).
+    save_locations:
+        ``SaveLocationReader`` seam, asked whether an emulator installation is
+        detected before the one-time save-directory pass runs.
+    rom_info, sync_engine, status, local_saves, versions, copies,
+    slot_listing, slot_switcher, setup_wizard, slot_deleter:
+        The sub-services the use cases delegate to.
     """
 
-    romm_api: RommSyncApi
-    retry: RetryStrategy
-    resolve_upload_conflict: ResolveUploadConflictFn
-    compute_sync_action: ComputeSyncActionFn
     settings: dict[str, Any]
     settings_persister: SettingsPersister
     save_file_store: SaveFileStore
+    uow_factory: UnitOfWorkFactory
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
-    clock: Clock
-    retrodeck_folders: RetroDeckFolders
-    active_core: ActiveCoreReader
-    save_locations: SaveLocationReader
-    platform_systems: PlatformSystems
-    hostname_provider: HostnameReader
-    machine_id_provider: MachineIdReader
-    log_debug: DebugLogger
-    emit: EventEmitter
-    is_update_in_progress: UpdateInProgressFn
-    is_retrodeck_migration_pending: MigrationPendingFn
     conflict_rules: ConflictRules
-    running_rom_ids: RunningRomIdsFn
-    uow_factory: UnitOfWorkFactory
+    save_locations: SaveLocationReader
+    rom_info: RomInfoService
+    sync_engine: SyncEngine
+    status: StatusService
+    local_saves: LocalSaveFiles
+    versions: VersionsService
+    copies: SaveCopyService
+    slot_listing: SlotListing
+    slot_switcher: SlotSwitcher
+    setup_wizard: SetupWizard
+    slot_deleter: SlotDeleter

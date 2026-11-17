@@ -377,7 +377,7 @@ class PlaytimeService:
         """POST one device's batch and sort each row into sent / failed / quarantine / rejected.
 
         A transport failure on the POST is non-fatal (mirrors
-        ``_close_negotiate_session``): the group's rows stay queued and retry on
+        ``NegotiateEnvelope.close_session``): the group's rows stay queued and retry on
         the next flush. A whole-request **404** is peeled off that catch-all for
         its own log line but keeps the same retain-untouched handling: RomM
         NULL-resolves an unknown device or rom instead of rejecting, so a 404
