@@ -4119,7 +4119,7 @@ class TestDoSyncPerUnitErrors:
         library.sync._box.sync_state = SyncState.RUNNING
 
         with caplog.at_level(logging.ERROR):
-            await library.sync._orchestrator._do_sync_per_unit()
+            await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         [record] = [r for r in caplog.records if r.getMessage().startswith("Failed to build work queue")]
         assert (record.levelno, bool(record.exc_info)) == (logging.ERROR, True)
@@ -5731,7 +5731,7 @@ class TestAPlatformWithoutACount:
         box.sync_state = SyncState.RUNNING
         box.current_sync_id = "run-1"
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         with library.uow as uow:
             assert uow.roms.get(4).shortcut_app_id == 5004
