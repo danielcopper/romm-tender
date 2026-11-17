@@ -41,8 +41,8 @@ async def converge_unless_running(
 
     Steam's running apps are read only when a group would converge, so a sync
     with nothing to converge asks Steam nothing. A group left out stays as it
-    is and converges on a later run (#2645 D5); where no reading could be
-    taken, every group is left out (#2776 D5). *hidden_rom_ids* is the run's
+    is and converges on a later run, as :func:`leave_running_groups_out`
+    decides. *hidden_rom_ids* is the run's
     hidden set, ``None`` where RomM's answer could not be read, which takes
     nothing for hidden.
     """

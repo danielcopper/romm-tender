@@ -637,18 +637,18 @@ On the delete matchers, joining more means deleting more.
 
 Where the fold applies: the run finalizer groups both `romm_collection_app_ids` and `platform_app_ids` by the folded
 key. A merged collection, a RomM collection's or a platform's, is named by its sorted-first spelling, which
-`spelling_by_fold` (`backend/domain/collection_name.py`) answers for the finalizer and for the preview's
-`collection_diff` alike, so the preview lists it under the name the apply creates whatever order RomM lists the
-collections and platforms in ([#2776](https://github.com/danielcopper/romm-tender/issues/2776) D4, D8); the preview's
-`collection_diff` and `platform_collection_diff` compare folded names the same way; and the frontend create/find
-(`createOrUpdateCollections` / `createOrUpdateRomMCollections`), the cleanup matchers (`clearPlatformCollection` /
-`clearAllRomMCollections`) and the `onSyncComplete` stale-delete (`removeStaleCollections`, `frontend/src/index.tsx`)
-fold the whole name, the `RomM:` prefix and the host suffix included — so a case variant of one of this machine's names
-matches as that name does, while one carrying another machine's suffix does not — a hostname differing from this one
-only by case counts as this machine, as it does for Steam. This is safe because Steam's identity is case-insensitive:
-two collections differing only by case can never coexist, so there is never an ambiguous match to disambiguate. The DB
-is unaffected — `collection_sync_state` is keyed by `(collection_id, collection_kind)`, never by name — so there is no
-migration.
+`spelling_by_fold` (`backend/domain/collection_name.py`) answers whatever order RomM lists the collections and platforms
+in ([#2776](https://github.com/danielcopper/romm-tender/issues/2776) D4, D8); the preview's `collection_diff` takes a
+RomM collection's name from it too, so it lists a merged one under the name the apply creates, and its
+`platform_collection_diff` names no platform collection, it only counts them. The preview's `collection_diff` and
+`platform_collection_diff` compare folded names the same way; and the frontend create/find (`createOrUpdateCollections`
+/ `createOrUpdateRomMCollections`), the cleanup matchers (`clearPlatformCollection` / `clearAllRomMCollections`) and the
+`onSyncComplete` stale-delete (`removeStaleCollections`, `frontend/src/index.tsx`) fold the whole name, the `RomM:`
+prefix and the host suffix included — so a case variant of one of this machine's names matches as that name does, while
+one carrying another machine's suffix does not — a hostname differing from this one only by case counts as this machine,
+as it does for Steam. This is safe because Steam's identity is case-insensitive: two collections differing only by case
+can never coexist, so there is never an ambiguous match to disambiguate. The DB is unaffected — `collection_sync_state`
+is keyed by `(collection_id, collection_kind)`, never by name — so there is no migration.
 
 ## App IDs and Artwork
 
@@ -743,8 +743,9 @@ to a game's page in a session sets each of the four, and the cover, **only where
 (`fillEmptyArtwork` in `utils/artwork.ts`). **Refresh Artwork** and a change of SteamGridDB game are an explicit request
 and replace the slots on automatic only (`applyAutomaticArtwork`, which reads the ARTWORK tab's slots first and leaves a
 chosen slot and one set in Steam alone, [#2381](https://github.com/danielcopper/romm-tender/issues/2381) D6, D12). The
-replacing apply (`applySgdbArtwork`) throws a transport failure of any image's fetch to its caller, which words it by
-its reason, and applies nothing; any other failure of a fetch is logged and counts as no image
+replacing apply (`applySgdbArtwork`) throws a transport failure of any image's fetch to its caller and applies nothing:
+Refresh Artwork and a change of SteamGridDB game word it by its reason, a version switch's apply and a superseded game's
+log it. Any other failure of a fetch is logged and counts as no image
 ([#2776](https://github.com/danielcopper/romm-tender/issues/2776) D9, D10). A version switch still replaces every slot
 (`applyArtwork`): once artwork was applied for one ROM of an app id, the newly bound ROM's is applied in the replacing
 mode, which sets Tender's image over one set by hand too; whether Steam then shows it over a hand-set file kept under

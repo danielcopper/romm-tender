@@ -2192,9 +2192,9 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
     const { snes, faves } = seedCollections();
     panelFactory();
 
-    // The live collection is "[Faves]"; the active map keys it as "faves" (the
-    // run finalizer's folded-first-seen casing). Case-insensitive identity → it is
-    // ACTIVE and must survive. SNES has no active platform → still stale.
+    // The live collection is "[Faves]"; the active map keys it as "faves", a
+    // case variant of it. Case-insensitive identity → it is ACTIVE and must
+    // survive. SNES has no active platform → still stale.
     emitSyncComplete({
       platform_app_ids: { "Nintendo 64": [1] },
       romm_collection_app_ids: { faves: [1] },

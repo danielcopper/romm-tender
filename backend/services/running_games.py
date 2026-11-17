@@ -50,8 +50,9 @@ class RunningGames:
         No reading is taken where the host has none (no debugger, the panel
         not loaded), where the reader raised or did not answer within
         :data:`READING_TIMEOUT_SECONDS`, or where the read of the ROMs failed;
-        each is logged here, and why the host took none is logged by the host.
-        An app Steam listed without an id matches no ROM. What each reader does without a reading is
+        each is logged here. Why the injector took none it logs itself; before
+        the injection is set up the host answers none without a reason. An app
+        Steam listed without an id matches no ROM. What each reader does without a reading is
         ``docs/architecture/save-file-sync-architecture.md``'s, "Is the game
         running".
         """
