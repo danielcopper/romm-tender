@@ -101,8 +101,9 @@ export interface PlatformRow {
    *  The two count different populations on purpose: this one is what RomM holds
    *  *now*, its partner is what our own rows say. So ROMs added on RomM since the
    *  last sync widen the gap, which is the gap being useful — but equality means
-   *  "nothing outstanding as of the last sync", not a fresh server-side proof. */
-  romCount: number;
+   *  "nothing outstanding as of the last sync", not a fresh server-side proof.
+   *  `null` where RomM's listing sent no number for it. */
+  romCount: number | null;
   syncEnabled: boolean;
   /** This platform's BIOS answer, or `null` where none is held. Non-null exactly
    *  when {@link firmwareState} is `answered`. */

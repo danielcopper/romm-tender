@@ -12,7 +12,8 @@ export interface PlatformSyncSetting {
   slug: string;
   /** The folder RomM keeps the platform in. */
   fs_slug: string;
-  rom_count: number;
+  /** `null` where RomM's listing sent no number for it. */
+  rom_count: number | null;
   sync_enabled: boolean;
 }
 
