@@ -3,6 +3,7 @@ import { executeManualSaveSync } from "./manualSaveSync";
 import * as backend from "../api/backend";
 import * as toast from "./toast";
 import * as gameDetailStore from "./gameDetailStore";
+import { resolveSaveSyncLabel } from "./playSection";
 import { makeConflict } from "../test-utils/saveFixtures";
 
 vi.mock("../api/backend", () => ({
@@ -59,9 +60,14 @@ describe("executeManualSaveSync", () => {
     );
     expect(gameDetailStore.noteSaveSyncDisplay).toHaveBeenCalledWith(100, 42, {
       status: "synced",
-      label: "Just now",
-      last_sync_check_at: null,
+      label: null,
+      last_sync_check_at: expect.any(String),
     });
+    expect(dispatchSpy.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(gameDetailStore.noteSaveSyncDisplay).mock.invocationCallOrder[0]!,
+    );
+    const recorded = vi.mocked(gameDetailStore.noteSaveSyncDisplay).mock.calls[0]![2];
+    expect(resolveSaveSyncLabel(recorded)).toBe("Just now");
   });
 
   it("shows 'Saves already up to date' when no files moved and no conflicts exist", async () => {
@@ -157,8 +163,8 @@ describe("executeManualSaveSync", () => {
     );
     expect(gameDetailStore.noteSaveSyncDisplay).toHaveBeenCalledWith(100, 42, {
       status: "synced",
-      label: "Just now",
-      last_sync_check_at: null,
+      label: null,
+      last_sync_check_at: expect.any(String),
     });
   });
 

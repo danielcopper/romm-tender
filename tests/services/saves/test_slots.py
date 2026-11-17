@@ -1515,6 +1515,12 @@ _UNSYNCABLE = [
     ),
 ]
 
+_SHORT_MESSAGE = {
+    "shared": "Shared save",
+    "beside_content": "Saved beside the game",
+    "saves_root_missing": "Saves folder missing",
+}
+
 
 class TestAGameWhoseSavesCannotSync:
     """#2153: no slot is set up for a game whose saves no sync would carry, from Play or from the wizard."""
@@ -1597,6 +1603,7 @@ class TestAGameWhoseSavesCannotSync:
         assert result["available"] is False
         assert result["reason"] == reason
         assert result["message"] == message
+        assert result["short_message"] == _SHORT_MESSAGE[kind]
         assert fake.call_log == []
         assert len(reader.calls) == 1
 

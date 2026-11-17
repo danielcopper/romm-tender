@@ -55,6 +55,7 @@ import { useDialogHost } from "./dialogs/useDialogHost";
 import { CONTAINER_STYLE, BUTTON_GROUP_STYLE, BUTTON_BASE_STYLE } from "./styles";
 import { DiscSelector } from "./DiscSelector";
 import { DownloadingButton } from "./DownloadingButton";
+import { PlayButtonBadges } from "./PlayButtonBadges";
 import { PlayStateButton } from "./PlayStateButton";
 import { SvgThrobber } from "./SvgThrobber";
 import { usePlayLaunch, type HeldState, type PressState } from "./usePlayLaunch";
@@ -613,6 +614,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
         pressUnderWay={(pressState !== null && pressState !== "launching") || downloadFlowUnderWay}
         onSwitchingChange={setSwitching}
       />
+      <PlayButtonBadges appId={appId} detail={detail} saveStatus={saveStatus} isOffline={isOffline} />
     </div>
   );
 };

@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { reconcilePlaytime, debugLog } from "../api/backend";
-import { formatPlaytime, formatLastPlayed, resolveLastPlayed } from "./formatters";
+import { formatPlaytime, formatSteamPlaytime, formatLastPlayed, resolveLastPlayed } from "./formatters";
 import { updatePlaytimeDisplay } from "./metadataPatches";
 import { detach } from "./detach";
 
@@ -20,12 +20,14 @@ interface PlaytimeState {
    *  set Steam's value. Preferred over Steam's device-local `rt_last_time_played`
    *  when rendering LAST PLAYED (#1294). */
   restoredLastPlayed: string | null;
-  playtime: string;
+  playtimeMinutes: number;
 }
 
 export interface GamePlaytime {
   lastPlayed: string;
   playtime: string;
+  /** The same total in Steam's words; empty at none. */
+  steamPlaytime: string;
 }
 
 /**
@@ -39,12 +41,12 @@ export function useGamePlaytime(appId: number, romId: number | null, logContext:
   // This avoids an unnecessary render from setting it inside the async effect.
   const overview = appStore.GetAppOverviewByAppID(appId);
   const initialLastPlayed = formatLastPlayed(overview?.rt_last_time_played ?? 0);
-  const initialPlaytime = formatPlaytime(overview?.minutes_playtime_forever ?? 0);
+  const initialMinutes = overview?.minutes_playtime_forever ?? 0;
 
   const [playtimeInfo, setPlaytimeInfo] = useState<PlaytimeState>({
     lastPlayed: initialLastPlayed,
     restoredLastPlayed: null,
-    playtime: initialPlaytime,
+    playtimeMinutes: initialMinutes,
   });
 
   // The play section is mounted under one constant key, so Steam can hand the same
@@ -57,7 +59,7 @@ export function useGamePlaytime(appId: number, romId: number | null, logContext:
       setPlaytimeInfo({
         lastPlayed: formatLastPlayed(ov?.rt_last_time_played ?? 0),
         restoredLastPlayed: null,
-        playtime: formatPlaytime(ov?.minutes_playtime_forever ?? 0),
+        playtimeMinutes: ov?.minutes_playtime_forever ?? 0,
       });
     }
   }, [appId]);
@@ -129,7 +131,7 @@ export function useGamePlaytime(appId: number, romId: number | null, logContext:
         return {
           ...prev,
           restoredLastPlayed,
-          playtime: formatPlaytime(ov.minutes_playtime_forever ?? 0),
+          playtimeMinutes: ov.minutes_playtime_forever ?? 0,
           lastPlayed: resolveLastPlayed(restoredLastPlayed, ov.rt_last_time_played ?? 0),
         };
       });
@@ -140,5 +142,9 @@ export function useGamePlaytime(appId: number, romId: number | null, logContext:
     };
   }, [appId]);
 
-  return { lastPlayed: playtimeInfo.lastPlayed, playtime: playtimeInfo.playtime };
+  return {
+    lastPlayed: playtimeInfo.lastPlayed,
+    playtime: formatPlaytime(playtimeInfo.playtimeMinutes),
+    steamPlaytime: formatSteamPlaytime(playtimeInfo.playtimeMinutes),
+  };
 }
