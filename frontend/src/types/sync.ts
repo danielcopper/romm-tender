@@ -441,7 +441,9 @@ export interface SyncPlanUnit {
   id: number | string;
   name: string;
   slug: string;
-  rom_count: number;
+  /** `null` for a platform whose count RomM's listing did not give; the
+   *  estimates weigh it at 0 and the plan row shows no count for it. */
+  rom_count: number | null;
   /** Only present when ``type === "collection"``. Discriminates standard/smart/virtual. */
   collection_kind?: CollectionKind;
   /**
@@ -487,8 +489,9 @@ export interface SyncPlanUnit {
    * Force Full Sync, which drops `collapsed_count` (stamp-gated) while leaving
    * the bindings intact.
    *
-   * Platform units only; absent on collections and older backends, where the
-   * seed falls back to the subtraction. `0` is real knowledge, not absence — a
+   * Platform units only; absent on collections, on a platform whose count RomM
+   * did not give, and on older backends, where the seed falls back to the
+   * subtraction. `0` is real knowledge, not absence — a
    * fully-mirrored platform genuinely creates nothing.
    */
   new_shortcut_count?: number;

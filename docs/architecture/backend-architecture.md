@@ -1755,8 +1755,11 @@ plan (per-unit weights + planned totals, via `sync_plan`) and the applying frame
   synced platform holding only PARTIAL collection-sibling rows** (ADR-0021): counting creates from the known rows alone
   would price a handful of items for a whole platform — a **short** read, the one direction this estimate may not err
   in. The `rom_count − persisted rows` term prices those unmirrored ROMs as creates, so the seed stays at (or above) the
-  full platform. A unit whose `new_shortcut_count` is absent (collections, older backends) falls back to the
-  `items − bound_count` subtraction, the pre-#1517 behaviour.
+  full platform. The one exception is a platform whose count RomM's listing did not give
+  ([#2761](https://github.com/danielcopper/romm-tender/issues/2761) D5): that term cannot be known, so no
+  `new_shortcut_count` is sent and the seed reads such a platform short. A unit whose `new_shortcut_count` is absent
+  (`SyncPlanUnit` in `frontend/src/types/sync.ts` says when) falls back to the `items − bound_count` subtraction, the
+  pre-#1517 behaviour.
 - **Collections still price by bound members.** Platform and collection units are priced the same way on an ordinary
   re-sync, so a collection-heavy library does not reinstate the over-read through its collections. **A Force Full Sync
   is the exception for collections**: `clear_sync_cache` clears `collection_sync_state` wholesale, and a collection's

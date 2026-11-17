@@ -113,9 +113,8 @@ export function previewApplySeconds(s: SyncPreviewSummary): number {
  * carries no completion stamp — exactly what a Force Full Sync leaves behind —
  * and on a platform with sibling groups (ADR-0021) the pre-collapse count
  * exceeds the real shortcut count, so the subtraction would price each collapsed
- * duplicate as a phantom create plus a cover download (#1517). A unit whose
- * backend omits ``new_shortcut_count`` (collections, a platform whose count RomM
- * did not give, older backends) keeps the
+ * duplicate as a phantom create plus a cover download (#1517). A unit the plan
+ * carries no ``new_shortcut_count`` for (``SyncPlanUnit`` says when) keeps the
  * subtraction, which is the pre-#1517 behaviour.
  *
  * The ``bound_count`` fallback is not rare for collections: a collection's
@@ -131,7 +130,7 @@ export function estimatePlanSeconds(units: readonly SyncPlanUnit[]): number {
   let updated = 0;
   for (const unit of units) {
     if (unit.predicted_skip) continue;
-    const items = Math.max(0, unit.collapsed_count ?? unit.rom_count);
+    const items = Math.max(0, unit.collapsed_count ?? unit.rom_count ?? 0);
     // Clamp: bound rows are counted pre-collapse, so a sibling-heavy platform
     // could report more bound rows than the collapsed item total.
     const bound = Math.min(items, Math.max(0, unit.bound_count ?? 0));

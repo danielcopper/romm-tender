@@ -4111,6 +4111,20 @@ class TestDoSyncPerUnitErrors:
         assert library.sync._box.sync_state == SyncState.IDLE
 
     @pytest.mark.asyncio
+    async def test_a_failure_other_than_an_unreadable_listing_is_logged_with_its_traceback(
+        self, make_library, fake_romm_api, caplog
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.list_platforms_side_effect = RuntimeError("RomM down")
+        library.sync._box.sync_state = SyncState.RUNNING
+
+        with caplog.at_level(logging.ERROR):
+            await library.sync._orchestrator._do_sync_per_unit()
+
+        [record] = [r for r in caplog.records if r.getMessage().startswith("Failed to build work queue")]
+        assert (record.levelno, record.exc_info is not None) == (logging.ERROR, True)
+
+    @pytest.mark.asyncio
     async def test_outer_exception_handler_emits_error_progress(self, make_library, fake_romm_api, emit):
         """An exception raised after build_work_queue (e.g. during a unit) hits the outer except."""
 
@@ -5768,9 +5782,11 @@ class TestAnUnreadablePlatformListing:
         assert [(f["stage"], f["message"], f["running"]) for f in progress] == [
             ("error", f"RomM's platform list could not be read (/api/platforms): {detail}", False)
         ]
-        assert [r.levelno for r in caplog.records if r.getMessage().startswith("Failed to build work queue")] == [
-            logging.WARNING
-        ]
+        assert [
+            (r.levelno, bool(r.exc_info))
+            for r in caplog.records
+            if r.getMessage().startswith("Failed to build work queue")
+        ] == [(logging.WARNING, False)]
         assert {c.args[0] for c in emit.call_args_list} == {"sync_progress"}
         with library.uow as uow:
             assert uow.sync_runs.get("run-2") is None

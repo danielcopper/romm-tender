@@ -128,12 +128,12 @@ function unitOutcome(unit: RunUnit): string {
  * (ADR-0023), so it is worded as an expectation. The new-shortcut count is what
  * the reader is waiting on where the plan carried one; a collection or an older
  * backend carries none, and then the unit's ROM count is what can honestly be
- * said about it.
+ * said about it — nothing, where RomM gave no count for the platform.
  */
 function unitPlan(unit: RunUnit): string {
   if (unit.predictedSkip) return "expected to skip";
   if (unit.newShortcutCount !== null && unit.newShortcutCount > 0) return `${unit.newShortcutCount} new`;
-  return pluralize(unit.romCount, "ROM");
+  return unit.romCount === null ? "—" : pluralize(unit.romCount, "ROM");
 }
 
 export const RunPanel: FC<{ state: SyncPageState }> = ({ state }) => {

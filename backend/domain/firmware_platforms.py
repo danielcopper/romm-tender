@@ -42,12 +42,20 @@ def library_firmware(platforms: Iterable[Mapping[str, Any]]) -> list[dict[str, A
     list raises :class:`~domain.platform_listing.UnreadableFirmware`.
     """
     entries = platform_entries(platforms)
+    unreadable = next((entry for entry in entries if entry.firmware is None), None)
+    if unreadable is not None:
+        raise UnreadableFirmware(
+            f"platform {unreadable.fs_slug or unreadable.platform_id} lists firmware that is no list"
+        )
+    return _firmware_rows(entries)
+
+
+def _firmware_rows(entries: list[PlatformEntry]) -> list[dict[str, Any]]:
+    """:func:`library_firmware`'s rows, from every entry whose firmware is a list."""
     owners = _owners_by_id(entries)
     rows: list[dict[str, Any]] = []
     for entry in entries:
-        if entry.firmware is None:
-            raise UnreadableFirmware(f"platform {entry.fs_slug or entry.platform_id} lists firmware that is no list")
-        for firmware in entry.firmware:
+        for firmware in entry.firmware or ():
             if firmware.get("missing_from_fs"):
                 continue
             platform_id = listed_number(firmware.get("platform_id"))
@@ -66,21 +74,30 @@ class ListedPlatforms:
     or without a slug (:func:`~domain.platform_names.listed_platform_folders`):
     the one notion of "a key that is a listed ``fs_slug``". ``by_slug`` groups
     those with a slug under it, and ``firmware`` is the library's firmware
-    (:func:`library_firmware`).
+    (:func:`library_firmware`) of every platform whose firmware is a list.
+    ``firmware_complete`` is false where a platform's firmware is no list, so
+    a file that is not among ``firmware`` may still be that platform's.
     """
 
     folders: frozenset[str]
     by_slug: Mapping[str, frozenset[str]]
     firmware: tuple[Mapping[str, Any], ...]
+    firmware_complete: bool = True
 
 
 def listed_platforms(platforms: Iterable[Mapping[str, Any]]) -> ListedPlatforms:
-    """The :class:`ListedPlatforms` of one read of RomM's platform listing."""
+    """The :class:`ListedPlatforms` of one read of RomM's platform listing.
+
+    A platform whose firmware is no list costs only what needs its firmware
+    (:func:`refiled_record_folder`); the folders and slugs are read as ever.
+    """
     listed = list(platforms)
+    entries = platform_entries(listed)
     return ListedPlatforms(
         folders=listed_platform_folders(listed),
         by_slug=folders_by_slug(listed),
-        firmware=tuple(library_firmware(listed)),
+        firmware=tuple(_firmware_rows(entries)),
+        firmware_complete=all(entry.firmware is not None for entry in entries),
     )
 
 
@@ -104,7 +121,8 @@ def refiled_record_folder(key: str, file_name: str, firmware_id: int | None, lis
     Otherwise *key* is read as a slug, and the record moves to the one listed
     ``fs_slug`` with that slug; where several share it, it stays, and each of
     their pages offers it (:func:`records_of_platform`). A key nothing places
-    stays where it is.
+    stays where it is, and so does a record whose ``firmware_id`` names no file
+    while a platform's firmware could not be read: that file may be its.
     """
     if key in listed.folders:
         return None
@@ -119,6 +137,8 @@ def refiled_record_folder(key: str, file_name: str, firmware_id: int | None, lis
         )
         if target is not None:
             return target
+        if not listed.firmware_complete:
+            return None
     folders = listed.by_slug.get(key, frozenset())
     return next(iter(folders)) if len(folders) == 1 else None
 

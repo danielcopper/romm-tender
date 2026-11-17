@@ -1433,6 +1433,17 @@ describe("SyncPage", () => {
       expect(rows[0]).toContain("collection");
     });
 
+    it("a waiting platform whose count RomM did not give shows no count", async () => {
+      seedRunUnits([planUnit({ id: 3, type: "platform", name: "Arcade", rom_count: null })], "run-live");
+      setSyncProgress({ running: true, stage: "fetching", step: 0, totalSteps: 1, message: "", runId: "run-live" });
+      const { container } = await renderPage();
+
+      const rows = rowTexts(container, "run-unit-");
+      expect(rows[0]).toContain("Arcade");
+      expect(rows[0]).not.toMatch(/\bROMs?\b/);
+      expect(rows[0]).toContain("—");
+    });
+
     it("with no rows the frame's own detail line takes their place (#1814)", async () => {
       // The plan arrives once per run, so a store that started empty after a
       // reload stays empty for the rest of it — and so does a preview run, which

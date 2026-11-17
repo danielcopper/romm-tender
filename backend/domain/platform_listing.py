@@ -30,8 +30,10 @@ class UnreadableFirmware(Exception):
     """A listed platform's firmware is no list, so what firmware the library holds cannot be read.
 
     Read as an empty list it would say the platform needs none (#1693). The
-    firmware read answers it as an unreadable platform listing; a sync never
-    reads the firmware, so it never stops over one.
+    firmware read answers it as an unreadable platform listing. A sync's own
+    read of the listing never stops over one; its refiling only leaves alone
+    the records whose firmware it cannot place
+    (:func:`~domain.firmware_platforms.listed_platforms`).
     """
 
 

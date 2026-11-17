@@ -31,7 +31,7 @@ class WorkUnit:
     slug: str
     # RomM's count of the unit's ROMs; ``None`` for a platform whose listing
     # entry gave no usable count (#2761 D5), which :meth:`planned_count` weighs
-    # at 0.
+    # at 0 and the plan sends as ``None``, so no surface shows a count for it.
     rom_count: int | None
     # Platform-only: the platform's ``fs_slug``, by
     # which the sync knows the platform (#2452 D1); the slug stays the console.
@@ -110,7 +110,7 @@ class WorkUnit:
             "id": self.id,
             "name": self.name,
             "slug": self.slug,
-            "rom_count": self.planned_count(),
+            "rom_count": self.rom_count,
         }
         if self.type == "collection":
             payload["collection_kind"] = self.collection_kind

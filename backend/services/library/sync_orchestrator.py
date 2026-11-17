@@ -316,8 +316,12 @@ class SyncOrchestrator:
             except Exception as e:
                 # RomM answered, but its platform list could not be read: a
                 # warning, as every reader of it logs one (#2761 D8).
-                level = logging.WARNING if isinstance(e, RommPlatformListingUnreadable) else logging.ERROR
-                self._logger.log(level, f"Failed to build work queue: {e}")
+                unreadable = isinstance(e, RommPlatformListingUnreadable)
+                self._logger.log(
+                    logging.WARNING if unreadable else logging.ERROR,
+                    f"Failed to build work queue: {e}",
+                    exc_info=not unreadable,
+                )
                 _code, _msg = classify_error(e)
                 await self._progress.emit_progress(SyncStage.ERROR, message=_msg, running=False)
                 return

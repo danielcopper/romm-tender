@@ -82,12 +82,12 @@ class TestToEventPayload:
 
 
 class TestAnUnknownRomCount:
-    """#2761 D5: a platform whose listing gave no count is planned at 0, and the wire still carries a number."""
+    """#2761 D5: a platform whose listing gave no count is planned at 0, and the plan sends no count for it."""
 
-    def test_it_is_planned_at_zero(self):
+    def test_it_is_planned_at_zero_and_the_plan_carries_no_count(self):
         unit = WorkUnit(type="platform", id=1, name="GBA", slug="gba", rom_count=None)
 
-        assert (unit.planned_count(), unit.estimated_items(), unit.to_event_payload()["rom_count"]) == (0, 0, 0)
+        assert (unit.planned_count(), unit.estimated_items(), unit.to_event_payload()["rom_count"]) == (0, 0, None)
 
     def test_a_known_count_is_planned_as_it_is(self):
         unit = WorkUnit(type="platform", id=1, name="GBA", slug="gba", rom_count=7)

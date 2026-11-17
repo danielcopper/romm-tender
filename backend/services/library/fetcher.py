@@ -712,8 +712,10 @@ class LibraryFetcher:
                     if stamp is not None and all_rows
                     else None
                 )
-                # Without RomM's count no estimate is sent (#2761 D5); the plan
-                # then prices the platform short, at its planned count of 0.
+                # Without RomM's count no create estimate is sent (#2761 D5); the
+                # plan then weighs the platform at its collapsed count where one
+                # is known, else at 0, which reads short — the exception
+                # docs/architecture/backend-architecture.md names beside the rule.
                 new_shortcuts = (
                     None
                     if unit.rom_count is None
