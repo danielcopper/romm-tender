@@ -314,8 +314,8 @@ class SyncOrchestrator:
                 await self._progress.emit_cancelled(SYNC_CANCELLED)
                 raise
             except Exception as e:
-                # RomM answered, but its platform list could not be read: a
-                # warning, as every reader of it logs one (#2761 D8).
+                # An unreadable platform list is a warning, as every reader of
+                # it logs one (#2761 D8); any other failure here is an error.
                 unreadable = isinstance(e, RommPlatformListingUnreadable)
                 self._logger.log(
                     logging.WARNING if unreadable else logging.ERROR,

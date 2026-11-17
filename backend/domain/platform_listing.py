@@ -33,7 +33,7 @@ class UnreadableFirmware(Exception):
     firmware read answers it as an unreadable platform listing. A sync's own
     read of the listing never stops over one; its refiling only leaves alone
     the records whose firmware it cannot place
-    (:func:`~domain.firmware_platforms.listed_platforms`).
+    (:func:`~domain.firmware_platforms.refiled_record_folder`).
     """
 
 

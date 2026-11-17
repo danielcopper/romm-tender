@@ -73,8 +73,8 @@ class ListedPlatforms:
     ``folders`` is the ``fs_slug`` of every listed platform that has one, with
     or without a slug (:func:`~domain.platform_names.listed_platform_folders`):
     the one notion of "a key that is a listed ``fs_slug``". ``by_slug`` groups
-    those with a slug under it, and ``firmware`` is the library's firmware
-    (:func:`library_firmware`) of every platform whose firmware is a list.
+    those with a slug under it, and ``firmware`` holds the rows
+    :func:`library_firmware` gives, from every platform whose firmware is a list.
     ``firmware_complete`` is false where a platform's firmware is no list, so
     a file that is not among ``firmware`` may still be that platform's.
     """
@@ -86,11 +86,7 @@ class ListedPlatforms:
 
 
 def listed_platforms(platforms: Iterable[Mapping[str, Any]]) -> ListedPlatforms:
-    """The :class:`ListedPlatforms` of one read of RomM's platform listing.
-
-    A platform whose firmware is no list costs only what needs its firmware
-    (:func:`refiled_record_folder`); the folders and slugs are read as ever.
-    """
+    """The :class:`ListedPlatforms` of one read of RomM's platform listing."""
     listed = list(platforms)
     entries = platform_entries(listed)
     return ListedPlatforms(

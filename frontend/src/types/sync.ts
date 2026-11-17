@@ -442,7 +442,8 @@ export interface SyncPlanUnit {
   name: string;
   slug: string;
   /** `null` for a platform whose count RomM's listing did not give; the
-   *  estimates weigh it at 0 and the plan row shows no count for it. */
+   *  estimates weigh it at its `collapsed_count` where one is sent, else at 0,
+   *  and the plan row shows no count for it. */
   rom_count: number | null;
   /** Only present when ``type === "collection"``. Discriminates standard/smart/virtual. */
   collection_kind?: CollectionKind;

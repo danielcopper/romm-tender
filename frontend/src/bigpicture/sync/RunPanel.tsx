@@ -126,9 +126,9 @@ function unitOutcome(unit: RunUnit): string {
  *
  * `predictedSkip` is a plan-time prediction and never the run's verdict
  * (ADR-0023), so it is worded as an expectation. The new-shortcut count is what
- * the reader is waiting on where the plan carried one; a collection or an older
- * backend carries none, and then the unit's ROM count is what can honestly be
- * said about it — nothing, where RomM gave no count for the platform.
+ * the reader is waiting on where the plan carried one above zero
+ * (`SyncPlanUnit.new_shortcut_count` says when it carries none), and otherwise
+ * the unit's ROM count, or nothing where RomM gave none for the platform.
  */
 function unitPlan(unit: RunUnit): string {
   if (unit.predictedSkip) return "expected to skip";
