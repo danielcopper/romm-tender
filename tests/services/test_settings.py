@@ -1100,13 +1100,18 @@ class TestSaveCollectionPlatformGroups:
         assert settings["collection_create_platform_groups"] is False
         settings_persister.save_settings.assert_called_once_with()
 
-    def test_coerces_truthy(self, service, settings):
-        service.save_collection_platform_groups(1)  # type: ignore[arg-type]
-        assert settings["collection_create_platform_groups"] is True
-
-    def test_coerces_falsy(self, service, settings):
-        service.save_collection_platform_groups(0)  # type: ignore[arg-type]
+    @pytest.mark.parametrize("value", ["false", "true", 1, 0, None])
+    def test_non_bool_rejected_without_writing(self, service, settings, settings_persister, value):
+        settings["collection_create_platform_groups"] = False
+        with pytest.raises(Refused) as refused:
+            service.save_collection_platform_groups(value)
+        assert (refused.value.reason, refused.value.message, refused.value.details) == (
+            "invalid_value",
+            "Invalid value",
+            {},
+        )
         assert settings["collection_create_platform_groups"] is False
+        settings_persister.save_settings.assert_not_called()
 
 
 class TestSetCollectionOwnerScope:
