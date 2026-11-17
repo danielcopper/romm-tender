@@ -50,8 +50,8 @@ in `docs/adr/`, linked from the issue. Every `## Done when` item becomes a test 
 sections and the ADR format ([rules](https://github.com/danielcopper/.github#the-decisions-check)); the rest is for
 review.
 
-An issue someone else opened stays as they wrote it; the work gets its own issue that links it, and the pull request
-closes both.
+In an issue someone else opened, their text stays as they wrote it; the decisions go into a section appended below it,
+opened by `> [!NOTE]` / `> Added by the maintainer.`
 
 ## Traps — non-obvious rules that bite silently
 
