@@ -5,12 +5,15 @@
  * Steam ships no API for either. Both are internals with no compatibility
  * promise, measured on the device rather than read from documentation; the
  * decision to use them, and what it rests on, is
- * `docs/adr/0029-wide-qam-pages-drive-steams-friends-expansion.md`.
+ * `docs/adr/0029-wide-qam-pages-drive-steams-friends-expansion.md`; how the
+ * first one reaches the panel's width is `docs/architecture/qam-panel.md`,
+ * "Two widths".
  *
  * The flag the first lever sets is Steam's own and global, so whoever sets it
- * clears it: a wide page that leaks it leaves Steam's QAM expanded until the
- * Friends tab toggles it back. `useWideQamPanel` covers the three paths a
- * mounted page can observe; `collapseQamOnDismount` is the fourth.
+ * clears it: a wide page that leaks it leaves the QAM expanded on whichever tab
+ * is active, through the wrapper, until a change to any QAM tab but Friends
+ * clears it. `useWideQamPanel` covers the three paths a mounted page can
+ * observe; `collapseQamOnDismount` is the fourth.
  *
  * The injected sheet carries two rules that are not about width: a focus
  * outline for a DISABLED button, which Steam's own stylesheet omits, and a
@@ -23,6 +26,8 @@
 import { useEffect, type RefObject } from "react";
 import { useQuickAccessVisible } from "@decky/ui";
 import { quickAccessMenuClasses } from "./deckyUiInternals";
+import { installQamWidthPatch } from "./installQamWidthPatch";
+import { tryQamWidthInstall } from "./qamWidthPatch";
 
 /** Marker class on a wide page's root, matched by the injected `:has()` rule. */
 export const WIDE_ROOT_CLASS = "romm-wide-qam-root";
@@ -109,9 +114,9 @@ ${TAB_PANEL_SELECTOR}:has(.${WIDE_ROOT_CLASS}) > * { max-width: none; }
 let injectedStyle: HTMLStyleElement | null = null;
 
 /**
- * Drive Steam's Friends-tab expansion. The FriendsUI store listens for `message`
- * events on the window plugin code runs in and flips one MobX observable, which
- * carries the `Expanded` class that un-shifts the QAM's placeholder.
+ * Drive Steam's Friends-tab expansion: post the message Steam's FriendsUI store
+ * sets or clears `qamFriendsExpanded` from. What that flag does to the panel's
+ * width is `docs/architecture/qam-panel.md`, "Two widths".
  *
  * The target origin is `window.origin`: it addresses the message to the one
  * window meant to receive it, and always matches, so the message is always
@@ -138,6 +143,7 @@ function collapseWidePanel(): void {
 
 function expandWidePanel(root: HTMLElement): void {
   if (injectedStyle) return;
+  tryQamWidthInstall(installQamWidthPatch);
   setQamExpanded(true);
   const doc = root.ownerDocument;
   const style = doc.createElement("style");

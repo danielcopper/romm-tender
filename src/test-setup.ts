@@ -323,6 +323,14 @@ vi.mock("@decky/ui", () => {
     // fallback is what the suite exercises — which is the point: the fallback
     // is what a Steam build that renamed the module would render.
     findModule: vi.fn(() => undefined),
+    findModuleExport: vi.fn(() => undefined),
+    // What the wide pages' install reaches Steam's QAM host through, named
+    // explicitly for the reason given above `quickAccessMenuClasses`. Never
+    // called: the install refuses before it reads a fiber wherever the class
+    // map is undefined, as it is above.
+    afterPatch: vi.fn(),
+    getReactInstance: vi.fn(() => undefined),
+    findInTree: vi.fn(() => null),
     // The QAM is open for any test that renders a wide page; the hook's
     // clear-on-close path is exercised in src/utils/qamExpansion.test.tsx.
     useQuickAccessVisible: () => true,

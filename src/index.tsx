@@ -68,6 +68,7 @@ import { initSessionManager, destroySessionManager } from "./utils/sessionManage
 import { findOutermostScrollParent } from "./utils/scrollHelpers";
 import { ENTRY_FOCUS_DELAY_MS, pageEntryStop, placeEntryFocus } from "./utils/entryFocus";
 import { collapseQamOnDismount } from "./utils/qamExpansion";
+import { unregisterQamWidthPatch } from "./utils/installQamWidthPatch";
 import { detach } from "./utils/detach";
 import type {
   SyncProgress,
@@ -1120,6 +1121,7 @@ export default definePlugin(() => {
       // Steam flag with no React cleanup left to clear it here, so a teardown
       // that dies halfway must not be what leaves Steam's own QAM expanded.
       collapseQamOnDismount();
+      unregisterQamWidthPatch();
       syncContinuationController.abort();
       destroySessionManager();
       unregisterLaunchInterceptor();

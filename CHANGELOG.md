@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.33.1](https://github.com/danielcopper/romm-tender/compare/tender-v0.33.0...tender-v0.33.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* **qam:** widen the wide pages again on Steam's current client ([#2818](https://github.com/danielcopper/romm-tender/issues/2818))
+
 ## [0.33.0](https://github.com/danielcopper/romm-tender/compare/tender-v0.32.0...tender-v0.33.0) (2026-09-14)
 
 

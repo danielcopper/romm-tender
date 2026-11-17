@@ -17,6 +17,9 @@ concurrency:
 
 jobs:
   release-please:
+    # Left out on a manual run: this branch's releases are cut by hand, and
+    # release-please here would act on the release pull request of `main`.
+    if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -47,7 +50,9 @@ jobs:
 
   build-plugin:
     needs: release-please
-    if: ${{ needs.release-please.outputs.release_created || github.event_name == 'workflow_dispatch' }}
+    # `!cancelled()`: without a status function, a skipped `needs` job skips
+    # this one too, which is what a manual run leaves release-please as.
+    if: ${{ !cancelled() && (needs.release-please.outputs.release_created || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -91,6 +96,12 @@ jobs:
           # rename cannot move it again. The smoke test below asserts the name.
           BUILD_ROOT="$RUNNER_TEMP/romm-tender"
           cp -a "$GITHUB_WORKSPACE" "$BUILD_ROOT"
+          # The CLI installs the frontend's dependencies again inside its
+          # builder image, with that image's pnpm. A node_modules laid out by
+          # the runner's pnpm is one it refuses to replace without a terminal
+          # (ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY), so the copy goes in
+          # without one.
+          rm -rf "$BUILD_ROOT/node_modules"
           sudo $(which decky) plugin build -o /tmp/output -s directory "$BUILD_ROOT"
           # The CLI builds as root inside a container mounted on the build tree,
           # so the artifacts it leaves behind are root-owned. That is the copy
@@ -100,13 +111,28 @@ jobs:
       - name: Determine tag name
         id: tag
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
         run: |
-          if [ -n "$TAG_NAME" ]; then
+          # A manual run uploads to the release of the version this tree carries,
+          # never to whichever release was created last, which can be one of
+          # `main`'s. The zip carries plugin.json as well, whose version must say
+          # the same.
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION=$(jq -er '.version | select(type == "string" and length > 0)' package.json) || {
+              echo "::error::package.json carries no version to name the release by"
+              exit 1
+            }
+            PLUGIN_VERSION=$(jq -r .version plugin.json)
+            if [ "$PLUGIN_VERSION" != "$VERSION" ]; then
+              echo "::error::package.json says $VERSION but plugin.json says $PLUGIN_VERSION"
+              exit 1
+            fi
+            echo "tag=tender-v$VERSION" >> "$GITHUB_OUTPUT"
+          elif [ -n "$TAG_NAME" ]; then
             echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
           else
-            echo "tag=$(gh release list --limit 1 --json tagName -q '.[0].tagName')" >> "$GITHUB_OUTPUT"
+            echo "::error::release-please created a release but named no tag"
+            exit 1
           fi
 
       - name: Smoke-test release zip

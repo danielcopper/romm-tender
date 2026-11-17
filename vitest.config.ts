@@ -18,6 +18,7 @@ export default defineConfig({
         "src/types/**",
         "src/index.tsx",
         "src/patches/**",
+        "src/utils/installQamWidthPatch.ts",
         "src/utils/styleInjector.ts",
       ],
     },

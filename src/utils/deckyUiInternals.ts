@@ -18,6 +18,7 @@
 import type { CSSProperties, FC, FocusEventHandler, ReactNode } from "react";
 import {
   findModule,
+  findModuleExport,
   appActionButtonClasses as _appActionButtonClasses,
   basicAppDetailsSectionStylerClasses as _basicAppDetailsSectionStylerClasses,
   appDetailsClasses as _appDetailsClasses,
@@ -29,12 +30,21 @@ import {
   type TabsProps,
 } from "@decky/ui";
 
+import { thrownText } from "./thrownText";
+import { warnInConsole, warnWithError } from "./warnWithError";
+
 export const appActionButtonClasses: typeof _appActionButtonClasses | undefined = _appActionButtonClasses;
 export const basicAppDetailsSectionStylerClasses: typeof _basicAppDetailsSectionStylerClasses | undefined =
   _basicAppDetailsSectionStylerClasses;
 export const appDetailsClasses: typeof _appDetailsClasses | undefined = _appDetailsClasses;
 export const playSectionClasses: typeof _playSectionClasses | undefined = _playSectionClasses;
-export const quickAccessMenuClasses: typeof _quickAccessMenuClasses | undefined = _quickAccessMenuClasses;
+/**
+ * Steam's runtime map also carries `Expanded`, the class its QAM host puts on
+ * the placeholder the QAM's view tracks; upstream's type names `ViewPlaceholder`
+ * beside it but not `Expanded`.
+ */
+export const quickAccessMenuClasses: (typeof _quickAccessMenuClasses & { readonly Expanded?: string }) | undefined =
+  _quickAccessMenuClasses;
 
 /**
  * What the tabbed page accepts beyond the four props `@decky/ui` declares.
@@ -150,3 +160,49 @@ export const ControllerGlyph: FC<ControllerGlyphProps> | undefined = findModule(
     return false;
   }
 })?.W;
+
+/**
+ * *predicate* as a `findModuleExport` filter that answers no where it throws,
+ * and says so: to the console each time, and through `warnWithError` once per
+ * load for each distinct error (`docs/architecture/qam-panel.md`, "Two widths",
+ * says why). The plugin searches with Decky Loader's copy of `@decky/ui`, which
+ * catches a throwing filter only from 4.11.1 on: under a loader built against
+ * an older one, a throw would end the search, and with it the evaluation of
+ * this module and the whole plugin.
+ */
+const passingOverThrows = (searchedFor: string, predicate: (e: unknown) => boolean) => {
+  const written = new Set<string>();
+  return (e: unknown): boolean => {
+    try {
+      return predicate(e);
+    } catch (error) {
+      const line = `the search for ${searchedFor} passed over an export that threw`;
+      const text = thrownText(error);
+      if (written.has(text)) {
+        warnInConsole(line, error);
+      } else {
+        written.add(text);
+        warnWithError(line, error);
+      }
+      return false;
+    }
+  };
+};
+
+/** Steam's FriendsUI store, reduced to the flag the wide pages read. */
+export interface SteamFriendsUIStore {
+  readonly qamFriendsExpanded?: unknown;
+}
+
+/**
+ * Steam's FriendsUI store, whose flag the wide pages set and read, found as
+ * `docs/architecture/qam-panel.md`, "Two widths", says rather than by its
+ * export name, which is minified and moves with Steam's bundle. `undefined`
+ * when none is found.
+ */
+export const FriendsUIStore: SteamFriendsUIStore | undefined = findModuleExport(
+  passingOverThrows(
+    "Steam's FriendsUI store",
+    (e) => typeof e === "object" && e !== null && "m_bQamFriendsExpanded" in e && "qamFriendsExpanded" in e,
+  ),
+);

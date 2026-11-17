@@ -27,8 +27,10 @@ without restating it. The width mechanism's decision record is
 | `src/components/DangerZone.tsx`, `RemovedGamesCleanup.tsx`    | Data Management                                                                                                                                                     |
 | `src/components/DownloadQueue.tsx`                            | Downloads                                                                                                                                                           |
 | `src/components/library/`                                     | The Library page's tabs: `usePlatformsPage` (its reads and actions), `PlatformsTab`, `PlatformDetail`                                                               |
-| `src/utils/deckyUiInternals.ts`                               | Honest typing for `@decky/ui` values that come from a webpack probe: the frame's class names, `Tabs`, `ScrollPanel`, the controller glyph                           |
-| `src/utils/qamExpansion.ts`                                   | The panel's width: the expand and hide messages, the injected `max-width` rule, and the four paths that clear both                                                  |
+| `src/utils/deckyUiInternals.ts`                               | Honest typing for `@decky/ui` values that come from a webpack probe: the frame's class names, `Tabs`, `ScrollPanel`, the controller glyph, Steam's FriendsUI store  |
+| `src/utils/qamExpansion.ts`                                   | The panel's width: the expand and hide messages, the injected `max-width` rule and the four paths that clear both, and the call that installs the wrapper           |
+| `src/utils/qamWidthPatch.ts`                                  | The wrapper on Steam's QAM host, the half decidable without Steam: the host, one render widened, taking it back, the lines it writes                                |
+| `src/utils/installQamWidthPatch.ts`                           | The wrapper's install and take-back, through Big Picture's document, the live fibers and `@decky/ui`'s `afterPatch`                                                 |
 | `src/components/qam/`                                         | The wide-page frame: `WidePage` (the Back/title line, tabs, measured height, entry focus), `ScrollRegion`, `Columns`, `ListDetail`, `pane`                          |
 | `src/utils/entryFocus.ts`                                     | Which stop a body opens on, a page's declaration when that stop is not it, the rule for a body that swaps under the reader, and the `.focus()` + `gpfocus` pair     |
 | `src/utils/syncRunView.ts`                                    | `useSyncRunView` — the run in flight as a page renders it: stage label, coarse bar, position within the running unit, fine-detail line, estimate, and the run's end |
@@ -59,14 +61,59 @@ How a page gets wide, measured on the device rather than read from documentation
 
 - Steam's main window holds the QAM in a sliding container: an absolutely positioned element as wide as the viewport and
   854 × 454 CSS px on the Deck — the 80 px above it is Steam's top bar — anchored right and pushed off-screen by
-  `transform: translateX(506px)`, so 348 px stay visible. Steam's `Expanded` class sets `translateX(0)`. Its class names
-  are hashed and there is no `ViewPlaceholder` to match on any more, so the container is found by geometry: absolutely
-  positioned, a transform set, at least 800 × 400. The class follows one MobX observable on the FriendsUI store, which
-  listens for `message` events on the SharedJSContext window — the window plugin code runs in. A wide page posts
-  `{ message: "QamFriendsExpanded" }` to `window` on mount and `{ message: "QamFriendsHidden" }` when it lets go. The
-  target origin is always `window.origin`, which addresses the message to that window and always matches it. A
-  well-formed target origin that does not match is checked at delivery and the message is discarded in silence, so a
-  literal one would leave the panel simply never widening.
+  `transform: translateX(506px)`, so 348 px stay visible. That element carries the `ViewPlaceholder` class of
+  `quickAccessMenuClasses`, and the QAM's view is laid over it: Steam's own layout effect keeps the view's bounds on the
+  element. Steam's `Expanded` class, from the same class map, sets `translateX(0)`.
+- Steam's QAM host — the component that renders the placeholder — takes `Expanded` from one MobX observable on the
+  FriendsUI store, `qamFriendsExpanded`, **only while Friends is the active QAM tab** (`steamui/sp.js`, in both QAM
+  renderers; the flag is one of the class's sources there, not the only one). The store listens for `message` events on
+  the SharedJSContext window — the window plugin code runs in. A wide page posts `{ message: "QamFriendsExpanded" }` to
+  `window` on mount and `{ message: "QamFriendsHidden" }` when it lets go; each makes the host render once. The target
+  origin is always `window.origin`, which addresses the message to that window and always matches it. A well-formed
+  target origin that does not match is checked at delivery and the message is discarded in silence, so a literal one
+  would leave the panel simply never widening.
+- On the Decky tab the flag alone widens nothing, so a wrapper on the host's render fills in for it
+  (`utils/qamWidthPatch.ts`, installed by `utils/installQamWidthPatch.ts`). While the flag is set, it adds `Expanded` to
+  the child the host hands the QAM's `browser` — the element the view follows — unless Steam has put it there already,
+  as it does on Friends; Steam's layout effect then moves the view itself, so nothing calls `SetBounds`, waits on a
+  timer or watches the placeholder's class. The flag is read from the store at every render, not kept by the plugin:
+  Steam clears it on a QAM tab change before the plugin's observer sees that change, so a flag of the plugin's own would
+  leave the panel wide on another tab for any render in between, and a `message` listener runs only after Steam has
+  rendered. The store is found by the field its message handler sets and the getter the wrapper reads, both required.
+  The host is found in `findSP()`'s document — Big Picture's main window — by walking up from a placeholder's fiber to
+  the first one whose props carry both `active` and `ModalManager`, and a placeholder whose host cannot be wrapped is
+  passed over for the next. The wrapper goes on through `@decky/ui`'s `afterPatch` on the host's `memo`, as the game
+  page's patch does, so it stacks with another plugin's patch on the same component and each can be taken off in any
+  order. The host is mounted as a simple `memo`, which carries its render function on the fiber itself: patching the
+  `memo` reaches a host mounted afterwards, not the one already on screen, so the mounted fiber and its alternate are
+  pointed at the patched function as well; a host mounted any other way is left alone. The install runs each time a wide
+  page widens the panel and wraps a host once. The plugin's `onDismount` takes the wrapper back, as it takes back the
+  plugin's other patches: off the `memo` through the handle `afterPatch` answers, and off every host fiber and alternate
+  that holds it — the pair pointed at it at the wrap, and the hosts above Big Picture's placeholders found again at that
+  moment, which takes in a host mounted from the patched `memo` since — each pointed at what the `memo` carries
+  afterwards, so a host on screen renders Steam's own function again, or another plugin's patch where one is still on
+  it; a fiber that holds another function is left alone. It also disarms the wrapper's handler, which from then on hands
+  Steam's result back untouched, so a fiber that walk misses renders Steam's result through it. The host lives until
+  Steam's JS context is rebuilt, so without this the wrapper would outlive an update, a reload or an uninstall of the
+  plugin; with it, the install after a reload wraps the host afresh. A take-back that throws is written to the console
+  and the plugin log, with what it leaves behind, and does not stop the rest of `onDismount`. The wrapper calls no
+  hooks, because it joins a host that is already mounted: a hook it called would change the number of hooks that host
+  calls from one render to the next, which React refuses. Where its own work throws it answers with Steam's result
+  unchanged. **Nothing checks afterwards that the panel widened**, and the cap below is lifted either way, whatever the
+  install answered or threw: a wrapper that stops applying leaves a wide page cut off at its right edge. It leaves a
+  trace instead, in the console and in the plugin log at `warn`, the level the default setting writes — the log the user
+  guide's troubleshooting page sends a user to — in three cases, each written once per load for each distinct reason:
+  the install wrapped nothing (with the reason, Big Picture's window not being found among them — the install runs only
+  from a wide page inside the Quick Access panel, where that window exists, so not finding it is a failed lookup), the
+  flag was set and the host rendered no element to widen (with the part of the render that was not as expected), and the
+  wrapper's or the install's own work threw (with the error itself in the console, so its stack is kept, and its name
+  and message in the plugin log; a throw's reason is where it was thrown and its error's name and message, so a second,
+  different error from the same place is written too). **Nothing asks after the store or the two classes at load**: a
+  class map without `ViewPlaceholder` or `Expanded`, or no store found, reaches the console and the plugin log only
+  through the install's own line (`class-map-incomplete`, `no-friends-ui-store`), the first time a wide page widens. The
+  store's search passes over an export that throws on being asked, and writes a line of its own for it: to the console
+  each time, and to the plugin log once per load for each distinct error, because the search asks every export of every
+  module.
 - Every tab's content panel carries `max-width: 300px`; only Steam's Friends panel lifts it. A wide page injects one
   stylesheet whose `:has()` rule lifts the cap for a marker class on the plugin's own subtree. Class names come from
   `quickAccessMenuClasses`, which can be `undefined`; `[id^="quickaccess_content_"]` is the fallback selector. Decky

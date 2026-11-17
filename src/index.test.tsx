@@ -60,6 +60,10 @@ vi.mock("./utils/launchInterceptor", () => ({
   registerLaunchInterceptor: vi.fn(),
   unregisterLaunchInterceptor: vi.fn(),
 }));
+vi.mock("./utils/installQamWidthPatch", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./utils/installQamWidthPatch")>()),
+  unregisterQamWidthPatch: vi.fn(),
+}));
 vi.mock("./utils/sessionManager", () => ({
   initSessionManager: vi.fn().mockResolvedValue(undefined),
   destroySessionManager: vi.fn(),
@@ -144,6 +148,7 @@ vi.mock("./utils/launcherRelocation", () => ({
 import { applyAllPlaytime, registerMetadataPatches, applyAllMetadata } from "./patches/metadataPatches";
 import { getLauncherState, setLauncherRelocated } from "./utils/launcherStore";
 import { registerRomMAppId, unregisterRomMAppId } from "./patches/gameDetailPatch";
+import { unregisterQamWidthPatch } from "./utils/installQamWidthPatch";
 import definePluginResult from "./index";
 
 // `definePlugin` is stubbed in test-setup to return its factory unchanged, so
@@ -214,6 +219,18 @@ describe("index.tsx — launcher relocation at plugin load", () => {
     expect(getLauncherState().relocated).toBe(false);
     expect(logError).toHaveBeenCalledWith(expect.stringContaining("shortcut store exploded"));
     plugin.onDismount();
+  });
+});
+
+describe("index.tsx — dismount", () => {
+  it("takes the wrapper on Steam's QAM host back", async () => {
+    const plugin = pluginFactory();
+    await act(flush);
+    vi.mocked(unregisterQamWidthPatch).mockClear();
+
+    plugin.onDismount();
+
+    expect(unregisterQamWidthPatch).toHaveBeenCalledTimes(1);
   });
 });
 
