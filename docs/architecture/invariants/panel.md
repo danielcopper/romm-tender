@@ -138,11 +138,12 @@ entry reads and binds, and the other areas: [the register's index](index.md).
   (`frontend/src/utils/useRomMetadata.ts`), `EmulationSettings` (`frontend/src/desktop/gameview/EmulationSettings.tsx`,
   in the desktop dev build) and `SaveManagementCard` (`frontend/src/desktop/gameview/SaveManagementCard.tsx`, in the
   desktop dev build — keyed by `detail.romId` on `SaveManagementCardContent` so a version switch tears down its subtree
-  alongside `isCancelled()` and `mountedRef` guards across `SaveManagementCard.tsx`, `DesktopSlotPanel.tsx` and
-  `DesktopVersionHistory.tsx`) the same way. Two answers for the SAME rom are ordered by a sequence taken at issue
-  (`loadSeq`, `saveStatusSeq`, `takeReadTicket`, `EmulationSettings`'s `readSeqRef`, and `SaveManagementCard`'s /
-  `DesktopSlotPanel`'s / `DesktopVersionHistory`'s sequence counters). Ordered but unbound: the two identity writes (the
-  store's `loadDetail`, the panel's `loadData`) and the panel's lazy SAVES-tab slot load
+  alongside `isCancelled()` and `mountedRef` guards across `SaveManagementCard.tsx`, `DesktopSlotPanel`
+  (`frontend/src/desktop/gameview/DesktopSlotPanel.tsx`) and `DesktopVersionHistory`
+  (`frontend/src/desktop/gameview/DesktopVersionHistory.tsx`)) the same way. Two answers for the SAME rom are ordered by
+  a sequence taken at issue (`loadSeq`, `saveStatusSeq`, `takeReadTicket`, `EmulationSettings`'s `readSeqRef`, and
+  `SaveManagementCard`'s / `DesktopSlotPanel`'s / `DesktopVersionHistory`'s sequence counters). Ordered but unbound: the
+  two identity writes (the store's `loadDetail`, the panel's `loadData`) and the panel's lazy SAVES-tab slot load
   (`frontend/src/bigpicture/panelSlotsLoad.ts`, raw setter, `slots` ticket); neither bound nor ordered: the store's
   `cached.bios_status` fold. The panel's `rereadBiosAnswer`, which `handleBiosChange` and a press on the BIOS tab both
   read through, is bound and ordered (`bios` ticket). The play button is NOT covered

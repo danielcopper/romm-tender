@@ -558,7 +558,7 @@ describe("loadFileVersions", () => {
       ok: false,
       error: "Couldn't reach RomM. Tap retry.",
     });
-    expect(backend.debugLog).toHaveBeenCalledWith(
+    expect(backend.logWarn).toHaveBeenCalledWith(
       "saveSlotFlow: failed to load versions for save.srm: Error: socket closed",
     );
   });
@@ -604,8 +604,13 @@ describe("executeCopySaveToSlot", () => {
     }
   });
 
-  it("hands conflicts to showConflict without toasting and logs/toasts thrown calls", async () => {
+  it("does nothing on an unrecognized copy status and handles conflicts and thrown calls", async () => {
     const showConflict = vi.fn().mockResolvedValue("resolved");
+    vi.mocked(backend.copySaveToSlot).mockResolvedValueOnce({ status: "unrecognized" as never });
+    await executeCopySaveToSlot(7, 10, "alt", showConflict);
+    expect(toast.showToast).not.toHaveBeenCalled();
+    expect(showConflict).not.toHaveBeenCalled();
+
     vi.mocked(backend.copySaveToSlot).mockResolvedValueOnce({ status: "conflict_blocked", conflicts: [CONFLICT] });
     await executeCopySaveToSlot(7, 10, "alt", showConflict);
     expect(showConflict).toHaveBeenCalledExactlyOnceWith(CONFLICT);
@@ -613,7 +618,7 @@ describe("executeCopySaveToSlot", () => {
 
     vi.mocked(backend.copySaveToSlot).mockRejectedValueOnce(new Error("net down"));
     await executeCopySaveToSlot(7, 10, "alt", showConflict);
-    expect(backend.debugLog).toHaveBeenCalledWith("saveSlotFlow: copy failed for save 10 into 'alt': Error: net down");
+    expect(backend.logWarn).toHaveBeenCalledWith("saveSlotFlow: copy failed for save 10 into 'alt': Error: net down");
     expect(toast.showToast).toHaveBeenCalledWith("Couldn't copy the save. Check your connection and try again.");
   });
 });
@@ -631,8 +636,15 @@ describe("executeVersionRestore", () => {
 
   it("returns true on ok and put_failed, false on refusal, conflict, or throw", async () => {
     const showConflict = vi.fn().mockResolvedValue("resolved");
-    vi.mocked(backend.savesRollbackToVersion).mockResolvedValueOnce({ status: "ok" });
-    await expect(executeVersionRestore(7, "default", VERSION, showConflict)).resolves.toBe(true);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2025-06-14T10:30:00Z"));
+    try {
+      vi.mocked(backend.savesRollbackToVersion).mockResolvedValueOnce({ status: "ok" });
+      await expect(executeVersionRestore(7, "default", VERSION, showConflict)).resolves.toBe(true);
+      expect(toast.showToast).toHaveBeenCalledWith("Save restored from 30m ago");
+    } finally {
+      vi.useRealTimers();
+    }
 
     vi.mocked(backend.savesRollbackToVersion).mockResolvedValueOnce({ status: "put_failed", message: "503" });
     await expect(executeVersionRestore(7, "default", VERSION, showConflict)).resolves.toBe(true);
@@ -640,9 +652,14 @@ describe("executeVersionRestore", () => {
     vi.mocked(backend.savesRollbackToVersion).mockResolvedValueOnce({ status: "version_deleted" });
     await expect(executeVersionRestore(7, "default", VERSION, showConflict)).resolves.toBe(false);
 
+    vi.mocked(toast.showToast).mockClear();
+    vi.mocked(backend.savesRollbackToVersion).mockResolvedValueOnce({ status: "unrecognized" as never });
+    await expect(executeVersionRestore(7, "default", VERSION, showConflict)).resolves.toBe(false);
+    expect(toast.showToast).not.toHaveBeenCalled();
+
     vi.mocked(backend.savesRollbackToVersion).mockRejectedValueOnce(new Error("boom"));
     await expect(executeVersionRestore(7, "default", VERSION, showConflict)).resolves.toBe(false);
-    expect(backend.debugLog).toHaveBeenCalledWith("saveSlotFlow: restore error for save 11: Error: boom");
+    expect(backend.logWarn).toHaveBeenCalledWith("saveSlotFlow: restore error for save 11: Error: boom");
     expect(toast.showToast).toHaveBeenCalledWith("Couldn't confirm the restore.", { subtext: "boom" });
   });
 });
@@ -682,7 +699,7 @@ describe("executeDeleteLocalSaves", () => {
 
     vi.mocked(backend.deleteLocalSaves).mockRejectedValueOnce(new Error("io"));
     await executeDeleteLocalSaves(100, 7);
-    expect(backend.debugLog).toHaveBeenCalledWith("saveSlotFlow: deleteLocalSaves for rom 7 threw: Error: io");
+    expect(backend.logWarn).toHaveBeenCalledWith("saveSlotFlow: deleteLocalSaves for rom 7 threw: Error: io");
     expect(toast.showToast).toHaveBeenCalledWith("Failed to delete saves");
   });
 });

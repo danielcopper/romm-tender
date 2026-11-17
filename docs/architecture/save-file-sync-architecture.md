@@ -1380,8 +1380,9 @@ any surface that shows a conflict:
   for a start whose questions go to the gamepad modals. It does not import the modal: `index.tsx` hands it
   `gamepadLaunchPrompts` (`frontend/src/shared/launchPrompts.ts`), whose `resolveConflicts` is `handleConflicts`, as the
   fallback of `launchPromptsForThisStart` ([Pre-launch sync](#pre-launch-sync)).
-- `VersionHistoryPanel.handleRestore` (in `SavesTab`, through `executeVersionRestore`), through `showSyncConflictModal`
-  for the first conflict — when a version-restore pre-flight returns `conflict_blocked`.
+- `VersionHistoryPanel.handleRestore` (in `SavesTab`, `frontend/src/bigpicture/SavesTab.tsx`, through
+  `executeVersionRestore`), through `showSyncConflictModal` for the first conflict — when a version-restore pre-flight
+  returns `conflict_blocked`.
 - `useCopyToSlot` (the Saves tab's "Copy to slot…", through `executeCopySaveToSlot`), through `showSyncConflictModal`
   for the first conflict — when a copy returns `conflict_blocked`.
 - In the desktop dev build, `SaveManagementCard` (`DesktopVersionHistory.tsx` and `SaveManagementCard.tsx`) reaches the
@@ -1550,8 +1551,10 @@ version history + rollback** for them:
 - `get_save_status` carries `multi_file: bool`, `component_files: list[str]` (the N filenames, sorted), and
   `rollback_supported: bool`. Detection counts the distinct canonical target filenames the active slot resolves to
   (across the matrix outcomes); more than one ⇒ multi-file.
-- The SAVES tab replaces the Previous-Versions dropdown for a multi-file slot with a read-only **"Files in this save
-  (N)"** component list plus a short note that per-version rollback isn't available yet.
+- The SAVES tab (and `SaveManagementCard` in the desktop dev build) replaces the Previous-Versions dropdown for a
+  multi-file slot with a read-only **"Files in this save (N)"** component list plus a short note that per-version
+  rollback isn't available yet (`multiFileSaveHeading` / `multiFileSaveNote` in
+  `frontend/src/utils/saveSlotWording.ts`).
 - `list_file_versions` short-circuits to `{"status": "multi_file_unsupported", "versions": []}` and
   `rollback_to_version` refuses with `{"status": "unsupported"}` before any preflight or destructive I/O. Both backstops
   detect multi-file from the **local** save files on disk (a rollback target is always installed), so they add no extra
@@ -1750,13 +1753,14 @@ the answer by `_build_save_schema`, and depends on whether the request names a d
   synced reads as not current.
 - **Without `device_id`** — `device_syncs` is empty, whatever rows are stored.
 
-The sync decision reads the placeholder, so the RomM adapter keeps it. What the SAVES tab is shown does not: a save
-row's and each version's `device_syncs` leave out the entry that names this device with the placeholder's shape —
-`is_current` false while `last_synced_at` is at or after the save's `updated_at`, which RomM's own `is_current` rule
-never answers for a stored row (`domain/save_status_builders.py::shown_device_syncs`). Without that, the placeholder,
-listed first and stamped with the same time as the row of the device that really uploaded the save, would be the one the
-"last synced by" name is taken from, and name this device on a save it never synced. A save row's `is_current` is still
-read off RomM's list as it came, so a save this device never synced still reads as not current.
+The sync decision reads the placeholder, so the RomM adapter keeps it. What the SAVES tab and desktop
+`SaveManagementCard` are shown does not: a save row's and each version's `device_syncs` leave out the entry that names
+this device with the placeholder's shape — `is_current` false while `last_synced_at` is at or after the save's
+`updated_at`, which RomM's own `is_current` rule never answers for a stored row
+(`domain/save_status_builders.py::shown_device_syncs`). Without that, the placeholder, listed first and stamped with the
+same time as the row of the device that really uploaded the save, would be the one the "last synced by" name is taken
+from, and name this device on a save it never synced. A save row's `is_current` is still read off RomM's list as it
+came, so a save this device never synced still reads as not current.
 
 The rows that make a save current for a device are written only by:
 
@@ -1903,9 +1907,9 @@ rather than staying silent; the automatic surfaces (pre-launch, post-exit) keep 
 in exactly one place: the frontend helper `saveSyncToastBody` (`frontend/src/utils/saveSyncToast.ts`), which every
 surface renders through — pre-launch (`runPreLaunchSync`, for a start from the Play button), post-exit
 (`sessionManager`, from the counts on the `finalize_game_session` payload), and the manual per-game sync
-(`RomMPlaySection`, and `SaveManagementCard` in the desktop dev build, through `frontend/src/utils/manualSaveSync.ts`).
-The backend delivers the counts as data, never the directional copy (#1481); the offline/failure body it still owns
-rides a separate `failure_toast` field on `SessionFinalizeSyncResult`.
+(`RomMPlaySection`, `frontend/src/bigpicture/RomMPlaySection.tsx`, and `SaveManagementCard` in the desktop dev build,
+through `frontend/src/utils/manualSaveSync.ts`). The backend delivers the counts as data, never the directional copy
+(#1481); the offline/failure body it still owns rides a separate `failure_toast` field on `SessionFinalizeSyncResult`.
 
 ### Pre-launch sync
 
@@ -2614,7 +2618,7 @@ for the physical column names and constraints.
 | `saves.<id>.slot_confirmed`                         | boolean                 | Whether user has explicitly chosen their slot (see "Slot Setup Wizard")                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `saves.<id>.last_synced_core`                       | string / null           | RetroArch core used at last sync (for core change detection, e.g. `"mgba_libretro"`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `saves.<id>.own_upload_ids`                         | array of integer        | Save ids this device originally POSTed. Drives the `uploaded_by_us` indicator on the SAVES tab.                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `saves.<id>.slots`                                  | object                  | Merged slot listing (read-model cache): per slot, its `source` / `count` / latest `updated_at`. A `get_save_slots` that could not reach the server hands this back in its own `last_known` field (`slots` / `active_slot`), but only once `slot_confirmed` is set — the QAM renders it as the state at the last contact. It carries no timestamp: nothing records when the listing was last refreshed, and `last_sync_check_at` moves independently of it (#1755).                                                                                       |
+| `saves.<id>.slots`                                  | object                  | Merged slot listing (read-model cache): per slot, its `source` / `count` / latest `updated_at`. A `get_save_slots` that could not reach the server hands this back in its own `last_known` field (`slots` / `active_slot`), but only once `slot_confirmed` is set — the QAM and desktop `SaveManagementCard` render it as read-only state at the last contact. It carries no timestamp: nothing records when the listing was last refreshed, and `last_sync_check_at` moves independently of it (#1755).                                                 |
 | `saves.<id>.last_sync_check_at`                     | ISO-8601 string / null  | Timestamp of the most recent `MatrixExecutor.sync_rom_saves` run for this rom (regardless of whether files transferred).                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `saves.<id>.files`                                  | object                  | Per-file sync state, keyed by filename (e.g. `"game.srm"`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `saves.<id>.files.<fn>.tracked_save_id`             | integer / null          | Most recent RomM save id this device tracked. Used to exclude the active save from the Previous Versions dropdown and as an uploader-attribution hint; **not** consulted by `compute_sync_action` (the algorithm picks newest by `updated_at`).                                                                                                                                                                                                                                                                                                          |

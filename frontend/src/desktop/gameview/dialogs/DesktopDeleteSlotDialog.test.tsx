@@ -16,7 +16,7 @@ describe("DesktopDeleteSlotDialog", () => {
     is_active: false,
   };
 
-  it("renders title, warning lines, irreversible note, and action buttons", () => {
+  it("renders title, warning lines, irreversible note, tone styles, and action buttons", () => {
     render(<DesktopDeleteSlotDialog deleteInfo={deleteInfo} onDismiss={vi.fn()} onConfirm={vi.fn()} />);
 
     expect(screen.getByRole("dialog", { name: "Delete Slot" })).toBeInTheDocument();
@@ -25,8 +25,11 @@ describe("DesktopDeleteSlotDialog", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("1 tracked file will be unlinked.")).toBeInTheDocument();
     expect(screen.getByText("This cannot be undone.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+
+    const cancelBtn = screen.getByRole("button", { name: "Cancel" });
+    expect(cancelBtn.style.backgroundColor).toBe("transparent");
+    const deleteBtn = screen.getByRole("button", { name: "Delete" });
+    expect(deleteBtn.style.backgroundImage).toContain("#c83c3c");
   });
 
   it("calls onConfirm when Delete button is clicked", () => {

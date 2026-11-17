@@ -297,6 +297,7 @@ describe("VersionHistoryPanel", () => {
       fireEvent.click(getByText("Restore"));
       await flushAsync();
       await flushAsync();
+      expect(backend.savesRollbackToVersion).toHaveBeenCalledWith(1, "default", 11);
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
         expect.objectContaining({ title: "Tender", body: expect.stringContaining("Save restored") }),
       );
@@ -526,17 +527,22 @@ describe("VersionHistoryPanel", () => {
     });
 
     it("says a restore that threw could not be confirmed, with the error's message as the subtext", async () => {
-      vi.mocked(backend.savesRollbackToVersion).mockRejectedValue(new Error("boom"));
-      const { getByText } = await expand();
-      fireEvent.click(getByText("Restore"));
-      await flushAsync();
-      await flushAsync();
-      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
-        expect.objectContaining({ body: "Couldn't confirm the restore.", subtext: "boom" }),
-      );
-      expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(expect.stringContaining("restore error"));
-      // The row is released for another try.
-      expect(getByText("Restore")).not.toBeDisabled();
+      const warnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => undefined);
+      try {
+        vi.mocked(backend.savesRollbackToVersion).mockRejectedValue(new Error("boom"));
+        const { getByText } = await expand();
+        fireEvent.click(getByText("Restore"));
+        await flushAsync();
+        await flushAsync();
+        expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
+          expect.objectContaining({ body: "Couldn't confirm the restore.", subtext: "boom" }),
+        );
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("restore error"));
+        // The row is released for another try.
+        expect(getByText("Restore")).not.toBeDisabled();
+      } finally {
+        warnSpy.mockRestore();
+      }
     });
   });
 

@@ -3,7 +3,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { SaveManagementCard } from "./SaveManagementCard";
 import * as backend from "../../api/backend";
-import { reportServerReachable, setRommConnectionState, setServerRetryProgress } from "../../utils/connectionState";
+import {
+  getRommConnectionState,
+  reportServerReachable,
+  setRommConnectionState,
+  setServerRetryProgress,
+} from "../../utils/connectionState";
+import { capturePruneLeaseAdmission, isPruneLeaseAdmissionCurrent } from "../../utils/pruneLease";
 import { setStrandedAnswer } from "../../test-utils/stranded-panel";
 import * as toast from "../../utils/toast";
 import * as gameDetailStore from "../../utils/gameDetailStore";
@@ -184,6 +190,17 @@ describe("SaveManagementCard", () => {
       expect(screen.queryByTestId("desktop-saves-card")).not.toBeInTheDocument();
       expect(backend.getSaveSlots).not.toHaveBeenCalled();
       expect(backend.getSaveSyncAvailability).not.toHaveBeenCalled();
+    });
+
+    it("holds prune lease owner desktop-saves-card:<appId> while mounted and releases it on unmount", () => {
+      const { unmount } = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+
+      expect(isPruneLeaseAdmissionCurrent(capturePruneLeaseAdmission("desktop-saves-card:100"))).toBe(true);
+      expect(isPruneLeaseAdmissionCurrent(capturePruneLeaseAdmission("desktop-saves-card:999"))).toBe(false);
+
+      unmount();
+
+      expect(isPruneLeaseAdmissionCurrent(capturePruneLeaseAdmission("desktop-saves-card:100"))).toBe(false);
     });
   });
 
@@ -1019,6 +1036,328 @@ describe("SaveManagementCard", () => {
         globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "saves" } }));
       });
       expect(scrollSpy).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+    });
+  });
+
+  describe("DesktopSlotPanel, DesktopVersionHistory, and failure/cancel edge branches", () => {
+    it("confirms active slot via 'Confirm Slot', handles confirm failure and rejection", async () => {
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: false,
+        active_slot: "default",
+        setup_needed: true,
+      });
+      render(<SaveManagementCard appId={100} detail={baseDetail} />);
+
+      const confirmBtn = await screen.findByRole("button", { name: "Confirm Slot" });
+      expect(confirmBtn.style.backgroundColor).toContain("rgba(26, 159, 255, 0.2)");
+
+      vi.mocked(backend.confirmSlotChoice).mockResolvedValueOnce({
+        success: true,
+        needs_conflict_resolution: false,
+        message: "",
+      });
+      const events: unknown[] = [];
+      const onEvt = (e: Event) => events.push((e as CustomEvent).detail);
+      globalThis.addEventListener("romm_data_changed", onEvt);
+      try {
+        fireEvent.click(confirmBtn);
+        await waitFor(() => {
+          expect(backend.confirmSlotChoice).toHaveBeenCalledWith(42, "default", false, null, false);
+          expect(toast.showToast).toHaveBeenCalledWith("Confirmed save slot 'default'");
+          expect(events).toContainEqual({ type: "save_sync", rom_id: 42 });
+          expect(gameDetailStore.refreshSaveStatus).toHaveBeenCalledWith(100);
+        });
+      } finally {
+        globalThis.removeEventListener("romm_data_changed", onEvt);
+      }
+
+      // Error branch when unconfirmed banner still allows confirm
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({
+        configured: false,
+        active_slot: "default",
+        setup_needed: true,
+      });
+      const warnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => undefined);
+      try {
+        const second = render(<SaveManagementCard appId={101} detail={{ ...baseDetail, romId: 43 }} />);
+        const bannerConfirmBtn = await within(second.container).findByRole("button", { name: "Confirm 'default'" });
+        vi.mocked(backend.confirmSlotChoice).mockResolvedValueOnce({
+          success: false,
+          reason: "unknown",
+          message: "",
+        });
+        fireEvent.click(bannerConfirmBtn);
+        await waitFor(() => expect(toast.showToast).toHaveBeenCalledWith("Failed to confirm save slot"));
+
+        vi.mocked(backend.confirmSlotChoice).mockRejectedValueOnce(new Error("confirm boom"));
+        fireEvent.click(bannerConfirmBtn);
+        await waitFor(() => {
+          expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("failed to confirm slot"));
+          expect(toast.showToast).toHaveBeenCalledWith("An error occurred while confirming the slot");
+        });
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+
+    it("renders Never, Conflict banner, missing server/local metadata, and LOCAL badges", async () => {
+      vi.mocked(backend.getSaveSlots).mockResolvedValue({
+        success: true,
+        slots: [{ slot: "localonly", source: "local", count: 1, latest_updated_at: null }],
+        active_slot: "localonly",
+      });
+      const neverConflictDetail: GameDetailState = {
+        ...baseDetail,
+        saveStatus: {
+          ...mockSaveStatus,
+          files: [
+            {
+              filename: "local-only.srm",
+              local_path: null,
+              local_size: 4096,
+              local_hash: null,
+              local_mtime: null,
+              server_save_id: null,
+              server_file_name: null,
+              server_emulator: null,
+              server_updated_at: null,
+              server_size: null,
+              last_sync_at: null,
+              status: "upload",
+              device_syncs: [],
+            },
+          ],
+          conflicts: [
+            {
+              type: "sync_conflict",
+              rom_id: 42,
+              filename: "local-only.srm",
+              server_save_id: 1,
+              server_updated_at: "2026-06-15T10:00:00Z",
+              server_size: 4096,
+              local_path: "/local/local-only.srm",
+              local_hash: "h",
+              local_mtime: "2026-06-15T10:00:00Z",
+              local_size: 4096,
+              created_at: "2026-06-15T10:00:00Z",
+            },
+          ],
+        },
+      };
+
+      render(<SaveManagementCard appId={100} detail={neverConflictDetail} />);
+
+      await waitFor(() => {
+        expect(screen.getByText("LOCAL")).toBeInTheDocument();
+        expect(screen.getByText("Never")).toBeInTheDocument();
+        expect(screen.getByText("Conflict detected on this file")).toBeInTheDocument();
+      });
+      expect(screen.queryByText("Server save:")).not.toBeInTheDocument();
+      expect(screen.queryByText("Local path:")).not.toBeInTheDocument();
+      expect(screen.queryByText("Copy to slot...")).not.toBeInTheDocument();
+    });
+
+    it("cancelling Delete Slot, Copy to slot, and New Slot dialogs performs no action", async () => {
+      vi.mocked(backend.getSlotDeleteInfo).mockResolvedValue({
+        success: true,
+        slot: "speedrun",
+        source: "server",
+        is_active: false,
+        server_save_count: 1,
+        server_save_ids: [1],
+        local_file_count: 0,
+        local_filenames: [],
+      });
+
+      render(<SaveManagementCard appId={100} detail={baseDetail} />);
+      fireEvent.click(await screen.findByRole("button", { name: /speedrun/ }));
+
+      // Cancel Delete Slot dialog via default useDialogHost
+      fireEvent.click(await screen.findByRole("button", { name: "Delete Slot" }));
+      const delDialog = await screen.findByRole("dialog", { name: "Delete Slot" });
+      fireEvent.click(within(delDialog).getByRole("button", { name: "Cancel" }));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Delete Slot" })).not.toBeInTheDocument());
+      expect(backend.deleteSlot).not.toHaveBeenCalled();
+
+      // Cancel Copy to slot dialog via default useDialogHost
+      fireEvent.click(screen.getByRole("button", { name: "Copy to slot..." }));
+      const copyDialog = await screen.findByRole("dialog", { name: "Copy save to slot" });
+      fireEvent.click(within(copyDialog).getByRole("button", { name: "Cancel" }));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Copy save to slot" })).not.toBeInTheDocument());
+      expect(backend.copySaveToSlot).not.toHaveBeenCalled();
+
+      // Cancel + New Slot dialog
+      fireEvent.click(screen.getByRole("button", { name: "+ New Slot" }));
+      const newDialog = await screen.findByRole("dialog", { name: "New Save Slot" });
+      fireEvent.click(within(newDialog).getByRole("button", { name: "Cancel" }));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "New Save Slot" })).not.toBeInTheDocument());
+      expect(backend.switchSlot).not.toHaveBeenCalled();
+    });
+
+    it("handles partial switch on Activate Slot, auto-clears switch error after 5s, and logs inactive save load failure", async () => {
+      const warnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => undefined);
+      try {
+        vi.mocked(backend.getSlotSaves).mockRejectedValueOnce(new Error("slot fetch down"));
+        vi.mocked(backend.switchSlot)
+          .mockResolvedValueOnce({
+            success: false,
+            reason: "switch_stopped",
+            message: "partial stop",
+            set_aside: ["foo.srm"],
+          })
+          .mockResolvedValueOnce({
+            success: false,
+            reason: "pending_uploads",
+            message: "",
+          });
+
+        render(<SaveManagementCard appId={100} detail={baseDetail} />);
+        fireEvent.click(await screen.findByRole("button", { name: /speedrun/ }));
+
+        await waitFor(() => {
+          expect(warnSpy).toHaveBeenCalledWith(
+            "DesktopSlotPanel: failed to load slot saves for speedrun: Error: slot fetch down",
+          );
+          expect(screen.getByText("No saves in this slot")).toBeInTheDocument();
+        });
+
+        // Partial stop shows toast and announces save sync
+        fireEvent.click(screen.getByRole("button", { name: "Activate Slot" }));
+        await waitFor(() => {
+          expect(toast.showToast).toHaveBeenCalledWith(expect.stringContaining("Already moved there: foo.srm"));
+        });
+
+        // Error auto-clears after 5s
+        vi.useFakeTimers();
+        fireEvent.click(screen.getByRole("button", { name: "Activate Slot" }));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1);
+        });
+        expect(screen.getByText("Sync your saves first — local changes haven't been uploaded")).toBeInTheDocument();
+
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(5000);
+        });
+        expect(
+          screen.queryByText("Sync your saves first — local changes haven't been uploaded"),
+        ).not.toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+        warnSpy.mockRestore();
+      }
+    });
+
+    it("renders DesktopVersionHistory attribution/empty variants and respects romm_data_changed filters", async () => {
+      const versions: SaveVersionEntry[] = [
+        {
+          id: 500,
+          emulator: "",
+          file_name: "a.srm",
+          file_size_bytes: null as unknown as number,
+          updated_at: "2026-06-12T10:00:00Z",
+          uploaded_by_us: undefined as unknown as boolean,
+          device_syncs: [],
+        },
+        {
+          id: 501,
+          emulator: "mgba",
+          file_name: "b.srm",
+          file_size_bytes: 2048,
+          updated_at: "2026-06-11T10:00:00Z",
+          uploaded_by_us: undefined as unknown as boolean,
+          device_syncs: [
+            {
+              device_id: "pc",
+              device_name: "desktop-pc",
+              is_current: true,
+              last_synced_at: "2026-06-11T10:00:00Z",
+            },
+          ],
+        },
+      ];
+      vi.mocked(backend.savesListFileVersions)
+        .mockResolvedValueOnce({ status: "ok", versions: [] })
+        .mockResolvedValueOnce({ status: "ok", versions });
+
+      const { unmount } = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+      fireEvent.click(await screen.findByRole("button", { name: "Previous Versions" }));
+      expect(await screen.findByText("No older versions available")).toBeInTheDocument();
+
+      // Ignores non-save_sync and other-rom events
+      act(() => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", { detail: { type: "core_changed", rom_id: 42 } }),
+        );
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 999 } }));
+      });
+      expect(backend.savesListFileVersions).toHaveBeenCalledTimes(1);
+
+      // Valid save_sync reloads while expanded
+      act(() => {
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+      });
+      await waitFor(() => {
+        expect(screen.getByText("#500")).toBeInTheDocument();
+        expect(screen.getByText("—")).toBeInTheDocument();
+        expect(screen.getByText("#501 · mgba")).toBeInTheDocument();
+        expect(
+          screen.getByText((_c, el) => el?.tagName === "SPAN" && el.textContent.includes("desktop-pc ✓")),
+        ).toBeInTheDocument();
+      });
+
+      // Failed restore keeps list open and re-enables buttons
+      vi.mocked(backend.savesRollbackToVersion).mockResolvedValueOnce({ status: "version_deleted" });
+      fireEvent.click(screen.getAllByRole("button", { name: "Restore" })[0]!);
+      await waitFor(() => expect(toast.showToast).toHaveBeenCalledWith("This version no longer exists on the server"));
+      expect(screen.getByText("#500")).toBeInTheDocument();
+
+      unmount();
+      act(() => {
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42 } }));
+      });
+      expect(backend.savesListFileVersions).toHaveBeenCalledTimes(2);
+    });
+
+    it("logs failures on offline snapshot, save slots, availability, local saves, and updates connection state on unreachable", async () => {
+      const warnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => undefined);
+      try {
+        vi.mocked(backend.getSaveSlots).mockResolvedValueOnce({
+          success: false,
+          reason: "server_unreachable",
+          message: "down",
+        });
+        vi.mocked(backend.getSaveSyncAvailability).mockRejectedValueOnce(new Error("avail boom"));
+        const first = render(<SaveManagementCard appId={100} detail={baseDetail} />);
+        await waitFor(() => {
+          expect(warnSpy).toHaveBeenCalledWith(
+            expect.stringContaining("save sync availability read for romId=42 failed"),
+          );
+          expect(getRommConnectionState()).toBe("offline");
+        });
+        first.unmount();
+
+        // Offline snapshot rejection logs warn
+        setRommConnectionState("offline", "test offline");
+        vi.mocked(backend.getSaveSlots).mockRejectedValueOnce(new Error("snap boom"));
+        const second = render(<SaveManagementCard appId={101} detail={{ ...baseDetail, romId: 43 }} />);
+        await waitFor(() => {
+          expect(warnSpy).toHaveBeenCalledWith(
+            "DesktopSaveManagementCard: offline slot snapshot read failed: Error: snap boom",
+          );
+        });
+        second.unmount();
+
+        // Save sync off read failure logs warn
+        vi.mocked(backend.getLocalSaveFiles).mockRejectedValueOnce(new Error("local boom"));
+        render(<SaveManagementCard appId={102} detail={{ ...baseDetail, romId: 44, saveSyncEnabled: false }} />);
+        await waitFor(() => {
+          expect(warnSpy).toHaveBeenCalledWith(
+            "DesktopSaveManagementCard: local saves read for romId=44 failed: Error: local boom",
+          );
+        });
+      } finally {
+        warnSpy.mockRestore();
+      }
     });
   });
 });

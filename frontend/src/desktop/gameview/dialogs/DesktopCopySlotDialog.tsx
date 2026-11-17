@@ -9,7 +9,7 @@ import { CANCEL_LABEL } from "../../../utils/launchPromptWording";
 import { displaySlot, eligibleCopyTargetSlots } from "../../../utils/saveHelpers";
 import { DIALOG_MUTED_STYLE, DIALOG_TEXT_STYLE, DesktopDialog, dialogButtonStyle } from "./DesktopDialog";
 
-export interface DesktopCopySlotDialogProps {
+interface DesktopCopySlotDialogProps {
   sourceSlot: string;
   availableSlots: SaveSlotSummary[];
   onDismiss: () => void;
@@ -36,9 +36,10 @@ export const DesktopCopySlotDialog: FC<DesktopCopySlotDialogProps> = ({
   const [newSlotInput, setNewSlotInput] = useState("");
   const targetSlots = eligibleCopyTargetSlots(availableSlots, sourceSlot);
   const trimmed = newSlotInput.trim();
+  const createDisabled = trimmed === "";
 
   const handleCreateAndCopy = () => {
-    if (trimmed !== "") {
+    if (!createDisabled) {
       void onCopy(trimmed);
     }
   };
@@ -84,8 +85,8 @@ export const DesktopCopySlotDialog: FC<DesktopCopySlotDialogProps> = ({
           />
           <button
             type="button"
-            style={dialogButtonStyle("primary", trimmed === "")}
-            disabled={trimmed === ""}
+            style={dialogButtonStyle("primary", createDisabled)}
+            disabled={createDisabled}
             onClick={handleCreateAndCopy}
           >
             Create & Copy

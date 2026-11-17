@@ -14,13 +14,10 @@ import {
   wizardMigrationOutcomeToastBody,
   SERVER_UNREACHABLE_WIZARD_MESSAGE,
   SERVER_UNREACHABLE_TOAST_BODY,
-  SERVER_UNREACHABLE_DESKTOP_TOAST_BODY,
   NOT_FOUND_WIZARD_MESSAGE,
   NOT_FOUND_TOAST_BODY,
-  NOT_FOUND_DESKTOP_TOAST_BODY,
   DEVICE_NOT_REGISTERED_WIZARD_MESSAGE,
   DEVICE_NOT_REGISTERED_TOAST_BODY,
-  DEVICE_NOT_REGISTERED_DESKTOP_TOAST_BODY,
   type LaunchGateSetupDeps,
   type SaveSetupOutcome,
   type WizardRetryDeps,
@@ -115,11 +112,16 @@ function makeLaunchGateDeps(overrides: Partial<LaunchGateSetupDeps> = {}): Launc
 
 describe("applyLaunchGateSetupOutcome", () => {
   it("toasts the unreachable copy, dispatches the saves-tab switch, and aborts on server_unreachable", async () => {
-    const deps = makeLaunchGateDeps();
+    const toast = vi.fn();
+    const dispatchSavesTab = vi.fn();
+    const deps = makeLaunchGateDeps({ toast, dispatchSavesTab });
     const result = await applyLaunchGateSetupOutcome({ kind: "server_unreachable" }, deps);
     expect(result).toBe("abort");
-    expect(deps.toast).toHaveBeenCalledWith(SERVER_UNREACHABLE_TOAST_BODY);
-    expect(deps.dispatchSavesTab).toHaveBeenCalledOnce();
+    expect(toast).toHaveBeenCalledWith(SERVER_UNREACHABLE_TOAST_BODY);
+    expect(dispatchSavesTab).toHaveBeenCalledOnce();
+    expect(toast.mock.invocationCallOrder[0] ?? Infinity).toBeLessThan(
+      dispatchSavesTab.mock.invocationCallOrder[0] ?? -1,
+    );
     expect(deps.confirmSlotChoice).not.toHaveBeenCalled();
   });
 
@@ -204,28 +206,39 @@ describe("applyLaunchGateSetupOutcome", () => {
 
   describe("desktop surface wording", () => {
     it.each([
-      ["server_unreachable", { kind: "server_unreachable" } as const, SERVER_UNREACHABLE_DESKTOP_TOAST_BODY, true],
-      ["not_found", { kind: "not_found" } as const, NOT_FOUND_DESKTOP_TOAST_BODY, true],
       [
-        "romm_refused",
-        { kind: "romm_refused", message: "rate limited" } as const,
-        "Cannot configure save slot — RomM did not list this game's saves. rate limited",
-        false,
+        "server_unreachable",
+        { kind: "server_unreachable" } as const,
+        "Cannot configure save slot — RomM server is not reachable. Open Saves to retry.",
+      ],
+      [
+        "not_found",
+        { kind: "not_found" } as const,
+        "Cannot configure save slot — RomM couldn't find the save data for this setup. Open Saves.",
       ],
       [
         "device_not_registered",
         { kind: "device_not_registered" } as const,
-        DEVICE_NOT_REGISTERED_DESKTOP_TOAST_BODY,
-        true,
+        "Cannot configure save slot — this device could not be registered with RomM. Open Saves to retry.",
       ],
-      ["needs_user_choice", { kind: "needs_user_choice" } as const, "Configure save sync in Saves first", true],
-    ])("uses desktop wording without 'the Saves tab' for %s", async (_name, outcome, expectedToast, mentionsSaves) => {
+      ["needs_user_choice", { kind: "needs_user_choice" } as const, "Configure save sync in Saves first"],
+    ])("uses desktop wording naming 'Saves' without 'the Saves tab' for %s", async (_name, outcome, expectedToast) => {
       const deps = makeLaunchGateDeps({ surface: "desktop" });
       const result = await applyLaunchGateSetupOutcome(outcome, deps);
       expect(result).toBe("abort");
       expect(deps.toast).toHaveBeenCalledWith(expectedToast);
-      if (mentionsSaves) expect(expectedToast).toContain("Saves");
+      expect(expectedToast).toContain("Saves");
       expect(expectedToast).not.toContain("the Saves tab");
+      expect(deps.dispatchSavesTab).toHaveBeenCalledOnce();
+    });
+
+    it("uses the shared RomM-refused wording on desktop without naming 'the Saves tab'", async () => {
+      const deps = makeLaunchGateDeps({ surface: "desktop" });
+      const result = await applyLaunchGateSetupOutcome({ kind: "romm_refused", message: "rate limited" }, deps);
+      expect(result).toBe("abort");
+      expect(deps.toast).toHaveBeenCalledWith(
+        "Cannot configure save slot — RomM did not list this game's saves. rate limited",
+      );
       expect(deps.dispatchSavesTab).toHaveBeenCalledOnce();
     });
 
@@ -595,9 +608,12 @@ describe("a device that could not be registered", () => {
     expect(DEVICE_NOT_REGISTERED_TOAST_BODY).not.toMatch(/unreachable|not reachable|offline/i);
   });
 
-  it("the wizard copy offers a retry, and a fresh sign-in if it keeps failing", () => {
+  it("the wizard and toast copy offer a retry, and a fresh sign-in on the wizard if it keeps failing", () => {
     expect(DEVICE_NOT_REGISTERED_WIZARD_MESSAGE).toBe(
       "This device could not be registered with RomM — setup paused. Retry, or sign in again if it keeps failing.",
+    );
+    expect(DEVICE_NOT_REGISTERED_TOAST_BODY).toBe(
+      "Cannot configure save slot — this device could not be registered with RomM. Open the Saves tab to retry.",
     );
   });
 });

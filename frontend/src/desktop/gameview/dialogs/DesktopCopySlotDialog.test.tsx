@@ -12,15 +12,19 @@ describe("DesktopCopySlotDialog", () => {
     { slot: "", count: 1, source: "server", latest_updated_at: null },
   ];
 
-  it("renders title, description, eligible target slots, and new slot input", () => {
-    render(
-      <DesktopCopySlotDialog
-        sourceSlot="default"
-        availableSlots={availableSlots}
-        onDismiss={vi.fn()}
-        onCopy={vi.fn()}
-      />,
-    );
+  const renderDialog = ({
+    slots = availableSlots,
+    onDismiss = vi.fn(),
+    onCopy = vi.fn(),
+  }: {
+    slots?: SaveSlotSummary[];
+    onDismiss?: () => void;
+    onCopy?: (targetSlot: string) => void;
+  } = {}) =>
+    render(<DesktopCopySlotDialog sourceSlot="default" availableSlots={slots} onDismiss={onDismiss} onCopy={onCopy} />);
+
+  it("renders title, description, eligible target slots, tone styles, and new slot input", () => {
+    renderDialog();
 
     expect(screen.getByRole("dialog", { name: "Copy save to slot" })).toBeInTheDocument();
     expect(
@@ -30,93 +34,64 @@ describe("DesktopCopySlotDialog", () => {
     ).toBeInTheDocument();
 
     // Eligible target slots (excludes sourceSlot 'default' and legacy '')
-    expect(screen.getByRole("button", { name: "speedrun" })).toBeInTheDocument();
+    const speedrunBtn = screen.getByRole("button", { name: "speedrun" });
+    expect(speedrunBtn).toBeInTheDocument();
+    expect(speedrunBtn.style.backgroundImage).toBe("none");
     expect(screen.getByRole("button", { name: "casual" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "default" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Manual archive" })).toBeNull();
 
     expect(screen.getByPlaceholderText("New slot name…")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Create & Copy" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    const createBtn = screen.getByRole("button", { name: "Create & Copy" });
+    expect(createBtn).toBeDisabled();
+    expect(createBtn.style.backgroundImage).toContain("#1a9fff");
+    expect(createBtn.style.opacity).toBe("0.5");
+
+    const cancelBtn = screen.getByRole("button", { name: "Cancel" });
+    expect(cancelBtn).toBeInTheDocument();
+    expect(cancelBtn.style.backgroundColor).toBe("transparent");
   });
 
   it("shows empty-targets notice when no eligible existing slots remain", () => {
-    render(
-      <DesktopCopySlotDialog
-        sourceSlot="default"
-        availableSlots={[{ slot: "default", count: 1, source: "server", latest_updated_at: null }]}
-        onDismiss={vi.fn()}
-        onCopy={vi.fn()}
-      />,
-    );
+    renderDialog({ slots: [{ slot: "default", count: 1, source: "server", latest_updated_at: null }] });
 
     expect(screen.getByText("No other slots yet — create one below.")).toBeInTheDocument();
   });
 
   it("calls onCopy when an existing target slot button is clicked", () => {
     const onCopy = vi.fn();
-    render(
-      <DesktopCopySlotDialog
-        sourceSlot="default"
-        availableSlots={availableSlots}
-        onDismiss={vi.fn()}
-        onCopy={onCopy}
-      />,
-    );
+    renderDialog({ onCopy });
 
     fireEvent.click(screen.getByRole("button", { name: "speedrun" }));
     expect(onCopy).toHaveBeenCalledWith("speedrun");
   });
 
-  it("calls onCopy with trimmed new slot name when Create & Copy is clicked", () => {
+  it("calls onCopy with trimmed new slot name when Create & Copy is clicked or Enter is pressed", () => {
     const onCopy = vi.fn();
-    render(
-      <DesktopCopySlotDialog
-        sourceSlot="default"
-        availableSlots={availableSlots}
-        onDismiss={vi.fn()}
-        onCopy={onCopy}
-      />,
-    );
+    renderDialog({ onCopy });
 
     const input = screen.getByPlaceholderText("New slot name…");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onCopy).not.toHaveBeenCalled();
+
     fireEvent.change(input, { target: { value: "  hardcore  " } });
+    fireEvent.keyDown(input, { key: "a" });
+    expect(onCopy).not.toHaveBeenCalled();
 
     const createAndCopyBtn = screen.getByRole("button", { name: "Create & Copy" });
     expect(createAndCopyBtn).not.toBeDisabled();
+    expect(createAndCopyBtn.style.opacity).toBe("");
     fireEvent.click(createAndCopyBtn);
-
     expect(onCopy).toHaveBeenCalledWith("hardcore");
-  });
 
-  it("submits new slot on Enter key press in the input", () => {
-    const onCopy = vi.fn();
-    render(
-      <DesktopCopySlotDialog
-        sourceSlot="default"
-        availableSlots={availableSlots}
-        onDismiss={vi.fn()}
-        onCopy={onCopy}
-      />,
-    );
-
-    const input = screen.getByPlaceholderText("New slot name…");
     fireEvent.change(input, { target: { value: "ironman" } });
     fireEvent.keyDown(input, { key: "Enter" });
-
     expect(onCopy).toHaveBeenCalledWith("ironman");
   });
 
   it("calls onDismiss when Cancel is clicked or Escape is pressed in input", () => {
     const onDismiss = vi.fn();
-    render(
-      <DesktopCopySlotDialog
-        sourceSlot="default"
-        availableSlots={availableSlots}
-        onDismiss={onDismiss}
-        onCopy={vi.fn()}
-      />,
-    );
+    renderDialog({ onDismiss });
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onDismiss).toHaveBeenCalledTimes(1);

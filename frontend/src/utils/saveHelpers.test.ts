@@ -32,12 +32,16 @@ describe("displaySlot", () => {
   });
 });
 
-describe("formatSaveTimeAgo", () => {
+function useJuneFixedClock(): void {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2025-06-15T12:00:00Z"));
   });
   afterEach(() => vi.useRealTimers());
+}
+
+describe("formatSaveTimeAgo", () => {
+  useJuneFixedClock();
 
   it("returns empty string for null", () => {
     expect(formatSaveTimeAgo(null)).toBe("");
@@ -64,8 +68,8 @@ describe("formatSaveTimeAgo", () => {
   });
 
   it("returns 'D Mon' for older dates", () => {
-    // 10 days back puts us in early June; only the day + month tokens matter.
-    const out = formatSaveTimeAgo("2025-06-05T12:00:00Z");
+    // 10 days back at 06:00Z keeps the same calendar day across all tested timezones (through UTC+14).
+    const out = formatSaveTimeAgo("2025-06-05T06:00:00Z");
     expect(out).toBe("5 Jun");
   });
 });
@@ -508,11 +512,7 @@ describe("sortSaveSlots and filterSaveSlotsForDisplay", () => {
 });
 
 describe("buildLastSyncedValue", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2025-06-15T12:00:00Z"));
-  });
-  afterEach(() => vi.useRealTimers());
+  useJuneFixedClock();
 
   const makeFile = (overrides: Partial<SaveFileStatus> = {}): SaveFileStatus => ({
     filename: "save.srm",

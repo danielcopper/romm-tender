@@ -4,13 +4,12 @@
  */
 
 import { useEffect, useRef, useState, type CSSProperties, type FC } from "react";
-import { detach } from "../../../utils/detach";
 import { CANCEL_LABEL } from "../../../utils/launchPromptWording";
 import { DIALOG_MUTED_STYLE, DIALOG_TEXT_STYLE, DesktopDialog, dialogButtonStyle } from "./DesktopDialog";
 
-export interface DesktopNewSlotDialogProps {
+interface DesktopNewSlotDialogProps {
   onDismiss: () => void;
-  onCreate: (slotName: string) => Promise<string | null | void> | string | null | void;
+  onCreate: (slotName: string) => Promise<string | null>;
   error?: string | null;
 }
 
@@ -38,38 +37,24 @@ export const DesktopNewSlotDialog: FC<DesktopNewSlotDialogProps> = ({ onDismiss,
   const [internalError, setInternalError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const mountedRef = useRef(true);
 
   useEffect(() => {
-    mountedRef.current = true;
     inputRef.current?.focus();
-    return () => {
-      mountedRef.current = false;
-    };
   }, []);
 
   const trimmed = slotName.trim();
+  const submitDisabled = creating || trimmed === "";
   const displayError = error ?? internalError;
 
-  const handleSubmit = () => {
-    if (creating || trimmed === "") return;
+  const handleSubmit = async () => {
+    if (submitDisabled) return;
     setInternalError(null);
-    const result = onCreate(trimmed);
-    if (result instanceof Promise) {
-      setCreating(true);
-      detach(
-        result
-          .then((err) => {
-            if (mountedRef.current && typeof err === "string" && err !== "") {
-              setInternalError(err);
-            }
-          })
-          .finally(() => {
-            if (mountedRef.current) setCreating(false);
-          }),
-      );
-    } else if (typeof result === "string" && result !== "") {
-      setInternalError(result);
+    setCreating(true);
+    try {
+      const err = await onCreate(trimmed);
+      if (err) setInternalError(err);
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -91,7 +76,7 @@ export const DesktopNewSlotDialog: FC<DesktopNewSlotDialogProps> = ({ onDismiss,
         disabled={creating}
         onChange={(e) => setSlotName(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter") handleSubmit();
+          if (e.key === "Enter") void handleSubmit();
         }}
         style={INPUT_STYLE}
       />
@@ -108,9 +93,9 @@ export const DesktopNewSlotDialog: FC<DesktopNewSlotDialogProps> = ({ onDismiss,
         </button>
         <button
           type="button"
-          style={dialogButtonStyle("primary", trimmed === "" || creating)}
-          disabled={trimmed === "" || creating}
-          onClick={handleSubmit}
+          style={dialogButtonStyle("primary", submitDisabled)}
+          disabled={submitDisabled}
+          onClick={() => void handleSubmit()}
         >
           {creating ? "Creating…" : "Create Slot"}
         </button>

@@ -9,7 +9,7 @@ import { CANCEL_LABEL } from "../../../utils/launchPromptWording";
 import { formatSlotDeleteLines } from "../../../utils/saveSlotWording";
 import { DIALOG_TEXT_STYLE, DesktopDialog, dialogButtonStyle } from "./DesktopDialog";
 
-export interface DesktopDeleteSlotDialogProps {
+interface DesktopDeleteSlotDialogProps {
   deleteInfo: SlotDeleteInfo;
   onDismiss: () => void;
   onConfirm: () => Promise<void> | void;

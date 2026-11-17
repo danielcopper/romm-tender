@@ -474,24 +474,33 @@ describe("usePlayLaunch", () => {
       expect(toast.showToast).not.toHaveBeenCalled();
     });
 
+    function mockUnconfiguredSetup(
+      recommended_action: "show_wizard" | "auto_confirm_default",
+      server_slots: Array<{ slot: string; saves: never[]; count: number; latest_updated_at: string }> = [],
+    ): void {
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({
+        configured: false,
+        active_slot: null,
+        setup_needed: true,
+      });
+      vi.mocked(backend.getSaveSetupInfo).mockResolvedValueOnce({
+        has_local_saves: false,
+        local_files: [],
+        server_slots,
+        default_slot: "default",
+        slot_confirmed: false,
+        active_slot: null,
+        recommended_action,
+      });
+    }
+
     it("aborts launch, toasts Desktop Saves copy, and dispatches romm_tab_switch when slot tracking needs user choice", async () => {
       const tabSwitch = vi.fn();
       globalThis.addEventListener("romm_tab_switch", tabSwitch);
       try {
-        vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({
-          configured: false,
-          active_slot: null,
-          setup_needed: true,
-        });
-        vi.mocked(backend.getSaveSetupInfo).mockResolvedValueOnce({
-          has_local_saves: false,
-          local_files: [],
-          server_slots: [{ slot: "default", saves: [], count: 1, latest_updated_at: "2026-01-01T00:00:00Z" }],
-          default_slot: "default",
-          slot_confirmed: false,
-          active_slot: null,
-          recommended_action: "show_wizard",
-        });
+        mockUnconfiguredSetup("show_wizard", [
+          { slot: "default", saves: [], count: 1, latest_updated_at: "2026-01-01T00:00:00Z" },
+        ]);
 
         const result = renderLaunch();
         await act(async () => {
@@ -509,20 +518,7 @@ describe("usePlayLaunch", () => {
     });
 
     it("auto-confirms default slot and launches when getSaveSetupInfo recommends auto_confirm_default", async () => {
-      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValueOnce({
-        configured: false,
-        active_slot: null,
-        setup_needed: true,
-      });
-      vi.mocked(backend.getSaveSetupInfo).mockResolvedValueOnce({
-        has_local_saves: false,
-        local_files: [],
-        server_slots: [],
-        default_slot: "default",
-        slot_confirmed: false,
-        active_slot: null,
-        recommended_action: "auto_confirm_default",
-      });
+      mockUnconfiguredSetup("auto_confirm_default");
       vi.mocked(backend.confirmSlotChoice).mockResolvedValueOnce({
         success: true,
         needs_conflict_resolution: false,

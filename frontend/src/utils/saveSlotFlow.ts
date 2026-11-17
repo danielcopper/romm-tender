@@ -171,8 +171,8 @@ export async function executeSlotDelete(romId: number, slot: string): Promise<bo
 }
 
 /**
- * Load prior server versions of `filename` in `slot` for `romId`. Never throws:
- * non-ok answers and rejections are logged and mapped via
+ * Load prior server versions of `filename` in `slot` for `romId`. Never
+ * throws: non-ok answers and rejections are logged and mapped via
  * {@link versionHistoryLoadError}.
  */
 export async function loadFileVersions(
@@ -184,12 +184,12 @@ export async function loadFileVersions(
     const result = await savesListFileVersions(romId, slot, filename);
     if (result.status === "ok" || result.status === "multi_file_unsupported") {
       // multi_file_unsupported carries an empty list — a multi-file slot's
-      // siblings are components, not prior versions (#908). The panel is
-      // hidden for multi-file slots anyway; this is the defensive backstop.
+      // siblings are components, not prior versions. The panel is hidden for
+      // multi-file slots anyway; this is the defensive backstop.
       return { ok: true, versions: result.versions };
     }
     if (result.status === "not_found") {
-      // The server answered — blaming the connection here would be a lie (#1570).
+      // The server answered — blaming the connection here would be a lie.
       detach(debugLog(`saveSlotFlow: server has no such entry for ${filename}: ${result.message}`));
     } else if (result.status === "device_not_registered") {
       detach(debugLog(`saveSlotFlow: device not registered for ${filename}: ${result.message}`));
@@ -198,7 +198,7 @@ export async function loadFileVersions(
     }
     return { ok: false, error: versionHistoryLoadError(result) };
   } catch (e) {
-    detach(debugLog(`saveSlotFlow: failed to load versions for ${filename}: ${e}`));
+    logWarn(`saveSlotFlow: failed to load versions for ${filename}: ${e}`);
     return { ok: false, error: versionHistoryLoadError(null) };
   }
 }
@@ -228,7 +228,7 @@ export async function executeCopySaveToSlot(
       announceSaveSync(romId);
     }
   } catch (e) {
-    detach(debugLog(`saveSlotFlow: copy failed for save ${saveId} into '${targetSlot}': ${e}`));
+    logWarn(`saveSlotFlow: copy failed for save ${saveId} into '${targetSlot}': ${e}`);
     showToast(COPY_SAVE_ERROR_TOAST);
   }
 }
@@ -258,7 +258,7 @@ export async function executeVersionRestore(
     // won't reach other devices yet.
     return !isEndpointFailure(result) && (result.status === "ok" || result.status === "put_failed");
   } catch (e) {
-    detach(debugLog(`saveSlotFlow: restore error for save ${version.id}: ${e}`));
+    logWarn(`saveSlotFlow: restore error for save ${version.id}: ${e}`);
     showToast(RESTORE_CONFIRM_ERROR_TOAST, { subtext: e instanceof Error ? e.message : String(e) });
     return false;
   }
@@ -280,7 +280,7 @@ export async function executeDeleteLocalSaves(appId: number, romId: number): Pro
       showToast(result.message || DELETE_LOCAL_SAVES_ERROR_TOAST);
     }
   } catch (e) {
-    detach(debugLog(`saveSlotFlow: deleteLocalSaves for rom ${romId} threw: ${e}`));
+    logWarn(`saveSlotFlow: deleteLocalSaves for rom ${romId} threw: ${e}`);
     showToast(DELETE_LOCAL_SAVES_ERROR_TOAST);
   }
 }

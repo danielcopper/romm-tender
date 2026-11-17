@@ -1,7 +1,8 @@
 /**
  * Expandable per-save version history subsection for DesktopSlotPanel.
- * Lazy-loads prior server versions on expand, shows offline / distinct error
- * states (#1570) with Retry, and supports Restore and Copy to slot... on rows.
+ * Lazy-loads prior server versions on expand, shows offline / entity / device /
+ * connection error states with Retry, and supports Restore and Copy to slot...
+ * on version rows.
  */
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type FC } from "react";
@@ -15,7 +16,7 @@ import type { AskDialog } from "./dialogs/askDialog";
 import { desktopSlotConflictDialog } from "./dialogs/desktopDialogs";
 import { BUTTON_STYLE } from "./styles";
 
-export interface DesktopVersionHistoryProps {
+interface DesktopVersionHistoryProps {
   romId: number;
   slot: string;
   filename: string;
@@ -42,25 +43,24 @@ const SMALL_BUTTON_STYLE: CSSProperties = {
   whiteSpace: "nowrap",
 };
 
+function smallButtonStyle(disabled: boolean): CSSProperties {
+  return {
+    ...SMALL_BUTTON_STYLE,
+    opacity: disabled ? 0.5 : 1,
+    cursor: disabled ? "not-allowed" : "pointer",
+  };
+}
+
 function renderAttributionWithCheckmark(attr: string | null) {
   if (attr === null) return null;
-  if (attr === "✓") {
-    return (
-      <>
-        {" · "}
-        <span style={{ color: "#5ba32b" }}>✓</span>
-      </>
-    );
-  }
-  if (attr.endsWith(" ✓")) {
-    return (
-      <>
-        {` · ${attr.slice(0, -2)} `}
-        <span style={{ color: "#5ba32b" }}>✓</span>
-      </>
-    );
-  }
-  return ` · ${attr}`;
+  if (!attr.endsWith("✓")) return ` · ${attr}`;
+  const prefix = attr === "✓" ? " · " : ` · ${attr.slice(0, -1)}`;
+  return (
+    <>
+      {prefix}
+      <span style={{ color: "#5ba32b" }}>✓</span>
+    </>
+  );
 }
 
 export const DesktopVersionHistory: FC<DesktopVersionHistoryProps> = ({
@@ -200,6 +200,8 @@ export const DesktopVersionHistory: FC<DesktopVersionHistoryProps> = ({
             const attr = formatAttributionSegment(v.uploaded_by_us, lastSyncer?.device_name);
             const isThisRestoring = restoringVersionId === v.id;
             const actionDisabled = restoringVersionId !== null;
+            const versionHeading = v.emulator ? `#${v.id} · ${v.emulator}` : `#${v.id}`;
+            const actionStyle = smallButtonStyle(actionDisabled);
 
             return (
               <div
@@ -212,9 +214,7 @@ export const DesktopVersionHistory: FC<DesktopVersionHistoryProps> = ({
                 }}
               >
                 <div style={{ minWidth: 0 }}>
-                  <div
-                    style={{ color: "#dfe3e6", fontWeight: 500 }}
-                  >{`#${v.id}${v.emulator ? ` · ${v.emulator}` : ""}`}</div>
+                  <div style={{ color: "#dfe3e6", fontWeight: 500 }}>{versionHeading}</div>
                   <div
                     style={{
                       color: MUTED_COLOR,
@@ -236,11 +236,7 @@ export const DesktopVersionHistory: FC<DesktopVersionHistoryProps> = ({
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
                   <button
                     type="button"
-                    style={{
-                      ...SMALL_BUTTON_STYLE,
-                      opacity: actionDisabled ? 0.5 : 1,
-                      cursor: actionDisabled ? "not-allowed" : "pointer",
-                    }}
+                    style={actionStyle}
                     disabled={actionDisabled}
                     onClick={() => detach(handleRestore(v))}
                   >
@@ -249,11 +245,7 @@ export const DesktopVersionHistory: FC<DesktopVersionHistoryProps> = ({
                   </button>
                   <button
                     type="button"
-                    style={{
-                      ...SMALL_BUTTON_STYLE,
-                      opacity: actionDisabled ? 0.5 : 1,
-                      cursor: actionDisabled ? "not-allowed" : "pointer",
-                    }}
+                    style={actionStyle}
                     disabled={actionDisabled}
                     onClick={() => onCopySave(v.id, slot)}
                   >

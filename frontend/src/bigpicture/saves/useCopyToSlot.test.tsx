@@ -13,7 +13,7 @@ import type { CopySaveToSlotStatus, SaveSlotSummary, SyncConflict } from "../../
 vi.mock("../../api/backend", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../api/backend")>()),
   copySaveToSlot: vi.fn(),
-  debugLog: vi.fn().mockResolvedValue(undefined),
+  logWarn: vi.fn(),
 }));
 vi.mock("../../shared/SyncConflictModal", () => ({
   showSyncConflictModal: vi.fn().mockResolvedValue("resolved"),
@@ -211,11 +211,11 @@ describe("useCopyToSlot", () => {
       await flush();
     });
 
-    // Post-catch state: the fallback toast fired and the error was debug-logged.
+    // Post-catch state: the fallback toast fired and the error was logged.
     expect(toaster.toast).toHaveBeenCalledWith(
       expect.objectContaining({ body: expect.stringContaining("Couldn't copy the save") }),
     );
-    expect(backend.debugLog).toHaveBeenCalled();
+    expect(backend.logWarn).toHaveBeenCalled();
     expect(dataChanged).not.toHaveBeenCalled();
   });
 });

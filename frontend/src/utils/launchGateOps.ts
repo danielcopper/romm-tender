@@ -232,7 +232,7 @@ function shapePreLaunchAnswer(settled: PreLaunchSyncSettled, options: PreLaunchS
  */
 async function ensureTrackingConfiguredForSurface(
   romId: number,
-  surface: SaveSetupSurface,
+  surface: SaveSetupSurface = "bigpicture",
 ): Promise<"proceed" | "abort"> {
   const trackingResult = await boundedOr(isSaveTrackingConfigured(romId), LOCAL_CALL_LIMIT_MS, () => ({
     setup_needed: false,
@@ -252,7 +252,7 @@ async function ensureTrackingConfiguredForSurface(
 }
 
 export function ensureTrackingConfiguredBigPicture(romId: number): Promise<"proceed" | "abort"> {
-  return ensureTrackingConfiguredForSurface(romId, "bigpicture");
+  return ensureTrackingConfiguredForSurface(romId);
 }
 
 export function ensureTrackingConfiguredDesktop(romId: number): Promise<"proceed" | "abort"> {
@@ -289,7 +289,7 @@ export async function ensureTrackingConfiguredSilently(romId: number, tag: strin
   // swallowed toast: the auto_confirm branch fires `confirmSlotChoice`; every
   // other (abort) branch is irrelevant here because this step never aborts a
   // start on tracking — an unconfigured slot the user can't resolve at the start
-  // must still let the game start (Big Picture's saves tab on the game page can
+  // must still let the game start (the game page's Saves tab or Saves card can
   // configure it later).
   await applyLaunchGateSetupOutcome(resolveSaveSetupOutcome(setupInfo), {
     rid: romId,
