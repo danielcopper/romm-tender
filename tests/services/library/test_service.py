@@ -788,6 +788,31 @@ class TestSaveCollectionSync:
 
         assert recorder.save_count == 1
 
+    @pytest.mark.parametrize("enabled", ["false", 0, 1, None])
+    async def test_a_state_that_is_not_true_or_false_is_refused_and_nothing_is_written(self, library, enabled):
+        """#2776 D11: the string "false" no longer switches a collection on."""
+        with pytest.raises(Refused) as excinfo:
+            await library.sync.save_collection_sync("42", "standard", enabled)
+
+        assert excinfo.value.reason == "invalid_value"
+        assert "42" not in library.settings["enabled_collections"]["standard"]
+        assert library.settings_persister.save_count == 0
+
+    @pytest.mark.parametrize("enabled", ["false", 0, 1, None])
+    async def test_a_batch_whose_state_is_not_true_or_false_is_refused_and_nothing_is_written(self, library, enabled):
+        with pytest.raises(Refused) as excinfo:
+            await library.sync.save_collections_sync(["42", "43"], "standard", enabled)
+
+        assert excinfo.value.reason == "invalid_value"
+        assert library.settings["enabled_collections"]["standard"] == {}
+        assert library.settings_persister.save_count == 0
+
+    @pytest.mark.parametrize("enabled", [True, False])
+    async def test_a_batch_stores_the_state_as_it_was_sent(self, library, enabled):
+        await library.sync.save_collections_sync(["42"], "standard", enabled)
+
+        assert library.settings["enabled_collections"]["standard"]["42"] is enabled
+
     async def test_does_not_call_save_settings_on_invalid_kind(self, make_library):
         """Invalid kind short-circuits before persistence."""
         recorder = FakeSettingsPersister()

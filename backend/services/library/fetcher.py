@@ -308,7 +308,7 @@ class LibraryFetcher:
         if kind not in ("standard", "smart", "virtual"):
             raise Refused("invalid_kind", f"Invalid collection kind: {kind}")
         buckets = self._get_enabled_collections_buckets()
-        buckets[kind][str(collection_id)] = bool(enabled)
+        buckets[kind][str(collection_id)] = enabled
         self._settings["enabled_collections"] = buckets
         self._settings_persister.save_settings()
         return {"success": True}
@@ -331,7 +331,7 @@ class LibraryFetcher:
             return {"success": True}
         buckets = self._get_enabled_collections_buckets()
         for cid in collection_ids:
-            buckets[kind][str(cid)] = bool(enabled)
+            buckets[kind][str(cid)] = enabled
         self._settings["enabled_collections"] = buckets
         self._settings_persister.save_settings()
         return {"success": True}

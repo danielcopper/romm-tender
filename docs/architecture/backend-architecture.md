@@ -1176,8 +1176,11 @@ migration **022** so an unchanged standard collection still takes the incrementa
 
 **Batch collection enable — `save_collections_sync` (#1539).** A single settings write that stamps every id it is given
 into one `kind` bucket and touches nothing else in it; the Collections tab's **Enable all / Disable all** send it the
-ids their table lists, so what is written is exactly what the page shows. An unknown kind refuses with `invalid_kind`
-and a non-list id argument with `invalid_ids`, before any write; an empty id list is a success no-op.
+ids their table lists, so what is written is exactly what the page shows. An unknown kind refuses with `invalid_kind`, a
+non-list id argument with `invalid_ids` and a state that is not a bool with `invalid_value` — as every sync switch on
+the wire does, the single `save_collection_sync` and the platform switches included
+([#2776](https://github.com/danielcopper/romm-tender/issues/2776) D11) — before any write; an empty id list is a success
+no-op.
 
 **Collection owner scope — `own` is a sync scope, not a display filter (#1532).** RomM's collection list endpoints
 return the signed-in user's own collections plus every other user's _public_ collection. The QAM's **Other users'
