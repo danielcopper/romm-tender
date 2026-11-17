@@ -2337,6 +2337,24 @@ class TestFinalizePerUnitRun:
         assert set(app_ids) == {1001, 1002}
 
     @pytest.mark.asyncio
+    async def test_a_merged_platform_collection_is_named_by_its_sorted_first_spelling(self, library, emit):
+        """The first bound row is on "retro", the second on "Retro": the bucket is "Retro" (#2776 D8)."""
+
+        uow = library.uow
+        _seed_rom(uow, 1, app_id=1001, platform_slug="a", name="A")
+        _seed_rom(uow, 2, app_id=1002, platform_slug="b", name="B")
+
+        await library.run_finalizer.finalize_per_unit_run(
+            pending_collection_memberships={},
+            pending_platform_rom_ids={1, 2},
+            platform_names={"a": "retro", "b": "Retro"},
+            processed_platform_folders={"a", "b"},
+        )
+
+        payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
+        assert payload["platform_app_ids"] == {"Retro": [1001, 1002]}
+
+    @pytest.mark.asyncio
     async def test_platform_names_union_when_joined_only_through_upper_case(self, library, emit):
         """Platform names fold by the rule collection keys do: a dotless i and ``I`` are one bucket."""
 

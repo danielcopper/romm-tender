@@ -636,19 +636,19 @@ create/find, joining more is the safe direction: what loses games is a pair Stea
 On the delete matchers, joining more means deleting more.
 
 Where the fold applies: the run finalizer groups both `romm_collection_app_ids` and `platform_app_ids` by the folded
-key. A merged RomM collection is named by its sorted-first spelling, which `spelling_by_fold`
-(`backend/domain/collection_name.py`) answers for the finalizer and for the preview's `collection_diff` alike, so the
-preview lists it under the name the apply creates whatever order RomM lists the collections in
-([#2776](https://github.com/danielcopper/romm-tender/issues/2776) D4); a platform collection keeps the first-seen
-spelling (which casing wins is irrelevant — every match folds both sides); the preview's `collection_diff` and
-`platform_collection_diff` compare folded names the same way; and the frontend create/find (`createOrUpdateCollections`
-/ `createOrUpdateRomMCollections`), the cleanup matchers (`clearPlatformCollection` / `clearAllRomMCollections`) and the
-`onSyncComplete` stale-delete (`removeStaleCollections`, `frontend/src/index.tsx`) fold the whole name, the `RomM:`
-prefix and the host suffix included — so a case variant of one of this machine's names matches as that name does, while
-one carrying another machine's suffix does not — a hostname differing from this one only by case counts as this machine,
-as it does for Steam. This is safe because Steam's identity is case-insensitive: two collections differing only by case
-can never coexist, so there is never an ambiguous match to disambiguate. The DB is unaffected — `collection_sync_state`
-is keyed by `(collection_id, collection_kind)`, never by name — so there is no migration.
+key. A merged collection, a RomM collection's or a platform's, is named by its sorted-first spelling, which
+`spelling_by_fold` (`backend/domain/collection_name.py`) answers for the finalizer and for the preview's
+`collection_diff` alike, so the preview lists it under the name the apply creates whatever order RomM lists the
+collections and platforms in ([#2776](https://github.com/danielcopper/romm-tender/issues/2776) D4, D8); the preview's
+`collection_diff` and `platform_collection_diff` compare folded names the same way; and the frontend create/find
+(`createOrUpdateCollections` / `createOrUpdateRomMCollections`), the cleanup matchers (`clearPlatformCollection` /
+`clearAllRomMCollections`) and the `onSyncComplete` stale-delete (`removeStaleCollections`, `frontend/src/index.tsx`)
+fold the whole name, the `RomM:` prefix and the host suffix included — so a case variant of one of this machine's names
+matches as that name does, while one carrying another machine's suffix does not — a hostname differing from this one
+only by case counts as this machine, as it does for Steam. This is safe because Steam's identity is case-insensitive:
+two collections differing only by case can never coexist, so there is never an ambiguous match to disambiguate. The DB
+is unaffected — `collection_sync_state` is keyed by `(collection_id, collection_kind)`, never by name — so there is no
+migration.
 
 ## App IDs and Artwork
 

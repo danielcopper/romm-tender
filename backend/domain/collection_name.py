@@ -21,12 +21,7 @@ def fold_collection_name(name: str) -> str:
 
 
 def spelling_by_fold(names: Iterable[str]) -> dict[str, str]:
-    """Map each folded name among *names* to the spelling its one Steam collection is named by: the sorted-first.
-
-    The sorted-first spelling depends on the names alone, never on the order
-    they arrive in, so the apply that creates a merged collection and the
-    preview that lists it spell it alike whatever order RomM lists them in.
-    """
+    """Map each folded name among *names* to its sorted-first spelling among *names*."""
     spelling: dict[str, str] = {}
     for name in sorted(names):
         spelling.setdefault(fold_collection_name(name), name)
