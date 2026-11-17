@@ -112,8 +112,9 @@ received), the adopted server save's `content_hash` on download or adopt, and fo
 head's `content_hash` as both hashes. Where a response or save carries none, `record_transfer` and `adopt_head` record
 `None` and `adopt_head_with_local_change` drops the file's tracking — never a hash fabricated from a local recomputation
 — so a stored server hash always truthfully pairs with its `last_sync_hash`. The negotiate inventory
-(`build_save_inventory`) still sends the locally-computed `content_hash`: echoing the stored hash buys nothing while the
-computed hash already is RomM's scheme (#1457), and it stays the client's own statement of local content.
+(`NegotiateEnvelope.build_inventory`) still sends the locally-computed `content_hash`: echoing the stored hash buys
+nothing while the computed hash already is RomM's scheme (#1457), and it stays the client's own statement of local
+content.
 
 Every local hash that reaches this comparison — the matrix's `local_hash`, the post-op baseline (`last_sync_hash`), the
 drift check, the slot-switch pending-changes check, and the keep_local adopt-without-upload probe — is computed with
@@ -125,10 +126,11 @@ The hash comes from `SaveFileStore.measure`, which opens the file once for its h
 the matrix, the baseline write); `SaveFileStore.hash_memo_scope` memoizes the measure keyed by `(path, mtime_ns, size)`
 so it is read once, bounded to that run and discarded on exit.
 
-### Negotiate inventory builder (`SaveService.build_save_inventory`)
+### Negotiate inventory builder (`NegotiateEnvelope.build_inventory`)
 
-The negotiate POST sends this device's local save inventory; `SaveService.build_save_inventory()` assembles it as a
-`list[ClientSaveState]`. It walks the `rom_save_sync_states` aggregate and keeps only ROMs **in scope** —
+The negotiate POST sends this device's local save inventory; `NegotiateEnvelope.build_inventory()`
+(`services/saves/sync_engine/negotiate.py`, the module that opens and closes the session it is sent in) assembles it as
+a `list[ClientSaveState]`. It walks the `rom_save_sync_states` aggregate and keeps only ROMs **in scope** —
 `slot_confirmed` is true **and** `active_slot` is a real (truthy) slot, which excludes both the unset `None` and the
 legacy `""` slot. For each in-scope ROM it enumerates the local save files via `RomInfoService.find_save_files` and
 emits **one `ClientSaveState` per file** (per-file granularity): a confirmed ROM with no local files contributes
@@ -137,10 +139,10 @@ nothing, and a ROM with several local files yields one entry each. Per entry, `c
 `updated_at` is the local file's mtime rendered as a UTC ISO-8601 string (`domain.iso_time.epoch_to_iso`, the round-trip
 inverse of `parse_iso_to_epoch`).
 
-`build_save_inventory(rom_id=None)` builds the whole-device inventory (the bulk `sync_all_saves` pre-negotiate); a
-concrete `rom_id` scopes it to that one ROM (the single-ROM negotiate trigger). The in-scope predicate is identical
-either way. The builder feeds the negotiate transport below (#1234 / ADR-0017). It is single-file-first; the
-multi-file-per-slot collision case (several local files mapping to one slot) is a Phase 4 concern tracked in #1235.
+`build_inventory(rom_id=None)` builds the whole-device inventory (the bulk `sync_all_saves` pre-negotiate); a concrete
+`rom_id` scopes it to that one ROM (the single-ROM negotiate trigger). The in-scope predicate is identical either way.
+The builder feeds the negotiate transport below (#1234 / ADR-0017). It is single-file-first; the multi-file-per-slot
+collision case (several local files mapping to one slot) is a Phase 4 concern tracked in #1235.
 
 ### Negotiate as transport; one decision kernel
 
@@ -179,17 +181,17 @@ unconfirmed-slot ROMs), so it ingests through the standalone `/api/play-sessions
 aside of ADR-0016/0017). The server's returned `operations` are **discarded** — detection is the client's
 `compute_sync_action`. The request names the ROMs it is about as `rom_ids` — the one ROM, or the distinct ROMs of the
 whole-device inventory — at most 500; above that the scope is left off and the server evaluates the whole library.
-Opening the session is best-effort: a `negotiate` **transport** failure is non-fatal, the run simply proceeds
-**without** a session (the kernel still syncs). The **one** exception is RomM's per-device `sync_enabled` switch —
-`negotiate` is the only API-mode endpoint that enforces it, answering a 400 with detail
-`"Sync is disabled for this device"` when the user has disabled sync for this device server-side. That specific 400 is
-translated to `RommSyncDisabledError` and **stops** the run with `reason: device_sync_disabled` (a visible policy stop,
-not a silent sessionless degrade); pre-launch treats it like the local save-sync toggle being off and skips silently so
-the launch always proceeds (#1489). Scope limit: legacy/unconfirmed ROMs never open a session, so a library with no
-confirmed named-slot ROM never reaches the switch. Legacy `slot:null` ROMs open no session at all (RomM cannot address
-`slot:null` through the negotiate inventory param) but take the identical kernel path. The `complete` close is likewise
-**non-fatal** — a session the server never hears closed times out and is cancelled by the next `negotiate`, so a failed
-`complete` never fails the run.
+Opening the session is best-effort: a failure to build its inventory or of the `negotiate` **transport** is non-fatal,
+for one ROM's session and the whole-device one alike, and the run simply proceeds **without** a session (the kernel
+still syncs). The **one** exception is RomM's per-device `sync_enabled` switch — `negotiate` is the only API-mode
+endpoint that enforces it, answering a 400 with detail `"Sync is disabled for this device"` when the user has disabled
+sync for this device server-side. That specific 400 is translated to `RommSyncDisabledError` and **stops** the run with
+`reason: device_sync_disabled` (a visible policy stop, not a silent sessionless degrade); pre-launch treats it like the
+local save-sync toggle being off and skips silently so the launch always proceeds (#1489). Scope limit:
+legacy/unconfirmed ROMs never open a session, so a library with no confirmed named-slot ROM never reaches the switch.
+Legacy `slot:null` ROMs open no session at all (RomM cannot address `slot:null` through the negotiate inventory param)
+but take the identical kernel path. The `complete` close is likewise **non-fatal** — a session the server never hears
+closed times out and is cancelled by the next `negotiate`, so a failed `complete` never fails the run.
 
 **Cross-device pulls come from `list_saves`, not an op.** A confirmed ROM with a save on the server but **no local file
 here** is picked up by the matrix directly: `list_saves` returns the server save, it is grouped by its canonical local
@@ -675,7 +677,7 @@ under a head that moved past it — a conflict nobody caused. Where the acknowle
 the file is reported as an error of that sync with its reason — not a conflict — and the next sync decides the same way
 again.
 
-The mutating sync path (`SyncEngine.do_sync_rom_saves`) records every adopt. The read-only status path
+The mutating sync path (`MatrixExecutor.sync_rom_saves`) records every adopt. The read-only status path
 (`StatusService._get_save_status_io`) records only one that needs no acknowledgement, and leaves the other to the next
 sync: showing a page never writes to RomM, and the read runs with save sync off too. The alternative — only writing the
 baseline from the mutating path — would leave the adopts that need no acknowledgement incomplete forever for users who
@@ -690,15 +692,15 @@ marshalling and the no-fallback posture). It answers in the `SyncAction` datacla
 `backend/domain/sync_action.py` — which is all that module holds, the decision itself living nowhere in Python. The
 `SaveService` aggregate (`backend/services/saves/`) calls the seam from two sub-services:
 
-- `SyncEngine.do_sync_rom_saves` (`services/saves/sync_engine/`) iterates local files and server-only-in-slot groups,
+- `MatrixExecutor.sync_rom_saves` (`services/saves/sync_engine/`) iterates local files and server-only-in-slot groups,
   dispatching each action via the matrix executor's `_dispatch_sync_action` (the in-place PUT is retired on this path,
   #1276).
 - `StatusService._get_save_status_io` (`services/saves/status/`) runs the same decisions read-only and folds them into
   the `SaveStatus.files[*].status` strings the frontend renders. The only allowed mutation is recording an adopt that
   needs no acknowledgement — pure state hygiene with no network traffic.
 
-What an action moves is not the matrix's. Two building blocks in `services/saves/`, built once by `SaveService` and
-handed to every save service that needs them, carry it out:
+What an action moves is not the matrix's. Two building blocks in `services/saves/`, built once by `bootstrap/saves.py`
+and handed to every save service that needs them, carry it out:
 
 - `SaveBackup` (`save_backup.py`) moves a local save file into the `.romm-backup` folder beside it before Tender itself
   replaces or removes it — every download over a local file (`SaveTransfer.download_save_file`, whichever flow calls
@@ -1565,7 +1567,7 @@ other save in the slot.
 ### Matrix pre-flight
 
 Before the destructive switch starts, `rollback_to_version` runs a full `compute_sync_action` pre-flight on the
-currently-tracked save (via `do_sync_rom_saves`):
+currently-tracked save (via `MatrixExecutor.sync_rom_saves`):
 
 | Pre-flight outcome                           | What happens                                                                                                                                                                                                |
 | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1659,8 +1661,9 @@ neither in place):
    `unsupported` (the latter two carry the `savefiles_in_content_dir` and `save_shape_unsupported` reasons), exactly as
    rollback refuses them — copying one component of an N-file set would produce an incoherent save, and the other two
    have nowhere the sync writes to.
-4. A **matrix pre-flight** (`do_sync_rom_saves`) runs unconditionally on the _current_ slot, protecting its dirty local
-   before the copy overwrites it: `conflict_blocked` / `preflight_failed` on a bad pre-flight (same shapes as rollback).
+4. A **matrix pre-flight** (`MatrixExecutor.sync_rom_saves`) runs unconditionally on the _current_ slot, protecting its
+   dirty local before the copy overwrites it: `conflict_blocked` / `preflight_failed` on a bad pre-flight (same shapes
+   as rollback).
 5. `list_saves` with **no slot filter** (the chosen save may live in any slot) locates the save by id; a missing id is
    `version_deleted`. A call that could not reach RomM is `server_unreachable`, a definitive 404 `not_found`, and any
    other RomM answer `copy_failed` with `classify_error`'s message — a 429 is RomM rate-limiting, not RomM gone.
@@ -1866,7 +1869,7 @@ an earlier sync of that slot, or an acknowledgement RomM took whose answer was l
 acknowledged (row 8a). Where another client replaced the head meanwhile, the sync decides against that newer head as any
 sync does.
 
-`download_save(save_id, dest_path)` names no device: it fetches a server copy to compare
+`download_save_content(save_id, dest_path)` without a `device_id` names no device: it fetches a server copy to compare
 (`SaveTransfer.fetch_server_copy`) and records nothing.
 
 ### Implication for the sync algorithm
@@ -2057,9 +2060,9 @@ The Play button's path:
    "Preparing..." to "Launching...", or, for a missing saves folder, to the "Save Sync Unavailable" question below. No
    other sync sends it — not Sync Saves, not Sync All Saves Now, not the sync after a game. The panel listens for it,
    for its own ROM, only until its pre-launch step answers, so an event that arrives after that — Cancel or Play Anyway
-   past the limit included — changes nothing. The backend fetches server saves and runs `do_sync_rom_saves`, which
-   iterates files and dispatches every `compute_sync_action` outcome. If a `Conflict` was returned for any file, the
-   result includes a `conflicts` list, and `actOnGateVerdict` puts each conflict through
+   past the limit included — changes nothing. The backend fetches server saves and runs `MatrixExecutor.sync_rom_saves`,
+   which iterates files and dispatches every `compute_sync_action` outcome. If a `Conflict` was returned for any file,
+   the result includes a `conflicts` list, and `actOnGateVerdict` puts each conflict through
    `LaunchPrompts.resolveConflicts` in turn — `handleConflicts` (see [The modal](#the-modal)): once all are resolved it
    notifies siblings and goes on; on the first Cancel the button switches to `conflict` and nothing launches. A sync
    that fails never launches unconditionally: the "Save Sync Unavailable" dialog asks first, and Cancel returns the
@@ -2105,9 +2108,9 @@ Triggered automatically when a game stops (if save sync and `sync_after_exit` ar
    not skipped. While a removed-game cleanup runs the call is refused (`prune_active`) and none of those steps runs: the
    panel logs the refusal and says in a toast that the session's playtime and saves were not synced. Any other refusal
    is logged and shown in its own message.
-3. Backend runs `do_sync_rom_saves`. For most rows the local file's hash will differ from `last_sync_hash` (the user
-   just played), so the typical action is `Upload` — matrix row 9 — POSTed as a new version (`overwrite=false`,
-   409-backstopped).
+3. Backend runs `MatrixExecutor.sync_rom_saves`. For most rows the local file's hash will differ from `last_sync_hash`
+   (the user just played), so the typical action is `Upload` — matrix row 9 — POSTed as a new version
+   (`overwrite=false`, 409-backstopped).
 4. If a `Conflict` is returned, a toast notifies the user. The modal is **not** opened post-exit — the conflict re-fires
    at the next pre-launch sync, where the user resolves it via Keep Local / Use Server before launch.
 5. Toast notification shown on success or conflict — the per-direction completion toast above (uploaded / downloaded /
@@ -2137,11 +2140,11 @@ chain, is not bounded this way.
 User-initiated from the "Sync All Saves Now" button in Save Sync settings.
 
 1. Iterates all installed ROMs from the backend registry.
-2. For each ROM **whose slot the user has confirmed** (`slot_confirmed`): runs `do_sync_rom_saves`. A never-configured
-   ROM — one the user has not yet set up save sync for — is **skipped**, so its possibly-stale local save can't be
-   auto-uploaded into the default slot and overwrite another device's newer progress (#1055). The single-ROM paths
-   (pre-launch / post-exit / per-game manual sync) stay ungated — those are the user's explicit per-ROM actions and the
-   first-sync auto-seed path, where the user decides.
+2. For each ROM **whose slot the user has confirmed** (`slot_confirmed`): runs `MatrixExecutor.sync_rom_saves`. A
+   never-configured ROM — one the user has not yet set up save sync for — is **skipped**, so its possibly-stale local
+   save can't be auto-uploaded into the default slot and overwrite another device's newer progress (#1055). The
+   single-ROM paths (pre-launch / post-exit / per-game manual sync) stay ungated — those are the user's explicit per-ROM
+   actions and the first-sync auto-seed path, where the user decides.
 3. Per-rom asyncio.Lock prevents collision with concurrent pre-launch / post-exit syncs. Under it, a confirmed ROM whose
    game is running is passed over and named ([A game that is running](#a-game-that-is-running)).
 4. Every other ROM's save answer is read live, the never-configured ones' too, and asked through the refusal every sync
@@ -2216,9 +2219,9 @@ press and before Steam lists it.
 ### Get save status (read-only)
 
 Triggered by the game-detail panel and SAVES tab via `getSaveStatus(romId)`. Runs `_get_save_status_io` — a read-only
-counterpart of `do_sync_rom_saves` that returns the same `compute_sync_action` decisions but performs no upload/download
-I/O. The only mutation it allows is recording the baseline of a `Skip(adopt_baseline=True)` that needs no
-acknowledgement, so future drift detection works; one that must be acknowledged is left to the next sync, and its row
+counterpart of `MatrixExecutor.sync_rom_saves` that returns the same `compute_sync_action` decisions but performs no
+upload/download I/O. The only mutation it allows is recording the baseline of a `Skip(adopt_baseline=True)` that needs
+no acknowledgement, so future drift detection works; one that must be acknowledged is left to the next sync, and its row
 reads "synced", which is true — the bytes are identical ([Outcomes](#outcomes)). `server_has_saves` says whether RomM's
 listing of the ROM's saves returned anything, in any slot, also for a game with no `files` row; it is false where the
 query failed or was never sent, with `server_query_failed` beside it.
@@ -2292,7 +2295,8 @@ its `recommended_action`; every other operation, the slot listing among them, ra
 `get_device_id()` — no per-flow transaction. The cache is refreshed when registration writes a new id and can be dropped
 via `invalidate_device_id_cache()` for the rare case where `kv_config["device_id"]` is mutated outside the registry
 (registration is the only in-process writer, so this is currently reached only from test backdoors). The registry is
-built in the `SaveService` facade and handed to `SyncEngine` alone; no other save service holds it.
+built in `bootstrap/saves.py` with the loop and the hostname and machine-id providers it registers with, and handed to
+`SyncEngine` alone; no other save service holds it.
 
 **Every save operation takes its id from one entry.** `SyncEngine.live_device_id()` registers or heals the device
 (`ensure_device_registered`) and answers the id as a `LiveDeviceId` (`domain/live_device_id.py`), a type of its own.
@@ -2300,14 +2304,13 @@ Each save operation that reaches RomM calls it once, before its first request, a
 (pre-launch, post-exit, one ROM, all), the copy into another slot and the restore of an older version (both before their
 pre-flight sync), the conflict resolution, the slot switch, listing and deleting a slot's saves, the setup info and the
 slot-choice migration, the version list, and the save status. The slot summary (`get_save_slots`) sends no device id and
-stays outside. `RommSaveApi.list_saves`, the sync logic (`do_sync_rom_saves`, `MatrixExecutor.sync_rom_saves`) and the
-save transfer's steps that name the device (`SaveTransfer.download_save_file`, `upload_save_file`,
-`acknowledge_server_head`, `adopt_server_head`) take a `LiveDeviceId`, so the type checker refuses a caller that passes
-a stored id or `None`. The entry pays one `PUT /api/devices/{id}` per operation, reads included: a cheaper path for
-reads would be the divergence the entry exists to remove. Concurrent callers wait on one lock, taken innermost — nothing
-is taken under it, so a holder of `rom_lock` or the device gate may call the entry — and two of them never register
-twice. What keeps the rule and what those checks miss: its entry in the invariant register
-([Save-file sync](invariants/saves.md)).
+stays outside. `RommSaveApi.list_saves`, the sync logic (`MatrixExecutor.sync_rom_saves`) and the save transfer's steps
+that name the device (`SaveTransfer.download_save_file`, `upload_save_file`, `acknowledge_server_head`,
+`adopt_server_head`) take a `LiveDeviceId`, so the type checker refuses a caller that passes a stored id or `None`. The
+entry pays one `PUT /api/devices/{id}` per operation, reads included: a cheaper path for reads would be the divergence
+the entry exists to remove. Concurrent callers wait on one lock, taken innermost — nothing is taken under it, so a
+holder of `rom_lock` or the device gate may call the entry — and two of them never register twice. What keeps the rule
+and what those checks miss: its entry in the invariant register ([Save-file sync](invariants/saves.md)).
 
 The cached id outside that entry is read by the play-session upload (`SaveService.get_device_id`, the
 `DeviceIdProvider`), and by the device list, which marks this device's row. Registration happens whether save sync is on
@@ -2569,7 +2572,7 @@ for the physical column names and constraints.
 | `saves.<id>.last_synced_core`                       | string / null           | RetroArch core used at last sync (for core change detection, e.g. `"mgba_libretro"`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `saves.<id>.own_upload_ids`                         | array of integer        | Save ids this device originally POSTed. Drives the `uploaded_by_us` indicator on the SAVES tab.                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `saves.<id>.slots`                                  | object                  | Merged slot listing (read-model cache): per slot, its `source` / `count` / latest `updated_at`. A `get_save_slots` that could not reach the server hands this back in its own `last_known` field (`slots` / `active_slot`), but only once `slot_confirmed` is set — the QAM renders it as the state at the last contact. It carries no timestamp: nothing records when the listing was last refreshed, and `last_sync_check_at` moves independently of it (#1755).                                                                                       |
-| `saves.<id>.last_sync_check_at`                     | ISO-8601 string / null  | Timestamp of the most recent `do_sync_rom_saves` run for this rom (regardless of whether files transferred).                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `saves.<id>.last_sync_check_at`                     | ISO-8601 string / null  | Timestamp of the most recent `MatrixExecutor.sync_rom_saves` run for this rom (regardless of whether files transferred).                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `saves.<id>.files`                                  | object                  | Per-file sync state, keyed by filename (e.g. `"game.srm"`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `saves.<id>.files.<fn>.tracked_save_id`             | integer / null          | Most recent RomM save id this device tracked. Used to exclude the active save from the Previous Versions dropdown and as an uploader-attribution hint; **not** consulted by `compute_sync_action` (the algorithm picks newest by `updated_at`).                                                                                                                                                                                                                                                                                                          |
 | `saves.<id>.files.<fn>.last_sync_hash`              | content-hash hex string | RomM-parity `content_hash` of the save file at last sync (zip-aware: MD5 for a single file, per-entry combined for a zip — `SaveFileStore.content_hash`, #1457). Drift baseline used by matrix rows 6a–6e/7/8a/8b/9/9b/10a/10b/11a/11b/12a/12b.                                                                                                                                                                                                                                                                                                          |
@@ -2598,10 +2601,10 @@ therefore can't render a game unplayable. `sync_before_launch` / `sync_after_exi
 post-exit syncs; `default_slot` is the slot new games adopt (`"autosave"`, matching the official RomM clients Argosy and
 Grout); `autocleanup_limit` caps retained save versions per slot on the server (10).
 
-Conflicts are no longer persisted. They are returned ephemerally from `do_sync_rom_saves` and `_get_save_status_io` and
-surfaced via the modal at the moment of the sync. If the user dismisses the modal (Cancel), the conflict re-fires on the
-next sync as long as the underlying state still produces one: a conflict row (12b, 6c, 6a, 11b, or 9b), or an upload the
-409 backstop resolves to a conflict.
+Conflicts are no longer persisted. They are returned ephemerally from `MatrixExecutor.sync_rom_saves` and
+`_get_save_status_io` and surfaced via the modal at the moment of the sync. If the user dismisses the modal (Cancel),
+the conflict re-fires on the next sync as long as the underlying state still produces one: a conflict row (12b, 6c, 6a,
+11b, or 9b), or an upload the 409 backstop resolves to a conflict.
 
 ### Legacy field migration
 

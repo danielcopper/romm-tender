@@ -44,6 +44,7 @@ from tests.services.saves._helpers import (
     _server_save,
     _server_save_with_syncs,
     _set_device_id,
+    make_parts,
     make_service,
     rom_save_sync_state_from_dict,
 )
@@ -82,13 +83,14 @@ class TestV47SyncFlow:
 
     def test_upload_passes_device_id_and_slot(self, tmp_path):
         """v4.7: upload_save receives device_id and slot."""
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "server-dev-123")
         _install_rom(svc, tmp_path)
         save_path = _create_save(tmp_path)
 
-        _do_upload(svc, 42, str(save_path), "pokemon.srm", "gba")
+        _do_upload(parts, 42, str(save_path), "pokemon.srm", "gba")
 
         upload_calls = [c for c in fake.call_log if c[0] == "upload_save"]
         assert len(upload_calls) == 1
@@ -802,7 +804,8 @@ class TestOwnUploadIds:
     @pytest.mark.asyncio
     async def test_post_upload_idempotent_in_own_list(self, tmp_path):
         """Calling upload_save_file twice with the same resulting save_id does not duplicate."""
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _set_device_id(svc, "dev-1")
         _install_rom(svc, tmp_path)
         save_file = _create_save(tmp_path)
@@ -822,7 +825,7 @@ class TestOwnUploadIds:
         fake.saves[1000] = _server_save(save_id=1000, rom_id=42)
 
         # Call internal upload with no server_save (POST path)
-        _do_upload(svc, 42, str(save_file), "pokemon.srm", "gba", server_save=None)
+        _do_upload(parts, 42, str(save_file), "pokemon.srm", "gba", server_save=None)
 
         rom_state = _require_save_state(svc, 42)
         assert rom_state.own_upload_ids is not None
@@ -832,7 +835,8 @@ class TestOwnUploadIds:
     @pytest.mark.asyncio
     async def test_put_upload_appends_own_upload_id(self, tmp_path):
         """A PUT upload (existing save id) records that id in own_upload_ids."""
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _set_device_id(svc, "dev-1")
         _install_rom(svc, tmp_path)
         save_file = _create_save(tmp_path)
@@ -851,7 +855,7 @@ class TestOwnUploadIds:
         )
 
         server_save = fake.saves[100]
-        _do_upload(svc, 42, str(save_file), "pokemon.srm", "gba", server_save=server_save)
+        _do_upload(parts, 42, str(save_file), "pokemon.srm", "gba", server_save=server_save)
 
         rom_state = _require_save_state(svc, 42)
         # This device pushed new content to id 100 → 100 is now ours; 99 untouched.
@@ -860,7 +864,8 @@ class TestOwnUploadIds:
     @pytest.mark.asyncio
     async def test_put_upload_idempotent_in_own_list(self, tmp_path):
         """Two PUT uploads to the same save id record it only once (dedup)."""
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _set_device_id(svc, "dev-1")
         _install_rom(svc, tmp_path)
         save_file = _create_save(tmp_path)
@@ -878,8 +883,8 @@ class TestOwnUploadIds:
         )
 
         server_save = fake.saves[100]
-        _do_upload(svc, 42, str(save_file), "pokemon.srm", "gba", server_save=server_save)
-        _do_upload(svc, 42, str(save_file), "pokemon.srm", "gba", server_save=server_save)
+        _do_upload(parts, 42, str(save_file), "pokemon.srm", "gba", server_save=server_save)
+        _do_upload(parts, 42, str(save_file), "pokemon.srm", "gba", server_save=server_save)
 
         rom_state = _require_save_state(svc, 42)
         assert rom_state.own_upload_ids is not None
@@ -1479,7 +1484,7 @@ class TestSyncRomSavesDispatch:
         assert errors == []
         assert conflicts == []
         # No I/O initiated.
-        assert not any(c[0] in ("upload_save", "download_save_content", "download_save") for c in fake.call_log)
+        assert not any(c[0] in ("upload_save", "download_save_content") for c in fake.call_log)
         assert not any(c[0] == "confirm_download" for c in fake.call_log)
         # Baseline now persisted, anchored on the adopted head.
         file_state = _require_save_state(svc, 42).files["pokemon.srm"]
@@ -1814,7 +1819,7 @@ class TestSyncRomSavesDispatch:
         engine = svc._sync_engine
         state = read_save_state_or_new(engine._uow_factory, 42)
 
-        uploaded, downloaded, errors, conflicts = engine.do_sync_rom_saves(
+        uploaded, downloaded, errors, conflicts = engine._matrix.sync_rom_saves(
             42, state, LiveDeviceId("device-1"), None, "default", stop=SyncStop()
         )
 
@@ -2079,7 +2084,8 @@ class TestRecordOwnUploadNoneId:
 
     def test_own_upload_unchanged_when_upload_result_has_no_id(self, tmp_path):
         """An upload whose server response carries no id leaves own_upload_ids alone."""
-        svc, fake = make_service(tmp_path)
+        parts, fake = make_parts(tmp_path)
+        svc = parts.service
         _set_device_id(svc, "dev-1")
         _install_rom(svc, tmp_path)
         save_path = _create_save(tmp_path)
@@ -2098,7 +2104,7 @@ class TestRecordOwnUploadNoneId:
         # Force the upload to return a result with no id (the None-guard path).
         fake.upload_save = lambda *a, **k: {"updated_at": "2026-01-01T00:00:00Z"}
 
-        state = _do_upload(svc, 42, str(save_path), "pokemon.srm", "gba")
+        state = _do_upload(parts, 42, str(save_path), "pokemon.srm", "gba")
 
         assert state.own_upload_ids == [50, 51]
 
@@ -2135,15 +2141,25 @@ def _confirm_calls(fake) -> list[tuple[int, str]]:
 
 
 def _transfers(fake) -> list[str]:
-    return [c[0] for c in fake.call_log if c[0] in ("upload_save", "download_save_content", "download_save")]
+    return [c[0] for c in fake.call_log if c[0] in ("upload_save", "download_save_content")]
 
 
 class TestAnAdoptOfTheHead:
     """romm-gavel 2.0.0: a local file identical to the head is adopted, never transferred (#2525)."""
 
     def _setup(self, tmp_path, *, content: bytes = _PROGRESS, current: bool, head_hash: str | None = None, retry=None):
+        parts, fake, save_path = self._setup_parts(
+            tmp_path, content=content, current=current, head_hash=head_hash, retry=retry
+        )
+        return parts.service, fake, save_path
+
+    def _setup_parts(
+        self, tmp_path, *, content: bytes = _PROGRESS, current: bool, head_hash: str | None = None, retry=None
+    ):
+        """:meth:`_setup`, answering the parts the service was built with."""
         overrides = {"retry": retry} if retry is not None else {}
-        svc, fake = make_service(tmp_path, **overrides)
+        parts, fake = make_parts(tmp_path, **overrides)
+        svc = parts.service
         _enable_sync_with_device(svc)
         _install_rom(svc, tmp_path)
         save_path = _create_save(tmp_path, content=content)
@@ -2151,7 +2167,7 @@ class TestAnAdoptOfTheHead:
         if current:
             fake.stage_device_sync(100, "device-1", "2026-02-17T06:00:00Z")
         _seed_save_state(svc, 42, RomSaveSyncState(active_slot=None))
-        return svc, fake, save_path
+        return parts, fake, save_path
 
     def test_a_current_device_without_a_baseline_and_a_differing_local_file_gets_a_conflict(self, tmp_path):
         svc, fake, _path = self._setup(tmp_path, current=True, head_hash="someone-elses-bytes")
@@ -2227,10 +2243,10 @@ class TestAnAdoptOfTheHead:
         assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == 100
 
     def test_a_file_changed_since_the_decision_is_not_recorded_as_the_head(self, tmp_path):
-        svc, fake, save_path = self._setup(tmp_path, current=True)
+        parts, fake, save_path = self._setup_parts(tmp_path, current=True)
         state = RomSaveSyncState()
 
-        recorded = svc._save_transfer.record_server_head(
+        recorded = parts.save_transfer.record_server_head(
             state, "pokemon.srm", fake.saves[100], str(save_path), "the-hash-the-decision-saw", system="gba"
         )
 
@@ -2540,3 +2556,46 @@ class TestTheSizeClaimReachesTheDecision:
         assert [c["server_save_id"] for c in status["conflicts"]] == conflicts
         assert [c["server_save_id"] for c in synced] == conflicts
         assert (uploaded, errors) == (0 if conflicts else 1, [])
+
+
+class TestBuildSyncConflictEntry:
+    """The ``sync_conflict`` descriptor the matrix executor builds for the panel."""
+
+    def test_the_descriptor_carries_the_server_save(self, tmp_path):
+        """MatrixExecutor.build_sync_conflict_entry builds the ``sync_conflict`` descriptor's dict shape."""
+        svc, _ = make_service(tmp_path)
+        server = _server_save(save_id=77, filename="pokemon.srm", file_size_bytes=2048)
+
+        entry = svc._sync_engine._matrix.build_sync_conflict_entry(
+            rom_id=42,
+            filename="pokemon.srm",
+            server=server,
+            local_path=None,
+            local_hash=None,
+        )
+
+        assert entry["type"] == "sync_conflict"
+        assert entry["rom_id"] == 42
+        assert entry["filename"] == "pokemon.srm"
+        assert entry["server_save_id"] == 77
+        assert entry["server_size"] == 2048
+        assert "created_at" in entry
+
+    @pytest.mark.parametrize("missing", ["absent", "null"])
+    def test_a_server_save_without_an_id_is_refused(self, tmp_path, missing):
+        """A server save with no id never becomes a descriptor with ``server_save_id: None``."""
+        svc, _ = make_service(tmp_path)
+        server = _server_save(save_id=77, filename="pokemon.srm")
+        if missing == "absent":
+            del server["id"]
+        else:
+            server["id"] = None
+
+        with pytest.raises(ValueError, match="without an id"):
+            svc._sync_engine._matrix.build_sync_conflict_entry(
+                rom_id=42,
+                filename="pokemon.srm",
+                server=server,
+                local_path=None,
+                local_hash=None,
+            )

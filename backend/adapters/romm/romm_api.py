@@ -390,9 +390,6 @@ class RommApiAdapter:
             params += f"&autocleanup=true&autocleanup_limit={autocleanup_limit}"
         return self._client.upload_multipart(f"/api/saves?{params}", file_path, method="POST")
 
-    def download_save(self, save_id: int, dest_path: str) -> None:
-        self._client.download(f"/api/saves/{save_id}/content", dest_path)
-
     def download_save_content(
         self,
         save_id: int,

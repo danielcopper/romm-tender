@@ -13,6 +13,7 @@ from fakes.fake_hostname_reader import FakeHostnameReader
 from fakes.fake_machine_id_reader import FakeMachineIdReader
 from fakes.fake_save_api import FakeSaveApi
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
+from fakes.running_loop import running_loop
 
 from domain.playtime import PendingPlaySession, Playtime
 from lib.errors import (
@@ -72,6 +73,9 @@ def _make_registry(*, settings=None, settings_persister=None):
         log_debug=lambda msg: None,
         settings_persister=settings_persister or _FailingSettingsPersister(RuntimeError("unused")),
         version="0.14.0",
+        loop=running_loop(),
+        hostname_provider=FakeHostnameReader(),
+        machine_id_provider=FakeMachineIdReader(),
     )
     return registry, uow_factory, fake
 

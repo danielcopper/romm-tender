@@ -2,6 +2,7 @@
 
 import hashlib
 import logging
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, cast
 
@@ -21,12 +22,15 @@ from fakes.system_time import FakeClock
 
 from adapters.gavel_native import GavelNativeAdapter
 from adapters.save_file import SaveFileAdapter
+from bootstrap import SaveParts, SaveWiring, wire_saves
 from domain.live_device_id import LiveDeviceId
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
-from services.saves import SaveService, SaveServiceConfig
+from services.saves import SaveService
 from services.saves._save_state import read_save_state_or_new, write_save_state
+from services.saves.sync_engine._sweep_step import RomSyncResult
+from services.saves.sync_engine.matrix import MatrixExecutor
 
 # One ctypes load for the whole SaveService suite — the adapter is stateless,
 # so every service built here can share the same instance.
@@ -42,8 +46,15 @@ async def _noop_emit(_event: str, /, *_args: object) -> None:
     """Default emitter for SaveService tests — drops all events."""
 
 
-def make_service(tmp_path, fake_api=None, *, emit=None, **overrides) -> tuple["SaveService", "FakeSaveApi"]:
-    """Create a SaveService with sensible defaults for testing."""
+def make_parts(
+    tmp_path, fake_api=None, *, emit=None, matrix_executor_type: type[MatrixExecutor] = MatrixExecutor, **overrides
+) -> tuple[SaveParts, FakeSaveApi]:
+    """Build the save package through ``wire_saves``, the way ``bootstrap/`` does, over test defaults.
+
+    Each keyword in *overrides* replaces one field of the :class:`SaveWiring`;
+    *matrix_executor_type* is the stand-in executor class handed in where the engine
+    is built.
+    """
     save_file_store = SaveFileAdapter(logger=logging.getLogger("test"))
     fake: FakeSaveApi = fake_api or FakeSaveApi(save_file_store=save_file_store)
     # Tests that build their own FakeSaveApi without wiring the adapter get
@@ -51,7 +62,7 @@ def make_service(tmp_path, fake_api=None, *, emit=None, **overrides) -> tuple["S
     # bytes onto the shared filesystem view.
     if fake.save_file_store is None:
         fake.save_file_store = save_file_store
-    config_kwargs: dict[str, Any] = {
+    wiring_kwargs: dict[str, Any] = {
         "romm_api": fake,
         "retry": _make_retry(),
         "resolve_upload_conflict": _GAVEL,
@@ -83,9 +94,28 @@ def make_service(tmp_path, fake_api=None, *, emit=None, **overrides) -> tuple["S
         "running_rom_ids": FakeRunningRomIds(),
         "uow_factory": FakeUnitOfWorkFactory(),
     }
-    config_kwargs.update(overrides)
-    svc = SaveService(config=SaveServiceConfig(**config_kwargs))
-    return svc, fake
+    wiring_kwargs.update(overrides)
+    parts = wire_saves(SaveWiring(**wiring_kwargs), matrix_executor_type=matrix_executor_type)
+    return parts, fake
+
+
+def executor_answering(sync: Callable[..., RomSyncResult]) -> type[MatrixExecutor]:
+    """A stand-in matrix executor whose ``sync_rom_saves`` answers what *sync* answers for the same arguments.
+
+    Handed to :func:`make_parts` or :func:`make_service` as ``matrix_executor_type``.
+    """
+
+    class _StandIn(MatrixExecutor):
+        def sync_rom_saves(self, rom_id: int, *args: Any, **kwargs: Any) -> RomSyncResult:
+            return sync(rom_id, *args, **kwargs)
+
+    return _StandIn
+
+
+def make_service(tmp_path, fake_api=None, **kwargs: Any) -> tuple[SaveService, FakeSaveApi]:
+    """Create a SaveService through :func:`make_parts`, for a test that needs no part the façade does not hold."""
+    parts, fake = make_parts(tmp_path, fake_api, **kwargs)
+    return parts.service, fake
 
 
 def _no_save_directory(svc, system: str = "gba") -> None:
@@ -188,19 +218,19 @@ def _do_sync(svc, rom_id: int):
     """Run the matrix sync worker for *rom_id* the way the op-entry does.
 
     Loads the ``RomSaveSyncState`` from the shared UoW and the stored device id
-    (:func:`_stored_device_id`), resolves the active core, runs ``do_sync_rom_saves`` (the matrix worker), persists the
-    mutated aggregate, and returns ``(uploaded, downloaded, errors, conflicts)``.
-    The direct-worker tests use this in place of the old ``do_sync_rom_saves(rom_id)``
-    call that reached into a global state dict.
+    (:func:`_stored_device_id`), resolves the active core, runs the matrix
+    executor's ``sync_rom_saves``, persists the mutated aggregate, and returns
+    ``(uploaded, downloaded, errors, conflicts)``.
     """
     engine = svc._sync_engine
+    matrix = engine._matrix
     if engine._rom_info.get_rom_save_info(rom_id) is None:
         # Not installed → nothing to sync and no roms row to anchor a write.
-        return engine.do_sync_rom_saves(rom_id, RomSaveSyncState(), _stored_device_id(svc), None, _default_slot(svc))
+        return matrix.sync_rom_saves(rom_id, RomSaveSyncState(), _stored_device_id(svc), None, _default_slot(svc))
     save_state, device_id = read_save_state_or_new(engine._uow_factory, rom_id), _stored_device_id(svc)
     core_so = engine.resolve_core(rom_id)
     default_slot = _default_slot(svc)
-    result = engine.do_sync_rom_saves(rom_id, save_state, device_id, core_so, default_slot)
+    result = matrix.sync_rom_saves(rom_id, save_state, device_id, core_so, default_slot)
     write_save_state(engine._uow_factory, rom_id, save_state)
     return result
 
@@ -221,16 +251,17 @@ def _default_slot(svc):
     return resolve_default_slot(svc._config.settings)
 
 
-def _do_upload(svc, rom_id, file_path, filename, system, *, server_save=None, core_so=None):
+def _do_upload(parts: SaveParts, rom_id, file_path, filename, system, *, server_save=None, core_so=None):
     """Run the upload worker the way the op-entry does and return the mutated state.
 
     Loads the ``RomSaveSyncState`` from the shared UoW and the stored device id, calls
     ``SaveTransfer.upload_save_file`` (which mutates the aggregate in memory), persists it, and
     returns the in-memory state so the test can assert on the same object.
     """
+    svc = parts.service
     engine = svc._sync_engine
     save_state, device_id = read_save_state_or_new(engine._uow_factory, rom_id), _stored_device_id(svc)
-    svc._save_transfer.upload_save_file(
+    parts.save_transfer.upload_save_file(
         rom_id, file_path, filename, save_state, device_id, system, core_so, server_save, _default_slot(svc)
     )
     write_save_state(engine._uow_factory, rom_id, save_state)
@@ -339,6 +370,25 @@ def _enable_sync_with_device(svc, device_id: str = "device-1") -> None:
     svc._sync_engine._devices.invalidate_device_id_cache()
 
 
+def _seed_confirmed_rom(
+    svc,
+    tmp_path,
+    *,
+    rom_id: int = 42,
+    system: str = "gba",
+    rom_name: str = "pokemon",
+    file_name: str = "pokemon.gba",
+    content: bytes = b"save data",
+) -> None:
+    """Enable sync with a device, and install a ROM with a confirmed named slot and a local-only save file."""
+    _enable_sync_with_device(svc)
+    _install_rom(svc, tmp_path, rom_id=rom_id, system=system, file_name=file_name)
+    _seed_save_state(
+        svc, rom_id, RomSaveSyncState(system=system, slot_confirmed=True, active_slot="default"), platform_slug=system
+    )
+    _create_save(tmp_path, system=system, rom_name=rom_name, content=content)
+
+
 def _set_device_id(svc, device_id: str | None) -> None:
     """Set or clear the server device id in ``kv_config`` (None deletes it).
 
@@ -421,10 +471,10 @@ def _fail_renames_from_call(svc, monkeypatch, failing_call: int) -> None:
     monkeypatch.setattr(store, "rename", rename)
 
 
-def _fail_save_backups(svc, monkeypatch) -> None:
+def _fail_save_backups(parts: SaveParts, monkeypatch) -> None:
     """Make every save backup raise ``PermissionError``: a download is never put in place and the local file stays."""
 
     def back_up_save_file(*_args: object, **_kwargs: object) -> bool:
         raise PermissionError(".romm-backup is read-only")
 
-    monkeypatch.setattr(svc._save_backup, "back_up_save_file", back_up_save_file)
+    monkeypatch.setattr(parts.save_backup, "back_up_save_file", back_up_save_file)

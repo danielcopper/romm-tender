@@ -478,7 +478,7 @@ class TestTheRefusalIsASkipAndNotAFailure:
         answer = _refusing(state)
         svc, _store, fake = _service(tmp_path, answer)
 
-        result = svc._sync_engine.do_sync_rom_saves(
+        result = svc._sync_engine._matrix.sync_rom_saves(
             42,
             RomSaveSyncState(active_slot="default", slot_confirmed=True),
             _stored_device_id(svc),
@@ -493,7 +493,7 @@ class TestTheRefusalIsASkipAndNotAFailure:
         answer = _syncable(str(tmp_path / "saves" / "gba"))
         svc, _store, fake = _service(tmp_path, answer)
 
-        svc._sync_engine.do_sync_rom_saves(
+        svc._sync_engine._matrix.sync_rom_saves(
             42,
             RomSaveSyncState(active_slot="default", slot_confirmed=True),
             _stored_device_id(svc),
@@ -621,7 +621,7 @@ class TestAPlaceNotReadIsRefusedWithItsFinding:
         assert refused.value.reason in BENIGN_SYNC_SKIP_REASONS
         assert refused.value.details == {**self._DETAILS, "synced": 0}
         assert not self._directory(tmp_path).exists()
-        assert not [call for call in fake.call_log if call[0] in ("upload_save", "download_save")]
+        assert not [call for call in fake.call_log if call[0] in ("upload_save", "download_save_content")]
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(

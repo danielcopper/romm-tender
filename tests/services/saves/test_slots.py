@@ -1,4 +1,4 @@
-"""Tests for SlotsService — slot management, tracking, and slot lifecycle."""
+"""Tests for the slot sub-modules — slot management, tracking, and slot lifecycle."""
 
 import asyncio
 import hashlib
@@ -48,6 +48,7 @@ from tests.services.saves._helpers import (
     _server_save,
     _set_device_id,
     _uow,
+    make_parts,
     make_service,
 )
 
@@ -1231,10 +1232,10 @@ class TestConfirmSlotChoice:
         _create_save(tmp_path, content=b"L" * 100)
         fake.saves[1] = _server_save(save_id=1, filename="pokemon [ts].srm", slot=None)
 
-        def failing_download(save_id, dest_path):
+        def failing_download(save_id, dest_path, **_kwargs):
             raise RommConnectionError("offline")
 
-        fake.download_save = failing_download
+        fake.download_save_content = failing_download
         confirming = svc.confirm_slot_choice(42, "default", True, None)
 
         with pytest.raises(RommConnectionError):
@@ -1303,14 +1304,14 @@ class TestConfirmSlotChoice:
         fake.saves[2] = _server_save(save_id=2, filename="b [ts].rtc", slot=None)
         fake.saves[2]["file_extension"] = "rtc"
 
-        orig_download = fake.download_save
+        orig_download = fake.download_save_content
 
-        def selective_download(save_id, dest_path):
+        def selective_download(save_id, dest_path, **kwargs):
             if save_id == 2:
                 raise RommConnectionError("offline")
-            return orig_download(save_id, dest_path)
+            return orig_download(save_id, dest_path, **kwargs)
 
-        fake.download_save = selective_download
+        fake.download_save_content = selective_download
         confirming = svc.confirm_slot_choice(42, "default", True, None)
 
         with pytest.raises(RommConnectionError):
@@ -2891,11 +2892,12 @@ class TestASwitchWhoseBackupFails:
 
     @pytest.mark.asyncio
     async def test_a_file_the_backup_did_not_move_keeps_its_tracking_when_the_switch_stops(self, tmp_path, monkeypatch):
-        svc, _fake = make_service(tmp_path)
+        parts, _fake = make_parts(tmp_path)
+        svc = parts.service
         svc._config.settings["save_sync_enabled"] = True
         srm, rtc = _seed_two_synced_saves(svc, tmp_path)
         sav = _create_save(tmp_path, ext=".sav", content=b"sav bytes")
-        backup = svc._save_backup
+        backup = parts.save_backup
         original = backup.back_up_save_file
 
         def back_up(saves_dir: str, filename: str, *, keep: int) -> bool:
@@ -3804,7 +3806,7 @@ class TestSlotMutationLocking:
 
         lock = svc._sync_engine.rom_lock(42)
         await lock.acquire()
-        task = asyncio.create_task(svc._slots.switch_slot(42, "desktop"))
+        task = asyncio.create_task(svc._slot_switcher.switch_slot(42, "desktop"))
         await asyncio.sleep(0.05)
         assert not task.done()  # blocked on the held lock
 
@@ -3837,7 +3839,7 @@ class TestSlotMutationLocking:
 
         lock = svc._sync_engine.rom_lock(42)
         await lock.acquire()
-        task = asyncio.create_task(svc._slots.delete_slot(42, "save1"))
+        task = asyncio.create_task(svc._slot_deleter.delete_slot(42, "save1"))
         await asyncio.sleep(0.05)
         assert not task.done()  # blocked on the held lock
 
@@ -3855,7 +3857,7 @@ class TestSlotMutationLocking:
 
         lock = svc._sync_engine.rom_lock(42)
         await lock.acquire()
-        task = asyncio.create_task(svc._slots.confirm_slot_choice(42, "default"))
+        task = asyncio.create_task(svc._setup_wizard.confirm_slot_choice(42, "default"))
         await asyncio.sleep(0.05)
         assert not task.done()  # blocked on the held lock
 
@@ -3902,12 +3904,12 @@ class TestASlotMigrationFetchThatBreaksOff:
         _create_save(tmp_path, content=b"L" * 100)
         fake.saves[1] = _server_save(save_id=1, filename="pokemon [ts].srm", slot=None)
 
-        def half_a_download(save_id, dest_path):
+        def half_a_download(save_id, dest_path, **_kwargs):
             with open(dest_path, "wb") as f:
                 f.write(b"half")
             raise RommConnectionError("offline")
 
-        fake.download_save = half_a_download
+        fake.download_save_content = half_a_download
 
         with pytest.raises(RommConnectionError):
             await svc.confirm_slot_choice(42, "default", True, None)

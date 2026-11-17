@@ -82,6 +82,7 @@ class RollbackOrchestrator:
         log_debug: DebugLogger,
         resolve_core: Callable[[int], str | None],
         settings: dict[str, Any],
+        loop: asyncio.AbstractEventLoop,
     ) -> None:
         self._uow_factory = uow_factory
         self._rom_info = rom_info
@@ -94,6 +95,7 @@ class RollbackOrchestrator:
         self._log_debug = log_debug
         self._resolve_core = resolve_core
         self._settings = settings
+        self._loop = loop
 
     async def resolve(
         self,
@@ -102,17 +104,14 @@ class RollbackOrchestrator:
         server_save_id: int,
         action: str,
         *,
-        loop: asyncio.AbstractEventLoop,
         save_answer: SaveAnswer | None,
     ) -> dict[str, Any]:
         """Drive the post-lock conflict-resolution flow.
 
-        ``loop`` is passed per call so :class:`SyncEngine` can hand its
-        live (test-rebindable) ``_loop`` attribute through without this
-        orchestrator caching a stale reference. The rom-level lock must
-        be held by the caller — every save-sync entry point serialises
-        through ``SyncEngine.rom_lock(rom_id)``. *save_answer* is the reading
-        the caller's entry gate took, used here instead of a second one.
+        The rom-level lock must be held by the caller — every save-sync entry
+        point serialises through ``SyncEngine.rom_lock(rom_id)``. *save_answer*
+        is the reading the caller's entry gate took, used here instead of a
+        second one.
 
         Raises its refusals, ``SyncEngine.live_device_id``'s among them, taken
         before the server's saves are listed; a RomM error from listing them,
@@ -129,7 +128,7 @@ class RollbackOrchestrator:
 
         self._validate_filename(rom_id, action, filename)
 
-        info = await loop.run_in_executor(
+        info = await self._loop.run_in_executor(
             None, functools.partial(self._rom_info.get_rom_save_info, rom_id, save_answer=save_answer)
         )
         if not info:
@@ -141,10 +140,10 @@ class RollbackOrchestrator:
         if saves_dir is None:
             raise shape_refusal(info["save_answer"])
 
-        save_state = await loop.run_in_executor(None, read_save_state_or_new, self._uow_factory, rom_id)
+        save_state = await self._loop.run_in_executor(None, read_save_state_or_new, self._uow_factory, rom_id)
         device_id = await self._live_device_id()
 
-        server_saves = await loop.run_in_executor(
+        server_saves = await self._loop.run_in_executor(
             None,
             lambda: self._retry.with_retry(
                 lambda: self._romm_api.list_saves(rom_id, device_id=device_id),
@@ -168,12 +167,12 @@ class RollbackOrchestrator:
             )
             raise StaleConflict("Server save changed since conflict was shown; please retry sync.")
 
-        core_so = await loop.run_in_executor(None, self._resolve_core, rom_id)
+        core_so = await self._loop.run_in_executor(None, self._resolve_core, rom_id)
         save_names = info["save_answer"].synced_names
 
         try:
             if action == "use_server":
-                await loop.run_in_executor(
+                await self._loop.run_in_executor(
                     None,
                     self._resolve_conflict_use_server,
                     save_state,
@@ -190,7 +189,7 @@ class RollbackOrchestrator:
                 # The frontend-supplied ``filename`` is kept for logging only;
                 # using it as the on-disk path would let an extension drift
                 # between the two resolution paths produce divergent states.
-                await loop.run_in_executor(
+                await self._loop.run_in_executor(
                     None,
                     self._resolve_conflict_keep_local,
                     rom_id,
@@ -203,7 +202,7 @@ class RollbackOrchestrator:
                     info["rom_name"],
                     save_names,
                 )
-            await loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
+            await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
             self._logger.info(
                 "resolve_sync_conflict(rom_id=%d, filename=%s, action=%s) -> success",
                 rom_id,

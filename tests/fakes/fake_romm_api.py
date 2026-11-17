@@ -195,7 +195,6 @@ class FakeRommApi:
         self.update_device_side_effect: Exception | None = None
         self.list_saves_side_effect: Exception | None = None
         self.upload_save_side_effect: Exception | None = None
-        self.download_save_side_effect: Exception | None = None
         self.download_save_content_side_effect: Exception | None = None
         self.confirm_download_side_effect: Exception | None = None
         self.get_save_summary_side_effect: Exception | None = None
@@ -837,12 +836,6 @@ class FakeRommApi:
         response["device_syncs"] = self._device_syncs_answer(entry, self._device_syncs_for(entry), device_id)
         return response
 
-    def download_save(self, save_id: int, dest_path: str) -> None:
-        self._log("download_save", (save_id, dest_path))
-        self._check_fail(self.download_save_side_effect)
-        payload = self._save_content.get(save_id) or self.download_payloads.get(f"save:{save_id}", b"")
-        self._materialize_download(dest_path, payload)
-
     def download_save_content(
         self,
         save_id: int,
@@ -987,7 +980,7 @@ class FakeRommApi:
     # ------------------------------------------------------------------
 
     def set_server_save_content(self, save_id: int, content: bytes) -> None:
-        """Stage server-side bytes returned by the next ``download_save*`` call."""
+        """Stage server-side bytes returned by the next ``download_save_content`` call."""
         self._save_content[save_id] = content
 
     def stage_device_sync(

@@ -1,14 +1,12 @@
 """Save-sync aggregate root and facade for the save endpoints.
 
-Composes the save-sync sub-services (sync_engine, status, local_saves,
-versions, slots, rom_info, prune_support, and the save backup and save transfer it builds once
-and hands to those that need them) over the SQLite ``rom_save_sync_states`` aggregate
-(reached through the injected Unit-of-Work factory) and exposes the use cases
-the endpoints call. The five save-sync feature toggles live in
-``settings.json`` and are read/written here directly; the device label beside
-them is ``DeviceRegistry``'s. Most methods are thin delegations; orchestration
-that genuinely spans multiple sub-services lives here, single-sub-service
-logic does not.
+Holds the save-sync sub-services the composition root built over the SQLite
+``rom_save_sync_states`` aggregate (reached through the injected Unit-of-Work
+factory) and exposes the use cases the endpoints call. The five save-sync
+feature toggles live in ``settings.json`` and are read/written here directly;
+the device label beside them is ``DeviceRegistry``'s. Most methods are thin
+delegations; orchestration that genuinely spans multiple sub-services lives
+here, single-sub-service logic does not.
 """
 
 from __future__ import annotations
@@ -17,8 +15,6 @@ import functools
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.identity import VERSION
-from domain.iso_time import epoch_to_iso
 from domain.rom_save_sync_state import RomSaveSyncState
 from lib.background_tasks import BackgroundTasks
 from lib.partial_failure import PartialFailure
@@ -29,19 +25,8 @@ from services.saves._settings import (
     sanitize_setting,
     save_sync_settings_view,
 )
-from services.saves.copies import SaveCopyService, SaveCopyServiceConfig
-from services.saves.local_saves import LocalSaveFiles, LocalSaveFilesConfig
-from services.saves.prune_support import PruneSaveSupport, PruneSaveSupportConfig
-from services.saves.rom_info import RomInfoService, RomInfoServiceConfig
-from services.saves.save_backup import SaveBackup, SaveBackupConfig
-from services.saves.save_transfer import SaveTransfer, SaveTransferConfig
-from services.saves.slots import SlotsService, SlotsServiceConfig
 from services.saves.slots.switching import SlotSwitchBackupFailed, SlotSwitchBackupFolderUnusable, SlotSwitchStopped
-from services.saves.status import StatusService, StatusServiceConfig
-from services.saves.sync_engine import SaveSweepIncomplete, SyncEngine, SyncEngineConfig
 from services.saves.sync_engine._running_game import RunningSkips
-from services.saves.sync_engine.devices import DeviceRegistry
-from services.saves.versions import VersionsService, VersionsServiceConfig
 
 # kv_config marker for the one-time pass that records the installed ROMs'
 # answered save directories: present once the pass finished.
@@ -49,9 +34,9 @@ _KV_SAVE_DIRECTORIES_RECORDED = "save_directories_recorded"
 
 if TYPE_CHECKING:
     from domain.save_answer import SaveAnswer
-    from models.sync import ClientSaveState
     from services.protocols import UnitOfWorkFactory
     from services.saves.slots.switching import SlotSwitchIncomplete
+    from services.saves.sync_engine import SaveSweepIncomplete
 
 
 @dataclass(frozen=True)
@@ -64,14 +49,10 @@ class SaveDeletionIncomplete(PartialFailure):
 class SaveService:
     """Aggregate root for bidirectional save file sync between RetroDECK and RomM.
 
-    Composes the save-sync sub-services (sync_engine, status, local_saves,
-    versions, slots, rom_info, prune_support) over the SQLite ``rom_save_sync_states``
-    aggregate. Exposes the use cases the endpoints on ``Endpoints`` call — every
-    public method delegates to a sub-service or reads ``settings.json``. A use
-    case an endpoint calls checks its conflict rules at its entry, under that
+    A use case an endpoint calls checks its conflict rules at its entry, under that
     endpoint's name, and raises the rule's refusal when one holds
-    (GLOSSARY.md → Conflict rules). Bulk local-save deletion is the only flow
-    whose orchestration lives directly on the aggregate root because it spans
+    (GLOSSARY.md → Conflict rules). Bulk local-save deletion's orchestration
+    lives directly on the aggregate root because it spans
     :class:`RomInfoService` (file discovery), the on-disk save files (via the
     injected ``SaveFileStore``), and the ``rom_save_sync_states`` repository
     (file-tracking state hygiene) without belonging to any single sub-service.
@@ -91,182 +72,18 @@ class SaveService:
         self._uow_factory: UnitOfWorkFactory = config.uow_factory
         self._settings_persister = config.settings_persister
         self._rules = config.conflict_rules
-        # Held for the one read this façade offloads itself: the per-platform
-        # save count walks the filesystem once per installed ROM, and the page
-        # asks it on every selection.
         self._loop = config.loop
         self._tasks = BackgroundTasks(logger=config.logger)
-        # The single owner of the server device id (kv_config["device_id"]),
-        # built here and held by the sync engine alone: every other save
-        # service takes its id from ``SyncEngine.live_device_id``. The device
-        # label stays in settings.json (ADR-0003).
-        device_registry = DeviceRegistry(
-            uow_factory=config.uow_factory,
-            settings=config.settings,
-            romm_api=config.romm_api,
-            retry=config.retry,
-            logger=config.logger,
-            log_debug=config.log_debug,
-            settings_persister=config.settings_persister,
-            version=VERSION,
-        )
-
-        self._rom_info = RomInfoService(
-            config=RomInfoServiceConfig(
-                uow_factory=config.uow_factory,
-                save_file_store=config.save_file_store,
-                retrodeck_folders=config.retrodeck_folders,
-                active_core=config.active_core,
-                save_locations=config.save_locations,
-                platform_systems=config.platform_systems,
-                logger=config.logger,
-            ),
-        )
-
-        # Built once and handed to every service that backs a save file up or
-        # moves one, so each holds the step it uses rather than the whole engine.
-        self._save_backup = SaveBackup(
-            config=SaveBackupConfig(save_file_store=config.save_file_store, clock=config.clock, logger=config.logger),
-        )
-        self._save_transfer = SaveTransfer(
-            config=SaveTransferConfig(
-                romm_api=config.romm_api,
-                retry=config.retry,
-                save_file_store=config.save_file_store,
-                clock=config.clock,
-                backup=self._save_backup,
-                logger=config.logger,
-                log_debug=config.log_debug,
-            ),
-        )
-
-        self._sync_engine = SyncEngine(
-            config=SyncEngineConfig(
-                settings=config.settings,
-                uow_factory=config.uow_factory,
-                rom_info=self._rom_info,
-                device_registry=device_registry,
-                romm_api=config.romm_api,
-                retry=config.retry,
-                resolve_upload_conflict=config.resolve_upload_conflict,
-                compute_sync_action=config.compute_sync_action,
-                loop=config.loop,
-                logger=config.logger,
-                clock=config.clock,
-                save_file_store=config.save_file_store,
-                log_debug=config.log_debug,
-                active_core=config.active_core,
-                hostname_provider=config.hostname_provider,
-                machine_id_provider=config.machine_id_provider,
-                is_update_in_progress=config.is_update_in_progress,
-                is_retrodeck_migration_pending=config.is_retrodeck_migration_pending,
-                build_inventory=self.build_save_inventory,
-                running_rom_ids=config.running_rom_ids,
-                save_backup=self._save_backup,
-                save_transfer=self._save_transfer,
-                emit=config.emit,
-            ),
-        )
-
-        self._status = StatusService(
-            config=StatusServiceConfig(
-                settings=config.settings,
-                uow_factory=config.uow_factory,
-                sync_engine=self._sync_engine,
-                rom_info=self._rom_info,
-                romm_api=config.romm_api,
-                retry=config.retry,
-                loop=config.loop,
-                logger=config.logger,
-                log_debug=config.log_debug,
-                active_core=config.active_core,
-                emit=config.emit,
-                save_file_store=config.save_file_store,
-                save_transfer=self._save_transfer,
-            ),
-        )
-
-        self._local_saves = LocalSaveFiles(
-            config=LocalSaveFilesConfig(
-                rom_info=self._rom_info,
-                sync_engine=self._sync_engine,
-                save_file_store=config.save_file_store,
-                loop=config.loop,
-            ),
-        )
-
-        self._versions = VersionsService(
-            config=VersionsServiceConfig(
-                settings=config.settings,
-                uow_factory=config.uow_factory,
-                sync_engine=self._sync_engine,
-                rom_info=self._rom_info,
-                resolve_core=self._sync_engine.resolve_core,
-                romm_api=config.romm_api,
-                retry=config.retry,
-                loop=config.loop,
-                logger=config.logger,
-                log_debug=config.log_debug,
-                save_transfer=self._save_transfer,
-            ),
-        )
-
-        self._copies = SaveCopyService(
-            config=SaveCopyServiceConfig(
-                settings=config.settings,
-                uow_factory=config.uow_factory,
-                sync_engine=self._sync_engine,
-                rom_info=self._rom_info,
-                resolve_core=self._sync_engine.resolve_core,
-                romm_api=config.romm_api,
-                retry=config.retry,
-                loop=config.loop,
-                logger=config.logger,
-                log_debug=config.log_debug,
-                save_transfer=self._save_transfer,
-            ),
-        )
-
-        self._slots = SlotsService(
-            config=SlotsServiceConfig(
-                settings=config.settings,
-                uow_factory=config.uow_factory,
-                sync_engine=self._sync_engine,
-                status_service=self._status,
-                rom_info=self._rom_info,
-                resolve_core=self._sync_engine.resolve_core,
-                romm_api=config.romm_api,
-                retry=config.retry,
-                loop=config.loop,
-                logger=config.logger,
-                clock=config.clock,
-                save_file_store=config.save_file_store,
-                log_debug=config.log_debug,
-                save_backup=self._save_backup,
-                save_transfer=self._save_transfer,
-            ),
-        )
-
-        self._prune_support = PruneSaveSupport(
-            config=PruneSaveSupportConfig(
-                uow_factory=config.uow_factory,
-                save_file_store=config.save_file_store,
-                retrodeck_folders=config.retrodeck_folders,
-                rom_info=self._rom_info,
-                sync_engine=self._sync_engine,
-                save_backup=self._save_backup,
-            ),
-        )
-
-    @property
-    def prune_support(self) -> PruneSaveSupport:
-        """The save-side collaborator the composition root wires as ``PruneSaveCoordinator``."""
-        return self._prune_support
-
-    @property
-    def save_backup(self) -> SaveBackup:
-        """The save backup the composition root hands the adoption renamer as its ``SaveBackupFn``."""
-        return self._save_backup
+        self._rom_info = config.rom_info
+        self._sync_engine = config.sync_engine
+        self._status = config.status
+        self._local_saves = config.local_saves
+        self._versions = config.versions
+        self._copies = config.copies
+        self._slot_listing = config.slot_listing
+        self._slot_switcher = config.slot_switcher
+        self._setup_wizard = config.setup_wizard
+        self._slot_deleter = config.slot_deleter
 
     # ------------------------------------------------------------------
     # Device registration (delegated to SyncEngine)
@@ -432,17 +249,17 @@ class SaveService:
             )
 
     # ------------------------------------------------------------------
-    # Slots (delegated to SlotsService)
+    # Slots (delegated to the slot sub-modules)
     # ------------------------------------------------------------------
 
     async def get_save_slots(self, rom_id: int) -> dict[str, Any]:
         """List available save slots for a ROM."""
         async with self._rules.hold("get_save_slots", prune=True):
-            return await self._slots.get_save_slots(rom_id)
+            return await self._slot_listing.get_save_slots(rom_id)
 
     async def get_slot_saves(self, rom_id: int, slot: str) -> dict[str, Any]:
         """Fetch server save files for a specific slot."""
-        return await self._slots.get_slot_saves(rom_id, slot)
+        return await self._slot_listing.get_slot_saves(rom_id, slot)
 
     async def switch_slot(
         self, rom_id: int, new_slot: str
@@ -454,7 +271,7 @@ class SaveService:
         """
         async with self._rules.hold("switch_slot", update=True, migration=True, prune=True):
             try:
-                result = await self._slots.switch_slot(rom_id, new_slot)
+                result = await self._slot_switcher.switch_slot(rom_id, new_slot)
             except (SlotSwitchBackupFailed, SlotSwitchBackupFolderUnusable) as refusal:
                 self._logger.warning(
                     f"Slot switch of rom {rom_id} to {new_slot!r} refused ({refusal.reason}): {refusal.message}"
@@ -468,15 +285,15 @@ class SaveService:
 
     def is_save_tracking_configured(self, rom_id: int) -> dict[str, Any]:
         """Check if save slot tracking is configured for a game."""
-        return self._slots.is_save_tracking_configured(rom_id)
+        return self._setup_wizard.is_save_tracking_configured(rom_id)
 
     async def get_save_setup_info(self, rom_id: int) -> dict[str, Any]:
         """Get info needed for the first-sync setup wizard."""
-        return await self._slots.get_save_setup_info(rom_id)
+        return await self._setup_wizard.get_save_setup_info(rom_id)
 
     async def get_save_sync_availability(self, rom_id: int) -> dict[str, Any]:
         """Whether this game's saves sync, with no device registration and no save listing."""
-        return await self._slots.get_save_sync_availability(rom_id)
+        return await self._setup_wizard.get_save_sync_availability(rom_id)
 
     async def confirm_slot_choice(
         self,
@@ -496,18 +313,18 @@ class SaveService:
         favour.
         """
         async with self._rules.hold("confirm_slot_choice", update=True, migration=True, prune=True):
-            return await self._slots.confirm_slot_choice(
+            return await self._setup_wizard.confirm_slot_choice(
                 rom_id, chosen_slot, migrate, migrate_from_slot, use_server_on_conflict
             )
 
     async def get_slot_delete_info(self, rom_id: int, slot: str) -> dict[str, Any]:
         """Return info about what deleting a slot would do, for the confirmation modal."""
-        return await self._slots.get_slot_delete_info(rom_id, slot)
+        return await self._slot_deleter.get_slot_delete_info(rom_id, slot)
 
     async def delete_slot(self, rom_id: int, slot: str) -> dict[str, Any]:
         """Delete a save slot and all its saves (local state + server if applicable)."""
         async with self._rules.hold("delete_slot", update=True, migration=True, prune=True):
-            return await self._slots.delete_slot(rom_id, slot)
+            return await self._slot_deleter.delete_slot(rom_id, slot)
 
     # ------------------------------------------------------------------
     # Versions (delegated to VersionsService)
@@ -586,65 +403,6 @@ class SaveService:
         save operation reads it: each takes ``SyncEngine.live_device_id``'s.
         """
         return self._sync_engine.get_device_id()
-
-    # ------------------------------------------------------------------
-    # Negotiate inventory (Phase 1c)
-    # ------------------------------------------------------------------
-
-    def build_save_inventory(
-        self, rom_id: int | None = None, *, save_answer: SaveAnswer | None = None
-    ) -> list[ClientSaveState]:
-        """Build the negotiate inventory of this device's local save files.
-
-        Gathers one :class:`ClientSaveState` per local save file belonging to a
-        ROM whose slot is **confirmed** and whose ``active_slot`` is a real
-        (non-legacy) slot — ``slot_confirmed`` is true and ``active_slot`` is
-        truthy (excludes both ``None`` and the legacy ``""``). A confirmed ROM
-        with no local files contributes nothing; per-file granularity means
-        each local file yields its own entry.
-
-        ``rom_id`` scopes the inventory: ``None`` (the default) builds the
-        whole-device inventory for the bulk ``sync_all_saves`` pre-negotiate; a
-        concrete id restricts it to that one ROM for the single-ROM negotiate
-        trigger. The in-scope predicate is unchanged either way.
-
-        ``save_answer`` is that one ROM's save reading where the caller already
-        took one, and it spares this build a second live reading of the machine.
-        It applies to the scoped form only: the whole-device inventory runs
-        BEFORE the sweep's per-ROM loop, so no answer exists yet for any of the
-        ROMs it walks, and one ROM's answer says nothing about another's.
-
-        ``content_hash`` is always set via :meth:`SaveFileStore.content_hash`
-        (the zip-aware RomM-parity hash — never ``checksum_md5``), and
-        ``updated_at`` is the local file's mtime rendered as a UTC ISO-8601
-        string.
-
-        Single-file-first: the multi-file-per-slot collision case (several local
-        files mapping to one slot) is a Phase 4 concern tracked in #1235.
-        """
-        with self._uow_factory() as uow:
-            confirmed = [
-                (rid, state)
-                for rid, state in uow.rom_save_sync_states.iter_all()
-                if state.slot_confirmed and state.active_slot and (rom_id is None or rid == rom_id)
-            ]
-
-        inventory: list[ClientSaveState] = []
-        for rid, state in confirmed:
-            scoped_answer = save_answer if rom_id is not None and rid == rom_id else None
-            for f in self._rom_info.find_save_files(rid, save_answer=scoped_answer):
-                path = f["path"]
-                entry: ClientSaveState = {
-                    "rom_id": rid,
-                    "file_name": f["filename"],
-                    "slot": state.active_slot,
-                    "emulator": state.emulator,
-                    "content_hash": self._save_file_store.content_hash(path),
-                    "updated_at": epoch_to_iso(self._save_file_store.get_mtime(path)),
-                    "file_size_bytes": self._save_file_store.get_size(path),
-                }
-                inventory.append(entry)
-        return inventory
 
     # ------------------------------------------------------------------
     # Bulk local-save deletion
