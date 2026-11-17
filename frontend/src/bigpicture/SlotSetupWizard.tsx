@@ -93,6 +93,7 @@ const CustomSlotModal: FC<{
       onOK={() => {
         onSubmit(value.trim());
       }}
+      bOKDisabled={value.trim() === ""}
     >
       <TextField
         focusOnMount={true}
@@ -100,9 +101,8 @@ const CustomSlotModal: FC<{
         value={value}
         onChange={(e: ChangeEvent<HTMLInputElement>) => setValue(e.target.value)}
         // Enter (the on-screen keyboard's "Eingabe" key) confirms, same as the OK
-        // button. Guard empty so a blank Enter is a no-op (the button itself
-        // doesn't guard, but a blank confirm must not fire). ConfirmModal doesn't
-        // auto-close this manual path.
+        // button — which is disabled while blank, so guard identically: a blank
+        // Enter is a no-op. ConfirmModal doesn't auto-close this manual path.
         onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
           if (e.key === "Enter" && value.trim() !== "") {
             onSubmit(value.trim());
