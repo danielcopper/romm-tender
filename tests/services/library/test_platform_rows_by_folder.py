@@ -20,6 +20,7 @@ from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 
+from domain.platform_names import listed_platform_names
 from domain.rom import Rom
 from services.library._state import LibrarySyncStateBox
 from services.library.fetcher import LibraryFetcher, LibraryFetcherConfig
@@ -84,6 +85,61 @@ class TestTwoPlatformsSharingASlugAreTwoRows:
         rows = (await _fetcher(api, FakeListingRefiler()).get_platforms())["platforms"]
 
         assert [row["fs_slug"] for row in rows] == ["snes"]
+
+
+class TestARowOfAnEntryWithAnUnusableField:
+    """#2761 D3, D5: an entry read through the one reader is still a row the tab can switch on and off."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("name", [None, "  "], ids=["null", "blank"])
+    async def test_a_platform_without_a_usable_name_is_named_by_its_fs_slug(self, name):
+        api = _api({"id": 12, "name": name, "display_name": "GameCube", "slug": "ngc", "fs_slug": "gc", "rom_count": 4})
+
+        rows = (await _fetcher(api, FakeListingRefiler()).get_platforms())["platforms"]
+
+        assert [(row["name"], row["fs_slug"]) for row in rows] == [("gc", "gc")]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("rom_count", [None, "many", 4.5], ids=["null", "text", "fraction"])
+    async def test_a_rom_count_that_is_not_a_number_is_shown_without_a_count(self, rom_count):
+        api = _api({**_platform(1, "Super Nintendo", "snes", "snes"), "rom_count": rom_count})
+
+        rows = (await _fetcher(api, FakeListingRefiler()).get_platforms())["platforms"]
+
+        assert [(row["fs_slug"], row["rom_count"]) for row in rows] == [("snes", None)]
+
+    @pytest.mark.asyncio
+    async def test_a_platform_without_a_rom_count_is_shown_without_a_count(self):
+        api = _api({"id": 1, "name": "Super Nintendo", "slug": "snes", "fs_slug": "snes"})
+
+        rows = (await _fetcher(api, FakeListingRefiler()).get_platforms())["platforms"]
+
+        assert [(row["fs_slug"], row["rom_count"]) for row in rows] == [("snes", None)]
+
+    @pytest.mark.asyncio
+    async def test_a_platform_with_no_games_is_no_row(self):
+        api = _api(_platform(1, "Super Nintendo", "snes", "snes", rom_count=0), _platform(2, "GBA", "gba", "gba"))
+
+        rows = (await _fetcher(api, FakeListingRefiler()).get_platforms())["platforms"]
+
+        assert [row["fs_slug"] for row in rows] == ["gba"]
+
+    @pytest.mark.asyncio
+    async def test_the_row_carries_the_fields_as_read(self):
+        api = _api({"id": "12", "name": "Nintendo GameCube", "slug": "  ", "fs_slug": "gc", "rom_count": "40"})
+
+        rows = (await _fetcher(api, FakeListingRefiler()).get_platforms())["platforms"]
+
+        assert rows == [
+            {
+                "id": 12,
+                "name": "Nintendo GameCube",
+                "slug": "",
+                "fs_slug": "gc",
+                "rom_count": 40,
+                "sync_enabled": False,
+            }
+        ]
 
 
 class TestEveryListingReadIsRefiled:
@@ -176,6 +232,16 @@ class TestRemovingOnePlatformsShortcuts:
 
         assert (result["app_ids"], result["rom_ids"]) == ([1020], ["20"])
         assert result["platform_name"] == "Super Nintendo (snes-hacks)"
+
+    @pytest.mark.asyncio
+    async def test_a_platform_listed_without_a_name_is_named_by_its_folder_in_the_answer(self, library):
+        """#2761 D3 (changed): the kept names, which the removal reads, name it as its Steam collection is."""
+        _seed_bound(library.uow, 10, "gc", slug="ngc")
+        _seed_names(library.uow, listed_platform_names([{"id": 12, "slug": "ngc", "fs_slug": "gc", "name": None}]))
+
+        result = await library.shortcut_removal.remove_platform_shortcuts("gc")
+
+        assert (result["app_ids"], result["platform_name"]) == ([1010], "gc")
 
     @pytest.mark.asyncio
     async def test_one_platform_s_removal_leaves_a_game_without_a_folder(self, library):

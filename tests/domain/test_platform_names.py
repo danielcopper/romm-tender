@@ -10,6 +10,7 @@ from domain.platform_names import (
     listed_platform_folders,
     listed_platform_names,
     platform_display_name,
+    platform_tab_name,
 )
 
 
@@ -59,15 +60,34 @@ class TestListedPlatformNames:
         [
             {"slug": "n64", "name": "Nintendo 64"},
             {"slug": "n64", "fs_slug": "", "name": "Nintendo 64"},
+            {"fs_slug": 64, "name": "Nintendo 64"},
+        ],
+        ids=["no-folder", "empty-folder", "folder-not-text"],
+    )
+    def test_a_platform_without_a_folder_is_left_out(self, platform):
+        assert listed_platform_names([platform]) == {}
+
+    @pytest.mark.parametrize(
+        "platform",
+        [
             {"fs_slug": "n64"},
             {"fs_slug": "n64", "name": "  "},
             {"fs_slug": "n64", "name": None, "display_name": "N64 Custom"},
-            {"fs_slug": 64, "name": "Nintendo 64"},
         ],
-        ids=["no-folder", "empty-folder", "no-name", "blank-name", "display-name-only", "folder-not-text"],
+        ids=["no-name", "blank-name", "display-name-only"],
     )
-    def test_a_platform_without_a_folder_or_a_name_is_left_out(self, platform):
-        assert listed_platform_names([platform]) == {}
+    def test_a_platform_without_a_name_is_named_by_its_folder(self, platform):
+        """#2761 D3 (changed): every reader of the cache names it as its Steam collection is."""
+        assert listed_platform_names([platform]) == {"n64": "n64"}
+
+    def test_a_platform_named_by_its_folder_renames_no_other(self):
+        """A nameless platform's folder is no name another platform shares (#2452 D2 stays as it was)."""
+        listed = [
+            {"slug": "ngc", "fs_slug": "gc"},
+            {"slug": "gamecube", "fs_slug": "gamecube-hacks", "name": "gc"},
+        ]
+
+        assert listed_platform_names(listed) == {"gc": "gc", "gamecube-hacks": "gc"}
 
 
 class TestPlatformDisplayName:
@@ -130,3 +150,23 @@ class TestAGameWithoutAFolderIsNamedBySlug:
 
     def test_a_folder_names_it_by_the_folder_s_cached_name(self):
         assert platform_display_name('{"gc": "Nintendo GameCube (gc)"}', "gc", "ngc") == "Nintendo GameCube (gc)"
+
+
+class TestPlatformTabName:
+    """The name the Platforms tab shows, which the sync names a platform's unit and its ROMs by (#2761 D2, D3)."""
+
+    def test_a_listed_name_names_it(self):
+        names = {"snes-hacks": "Super Nintendo (snes-hacks)"}
+
+        assert platform_tab_name(names, "snes-hacks", "snes") == "Super Nintendo (snes-hacks)"
+
+    def test_a_folder_the_listing_does_not_name_is_named_by_its_fs_slug(self):
+        assert platform_tab_name({}, "gc", "ngc") == "gc"
+
+    @pytest.mark.parametrize("folder", [None, "", "  ", 7], ids=["none", "empty", "blank", "not-text"])
+    def test_without_a_usable_fs_slug_the_slug_names_it(self, folder):
+        assert platform_tab_name({"ngc": "Folder Named ngc", "": "Blank"}, folder, "ngc") == "ngc"
+
+    @pytest.mark.parametrize("slug", [None, "", "  ", 7], ids=["none", "empty", "blank", "not-text"])
+    def test_with_neither_nothing_names_it(self, slug):
+        assert platform_tab_name({}, None, slug) == ""

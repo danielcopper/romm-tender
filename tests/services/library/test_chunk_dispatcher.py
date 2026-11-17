@@ -31,6 +31,67 @@ from domain.work_unit import WorkUnit
 from tests.services.library._helpers import _fake_wait_set_event, _seed_platform, _seed_rom_row
 
 
+class TestAStampOfAPlatformWithoutACount:
+    """#2761 D5: an unknown ``rom_count`` reaches the completion stamp as what the fetch returned, never as 0."""
+
+    @staticmethod
+    async def _stamp(library, fake_romm_api, *, rom_count: int | None):
+        _seed_platform(
+            fake_romm_api,
+            platform_id=1,
+            name="N64",
+            slug="n64",
+            roms=[{"id": i, "name": f"Game {i}"} for i in (1, 2, 3)],
+        )
+        stamps = []
+
+        async def capture_commit(
+            _rid_to_aid, chunk_rows, platform_stamp=None, collection_stamp=None, fetch_id=None, delivered_through=None
+        ):
+            stamps.append(platform_stamp)
+
+        library.sync._reporter.commit_unit_results = capture_commit  # type: ignore[method-assign]
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.sync._box.sync_state = SyncState.RUNNING
+        library.sync._box.current_sync_id = "run-chunk"
+        unit = WorkUnit(
+            type="platform",
+            id=1,
+            name="N64",
+            slug="n64",
+            platform_folder="n64",
+            rom_count=rom_count,
+        )
+        await library.unit_applier.apply_unit(
+            unit,
+            unit_index=0,
+            total_units=1,
+            synced_rom_ids=set(),
+            collection_memberships={},
+            platform_rom_ids=set(),
+        )
+        [stamp] = [s for s in stamps if s is not None]
+        return stamp
+
+    @pytest.mark.asyncio
+    async def test_the_stamp_records_what_the_fetch_returned(self, make_library, fake_romm_api):
+        """Recorded as 0, removed-game discovery would read the platform's fetch as empty."""
+        library = make_library(romm_api=fake_romm_api)
+
+        stamp = await self._stamp(library, fake_romm_api, rom_count=None)
+
+        assert stamp.rom_count == 3
+
+    @pytest.mark.asyncio
+    async def test_a_known_count_is_recorded_as_rom_m_gave_it(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
+
+        stamp = await self._stamp(library, fake_romm_api, rom_count=5)
+
+        assert stamp.rom_count == 5
+
+
 class TestApplyChunking:
     """A unit's apply is split into durable commit chunks (#1025).
 

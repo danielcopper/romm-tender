@@ -59,8 +59,10 @@ class PlatformSyncState:
         """Record that the platform whose ``fs_slug`` is ``platform_folder`` fully synced at ISO timestamp ``at``.
 
         ``rom_count`` is the server's platform ROM count the completing run
-        planned with. The skip does not read it; removed-game discovery reads
-        a zero as an empty completed fetch (``domain/fetch_generation.py``).
+        planned with, or, where the listing gave none, how many ROMs that
+        fetch returned (#2761 D5). The skip does not read it; removed-game
+        discovery reads a zero as an empty completed fetch
+        (``domain/fetch_generation.py``).
 
         ``fetch_started_at`` (ISO, Tender's clock) and ``rom_id_checksum``
         (``domain/platform_skip.rom_id_checksum`` over the ids that fetch

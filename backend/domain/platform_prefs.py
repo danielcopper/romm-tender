@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, NamedTuple
 
-from domain.platform_names import listed_fs_slug
+from domain.platform_listing import platform_entries
 from domain.state_migrations import SWITCHES_BY_ID_SETTING, SWITCHES_SETTING
 
 if TYPE_CHECKING:
@@ -72,7 +72,14 @@ def switches_by_folder(
     names without an ``fs_slug`` — is dropped (D21, D26). ``None`` where the
     listing names no ``fs_slug``, since nothing can be moved yet.
     """
-    listed = [(str(p.get("id")), folder) for p in platforms if (folder := listed_fs_slug(p)) is not None]
+    # A listed platform without a usable id names no toggle kept by id, so it
+    # is left out of the move rather than given a guessed state; a listing
+    # holding one is refused before it gets here (#2761 D4).
+    listed = [
+        (str(platform_id), folder)
+        for entry in platform_entries(platforms)
+        if (folder := entry.fs_slug) is not None and (platform_id := entry.platform_id) is not None
+    ]
     if not listed:
         return None
     moved = dict(switches)

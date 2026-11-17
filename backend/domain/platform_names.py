@@ -2,9 +2,9 @@
 
 The cache maps each platform's ``fs_slug`` to the name it is
 shown under (#2452 D10). The name the sync files a platform under, and the one
-this cache holds, is the ``name`` RomM's platform listing gives it, never the
-``custom_name`` a user set in RomM or the ``display_name`` that prefers it
-(#2564 D2), with the platform's ``fs_slug`` added where #2452 D2 says
+this cache holds, is the name :mod:`domain.platform_listing` reads off RomM's
+platform listing, with the platform's ``fs_slug`` added where #2452 D2 says, or
+the ``fs_slug`` alone where the listing gives no usable name (#2761 D3)
 (:func:`listed_platform_names`). The cache is a JSON object stored as a single ``kv_config`` TEXT
 value, rewritten from the run's listing by each sync so its readers get a
 platform's name without asking RomM — among them the game-detail page's platform
@@ -25,6 +25,8 @@ from __future__ import annotations
 import json
 from collections import Counter
 from typing import TYPE_CHECKING, Any
+
+from domain.platform_listing import listed_text, platform_entries, platform_entry_of
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -63,32 +65,41 @@ def platform_display_name(raw: str | None, platform_folder: str | None, slug: st
 
 def listed_fs_slug(platform: Mapping[str, Any]) -> str | None:
     """The ``fs_slug`` RomM's listing gives *platform*; ``None`` where it gives none, or a blank one."""
-    return _text(platform.get("fs_slug"))
+    return platform_entry_of(platform).fs_slug
 
 
 def listed_platform_names(platforms: Iterable[Mapping[str, Any]]) -> dict[str, str]:
-    """Every listed platform's name, keyed by its ``fs_slug``; one without an ``fs_slug`` or a name is left out.
+    """Every listed platform's name, keyed by its ``fs_slug``; one without an ``fs_slug`` is left out.
 
     A platform whose ``fs_slug`` is not its slug, and whose ``name`` another platform
     of the listing shares, is named ``<name> (<fs_slug>)``; every other keeps its
     ``name``, so the platform whose ``fs_slug`` is its slug is not renamed when a
-    second ``fs_slug`` appears (#2452 D2).
+    second ``fs_slug`` appears (#2452 D2). One the listing gives no usable name
+    is named by its ``fs_slug``, as its Steam collection is (#2761 D3).
     """
-    named = [
-        (folder, _text(p.get("slug")), name)
-        for p in platforms
-        if (folder := listed_fs_slug(p)) is not None and (name := _text(p.get("name"))) is not None
-    ]
-    shared = Counter(name for _folder, _slug, name in named)
+    listed = [(folder, entry.slug, entry.name) for entry in platform_entries(platforms) if (folder := entry.fs_slug)]
+    shared = Counter(name for _folder, _slug, name in listed if name is not None)
     return {
-        folder: f"{name} ({folder})" if shared[name] > 1 and folder != slug else name for folder, slug, name in named
+        folder: folder if name is None else f"{name} ({folder})" if shared[name] > 1 and folder != slug else name
+        for folder, slug, name in listed
     }
 
 
 def listed_platform_folders(platforms: Iterable[Mapping[str, Any]]) -> frozenset[str]:
     """The ``fs_slug`` of every listed platform that has one."""
-    return frozenset(folder for p in platforms if (folder := listed_fs_slug(p)) is not None)
+    return frozenset(folder for entry in platform_entries(platforms) if (folder := entry.fs_slug) is not None)
 
 
-def _text(value: Any) -> str | None:
-    return value if isinstance(value, str) and value.strip() else None
+def platform_tab_name(names: Mapping[str, str], platform_folder: object, slug: object) -> str:
+    """The name the Platforms tab gives the platform in *platform_folder*, given the listing's *names*.
+
+    *names* is :func:`listed_platform_names` of the listing. A folder it holds
+    no name for — one the listing does not list — is named by its
+    ``fs_slug``, as its Steam collection is; without an ``fs_slug`` the slug
+    names it, and ``""`` without either. A blank value, or one that is no
+    string, counts as none.
+    """
+    folder = listed_text(platform_folder)
+    if folder is None:
+        return listed_text(slug) or ""
+    return names.get(folder, folder)

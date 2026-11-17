@@ -4111,6 +4111,20 @@ class TestDoSyncPerUnitErrors:
         assert library.sync._box.sync_state == SyncState.IDLE
 
     @pytest.mark.asyncio
+    async def test_a_failure_other_than_an_unreadable_listing_is_logged_with_its_traceback(
+        self, make_library, fake_romm_api, caplog
+    ):
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.list_platforms_side_effect = RuntimeError("RomM down")
+        library.sync._box.sync_state = SyncState.RUNNING
+
+        with caplog.at_level(logging.ERROR):
+            await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
+
+        [record] = [r for r in caplog.records if r.getMessage().startswith("Failed to build work queue")]
+        assert (record.levelno, bool(record.exc_info)) == (logging.ERROR, True)
+
+    @pytest.mark.asyncio
     async def test_outer_exception_handler_emits_error_progress(self, make_library, fake_romm_api, emit):
         """An exception raised after build_work_queue (e.g. during a unit) hits the outer except."""
 
@@ -5697,16 +5711,56 @@ class TestFailedCollectionListing:
             assert uow.sync_runs.get("run-1") is None
 
 
-class TestPlatformListingThatIsNotAList:
-    """A platform listing that answers with something but a list stops the run before it changes anything.
-
-    Read as "no platforms" instead, a run with a collection enabled would still
-    complete, and the end-of-run stale removal would remove the shortcut of every
-    game only a platform brings in.
-    """
+class TestAPlatformWithoutACount:
+    """#2761 D5: a platform whose count RomM did not give is synced as any other, and the plan sends no count."""
 
     @pytest.mark.asyncio
-    async def test_the_run_fails_and_leaves_every_binding_as_it_was(self, make_library, fake_romm_api, emit):
+    async def test_a_run_over_it_binds_its_games_and_the_plan_carries_no_count(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
+        _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
+        fake_romm_api.platforms[0]["rom_count"] = "many"
+        library.settings["enabled_platforms"] = {"gba": True}
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+
+        async def bind(unit, event):
+            event.set()
+            return {"4": 5004}
+
+        library.chunk_dispatcher._wait_for_unit_complete = bind
+        box = library.sync._box
+        box.sync_state = SyncState.RUNNING
+        box.current_sync_id = "run-1"
+
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
+
+        with library.uow as uow:
+            assert uow.roms.get(4).shortcut_app_id == 5004
+        [plan] = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_plan"]
+        assert ([u["rom_count"] for u in plan["units"]], plan["total_roms"]) == ([None], 0)
+
+
+class TestAnUnreadablePlatformListing:
+    """A platform listing Tender cannot read stops the run before it changes anything (#2761 D4, D8).
+
+    Why: docs/architecture/backend-architecture.md, "A listing that fails stops the run".
+    """
+
+    @pytest.mark.parametrize(
+        ("answer", "detail"),
+        [
+            ({"detail": "not a list"}, "RomM answered with a dict, not a list"),
+            (["n64"], "an item is a str, not an object"),
+            (
+                [{"id": 1, "slug": "n64", "fs_slug": "n64"}, {"id": None, "slug": "gba", "fs_slug": "gba"}],
+                "platform gba has no usable id",
+            ),
+        ],
+        ids=["no-list", "item-no-object", "switched-on-folder-without-id"],
+    )
+    @pytest.mark.asyncio
+    async def test_the_run_fails_and_leaves_every_binding_as_it_was(
+        self, make_library, fake_romm_api, emit, caplog, answer, detail
+    ):
         from adapters.romm.romm_api import RommApiAdapter
 
         library = make_library(romm_api=fake_romm_api)
@@ -5744,17 +5798,23 @@ class TestPlatformListingThatIsNotAList:
         await run_to_its_end("run-1")
         assert bindings() == {1: 5001, 2: 5002, 4: 5004}
 
-        # Run 2: the platform listing answers with an object; the collection listing still answers.
+        # Run 2: the platform listing answers with one Tender cannot read; the collection listing still answers.
         client = MagicMock()
-        client.request.return_value = {"detail": "not a list"}
+        client.request.return_value = answer
         fake_romm_api.list_platforms = RommApiAdapter(client).list_platforms  # type: ignore[method-assign]
         emit.reset_mock()
-        await run_to_its_end("run-2")
+        with caplog.at_level(logging.WARNING):
+            await run_to_its_end("run-2")
 
         progress = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_progress"]
         assert [(f["stage"], f["message"], f["running"]) for f in progress] == [
-            ("error", "Unexpected response from /api/platforms: dict", False)
+            ("error", f"RomM's platform list could not be read (/api/platforms): {detail}", False)
         ]
+        assert [
+            (r.levelno, bool(r.exc_info))
+            for r in caplog.records
+            if r.getMessage().startswith("Failed to build work queue")
+        ] == [(logging.WARNING, False)]
         assert {c.args[0] for c in emit.call_args_list} == {"sync_progress"}
         with library.uow as uow:
             assert uow.sync_runs.get("run-2") is None

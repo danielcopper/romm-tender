@@ -996,7 +996,7 @@ const tender = definePanel(() => {
     // prior slope.
     beginEtaRun(
       data.run_id,
-      data.units.map((u) => (u.predicted_skip ? 0 : (u.collapsed_count ?? u.rom_count))),
+      data.units.map((u) => (u.predicted_skip ? 0 : (u.collapsed_count ?? u.rom_count ?? 0))),
       data.total_estimated_items ?? data.total_roms,
     );
     logInfo(

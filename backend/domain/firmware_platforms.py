@@ -21,7 +21,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.platform_names import listed_fs_slug, listed_platform_folders
+from domain.platform_listing import PlatformEntry, UnreadableFirmware, listed_number, platform_entries
+from domain.platform_names import listed_platform_folders
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -37,19 +38,30 @@ def library_firmware(platforms: Iterable[Mapping[str, Any]]) -> list[dict[str, A
     its slug is ``platform_slug``. A file RomM marks ``missing_from_fs`` is left
     out: the server lists it while its bytes are gone. So is a file whose
     ``platform_id`` names no platform of the list, or one with no slug or no
-    folder, which has no platform to belong to.
+    folder, which has no platform to belong to. A platform whose firmware is no
+    list raises :class:`~domain.platform_listing.UnreadableFirmware`.
     """
-    listed = list(platforms)
-    slugs = _slugs_by_id(listed)
-    folders = _folders_by_id(listed)
+    entries = platform_entries(platforms)
+    unreadable = next((entry for entry in entries if entry.firmware is None), None)
+    if unreadable is not None:
+        raise UnreadableFirmware(
+            f"platform {unreadable.fs_slug or unreadable.platform_id} lists firmware that is no list"
+        )
+    return _firmware_rows(entries)
+
+
+def _firmware_rows(entries: list[PlatformEntry]) -> list[dict[str, Any]]:
+    """:func:`library_firmware`'s rows, from every entry whose firmware is a list."""
+    owners = _owners_by_id(entries)
     rows: list[dict[str, Any]] = []
-    for platform in listed:
-        for firmware in platform.get("firmware") or ():
+    for entry in entries:
+        for firmware in entry.firmware or ():
             if firmware.get("missing_from_fs"):
                 continue
-            platform_id = firmware.get("platform_id")
-            slug, folder = slugs.get(platform_id), folders.get(platform_id)
-            if slug is not None and folder is not None:
+            platform_id = listed_number(firmware.get("platform_id"))
+            owner = owners.get(platform_id) if platform_id is not None else None
+            if owner is not None:
+                folder, slug = owner
                 rows.append({**firmware, "platform_folder": folder, "platform_slug": slug})
     return rows
 
@@ -61,32 +73,36 @@ class ListedPlatforms:
     ``folders`` is the ``fs_slug`` of every listed platform that has one, with
     or without a slug (:func:`~domain.platform_names.listed_platform_folders`):
     the one notion of "a key that is a listed ``fs_slug``". ``by_slug`` groups
-    those with a slug under it, and ``firmware`` is the library's firmware
-    (:func:`library_firmware`).
+    those with a slug under it, and ``firmware`` holds the rows
+    :func:`library_firmware` gives, from every platform whose firmware is a list.
+    ``firmware_complete`` is false where a platform's firmware is no list, so
+    a file that is not among ``firmware`` may still be that platform's.
     """
 
     folders: frozenset[str]
     by_slug: Mapping[str, frozenset[str]]
     firmware: tuple[Mapping[str, Any], ...]
+    firmware_complete: bool = True
 
 
 def listed_platforms(platforms: Iterable[Mapping[str, Any]]) -> ListedPlatforms:
     """The :class:`ListedPlatforms` of one read of RomM's platform listing."""
     listed = list(platforms)
+    entries = platform_entries(listed)
     return ListedPlatforms(
         folders=listed_platform_folders(listed),
         by_slug=folders_by_slug(listed),
-        firmware=tuple(library_firmware(listed)),
+        firmware=tuple(_firmware_rows(entries)),
+        firmware_complete=all(entry.firmware is not None for entry in entries),
     )
 
 
 def folders_by_slug(platforms: Iterable[Mapping[str, Any]]) -> dict[str, frozenset[str]]:
     """Every listed platform's ``fs_slug``, grouped under its slug; a platform without either is left out."""
     grouped: dict[str, set[str]] = {}
-    for platform in platforms:
-        slug, folder = platform.get("slug"), listed_fs_slug(platform)
-        if isinstance(slug, str) and slug and folder is not None:
-            grouped.setdefault(slug, set()).add(folder)
+    for entry in platform_entries(platforms):
+        if entry.slug is not None and entry.fs_slug is not None:
+            grouped.setdefault(entry.slug, set()).add(entry.fs_slug)
     return {slug: frozenset(folders) for slug, folders in grouped.items()}
 
 
@@ -101,7 +117,8 @@ def refiled_record_folder(key: str, file_name: str, firmware_id: int | None, lis
     Otherwise *key* is read as a slug, and the record moves to the one listed
     ``fs_slug`` with that slug; where several share it, it stays, and each of
     their pages offers it (:func:`records_of_platform`). A key nothing places
-    stays where it is.
+    stays where it is, and so does a record whose ``firmware_id`` names no file
+    while a platform's firmware could not be read: that file may be its.
     """
     if key in listed.folders:
         return None
@@ -116,6 +133,8 @@ def refiled_record_folder(key: str, file_name: str, firmware_id: int | None, lis
         )
         if target is not None:
             return target
+        if not listed.firmware_complete:
+            return None
     folders = listed.by_slug.get(key, frozenset())
     return next(iter(folders)) if len(folders) == 1 else None
 
@@ -158,17 +177,10 @@ def records_of_platform(
     ]
 
 
-def _slugs_by_id(platforms: list[Mapping[str, Any]]) -> dict[Any, str]:
-    return _by_id(platforms, "slug")
-
-
-def _folders_by_id(platforms: list[Mapping[str, Any]]) -> dict[Any, str]:
-    return _by_id(platforms, "fs_slug")
-
-
-def _by_id(platforms: list[Mapping[str, Any]], key: str) -> dict[Any, str]:
+def _owners_by_id(entries: Iterable[PlatformEntry]) -> dict[int, tuple[str, str]]:
+    """``(fs_slug, slug)`` of every listed platform with both, by its RomM id."""
     return {
-        platform.get("id"): value
-        for platform in platforms
-        if isinstance(value := platform.get(key), str) and value and platform.get("id") is not None
+        entry.platform_id: (entry.fs_slug, entry.slug)
+        for entry in entries
+        if entry.platform_id is not None and entry.fs_slug is not None and entry.slug is not None
     }

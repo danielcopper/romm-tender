@@ -294,8 +294,8 @@ that will not happen for `pcsx2/bios`, which RetroDECK links onto the BIOS folde
 
 The **Platforms** tab of the **Library** page holds everything about one system: its sync toggle, the **active emulator
 core**, the BIOS files that core needs, and the two ways to take the platform back out of Steam. The list on the left
-holds every platform your RomM server reports with at least one ROM, in two groups — **Synced** above **Available** —
-and the row you focus is the one the right-hand pane describes.
+holds every platform your RomM server reports with at least one ROM, or whose count it does not give, in two groups —
+**Synced** above **Available** — and the row you focus is the one the right-hand pane describes.
 
 1. From the main QAM page, tap **Library**, then move to the **Platforms** tab with L1/R1
 2. Each row is a coloured dot, the platform's name and the sync toggle. The dot is the BIOS state at a glance — green
@@ -315,10 +315,11 @@ and the row you focus is the one the right-hand pane describes.
    chose an emulator for the system inside ES-DE, that choice ("Gearsystem chosen in ES-DE", with the source named when
    more than one is switched on), then how many versions it has on RomM and how many versions are in Steam ("12 versions
    on RomM · 9 versions in Steam"; every version of a game that shares one shortcut counts, so this can be more than the
-   shortcuts the Remove button names). The name is in red where the platform's games cannot start with it — it is not
-   installed — and the sentence below says why. If it reads **no default** in red, whether the emulator RetroDECK ships
-   as its default is installed could not be established, so nothing is the default until you pick one; the sentence
-   below says so. If it reads **no emulator** in red, RetroDECK has none for this platform at all
+   shortcuts the Remove button names; the count on RomM is left out where RomM did not send one). The name is in red
+   where the platform's games cannot start with it — it is not installed — and the sentence below says why. If it reads
+   **no default** in red, whether the emulator RetroDECK ships as its default is installed could not be established, so
+   nothing is the default until you pick one; the sentence below says so. If it reads **no emulator** in red, RetroDECK
+   has none for this platform at all
 6. The **chip button** at the right of the name opens a menu of the platform's emulators — the same button, in the same
    two colours, as the one on a game's page. It is always there: it opens the menu whenever there is more than one
    emulator to choose between — also before the platform's first sync, so you can pick before its games reach Steam —

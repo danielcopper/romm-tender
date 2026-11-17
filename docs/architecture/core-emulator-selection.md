@@ -291,15 +291,16 @@ started from its page and its launch (`PlatformSystems.rom_system`); only a new 
 download, follow the source's current answer. A source that renames, moves or drops a system is not followed yet.
 
 **The ids are kept.** `kv_config`'s `platform_ids` keeps a record of each platform RomM lists, keyed by the platform's
-folder in RomM (`fs_slug`): its slug, its folder, its RomM id, its `name`, `is_identified`, the RomM version Tender had
-detected when the listing was read (none where Tender had detected no version), and under `ids` every field of the
-platform whose name ends in `_id` or `_slug`, as RomM sent it. Tender reads only the four ids the question above is
-asked with; the rest are kept for the resolver's platform table, so an id RomM adds is kept at the next sync with no
-change in Tender. A listed platform without a folder is not kept. The value is replaced at the start of every sync from
-RomM's listing (`PlatformSystemService.replace_listing`, the value's one owner; a failed write is logged and leaves the
-run alone); one kept before it was keyed by folder is read as it stands — each key as the slug it was kept under, the
-new fields empty — until that sync replaces it. A platform is found in it by its slug, the console's identity the
-question is put by; where several folders share a slug, the last listed answers
+folder in RomM (`fs_slug`): its slug, its folder, its RomM id, its `name` (none where the listing gives no usable one),
+`is_identified`, the RomM version Tender had detected when the listing was read (none where Tender had detected no
+version), and under `ids` every field of the platform whose name ends in `_id` or `_slug`, as RomM sent it — each read
+through the one reader of a listing entry, `domain/platform_listing.py`. Tender reads only the four ids the question
+above is asked with; the rest are kept for the resolver's platform table, so an id RomM adds is kept at the next sync
+with no change in Tender. A listed platform without a folder is not kept. The value is replaced at the start of every
+sync from RomM's listing (`PlatformSystemService.replace_listing`, the value's one owner; a failed write is logged and
+leaves the run alone); one kept before it was keyed by folder is read as it stands — each key as the slug it was kept
+under, the new fields empty — until that sync replaces it. A platform is found in it by its slug, the console's identity
+the question is put by; where several folders share a slug, the last listed answers
 (`domain/platform_system.py::kept_by_slug` says why that changes no question). Where none is kept for a platform — the
 first start after an update — `PlatformSystemService` reads the listing once and hands it to the refiling, which has it
 kept beside what was kept (`keep_listing`): an entry for a slug the listing names gives way to the listing's. A slug the

@@ -533,9 +533,10 @@ field. Tender owns machine-scoped collections named `RomM: <platform> (<hostname
 it receives and then runs a **stale-collection cleanup** that deletes any `RomM: …` collection for this machine whose
 platform/collection name is absent from those maps.
 
-`<platform>` is the `name` RomM's platform listing gives the platform, never the `custom_name` a user set in RomM, for
-every platform the run's listing names, its sync on in Tender or not: the fetcher records each listed platform's name
-beside its `fs_slug` (`LibrarySyncStateBox.run_listed_platform_names`, through
+`<platform>` is the `name` RomM's platform listing gives the platform, never the `custom_name` a user set in RomM, and
+its `fs_slug` where the listing gives no usable name ([#2761](https://github.com/danielcopper/romm-tender/issues/2761)
+D3), for every platform the run's listing names, its sync on in Tender or not: the fetcher records each listed
+platform's name beside its `fs_slug` (`LibrarySyncStateBox.run_listed_platform_names`, through
 `domain/platform_names.py::listed_platform_names`) ([#2564](https://github.com/danielcopper/romm-tender/issues/2564) D1,
 D2). Two listed platforms can share a name — two folders RomM files under one slug, a version folder beside its
 console's — so a platform whose `fs_slug` is not its slug, and whose name another listed platform carries too, is named

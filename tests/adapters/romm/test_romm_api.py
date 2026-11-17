@@ -18,10 +18,12 @@ from lib.errors import (
     RommConnectionError,
     RommForbiddenError,
     RommNotFoundError,
+    RommPlatformListingUnreadable,
     RommServerError,
     RommSyncDisabledError,
     RommUnprocessableEntityError,
     classify_error,
+    romm_error_log_level,
 )
 
 if TYPE_CHECKING:
@@ -72,16 +74,70 @@ class TestListPlatforms:
         assert result == [{"id": 1, "slug": "snes"}]
 
     def test_non_list_raises(self):
-        """A non-list answer is a failed listing, never an empty one, and never a 404 verdict."""
+        """A non-list answer is a failed listing: never empty, never a 404 verdict, never RomM unreachable."""
         api, client = _make_api()
         client.request.return_value = {"error": "bad"}
-        with pytest.raises(RommApiError) as exc_info:
+        with pytest.raises(RommPlatformListingUnreadable) as exc_info:
             api.list_platforms()
         assert not isinstance(exc_info.value, RommNotFoundError)
         assert classify_error(exc_info.value) == (
-            "server_unreachable",
-            "Unexpected response from /api/platforms: dict",
+            "platform_listing_unreadable",
+            "RomM's platform list could not be read (/api/platforms): RomM answered with a dict, not a list",
         )
+
+    @pytest.mark.parametrize("item", ["n64", None, 7], ids=["text", "null", "number"])
+    def test_an_item_that_is_no_object_fails_the_listing(self, item):
+        """#2761 D8: refused here rather than raising unclassified in the first reader."""
+        api, client = _make_api()
+        client.request.return_value = [{"id": 1, "slug": "snes", "fs_slug": "snes"}, item]
+        with pytest.raises(RommPlatformListingUnreadable) as exc_info:
+            api.list_platforms()
+        assert classify_error(exc_info.value) == (
+            "platform_listing_unreadable",
+            "RomM's platform list could not be read (/api/platforms): "
+            f"an item is a {type(item).__name__}, not an object",
+        )
+
+    @pytest.mark.parametrize("platform_id", [None, True, "abc", 1.5], ids=["null", "boolean", "text", "fraction"])
+    def test_a_platform_with_a_folder_but_no_usable_id_fails_the_listing(self, platform_id):
+        """#2761 D4, D8: the whole listing is unreadable, with a reason of its own."""
+        api, client = _make_api()
+        client.request.return_value = [
+            {"id": 1, "slug": "snes", "fs_slug": "snes"},
+            {"id": platform_id, "slug": "n64", "fs_slug": "n64"},
+        ]
+        with pytest.raises(RommPlatformListingUnreadable) as exc_info:
+            api.list_platforms()
+        assert not isinstance(exc_info.value, RommNotFoundError)
+        assert classify_error(exc_info.value) == (
+            "platform_listing_unreadable",
+            "RomM's platform list could not be read (/api/platforms): platform n64 has no usable id",
+        )
+
+    def test_a_platform_missing_its_id_fails_the_listing(self):
+        api, client = _make_api()
+        client.request.return_value = [{"slug": "n64", "fs_slug": "n64"}]
+        with pytest.raises(RommPlatformListingUnreadable, match=r"platform n64 has no usable id$"):
+            api.list_platforms()
+
+    def test_an_unreadable_listing_is_logged_as_a_warning(self):
+        """#2761 D8: RomM answered, so it is no offline handheld's info line."""
+        api, client = _make_api()
+        client.request.return_value = {"error": "bad"}
+        with pytest.raises(RommPlatformListingUnreadable) as exc_info:
+            api.list_platforms()
+        assert romm_error_log_level(exc_info.value) == logging.WARNING
+
+    def test_a_platform_without_a_folder_needs_no_id(self):
+        api, client = _make_api()
+        listing = [{"id": 1, "slug": "snes", "fs_slug": "snes"}, {"slug": "arcade", "fs_slug": "  "}, {"slug": "x"}]
+        client.request.return_value = listing
+        assert api.list_platforms() == listing
+
+    def test_an_id_sent_as_a_string_of_digits_is_usable(self):
+        api, client = _make_api()
+        client.request.return_value = [{"id": "1", "slug": "snes", "fs_slug": "snes"}]
+        assert api.list_platforms() == [{"id": "1", "slug": "snes", "fs_slug": "snes"}]
 
 
 class TestGetRom:

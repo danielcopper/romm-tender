@@ -92,7 +92,7 @@ def classify_roms(
     it is a derived display field, never persisted on the ``roms`` row. The
     registry side resolves it from the enabled-platforms-only ``fs_slug``→name map
     (falling back to the bare slug for a disabled platform), while an entry
-    carries RomM's display name, so a divergence between the two can never be
+    carries the name the Platforms tab gives its platform, so a divergence between the two can never be
     healed by an apply (the upsert writes only platform_slug/name/fs_name) —
     comparing it produced a permanent phantom "changed" delta (#1292). Platform
     display renames are diffed separately by

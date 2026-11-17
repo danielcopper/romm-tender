@@ -25,7 +25,7 @@ from domain.platform_system import PLATFORM_IDS_KEY, KeptPlatform, decode_platfo
 from domain.sync_diff import ExactAnswers
 from domain.sync_state import SyncCancelled, SyncState
 from domain.work_unit import WorkUnit
-from lib.errors import Refused, RommApiError, RommNotFoundError, classify_error
+from lib.errors import Refused, RommApiError, RommNotFoundError, RommPlatformListingUnreadable, classify_error
 from lib.romm_paging import LIST_PAGE_SIZE
 from tests.services.library._helpers import _fetching_frames, _seed_collection_stamp, _seed_persisted_rom
 
@@ -78,7 +78,7 @@ class TestFetchEnabledPlatforms:
         client.request.return_value = {"error": "bad response"}
         library = make_library(romm_api=RommApiAdapter(client))
 
-        with pytest.raises(RommApiError, match=r"^Unexpected response from /api/platforms: dict$") as exc_info:
+        with pytest.raises(RommPlatformListingUnreadable, match=r"RomM answered with a dict, not a list$") as exc_info:
             await library.sync._fetcher._fetch_enabled_platforms()
         assert not isinstance(exc_info.value, RommNotFoundError)
 
@@ -293,6 +293,123 @@ class TestAPlatformUnitCarriesItsFsSlug:
         units = await library.sync._fetcher.build_work_queue()
 
         assert {u.id: u.platform_folder for u in units} == {1: "snes", 2: "snes-hacks"}
+
+
+class TestAPlatformUnitIsNamedAsTheTabNamesIt:
+    """#2761 D2, D3, D5: a platform unit reads its fields through the one reader of the listing."""
+
+    @staticmethod
+    async def _units(make_library, fake_romm_api, platforms, switched_on):
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.platforms = platforms
+        library.settings["enabled_platforms"] = dict.fromkeys(switched_on, True)
+        library.settings["enabled_collections"] = {"standard": {}, "smart": {}, "virtual": {}}
+        return library, await library.sync._fetcher.build_work_queue()
+
+    @pytest.mark.asyncio
+    async def test_a_platform_sharing_its_name_is_named_with_its_fs_slug(self, make_library, fake_romm_api):
+        _library, units = await self._units(
+            make_library,
+            fake_romm_api,
+            [
+                {"id": 1, "name": "Super Nintendo", "slug": "snes", "fs_slug": "snes", "rom_count": 2},
+                {"id": 2, "name": "Super Nintendo", "slug": "snes", "fs_slug": "snes-hacks", "rom_count": 1},
+            ],
+            ["snes", "snes-hacks"],
+        )
+
+        assert [u.name for u in units] == ["Super Nintendo", "Super Nintendo (snes-hacks)"]
+
+    @pytest.mark.asyncio
+    async def test_a_platform_listed_with_a_display_name_and_no_name_is_named_by_its_fs_slug(
+        self, make_library, fake_romm_api
+    ):
+        unnamed = {k: v for k, v in LISTED_GAMECUBE.items() if k != "name"}
+
+        _library, units = await self._units(make_library, fake_romm_api, [unnamed], ["gc"])
+
+        assert [(u.name, u.platform_folder) for u in units] == [("gc", "gc")]
+
+    @pytest.mark.asyncio
+    async def test_its_roms_carry_its_name(self, make_library, fake_romm_api):
+        library, units = await self._units(
+            make_library,
+            fake_romm_api,
+            [
+                {"id": 1, "name": "Super Nintendo", "slug": "snes", "fs_slug": "snes", "rom_count": 1},
+                {"id": 2, "name": "Super Nintendo", "slug": "snes", "fs_slug": "snes-hacks", "rom_count": 1},
+            ],
+            ["snes-hacks"],
+        )
+        fake_romm_api.roms = {5: {"id": 5, "platform_id": 2, "name": "Hack", "platform_display_name": "SNES"}}
+
+        roms, _skipped = await library.sync._fetcher.fetch_platform_unit(units[0])
+
+        assert [(r["id"], r["platform_name"]) for r in roms] == [(5, "Super Nintendo (snes-hacks)")]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("rom_count", [None, "many"], ids=["null", "text"])
+    async def test_a_rom_count_that_is_not_a_number_counts_as_0_and_the_platform_is_synced(
+        self, make_library, fake_romm_api, rom_count
+    ):
+        _library, units = await self._units(
+            make_library,
+            fake_romm_api,
+            [{"id": 1, "name": "GBA", "slug": "gba", "fs_slug": "gba", "rom_count": rom_count}],
+            ["gba"],
+        )
+
+        assert [(u.id, u.rom_count, u.planned_count(), u.new_shortcut_count) for u in units] == [(1, None, 0, None)]
+
+    @pytest.mark.asyncio
+    async def test_a_platform_with_an_unknown_count_still_fetches_its_games(self, make_library, fake_romm_api):
+        library, units = await self._units(
+            make_library,
+            fake_romm_api,
+            [{"id": 1, "name": "GBA", "slug": "gba", "fs_slug": "gba", "rom_count": "many"}],
+            ["gba"],
+        )
+        fake_romm_api.roms = {5: {"id": 5, "platform_id": 1, "name": "Advance Wars"}}
+
+        roms, skipped = await library.sync._fetcher.fetch_platform_unit(units[0])
+
+        assert ([r["id"] for r in roms], skipped) == ([5], False)
+
+    @pytest.mark.asyncio
+    async def test_a_switched_on_platform_without_an_id_fails_the_listing_rather_than_being_left_out(
+        self, make_library, fake_romm_api, monkeypatch
+    ):
+        """#2761 D4: it fails the listing rather than being left out.
+
+        The adapter refuses such a listing first, so the entry is read without
+        its id here, past that check.
+        """
+        from services.library import fetcher
+
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.platforms = [{"id": 1, "name": "GBA", "slug": "gba", "fs_slug": "gba"}]
+        library.settings["enabled_platforms"] = {"gba": True}
+        read = fetcher.platform_entry_of
+        monkeypatch.setattr(fetcher, "platform_entry_of", lambda platform: replace(read(platform), platform_id=None))
+
+        with pytest.raises(RommPlatformListingUnreadable) as excinfo:
+            await library.sync._fetcher.build_work_queue()
+
+        assert classify_error(excinfo.value)[0] == "platform_listing_unreadable"
+
+    @pytest.mark.asyncio
+    async def test_an_entry_without_a_folder_or_an_id_is_left_out(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.platforms = [
+            {"id": 1, "name": "GBA", "slug": "gba", "fs_slug": "gba"},
+            {"id": 2, "name": "SNES", "slug": "snes", "fs_slug": "snes"},
+            {"name": "Mystery", "slug": "mystery", "fs_slug": None},
+        ]
+        library.settings["enabled_platforms"] = {"gba": True}
+
+        synced, unwalked = await library.sync._fetcher._fetch_enabled_platforms()
+
+        assert ([p["id"] for p in synced], unwalked) == ([1], (2,))
 
 
 class TestBuildWorkQueueErrorPaths:
@@ -555,37 +672,53 @@ class TestGetCollectionsMalformedListing:
         )
 
 
+_UNREADABLE_LISTINGS = pytest.mark.parametrize(
+    ("answer", "detail"),
+    [
+        ({"detail": "not a list"}, "RomM answered with a dict, not a list"),
+        (["n64"], "an item is a str, not an object"),
+        ([{"slug": "n64", "fs_slug": "n64", "id": None}], "platform n64 has no usable id"),
+    ],
+    ids=["no-list", "item-no-object", "folder-without-id"],
+)
+
+
 class TestPlatformListingThatIsNotAList:
-    """The Library page's two platform reads let the adapter's error on a non-list listing reach the caller."""
+    """The Library page's two platform reads let the adapter's unreadable-listing error reach the caller (#2761 D8)."""
 
     @staticmethod
-    def _library_over_a_malformed_listing(make_library):
+    def _library_over(make_library, answer):
         from adapters.romm.romm_api import RommApiAdapter
 
         client = MagicMock()
-        client.request.return_value = {"detail": "not a list"}
+        client.request.return_value = answer
         return make_library(romm_api=RommApiAdapter(client))
 
+    @_UNREADABLE_LISTINGS
     @pytest.mark.asyncio
-    async def test_get_platforms_fails(self, make_library):
-        library = self._library_over_a_malformed_listing(make_library)
+    async def test_get_platforms_fails(self, make_library, answer, detail):
+        library = self._library_over(make_library, answer)
         call = library.sync._fetcher.get_platforms()
 
         with pytest.raises(RommApiError) as excinfo:
             await call
 
-        assert classify_error(excinfo.value) == ("server_unreachable", "Unexpected response from /api/platforms: dict")
+        assert classify_error(excinfo.value) == (
+            "platform_listing_unreadable",
+            f"RomM's platform list could not be read (/api/platforms): {detail}",
+        )
 
+    @_UNREADABLE_LISTINGS
     @pytest.mark.asyncio
-    async def test_set_all_platforms_sync_fails_and_writes_nothing(self, make_library):
-        library = self._library_over_a_malformed_listing(make_library)
+    async def test_set_all_platforms_sync_fails_and_writes_nothing(self, make_library, answer, detail):
+        library = self._library_over(make_library, answer)
         library.settings["enabled_platforms"] = {"n64": True}
         call = library.sync._fetcher.set_all_platforms_sync(False)
 
         with pytest.raises(RommApiError) as excinfo:
             await call
 
-        assert classify_error(excinfo.value) == ("server_unreachable", "Unexpected response from /api/platforms: dict")
+        assert classify_error(excinfo.value)[0] == "platform_listing_unreadable"
         assert library.settings["enabled_platforms"] == {"n64": True}
 
 

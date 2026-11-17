@@ -92,6 +92,9 @@ class RommFirmwareApi(Protocol):
         """Fetch every platform with the firmware files RomM holds for it.
 
         Returns /api/platforms, each platform carrying its files as ``firmware``.
+        Raises ``RommPlatformListingUnreadable`` (``lib/errors.py``) for an
+        answer the adapter cannot read; a firmware entry that is no list is the
+        firmware read's to refuse.
         """
         ...
 
@@ -109,7 +112,9 @@ class RommPlatformReader(Protocol):
     def list_platforms(self) -> list[dict[str, Any]]:
         """Fetch all platforms configured on the RomM server.
 
-        Returns a list of platform dicts from /api/platforms.
+        Returns a list of platform dicts from /api/platforms. Raises
+        ``RommPlatformListingUnreadable`` (``lib/errors.py``) where Tender
+        cannot read the answer.
         """
         ...
 

@@ -81,7 +81,8 @@ export interface RunUnit {
   readonly id: number | string;
   readonly type: "platform" | "collection";
   readonly name: string;
-  readonly romCount: number;
+  /** RomM's count, or `null` where its listing gave none for the platform. */
+  readonly romCount: number | null;
   /** The plan's prediction that this unit will skip wholesale — an estimate, not
    *  the fetch-time skip decision. `false` where the plan carried none. */
   readonly predictedSkip: boolean;
@@ -90,7 +91,7 @@ export interface RunUnit {
    *  backends). `0` is knowledge; `null` is its absence. */
   readonly boundCount: number | null;
   /** Shortcuts this unit's apply was expected to create, or `null` where the
-   *  plan carried no count (collections, older backends). */
+   *  plan carried no count (`SyncPlanUnit.new_shortcut_count` says when). */
   readonly newShortcutCount: number | null;
   readonly state: RunUnitState;
   /** Shortcuts this unit's apply brought under management — a fresh create or an

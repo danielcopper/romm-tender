@@ -29,6 +29,7 @@ ran. The recorder writes that answer, never picks it.
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -44,7 +45,7 @@ from domain.sync_run_kind import SyncRunKind
 from domain.sync_stage import SyncStage
 from domain.sync_state import SyncCancelled
 from lib.background_tasks import BackgroundTasks
-from lib.errors import Refused, classify_error
+from lib.errors import Refused, RommPlatformListingUnreadable, classify_error
 from services.library._convergence import leave_running_groups_out
 from services.library._stale_rows import settle_stale_rows
 from services.library._state import SYNC_CANCELLED, SYNC_IN_PROGRESS
@@ -52,8 +53,6 @@ from services.library._unit_roms import collection_membership_key
 from services.library.session_budget import SYNC_PAUSED_BUDGET, SessionBudgetMonitor
 
 if TYPE_CHECKING:
-    import logging
-
     from domain.work_unit import WorkUnit
     from services.library._state import CollectionMembership, LibrarySyncStateBox
     from services.library.collection_fetcher import CollectionDelivery
@@ -315,15 +314,22 @@ class SyncOrchestrator:
                 await self._progress.emit_cancelled(SYNC_CANCELLED)
                 raise
             except Exception as e:
-                self._logger.error(f"Failed to build work queue: {e}")
+                # An unreadable platform list is a warning, as every reader of
+                # it logs one (#2761 D8); any other failure here is an error.
+                unreadable = isinstance(e, RommPlatformListingUnreadable)
+                self._logger.log(
+                    logging.WARNING if unreadable else logging.ERROR,
+                    f"Failed to build work queue: {e}",
+                    exc_info=not unreadable,
+                )
                 _code, _msg = classify_error(e)
                 await self._progress.emit_progress(SyncStage.ERROR, message=_msg, running=False)
                 return
 
             total_units = len(work_queue)
-            total_roms_planned = sum(u.rom_count for u in work_queue)
+            total_roms_planned = sum(u.planned_count() for u in work_queue)
             # Skip-aware estimate total (#1382): predicted-skip units weigh 0,
-            # the rest their persisted collapsed count (raw ``rom_count``
+            # the rest their persisted collapsed count (``planned_count``
             # fallback). Estimate-only — it prices the frontend's seeds and
             # never feeds the actual skip decision (ADR-0023); ``total_roms``
             # below stays the raw planned total for backward compatibility.

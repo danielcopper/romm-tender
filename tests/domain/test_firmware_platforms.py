@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from domain.firmware_platforms import library_firmware
+from domain.platform_listing import UnreadableFirmware
 
 
 def _platform(platform_id: int, slug: str, fs_slug: str | None = None, *firmware: dict[str, Any]) -> dict[str, Any]:
@@ -64,6 +67,49 @@ class TestLibraryFirmware:
         ]
 
         assert library_firmware(platforms) == []
+
+    def test_a_platform_id_sent_as_a_string_of_digits_names_its_platform(self):
+        """#2761 D7: an id sent as a numeric string is that number, so a file's ``platform_id`` matches it."""
+        platforms = [{"id": "1", "slug": "psx", "fs_slug": "ps", "firmware": [_file(10, "scph5501.bin", 1)]}]
+
+        assert [(row["file_name"], row["platform_folder"]) for row in library_firmware(platforms)] == [
+            ("scph5501.bin", "ps")
+        ]
+
+    def test_a_file_whose_platform_id_is_a_string_of_digits_belongs_to_that_platform(self):
+        """#2761 D7: one set of checks reads the file's ``platform_id`` as it reads the platform's ``id``."""
+        platforms = [
+            {
+                "id": 1,
+                "slug": "psx",
+                "fs_slug": "ps",
+                "firmware": [{**_file(10, "scph5501.bin", 1), "platform_id": "1"}],
+            }
+        ]
+
+        assert [(row["file_name"], row["platform_folder"]) for row in library_firmware(platforms)] == [
+            ("scph5501.bin", "ps")
+        ]
+
+    def test_a_platform_whose_id_is_no_whole_number_owns_no_file(self):
+        """#2761 D7: a boolean id is no id, so the file whose ``platform_id`` is 1 has no platform."""
+        platforms = [{"id": True, "slug": "psx", "fs_slug": "ps", "firmware": [_file(10, "scph5501.bin", 1)]}]
+
+        assert library_firmware(platforms) == []
+
+    def test_a_platform_whose_firmware_is_no_list_fails_the_read_rather_than_needing_none(self):
+        """An empty answer reads as "needs none"; the raise lets the caller keep its cache or say unknown (#1693)."""
+        platforms = [
+            _platform(1, "psx", None, _file(10, "scph5501.bin", 1)),
+            {"id": 2, "slug": "gba", "firmware": {"id": 7}},
+        ]
+
+        with pytest.raises(UnreadableFirmware, match=r"^platform 2 lists firmware that is no list$"):
+            library_firmware(platforms)
+
+    def test_a_platform_whose_slug_is_only_whitespace_owns_no_file(self):
+        """#2761 D7: a slug that is only whitespace is no slug."""
+        assert library_firmware([_platform(1, "  ", "ps", _file(10, "scph5501.bin", 1))]) == []
 
     def test_the_server_s_fields_are_kept(self):
         rows = library_firmware([_platform(1, "psx", None, _file(10, "a.bin", 1, md5_hash="abc", file_size_bytes=3))])

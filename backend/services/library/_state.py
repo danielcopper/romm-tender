@@ -250,8 +250,9 @@ class LibrarySyncStateBox:
     run_listed_platform_folders: frozenset[str] | None = None
     # Every listed platform's name from that same listing, by ``fs_slug``
     # (``domain.platform_names.listed_platform_names``): what the run names a
-    # platform by — in its Steam collections, the name cache and the preview —
-    # whether its sync is on or not. Empty until the run has listed. Reset by
+    # platform by — in its Steam collections, the name cache, the preview, its
+    # platform units and every ROM a collection brings — whether its sync is on
+    # or not. Empty until the run has listed. Reset by
     # ``try_begin_run``.
     run_listed_platform_names: dict[str, str] = field(default_factory=dict)
     # Every ROM the user hid in RomM (``domain.hidden_roms.hidden_rom_ids``), read

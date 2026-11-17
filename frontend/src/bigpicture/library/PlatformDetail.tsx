@@ -525,7 +525,7 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
       <HeaderFacts
         testId="platform-counts"
         parts={[
-          { text: `${pluralize(row.romCount, "version")} on RomM` },
+          ...(row.romCount === null ? [] : [{ text: `${pluralize(row.romCount, "version")} on RomM` }]),
           ...(row.reachableCount === null ? [] : [{ text: `${pluralize(row.reachableCount, "version")} in Steam` }]),
         ]}
       />
