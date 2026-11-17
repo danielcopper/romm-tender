@@ -422,6 +422,7 @@ class SyncPreview:
                 preview_id=preview_id,
                 created_at=created_at,
                 answer=answer,
+                preferred_region=preferred_region,
             )
 
             await self._progress.emit_progress(SyncStage.DONE, message="Preview ready", running=False)

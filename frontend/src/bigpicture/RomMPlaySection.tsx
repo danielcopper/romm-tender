@@ -41,6 +41,7 @@ import { isKnownWithoutSgdbGame, loadArtworkSlots, useArtworkSlotsChanges } from
 import { CHOOSE_GAME_FIRST } from "../utils/artworkTabWording";
 import { useAutoArtwork } from "../utils/autoArtwork";
 import { artworkApplyMessage } from "../utils/artworkApplyMessage";
+import { transportFailureSentence } from "../utils/transportFailureWording";
 import { hasAnySaveConflict } from "../utils/saveStatus";
 import { scrollToTop } from "../utils/scrollHelpers";
 import { getEventTarget } from "../utils/events";
@@ -92,6 +93,9 @@ import {
  *  worth a log line. It is NOT a deadline after which the server counts as
  *  unreachable — see the check below. */
 const CONNECTION_CHECK_DEADLINE_MS = 5000;
+
+/** What Refresh Artwork says where it failed without a reason of its own. */
+const REFRESH_ARTWORK_FAILED = "Failed to refresh artwork";
 
 /** Source of connection-check ids, in start order. Ids are handed out at module
  *  level rather than per component because the state they order is module-level
@@ -522,7 +526,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       // slot the user chose or one set in Steam (#2381 D6).
       const slots = await loadArtworkSlots(appId, romId);
       if (!slots) {
-        showToast("Failed to refresh artwork");
+        showToast(REFRESH_ARTWORK_FAILED);
         return;
       }
       if (slots.game.sgdb_id === null) {
@@ -540,7 +544,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         return null;
       });
       if (!resolution) {
-        say("Failed to refresh artwork");
+        say(REFRESH_ARTWORK_FAILED);
         return;
       }
       if (isEndpointFailure(resolution)) {
@@ -573,7 +577,8 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         detach(debugLog(`handleRefreshArtwork: continuation was cancelled: ${e}`));
         return;
       }
-      say("Failed to refresh artwork");
+      detach(debugLog(`handleRefreshArtwork: the refresh failed: ${e}`));
+      say(transportFailureSentence(REFRESH_ARTWORK_FAILED, e) ?? REFRESH_ARTWORK_FAILED);
     } finally {
       setActionPending(null);
       detach(loadArtworkSlots(appId, romId));

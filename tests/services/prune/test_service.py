@@ -3181,3 +3181,37 @@ async def test_a_running_removed_game_is_left_as_it_is_and_offered_again(harness
     assert row.shortcut_app_id == app_id
     assert harness.installed_remover.removed == []
     assert (await _preview(harness))["candidate_total"] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("unread_from_reading", [1, 2], ids=["unread-at-planning", "unread-before-the-steam-action"])
+async def test_a_removed_game_is_left_as_it_is_and_offered_again_without_a_reading(
+    harness, monkeypatch, unread_from_reading
+):
+    """#2776 D5: where Steam's running apps cannot be read, the group is left as a running game's is."""
+    app_id = 0x80000001
+    _seed(harness.uow, _rom(1, fetch="old", app_id=app_id))
+    harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
+    running = FakeRunningRomIds()
+
+    def lose_the_reading(reading: int) -> None:
+        if reading == unread_from_reading:
+            running.unread = True
+
+    running.on_read = lose_the_reading
+    executor = harness.service._executor
+    monkeypatch.setattr(executor, "_running_rom_ids", running)
+    monkeypatch.setattr(executor._planner, "_running_rom_ids", running)
+
+    preview = await _preview(harness)
+    await _start(harness, preview["preview_id"], remove_fully_vanished=True)
+    complete = await _finish(harness)
+
+    assert complete["results"][0]["reason"] == "running_apps_unknown"
+    assert not any(name == "prune_action_required" for name, _payload in harness.events.events)
+    with harness.uow:
+        row = harness.uow.roms.get(1)
+    assert row is not None
+    assert row.shortcut_app_id == app_id
+    assert harness.installed_remover.removed == []
+    assert (await _preview(harness))["candidate_total"] == 1

@@ -293,11 +293,11 @@ actually present in the games you have already synced (read from the local datab
 request). If your synced library has no other regions, only the anchors are shown.
 
 **When you change it, a short modal explains the effect** and asks you to confirm. The choice is saved immediately, but
-it takes effect on the **next sync** and only affects games synced from then on. It **never** switches the version or
-renames an existing shortcut — shortcut names are fixed when the shortcut is first created, to protect its artwork,
-collections and playtime. Already-synced games keep their bound version and name; run a sync to apply the new preference
-to new games. See [Multiple versions of a game](syncing-your-library.md#multiple-versions-of-a-game) for the full
-picture.
+it takes effect on the **next sync** and only affects games synced from then on: a sync already running keeps the region
+it started with, and applying a preview uses the region the preview showed. It **never** switches the version or renames
+an existing shortcut — shortcut names are fixed when the shortcut is first created, to protect its artwork, collections
+and playtime. Already-synced games keep their bound version and name; run a sync to apply the new preference to new
+games. See [Multiple versions of a game](syncing-your-library.md#multiple-versions-of-a-game) for the full picture.
 
 ## Emulator sources
 

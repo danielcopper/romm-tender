@@ -2748,13 +2748,19 @@ answers the ROMs whose shortcut has a listed app id (`roms.shortcut_app_id`, the
 a game counts as running for the save sync as it holds the backend's waits: Launching, Running or Terminating, or a
 status that cannot be read; an entry left behind after its exit, reading ReadyToLaunch, does not. A game on its way in
 or out is one whose save the emulator may be writing. Where no reading can be taken — no debugger attached, the panel
-not loaded, a reader that raised, or one that did not answer within `READING_TIMEOUT_SECONDS` (2 s) — nothing counts as
-running, so the save sync works as before rather than refusing every game; a failed read of the ROMs answers none too,
-and an entry without an app id matches no ROM. The limit is shorter than the host's 10 s per debugger command
-(`COMMAND_TIMEOUT_SECONDS`, `host/inject/injector.py`) because a renderer that is attached but does not answer would
-otherwise hold every save path that asks — under the game's `rom_lock`, and the sweep once per ROM while it holds the
-device gate — for that long. What the save sync does with a running game is
-[A game that is running](#a-game-that-is-running).
+not loaded, a reader that raised, one that did not answer within `READING_TIMEOUT_SECONDS` (2 s), or a failed read of
+the ROMs — the answer is `None`, never the empty set a reading that lists none of Tender's games answers
+([#2776](https://github.com/danielcopper/romm-tender/issues/2776) D5), and an entry without an app id matches no ROM.
+The limit is shorter than the host's 10 s per debugger command (`COMMAND_TIMEOUT_SECONDS`, `host/inject/injector.py`)
+because a renderer that is attached but does not answer would otherwise hold every save path that asks — under the
+game's `rom_lock`, and the sweep once per ROM while it holds the device gate — for that long. Each reader decides what
+no reading means for it. The save paths read it as nothing running (`RunningGameGuard.is_running`), so the save sync
+works as before rather than refusing every game; a game that runs while the reading fails can still have its saves
+written or deleted by any save path, Sync All Saves Now and a platform's delete among them. The removed-game cleanup
+leaves the group of a shortcut as it leaves a running game's
+([A game that is running](removed-game-cleanup.md#a-game-that-is-running)), and the library sync's convergence of a game
+with several shortcuts leaves every such group to a later run, at the platform unit and again before the removal, as it
+does a running one's. What the save sync does with a running game is [A game that is running](#a-game-that-is-running).
 
 An app that counts only because its status could not be read holds both waits, and only the user can tell whether it has
 closed, so the panel says what to do about it in one sentence (`utils/runningAppsWording.ts`): quit it if it is open,

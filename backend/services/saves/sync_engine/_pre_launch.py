@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from lib.errors import NamedRefused
 from services.saves._sync_stop import SyncStop, SyncStopped
+from services.saves.sync_engine._result_message import summarize_sync_result
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterator
@@ -45,9 +46,7 @@ def completed_answer(
 ) -> dict[str, Any]:
     """The answer of a sync before a start that ran to its end; it fails only on per-file *errors*."""
     synced = uploaded + downloaded
-    msg = f"Downloaded {synced} save(s)"
-    if errors:
-        msg += f", {len(errors)} error(s)"
+    msg = summarize_sync_result(f"Synced {synced} save(s)", synced=synced, errors=errors, conflicts=len(conflicts))
     return {
         "success": len(errors) == 0,
         "message": msg,

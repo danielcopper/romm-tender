@@ -232,7 +232,6 @@ def wire_library(wiring: LibraryWiring) -> LibraryParts:
 
     unit_applier = UnitApplier(
         config=UnitApplierConfig(
-            settings=wiring.settings,
             loop=wiring.loop,
             logger=wiring.logger,
             launcher_exe=wiring.launcher_exe,
@@ -273,6 +272,7 @@ def wire_library(wiring: LibraryWiring) -> LibraryParts:
         config=SyncOrchestratorConfig(
             loop=wiring.loop,
             logger=wiring.logger,
+            settings=wiring.settings,
             emit=wiring.emit,
             clock=wiring.clock,
             uuid_gen=wiring.uuid_gen,

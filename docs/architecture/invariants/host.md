@@ -106,9 +106,19 @@ listed app runs, and the focus watcher in Desktop Mode. How an entry reads and b
   no stop rule; the card's tests pin that, and nothing joins them to the backend's expression. The expression's entries
   also name their `appid`, and `RunningGames.running_rom_ids` (`services/running_games.py`) matches them to the ROMs
   whose shortcut `roms.shortcut_app_id` records, so the save sync counts a game as running as the backend's waits hold:
-  Launching, Running or Terminating, or a status that could not be read. `TestEachEntryNamesItsApp` runs the expression
-  under node for the id and pins the reading's parse; `tests/services/test_running_games.py` pins the match, and that no
-  reading — or a reader that raised — is nothing running
+  Launching, Running or Terminating, or a status that could not be read. Where no reading can be taken it answers
+  `None`, never the empty set a reading that lists none of Tender's games answers, and each reader decides what that
+  means for it: the save paths read it as nothing running, the removed-game cleanup leaves a group with a shortcut as it
+  leaves a running game's, and the library sync's convergence leaves every group with several shortcuts to a later run
+  ([#2776](https://github.com/danielcopper/romm-tender/issues/2776) D5). `TestEachEntryNamesItsApp` runs the expression
+  under node for the id and pins the reading's parse; `tests/services/test_running_games.py` pins the match, and no
+  reading — no debugger, a reader that raised or timed out, a failed read of the ROMs — apart from a reading of none of
+  Tender's games; `tests/services/saves/test_running_game.py::TestWithoutAReadingTheSavePathsGoOnAsToday`,
+  `tests/services/prune/test_planning.py::TestARunningGameIsLeftOut`,
+  `tests/services/prune/test_service.py::test_a_removed_game_is_left_as_it_is_and_offered_again_without_a_reading` and
+  `tests/services/library/test_sync_orchestrator.py::TestAGameWithSeveralShortcutsConverges` pin each reader's answer to
+  no reading. **Prompt-only**: a new reader of `RunningRomIdsFn` decides what `None` means for it; the type checker only
+  makes it handle `None`
 - **The focus watcher sends `steam://forceinputappid` only while Steam runs the 64-bit client outside gamescope** —
   test + prompt-only
 

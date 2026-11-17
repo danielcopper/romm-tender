@@ -25,8 +25,9 @@ export function useAutoArtwork(appId: number, romId: number | null, logContext: 
   // empty slots, so an image already there keeps it; a version switch (an
   // earlier rom_id applied for this appId) replaces every slot. Marked applied once the apply resolves, so a slot whose fetch
   // failed is asked again in the next session; an apply that throws — cut
-  // short by leaving the page, or a Steam write failing in the replacing apply
-  // — is not marked, and the next visit applies again.
+  // short by leaving the page, a Steam write failing in the replacing apply, or
+  // a transport failure of an image's fetch in it — is not marked, and the next
+  // visit applies again.
   useEffect(() => {
     const appliedRomId = artworkApplied.get(appId);
     if (!romId || appliedRomId === romId) return;

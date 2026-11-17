@@ -284,8 +284,13 @@ reaches the group (`services/prune/planning.py`), after the group's admission ch
 and the run asks again before anything irreversible (`_armed_to_mutate`, `services/prune/executor.py`), beside its
 re-check of the downloads; a group skipped there keeps its sealed bundle and reports its path. What counts as running is
 the save sync's reading ([Is the game running](save-file-sync-architecture.md#is-the-game-running)), matched by the
-shortcut's app id, so only the group's bound row can make it run. The preview does not ask: whether the game runs is a
-question about the moment of the removal, and the preview is taken before the user confirms.
+shortcut's app id, so only the group's bound row can make it run. Where no reading of Steam's running apps can be taken,
+the group's game may be running: a group with a bound row is skipped the same way at both checks, as
+`running_apps_unknown` — the reason an update's install gives the same condition — with "Tender could not read which
+games Steam is running, so this game was left as it is. Scan again to remove it."
+([#2776](https://github.com/danielcopper/romm-tender/issues/2776) D5, D7). A group with no bound row goes on whatever
+the reading, since only a bound row can make it run. The preview does not ask: whether the game runs is a question about
+the moment of the removal, and the preview is taken before the user confirms.
 
 ## Actions and frames
 

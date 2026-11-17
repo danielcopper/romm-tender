@@ -222,7 +222,7 @@ class TestCoverRefreshPass:
             library, 10, app_id=1010, platform_slug="n64", name="Keep", fs_name="keep.z64", cover_source=self._OLD
         )
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         events = self._apply_unit_events(emit)
         assert len(events) == 1
@@ -252,7 +252,7 @@ class TestCoverRefreshPass:
         cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_bytes(b"pre-existing cache")
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         events = self._apply_unit_events(emit)
         assert len(events) == 1
@@ -299,7 +299,7 @@ class TestCoverRefreshPass:
                 cover_source=self._OLD if i == 1 else None,
             )
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         events = self._apply_unit_events(emit)
         assert len(events) == 2
@@ -335,7 +335,7 @@ class TestCoverRefreshPass:
             library, 2, app_id=1002, platform_slug="n64", name="B", fs_name="b.z64", cover_source="/b.png?ts=old"
         )
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         events = self._apply_unit_events(emit)
         assert len(events) == 1, "the refreshes must never pause the run"

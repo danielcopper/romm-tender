@@ -34,11 +34,15 @@ class PreviewDelta:
     a panel that was navigated away from and remounted can be handed back what
     the user was shown rather than a second assembly of it that can drift from
     the first.
+
+    ``preferred_region`` is the region the preview ranked every sibling group
+    by.
     """
 
     preview_id: str
     created_at: float
     answer: Mapping[str, Any]
+    preferred_region: str
 
     def is_expired(self, now: float, max_age_seconds: float) -> bool:
         """Whether the snapshot is past its TTL at wall-clock *now*.

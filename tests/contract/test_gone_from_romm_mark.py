@@ -61,7 +61,7 @@ async def _apply(harness, run_id: str) -> None:
     sync = harness.app.services.sync_service
     assert sync._box.try_begin_run(run_id, kind=SyncRunKind.APPLY) is True
     start = len(harness.emit.call_args_list)
-    await sync._orchestrator._do_sync_per_unit()
+    await sync._orchestrator._do_sync_per_unit(preferred_region="auto")
     removed = [
         row
         for call in harness.emit.call_args_list[start:]

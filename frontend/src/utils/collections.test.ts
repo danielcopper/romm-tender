@@ -45,9 +45,9 @@ describe("createOrUpdateRomMCollections — case-insensitive identity (#1569)", 
   });
 
   it("updates an existing case-variant collection instead of creating a duplicate", async () => {
-    // Steam already holds "RomM: [7 Up] (test)"; the run finalizer now emits the
-    // folded-first-seen casing "7 up". Must UPDATE the existing one, not create a
-    // colliding "7 up" that Steam merges over the top of.
+    // Steam already holds "RomM: [7 Up] (test)"; the run finalizer emits a case
+    // variant of it, "7 up". Must UPDATE the existing one, not create a colliding
+    // "7 up" that Steam merges over the top of.
     const existing = fakeCollection("RomM: [7 Up] (test)");
     const NewUnsavedCollection = vi.fn();
     vi.stubGlobal("collectionStore", { userCollections: [existing], NewUnsavedCollection });

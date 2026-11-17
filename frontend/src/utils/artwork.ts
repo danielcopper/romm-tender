@@ -27,6 +27,7 @@ import {
   type SgdbArtworkSlot,
   type SgdbSlotArtwork,
 } from "../api/backend";
+import { HostTransportError, isConnectionLost } from "../api/host";
 import { writeSlotArtwork } from "./artworkSlotsStore";
 import { detach } from "./detach";
 import {
@@ -78,7 +79,9 @@ async function saveIcon(romId: number, appId: number, signal: AbortSignal): Prom
 /** Fetch SGDB artwork (hero, logo, wide grid, icon) and apply to Steam, replacing
  *  what each slot holds. Returns count of successfully applied images, -1
  *  when no SGDB API key is configured, or the refusal of an image's fetch, in
- *  which case nothing is applied. */
+ *  which case nothing is applied. A transport failure of an image's fetch is
+ *  thrown, and nothing is applied; any other failure of it is logged and counts
+ *  as no image. */
 export async function applyArtwork(romId: number, appId: number): Promise<number | EndpointFailure> {
   return whileInFlight(appId, () => applySgdbArtwork(romId, appId, ALL_SGDB_SLOTS));
 }
@@ -88,14 +91,11 @@ const ALL_SGDB_SLOTS: ReadonlySet<RecordedSlot> = new Set(["hero", "logo", "grid
 
 /**
  * `applyArtwork` for the slots on automatic alone: a slot the user chose and one set in Steam stay, as Refresh Artwork
- * and a change of SteamGridDB game leave them. The slots' state is read first; where it cannot be read, nothing is
- * applied and the read's failure is answered.
+ * and a change of SteamGridDB game leave them. The slots' state is read first; where the read is refused, nothing is
+ * applied and the refusal is answered, and where the call itself fails, nothing is applied and its error is thrown.
  */
 export async function applyAutomaticArtwork(romId: number, appId: number): Promise<number | EndpointFailure> {
-  const read = await getArtworkSlots(romId, appId).catch((e): EndpointFailure => {
-    detach(debugLog(`applyAutomaticArtwork: the slots of appId ${appId} could not be read: ${e}`));
-    return { success: false, reason: "server_unreachable", message: "The artwork slots could not be read" };
-  });
+  const read = await getArtworkSlots(romId, appId);
   if (isEndpointFailure(read)) return read;
   const automatic = new Set(
     read.slots
@@ -150,17 +150,25 @@ async function applySgdbArtwork(
   const superseded = claimGeneration(appId);
 
   const refusals: EndpointFailure[] = [];
+  // A transport failure is thrown on once every fetch has settled and its lease is given back (#2776 D10).
+  const transportFailures: HostTransportError[] = [];
   const fetchArtwork = async (assetType: number, slot: RecordedSlot): Promise<SgdbArtwork> => {
     if (!slots.has(slot)) return NO_IMAGE;
-    const answer = await getSgdbArtworkBase64(romId, assetType).catch(() => NO_IMAGE);
+    const answer = await getSgdbArtworkBase64(romId, assetType).catch((e: unknown): SgdbArtwork => {
+      if (e instanceof HostTransportError) transportFailures.push(e);
+      else
+        detach(debugLog(`applyArtwork: the image of asset type ${assetType} for appId ${appId} was not fetched: ${e}`));
+      return NO_IMAGE;
+    });
     if (!isEndpointFailure(answer)) return answer;
     refusals.push(answer);
     return NO_IMAGE;
   };
   const fetchIcon = async (): Promise<SgdbSlotArtwork> => {
     if (!slots.has("icon")) return { status: "skip" };
-    const answer = await getSgdbSlotArtwork(romId, appId, "icon", true).catch((e): SgdbSlotArtwork => {
-      detach(debugLog(`applyArtwork: icon fetch for appId ${appId} rejected: ${e}`));
+    const answer = await getSgdbSlotArtwork(romId, appId, "icon", true).catch((e: unknown): SgdbSlotArtwork => {
+      if (e instanceof HostTransportError) transportFailures.push(e);
+      else detach(debugLog(`applyArtwork: icon fetch for appId ${appId} rejected: ${e}`));
       return { status: "failed" };
     });
     if (!isEndpointFailure(answer)) return answer;
@@ -173,11 +181,27 @@ async function applySgdbArtwork(
   ]);
 
   const leaseTokens = [...results.map((result) => result.prune_lease_token), leaseOf(icon)];
+  // One failure answers the apply: a lost connection before any other transport failure, since a caller names its
+  // cause (#2776 D9); the rest are logged.
+  const setAside = (answered: HostTransportError | EndpointFailure | undefined): void => {
+    for (const failure of [...transportFailures, ...refusals]) {
+      if (failure === answered) continue;
+      const what = `${failure.reason}: ${failure.message}`;
+      detach(debugLog(`applyArtwork: a further failure of the apply for appId ${appId} was set aside: ${what}`));
+    }
+  };
+  const thrown = transportFailures.find(isConnectionLost) ?? transportFailures[0];
+  if (thrown) {
+    setAside(thrown);
+    return withPruneLeases(leaseTokens, "Artwork apply", () => Promise.reject(thrown), leaseOwner, admission);
+  }
   if (results.some((r) => r.no_api_key) || icon.status === "no_api_key") {
+    setAside(undefined);
     return withPruneLeases(leaseTokens, "Artwork apply", async () => -1, leaseOwner, admission);
   }
   const refusal = refusals[0];
   if (refusal) {
+    setAside(refusal);
     return withPruneLeases(leaseTokens, "Artwork apply", () => Promise.resolve(refusal), leaseOwner, admission);
   }
 
@@ -504,11 +528,12 @@ export async function setChosenCover(
   appId: number,
   onCover?: (base64: string) => void,
 ): Promise<ChosenCover> {
-  const answer = await getSgdbArtworkBase64(romId, STEAM_ASSET_TYPES.cover).catch((e: unknown): EndpointFailure => ({
-    success: false,
-    reason: "server_unreachable",
-    message: String(e),
-  }));
+  let answer: Awaited<ReturnType<typeof getSgdbArtworkBase64>>;
+  try {
+    answer = await getSgdbArtworkBase64(romId, STEAM_ASSET_TYPES.cover);
+  } catch (e) {
+    return { kind: "unread", reason: String(e) };
+  }
   if (isEndpointFailure(answer)) return { kind: "unread", reason: answer.message };
   if (!answer.base64) return { kind: answer.chosen === true ? "unavailable" : "none" };
   const base64 = answer.base64;

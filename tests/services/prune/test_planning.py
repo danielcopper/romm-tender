@@ -70,6 +70,7 @@ def _planner(
     drifted: bool = False,
     drift_answer: dict[str, Any] | None = None,
     running: set[int] | None = None,
+    unread: bool = False,
 ) -> tuple[GroupPlanner, _FakeLiveness]:
     uow = FakeUnitOfWork()
     with uow:
@@ -96,7 +97,7 @@ def _planner(
             liveness=cast("Any", liveness),
             active_downloads=lambda: active_downloads or set(),
             drift_probe=drift_probe,
-            running_rom_ids=FakeRunningRomIds(running or ()),
+            running_rom_ids=FakeRunningRomIds(running or (), unread=unread),
         )
     )
     return planner, liveness
@@ -349,6 +350,29 @@ class TestARunningGameIsLeftOut:
             "This game is running, so it was left as it is. Quit it and scan again to remove it."
         )
         assert liveness.probed == [], "a skipped group must not be probed"
+
+    async def test_without_a_reading_the_group_is_left_as_a_running_game_s_is(self):
+        """#2776 D5: no reading of Steam's running apps could be taken, so the game may be running."""
+        rows = [_rom(1, app_id=0x8001), _rom(2)]
+        planner, liveness = _planner(rows, {1: "vanished", 2: "vanished"}, unread=True)
+
+        result = await planner.plan("run-1", rows, {1, 2}, _options(), 1, 1, MutationLedger(rows))
+
+        assert not isinstance(result, GroupPlan)
+        assert result["status"] == "skipped"
+        assert result["reason"] == "running_apps_unknown"
+        assert result["name"] == "Game 1"
+        assert result["message"] == (
+            "Tender could not read which games Steam is running, so this game was left as it is. "
+            "Scan again to remove it."
+        )
+        assert liveness.probed == [], "a skipped group must not be probed"
+
+    async def test_without_a_reading_a_group_with_no_shortcut_is_planned(self):
+        rows = [_rom(1)]
+        result, _ = await _plan(rows, {1: "vanished"}, unread=True)
+
+        assert isinstance(result, GroupPlan)
 
     async def test_a_game_that_is_not_running_is_planned(self):
         rows = [_rom(1, app_id=0x8001)]

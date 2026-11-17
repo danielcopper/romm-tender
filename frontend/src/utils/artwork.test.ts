@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import * as backend from "../api/backend";
+import { HostTransportError } from "../api/host";
 import { _resetArtworkSlotsForTests, artworkThumbToken } from "./artworkSlotsStore";
 import {
   applyArtwork,
@@ -175,12 +176,18 @@ describe("applyArtwork", () => {
     expect(vi.mocked(backend.saveShortcutIcon)).not.toHaveBeenCalled();
   });
 
-  it("per-asset fetch rejection is swallowed → treated as null (returns 0)", async () => {
+  it("a fetch rejected with an error that is no transport failure is logged and counts as no image", async () => {
     vi.mocked(backend.getSgdbArtworkBase64).mockRejectedValue(new Error("net"));
     vi.mocked(backend.getSgdbSlotArtwork).mockRejectedValue(new Error("net"));
     await expect(applyArtwork(42, 5000)).resolves.toBe(0);
     expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
     expect(vi.mocked(backend.saveShortcutIcon)).not.toHaveBeenCalled();
+    expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(
+      expect.stringContaining("applyArtwork: the image of asset type 1 for appId 5000 was not fetched: Error: net"),
+    );
+    expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(
+      expect.stringContaining("applyArtwork: icon fetch for appId 5000 rejected: Error: net"),
+    );
   });
 });
 
@@ -710,6 +717,70 @@ describe("a refused artwork fetch", () => {
     vi.mocked(backend.debugLog).mockResolvedValue(undefined);
   });
 
+  it.each([
+    ["an image", "base64", "connection_lost"],
+    ["the icon", "icon", "connection_lost"],
+    ["an image", "base64", "payload_too_large"],
+    ["the icon", "icon", "backend_exception"],
+  ])(
+    "makes applyArtwork throw a transport failure of %s's fetch (%s, %s), apply nothing and give every lease back (#2776 D10)",
+    async (_which, failing, reason) => {
+      const thrown = new HostTransportError(reason, "the call failed in transport");
+      vi.mocked(backend.getSgdbArtworkBase64)
+        .mockResolvedValueOnce({ base64: "AA==", no_api_key: false, prune_lease_token: "lease-1" })
+        .mockImplementationOnce(() =>
+          failing === "base64"
+            ? Promise.reject(thrown)
+            : Promise.resolve({ base64: "BB==", no_api_key: false, prune_lease_token: "lease-2" }),
+        )
+        .mockResolvedValueOnce({ base64: "CC==", no_api_key: false, prune_lease_token: "lease-3" });
+      if (failing === "icon") vi.mocked(backend.getSgdbSlotArtwork).mockRejectedValue(thrown);
+      else vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "ready", prune_lease_token: "lease-4" });
+
+      await expect(applyArtwork(42, 5000)).rejects.toBe(thrown);
+
+      expect(SteamClient.Apps.SetCustomArtworkForApp).not.toHaveBeenCalled();
+      expect(backend.saveShortcutIcon).not.toHaveBeenCalled();
+      expect(
+        vi
+          .mocked(backend.releasePruneConflictLease)
+          .mock.calls.map(([token]) => token)
+          .sort(),
+      ).toEqual(failing === "base64" ? ["lease-1", "lease-3", "lease-4"] : ["lease-1", "lease-2", "lease-3"]);
+    },
+  );
+
+  it("throws a lost connection over another transport failure and logs what it set aside (#2776)", async () => {
+    const raised = new HostTransportError("backend_exception", "KeyError: 'hero'");
+    const lost = new HostTransportError("connection_lost", "socket closed");
+    vi.mocked(backend.getSgdbArtworkBase64)
+      .mockRejectedValueOnce(raised)
+      .mockResolvedValueOnce(refusal)
+      .mockRejectedValueOnce(lost);
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "ready", prune_lease_token: "lease-4" });
+
+    await expect(applyArtwork(42, 5000)).rejects.toBe(lost);
+
+    const logged = vi.mocked(backend.debugLog).mock.calls.map(([line]) => line);
+    expect(logged).toContainEqual(expect.stringContaining("set aside: backend_exception: KeyError: 'hero'"));
+    expect(logged).toContainEqual(expect.stringContaining(refusal.message));
+    expect(logged).not.toContainEqual(expect.stringContaining("socket closed"));
+  });
+
+  it("logs every refusal but the one it answers", async () => {
+    const other: backend.EndpointFailure = { success: false, reason: "rate_limited", message: "slow down" };
+    vi.mocked(backend.getSgdbArtworkBase64)
+      .mockResolvedValueOnce(refusal)
+      .mockResolvedValueOnce(other)
+      .mockResolvedValueOnce({ base64: null, no_api_key: false });
+
+    await expect(applyArtwork(42, 5000)).resolves.toEqual(refusal);
+
+    const logged = vi.mocked(backend.debugLog).mock.calls.map(([line]) => line);
+    expect(logged).toContainEqual(expect.stringContaining("slow down"));
+    expect(logged).not.toContainEqual(expect.stringContaining(refusal.message));
+  });
+
   it("makes applyArtwork answer the refusal, apply nothing and give every lease back", async () => {
     vi.mocked(backend.getSgdbArtworkBase64)
       .mockResolvedValueOnce({ base64: "AA==", no_api_key: false, prune_lease_token: "lease-1" })
@@ -1008,6 +1079,14 @@ describe("the ARTWORK tab's writes", () => {
     vi.mocked(backend.getArtworkSlots).mockResolvedValue(refused);
 
     await expect(applyAutomaticArtwork(42, 5000)).resolves.toEqual(refused);
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
+  });
+
+  it("rejects with the read's error where the slots' read itself fails, and applies nothing (#2776)", async () => {
+    const lost = new HostTransportError("connection_lost", "socket closed");
+    vi.mocked(backend.getArtworkSlots).mockRejectedValue(lost);
+
+    await expect(applyAutomaticArtwork(42, 5000)).rejects.toBe(lost);
     expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
   });
 

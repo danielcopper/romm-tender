@@ -146,44 +146,69 @@ class TestGetSyncStats:
             assert uow.roms.get(20).shortcut_app_id is None
 
 
-class TestGetSyncStatsCountsThePlatformsSwitchedOn:
-    """The main page's platform count, before and after the toggles move from RomM id to fs_slug (#2452 D25)."""
+class TestGetSyncStatsCountsThePlatformsOfTheBoundGames:
+    """Main's "N games · M platforms" describes one set of games, whatever the toggles say (#2776 D1)."""
 
     @pytest.mark.asyncio
-    async def test_the_toggles_kept_by_folder_are_counted(self, library):
-        library.settings["enabled_platforms"] = {"snes": True, "snes-hacks": False, "gba": True}
+    async def test_no_toggle_ever_saved_counts_the_platforms_of_the_bound_games(self, library):
+        """No toggle saved: the count is still the bound games' platforms."""
+        _seed_rom(library.uow, 10, app_id=1001, platform_slug="n64")
+        _seed_rom(library.uow, 20, app_id=1002, platform_slug="snes")
+        library.settings["enabled_platforms"] = {}
         library.settings["enabled_platform_ids"] = None
 
         assert library.sync.get_sync_stats()["platforms"] == 2
 
     @pytest.mark.asyncio
-    async def test_until_they_move_the_toggles_kept_by_id_are_counted(self, library):
-        library.settings["enabled_platforms"] = {}
-        library.settings["enabled_platform_ids"] = {"1": True, "2": False, "3": True}
-
-        assert library.sync.get_sync_stats()["platforms"] == 2
-
-    @pytest.mark.asyncio
-    async def test_only_a_toggle_that_is_true_is_counted(self, library):
-        library.settings["enabled_platforms"] = {"snes": True, "gba": "yes", "n64": 1}
+    async def test_an_enabled_platform_with_no_bound_shortcut_is_not_counted(self, library):
+        _seed_rom(library.uow, 10, app_id=1001, platform_slug="n64")
+        _seed_rom(library.uow, 20, app_id=None, platform_slug="snes")
+        library.settings["enabled_platforms"] = {"n64": True, "snes": True, "gba": True}
         library.settings["enabled_platform_ids"] = None
 
         assert library.sync.get_sync_stats()["platforms"] == 1
 
     @pytest.mark.asyncio
-    async def test_toggles_that_are_no_map_count_no_platform(self, library):
-        library.settings["enabled_platforms"] = ["snes"]
+    async def test_a_disabled_platform_whose_shortcuts_are_still_bound_is_counted(self, library):
+        _seed_rom(library.uow, 10, app_id=1001, platform_slug="n64")
+        _seed_rom(library.uow, 20, app_id=1002, platform_slug="snes")
+        library.settings["enabled_platforms"] = {"n64": True, "snes": False}
         library.settings["enabled_platform_ids"] = None
 
-        assert library.sync.get_sync_stats()["platforms"] == 0
+        assert library.sync.get_sync_stats()["platforms"] == 2
 
     @pytest.mark.asyncio
-    async def test_none_ever_saved_counts_no_platform(self, library):
-        """The main page leaves a count of 0 out, rather than reading every platform as on."""
+    async def test_toggles_still_kept_by_id_do_not_change_the_count(self, library):
+        _seed_rom(library.uow, 10, app_id=1001, platform_slug="n64")
         library.settings["enabled_platforms"] = {}
-        library.settings["enabled_platform_ids"] = {}
+        library.settings["enabled_platform_ids"] = {"1": True, "2": False, "3": True}
 
-        assert library.sync.get_sync_stats()["platforms"] == 0
+        assert library.sync.get_sync_stats()["platforms"] == 1
+
+    @pytest.mark.asyncio
+    async def test_several_games_on_one_platform_count_it_once(self, library):
+        _seed_rom(library.uow, 10, app_id=1001, platform_slug="n64", name="Game A")
+        _seed_rom(library.uow, 20, app_id=1002, platform_slug="n64", name="Game B")
+
+        assert library.sync.get_sync_stats()["platforms"] == 1
+
+    @pytest.mark.asyncio
+    async def test_a_bound_game_with_no_fs_slug_is_on_no_platform(self, library):
+        """As in the Platforms listing, a row with no ``fs_slug`` recorded belongs to no platform (#2452 D17)."""
+        rom = Rom(
+            rom_id=10,
+            platform_slug="n64",
+            platform_fs_slug=None,
+            name="Game",
+            fs_name="Game.z64",
+            shortcut_app_id=1001,
+            last_synced_at="2025-01-01T00:00:00",
+        )
+        with library.uow as uow:
+            uow.roms.save(rom)
+
+        stats = library.sync.get_sync_stats()
+        assert (stats["roms"], stats["platforms"]) == (1, 0)
 
 
 class TestGetSyncStatsLastAttempt:
@@ -2189,7 +2214,8 @@ class TestFinalizePerUnitRun:
         The data-loss guard: Steam collapses "7 up" and "7 Up" onto one
         case-insensitive collection, so the run finalizer must emit a single key with
         BOTH member sets — otherwise the second Steam create overwrites the first
-        and its games are lost. First-seen casing wins for display.
+        and its games are lost. The sorted-first spelling names it, as the
+        preview lists it (#2776 D4).
         """
 
         library.settings["collection_naming_mode"] = "merge"
@@ -2211,8 +2237,8 @@ class TestFinalizePerUnitRun:
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
-        # ONE key (first-seen casing "7 up"), 2 + 5 = 7 apps unioned, neither set dropped.
-        assert payload["romm_collection_app_ids"] == {"7 up": [1001, 1002, 1003, 1004, 1005, 1006, 1007]}
+        # ONE key (sorted-first spelling "7 Up"), 2 + 5 = 7 apps unioned, neither set dropped.
+        assert payload["romm_collection_app_ids"] == {"7 Up": [1001, 1002, 1003, 1004, 1005, 1006, 1007]}
 
     @pytest.mark.asyncio
     async def test_merge_unions_names_joined_only_through_upper_case(self, library, emit):
@@ -2234,7 +2260,7 @@ class TestFinalizePerUnitRun:
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
-        assert payload["romm_collection_app_ids"] == {"\u0131x": [1001, 1002]}
+        assert payload["romm_collection_app_ids"] == {"Ix": [1001, 1002]}
 
     @pytest.mark.asyncio
     async def test_by_label_merges_same_type_case_variants(self, library, emit):
@@ -2256,8 +2282,8 @@ class TestFinalizePerUnitRun:
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
-        # One key ("abc", first-seen casing), both apps unioned.
-        assert payload["romm_collection_app_ids"] == {"abc": [1001, 1002]}
+        # One key ("ABC", the sorted-first spelling), both apps unioned.
+        assert payload["romm_collection_app_ids"] == {"ABC": [1001, 1002]}
 
     @pytest.mark.asyncio
     async def test_by_label_keeps_different_type_case_variants_separate(self, library, emit):
@@ -2309,6 +2335,24 @@ class TestFinalizePerUnitRun:
         (display, app_ids) = next(iter(platform_map.items()))
         assert fold_collection_name(display) == "retro"
         assert set(app_ids) == {1001, 1002}
+
+    @pytest.mark.asyncio
+    async def test_a_merged_platform_collection_is_named_by_its_sorted_first_spelling(self, library, emit):
+        """The first bound row is on "retro", the second on "Retro": the bucket is "Retro" (#2776 D8)."""
+
+        uow = library.uow
+        _seed_rom(uow, 1, app_id=1001, platform_slug="a", name="A")
+        _seed_rom(uow, 2, app_id=1002, platform_slug="b", name="B")
+
+        await library.run_finalizer.finalize_per_unit_run(
+            pending_collection_memberships={},
+            pending_platform_rom_ids={1, 2},
+            platform_names={"a": "retro", "b": "Retro"},
+            processed_platform_folders={"a", "b"},
+        )
+
+        payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
+        assert payload["platform_app_ids"] == {"Retro": [1001, 1002]}
 
     @pytest.mark.asyncio
     async def test_platform_names_union_when_joined_only_through_upper_case(self, library, emit):

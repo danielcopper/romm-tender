@@ -974,15 +974,13 @@ class TestSyncRomSavesDisabledGuard:
 class TestSyncUseCaseErrorMessages:
     """The failure ``message`` each public sync use case builds from the matrix
     result (``_summarize_sync_result``). A total failure leads with the first
-    error's classified reason (never buried behind "Uploaded 0 save(s)"); a
-    partial run keeps the count summary and appends the reason; pre-launch
-    (download) keeps the plain count clause (#1334). Driven by stubbing
-    the matrix executor's sync_rom_saves to return a non-empty errors list."""
+    error's classified reason (never buried behind "Synced 0 save(s)"); a
+    partial run keeps the count summary and appends the reason (#1334); the
+    sync before a start words its answer the same way (#2776). Driven by
+    stubbing the matrix executor's sync_rom_saves to return a non-empty errors list."""
 
     @pytest.mark.asyncio
-    async def test_pre_launch_sync_message_includes_error_count(self, tmp_path):
-        # pre_launch keeps the plain count clause — the reason promotion is
-        # scoped to the upload-side use cases (#1334).
+    async def test_pre_launch_sync_leads_with_the_reason_when_every_file_failed(self, tmp_path):
         def stub_sync(rom_id, *args, **kwargs):
             return (0, 0, ["pokemon.srm: bad gateway"], [])
 
@@ -994,8 +992,22 @@ class TestSyncUseCaseErrorMessages:
         result = await svc.pre_launch_sync(42)
 
         assert result["success"] is False
-        assert "1 error(s)" in result["message"]
-        assert "Downloaded" in result["message"]
+        assert result["message"] == "Bad gateway"
+
+    @pytest.mark.asyncio
+    async def test_post_exit_sync_that_downloaded_a_file_does_not_say_uploaded(self, tmp_path):
+        def stub_sync(rom_id, *args, **kwargs):
+            return (0, 1, ["pokemon.sav: timeout"], [])
+
+        svc, _ = make_service(tmp_path, matrix_executor_type=executor_answering(stub_sync))
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path)
+
+        result = await svc.post_exit_sync(42)
+
+        assert "Uploaded" not in result["message"]
+        assert result["message"] == "Synced 1 save(s), 1 error(s) — timeout"
 
     @pytest.mark.asyncio
     async def test_post_exit_sync_promotes_reason_when_nothing_uploaded(self, tmp_path):
@@ -1026,7 +1038,7 @@ class TestSyncUseCaseErrorMessages:
         result = await svc.post_exit_sync(42)
 
         assert result["success"] is False
-        assert result["message"] == "Uploaded 2 save(s), 1 error(s) — timeout"
+        assert result["message"] == "Synced 2 save(s), 1 error(s) — timeout"
 
     @pytest.mark.asyncio
     async def test_post_exit_sync_multiple_errors_count_the_extras(self, tmp_path):

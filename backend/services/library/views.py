@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any
 
 from domain.fetch_generation import gone_from_romm_ids, rows_with_their_stamp
 from domain.platform_names import PLATFORM_NAMES_KEY, platform_display_name
-from domain.platform_prefs import stored_switches, switches_kept_by_id
 from domain.sibling_resolution import reachable_rom_ids
 
 if TYPE_CHECKING:
@@ -30,7 +29,7 @@ SYNC_RUN_HISTORY_LIMIT = 10
 class LibraryViewsConfig:
     """Frozen wiring bundle handed to ``LibraryViews.__init__``.
 
-    Holds the live settings dict (the enabled platform and collection counts
+    Holds the live settings dict (the enabled collection count
     ``get_sync_stats`` answers) and the SQLite Unit-of-Work factory every read
     opens its UoW through.
     """
@@ -46,6 +45,7 @@ class _SyncStatsReading:
     last_sync: str | None
     last_attempt: dict[str, str] | None
     rom_count: int
+    platform_count: int
     resumable_games: int
     has_completion_stamp: bool
 
@@ -110,12 +110,6 @@ class LibraryViews:
     # ── Stats / run history ──────────────────────────────────────
 
     def get_sync_stats(self):
-        # Until a read of RomM's listing moves them, the toggles are counted where
-        # they are still kept by RomM id; kept there empty, no platform is counted
-        # (#2452 D25).
-        by_id = switches_kept_by_id(self._settings)
-        counted = by_id if by_id is not None else stored_switches(self._settings)
-        enabled_platform_count = sum(1 for v in counted.values() if v is True)
         enabled_collections = self._settings.get("enabled_collections", {})
         if isinstance(enabled_collections, dict):
             enabled_collection_count = sum(
@@ -127,7 +121,7 @@ class LibraryViews:
         return {
             "last_sync": stats.last_sync,
             "last_attempt": stats.last_attempt,
-            "platforms": enabled_platform_count,
+            "platforms": stats.platform_count,
             "collections": enabled_collection_count,
             "roms": stats.rom_count,
             "total_shortcuts": stats.rom_count,
@@ -141,7 +135,11 @@ class LibraryViews:
         ``last_sync`` is the ``finished_at`` of the latest completed ``SyncRun``;
         ``last_attempt`` surfaces the newest cancelled/interrupted/paused/errored run when
         it is newer than that (see :meth:`_last_attempt`); the ROM count is the
-        bound-shortcut count in ``roms``.
+        bound-shortcut count in ``roms``, and the platform count the number of
+        platforms (by ``fs_slug``) those bound shortcuts are on — whatever the
+        platform toggles say, so Main's "N games · M platforms" describes one set
+        of games. A bound row with no ``fs_slug`` recorded is on no platform, as in
+        :meth:`get_registry_platforms`.
 
         The last two are what makes the panel's resume offer honest, and
         they are two facts rather than one because Tender keeps **two** kinds
@@ -173,11 +171,14 @@ class LibraryViews:
             completed = uow.sync_runs.get_latest_completed()
             terminal = uow.sync_runs.get_latest_terminal()
             rom_count = 0
+            platforms: set[str] = set()
             resumable_games = 0
             for rom in uow.roms.iter_all():
                 if rom.shortcut_app_id is None:
                     continue
                 rom_count += 1
+                if rom.platform_fs_slug is not None:
+                    platforms.add(rom.platform_fs_slug)
                 # Bound AND applied, never applied alone. ``classify_roms``
                 # (``domain/sync_diff.py``) sends an unbound row down the NEW branch
                 # — ``if not reg or not reg.get("app_id")`` — before it ever reads
@@ -195,6 +196,7 @@ class LibraryViews:
             last_sync=completed.finished_at if completed is not None else None,
             last_attempt=self._last_attempt(completed, terminal),
             rom_count=rom_count,
+            platform_count=len(platforms),
             resumable_games=resumable_games,
             has_completion_stamp=has_completion_stamp,
         )

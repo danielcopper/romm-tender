@@ -18,7 +18,6 @@
  * can start went wrong, and for a start pressed after it that then fails.
  */
 
-import { HostTransportError } from "../api/host";
 import type {
   AnsweringSource,
   GameLaunch,
@@ -29,6 +28,7 @@ import type {
   LaunchStoppedShortReason,
 } from "../types";
 import { sourceName } from "./emulatorSourceWording";
+import { transportFailureSentence } from "./transportFailureWording";
 import { TimeoutError } from "./withTimeout";
 
 const REFUSING: ReadonlySet<GameLaunch["state"]> = new Set([
@@ -428,14 +428,17 @@ export function entryLaunchLine(
 
 /**
  * What went wrong where the page's check of whether the game can start failed
- * itself, as the notification says it (#2195 D32, D36). A timeout's and a lost
- * connection's own detail is for the log, not the sentence.
+ * itself, as the notification says it (#2195 D32, D36). A timeout's own detail
+ * is for the log, not the sentence; a transport failure is worded by
+ * `transportFailureSentence` (#2776 D9), and closes with a period like every
+ * other form here.
  */
 export function startCheckFailureSentence(e: unknown): string {
   const lead = "Tender could not check whether this game can start";
   if (e instanceof TimeoutError) return `${lead}: Tender's backend did not answer in time.`;
-  if (e instanceof HostTransportError) return `${lead}: the connection to Tender's backend was lost.`;
-  return `${lead}: ${e instanceof Error ? e.message : String(e)}.`;
+  const transport = transportFailureSentence(lead, e);
+  if (transport === lead) return `${lead}.`;
+  return transport ?? `${lead}: ${e instanceof Error ? e.message : String(e)}.`;
 }
 
 /**

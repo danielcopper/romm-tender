@@ -376,6 +376,7 @@ class TestPreviewSnapshot:
             preview_id=preview_id,
             created_at=self._CREATED_AT,
             answer={"success": True, "preview_id": preview_id},
+            preferred_region="auto",
         )
         return box
 
@@ -395,6 +396,7 @@ class TestPreviewSnapshot:
             preview_id="pv-new",
             created_at=self._CREATED_AT,
             answer={"success": True, "preview_id": "pv-new"},
+            preferred_region="auto",
         )
 
         assert box.matches_preview("pv-new") is True

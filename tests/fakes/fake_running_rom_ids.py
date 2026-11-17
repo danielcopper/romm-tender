@@ -12,17 +12,19 @@ class FakeRunningRomIds:
     """Answers the ROMs in ``running`` as the games Steam lists as running, and counts the readings.
 
     ``running`` is a set a test changes between calls to start or quit a game;
+    ``unread``, while set, answers that no reading could be taken (``None``);
     ``on_read``, where set, is called with the reading's number before it
     answers, so a test can start a game between two readings.
     """
 
-    def __init__(self, running: Iterable[int] = ()) -> None:
+    def __init__(self, running: Iterable[int] = (), *, unread: bool = False) -> None:
         self.running: set[int] = set(running)
+        self.unread = unread
         self.readings = 0
         self.on_read: Callable[[int], None] | None = None
 
-    async def __call__(self) -> frozenset[int]:
+    async def __call__(self) -> frozenset[int] | None:
         self.readings += 1
         if self.on_read is not None:
             self.on_read(self.readings)
-        return frozenset(self.running)
+        return None if self.unread else frozenset(self.running)

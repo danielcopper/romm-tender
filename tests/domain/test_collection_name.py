@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from domain.collection_name import fold_collection_name
+from domain.collection_name import fold_collection_name, spelling_by_fold
 
 _FOLDS = json.loads(Path(__file__).with_name("collection_name_folds.json").read_text(encoding="utf-8"))
 
@@ -28,3 +28,14 @@ def test_names_that_differ_beyond_case_keep_different_keys():
 
 def test_an_empty_name_folds_to_itself():
     assert fold_collection_name("") == ""
+
+
+def test_case_variants_are_spelled_by_the_sorted_first_whatever_order_they_come_in():
+    expected = {"7 up": "7 Up", "metroid": "Metroid"}
+
+    assert spelling_by_fold(["7 up", "Metroid", "7 Up"]) == expected
+    assert spelling_by_fold(["7 Up", "7 up", "Metroid"]) == expected
+
+
+def test_no_names_spell_nothing():
+    assert spelling_by_fold([]) == {}

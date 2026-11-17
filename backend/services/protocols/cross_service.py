@@ -514,10 +514,12 @@ class RunningRomIdsFn(Protocol):
     Each call is one fresh reading of ``SteamInterfaceReader.running_apps``,
     matched to ROMs by ``roms.shortcut_app_id``; what counts as running is
     ``docs/architecture/save-file-sync-architecture.md``'s, "Is the game
-    running". Where no reading could be taken, the answer is empty. Never raises.
+    running". Where no reading could be taken, the answer is ``None``, never
+    an empty set, which is a reading that lists none of Tender's games; what
+    each reader does then is that page's too. Never raises.
     """
 
-    async def __call__(self) -> frozenset[int]: ...
+    async def __call__(self) -> frozenset[int] | None: ...
 
 
 class PruneSaveCoordinator(Protocol):

@@ -940,8 +940,11 @@ game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app
   and a live shortcut is never renamed. The appId is minted from the canonical name by the frontend `AddShortcut`; the
   DB binding lands on the representative `rom_id`; the reporter is agnostic to the name↔rom mismatch (it binds on
   `rom_id` + the acked appId, and persists each sibling's own RomM name from `pending_all_roms`). `preferred_region` is
-  read from settings by `sync_preview` and `unit_apply` and threaded into every collapse call site (preview + apply) as
-  the same value within a run.
+  read from settings once per run and threaded into every collapse call site as that value: `sync_preview` reads it and
+  stages it with the preview (`PreviewDelta.preferred_region`); an apply is admitted with one value, the staged
+  preview's (`sync_apply_delta`) or the setting as `start_sync` reads it, which `_do_sync_per_unit` requires and puts
+  into `LibrarySyncStateBox.run_preferred_region`, and every platform unit and the collection deliveries rank by that
+  ([#2776](https://github.com/danielcopper/romm-tender/issues/2776) D2). A change during a run takes effect on the next.
 - **A version gone from RomM stays bound; only the same dump takes its binding**
   ([ADR-0021](../adr/0021-sibling-group-one-shortcut-binding-active-version.md) §2's amendment). A bound sibling that
   vanished from the server emits nothing and keeps its binding, its shortcut, name and launch command, installed or not;
@@ -1173,8 +1176,10 @@ migration **022** so an unchanged standard collection still takes the incrementa
 
 **Batch collection enable — `save_collections_sync` (#1539).** A single settings write that stamps every id it is given
 into one `kind` bucket and touches nothing else in it; the Collections tab's **Enable all / Disable all** send it the
-ids their table lists, so what is written is exactly what the page shows. An unknown kind refuses with `invalid_kind`
-and a non-list id argument with `invalid_ids`, before any write; an empty id list is a success no-op.
+ids their table lists, so what is written is exactly what the page shows. An unknown kind refuses with `invalid_kind`, a
+non-list id argument with `invalid_ids` and a state that is not a bool with `invalid_value`, as the single
+`save_collection_sync` does ([#2776](https://github.com/danielcopper/romm-tender/issues/2776) D11), before any write; an
+empty id list is a success no-op.
 
 **Collection owner scope — `own` is a sync scope, not a display filter (#1532).** RomM's collection list endpoints
 return the signed-in user's own collections plus every other user's _public_ collection. The QAM's **Other users'
@@ -1636,8 +1641,8 @@ the toggles even where it cannot work out where the records and picks belong, si
 read. Where the move fails all the same, the toggles stay kept by id, a warning says so, and the move is tried again at
 the next read: until then the Platforms tab and a sync go by the map the move would write
 (`domain/platform_prefs.py::switches_as_read`), so a sync reads exactly the platforms that were on before the update, as
-since switched on or off on the tab (D27). Until the move, the main page counts the platforms switched on from
-`enabled_platform_ids`, and a map kept there empty counts none, which the page leaves out (D25).
+since switched on or off on the tab (D27). The main page counts the platforms of the games bound to a shortcut, whatever
+the toggles say ([qam-panel](qam-panel.md), [#2776](https://github.com/danielcopper/romm-tender/issues/2776) D1).
 
 Where Tender starts from the defaults because it could not take the settings file over — one that cannot be parsed and
 is set aside, or one too old or not a settings object (`PersistenceAdapter`, below) — those defaults keep an empty

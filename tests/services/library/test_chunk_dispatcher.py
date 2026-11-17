@@ -894,7 +894,7 @@ class TestInterChunkCancelGuard:
         box.sync_state = SyncState.RUNNING
         box.current_sync_id = "run-cancel-near-ceiling"
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         with library.uow as uow:
             run = uow.sync_runs.get("run-cancel-near-ceiling")

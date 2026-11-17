@@ -237,8 +237,11 @@ class PanelInjector:
         return self._instance
 
     async def running_apps(self) -> tuple[ListedApp, ...] | None:
-        """Steam's running apps, one reading; ``None`` where it could not be taken."""
-        return (await read_running_apps(self._evaluate_attached)).apps
+        """Steam's running apps, one reading; ``None`` where it could not be taken, logged with why."""
+        reading = await read_running_apps(self._evaluate_attached)
+        if reading.apps is None:
+            self._logger.debug(f"inject: Steam's running apps could not be read: {reading.why}")
+        return reading.apps
 
     async def execute_steam_url(self, url: str) -> bool:
         """Have Steam execute *url* in the context attached right now; answer whether it went out.

@@ -114,10 +114,12 @@ class LibraryService:
         return await self._fetcher.get_collections()
 
     async def save_collection_sync(self, collection_id, kind, enabled):
+        _require_switch_state(enabled)
         async with self._rules.hold("save_collection_sync", update=True, migration=True):
             return self._fetcher.save_collection_sync(collection_id, kind, enabled)
 
     async def save_collections_sync(self, collection_ids, kind, enabled):
+        _require_switch_state(enabled)
         async with self._rules.hold("save_collections_sync", update=True, migration=True):
             return self._fetcher.save_collections_sync(collection_ids, kind, enabled)
 
