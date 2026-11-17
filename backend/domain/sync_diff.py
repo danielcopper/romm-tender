@@ -452,7 +452,6 @@ def converge_bound_groups(
     *,
     platform_folders: AbstractSet[str],
     preferred_region: str = AUTO_REGION,
-    running_rom_ids: AbstractSet[int] = frozenset(),
     hidden_rom_ids: Collection[int] = frozenset(),
 ) -> list[ConvergedBinding]:
     """Every bound row of *platform_folders* whose group keeps another row's shortcut (#2645).
@@ -484,9 +483,8 @@ def converge_bound_groups(
     (:func:`sort_stale_rows`), so it neither keeps the group's shortcut nor
     hands it to another row (#2502 D1).
 
-    A group one of whose bound rows is in *running_rom_ids* is left out: its
-    shortcut is not removed under a game Steam lists as running, and the group
-    converges on a later run (#2645 D5).
+    Whether a group's game runs is not asked here: :func:`without_running_groups`
+    leaves such a group out of the answer.
     """
     members_by_id = {sd["rom_id"]: sd for sd in listed}
     listed_keys = {sd.get("sibling_group_key") for sd in listed}
@@ -502,8 +500,6 @@ def converge_bound_groups(
     bindings: list[ConvergedBinding] = []
     for key in sorted(converging):
         bound = sorted(bound_by_group[key], key=lambda item: item[0])
-        if any(rom_id in running_rom_ids for rom_id, _reg in bound):
-            continue
         kept_id = _kept_rom_id([rom_id for rom_id, _reg in bound], members_by_id, installed_rom_ids, preferred_region)
         kept_app_id = int(dict(bound)[kept_id]["app_id"])
         bindings.extend(
