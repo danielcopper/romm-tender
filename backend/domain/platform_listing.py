@@ -61,7 +61,6 @@ class PlatformEntry:
 def platform_entry_of(platform: Mapping[str, Any]) -> PlatformEntry:
     """*platform*, one entry of RomM's platform listing, read field by field; a field of the wrong kind is none."""
     identified = platform.get("is_identified")
-    firmware = platform.get("firmware")
     rom_count = listed_number(platform.get("rom_count"))
     return PlatformEntry(
         fs_slug=listed_text(platform.get("fs_slug")),
@@ -71,8 +70,17 @@ def platform_entry_of(platform: Mapping[str, Any]) -> PlatformEntry:
         rom_count=rom_count if rom_count is not None and rom_count >= 0 else None,
         is_identified=identified if isinstance(identified, bool) else None,
         ids={key: value for key, value in platform.items() if key.endswith(_IDENTIFIER_SUFFIXES)},
-        firmware=() if firmware is None else tuple(firmware) if isinstance(firmware, list) else None,
+        firmware=_listed_firmware(platform.get("firmware")),
     )
+
+
+def _listed_firmware(firmware: Any) -> tuple[Any, ...] | None:
+    """*firmware* as :attr:`PlatformEntry.firmware` holds it: empty where none is sent, ``None`` where it is no list."""
+    if firmware is None:
+        return ()
+    if isinstance(firmware, list):
+        return tuple(firmware)
+    return None
 
 
 def platform_entries(platforms: Iterable[Mapping[str, Any]]) -> list[PlatformEntry]:
