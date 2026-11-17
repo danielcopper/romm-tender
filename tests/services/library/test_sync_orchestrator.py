@@ -4122,7 +4122,7 @@ class TestDoSyncPerUnitErrors:
             await library.sync._orchestrator._do_sync_per_unit()
 
         [record] = [r for r in caplog.records if r.getMessage().startswith("Failed to build work queue")]
-        assert (record.levelno, record.exc_info is not None) == (logging.ERROR, True)
+        assert (record.levelno, bool(record.exc_info)) == (logging.ERROR, True)
 
     @pytest.mark.asyncio
     async def test_outer_exception_handler_emits_error_progress(self, make_library, fake_romm_api, emit):
@@ -5709,6 +5709,34 @@ class TestFailedCollectionListing:
         assert {c.args[0] for c in emit.call_args_list} == {"sync_progress"}
         with library.uow as uow:
             assert uow.sync_runs.get("run-1") is None
+
+
+class TestAPlatformWithoutACount:
+    """#2761 D5: a platform whose count RomM did not give is synced as any other, and the plan sends no count."""
+
+    @pytest.mark.asyncio
+    async def test_a_run_over_it_binds_its_games_and_the_plan_carries_no_count(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
+        _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
+        fake_romm_api.platforms[0]["rom_count"] = "many"
+        library.settings["enabled_platforms"] = {"gba": True}
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+
+        async def bind(unit, event):
+            event.set()
+            return {"4": 5004}
+
+        library.chunk_dispatcher._wait_for_unit_complete = bind
+        box = library.sync._box
+        box.sync_state = SyncState.RUNNING
+        box.current_sync_id = "run-1"
+
+        await library.sync._orchestrator._do_sync_per_unit()
+
+        with library.uow as uow:
+            assert uow.roms.get(4).shortcut_app_id == 5004
+        [plan] = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_plan"]
+        assert ([u["rom_count"] for u in plan["units"]], plan["total_roms"]) == ([None], 0)
 
 
 class TestAnUnreadablePlatformListing:
