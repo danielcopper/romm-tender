@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { HostTransportError, toaster } from "../api/host";
 import * as backend from "../api/backend";
 import * as artwork from "../utils/artwork";
-import { mountPruneLeaseOwner, PruneLeaseAdmissionCancelled } from "../utils/pruneLease";
+import { mountPruneLeaseOwner, PruneLeaseAdmissionCancelled, releasePruneLeasesByOwner } from "../utils/pruneLease";
 import { SgdbGamePickerModalContent } from "./SgdbGamePickerModal";
 
 // applyAutomaticArtwork is mocked so the modal's apply path is observable without
@@ -478,7 +478,23 @@ describe("SgdbGamePickerModal", () => {
       expect(vi.mocked(toaster.toast)).not.toHaveBeenCalled();
       expect(onApplied).not.toHaveBeenCalled();
       expect(closeModal).toHaveBeenCalled();
+      expect(vi.mocked(artwork.applySteamGridDbCover)).not.toHaveBeenCalled();
       expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(expect.stringContaining("was cancelled"));
+    });
+
+    it("an apply that fails after the game page was left says nothing (#2776)", async () => {
+      vi.mocked(artwork.applyAutomaticArtwork).mockImplementation(async () => {
+        await releasePruneLeasesByOwner("game-detail:6000");
+        throw new Error("io");
+      });
+      const { container, onApplied } = renderCandidate();
+      await act(async () => {
+        fireEvent.click(buttonContaining(container, "Super Mario"));
+      });
+      await flushAsync();
+      expect(vi.mocked(toaster.toast)).not.toHaveBeenCalled();
+      expect(onApplied).not.toHaveBeenCalled();
+      expect(vi.mocked(artwork.applySteamGridDbCover)).not.toHaveBeenCalled();
     });
 
     it("a lost connection while applying says so instead of 'No artwork available' (#2776 D3)", async () => {
