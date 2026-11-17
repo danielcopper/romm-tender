@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, act, fireEvent } from "@testing-library/react";
 import { createElement } from "react";
-import { toaster } from "../api/host";
+import { HostTransportError, toaster } from "../api/host";
 import * as backend from "../api/backend";
 import * as artwork from "../utils/artwork";
 import { SgdbGamePickerModalContent } from "./SgdbGamePickerModal";
@@ -451,6 +451,21 @@ describe("SgdbGamePickerModal", () => {
         expect.stringContaining("applyAutomaticArtwork rejected"),
       );
       expect(onApplied).toHaveBeenCalledWith(0);
+    });
+
+    it("a lost connection while applying says so instead of 'No artwork available' (#2776 D3)", async () => {
+      vi.mocked(artwork.applyAutomaticArtwork).mockRejectedValue(new HostTransportError("connection_lost", "closed"));
+      const { container } = renderCandidate();
+      await act(async () => {
+        fireEvent.click(buttonContaining(container, "Super Mario"));
+      });
+      await flushAsync();
+      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
+        expect.objectContaining({ body: "Failed to apply artwork: the connection to Tender's backend was lost." }),
+      );
+      expect(vi.mocked(toaster.toast)).not.toHaveBeenCalledWith(
+        expect.objectContaining({ body: "No artwork available for this game" }),
+      );
     });
   });
 });

@@ -40,7 +40,7 @@ import { settleArtworkGame } from "../utils/artworkGameChange";
 import { isKnownWithoutSgdbGame, loadArtworkSlots, useArtworkSlotsChanges } from "../utils/artworkSlotsStore";
 import { CHOOSE_GAME_FIRST } from "../utils/artworkTabWording";
 import { useAutoArtwork } from "../utils/autoArtwork";
-import { artworkApplyMessage } from "../utils/artworkApplyMessage";
+import { artworkApplyMessage, lostConnectionMessage } from "../utils/artworkApplyMessage";
 import { hasAnySaveConflict } from "../utils/saveStatus";
 import { scrollToTop } from "../utils/scrollHelpers";
 import { getEventTarget } from "../utils/events";
@@ -573,7 +573,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         detach(debugLog(`handleRefreshArtwork: continuation was cancelled: ${e}`));
         return;
       }
-      say("Failed to refresh artwork");
+      say(lostConnectionMessage("Failed to refresh artwork", e) ?? "Failed to refresh artwork");
     } finally {
       setActionPending(null);
       detach(loadArtworkSlots(appId, romId));

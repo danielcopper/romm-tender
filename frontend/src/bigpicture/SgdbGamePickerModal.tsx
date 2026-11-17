@@ -30,7 +30,7 @@ import {
 } from "../api/backend";
 import { applyAutomaticArtwork, applySteamGridDbCover } from "../utils/artwork";
 import { GAME_CHANGE_DISCARDS_CHOICES } from "../utils/artworkTabWording";
-import { artworkApplyMessage } from "../utils/artworkApplyMessage";
+import { artworkApplyMessage, lostConnectionMessage } from "../utils/artworkApplyMessage";
 import { scrollToTop, scrollFocusedToCenter } from "../utils/scrollHelpers";
 import { detach } from "../utils/detach";
 import { Throbber, ThrobberLabel } from "../shared/Throbber";
@@ -161,14 +161,18 @@ export const SgdbGamePickerModalContent: FC<SgdbGamePickerModalProps> = ({
         showToast(result.message);
         return;
       }
-      const applied = await applyAutomaticArtwork(romId, appId).catch((e): number => {
+      let applied: number | EndpointFailure = 0;
+      let message: string | null = null;
+      try {
+        applied = await applyAutomaticArtwork(romId, appId);
+      } catch (e) {
         detach(debugLog(`SgdbGamePickerModal: applyAutomaticArtwork rejected: ${e}`));
-        return 0;
-      });
+        message = lostConnectionMessage("Failed to apply artwork", e);
+      }
       await applySteamGridDbCover(romId, appId).catch((e: unknown) => {
         detach(debugLog(`SgdbGamePickerModal: applySteamGridDbCover rejected: ${e}`));
       });
-      showToast(artworkApplyMessage(applied));
+      showToast(message ?? artworkApplyMessage(applied));
       onApplied(applied);
       closeModal?.();
     } finally {

@@ -5852,6 +5852,22 @@ describe("RomMPlaySection", () => {
         expect.objectContaining({ body: "Failed to refresh artwork" }),
       );
     });
+
+    it("says the connection was lost where applying the artwork loses it (#2776 D3)", async () => {
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "resolved", sgdb_id: 42 });
+      const items = await openMenu();
+      vi.mocked(backend.getArtworkSlots)
+        .mockResolvedValueOnce(withRows({ cover: "chosen" }))
+        .mockRejectedValueOnce(new HostTransportError("connection_lost", "socket closed"));
+      vi.mocked(toaster.toast).mockClear();
+      await act(async () => {
+        await items[0]!.props.onClick?.();
+      });
+      expect(vi.mocked(backend.refreshSgdbArtwork)).toHaveBeenCalledWith(77, 42);
+      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
+        expect.objectContaining({ body: "Failed to refresh artwork: the connection to Tender's backend was lost." }),
+      );
+    });
   });
 
   describe("Refresh Artwork downloads anew and says what was refused", () => {

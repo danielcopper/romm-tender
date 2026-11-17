@@ -34,7 +34,9 @@ export async function settleArtworkGame(appId: number, romId: number): Promise<v
  */
 export async function applySupersededGame(appId: number, romId: number, superseded: SupersededGame): Promise<void> {
   showToast(supersededNotice(superseded));
-  await applyAutomaticArtwork(romId, appId);
+  await applyAutomaticArtwork(romId, appId).catch((e: unknown) => {
+    detach(debugLog(`The automatic artwork of appId ${appId} was not applied: ${e}`));
+  });
   if (!superseded.slots.includes("cover")) {
     await applySteamGridDbCover(romId, appId);
     return;

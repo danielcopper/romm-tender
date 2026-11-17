@@ -963,7 +963,10 @@ now, that image then becomes the one of the game RomM's id points to. An image t
 
 When SteamGridDB refuses your API key, **Refresh Artwork** says "SteamGridDB refused the API key — check it in
 Settings"; when SteamGridDB is rate-limiting requests, it says that instead. Opening a game's page stays quiet about
-both. When the RomM cover could not be updated, the same message says why, after the SteamGridDB result.
+both. When the RomM cover could not be updated, the same message says why, after the SteamGridDB result. When the panel
+loses its connection to Tender's backend on the way, **Refresh Artwork** says "Failed to refresh artwork: the connection
+to Tender's backend was lost.", and a change of SteamGridDB game in the ARTWORK tab says the same with "Failed to apply
+artwork".
 
 The full set of per-game actions — refresh artwork, refresh metadata, sync save files, delete local saves, and uninstall
 — is available from the RomM Actions menu in the game detail panel. BIOS files are downloaded from the game's **BIOS**

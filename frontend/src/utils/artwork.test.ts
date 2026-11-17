@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import * as backend from "../api/backend";
+import { HostTransportError } from "../api/host";
 import { _resetArtworkSlotsForTests, artworkThumbToken } from "./artworkSlotsStore";
 import {
   applyArtwork,
@@ -1008,6 +1009,14 @@ describe("the ARTWORK tab's writes", () => {
     vi.mocked(backend.getArtworkSlots).mockResolvedValue(refused);
 
     await expect(applyAutomaticArtwork(42, 5000)).resolves.toEqual(refused);
+    expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
+  });
+
+  it("rejects with the read's error where the slots' read itself fails, and applies nothing (#2776)", async () => {
+    const lost = new HostTransportError("connection_lost", "socket closed");
+    vi.mocked(backend.getArtworkSlots).mockRejectedValue(lost);
+
+    await expect(applyAutomaticArtwork(42, 5000)).rejects.toBe(lost);
     expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
   });
 

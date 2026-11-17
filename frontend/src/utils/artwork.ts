@@ -88,14 +88,11 @@ const ALL_SGDB_SLOTS: ReadonlySet<RecordedSlot> = new Set(["hero", "logo", "grid
 
 /**
  * `applyArtwork` for the slots on automatic alone: a slot the user chose and one set in Steam stay, as Refresh Artwork
- * and a change of SteamGridDB game leave them. The slots' state is read first; where it cannot be read, nothing is
- * applied and the read's failure is answered.
+ * and a change of SteamGridDB game leave them. The slots' state is read first; where the read is refused, nothing is
+ * applied and the refusal is answered, and where the call itself fails, nothing is applied and its error is thrown.
  */
 export async function applyAutomaticArtwork(romId: number, appId: number): Promise<number | EndpointFailure> {
-  const read = await getArtworkSlots(romId, appId).catch((e): EndpointFailure => {
-    detach(debugLog(`applyAutomaticArtwork: the slots of appId ${appId} could not be read: ${e}`));
-    return { success: false, reason: "server_unreachable", message: "The artwork slots could not be read" };
-  });
+  const read = await getArtworkSlots(romId, appId);
   if (isEndpointFailure(read)) return read;
   const automatic = new Set(
     read.slots
@@ -504,11 +501,12 @@ export async function setChosenCover(
   appId: number,
   onCover?: (base64: string) => void,
 ): Promise<ChosenCover> {
-  const answer = await getSgdbArtworkBase64(romId, STEAM_ASSET_TYPES.cover).catch((e: unknown): EndpointFailure => ({
-    success: false,
-    reason: "server_unreachable",
-    message: String(e),
-  }));
+  let answer: Awaited<ReturnType<typeof getSgdbArtworkBase64>>;
+  try {
+    answer = await getSgdbArtworkBase64(romId, STEAM_ASSET_TYPES.cover);
+  } catch (e) {
+    return { kind: "unread", reason: String(e) };
+  }
   if (isEndpointFailure(answer)) return { kind: "unread", reason: answer.message };
   if (!answer.base64) return { kind: answer.chosen === true ? "unavailable" : "none" };
   const base64 = answer.base64;
