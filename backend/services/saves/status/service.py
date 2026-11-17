@@ -353,8 +353,8 @@ class StatusService:
             "save_sync_display": save_sync_display,
             "server_query_failed": server_query_failed,
             # Why the query failed, as a :func:`classify_error` slug (None when
-            # it didn't). Additive alongside the flag, per CLAUDE.md's
-            # partial-success carve-out — do NOT collapse this into the
+            # it didn't). Additive alongside the flag, per the partial-success
+            # carve-out in .claude/rules/endpoints.md — do NOT collapse this into the
             # canonical ``{success, reason, message}``: the response is a full
             # payload the UI renders, and the binary ``success`` would erase
             # that. The flag stays the "we lack the server's view" signal that

@@ -1,6 +1,7 @@
 # Development
 
-Guide for setting up a development environment and contributing to Tender.
+Guide for setting up a development environment and contributing to Tender. Open work is on the
+[project board](https://github.com/users/danielcopper/projects/2).
 
 ## Prerequisites
 
@@ -33,6 +34,13 @@ every commit. Git allows only one hooks path, so that setting replaces a global 
 therefore runs whatever global `pre-commit` you have installed first and aborts the commit if it refuses. The repo's
 `commit-msg`, `pre-merge-commit` and `pre-push` hooks likewise hand over to a global hook of the same name and adopt its
 verdict, so a guard you rely on in your other repos keeps working here too. If you have no global hook, nothing changes.
+
+The pre-commit hook formats what is staged — `ruff format` and `ruff check` for Python, `prettier --write` for TS/TSX,
+`deno fmt` for Markdown — and stops a commit Ruff can't fix. It stays under about two seconds; heavy validation belongs
+to CI, not to the hook. It re-stages what it formatted, but only for a file with no unstaged changes: `git add` stages
+the whole file, so re-adding one staged in part with `git add -p` would commit the hunks left out. Such a file is named
+on stdout and its index entry is left as staged, so the commit can carry unformatted content — loudly, since CI says so,
+where the other direction was silent.
 
 Python dependencies are installed from `requirements-dev.lock` — fully-pinned versions compiled from
 `requirements-dev.txt` by uv. After changing a source (`requirements-dev.txt` / `docs/requirements.txt`) or bumping a
@@ -236,7 +244,9 @@ bash install.sh --from build/romm-tender-<V>.tar.gz
 ```
 
 That is the same path a release takes, with the download skipped — `install.sh --uninstall` takes it back out, and
-leaves the database, the settings and the launcher where they are.
+leaves the database, the settings and the launcher where they are. Neither the packager nor the installer is ever run
+against your own machine from a test: `tests/scripts/` runs under a throwaway HOME (the suite's autouse fixture), and
+the installer's tests also under a stub `PATH`.
 
 Literally the same path: the release workflow's second job runs those same two steps on the tagged tree and attaches
 what comes out, so there is one producer for a local build and a published one. What it attaches is held to
@@ -427,6 +437,9 @@ PYTHONPATH=backend lint-imports   # check service/adapter layer rules
 mise run lint                     # same via mise
 ```
 
+`mise run lint` runs import-linter, the `scripts/check_*` gates and markdownlint. Ruff and basedpyright have no task of
+their own: `mise run gate` runs them through its hidden `gate:python-static` step.
+
 The `.importlinter` config holds the layer boundary contracts, one section per rule with the rule stated on its `name`
 line; [Boundary Enforcement](../architecture/backend-architecture.md#1-import-linter-ci-enforced) walks through them.
 
@@ -479,9 +492,9 @@ green.
 
 `mise run lint` (and CI) also runs `scripts/check_invariant_register.py`, which holds the invariant register to its
 size: the register section of `CLAUDE.md` at most 6,000 characters, an entry's bold headline at most 300, one area file
-under `docs/architecture/invariants/` at most 40,000, and no headline standing in two places. What it reads is its
-docstring, and what it misses is its entry in the invariant register
-([Cross-cutting](../architecture/invariants/cross-cutting.md)); its tests are
+under `docs/architecture/invariants/` at most 40,000, no headline standing in two places, and every area file linked
+from the map in that folder's `index.md`. What it reads is its docstring, and what it misses is its entry in the
+invariant register ([Cross-cutting](../architecture/invariants/cross-cutting.md)); its tests are
 `tests/scripts/test_check_invariant_register.py`.
 
 `mise run lint` (and CI) also runs `scripts/check_generated_installer_logo.py`, which holds `install.sh`'s greeter to
@@ -545,23 +558,24 @@ architecture/lint gates (`mise run lint`) and the rest of what CI enforces: `ruf
 bundle-size budget, the frontend tests (`pnpm -C frontend test`), and `deno fmt --check` for Markdown. These run side by
 side, except that the frontend tests start only once the backend tests are done (`[tasks."gate:frontend-test"]` in
 `mise.toml` says why). The first step to fail stops the others: its output ends in `ERROR task failed` under the task's
-name, and the gate exits non-zero. It is slow — the two test suites one after the other, with a production frontend
-build beside them — so it is a pre-push check, not something to run on every save. The CI jobs it does not run are
-`test-3.12` and `test-3.13`, which run the backend suite under Python 3.12 and 3.13 — interpreters the toolchain does
-not install (why CI runs them: [Dependency management](dependency-management.md)) — and the two that feed Sonar:
-`pr-metadata`, which needs a pull request, and `sonarcloud`, which needs `SONAR_TOKEN` and the CI coverage artifacts.
-The build job's fetch and check of the `@decky/ui` source package (`scripts/decky_ui_source.py`) stays out of it too,
-because it needs the network, and so does its `pnpm audit` step ([pnpm audit](#code-quality) under Code Quality).
+name, and the gate exits non-zero. Keep scratch files out of the working tree while it runs: `lint:md` globs `**/*.md`
+without honouring `.gitignore`, and `tsc` checks all of `frontend/src`, where Vitest also runs any `*.test.ts`, so a
+stray file fails the gate. It is slow — the two test suites one after the other, with a production frontend build beside
+them — so it is a pre-push check, not something to run on every save. The CI jobs it does not run are `test-3.12` and
+`test-3.13`, which run the backend suite under Python 3.12 and 3.13 — interpreters the toolchain does not install (why
+CI runs them: [Dependency management](dependency-management.md)) — and the two that feed Sonar: `pr-metadata`, which
+needs a pull request, and `sonarcloud`, which needs `SONAR_TOKEN` and the CI coverage artifacts. The build job's fetch
+and check of the `@decky/ui` source package (`scripts/decky_ui_source.py`) stays out of it too, because it needs the
+network, and so does its `pnpm audit` step ([pnpm audit](#code-quality) under Code Quality).
 
 Outside `ci.yml`, a pull request runs more checks, and the gate runs none of them, because each reads the pull request
 itself on GitHub: `decisions` (`.github/workflows/decisions.yml`), which checks that the pull request links an issue
 whose decisions are settled — the rules, the exemptions and the opt-outs are in the
 [shared workflow's README](https://github.com/danielcopper/.github#the-decisions-check); `Docs updated in same PR`
-(`docs-check.yml`), which fails a pull request that changes source without touching `docs/` unless it carries the
-`no-docs-change` label or a `docs: N/A` line; `commitlint` (`pr-title.yml`), which holds the pull request's title to
-Conventional Commits; and `label` (`labeler.yml`), which only sets labels. A pull request that touches `docs/**` or
-`mkdocs.yml` also builds the documentation site (`docs.yml`, `mkdocs build --strict`), which `mise run docs:build` runs
-locally.
+(`docs-check.yml`), which holds the rule under [Documentation](#documentation); `commitlint` (`pr-title.yml`), which
+holds the pull request's title to Conventional Commits; and `label` (`labeler.yml`), which only sets labels. A pull
+request that touches `docs/**` or `mkdocs.yml` also builds the documentation site (`docs.yml`, `mkdocs build --strict`),
+which `mise run docs:build` runs locally.
 
 `steam-internals.yml` is no pull-request check, and the gate does not run it either: once a day and by hand it looks for
 every listed Steam internal in the client Valve publishes, and puts a finding on the issue labelled `steam-internals`
@@ -613,21 +627,80 @@ instead of failing the run
   when no test runs after that point, pytest reports it at session end, where every test shows as passed, the run exits
   1, and the traceback names no test.
 
+## Documentation
+
+A change to architecture, data flow, feature behaviour or user-facing UI updates the page under `docs/` that owns it, in
+the same pull request. Documentation debt as a separate follow-up issue is not an option, because those follow-ups never
+land; when it is unclear whether a change needs docs, it does. The `Docs updated in same PR` check (`docs-check.yml`)
+holds it.
+
+A pull request with genuinely nothing to document — a pure refactor with no user-visible change and no new flow, a
+tooling or CI change, a dependency bump — opts out with the `no-docs-change` label or a `docs: N/A` line, with a
+one-line reason, in its description. Opting out is an explicit acknowledgement, not a silent omission.
+
+One opt-out is automatic: a pull request from a `release-please--*` branch, for the reason the comment above that branch
+test in `docs-check.yml` gives.
+
+The site is Material for MkDocs, published to GitHub Pages by `.github/workflows/docs.yml` on a push to `main` that
+touches the site; `mise run docs` previews it locally.
+
+## Releasing
+
+Releases are cut by release-please, configured as `release-type: simple` (`release-please-config.json`). What the
+release workflow builds and attaches is under [Running an installed one](#running-an-installed-one). The latest release
+and what it shipped are `git tag --sort=-v:refname` and the GitHub Releases page.
+
+What a release proposes is normally computed from `.release-please-manifest.json` and the commits since, but
+`release-as: "1.0.0"` in the config overrides that on every run, so every release pull request proposes 1.0.0 until the
+key is removed. It has to come out once 1.0.0 has shipped, or the version stops moving and nothing says so.
+
+`main` is always releasable, and there are no hotfix branches: a fault found after a merge — a database migration
+included, through a new rung — is fixed forward on `main` and ships as a normal patch release.
+
+Two files carry the version, each written by a different mechanism, and both are outputs of the release run that are
+never edited by hand: `version.txt` at the repository root is the `simple` strategy's own version file, and
+`backend/domain/identity.py`'s `VERSION` line is an extra file, found by the `x-release-please-version` marker on that
+line (the `generic` entry reaches only `identity.py`). `version.txt` ends with a newline because that is what
+release-please writes (`DefaultUpdater.updateContent` returns `this.version + '\n'`); stripping it makes the next
+release pull request diff a line nobody touched.
+
+README's release badge is a shields `dynamic/json` badge over `.release-please-manifest.json`, because the JS manifest
+it used to read moved under `frontend/` and carries no version. That note lives here rather than beside the badge: the
+badge sits inside a centred HTML block, and `deno fmt` puts blank lines around an HTML comment, which would end that
+block and unalign the row.
+
+## Issues and decisions
+
+How an issue carries its open questions and its decisions is `CLAUDE.md`'s "Where decisions live". Beside it: a pull
+request merges only once every question under `## To decide` is checked off; "(device)" marks a `## Done when` criterion
+only the owner's pass in Game Mode on a device can show; and nothing needed to understand a change lives outside this
+repository and its issues. The `decisions` check enforces what its
+[rules](https://github.com/danielcopper/.github#the-decisions-check) list; everything else is for the review.
+
 ## Where the coding conventions live
 
 Three places, split by how often they apply:
 
-- **`CLAUDE.md`** (repo root) — the traps, the invariant register's map from area to file with the few rules it keeps,
-  and the workflow. Everything here applies no matter which file you touch, so it is read up front.
-- **`docs/architecture/invariants/`** — the invariant register's entries, one file per area; `CLAUDE.md`'s map names
-  each area's file and when to read it.
+- **`CLAUDE.md`** (repo root) — what applies no matter which file you touch, read up front; what it holds is the
+  paragraph below.
+- **`docs/architecture/invariants/`** — the invariant register's entries, one file per area; the map in its
+  [index](../architecture/invariants/index.md) names each area's paths and file.
 - **`.claude/rules/*.md`** — the per-area conventions (services, adapters/domain, Python naming and docstrings, endpoint
-  shapes, bootstrap wiring, vendored assets, backend and frontend testing). Each file carries a `paths:` frontmatter
-  glob and is loaded when a matching file is opened, which keeps the always-on set small.
+  shapes, bootstrap wiring, the host, RomM HTTP, comments, the desktop surface, vendored assets, backend and frontend
+  testing). Each file carries a `paths:` frontmatter glob. They are plain Markdown, not a harness-specific format: an
+  agent that supports path-scoped rules gets one loaded when a matching file is read, and every other agent must open
+  the file itself. Either way it arrives a beat late for a file being created rather than edited.
+
+`CLAUDE.md` holds three things and nothing else: traps, where an agent would confidently do the wrong thing and have no
+reason to go look first; cross-cutting invariants, whose breach no single diff shows; and how work is done here, which
+the code cannot show. Everything else is topic depth in `docs/` or `.claude/rules/`. A rule with a mechanical check
+needs only its one-line statement — in its area's register file, or in `CLAUDE.md` if it is a trap — because CI carries
+the enforcement; a rule without one needs its full statement in the rule file or register file that owns its area,
+because nothing else will catch it. `CLAUDE.md` cites no ADR: an ADR is frozen history and may be `Proposed` or
+superseded, which is invisible at the citation site, so it is reached through the page that owns the topic.
 
 Most of what lives in `.claude/rules/` has no mechanical check — Protocol suffixes, constructor shape, docstring intent,
-verb-named mutations — so those rules hold only if they are carried while writing. `CLAUDE.md` indexes them with the
-failure mode each one prevents.
+verb-named mutations — so those rules hold only if they are carried while writing.
 
 Note that `.gitignore` ignores `.claude/*` (worktrees, local agents, `settings.local.json`) and re-includes
 `.claude/rules/` explicitly. Adding a rule file works; adding anything else under `.claude/` will silently not be

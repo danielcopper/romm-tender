@@ -29,9 +29,11 @@ SQLite. Rules for the relational state that _does_ live in SQLite:
 
 - `[CP]` One Repository Protocol per aggregate root, not per table.
 - `[CP]` Aggregate methods are the **only** mutation API for the aggregate's state. No field assignment from outside the
-  aggregate's own methods. Field access for reads is fine.
+  aggregate's own methods. Field access for reads is fine. `scripts/check_aggregate_field_assignment.py` fails a field
+  assignment from outside them; what it does not see is its entry in `docs/architecture/invariants/code-structure.md`.
 - `[ours]` **Mutation methods are verb-named after the domain event they represent.** `adopt_baseline(filename, hash)`
   not `update_baseline(...)`; `mark_installed(path)` not `set_installed(...)`; `promote_slot(slot, source)` not
-  `update_slot_source(...)`. The method name becomes the implicit event name if events are added later.
+  `update_slot_source(...)`. The method name becomes the implicit event name if events are added later. No mechanical
+  check exists for the naming.
 - `[ours]` Domain events + message bus are out of scope. Revisit when handler diversity ≥3 kinds for the same state
   change, or a non-Steam consumer becomes concrete, or telemetry needs to subscribe.

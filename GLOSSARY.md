@@ -28,8 +28,8 @@ What an aggregate is _not_: a DTO sent to the frontend, a query projection, or "
 file." Aggregate boundaries are **invariant boundaries**, not storage boundaries.
 
 Chapters 8+ of the CP book (domain events + message bus) are explicitly out of scope. Triggers for revisiting that scope
-are documented in `CLAUDE.md`. The concrete aggregate set, its tables, and the enforcement layers live in
-`docs/architecture/database-design.md` — this entry defines the term, not the inventory.
+are documented in `.claude/rules/adapters-domain.md`. The concrete aggregate set, its tables, and the enforcement layers
+live in `docs/architecture/database-design.md` — this entry defines the term, not the inventory.
 
 ### Value Object
 

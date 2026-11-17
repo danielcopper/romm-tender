@@ -3,10 +3,11 @@
 The check is loaded via ``importlib`` because ``scripts/`` is not on
 ``sys.path``. Each test retargets the module's ``ROOT`` at a ``tmp_path`` tree
 holding a ``CLAUDE.md`` and an area folder, so the real parsing and the real
-limits run against a controlled layout.
+limits run against a controlled layout. Unless a test writes its own, the
+folder gets an ``index.md`` whose map links every area file it was given.
 
-Coverage follows the three limits — each at its boundary and one past it — and
-the one-home rule, plus the parsing the limits rest on: a headline the
+Coverage follows the three limits — each at its boundary and one past it —
+the one-home rule and the map, plus the parsing the limits rest on: a headline the
 formatter wrapped, a bold word inside a headline, a headline followed by the
 paragraph that holds the rest of its rule, and the two ways the gate could lose
 its input and go quiet.
@@ -50,10 +51,16 @@ def _entry(headline: str, rest: str = "check — `scripts/check_x.py`") -> str:
     return f"- **{headline}** — {rest}\n"
 
 
+def _index(names: list[str]) -> str:
+    return "# Index\n\n## The areas\n\n" + "".join(f"- [{name}]({name})\n" for name in names)
+
+
 def _tree(tmp_path: Path, claude: str, areas: dict[str, str], monkeypatch: pytest.MonkeyPatch) -> None:
     (tmp_path / "CLAUDE.md").write_text(claude, encoding="utf-8")
     folder = tmp_path / check.AREA_DIR
     folder.mkdir(parents=True)
+    if check.INDEX not in areas:
+        areas = {check.INDEX: _index([name for name in areas if name.endswith(".md")]), **areas}
     for name, text in areas.items():
         (folder / name).write_text(text, encoding="utf-8")
     monkeypatch.setattr(check, "ROOT", tmp_path)
@@ -100,7 +107,7 @@ class TestTheSectionLimit:
         code, out = _run(capsys)
         assert code == 1
         assert "the register section is 6,001 characters" in out
-        assert "meets the criterion CLAUDE.md's register section states" in out
+        assert "meets the criterion docs/architecture/invariants/index.md states stays in CLAUDE.md" in out
 
     def test_the_section_ends_at_the_next_level_two_heading(self) -> None:
         text = _claude_md("Body.\n\n### A subheading stays inside\n\nMore.\n\n")
@@ -201,6 +208,7 @@ class TestTheAreaFileLimit:
         assert code == 1
         assert f"{check.AREA_DIR}/big.md: 40,001 characters" in out
         assert "Split the area" in out
+        assert f"in the map in {check.AREA_DIR}/{check.INDEX}" in out
 
     def test_characters_are_counted_not_bytes(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
@@ -287,6 +295,51 @@ class TestOneHomePerEntry:
         _tree(tmp_path, _claude_md(), {"a.md": _entry("One rule"), "b.md": _entry("Another rule")}, monkeypatch)
         code, out = _run(capsys)
         assert code == 0, out
+
+
+class TestTheMap:
+    def test_an_area_file_the_map_does_not_link_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        areas = {check.INDEX: _index(["a.md"]), "a.md": _entry("One rule"), "b.md": _entry("Another rule")}
+        _tree(tmp_path, _claude_md(), areas, monkeypatch)
+        code, out = _run(capsys)
+        assert code == 1
+        assert f"{check.AREA_DIR}/b.md: no link to it in the map" in out
+        assert f"{check.AREA_DIR}/a.md: no link" not in out
+
+    def test_a_link_outside_the_map_section_does_not_map_a_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        before = "# Index\n\nSee [B](b.md#a-rule).\n\n"
+        index = before + _index(["a.md"]).removeprefix("# Index\n\n") + "\n## After\n\n[B](b.md)\n"
+        areas = {check.INDEX: index, "a.md": _entry("One rule"), "b.md": _entry("Another rule")}
+        _tree(tmp_path, _claude_md(), areas, monkeypatch)
+        code, out = _run(capsys)
+        assert code == 1
+        assert f"{check.AREA_DIR}/b.md: no link to it in the map" in out
+
+    def test_a_link_with_an_anchor_maps_its_file(self) -> None:
+        index = "## The areas\n\n- [A rule](a.md#a-rule) and [B](b.md)\n"
+        assert check.unmapped(index, ["a.md", "b.md", check.INDEX]) == []
+
+    def test_a_missing_index_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        _tree(tmp_path, _claude_md(), {"a.md": _entry("One rule")}, monkeypatch)
+        (tmp_path / check.AREA_DIR / check.INDEX).unlink()
+        code, out = _run(capsys)
+        assert code == 1
+        assert f"{check.AREA_DIR}/{check.INDEX}: no such file" in out
+
+    def test_an_index_without_a_map_section_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        areas = {check.INDEX: "# Index\n\n- [A](a.md)\n", "a.md": _entry("One rule")}
+        _tree(tmp_path, _claude_md(), areas, monkeypatch)
+        code, out = _run(capsys)
+        assert code == 1
+        assert f"{check.AREA_DIR}/{check.INDEX}: no '## The areas' section" in out
 
 
 class TestTheHeadlineClose:
