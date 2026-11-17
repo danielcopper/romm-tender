@@ -432,6 +432,41 @@ describe("navigationWatcher", () => {
       for (const root of react.roots) expect(root.unmount).toHaveBeenCalled();
     });
 
+    it("lets the element the button stands in shrink once the button is drawn, and gives that back", () => {
+      reactClient();
+      const page = gamePage();
+      const client = desktopClient(page.doc);
+      navigateTo("/library/app/99999");
+      vi.spyOn(rommAppIds, "isRomMAppId").mockReturnValue(true);
+
+      const stop = start(PAGE, client);
+
+      expect(page.doc.getElementById(TENDER_PLAY_BUTTON_ID)?.parentElement).toBe(page.playBar);
+      expect(page.playBar.style.flexShrink).toBe("1");
+      expect(page.playBar.style.minWidth).toMatch(/^0(px)?$/);
+
+      stop();
+
+      expect(page.playBar.style.flexShrink).toBe("");
+      expect(page.playBar.style.minWidth).toBe("");
+    });
+
+    it("holds the element the button stands in at its height, which a narrow window would take, and gives that back", () => {
+      reactClient();
+      const page = gamePage();
+      const client = desktopClient(page.doc);
+      navigateTo("/library/app/99999");
+      vi.spyOn(rommAppIds, "isRomMAppId").mockReturnValue(true);
+
+      const stop = start(PAGE, client);
+
+      expect(page.playBar.style.height).toBe("46px");
+
+      stop();
+
+      expect(page.playBar.style.height).toBe("");
+    });
+
     it("hides Steam default play bar badges alongside native play button and restores on unmount", () => {
       reactClient();
       const page = gamePage();
@@ -785,6 +820,9 @@ describe("navigationWatcher", () => {
       expect(steam.playButton.style.display).toBe("");
       expect(steam.badges.style.display).toBe("");
       expect(steam.content.style.display).toBe("");
+      expect(steam.playBar.style.flexShrink).toBe("");
+      expect(steam.playBar.style.minWidth).toBe("");
+      expect(steam.playBar.style.height).toBe("");
       stop();
     });
 

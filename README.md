@@ -85,7 +85,7 @@ into Steam as non-steam shortcuts. Games appear directly in your Steam library, 
 see _How this is built_ above. Install it from the URL below.
 
 ```text
-https://github.com/danielcopper/romm-tender/releases/download/tender-v0.33.0/Tender.zip
+https://github.com/danielcopper/romm-tender/releases/download/tender-v0.33.1/Tender.zip
 ```
 
 <details open>
@@ -96,7 +96,8 @@ Needs **Developer mode** in Decky Loader (Decky tab › gear icon › **General 
 1. Decky settings › **Developer** tab › **Install Plugin from URL**
 2. Paste the URL above and install
 
-That URL names one fixed release, `tender-v0.33.0` — the last one published with a plugin zip.
+That URL names one fixed release; which one, and why, is in
+[Getting Started](https://danielcopper.github.io/romm-tender/user-guide/getting-started/).
 
 </details>
 

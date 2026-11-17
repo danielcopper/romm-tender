@@ -17,6 +17,7 @@ import pytest
 from domain.emulator_sources import SourceFinding
 from domain.save_answer import (
     BENIGN_SYNC_SKIP_REASONS,
+    ROOT_CONTENT_DIRECTORY,
     SAVE_SHAPE_UNSUPPORTED_REASON,
     SAVE_STATE_HOLE,
     SAVE_STATE_INSIDE_CONTENT,
@@ -31,6 +32,7 @@ from domain.save_answer import (
     build_save_answer,
     pick_download_name,
     save_finding_details,
+    save_refusal_label,
     save_shape_message,
     saves_root_missing_answer,
     unestablished_answer,
@@ -368,6 +370,7 @@ class TestTheRefusalIsReportedNeutrally:
             ({"granularity": "shared-card", "files": ("Mcd001.ps2",)}, "share"),
             ({"caveats": ("save-inside-content",), "files": ()}, "inside the game file"),
             ({"needs": ("save_id",)}, "identity of the game"),
+            ({"needs": ("save_id", "cwd")}, "the folder the game is started from"),
             ({"file_set_state": "unknown", "files": ()}, "could not be established"),
         ],
     )
@@ -392,6 +395,37 @@ class TestTheRefusalIsReportedNeutrally:
         )
 
 
+class TestTheRefusalsShortLabel:
+    @pytest.mark.parametrize(
+        ("kwargs", "label"),
+        [
+            ({"granularity": "shared-card", "files": ("Mcd001.ps2",)}, "Shared save"),
+            ({"granularity": "shared-file", "files": ("disc.brm",)}, "Shared save"),
+            ({"caveats": ("save-inside-content",), "files": ()}, "Saved in the game file"),
+            ({"needs": ("save_id",)}, "Saved under an unknown ID"),
+            ({"needs": ("cwd",)}, "Saves follow the start folder"),
+            ({"needs": ("save_id", "cwd")}, "Saves follow the start folder"),
+            ({"file_set_state": "unknown", "files": ()}, "Save files unknown"),
+        ],
+    )
+    def test_each_state_has_its_own(self, kwargs: dict[str, object], label: str):
+        assert save_refusal_label(_answer(**kwargs)) == label
+
+    def test_a_missing_saves_root(self):
+        answer = saves_root_missing_answer(path="/run/media/sd/saves", emulator="mGBA", content_installed=True)
+
+        assert save_refusal_label(answer) == "Saves folder missing"
+
+    def test_an_answer_with_no_emulator(self):
+        assert save_refusal_label(unestablished_answer()) == "Save files unknown"
+
+    def test_a_save_beside_the_content(self):
+        answer = _answer(root_kind=ROOT_CONTENT_DIRECTORY)
+
+        assert answer.in_content_directory
+        assert save_refusal_label(answer) == "Saved beside the game"
+
+
 class TestAPlaceNotRead:
     """A finding that the save place was not read from the settings refuses the answer, and the refusal says so."""
 
@@ -404,6 +438,10 @@ class TestAPlaceNotRead:
             findings=(self._FINDING,) if findings is None else findings,
             missing_saves_root=None,
         )
+
+    def test_its_short_label(self):
+        assert save_refusal_label(self._refused()) == "Save location not read"
+        assert save_refusal_label(self._refused(_answer(needs=("cwd",)))) == "Save location not read"
 
     def test_the_refusal_carries_the_finding_the_source_and_the_emulator(self):
         assert save_finding_details(self._refused()) == {

@@ -145,6 +145,7 @@ describe("useGamePlaytime", () => {
     const { result } = renderHook(() => useGamePlaytime(mockAppId, mockRomId));
 
     expect(result.current.playtime).toBe("None");
+    expect(result.current.steamPlaytime).toBe("");
 
     // Dispatch event for a different app ID - should be ignored
     act(() => {
@@ -163,6 +164,7 @@ describe("useGamePlaytime", () => {
     await waitFor(() => {
       expect(result.current.playtime).toBe("1h 30m");
     });
+    expect(result.current.steamPlaytime).toBe("90 minutes");
   });
 
   it("resets state when appId changes", () => {

@@ -99,6 +99,7 @@ vi.mock("../utils/formatters", async (importOriginal) => {
   return {
     formatLastPlayed: vi.fn((rt: number) => (rt ? "2024-01-15" : "")),
     formatPlaytime: vi.fn((m: number) => (m ? "1h 30m" : "")),
+    formatSteamPlaytime: actual.formatSteamPlaytime,
     // Deterministic echo so the SPACE REQUIRED cell's rendered value is
     // recognizable in assertions; null (unknown size) yields "" per the real impl.
     formatBytes: vi.fn((b: number | null) => (b == null ? "" : `${b}bytes`)),

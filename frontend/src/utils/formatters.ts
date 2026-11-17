@@ -64,6 +64,18 @@ export function formatPlaytime(minutes: number): string {
   return `${hours}h ${remainingMin}m`;
 }
 
+/**
+ * A play total in the words of the cell on Steam's desktop game page (client 1792618285).
+ * One minute is singular here, where Steam's own reads "1 minutes".
+ */
+export function formatSteamPlaytime(minutes: number): string {
+  if (!minutes || minutes <= 0) return "";
+  if (minutes === 1) return "1 minute";
+  if (minutes < 120) return `${minutes} minutes`;
+  const hours = Math.round((minutes / 60) * 10) / 10;
+  return `${hours.toLocaleString(undefined, { maximumFractionDigits: 1 })} hours`;
+}
+
 export function formatTimestamp(iso: string | null): string {
   if (!iso) return "unknown";
   try {

@@ -11,7 +11,7 @@ from fakes.fake_save_location_reader import FakeSaveLocationReader
 from adapters.save_file import SaveFileAdapter
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from domain.save_answer import SaveAnswer
-from lib.errors import RommConnectionError, RommNotFoundError
+from lib.errors import RommConnectionError, RommForbiddenError, RommNotFoundError
 from tests.services.saves._helpers import (
     _create_save,
     _do_sync,
@@ -673,6 +673,133 @@ class TestSaveSyncDisplayEnrichment:
         assert result["save_sync_display"]["status"] == "conflict"
         assert result["save_sync_display"]["label"] == "Conflict"
         assert result["save_sync_display"]["last_sync_check_at"] is None
+
+
+_SHARED_CARD = SaveAnswer(
+    state="shared",
+    unestablished=None,
+    emulator="PCSX2 (Standalone)",
+    directory="/saves/ps2/pcsx2/memcards",
+    backing_directory=None,
+    granularity="shared-card",
+    needs=(),
+    components=(),
+    caveats=(),
+    content_installed=True,
+)
+
+
+class TestWhetherRommHoldsASave:
+    @pytest.mark.asyncio
+    async def test_a_game_not_on_this_device_counts_with_no_row_for_it(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _seed_rom(svc, 42)
+        fake.saves[100] = _server_save()
+
+        result = await svc.get_save_status(42)
+
+        assert result["files"] == []
+        assert result["server_has_saves"] is True
+
+    @pytest.mark.asyncio
+    async def test_a_save_only_in_a_slot_other_than_the_active_one_counts(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _seed_rom(svc, 42)
+        fake.saves[100] = _server_save(slot="default")
+        _seed_save_state(svc, 42, RomSaveSyncState(active_slot="other"))
+
+        result = await svc.get_save_status(42)
+
+        assert result["files"] == []
+        assert result["server_has_saves"] is True
+
+    @pytest.mark.asyncio
+    async def test_an_installed_game_with_a_row_counts(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path)
+        fake.saves[100] = _server_save()
+
+        result = await svc.get_save_status(42)
+
+        assert result["files"] != []
+        assert result["server_has_saves"] is True
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("beside_content", "answer"),
+        [(True, None), (False, _SHARED_CARD)],
+        ids=["beside-the-game-file", "shared-card"],
+    )
+    async def test_an_installed_game_whose_saves_are_refused_counts(self, tmp_path, beside_content, answer):
+        svc, fake = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=beside_content))
+        _enable_sync_with_device(svc)
+        if answer is not None:
+            cast("FakeSaveLocationReader", svc._rom_info._save_locations).answer_with("gba", answer)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path)
+        fake.saves[100] = _server_save()
+
+        result = await svc.get_save_status(42)
+
+        assert result["files"] == []
+        assert result["server_has_saves"] is True
+
+    @pytest.mark.asyncio
+    async def test_it_answers_the_same_with_save_sync_off(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        svc._config.settings["save_sync_enabled"] = False
+        _seed_rom(svc, 42)
+        fake.saves[100] = _server_save()
+
+        result = await svc.get_save_status(42)
+
+        assert result["server_has_saves"] is True
+
+    @pytest.mark.asyncio
+    async def test_nothing_on_romm(self, tmp_path):
+        svc, _ = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+
+        result = await svc.get_save_status(42)
+
+        assert result["server_has_saves"] is False
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "failure",
+        [OSError("connection reset"), RommConnectionError("offline"), RommNotFoundError("HTTP 404: Not Found")],
+        ids=["os-error", "unreachable", "not-found"],
+    )
+    async def test_a_listing_that_failed_establishes_nothing(self, tmp_path, failure):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        fake.saves[100] = _server_save()
+        fake.fail_next_list_saves(failure)
+
+        result = await svc.get_save_status(42)
+
+        assert result["server_query_failed"] is True
+        assert result["server_has_saves"] is False
+
+    @pytest.mark.asyncio
+    async def test_a_listing_never_sent_establishes_nothing(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _set_device_id(svc, None)
+        fake.saves[100] = _server_save()
+        fake.fail_on_next(RommForbiddenError("HTTP 403: Forbidden"))
+
+        result = await svc.get_save_status(42)
+
+        assert result["server_query_failed"] is True
+        assert result["server_query_reason"] == "device_not_registered"
+        assert result["server_has_saves"] is False
+        assert not any(call[0] == "list_saves" for call in fake.call_log)
 
 
 class TestServerQueryFailed:
