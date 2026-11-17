@@ -5868,6 +5868,29 @@ describe("RomMPlaySection", () => {
         expect.objectContaining({ body: "Failed to refresh artwork: the connection to Tender's backend was lost." }),
       );
     });
+
+    it.each([
+      ["an endpoint that raised", new HostTransportError("backend_exception", "KeyError"), "Failed to refresh artwork"],
+      [
+        "a stranded panel",
+        new HostTransportError("stranded_panel", "Tender was restarted — restart Steam to use it again."),
+        "Tender was restarted — restart Steam to use it again.",
+      ],
+    ])("words %s as D9 says and logs what it caught (#2776)", async (_kind, error, body) => {
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "resolved", sgdb_id: 42 });
+      const items = await openMenu();
+      vi.mocked(backend.getArtworkSlots)
+        .mockResolvedValueOnce(withRows({ cover: "chosen" }))
+        .mockRejectedValueOnce(error);
+      vi.mocked(toaster.toast).mockClear();
+      await act(async () => {
+        await items[0]!.props.onClick?.();
+      });
+      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(expect.objectContaining({ body }));
+      expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(
+        expect.stringContaining(`handleRefreshArtwork: the refresh failed: ${String(error)}`),
+      );
+    });
   });
 
   describe("Refresh Artwork downloads anew and says what was refused", () => {

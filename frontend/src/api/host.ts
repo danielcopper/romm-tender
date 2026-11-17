@@ -41,7 +41,7 @@ import { withFindingSentence, withPlatformSystemSentence } from "../utils/emulat
 import { steamToaster } from "../utils/steamToaster";
 import { HostSocket, addressFromBundleUrl } from "./hostSocket";
 
-export { HostTransportError, isStrandedPanelFailure } from "./hostSocket";
+export { HostTransportError, isConnectionLost, isStrandedPanelFailure } from "./hostSocket";
 
 // -- the types the call sites name --------------------------------------------
 

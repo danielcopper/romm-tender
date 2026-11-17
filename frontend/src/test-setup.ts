@@ -127,7 +127,7 @@ vi.stubGlobal("collectionStore", { userCollections: [] });
 // reconnection and the outbox is covered by that module's own tests, against an
 // injected socket, and is invisible to every test that goes through here. The
 // socket's word on a stranded panel goes through `test-utils/stranded-panel.ts`
-// the same way; the error class and its predicate are the real ones, so a test
+// the same way; the error class and its predicates are the real ones, so a test
 // rejects a call with the very failure a stranded socket raises.
 vi.mock("./api/host", async () => {
   const bus = await import("./test-utils/host-event-bus");
@@ -140,6 +140,7 @@ vi.mock("./api/host", async () => {
     addEventListener: bus.mockAddEventListener,
     removeEventListener: bus.mockRemoveEventListener,
     HostTransportError: transport.HostTransportError,
+    isConnectionLost: transport.isConnectionLost,
     isStrandedPanelFailure: transport.isStrandedPanelFailure,
     strandedAnswer: stranded.mockStrandedAnswer,
     onStrandedAnswerChange: stranded.mockOnStrandedAnswerChange,

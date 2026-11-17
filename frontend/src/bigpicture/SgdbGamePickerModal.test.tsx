@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { HostTransportError, toaster } from "../api/host";
 import * as backend from "../api/backend";
 import * as artwork from "../utils/artwork";
+import { mountPruneLeaseOwner, PruneLeaseAdmissionCancelled } from "../utils/pruneLease";
 import { SgdbGamePickerModalContent } from "./SgdbGamePickerModal";
 
 // applyAutomaticArtwork is mocked so the modal's apply path is observable without
@@ -35,6 +36,8 @@ describe("SgdbGamePickerModal", () => {
     vi.mocked(backend.applySgdbGameId).mockResolvedValue({ success: true });
     vi.mocked(backend.searchSgdbGames).mockResolvedValue({ success: true, games: [] });
     vi.mocked(backend.debugLog).mockResolvedValue(undefined);
+    // The game page under the picker holds its prune-lease owner while it is open.
+    mountPruneLeaseOwner("game-detail:6000");
   });
 
   // ----- needs_pick / candidate entry point -----
@@ -437,20 +440,45 @@ describe("SgdbGamePickerModal", () => {
       );
     });
 
-    it("applyAutomaticArtwork rejection → treated as 0 applied + debugLogs (non-vacuous catch)", async () => {
-      vi.mocked(artwork.applyAutomaticArtwork).mockRejectedValue(new Error("io"));
-      const { container, onApplied } = renderCandidate();
+    it.each([
+      ["an error of its own", new Error("io"), "Failed to apply artwork"],
+      ["an endpoint that raised", new HostTransportError("backend_exception", "KeyError"), "Failed to apply artwork"],
+      [
+        "a stranded panel",
+        new HostTransportError("stranded_panel", "Tender was restarted — restart Steam to use it again."),
+        "Tender was restarted — restart Steam to use it again.",
+      ],
+    ])(
+      "an apply that throws %s says it failed, never 'No artwork available' (#2776 D9)",
+      async (_kind, error, body) => {
+        vi.mocked(artwork.applyAutomaticArtwork).mockRejectedValue(error);
+        const { container, onApplied } = renderCandidate();
+        await act(async () => {
+          fireEvent.click(buttonContaining(container, "Super Mario"));
+        });
+        await flushAsync();
+        expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(expect.objectContaining({ body }));
+        expect(vi.mocked(toaster.toast)).not.toHaveBeenCalledWith(
+          expect.objectContaining({ body: "No artwork available for this game" }),
+        );
+        expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(
+          expect.stringContaining("applyAutomaticArtwork rejected"),
+        );
+        expect(onApplied).toHaveBeenCalledWith(0);
+      },
+    );
+
+    it("an apply cancelled by leaving the game page says nothing and closes (#2776)", async () => {
+      vi.mocked(artwork.applyAutomaticArtwork).mockRejectedValue(new PruneLeaseAdmissionCancelled("cancelled"));
+      const { container, onApplied, closeModal } = renderCandidate();
       await act(async () => {
         fireEvent.click(buttonContaining(container, "Super Mario"));
       });
       await flushAsync();
-      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
-        expect.objectContaining({ body: "No artwork available for this game" }),
-      );
-      expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(
-        expect.stringContaining("applyAutomaticArtwork rejected"),
-      );
-      expect(onApplied).toHaveBeenCalledWith(0);
+      expect(vi.mocked(toaster.toast)).not.toHaveBeenCalled();
+      expect(onApplied).not.toHaveBeenCalled();
+      expect(closeModal).toHaveBeenCalled();
+      expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(expect.stringContaining("was cancelled"));
     });
 
     it("a lost connection while applying says so instead of 'No artwork available' (#2776 D3)", async () => {

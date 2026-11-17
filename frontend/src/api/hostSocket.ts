@@ -79,6 +79,11 @@ export class HostTransportError extends Error {
   }
 }
 
+/** Is *error* the failure of a call whose socket went before its reply came back? */
+export function isConnectionLost(error: unknown): error is HostTransportError {
+  return error instanceof HostTransportError && error.reason === CONNECTION_LOST;
+}
+
 /** Is *error* the failure of a call a stranded panel made? */
 export function isStrandedPanelFailure(error: unknown): error is HostTransportError {
   return error instanceof HostTransportError && error.reason === STRANDED_PANEL;
