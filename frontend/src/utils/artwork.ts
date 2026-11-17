@@ -27,7 +27,7 @@ import {
   type SgdbArtworkSlot,
   type SgdbSlotArtwork,
 } from "../api/backend";
-import { HostTransportError } from "../api/host";
+import { HostTransportError, isConnectionLost } from "../api/host";
 import { writeSlotArtwork } from "./artworkSlotsStore";
 import { detach } from "./detach";
 import {
@@ -181,15 +181,26 @@ async function applySgdbArtwork(
   ]);
 
   const leaseTokens = [...results.map((result) => result.prune_lease_token), leaseOf(icon)];
-  const lost = lostCalls[0];
+  // One failure answers the apply; a lost connection is the one a caller names a cause for (#2776 D9).
+  const setAside = (answered: HostTransportError | EndpointFailure | undefined): void => {
+    for (const failure of [...lostCalls, ...refusals]) {
+      if (failure === answered) continue;
+      const what = failure instanceof HostTransportError ? String(failure) : `${failure.reason}: ${failure.message}`;
+      detach(debugLog(`applyArtwork: a further failure of the apply for appId ${appId} was set aside: ${what}`));
+    }
+  };
+  const lost = lostCalls.find(isConnectionLost) ?? lostCalls[0];
   if (lost) {
+    setAside(lost);
     return withPruneLeases(leaseTokens, "Artwork apply", () => Promise.reject(lost), leaseOwner, admission);
   }
   if (results.some((r) => r.no_api_key) || icon.status === "no_api_key") {
+    setAside(undefined);
     return withPruneLeases(leaseTokens, "Artwork apply", async () => -1, leaseOwner, admission);
   }
   const refusal = refusals[0];
   if (refusal) {
+    setAside(refusal);
     return withPruneLeases(leaseTokens, "Artwork apply", () => Promise.resolve(refusal), leaseOwner, admission);
   }
 
