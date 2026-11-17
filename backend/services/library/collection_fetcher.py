@@ -26,6 +26,7 @@ from domain.collection_skip import (
     probe_verdict,
     recorded_updated_at,
 )
+from domain.platform_names import platform_tab_name
 from domain.platform_skip import skip_reference
 from domain.sync_stage import SyncStage
 from lib.romm_paging import LIST_PAGE_SIZE
@@ -139,6 +140,7 @@ class CollectionFetcher:
         not a shortcut to reconstruct (an unbound sibling maps to its group's
         bound representative at finalize, ADR-0021). One short read UoW.
         """
+        names = self._sync_state.run_listed_platform_names
         with self._uow_factory() as uow:
             reconstructed: list[dict[str, Any]] = []
             for rid in member_rom_ids:
@@ -154,7 +156,7 @@ class CollectionFetcher:
                         "fs_name": rom.fs_name,
                         "platform_slug": rom.platform_slug,
                         "platform_fs_slug": rom.platform_fs_slug,
-                        "platform_name": rom.platform_slug,
+                        "platform_name": platform_tab_name(names, rom.platform_fs_slug, rom.platform_slug),
                         "igdb_id": rom.igdb_id,
                         "sgdb_id": rom.sgdb_id,
                         "ra_id": rom.ra_id,
@@ -448,6 +450,7 @@ class CollectionFetcher:
         """
         new_roms: list[dict[str, Any]] = []
         walked_ids: list[int] = []
+        names = self._sync_state.run_listed_platform_names
         offset = 0
         limit = LIST_PAGE_SIZE
         total_pages = (expected_count + limit - 1) // limit if expected_count else 0
@@ -473,8 +476,8 @@ class CollectionFetcher:
                 if rid in synced_rom_ids:
                     continue
                 synced_rom_ids.add(rid)
-                rom["platform_name"] = rom.get("platform_name", rom.get("platform_display_name", "Unknown"))
                 rom.setdefault("platform_slug", "")
+                rom["platform_name"] = platform_tab_name(names, rom.get("platform_fs_slug"), rom["platform_slug"])
                 rom.pop("files", None)
                 new_roms.append(rom)
 

@@ -25,7 +25,8 @@ from domain.fetch_generation import (
     count_rows_for_skip,
     hidden_without_a_listed_version,
 )
-from domain.platform_names import listed_fs_slug, listed_platform_folders, listed_platform_names
+from domain.platform_listing import platform_entries, platform_entry_of
+from domain.platform_names import listed_platform_folders, listed_platform_names, platform_tab_name
 from domain.platform_prefs import platform_sync_enabled, stored_switches, switches_as_read, switches_kept_by_id
 from domain.platform_skip import probe_verdict, stamp_can_match
 from domain.platform_sync_state import stamp_for_skip
@@ -181,23 +182,21 @@ class LibraryFetcher:
         platforms = await self._read_listing()
         switches = switches_as_read(stored_switches(self._settings), switches_kept_by_id(self._settings), platforms)
 
-        # One row per platform, by its fs_slug, named as its Steam collection is (#2452 D1, D2).
+        # One row per platform, by its fs_slug, named as its Steam collection is (#2452 D1, D2, #2761 D3).
+        # A rom_count that is no number is unknown, and the row is shown without one (#2761 D5).
         names = listed_platform_names(platforms)
-        result = []
-        for p in platforms:
-            rom_count = p.get("rom_count", 0)
-            fs_slug = listed_fs_slug(p)
-            if rom_count == 0 or fs_slug is None:
-                continue
-            entry = {
-                "id": p["id"],
-                "name": names.get(fs_slug, p.get("name", "")),
-                "slug": p.get("slug", ""),
+        result = [
+            {
+                "id": entry.platform_id,
+                "name": platform_tab_name(names, fs_slug, entry.slug),
+                "slug": entry.slug or "",
                 "fs_slug": fs_slug,
-                "rom_count": rom_count,
+                "rom_count": entry.rom_count,
                 "sync_enabled": platform_sync_enabled(switches, fs_slug),
             }
-            result.append(entry)
+            for entry in platform_entries(platforms)
+            if (fs_slug := entry.fs_slug) is not None and entry.rom_count != 0
+        ]
         return {"success": True, "platforms": result}
 
     async def save_platform_sync(self, platform_folder: str, enabled: bool):
@@ -372,11 +371,19 @@ class LibraryFetcher:
         if by_id is not None:
             self._logger.warning("The per-platform sync toggles kept by RomM's platform ids have not moved; read by id")
         switches = switches_as_read(stored_switches(self._settings), by_id, listed)
-        platforms = [p for p in listed if platform_sync_enabled(switches, listed_fs_slug(p))]
-        self._logger.info(f"Syncing {len(platforms)} platforms: {[p['name'] for p in platforms]}")
-        synced_ids = {int(p["id"]) for p in platforms}
-        left_off_ids = tuple(int(p["id"]) for p in listed if int(p["id"]) not in synced_ids)
-        return platforms, left_off_ids
+        names = self._sync_state.run_listed_platform_names
+        read = list(zip(listed, platform_entries(listed), strict=True))
+        synced = [(p, entry) for p, entry in read if platform_sync_enabled(switches, entry.fs_slug)]
+        self._logger.info(
+            f"Syncing {len(synced)} platforms: {[platform_tab_name(names, e.fs_slug, e.slug) for _p, e in synced]}"
+        )
+        synced_ids = {entry.platform_id for _p, entry in synced}
+        left_off_ids = tuple(
+            platform_id
+            for _p, entry in read
+            if (platform_id := entry.platform_id) is not None and platform_id not in synced_ids
+        )
+        return [p for p, _entry in synced], left_off_ids
 
     def _check_cancelling(self):
         """Raise SyncCancelled if sync is being cancelled."""
@@ -407,16 +414,21 @@ class LibraryFetcher:
         # Asked once per run, and the run's only source of what is hidden (#2502 D2).
         hidden = await self._loop.run_in_executor(None, self._romm_api.read_hidden_rom_ids)
         self._sync_state.run_hidden_rom_ids = hidden
+        names = self._sync_state.run_listed_platform_names
+        # Every platform switched on has an fs_slug, and the listing names none
+        # without an id (``RommPlatformReader.list_platforms``); a rom_count
+        # that is no number counts as 0 for the progress alone (#2761 D5).
         platform_units = [
             WorkUnit(
                 type="platform",
-                id=int(platform["id"]),
-                name=platform.get("name", platform.get("display_name", "Unknown")),
-                slug=platform.get("slug", ""),
-                rom_count=int(platform.get("rom_count", 0)),
-                platform_folder=listed_fs_slug(platform) or "",
+                id=platform_id,
+                name=platform_tab_name(names, folder, entry.slug),
+                slug=entry.slug or "",
+                rom_count=entry.rom_count or 0,
+                platform_folder=folder,
             )
-            for platform in platforms
+            for entry in map(platform_entry_of, platforms)
+            if (platform_id := entry.platform_id) is not None and (folder := entry.fs_slug) is not None
         ]
         units.extend(await self._attach_plan_estimates(platform_units))
 
@@ -778,7 +790,7 @@ class LibraryFetcher:
     def _decorate_reconstructed(
         roms: list[dict[str, Any]], platform_name: str, platform_slug: str, platform_id: int
     ) -> list[dict[str, Any]]:
-        """Stamp the live platform display name/slug/id onto reconstructed ROM dicts.
+        """Stamp the unit's platform name/slug/id onto reconstructed ROM dicts.
 
         ``platform_id`` is the unit's own platform id (every reconstructed row is
         this one platform's), stamped so a reconstructed dict is shaped like a live
@@ -789,7 +801,6 @@ class LibraryFetcher:
         for rom in roms:
             rom["platform_name"] = platform_name
             rom["platform_slug"] = platform_slug
-            rom["platform_display_name"] = platform_name
             rom["platform_id"] = platform_id
         return roms
 

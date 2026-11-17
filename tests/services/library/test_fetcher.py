@@ -295,6 +295,87 @@ class TestAPlatformUnitCarriesItsFsSlug:
         assert {u.id: u.platform_folder for u in units} == {1: "snes", 2: "snes-hacks"}
 
 
+class TestAPlatformUnitIsNamedAsTheTabNamesIt:
+    """#2761 D2, D3, D5: a platform unit reads its fields through the one reader of the listing."""
+
+    @staticmethod
+    async def _units(make_library, fake_romm_api, platforms, switched_on):
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.platforms = platforms
+        library.settings["enabled_platforms"] = dict.fromkeys(switched_on, True)
+        library.settings["enabled_collections"] = {"standard": {}, "smart": {}, "virtual": {}}
+        return library, await library.sync._fetcher.build_work_queue()
+
+    @pytest.mark.asyncio
+    async def test_a_platform_sharing_its_name_is_named_with_its_fs_slug(self, make_library, fake_romm_api):
+        _library, units = await self._units(
+            make_library,
+            fake_romm_api,
+            [
+                {"id": 1, "name": "Super Nintendo", "slug": "snes", "fs_slug": "snes", "rom_count": 2},
+                {"id": 2, "name": "Super Nintendo", "slug": "snes", "fs_slug": "snes-hacks", "rom_count": 1},
+            ],
+            ["snes", "snes-hacks"],
+        )
+
+        assert [u.name for u in units] == ["Super Nintendo", "Super Nintendo (snes-hacks)"]
+
+    @pytest.mark.asyncio
+    async def test_a_platform_listed_with_a_display_name_and_no_name_is_named_by_its_fs_slug(
+        self, make_library, fake_romm_api
+    ):
+        unnamed = {k: v for k, v in LISTED_GAMECUBE.items() if k != "name"}
+
+        _library, units = await self._units(make_library, fake_romm_api, [unnamed], ["gc"])
+
+        assert [(u.name, u.platform_folder) for u in units] == [("gc", "gc")]
+
+    @pytest.mark.asyncio
+    async def test_its_roms_carry_its_name(self, make_library, fake_romm_api):
+        library, units = await self._units(
+            make_library,
+            fake_romm_api,
+            [
+                {"id": 1, "name": "Super Nintendo", "slug": "snes", "fs_slug": "snes", "rom_count": 1},
+                {"id": 2, "name": "Super Nintendo", "slug": "snes", "fs_slug": "snes-hacks", "rom_count": 1},
+            ],
+            ["snes-hacks"],
+        )
+        fake_romm_api.roms = {5: {"id": 5, "platform_id": 2, "name": "Hack", "platform_display_name": "SNES"}}
+
+        roms, _skipped = await library.sync._fetcher.fetch_platform_unit(units[0])
+
+        assert [(r["id"], r["platform_name"]) for r in roms] == [(5, "Super Nintendo (snes-hacks)")]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("rom_count", [None, "many"], ids=["null", "text"])
+    async def test_a_rom_count_that_is_not_a_number_counts_as_none_and_the_platform_is_synced(
+        self, make_library, fake_romm_api, rom_count
+    ):
+        _library, units = await self._units(
+            make_library,
+            fake_romm_api,
+            [{"id": 1, "name": "GBA", "slug": "gba", "fs_slug": "gba", "rom_count": rom_count}],
+            ["gba"],
+        )
+
+        assert [(u.id, u.rom_count) for u in units] == [(1, 0)]
+
+    @pytest.mark.asyncio
+    async def test_an_entry_without_a_folder_or_an_id_is_left_out(self, make_library, fake_romm_api):
+        library = make_library(romm_api=fake_romm_api)
+        fake_romm_api.platforms = [
+            {"id": 1, "name": "GBA", "slug": "gba", "fs_slug": "gba"},
+            {"id": 2, "name": "SNES", "slug": "snes", "fs_slug": "snes"},
+            {"name": "Mystery", "slug": "mystery", "fs_slug": None},
+        ]
+        library.settings["enabled_platforms"] = {"gba": True}
+
+        synced, unwalked = await library.sync._fetcher._fetch_enabled_platforms()
+
+        assert ([p["id"] for p in synced], unwalked) == ([1], (2,))
+
+
 class TestBuildWorkQueueErrorPaths:
     """Tests for build_work_queue() collection-list failure / filter branches."""
 

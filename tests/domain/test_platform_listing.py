@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import ast
+from pathlib import Path
+
 import pytest
 from _romm_platforms import LISTED_GAMECUBE
 
@@ -143,3 +146,45 @@ class TestFieldChecks:
     )
     def test_listed_number(self, value, read):
         assert listed_number(value) == read
+
+
+_BACKEND = Path(__file__).resolve().parents[2] / "backend"
+_DISPLAY_NAMES = frozenset({"display_name", "platform_display_name"})
+
+
+def _display_name_literals(source: str) -> list[int]:
+    """The line of every string literal in *source* that is one of RomM's display-name fields."""
+    return [
+        node.lineno
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value in _DISPLAY_NAMES
+    ]
+
+
+class TestNoModuleReadsRommsDisplayName:
+    """#2564 D2: no backend module takes RomM's ``display_name`` or ``platform_display_name`` for a platform's name.
+
+    Read from the syntax tree, so a docstring or comment naming the field is
+    prose and passes; a key spelled as a string literal anywhere is a read.
+    """
+
+    def test_no_backend_module_spells_either_field(self):
+        found = [
+            f"{path.relative_to(_BACKEND)}:{line}"
+            for path in sorted(_BACKEND.rglob("*.py"))
+            if not path.is_relative_to(_BACKEND / "_vendor")
+            for line in _display_name_literals(path.read_text(encoding="utf-8"))
+        ]
+
+        assert found == []
+
+    @pytest.mark.parametrize(
+        "source",
+        ['name = rom.get("platform_display_name")\n', 'name = p["display_name"]\n'],
+        ids=["a get", "a subscript"],
+    )
+    def test_a_read_is_found(self, source):
+        assert _display_name_literals(source) == [1]
+
+    def test_a_docstring_naming_the_field_is_no_read(self):
+        assert _display_name_literals('"""Never RomM\'s ``display_name``."""\n') == []
