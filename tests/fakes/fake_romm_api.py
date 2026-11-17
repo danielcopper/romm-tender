@@ -33,7 +33,7 @@ import pathlib
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from adapters.romm.romm_api import hidden_rom_ids_answered_by
+from adapters.romm.romm_api import hidden_rom_ids_answered_by, platform_listing_of
 from domain.cover_refresh import _strip_cover_ts
 from domain.game_files import file_ids_query
 from fakes._romm_save_semantics import (
@@ -295,11 +295,13 @@ class FakeRommApi:
         """Every seeded platform, carrying as ``firmware`` the ``firmware_files`` its ``id`` is the ``platform_id`` of.
 
         RomM's ``/api/platforms`` answers each platform with its firmware
-        inline; a platform no seeded file belongs to is answered as seeded.
+        inline; a platform no seeded file belongs to is answered as seeded. The
+        answer is read by the adapter's :func:`platform_listing_of`, so a seeded
+        listing the adapter refuses is refused here too.
         """
         self._log("list_platforms")
         self._check_fail(self.list_platforms_side_effect)
-        return [self._with_firmware({"fs_slug": p.get("slug"), **p}) for p in self.platforms]
+        return platform_listing_of([self._with_firmware({"fs_slug": p.get("slug"), **p}) for p in self.platforms])
 
     def _with_firmware(self, platform: dict[str, Any]) -> dict[str, Any]:
         files = [dict(f) for f in self.firmware_files if f.get("platform_id") == platform.get("id")]

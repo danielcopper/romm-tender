@@ -316,8 +316,8 @@ another platform's store folder serves, and the [platform system](core-emulator-
 (`PlatformSystemService`), whose name its `no_platform_system` refusal, the pages that show the system, and a download's
 queue entry and every frame and event it sends, `download_failed` included, carry
 ([#2573](https://github.com/danielcopper/romm-tender/issues/2573) D1). Each refresh writes the name of every platform
-the run's own platform listing names, its sync on in Tender or not — RomM's `name`, never a custom name set in RomM
-([#2564](https://github.com/danielcopper/romm-tender/issues/2564) D1, D2) — and keeps the cached name of every other
+the run's own platform listing names, its sync on in Tender or not — named as
+[its Steam collection](steam-non-steam-shortcuts.md#collection-management) is — and keeps the cached name of every other
 platform a bound game is still on, a stopped run's refresh included. The schema version is **not** a `kv_config` key —
 it is tracked in `PRAGMA user_version` by the [migration runner](#the-migration-framework)
 ([#781](https://github.com/danielcopper/romm-tender/issues/781)).

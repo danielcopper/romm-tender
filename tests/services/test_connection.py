@@ -20,7 +20,6 @@ from lib.errors import (
     PairingCodeRateLimitedError,
     PairingCodeTokenGoneError,
     Refused,
-    RommApiError,
     RommAuthError,
     RommConnectionError,
     RommForbiddenError,
@@ -232,20 +231,29 @@ class TestTestConnectionBadPath:
             event_loop.run_until_complete(coro)
         assert raised.value is error
 
-    def test_a_platform_listing_that_is_not_a_list_fails(self, event_loop, logger):
-        """The adapter raises on a non-list platform listing, so the connection test does not pass over it."""
+    @pytest.mark.parametrize(
+        "listing",
+        [{"detail": "not a list"}, ["n64"], [{"slug": "n64", "fs_slug": "n64"}]],
+        ids=["no-list", "item-no-object", "folder-without-id"],
+    )
+    def test_a_platform_listing_rom_m_answered_but_tender_cannot_read_passes(self, event_loop, logger, caplog, listing):
+        """#2761 D8: RomM answered and the sign-in holds, so the panel stays online; the listing is logged."""
         from adapters.romm.romm_api import RommApiAdapter
 
         settings = {"romm_url": "http://romm.local", "romm_api_token": "rmm_token"}
-        answers = {"/api/heartbeat": {"SYSTEM": {"VERSION": "5.3.0"}}, "/api/platforms": {"detail": "not a list"}}
+        answers = {"/api/heartbeat": {"SYSTEM": {"VERSION": "5.3.0"}}, "/api/platforms": listing}
         client = MagicMock()
         client.request.side_effect = lambda path: answers[path]
         romm_api = MagicMock(wraps=RommApiAdapter(client))
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
 
-        coro = service.test_connection()
-        with pytest.raises(RommApiError, match=r"^Unexpected response from /api/platforms: dict$"):
-            event_loop.run_until_complete(coro)
+        with caplog.at_level(logging.WARNING):
+            result = event_loop.run_until_complete(service.test_connection())
+
+        assert result["success"] is True
+        assert [r.levelno for r in caplog.records if "platform list could not be read" in r.getMessage()] == [
+            logging.WARNING
+        ]
 
 
 class TestTestConnectionVersionGate:

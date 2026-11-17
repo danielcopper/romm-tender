@@ -87,7 +87,7 @@ class TestPlatformIds:
             igdb_id=19, libretro_slug="Nintendo - Super Nintendo Entertainment System", ss_id=4, tgdb_id=6
         )
 
-    def test_rom_ms_display_name_is_kept_beside_the_ids_and_never_asked(self):
+    def test_the_listed_name_is_kept_beside_the_ids_never_asked_and_never_the_display_name(self):
         ids = platform_ids_of({"name": "Super Nintendo", "igdb_id": 19})
 
         assert ids.name == "Super Nintendo"

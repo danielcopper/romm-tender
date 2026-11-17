@@ -21,6 +21,7 @@ from lib.errors import (
     RommApiError,
     RommForbiddenError,
     RommNotFoundError,
+    RommPlatformListingUnreadable,
     RommServerError,
     RommSyncDisabledError,
 )
@@ -46,6 +47,32 @@ if TYPE_CHECKING:
     )
 
 _logger = logging.getLogger(__name__)
+
+_PLATFORMS_PATH = "/api/platforms"
+
+
+def platform_listing_of(answer: object) -> list[dict[str, Any]]:
+    """RomM's platform listing in *answer*, its answer to ``/api/platforms``.
+
+    Raises :class:`RommPlatformListingUnreadable` where Tender cannot read it
+    (#2761 D4, D8): an answer that is no list, an item that is no object, or an
+    entry with a folder (``fs_slug``) but no usable ``id``
+    (:func:`~domain.platform_listing.folder_without_an_id`) — never an empty
+    list, and never only that entry left out. Shared by
+    :meth:`RommApiAdapter.list_platforms` and the fake RomM, so both read an
+    answer alike.
+    """
+    unreadable = f"RomM's platform list could not be read ({_PLATFORMS_PATH})"
+    if not isinstance(answer, list):
+        raise RommPlatformListingUnreadable(f"{unreadable}: RomM answered with a {type(answer).__name__}, not a list")
+    listing: list[Any] = answer
+    no_objects = [item for item in listing if not isinstance(item, dict)]
+    if no_objects:
+        raise RommPlatformListingUnreadable(f"{unreadable}: an item is a {type(no_objects[0]).__name__}, not an object")
+    folder = folder_without_an_id(listing)
+    if folder is not None:
+        raise RommPlatformListingUnreadable(f"{unreadable}: platform {folder} has no usable id")
+    return listing
 
 
 def hidden_rom_ids_answered_by(list_hidden_roms: Callable[[], object]) -> frozenset[int] | None:
@@ -184,18 +211,8 @@ class RommApiAdapter:
         return self._client.request_once("/api/heartbeat", timeout=self._PROBE_TIMEOUT_SECONDS)
 
     def list_platforms(self) -> list[dict[str, Any]]:
-        """RomM's platform listing, raising :class:`RommApiError` as :meth:`_request_listing` does.
-
-        A platform listed with a folder (``fs_slug``) but no usable ``id``
-        makes the whole listing unreadable, raised the same way
-        (:func:`~domain.platform_listing.folder_without_an_id`).
-        """
-        path = "/api/platforms"
-        platforms = self._request_listing(path)
-        folder = folder_without_an_id(platforms)
-        if folder is not None:
-            raise RommApiError(f"Unexpected response from {path}: platform {folder} has no usable id")
-        return platforms
+        """RomM's platform listing, read by :func:`platform_listing_of`."""
+        return platform_listing_of(self._client.request(_PLATFORMS_PATH))
 
     def get_current_user(self) -> dict[str, Any]:
         return self._client.request("/api/users/me")

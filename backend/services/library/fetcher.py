@@ -40,7 +40,7 @@ from domain.sync_diff import ExactAnswers
 from domain.sync_state import SyncCancelled
 from domain.virtual_collection_id import virtual_types_to_list
 from domain.work_unit import WorkUnit, collection_units
-from lib.errors import Refused, RommNotFoundError
+from lib.errors import Refused, RommNotFoundError, RommPlatformListingUnreadable
 from lib.romm_paging import LIST_PAGE_SIZE
 from services.library._fetch_pages import emit_fetch_page_progress, raise_if_cancelling
 
@@ -48,6 +48,7 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Callable, Collection, Mapping
 
+    from domain.platform_listing import PlatformEntry
     from domain.platform_sync_state import PlatformSyncState
     from domain.sync_diff import RomAnswer
     from services.library._fetch_pages import EmitProgressFn
@@ -150,6 +151,30 @@ class LibraryFetcherConfig:
     refiling: ListingRefiler
     platform_listing: ListingReplacer
     platform_switches: PlatformSwitchesWriter
+
+
+def _platform_unit(entry: PlatformEntry, names: Mapping[str, str]) -> WorkUnit:
+    """The work unit of one switched-on platform, named as the Platforms tab names it (#2761 D2, D3).
+
+    A switched-on platform has an ``fs_slug``, and none of those is listed
+    without an id (``RommApiAdapter.list_platforms``); one that is all the same
+    fails the listing rather than being left out, which would remove its games'
+    shortcuts as for a platform switched off (#2761 D4). A ``rom_count`` that is
+    unknown counts as 0, and the unit says so (#2761 D5).
+    """
+    if entry.platform_id is None or entry.fs_slug is None:
+        raise RommPlatformListingUnreadable(
+            f"RomM's platform list could not be read: platform {entry.fs_slug or entry.slug} has no usable id or folder"
+        )
+    return WorkUnit(
+        type="platform",
+        id=entry.platform_id,
+        name=platform_tab_name(names, entry.fs_slug, entry.slug),
+        slug=entry.slug or "",
+        rom_count=entry.rom_count or 0,
+        rom_count_known=entry.rom_count is not None,
+        platform_folder=entry.fs_slug,
+    )
 
 
 class LibraryFetcher:
@@ -415,21 +440,7 @@ class LibraryFetcher:
         hidden = await self._loop.run_in_executor(None, self._romm_api.read_hidden_rom_ids)
         self._sync_state.run_hidden_rom_ids = hidden
         names = self._sync_state.run_listed_platform_names
-        # Every platform switched on has an fs_slug, and the listing names none
-        # without an id (``RommPlatformReader.list_platforms``); a rom_count
-        # that is no number counts as 0 for the progress alone (#2761 D5).
-        platform_units = [
-            WorkUnit(
-                type="platform",
-                id=platform_id,
-                name=platform_tab_name(names, folder, entry.slug),
-                slug=entry.slug or "",
-                rom_count=entry.rom_count or 0,
-                platform_folder=folder,
-            )
-            for entry in map(platform_entry_of, platforms)
-            if (platform_id := entry.platform_id) is not None and (folder := entry.fs_slug) is not None
-        ]
+        platform_units = [_platform_unit(platform_entry_of(platform), names) for platform in platforms]
         units.extend(await self._attach_plan_estimates(platform_units))
 
         buckets = self._get_enabled_collections_buckets()

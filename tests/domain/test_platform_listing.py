@@ -80,7 +80,7 @@ class TestRommsEntry:
     def test_an_id_that_is_no_whole_number_is_none(self, platform_id):
         assert platform_entry_of({**LISTED_GAMECUBE, "id": platform_id}).platform_id is None
 
-    @pytest.mark.parametrize("rom_count", [None, "many", 4.5, False, [40]])
+    @pytest.mark.parametrize("rom_count", [None, "many", 4.5, False, [40], -1, "-1"])
     def test_a_rom_count_that_is_not_a_number_is_unknown(self, rom_count):
         assert platform_entry_of({**LISTED_GAMECUBE, "rom_count": rom_count}).rom_count is None
 
@@ -95,11 +95,21 @@ class TestRommsEntry:
 
     @pytest.mark.parametrize(
         ("firmware", "read"),
-        [(None, ()), ("IPL.bin", ()), ({"id": 7}, ()), ([_FIRMWARE, "IPL.bin"], (_FIRMWARE, "IPL.bin"))],
-        ids=["null", "text", "object", "list"],
+        [(None, ()), ([], ()), ([_FIRMWARE, "IPL.bin"], (_FIRMWARE, "IPL.bin"))],
+        ids=["null", "empty", "list"],
     )
     def test_firmware_is_the_list_as_sent(self, firmware, read):
         assert platform_entry_of({**LISTED_GAMECUBE, "firmware": firmware}).firmware == read
+
+    def test_no_firmware_sent_is_none_listed(self):
+        platform = {k: v for k, v in LISTED_GAMECUBE.items() if k != "firmware"}
+
+        assert platform_entry_of(platform).firmware == ()
+
+    @pytest.mark.parametrize("firmware", ["IPL.bin", {"id": 7}, 7, ""], ids=["text", "object", "number", "empty-text"])
+    def test_firmware_that_is_no_list_is_unreadable_not_empty(self, firmware):
+        """Read as empty it would say the platform needs no firmware (#1693)."""
+        assert platform_entry_of({**LISTED_GAMECUBE, "firmware": firmware}).firmware is None
 
 
 class TestPlatformEntries:
@@ -120,6 +130,9 @@ class TestFolderWithoutAnId:
         listed = [LISTED_GAMECUBE, {"fs_slug": "n64", "id": platform_id}]
 
         assert folder_without_an_id(listed) == "n64"
+
+    def test_an_entry_without_a_folder_or_an_id_before_it_is_passed_over(self):
+        assert folder_without_an_id([{"slug": "x"}, {"fs_slug": "n64"}]) == "n64"
 
     def test_an_entry_missing_its_id_names_its_folder(self):
         assert folder_without_an_id([{"fs_slug": "n64", "name": "Nintendo 64"}]) == "n64"

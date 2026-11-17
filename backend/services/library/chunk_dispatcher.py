@@ -413,16 +413,19 @@ class ChunkDispatcher:
         mid-unit returns before the final chunk, so an incomplete platform is
         never stamped (ADR-0023 / #1025). *fetched_rom_ids* are the ids the
         unit's fetch returned, whose checksum the next skip compares RomM's id
-        set with.
+        set with. Where the listing gave no ROM count for the platform, the
+        stamp records how many ROMs that fetch returned, so removed-game
+        discovery does not read an unknown count as an empty fetch (#2761 D5).
         """
         if unit.type == "platform" and unit.platform_folder and chunk_index == chunk_count - 1:
+            fetched = set(fetched_rom_ids)
             return PlatformSyncState.stamp(
                 platform_folder=unit.platform_folder,
                 at=self._clock.now().isoformat(),
-                rom_count=unit.rom_count,
+                rom_count=unit.rom_count if unit.rom_count_known else len(fetched),
                 fetch_id=fetch_id,
                 fetch_started_at=fetch_started_at,
-                rom_id_checksum=rom_id_checksum(fetched_rom_ids),
+                rom_id_checksum=rom_id_checksum(fetched),
             )
         return None
 

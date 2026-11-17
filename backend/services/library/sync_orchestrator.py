@@ -29,6 +29,7 @@ ran. The recorder writes that answer, never picks it.
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -44,7 +45,7 @@ from domain.sync_run_kind import SyncRunKind
 from domain.sync_stage import SyncStage
 from domain.sync_state import SyncCancelled
 from lib.background_tasks import BackgroundTasks
-from lib.errors import Refused, classify_error
+from lib.errors import Refused, RommPlatformListingUnreadable, classify_error
 from services.library._convergence import leave_running_groups_out
 from services.library._stale_rows import settle_stale_rows
 from services.library._state import SYNC_CANCELLED, SYNC_IN_PROGRESS
@@ -52,8 +53,6 @@ from services.library._unit_roms import collection_membership_key
 from services.library.session_budget import SYNC_PAUSED_BUDGET, SessionBudgetMonitor
 
 if TYPE_CHECKING:
-    import logging
-
     from domain.work_unit import WorkUnit
     from services.library._state import CollectionMembership, LibrarySyncStateBox
     from services.library.collection_fetcher import CollectionDelivery
@@ -315,7 +314,10 @@ class SyncOrchestrator:
                 await self._progress.emit_cancelled(SYNC_CANCELLED)
                 raise
             except Exception as e:
-                self._logger.error(f"Failed to build work queue: {e}")
+                # RomM answered with a platform list it cannot be read from: a
+                # warning, as every reader of it logs one (#2761 D8).
+                level = logging.WARNING if isinstance(e, RommPlatformListingUnreadable) else logging.ERROR
+                self._logger.log(level, f"Failed to build work queue: {e}")
                 _code, _msg = classify_error(e)
                 await self._progress.emit_progress(SyncStage.ERROR, message=_msg, running=False)
                 return

@@ -1022,20 +1022,20 @@ game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app
   emitted entry is on, the name the `platform_names` cache holds, else the `fs_slug` — an emitted entry and a row left
   bound through `platform_collection_name`, a kept row by the same lookup — never by the `platform_name` an entry
   carries (#2558 D1), even where that is the same name: a ROM a collection brings, walked or rebuilt from the kept data,
-  carries its platform's listed name ([#2761](https://github.com/danielcopper/romm-tender/issues/2761) D6). The
-  preview's per-platform table is named by the same names ([QAM panel — Sync](qam-panel.md#sync)). Force Full Sync
-  leaves the routes in place. The preview asks the same question for the same rows, through the same
-  `services/library/_stale_rows.py::settle_stale_rows`, so the removals it counts are the ones the apply makes. Both
-  judge a row's game by the group keys of the ROMs the run counts as synced (`domain/sync_diff.py::group_keys_of`): the
-  apply reads them off the rows its commits upserted (`do_read_resident_group_keys`), and the preview, which writes
-  nothing, lays the keys its fetch stamped over the same read. **Only the apply records what it established**
-  (`StaleSort.gone_from_romm_marks`, written in the finalize's write UoW by `RunFinalizer.finalize_per_unit_run`): an
-  asked row RomM answered with a proven 404 is marked `roms.gone_from_romm = 'not_found'`, one RomM returned has its
-  mark cleared, and an answer that establishes nothing writes nothing; a row kept on a platform RomM no longer lists is
-  marked `delisted`. A row kept on a platform the run read whole is not marked, since that platform's stamp already
-  names it. Any commit of a row clears its mark, because the column rides the sync UPSERT with no merge. The mark is
-  what lets the removed-game cleanup list such a row ([Removed-game cleanup](removed-game-cleanup.md#discovery)); Force
-  Full Sync leaves it in place.
+  carries the name the Platforms tab gives its platform
+  ([#2761](https://github.com/danielcopper/romm-tender/issues/2761) D6). The preview's per-platform table is named by
+  the same names ([QAM panel — Sync](qam-panel.md#sync)). Force Full Sync leaves the routes in place. The preview asks
+  the same question for the same rows, through the same `services/library/_stale_rows.py::settle_stale_rows`, so the
+  removals it counts are the ones the apply makes. Both judge a row's game by the group keys of the ROMs the run counts
+  as synced (`domain/sync_diff.py::group_keys_of`): the apply reads them off the rows its commits upserted
+  (`do_read_resident_group_keys`), and the preview, which writes nothing, lays the keys its fetch stamped over the same
+  read. **Only the apply records what it established** (`StaleSort.gone_from_romm_marks`, written in the finalize's
+  write UoW by `RunFinalizer.finalize_per_unit_run`): an asked row RomM answered with a proven 404 is marked
+  `roms.gone_from_romm = 'not_found'`, one RomM returned has its mark cleared, and an answer that establishes nothing
+  writes nothing; a row kept on a platform RomM no longer lists is marked `delisted`. A row kept on a platform the run
+  read whole is not marked, since that platform's stamp already names it. Any commit of a row clears its mark, because
+  the column rides the sync UPSERT with no merge. The mark is what lets the removed-game cleanup list such a row
+  ([Removed-game cleanup](removed-game-cleanup.md#discovery)); Force Full Sync leaves it in place.
 - **A game the user hid in RomM leaves Steam ([#2502](https://github.com/danielcopper/romm-tender/issues/2502)).** RomM
   has two kinds of hidden. A ROM an admin hid from a user or group (`hidden_entities`) is answered 404 by its exact id
   and listed nowhere, so nothing tells it from a deleted one and Tender treats it as gone from RomM (D3). A ROM the user
@@ -1433,27 +1433,32 @@ collection is fetched rather than skipped once a run builds one for it again.
 read while the work queue is built, before any unit is fetched, and a failure of any of them raises to the same handler
 on each path. A failure is any error the transport raises — a transient one only once its retry ladder gives up — and
 also an answer that is not a list: the adapter's platform listing and its three collection listings
-(`adapters/romm/romm_api.py`) raise that as a plain `RommApiError`, never an empty list and never `RommNotFoundError`,
-which downstream reads as proof that one entity is gone, and a listing is about no single entity. The platform listing
-raises the same way where an entry with an `fs_slug` has no usable `id`
+(`adapters/romm/romm_api.py`) raise that as a `RommApiError` — the platform listing as the subclass below — never an
+empty list and never `RommNotFoundError`, which downstream reads as proof that one entity is gone, and a listing is
+about no single entity. The platform listing raises the same way where an entry with an `fs_slug` has no usable `id`
 (`domain/platform_listing.py::folder_without_an_id`, [#2761](https://github.com/danielcopper/romm-tender/issues/2761)
-D4): leaving out only that entry would read a switched-on platform as gone from RomM and remove its shortcuts. Apply
-emits a `sync_progress` frame at stage `error` carrying the `classify_error` message and returns before it opens a
-`SyncRun`, so no stale removal runs and neither `sync_collections` nor `sync_complete` is emitted. The preview drops any
-staged preview, emits the same `error` frame and raises the error on: a RomM error is answered with `classify_error`'s
-reason and message, and anything else reaches the panel as a transport error, for which the Sync page shows its own
-general line. Read as an empty listing instead, the run would build no unit for an enabled platform or collection, and
-once any other unit keeps the run from ending as "Nothing to sync", the stale removal would remove the shortcuts of the
-games only it brings in; a collection would also lose its stamp (every kind has one), and the frontend's
-stale-collection cleanup would delete its Steam collection. A collection absent from a list RomM did answer with is a
-real removal and still goes that way. Only a kind with an enabled id is listed, and of the virtual kind only a type an
-enabled id encodes (`domain/virtual_collection_id.py` reads it out of RomM's id; an id that does not decode lists every
-supported type), so an endpoint that keeps failing blocks the sync only for a user who has switched on a collection it
-serves — switched on, not synced: a foreign collection the owner scope drops from the queue still needs its kind listed.
-The platform listing is always read. The Library page's `get_collections` reads the same collection listings only to
-display them: a failed standard listing fails it, while a failed smart listing or virtual type is left out and the rest
-is listed. The platform listing's other readers — the Library page's `get_platforms` and `set_all_platforms_sync`, and
-the connection test — answer a RomM error from it, a non-list answer included, with `classify_error`'s failure shape.
+D4): leaving out only that entry would leave a switched-on platform listed but not fetched, and the run would remove its
+games' shortcuts as for a platform switched off. Such a listing — and an answer that is no list, or one holding an item
+that is no object — is raised as `RommPlatformListingUnreadable` (`adapters/romm/romm_api.py::platform_listing_of`),
+which `classify_error` answers with `platform_listing_unreadable` rather than `server_unreachable`: RomM answered, so it
+is logged as a warning, the Platforms tab says RomM's platform list could not be read, and the connection test, which
+asks the listing only to see that RomM answers and the sign-in holds, passes it by (#2761 D8). Apply emits a
+`sync_progress` frame at stage `error` carrying the `classify_error` message and returns before it opens a `SyncRun`, so
+no stale removal runs and neither `sync_collections` nor `sync_complete` is emitted. The preview drops any staged
+preview, emits the same `error` frame and raises the error on: a RomM error is answered with `classify_error`'s reason
+and message, and anything else reaches the panel as a transport error, for which the Sync page shows its own general
+line. Read as an empty listing instead, the run would build no unit for an enabled platform or collection, and once any
+other unit keeps the run from ending as "Nothing to sync", the stale removal would remove the shortcuts of the games
+only it brings in; a collection would also lose its stamp (every kind has one), and the frontend's stale-collection
+cleanup would delete its Steam collection. A collection absent from a list RomM did answer with is a real removal and
+still goes that way. Only a kind with an enabled id is listed, and of the virtual kind only a type an enabled id encodes
+(`domain/virtual_collection_id.py` reads it out of RomM's id; an id that does not decode lists every supported type), so
+an endpoint that keeps failing blocks the sync only for a user who has switched on a collection it serves — switched on,
+not synced: a foreign collection the owner scope drops from the queue still needs its kind listed. The platform listing
+is always read. The Library page's `get_collections` reads the same collection listings only to display them: a failed
+standard listing fails it, while a failed smart listing or virtual type is left out and the rest is listed. The platform
+listing's other readers — the Library page's `get_platforms` and `set_all_platforms_sync`, and the connection test —
+answer a RomM error from it, a non-list answer included, with `classify_error`'s failure shape.
 
 "Force Full Sync" (`clear_sync_cache`) clears every stamp (and every row's `shortcut_applied`), which is the entire
 full-re-fetch + full-re-apply arm — the stamps are the fetcher's sole skip authority. The `sync_runs` history is
@@ -3532,7 +3537,7 @@ and `models` included). Aggregate roots and the enforcement that keeps them hone
 | `save_path.py` / `save_attribution.py` / `save_status*.py`       | save path resolution, uploader attribution, status DTO building                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `save_answer.py`                                                 | `SaveAnswer` / `SaveComponent` / `SaveGroup` and the rule that classifies one resolver reading into exactly one of the seven save states. Holds the progress-vs-configuration role rule, the download-name fold, the benign-skip reason the refusing states produce (ADR-0034), and which resolver findings refuse a save place as not read from the emulator's settings                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `firmware_platforms.py` / `bios_status.py` / `firmware_wants.py` | Which platform a library firmware file belongs to (and where an older download record or per-platform emulator pick kept under another key — a slug or a server folder name — belongs, judged against one read of the listing, `ListedPlatforms`; and which records a platform's page offers), the status shape, and the resolver's vocabulary. `bios_status.py` holds the status dataclasses (`BiosFileEntry`, `BiosStatus`) and owns the unknown/ok/partial/missing LEVEL (`compute_bios_level` / `compute_bios_label`) — the single source of truth all surfaces read; phrasing + color stay UI-layer. `firmware_wants.py` holds only the words a firmware answer arrives in (`FirmwareCatalogue` / `FirmwarePlacement`, the four `wanted` values) — the decisions are the resolver's, not this layer's |
-| `platform_listing.py`                                            | `PlatformEntry` and `platform_entry_of` — one entry of RomM's platform listing read into the fields Tender takes from it, each checked one way (a platform is named by the listing's `name` alone, never RomM's `display_name`), and `folder_without_an_id`, the entry that makes the whole listing unreadable; every reader of a listed platform's fields goes through it                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `platform_listing.py`                                            | `PlatformEntry` and `platform_entry_of` — one entry of RomM's platform listing read into the fields Tender takes from it, each checked one way, and `folder_without_an_id`, the entry that makes the whole listing unreadable; every reader of a listed platform's fields goes through it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `iso_time.py`                                                    | `parse_iso` / `parse_iso_to_epoch` — ISO-8601 timestamp parsing (stdlib only)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `achievements.py`                                                | achievement progress computation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `shortcut_data.py`                                               | shortcut data building (registry entries, shortcut dicts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |

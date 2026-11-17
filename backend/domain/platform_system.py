@@ -113,7 +113,7 @@ class KeptPlatform:
 
 
 def kept_platform_of(platform: Mapping[str, Any], romm_version: str | None) -> KeptPlatform:
-    """What is kept of one RomM platform read with *romm_version*, read through :func:`platform_entry_of`."""
+    """What is kept of one RomM platform read with *romm_version*; a named field of the wrong kind counts as none."""
     entry = platform_entry_of(platform)
     return KeptPlatform(
         slug=entry.slug,
@@ -122,7 +122,7 @@ def kept_platform_of(platform: Mapping[str, Any], romm_version: str | None) -> K
         name=entry.name,
         is_identified=entry.is_identified,
         romm_version=romm_version,
-        ids=entry.ids,
+        ids=dict(entry.ids),
     )
 
 

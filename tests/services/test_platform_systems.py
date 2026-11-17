@@ -295,6 +295,12 @@ class TestAPlatformListedWithoutAName:
         assert kept["snes"].name is None
         assert answer.platform_name == "snes"
 
+    def test_its_system_is_named_by_its_fs_slug_before_any_sync_named_it(self, service, romm):
+        """#2761 D3 (changed): the platform system's answer names it as its Steam collection is."""
+        romm.platforms = [{"id": 12, "slug": "ngc", "fs_slug": "gc", "display_name": "GameCube", "igdb_id": 21}]
+
+        assert service.platform_system("ngc").platform_name == "gc"
+
 
 class TestAnInstalledGame:
     def test_it_keeps_the_system_its_install_record_holds(self, service, sources, romm):

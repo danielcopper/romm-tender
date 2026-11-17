@@ -128,13 +128,13 @@ class TestSwitchesByFolder:
 
         assert moved == {"snes": True}
 
-    def test_a_listed_platform_whose_id_is_no_whole_number_takes_no_id_s_toggle(self):
-        """#2761 D7: a boolean id is no id, so the toggle kept under ``"True"`` is not its toggle."""
-        move = switches_by_folder({"True": True}, {}, [{"id": True, "fs_slug": "snes"}])
+    def test_a_listed_platform_whose_id_is_no_whole_number_is_given_no_toggle(self):
+        """#2761 D7: a boolean id is no id, so no toggle kept by id is its toggle, and none is guessed."""
+        move = switches_by_folder({"True": True, "1": True}, {}, [{"id": True, "fs_slug": "snes"}, _listed(2, "gba")])
 
         assert move is not None
-        assert move.switches == {"snes": False}
-        assert move.dropped == ("True",)
+        assert move.switches == {"gba": False}
+        assert move.dropped == ("1", "True")
 
     @pytest.mark.parametrize("platforms", [[], [_listed(1, None)]])
     def test_a_listing_naming_no_folder_moves_nothing_yet(self, platforms):

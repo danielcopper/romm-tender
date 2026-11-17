@@ -974,6 +974,21 @@ describe("Library › Platforms", () => {
       expect(container.textContent).toContain("Could not read your platforms");
     });
 
+    it("says RomM's platform list could not be read, not the connection, when RomM answered with one it cannot", async () => {
+      vi.mocked(backend.getPlatforms).mockResolvedValue({
+        success: false,
+        platforms: [],
+        reason: "platform_listing_unreadable",
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain(
+        "RomM answered, but its platform list could not be read. Check your platforms in RomM and open the page again.",
+      );
+      expect(container.textContent).not.toContain("Check the connection to RomM");
+    });
+
     it("says so when the platform read throws", async () => {
       vi.mocked(backend.getPlatforms).mockRejectedValue(new Error("net"));
       const { container } = render(<LibraryPage onBack={vi.fn()} />);

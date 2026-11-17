@@ -41,15 +41,12 @@ def platform_sync_enabled(switches: Mapping[str, Any], fs_slug: str | None) -> b
     return fs_slug is not None and switches.get(fs_slug) is True
 
 
-def resolve_sync_enabled(stored: Mapping[str, Any], pid: str | None) -> bool:
+def resolve_sync_enabled(stored: Mapping[str, Any], pid: str) -> bool:
     """Whether the toggles kept by RomM's platform id had platform ``pid`` synced.
 
     An absent id was synced **only while the map was empty** (every platform on
-    by default); once any toggle was recorded, an absent id was off. ``None``
-    is a platform listed without a usable id, which no toggle is kept under.
+    by default); once any toggle was recorded, an absent id was off.
     """
-    if pid is None:
-        return len(stored) == 0
     return stored.get(pid, len(stored) == 0) is True
 
 
@@ -75,10 +72,13 @@ def switches_by_folder(
     names without an ``fs_slug`` — is dropped (D21, D26). ``None`` where the
     listing names no ``fs_slug``, since nothing can be moved yet.
     """
+    # A listed platform without a usable id names no toggle kept by id, so it
+    # is left out of the move rather than given a guessed state; a listing
+    # holding one is refused before it gets here (#2761 D4).
     listed = [
-        (None if entry.platform_id is None else str(entry.platform_id), folder)
+        (str(platform_id), folder)
         for entry in platform_entries(platforms)
-        if (folder := entry.fs_slug) is not None
+        if (folder := entry.fs_slug) is not None and (platform_id := entry.platform_id) is not None
     ]
     if not listed:
         return None

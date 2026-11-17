@@ -294,8 +294,8 @@ that will not happen for `pcsx2/bios`, which RetroDECK links onto the BIOS folde
 
 The **Platforms** tab of the **Library** page holds everything about one system: its sync toggle, the **active emulator
 core**, the BIOS files that core needs, and the two ways to take the platform back out of Steam. The list on the left
-holds every platform your RomM server reports with at least one ROM, in two groups — **Synced** above **Available** —
-and the row you focus is the one the right-hand pane describes.
+holds every platform your RomM server reports with at least one ROM, or whose count it does not give, in two groups —
+**Synced** above **Available** — and the row you focus is the one the right-hand pane describes.
 
 1. From the main QAM page, tap **Library**, then move to the **Platforms** tab with L1/R1
 2. Each row is a coloured dot, the platform's name and the sync toggle. The dot is the BIOS state at a glance — green

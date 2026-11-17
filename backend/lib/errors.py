@@ -168,6 +168,16 @@ class RommAcknowledgementNotTaken(RommApiError):
         )
 
 
+class RommPlatformListingUnreadable(RommApiError):
+    """RomM answered its platform listing, but not in a form Tender can read.
+
+    The answer is no list, an item of it is no object, or an entry has a folder
+    (``fs_slug``) but no usable ``id`` (#2761 D4). RomM answered, so this says
+    nothing about it being reachable (#2761 D8). Non-retryable: the same answer
+    comes back.
+    """
+
+
 class RommConnectionError(RommApiError):
     """Network-level failures: connection refused, DNS failure, reset, etc."""
 
@@ -341,6 +351,8 @@ def classify_error(exc):
         return ErrorCode.UNSUPPORTED.value, f"This feature requires RomM {exc.min_version} or newer"
     if isinstance(exc, TokenHostMismatchError | TokenUnsendableError):
         return "config_error", _unsent_token_message(exc)
+    if isinstance(exc, RommPlatformListingUnreadable):
+        return "platform_listing_unreadable", str(exc)
     if isinstance(exc, RommSyncDisabledError):
         return (
             "device_sync_disabled",

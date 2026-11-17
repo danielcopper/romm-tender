@@ -186,6 +186,9 @@ export interface PlatformsPageState extends BiosActions {
   loading: boolean;
   /** The platform list itself could not be read — the tab has nothing to show. */
   failed: boolean;
+  /** Of a {@link failed} read: RomM answered, but its platform list could not
+   *  be read (`platform_listing_unreadable`), so the connection is not to blame. */
+  listingUnreadable: boolean;
   /** RomM is unreachable: the BIOS downloads are withdrawn, everything else stands. */
   serverOffline: boolean;
   /** The Steam shortcut counts could not be read — every row's `shortcutCount`
@@ -255,6 +258,7 @@ export function usePlatformsPage(): PlatformsPageState {
   const [groups, setGroups] = useState<FrozenGroups | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [listingUnreadable, setListingUnreadable] = useState(false);
   // The two things known about the BIOS answers, kept apart because they are
   // two different statements: what each platform's answer IS (`firmware`, a
   // landed entry) and which reads did not come back (`readFailed`). A folder in
@@ -528,6 +532,7 @@ export function usePlatformsPage(): PlatformsPageState {
       .then((result) => {
         if (!result.success) {
           setFailed(true);
+          setListingUnreadable(result.reason === "platform_listing_unreadable");
           return;
         }
         syncWrites.seed(result.platforms.map((p) => [p.fs_slug, p.sync_enabled]));
@@ -873,6 +878,7 @@ export function usePlatformsPage(): PlatformsPageState {
     groups,
     loading,
     failed,
+    listingUnreadable,
     serverOffline,
     shortcutCountsFailed,
     selectedFolder,

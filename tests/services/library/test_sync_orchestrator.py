@@ -5698,15 +5698,30 @@ class TestFailedCollectionListing:
 
 
 class TestPlatformListingThatIsNotAList:
-    """A platform listing that answers with something but a list stops the run before it changes anything.
+    """A platform listing Tender cannot read stops the run before it changes anything (#2761 D4, D8).
 
     Read as "no platforms" instead, a run with a collection enabled would still
     complete, and the end-of-run stale removal would remove the shortcut of every
-    game only a platform brings in.
+    game only a platform brings in; read without only the entry it cannot read,
+    that platform's games would go as for a platform switched off.
     """
 
+    @pytest.mark.parametrize(
+        ("answer", "detail"),
+        [
+            ({"detail": "not a list"}, "RomM answered with a dict, not a list"),
+            (["n64"], "an item is a str, not an object"),
+            (
+                [{"id": 1, "slug": "n64", "fs_slug": "n64"}, {"id": None, "slug": "gba", "fs_slug": "gba"}],
+                "platform gba has no usable id",
+            ),
+        ],
+        ids=["no-list", "item-no-object", "switched-on-folder-without-id"],
+    )
     @pytest.mark.asyncio
-    async def test_the_run_fails_and_leaves_every_binding_as_it_was(self, make_library, fake_romm_api, emit):
+    async def test_the_run_fails_and_leaves_every_binding_as_it_was(
+        self, make_library, fake_romm_api, emit, caplog, answer, detail
+    ):
         from adapters.romm.romm_api import RommApiAdapter
 
         library = make_library(romm_api=fake_romm_api)
@@ -5744,16 +5759,20 @@ class TestPlatformListingThatIsNotAList:
         await run_to_its_end("run-1")
         assert bindings() == {1: 5001, 2: 5002, 4: 5004}
 
-        # Run 2: the platform listing answers with an object; the collection listing still answers.
+        # Run 2: the platform listing answers with one Tender cannot read; the collection listing still answers.
         client = MagicMock()
-        client.request.return_value = {"detail": "not a list"}
+        client.request.return_value = answer
         fake_romm_api.list_platforms = RommApiAdapter(client).list_platforms  # type: ignore[method-assign]
         emit.reset_mock()
-        await run_to_its_end("run-2")
+        with caplog.at_level(logging.WARNING):
+            await run_to_its_end("run-2")
 
         progress = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_progress"]
         assert [(f["stage"], f["message"], f["running"]) for f in progress] == [
-            ("error", "Unexpected response from /api/platforms: dict", False)
+            ("error", f"RomM's platform list could not be read (/api/platforms): {detail}", False)
+        ]
+        assert [r.levelno for r in caplog.records if r.getMessage().startswith("Failed to build work queue")] == [
+            logging.WARNING
         ]
         assert {c.args[0] for c in emit.call_args_list} == {"sync_progress"}
         with library.uow as uow:

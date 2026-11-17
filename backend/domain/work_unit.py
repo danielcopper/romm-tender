@@ -30,6 +30,10 @@ class WorkUnit:
     name: str
     slug: str
     rom_count: int
+    # Platform-only, off the wire: whether ``rom_count`` is RomM's count. Where
+    # the listing gave none it is 0 for the progress alone, and the platform's
+    # completion stamp records what the fetch returned instead (#2761 D5).
+    rom_count_known: bool = True
     # Platform-only: the platform's ``fs_slug``, by
     # which the sync knows the platform (#2452 D1); the slug stays the console.
     # ``""`` for a collection.

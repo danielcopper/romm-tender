@@ -31,6 +31,7 @@ from lib.errors import (
     Refused,
     RommAuthError,
     RommForbiddenError,
+    RommPlatformListingUnreadable,
     ServerUnreachable,
     VersionUnsupported,
 )
@@ -183,7 +184,9 @@ class ConnectionService:
         name or password — before any request — or no token has been minted
         yet, and ``VersionUnsupported`` (carrying ``romm_version``) for a server
         below the minimum; a RomM error from the heartbeat or the platform
-        listing propagates as it is. On success ``romm_version`` carries the
+        listing propagates as it is. A platform listing RomM answered but Tender
+        cannot read still shows that RomM answers and the sign-in holds, so it is
+        logged and the test goes on (#2761 D8). On success ``romm_version`` carries the
         detected server version when the heartbeat exposed one.
         """
         async with self._rules.hold("test_connection", prune=True):
@@ -198,7 +201,10 @@ class ConnectionService:
             raise NotConfigured("Not signed in — sign in to RomM first")
 
         version = await self._probe_version_or_forget()
-        await self._loop.run_in_executor(None, self._romm_api.list_platforms)
+        try:
+            await self._loop.run_in_executor(None, self._romm_api.list_platforms)
+        except RommPlatformListingUnreadable as e:
+            self._logger.warning(f"Connection test: {e}; RomM answered and the sign-in holds")
         self._refuse_unsupported_version(version)
 
         await self._backfill_user_id_best_effort()
