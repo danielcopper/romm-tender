@@ -105,8 +105,11 @@ class TestWhereNoReadingCouldBeTaken:
     async def test_an_empty_reading_is_nothing_running(self):
         assert await _games(_Steam(())).running_rom_ids() == frozenset()
 
-    async def test_no_debugger_is_no_reading(self):
-        assert await _games(_Steam(None)).running_rom_ids() is None
+    async def test_no_debugger_is_no_reading_and_is_logged(self):
+        debug: list[str] = []
+
+        assert await _games(_Steam(None), debug).running_rom_ids() is None
+        assert any("the host took no reading" in line for line in debug)
 
     async def test_a_reader_that_raised_is_no_reading_and_is_logged(self):
         debug: list[str] = []

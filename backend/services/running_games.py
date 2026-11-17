@@ -50,8 +50,8 @@ class RunningGames:
         No reading is taken where the host has none (no debugger, the panel
         not loaded), where the reader raised or did not answer within
         :data:`READING_TIMEOUT_SECONDS`, or where the read of the ROMs failed;
-        each failure is logged. An app Steam listed without an id matches no
-        ROM. What each reader does without a reading is
+        each is logged here, and why the host took none is logged by the host.
+        An app Steam listed without an id matches no ROM. What each reader does without a reading is
         ``docs/architecture/save-file-sync-architecture.md``'s, "Is the game
         running".
         """
@@ -62,6 +62,7 @@ class RunningGames:
             self._log_debug(f"Steam's running apps could not be read: {e!r}")
             return None
         if apps is None:
+            self._log_debug("Steam's running apps could not be read: the host took no reading")
             return None
         app_ids = {app.app_id for app in apps if app.app_id is not None}
         if not app_ids:
