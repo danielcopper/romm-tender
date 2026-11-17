@@ -1505,11 +1505,13 @@ cannot take back a newer refusal's line, and nothing lands on a view entered afr
 `frontend/src/bigpicture/library/latestWrites.ts`, shared by both tabs' hooks.
 
 **Platforms** is list and detail. The list holds every platform RomM reports with at least one ROM — what
-`get_platforms` returns; a platform with nothing to sync is not listed — one row per RomM platform, by its `fs_slug`, so
-two platforms that share a slug are two rows, each named as its Steam collection is
-([#2452](https://github.com/danielcopper/romm-tender/issues/2452) D1, D2). The rows stand in two groups, **Synced** (the
-toggle is on) above **Available**, each alphabetical: **a dot, the name, the toggle, and nothing else**. The dot is the
-row's whole BIOS signal, through the shared mapping every platform-level BIOS dot renders through
+`get_platforms` returns; a platform with nothing to sync is not listed, while one whose `rom_count` RomM sends as no
+number is, so it can still be switched on and off — one row per RomM platform, by its `fs_slug`, so two platforms that
+share a slug are two rows, each named as its Steam collection is
+([#2452](https://github.com/danielcopper/romm-tender/issues/2452) D1, D2), and one RomM lists without a usable `name` by
+its `fs_slug` ([#2761](https://github.com/danielcopper/romm-tender/issues/2761) D3, D5). The rows stand in two groups,
+**Synced** (the toggle is on) above **Available**, each alphabetical: **a dot, the name, the toggle, and nothing else**.
+The dot is the row's whole BIOS signal, through the shared mapping every platform-level BIOS dot renders through
 (`frontend/src/utils/biosColor.ts`: green met, red not met, grey not established or no level, and amber only where the
 resolver's verdict is open because of the disc's region alone; the per-file rows on the platform detail and the game
 page hard-code the same colours, and never use amber for a row). It is drawn on every row, taking exactly the helper's
@@ -1539,9 +1541,10 @@ it, in the platform page's 10 px small print and muted, stand up to three lines
 ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D25): the emulator in effect (`platform-facts`); one
 line per enabled source whose user chose an emulator inside ES-DE (`platform-frontend-choices`, "Gearsystem chosen in
 ES-DE", "RetroDECK: Gearsystem chosen in ES-DE" where more than one source is listed), absent where no source has such a
-choice; and `N versions on RomM · M versions in Steam` (`platform-counts`). Each part of the counts line keeps itself on
-one line and carries its `·` in front, so the line wraps only between parts and never cuts one. The system a platform is
-in is not named while one is found; it shows only in the line that says why there is none or why it is switched off
+choice; and `N versions on RomM · M versions in Steam` (`platform-counts`), the first half left out where RomM's listing
+sent no number for `N`. Each part of the counts line keeps itself on one line and carries its `·` in front, so the line
+wraps only between parts and never cuts one. The system a platform is in is not named while one is found; it shows only
+in the line that says why there is none or why it is switched off
 ([core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)). **Those lines, the notes under the BIOS
 heading and the lines under each BIOS file's name share one size**, `NOTE_FONT` (10 px), below the 11 px
 `SECONDARY_FONT` the other panes' secondary lines keep: on the Deck the three read as large as the rows' file names at

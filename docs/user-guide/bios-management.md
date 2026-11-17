@@ -315,10 +315,11 @@ and the row you focus is the one the right-hand pane describes.
    chose an emulator for the system inside ES-DE, that choice ("Gearsystem chosen in ES-DE", with the source named when
    more than one is switched on), then how many versions it has on RomM and how many versions are in Steam ("12 versions
    on RomM · 9 versions in Steam"; every version of a game that shares one shortcut counts, so this can be more than the
-   shortcuts the Remove button names). The name is in red where the platform's games cannot start with it — it is not
-   installed — and the sentence below says why. If it reads **no default** in red, whether the emulator RetroDECK ships
-   as its default is installed could not be established, so nothing is the default until you pick one; the sentence
-   below says so. If it reads **no emulator** in red, RetroDECK has none for this platform at all
+   shortcuts the Remove button names; the count on RomM is left out where RomM did not send one). The name is in red
+   where the platform's games cannot start with it — it is not installed — and the sentence below says why. If it reads
+   **no default** in red, whether the emulator RetroDECK ships as its default is installed could not be established, so
+   nothing is the default until you pick one; the sentence below says so. If it reads **no emulator** in red, RetroDECK
+   has none for this platform at all
 6. The **chip button** at the right of the name opens a menu of the platform's emulators — the same button, in the same
    two colours, as the one on a game's page. It is always there: it opens the menu whenever there is more than one
    emulator to choose between — also before the platform's first sync, so you can pick before its games reach Steam —
