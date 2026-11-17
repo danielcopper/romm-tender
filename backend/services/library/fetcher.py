@@ -712,8 +712,8 @@ class LibraryFetcher:
                     if stamp is not None and all_rows
                     else None
                 )
-                # Without RomM's count the estimate would read short; unknown is
-                # the answer that never does (#2761 D5).
+                # Without RomM's count no estimate is sent (#2761 D5); the plan
+                # then prices the platform short, at its planned count of 0.
                 new_shortcuts = (
                     None
                     if unit.rom_count is None

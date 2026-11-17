@@ -6615,7 +6615,7 @@ class TestTheListingMovesOlderEntries:
 
 
 class TestFirmwareThatIsNoList:
-    """A platform whose firmware is no list fails the firmware read as an unreadable listing (#2761 D8)."""
+    """A platform whose firmware is no list fails the firmware read as an unreadable listing."""
 
     _LISTING: ClassVar[list[dict[str, Any]]] = [{"id": 1, "slug": "psx", "fs_slug": "ps", "firmware": {"id": 7}}]
 

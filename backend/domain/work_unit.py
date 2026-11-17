@@ -95,7 +95,7 @@ class WorkUnit:
         """This unit's weight in the plan's skip-aware estimate total.
 
         ``0`` when the plan predicts the wholesale skip, else the persisted
-        post-collapse shortcut count, falling back to the raw ``rom_count``
+        post-collapse shortcut count, falling back to :meth:`planned_count`
         when no collapsed count is known. Estimate-only — prices the
         ``sync_plan`` payload, never the actual skip decision (ADR-0023).
         """

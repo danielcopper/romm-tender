@@ -5700,11 +5700,7 @@ class TestFailedCollectionListing:
 class TestAnUnreadablePlatformListing:
     """A platform listing Tender cannot read stops the run before it changes anything (#2761 D4, D8).
 
-    Read as "no platforms" instead, a run with a collection enabled would still
-    complete, and the end-of-run stale removal would remove the shortcut of every
-    game only a platform brings in. Why an entry it cannot read is not left out
-    instead: docs/architecture/backend-architecture.md, "A listing that fails
-    stops the run".
+    Why: docs/architecture/backend-architecture.md, "A listing that fails stops the run".
     """
 
     @pytest.mark.parametrize(

@@ -43,8 +43,7 @@ class PlatformEntry:
     ``firmware`` is the entry's list of firmware files as sent: empty where the
     entry sends none, ``None`` where it sends something that is no list, which
     says nothing about the platform's firmware. ``rom_count`` is ``None`` where
-    the count is unknown (#2761 D5): not a whole number, or below zero, which
-    the one set of checks counts as none (#2761 D7).
+    the count is unknown (#2761 D5): not a whole number, or below zero.
     """
 
     fs_slug: str | None = None

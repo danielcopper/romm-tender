@@ -92,9 +92,8 @@ class RommFirmwareApi(Protocol):
         """Fetch every platform with the firmware files RomM holds for it.
 
         Returns /api/platforms, each platform carrying its files as ``firmware``.
-        Raises ``RommPlatformListingUnreadable`` (``lib/errors.py``) for an
-        answer that is no list, an item that is no object, or a platform
-        listed with an ``fs_slug`` but no usable ``id``.
+        Raises ``RommPlatformListingUnreadable`` (``lib/errors.py``) where
+        Tender cannot read the answer.
         """
         ...
 
@@ -113,9 +112,8 @@ class RommPlatformReader(Protocol):
         """Fetch all platforms configured on the RomM server.
 
         Returns a list of platform dicts from /api/platforms. Raises
-        ``RommPlatformListingUnreadable`` (``lib/errors.py``) for an answer
-        that is no list, an item that is no object, or a platform listed with
-        an ``fs_slug`` but no usable ``id``.
+        ``RommPlatformListingUnreadable`` (``lib/errors.py``) where Tender
+        cannot read the answer.
         """
         ...
 

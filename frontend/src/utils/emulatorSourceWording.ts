@@ -310,7 +310,7 @@ export function sealedCatalogueSentence(kind: string): string {
 /** Why a platform has no system yet: its ids are not kept, and RomM, which gives them, cannot be reached. */
 const ROMM_UNREACHABLE_SENTENCE = "RomM cannot be reached, so Tender does not know this platform's system yet.";
 
-/** Why a platform has no system yet: its ids are not kept, and RomM refused the read that gives them. */
+/** Why a platform has no system yet: its ids are not kept, and the RomM read that gives them failed. */
 const ROMM_REFUSED_SENTENCE = "RomM did not give this platform's ids, so Tender does not know its system yet.";
 
 /** Every reason a RomM read can fail with: a `Record` so that a reason added to {@link RommErrorReason} must be added here. */

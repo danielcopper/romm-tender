@@ -398,7 +398,7 @@ describe("emulatorDataReasonSentence", () => {
     "unsupported",
     "unknown",
     "platform_listing_unreadable",
-  ] as const)("says RomM did not give the platform's ids where it refused them with %s", (reason) => {
+  ] as const)("says RomM did not give the platform's ids where the read that gives them failed with %s", (reason) => {
     const sentence = "RomM did not give this platform's ids, so Tender does not know its system yet.";
     expect(emulatorDataReasonSentence(reason, RETRODECK, null)).toBe(sentence);
     expect(emulatorDataReasonSentence(reason, null, null)).toBe(sentence);

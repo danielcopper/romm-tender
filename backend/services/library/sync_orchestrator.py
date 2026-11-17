@@ -325,7 +325,7 @@ class SyncOrchestrator:
             total_units = len(work_queue)
             total_roms_planned = sum(u.planned_count() for u in work_queue)
             # Skip-aware estimate total (#1382): predicted-skip units weigh 0,
-            # the rest their persisted collapsed count (raw ``rom_count``
+            # the rest their persisted collapsed count (``planned_count``
             # fallback). Estimate-only — it prices the frontend's seeds and
             # never feeds the actual skip decision (ADR-0023); ``total_roms``
             # below stays the raw planned total for backward compatibility.

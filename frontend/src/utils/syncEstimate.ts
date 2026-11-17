@@ -114,7 +114,8 @@ export function previewApplySeconds(s: SyncPreviewSummary): number {
  * and on a platform with sibling groups (ADR-0021) the pre-collapse count
  * exceeds the real shortcut count, so the subtraction would price each collapsed
  * duplicate as a phantom create plus a cover download (#1517). A unit whose
- * backend omits ``new_shortcut_count`` (collections, older backends) keeps the
+ * backend omits ``new_shortcut_count`` (collections, a platform whose count RomM
+ * did not give, older backends) keeps the
  * subtraction, which is the pre-#1517 behaviour.
  *
  * The ``bound_count`` fallback is not rare for collections: a collection's
