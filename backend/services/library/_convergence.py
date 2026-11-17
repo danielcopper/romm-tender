@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from domain.sync_diff import brought_in_by_delivery, converge_bound_groups, stored_version
+from domain.sync_diff import brought_in_by_delivery, converge_bound_groups, stored_version, without_running_groups
 
 if TYPE_CHECKING:
     import asyncio
@@ -57,21 +57,26 @@ async def converge_unless_running(
     )
     if not converged:
         return converged
-    running = await running_rom_ids()
-    if running is None:
-        logger.info(f"Convergence: Steam's running games could not be read; {len(converged)} shortcut(s) stay")
+    return leave_running_groups_out(converged, await running_rom_ids(), logger)
+
+
+def leave_running_groups_out(
+    converged: Sequence[ConvergedBinding], running_rom_ids: frozenset[int] | None, logger: logging.Logger
+) -> list[ConvergedBinding]:
+    """*converged* less every group one of whose shortcuts Steam lists as running; less every group without a reading.
+
+    *running_rom_ids* is one reading of Steam's running games, ``None`` where
+    none could be taken: a game may be running then, so every group stays as
+    it is and converges on a later run (#2645 D5, D6; #2776 D5).
+    """
+    if running_rom_ids is None:
+        if converged:
+            logger.info(
+                f"Convergence: Steam's running games could not be read; {len(converged)} shortcut(s) stay "
+                "until a later sync"
+            )
         return []
-    if not running:
-        return converged
-    left = converge_bound_groups(
-        listed,
-        registry,
-        installed_rom_ids,
-        platform_folders=platform_folders,
-        preferred_region=preferred_region,
-        running_rom_ids=running,
-        hidden_rom_ids=hidden,
-    )
+    left = without_running_groups(converged, running_rom_ids)
     if len(left) < len(converged):
         logger.info(f"Convergence: {len(converged) - len(left)} shortcut(s) of a running game stay until a later sync")
     return left

@@ -1157,7 +1157,7 @@ class TestSyncApplyDelta:
         do_sync.assert_called_once()
         # It carries the preview's region and nothing fetched (#2776 D2).
         assert do_sync.call_args.args == ()
-        assert do_sync.call_args.kwargs == {"staged_region": "auto"}
+        assert do_sync.call_args.kwargs == {"preferred_region": "auto"}
 
     @pytest.mark.asyncio
     async def test_apply_dispatches_per_unit_task(self, library, emit):
@@ -1629,7 +1629,7 @@ class TestRunKindOnTheWire:
         library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         assert library.sync._box.try_begin_run("run-apply", kind=SyncRunKind.APPLY) is True
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         frames = self._frames(emit)
         assert frames, "an apply run narrates its units"
@@ -1673,7 +1673,7 @@ class TestRunKindOnTheWire:
         library.unit_applier.apply_unit = AsyncMock(side_effect=RuntimeError("boom"))
         assert library.sync._box.try_begin_run("run-err", kind=SyncRunKind.APPLY) is True
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         frames = self._frames(emit)
         assert frames[-1]["stage"] == "error"
@@ -2049,7 +2049,7 @@ class TestDoSyncPerUnit:
         library.settings["enabled_collections"] = {}
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         assert library.sync._box.sync_state == SyncState.IDLE
         # Sync plan was emitted with empty units
@@ -2069,7 +2069,7 @@ class TestDoSyncPerUnit:
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-plan"
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         plan_events = [c for c in emit.call_args_list if c[0][0] == "sync_plan"]
         assert len(plan_events) == 1
@@ -2112,7 +2112,7 @@ class TestDoSyncPerUnit:
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-est"
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         plan_events = [c for c in emit.call_args_list if c[0][0] == "sync_plan"]
         assert len(plan_events) == 1
@@ -2159,7 +2159,7 @@ class TestDoSyncPerUnit:
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-est"
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         payload = next(c[0][1] for c in emit.call_args_list if c[0][0] == "sync_plan")
         units = {u["name"]: u for u in payload["units"]}
@@ -2200,7 +2200,7 @@ class TestDoSyncPerUnit:
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-restamp"
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         # The apply ran despite the empty delta: a single empty final chunk fired.
         unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
@@ -2249,7 +2249,7 @@ class TestDoSyncPerUnit:
         library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert len(unit_events) == 2
@@ -2290,7 +2290,7 @@ class TestDoSyncPerUnit:
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-abc"
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert len(unit_events) == 2
@@ -2318,7 +2318,7 @@ class TestDoSyncPerUnit:
         library.sync._reporter.commit_unit_results = AsyncMock()  # type: ignore[method-assign]
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert len(unit_events) == 1
@@ -2354,7 +2354,7 @@ class TestDoSyncPerUnit:
         library.sync._reporter.commit_unit_results = commit_mock  # type: ignore[method-assign]
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         # Nothing on the apply branch ran.
         download_artwork.assert_not_called()
@@ -2408,7 +2408,7 @@ class TestDoSyncPerUnit:
         library.sync._reporter.commit_unit_results = AsyncMock()  # type: ignore[method-assign]
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         # Frontend was told to remove rom_id 99, carrying its bound app_id.
         stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
@@ -2462,7 +2462,7 @@ class TestDoSyncPerUnit:
         library.sync._reporter.commit_unit_results = AsyncMock()  # type: ignore[method-assign]
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
         # Only the bound stale ROM (99) is emitted; the unbound leftover (77) is excluded.
@@ -2508,7 +2508,7 @@ class TestDoSyncPerUnit:
         library.chunk_dispatcher._wait_for_unit_complete = ack_same_appid
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         # The load-bearing assertion: app 5000 is NOT emitted for removal.
         stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
@@ -2553,7 +2553,7 @@ class TestDoSyncPerUnit:
         library.chunk_dispatcher._wait_for_unit_complete = ack_same_appid
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
         # rom 99 (app 9900) is removed; the colliding app 5000 is excluded.
@@ -2594,7 +2594,7 @@ class TestDoSyncPerUnit:
         library.chunk_dispatcher._wait_for_unit_complete = ack_reps
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert len(unit_events) == 1
@@ -2611,7 +2611,8 @@ class TestDoSyncPerUnit:
 
     async def _apply_group_and_get_shortcuts(self, library, fake_romm_api, emit, roms):
         """Seed a single-platform sibling group, run one apply unit, return the
-        emitted ``sync_apply_unit`` shortcut dicts. Shared by the region tests."""
+        emitted ``sync_apply_unit`` shortcut dicts. Shared by the region tests;
+        the run ranks by the region the setting holds, as ``start_sync`` reads it."""
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=roms)
         library.settings["enabled_platforms"] = {"n64": True}
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
@@ -2622,7 +2623,9 @@ class TestDoSyncPerUnit:
 
         library.chunk_dispatcher._wait_for_unit_complete = ack_reps
         library.sync._box.sync_state = SyncState.RUNNING
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(
+            preferred_region=library.settings.get("preferred_region", "auto")
+        )
 
         unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert len(unit_events) == 1
@@ -2745,7 +2748,7 @@ class TestDoSyncPerUnit:
         library.chunk_dispatcher._wait_for_unit_complete = ack_reuse
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert [[e["rom_id"] for e in u["shortcuts"]] for u in unit_events] == [[1]]
@@ -2809,7 +2812,7 @@ class TestDoSyncPerUnit:
         library = make_library(romm_api=fake_romm_api)
         self._seed_zelda_whose_bound_usa_dump_is_gone(library, fake_romm_api)
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert [e["rom_id"] for event in unit_events for e in event["shortcuts"]] == []
@@ -2829,7 +2832,7 @@ class TestDoSyncPerUnit:
         library = make_library(romm_api=fake_romm_api)
         self._seed_zelda_whose_bound_usa_dump_is_gone(library, fake_romm_api, server_usa_id=4)
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert [e["rom_id"] for event in unit_events for e in event["shortcuts"]] == [1]
@@ -2852,7 +2855,7 @@ class TestDoSyncPerUnit:
         library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
         assert stale_events == [{"remove": []}]
@@ -2937,7 +2940,7 @@ class TestDoSyncPerUnit:
         library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         # The platform incremental-SKIPPED (never paginated ``list_roms``), and the
         # collection fetched no page.
@@ -3013,7 +3016,7 @@ class TestDoSyncPerUnit:
         library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
         assert stale_events == [{"remove": []}]
@@ -3049,7 +3052,7 @@ class TestDoSyncPerUnit:
         library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         download_artwork.assert_called_once()
 
     @pytest.mark.asyncio
@@ -3093,7 +3096,7 @@ class TestDoSyncPerUnit:
         library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert len(unit_events) == 1  # cancel observed between units
@@ -3121,7 +3124,7 @@ class TestDoSyncPerUnit:
         library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         finalizing = [
             c.args[1]
@@ -3172,7 +3175,7 @@ class TestDoSyncPerUnit:
         library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         finalizing = [
             c.args[1]
@@ -3226,9 +3229,10 @@ class TestOneRunRanksByOnePreferredRegion:
             library.settings["preferred_region"] = "Japan"
 
         self._ack_and_then(library, change_the_region)
-        library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync.start_sync()
+        (run,) = tuple(library.sync._orchestrator._tasks)
+        await asyncio.wait_for(run, 5)
 
         assert library.settings["preferred_region"] == "Japan"
         assert sorted(self._shortcuts_by_unit(emit)) == [[(11, "Zelda (USA)")], [(21, "Zelda (USA)")]]
@@ -3284,7 +3288,7 @@ class TestSyncRunLifecycle:
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-clean"
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         with library.uow as uow:
             run = uow.sync_runs.get("run-clean")
@@ -3312,7 +3316,7 @@ class TestSyncRunLifecycle:
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-empty"
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         with library.uow as uow:
             # No empty run was persisted.
@@ -3342,7 +3346,7 @@ class TestSyncRunLifecycle:
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-cancel"
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         with library.uow as uow:
             run = uow.sync_runs.get("run-cancel")
@@ -3373,7 +3377,7 @@ class TestSyncRunLifecycle:
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-interrupted"
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         with library.uow as uow:
             run = uow.sync_runs.get("run-interrupted")
@@ -3393,7 +3397,7 @@ class TestSyncRunLifecycle:
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-error"
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         for _ in range(3):
             await asyncio.sleep(0)
 
@@ -3443,7 +3447,7 @@ class TestSyncRunLifecycle:
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-terminal-fail"
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         for _ in range(3):
             await asyncio.sleep(0)
 
@@ -3820,7 +3824,7 @@ class TestRealOrchestratorLateAckRecovery:
         assert library.sync._box.try_begin_run("run-headline", kind=SyncRunKind.APPLY) is True
         library.sync._box.sync_last_heartbeat = orch._clock.monotonic()
 
-        await orch._do_sync_per_unit()
+        await orch._do_sync_per_unit(preferred_region="auto")
 
         box = library.sync._box
         # The run wound down: the slot is free and a chunk is stashed for recovery.
@@ -3876,7 +3880,7 @@ class TestRealOrchestratorLateAckRecovery:
 
         assert library.sync._box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
         library.sync._box.sync_last_heartbeat = orch._clock.monotonic()
-        await orch._do_sync_per_unit()
+        await orch._do_sync_per_unit(preferred_region="auto")
 
         box = library.sync._box
         assert box.abandoned_chunk is not None
@@ -4007,7 +4011,7 @@ class TestTheRunIsHeldUntilItEnds:
         library.settings["enabled_platforms"] = {"n64": True}
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         assert spawned == ["sync_progress error frame"]
         await library.sync.shutdown()
@@ -4076,7 +4080,7 @@ class TestDoSyncPerUnitErrors:
         library.sync._box.current_sync_id = "sync-cancel-build"
 
         with pytest.raises(asyncio.CancelledError):
-            await library.sync._orchestrator._do_sync_per_unit()
+            await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         # The run's ``finally: box.finish_run(run_id)`` transitioned to IDLE + cleared sync id.
         assert library.sync._box.sync_state == SyncState.IDLE
@@ -4095,7 +4099,7 @@ class TestDoSyncPerUnitErrors:
         library.sync._box.sync_state = SyncState.RUNNING
 
         # Should NOT raise — outer flow swallows the exception after emitting an error.
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         # error phase was emitted via sync_progress.
         error_events = [
@@ -4119,7 +4123,7 @@ class TestDoSyncPerUnitErrors:
         library.settings["enabled_platforms"] = {"n64": True}
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         # Drain any pending tasks the outer handler spawned.
         for _ in range(3):
             await asyncio.sleep(0)
@@ -4158,7 +4162,7 @@ class TestDoSyncPerUnitErrors:
         library.settings["enabled_platforms"] = {"n64": True}
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         # Drain any pending tasks scheduled by the outer handler.
         for _ in range(3):
             await asyncio.sleep(0)
@@ -4232,7 +4236,7 @@ class TestDoSyncPerUnitErrors:
         assert library.sync._box.sync_state == SyncState.RUNNING
 
         # Must NOT propagate the cooperative cancel — awaiting returns normally.
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         # The cooperative signal genuinely originated from the per-unit fetch.
         fake_romm_api.list_roms.assert_called()
@@ -4296,7 +4300,7 @@ class TestDoSyncPerUnitErrors:
         # The real cancel must PROPAGATE OUT — the cooperative handler does not
         # catch it.
         with pytest.raises(asyncio.CancelledError):
-            await library.sync._orchestrator._do_sync_per_unit()
+            await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         # The cancel genuinely fired from the per-unit fetch (not a bypass).
         fake_romm_api.list_roms.assert_called()
@@ -4354,7 +4358,7 @@ class TestDoSyncPerUnitErrors:
         library.cover_preparer._download_artwork = AsyncMock(return_value={})
         library.sync._box.sync_state = SyncState.CANCELLING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         # No units were processed because the CANCELLING check fired before
         # the loop entered the per-unit body — sync_apply_unit is the
@@ -4395,7 +4399,7 @@ class TestApplyUnitCollectionAndCancel:
         library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         # sync_complete fired (collection_memberships flowed through to finalize).
         complete = [c for c in emit.call_args_list if c.args and c.args[0] == "sync_complete"]
@@ -5441,7 +5445,7 @@ class TestCollectionTurnedOffAndBackOn:
             box.sync_state = SyncState.RUNNING
             box.current_sync_id = run_id
             start = len(emit.call_args_list)
-            await library.sync._orchestrator._do_sync_per_unit()
+            await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
             await _the_panel_reports(library, _removals_since(emit, start))
 
         def bindings():
@@ -5498,7 +5502,7 @@ class TestCollectionTurnedOffAndBackOn:
             box.sync_state = SyncState.RUNNING
             box.current_sync_id = run_id
             start = len(emit.call_args_list)
-            await library.sync._orchestrator._do_sync_per_unit()
+            await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
             await _the_panel_reports(library, _removals_since(emit, start))
 
         def bindings():
@@ -5548,7 +5552,7 @@ class TestCollectionTurnedOffAndBackOn:
             box.sync_state = SyncState.RUNNING
             box.current_sync_id = run_id
             start = len(emit.call_args_list)
-            await library.sync._orchestrator._do_sync_per_unit()
+            await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
             await _the_panel_reports(library, _removals_since(emit, start))
 
         def bindings():
@@ -5621,7 +5625,7 @@ class TestFailedCollectionListing:
         async def run_to_its_end(run_id):
             box.sync_state = SyncState.RUNNING
             box.current_sync_id = run_id
-            await library.sync._orchestrator._do_sync_per_unit()
+            await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         def bindings():
             with library.uow as uow:
@@ -5682,7 +5686,7 @@ class TestFailedCollectionListing:
         box.sync_state = SyncState.RUNNING
         box.current_sync_id = "run-1"
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         progress = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_progress"]
         assert [(f["stage"], f["message"], f["running"]) for f in progress] == [
@@ -5730,7 +5734,7 @@ class TestPlatformListingThatIsNotAList:
         async def run_to_its_end(run_id):
             box.sync_state = SyncState.RUNNING
             box.current_sync_id = run_id
-            await library.sync._orchestrator._do_sync_per_unit()
+            await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         def bindings():
             with library.uow as uow:
@@ -5813,7 +5817,7 @@ class TestStoppedRunLeavesNoHiddenStaleRow:
         library.chunk_dispatcher._wait_for_unit_complete = cancel_inside_gba
         box.sync_state = SyncState.RUNNING
         box.current_sync_id = "run-1"
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         with library.uow as uow:
             stamp = uow.platform_sync_state.get("n64")
@@ -5834,7 +5838,7 @@ class TestStoppedRunLeavesNoHiddenStaleRow:
         library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         box.sync_state = SyncState.RUNNING
         box.current_sync_id = "run-2"
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         run_2 = emit.call_args_list[run_2_starts_at:]
         applied_units = {c.args[1]["unit_name"] for c in run_2 if c.args and c.args[0] == "sync_apply_unit"}
@@ -5894,7 +5898,7 @@ class TestOnlyAFreshStampRestoresTheSkip:
         library.chunk_dispatcher._wait_for_unit_complete = wait
         box.sync_state = SyncState.RUNNING
         box.current_sync_id = run_id
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
     @staticmethod
     def _walked_n64(fake_romm_api) -> bool:
@@ -6067,7 +6071,7 @@ class TestOnlyAFreshCollectionStampRestoresTheSkip:
         library.chunk_dispatcher._wait_for_unit_complete = wait
         box.sync_state = SyncState.RUNNING
         box.current_sync_id = run_id
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
     def _walked(self, fake_romm_api) -> bool:
         return any(name in self._WALKS for name, _args, _kwargs in fake_romm_api.call_log)
@@ -6249,7 +6253,7 @@ class TestPlatformTurnedOffAndBackOn:
             box.sync_state = SyncState.RUNNING
             box.current_sync_id = run_id
             start = len(emit.call_args_list)
-            await library.sync._orchestrator._do_sync_per_unit()
+            await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
             await _the_panel_reports(library, _removals_since(emit, start))
 
         def bindings():
@@ -6308,7 +6312,7 @@ class TestPlatformTurnedOffAndBackOn:
         async def complete_a_run(run_id):
             box.sync_state = SyncState.RUNNING
             box.current_sync_id = run_id
-            await library.sync._orchestrator._do_sync_per_unit()
+            await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         await complete_a_run("run-1")
 
@@ -6346,7 +6350,7 @@ class TestPlatformTurnedOffAndBackOn:
         async def complete_a_run(run_id):
             box.sync_state = SyncState.RUNNING
             box.current_sync_id = run_id
-            await library.sync._orchestrator._do_sync_per_unit()
+            await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         await complete_a_run("run-1")
 
@@ -6389,7 +6393,7 @@ class TestPlatformTurnedOffAndBackOn:
         async def complete_a_run(run_id):
             box.sync_state = SyncState.RUNNING
             box.current_sync_id = run_id
-            await library.sync._orchestrator._do_sync_per_unit()
+            await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         await complete_a_run("run-1")
 
@@ -6426,7 +6430,7 @@ class TestPlatformTurnedOffAndBackOn:
         async def complete_a_run(run_id):
             box.sync_state = SyncState.RUNNING
             box.current_sync_id = run_id
-            await library.sync._orchestrator._do_sync_per_unit()
+            await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         await complete_a_run("run-1")
         fake_romm_api.platforms = [p for p in fake_romm_api.platforms if p["slug"] != "n64"]
@@ -6485,7 +6489,7 @@ class TestPlatformTurnedOffAndBackOn:
         async def complete_a_run(run_id):
             box.sync_state = SyncState.RUNNING
             box.current_sync_id = run_id
-            await library.sync._orchestrator._do_sync_per_unit()
+            await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         await complete_a_run("run-1")
 
@@ -6533,7 +6537,7 @@ class TestAVersionReachedOnlyThroughACollection:
         library.chunk_dispatcher._wait_for_unit_complete = bind_what_the_collection_holds
         box.sync_state = SyncState.RUNNING
         box.current_sync_id = "run-1"
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         with library.uow as uow:
             assert (uow.roms.get(20).shortcut_app_id, uow.roms.get(21).shortcut_app_id) == (6020, 6021)
             assert {rid for stamp in uow.collection_sync_state.iter_all() for rid in stamp.member_rom_ids} == {20, 21}
@@ -6554,7 +6558,7 @@ class TestAVersionReachedOnlyThroughACollection:
         box.sync_state = SyncState.RUNNING
         box.current_sync_id = run_id
         run_2_starts_at = len(emit.call_args_list)
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         stale = [c.args[1] for c in emit.call_args_list[run_2_starts_at:] if c.args and c.args[0] == "sync_stale"]
         await _the_panel_reports(library, _removals_since(emit, run_2_starts_at))
         with library.uow as uow:
@@ -6712,7 +6716,7 @@ class TestAVersionSwitchedOffTheCollectionsMember:
         library.chunk_dispatcher._wait_for_unit_complete = bind_what_the_collection_holds
         box.sync_state = SyncState.RUNNING
         box.current_sync_id = "run-1"
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         with library.uow as uow:
             key = uow.roms.get(20).sibling_group_key
             assert (uow.roms.get(20).shortcut_app_id, key) == (6020, "igdb:300:2")
@@ -6734,7 +6738,7 @@ class TestAVersionSwitchedOffTheCollectionsMember:
         box.sync_state = SyncState.RUNNING
         box.current_sync_id = "run-2"
         run_2_starts_at = len(emit.call_args_list)
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         stale = [c.args[1] for c in emit.call_args_list[run_2_starts_at:] if c.args and c.args[0] == "sync_stale"]
         await _the_panel_reports(library, _removals_since(emit, run_2_starts_at))
         with library.uow as uow:
@@ -6974,7 +6978,7 @@ class TestAGameOnlyACollectionReachesIsCountedAsItsApplyCollapsesIt:
 
         library.chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
         assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         assert cls._bindings(library) == {20: 6020}
 
     @staticmethod
@@ -7002,7 +7006,7 @@ class TestAGameOnlyACollectionReachesIsCountedAsItsApplyCollapsesIt:
         box.discard_preview()
         assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
         run_2_starts_at = len(emit.call_args_list)
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         frames = [c.args for c in emit.call_args_list[run_2_starts_at:] if c.args]
         sent = [
             shortcut["rom_id"]
@@ -7133,7 +7137,7 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
 
         library.chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
         assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         assert cls._bindings(library) == {20: 6020}
 
     @classmethod
@@ -7171,7 +7175,7 @@ class TestAMemberASkippedCollectionStillListsIsCountedAsItsPlatformUnitRebindsIt
         box.discard_preview()
         assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
         run_2_starts_at = len(emit.call_args_list)
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         frames = [c.args for c in emit.call_args_list[run_2_starts_at:] if c.args]
         sent = [
             shortcut["rom_id"]
@@ -7327,7 +7331,7 @@ class TestAHiddenVersionKeepsItsPlatformCollectionWhetherItsCollectionIsSkippedO
         box.discard_preview()
         assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
         run_2_starts_at = len(emit.call_args_list)
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         frames = [c.args for c in emit.call_args_list[run_2_starts_at:] if c.args]
         (platform_app_ids,) = [
             payload[0]["platform_app_ids"] for name, *payload in frames if name == "sync_collections"
@@ -7397,7 +7401,7 @@ class TestAHiddenVersionKeepsItsPlatformCollectionWhetherItsCollectionIsSkippedO
         monkeypatch.setattr(library.unit_applier, "apply_unit", stop_after_faves)
         assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
         run_2_starts_at = len(emit.call_args_list)
-        await orchestrator._do_sync_per_unit()
+        await orchestrator._do_sync_per_unit(preferred_region="auto")
 
         frames = [c.args for c in emit.call_args_list[run_2_starts_at:] if c.args]
         (platform_app_ids,) = [
@@ -7449,7 +7453,7 @@ class TestThePreviewNamesAPlatformCollectionAsTheApplyDoes:
 
         library.chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
         assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         with library.uow as uow:
             assert uow.roms.get(20).shortcut_app_id == 6020
 
@@ -7477,7 +7481,7 @@ class TestThePreviewNamesAPlatformCollectionAsTheApplyDoes:
         box.discard_preview()
         assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
         run_2_starts_at = len(emit.call_args_list)
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         frames = [c.args for c in emit.call_args_list[run_2_starts_at:] if c.args]
         (platform_app_ids,) = [
             payload[0]["platform_app_ids"] for name, *payload in frames if name == "sync_collections"
@@ -7562,7 +7566,7 @@ class TestThePreviewFilesAGameRommDidNotConfirmAsTheApplyDoes:
 
         library.chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
         assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         with library.uow as uow:
             assert (uow.roms.get(20).shortcut_app_id, uow.roms.get(30).shortcut_app_id) == (6020, 6030)
         faves = fake_romm_api.collections[0]
@@ -7697,7 +7701,7 @@ class TestThePerPlatformTableLabelsAPlatformAsTheApplyNamesIt:
 
         library.chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
         assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         with library.uow as uow:
             assert (uow.roms.get(20).shortcut_app_id, uow.roms.get(30).shortcut_app_id) == (6020, 6030)
 
@@ -7719,7 +7723,7 @@ class TestThePerPlatformTableLabelsAPlatformAsTheApplyNamesIt:
         box.discard_preview()
         assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
         run_2_starts_at = len(emit.call_args_list)
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         frames = [c.args for c in emit.call_args_list[run_2_starts_at:] if c.args]
         (platform_app_ids,) = [
             payload[0]["platform_app_ids"] for name, *payload in frames if name == "sync_collections"
@@ -7847,7 +7851,7 @@ class TestRegression738CacheCorruption:
         library.chunk_dispatcher._wait_for_unit_complete = fake_wait
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         # Post-flight: the 3 populated metadata rows MUST survive untouched.
         # Pre-fix, they would have been overwritten by empty ones.
@@ -7874,7 +7878,7 @@ class TestFetchNarrationInterplay:
         library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         progress_frames = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_progress"]
         # The unit's first progress frame anchors the coarse bar under FETCHING,
@@ -7900,7 +7904,7 @@ class TestFetchNarrationInterplay:
         library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         first_chunk_idx = next(i for i, c in enumerate(emit.call_args_list) if c[0][0] == "sync_apply_unit")
         fetching_after_chunk = [
@@ -7950,7 +7954,7 @@ class TestComponentGroupKeyStamping:
         library.chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         with library.uow:
             assert library.uow.roms.get(10).sibling_group_key == "igdb:1001:1"
@@ -8034,7 +8038,7 @@ class TestAPlatformUnitIsKeyedAsThePreviewKeysIt:
         box.discard_preview()
         assert box.try_begin_run(run_id, kind=SyncRunKind.APPLY) is True
         start = len(emit.call_args_list)
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         await _the_panel_reports(library, _removals_since(emit, start))
         frames = [call.args for call in emit.call_args_list[start:] if call.args]
         sent = [
@@ -8381,7 +8385,7 @@ class TestAGameKeepsItsKeyWhenTheVersionCarryingItIsNotListed:
         box = library.sync._box
         assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
         box.sync_last_heartbeat = library.sync._orchestrator._clock.monotonic()
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         assert box.abandoned_chunk is not None
         assert self._rows(library) == {30: (6030, "igdb:300:2"), 31: (None, "igdb:300:2")}
         (frame,) = [call.args[1] for call in emit.call_args_list if call.args[0] == "sync_apply_unit"][-1:]
@@ -8467,7 +8471,7 @@ class TestAGameWithSeveralShortcutsConverges:
 
             library.chunk_dispatcher._wait_for_unit_complete = cancel_inside_the_unit
         start = len(emit.call_args_list)
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         if report:
             await _the_panel_reports(library, _removals_since(emit, start))
         frames = [call.args for call in emit.call_args_list[start:] if call.args]
@@ -8917,7 +8921,7 @@ class TestARemovalThePanelDidNotReport:
         box.discard_preview()
         assert box.try_begin_run(run_id, kind=SyncRunKind.APPLY) is True
         start = len(emit.call_args_list)
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         return _removals_since(emit, start)
 
     @pytest.mark.asyncio
@@ -9065,7 +9069,7 @@ class TestAReportThatLandsBeforeTheFinalize:
             box.sync_state = SyncState.RUNNING
             box.current_sync_id = run_id
             run_start["at"] = len(emit.call_args_list)
-            await library.sync._orchestrator._do_sync_per_unit()
+            await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         def bindings():
             with library.uow as uow:
@@ -9110,7 +9114,7 @@ class TestAReportThatLandsBeforeTheFinalize:
             box.sync_state = SyncState.RUNNING
             box.current_sync_id = run_id
             run_start["at"] = len(emit.call_args_list)
-            await library.sync._orchestrator._do_sync_per_unit()
+            await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         def bindings():
             with library.uow as uow:
@@ -9167,7 +9171,7 @@ class TestDeltaRestrictedApply:
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="Keep", fs_name="keep.z64")
         _seed_rom_row(library, 11, app_id=1011, platform_slug="n64", name="Old Name", fs_name="changed.z64")
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         events = self._apply_unit_events(emit)
         assert len(events) == 1
@@ -9205,7 +9209,7 @@ class TestDeltaRestrictedApply:
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="A", fs_name="a.z64")
         _seed_rom_row(library, 11, app_id=1011, platform_slug="n64", name="B", fs_name="b.z64")
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         events = self._apply_unit_events(emit)
         assert len(events) == 1, "the empty-delta platform still round-trips exactly one (empty) chunk"
@@ -9228,7 +9232,7 @@ class TestDeltaRestrictedApply:
         library.settings["enabled_platforms"] = {"n64": True}
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="A", fs_name="a.z64", shortcut_applied=False)
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         events = self._apply_unit_events(emit)
         assert len(events) == 1
@@ -9278,7 +9282,7 @@ class TestSessionBudgetGate:
         # the second chunk's predictive-vs-ceiling check (+2500 ≥ 2.2 GB) crosses.
         library.renderer_rss.rss_kb = 2_199_000
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         with library.uow as uow:
             run = uow.sync_runs.get("run-budget")
@@ -9331,7 +9335,7 @@ class TestSessionBudgetGate:
         library.renderer_gc.result = True
         library.renderer_rss.rss_kb = 2_400_000  # above the 2.2M ceiling, below the 2.45M cliff
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         with library.uow as uow:
             run = uow.sync_runs.get("run-solo")
@@ -9352,7 +9356,7 @@ class TestSessionBudgetGate:
         library.renderer_gc.result = True
         library.renderer_rss.rss_kb = 2_449_000  # +2500 (create + cover) for the one item ≥ the 2.45M cliff
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         with library.uow as uow:
             run = uow.sync_runs.get("run-over")
@@ -9368,7 +9372,7 @@ class TestSessionBudgetGate:
         library.renderer_gc.result = False
         library.renderer_rss.rss_kb = None  # measurement unavailable → gate skipped
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         with library.uow as uow:
             run = uow.sync_runs.get("run-budget")
@@ -9467,7 +9471,7 @@ class TestSessionBudgetGate:
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-restart"
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         complete = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_complete"]
         assert complete, "sync_complete must be emitted"
@@ -9566,7 +9570,7 @@ class TestSessionBudgetGate:
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-skip"
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         box = library.sync._box
         assert box.run_start_rss_kb == 1_200_000  # captured at run start despite no chunk
@@ -9588,7 +9592,7 @@ class TestSessionBudgetGate:
                     seen["value"] = run.status if run is not None else None
 
         emit.side_effect = _hook
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         return seen.get("value")
 
     @pytest.mark.asyncio
@@ -9665,7 +9669,7 @@ class TestRunProgressCounters:
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 1)
         self._acks(library, {"10": 1010}, {"11": 1011})
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         box = library.sync._box
         assert box.run_total_items == 2
@@ -9697,7 +9701,7 @@ class TestRunProgressCounters:
 
         library.chunk_dispatcher._wait_for_unit_complete = cancel_mid_wait
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         assert box.run_total_items == 2
         assert box.run_done_items == 0, "an emitted chunk whose ack never landed is not done"
@@ -9723,7 +9727,7 @@ class TestRunProgressCounters:
         library.renderer_gc.result = True
         library.renderer_rss.rss_kb = 2_199_000  # first chunk passes (vs cliff), second pauses
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         with library.uow as uow:
             assert uow.sync_runs.get("run-paused").status == "paused"
@@ -9752,7 +9756,7 @@ class TestRunProgressCounters:
         _seed_rom_row(library, 11, app_id=1011, platform_slug="n64", name="Old Name", fs_name="changed.z64")
         self._acks(library, {"11": 1011})
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         box = library.sync._box
         assert box.run_total_items == 2
@@ -9772,7 +9776,7 @@ class TestRunProgressCounters:
         library.settings["enabled_platforms"] = {"n64": True}
         self._acks(library)
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         box = library.sync._box
         assert box.run_total_items == 1
@@ -9790,7 +9794,7 @@ class TestRunProgressCounters:
         box.run_done_items = 5000
         box.run_total_items = 9999
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         assert box.run_total_items == 1
         assert box.run_done_items == 1
@@ -9810,7 +9814,7 @@ class TestRunProgressCounters:
         library.settings["enabled_platforms"] = {"n64": True}
         self._acks(library, {"10": 1010, "11": 1011})
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         result = await library.sync.get_session_budget_status()
 
         assert result["run_done_items"] == 2
@@ -9868,7 +9872,7 @@ class TestProcessedGamesNumerator:
 
         library.chunk_dispatcher._wait_for_unit_complete = fake_wait
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         complete = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_complete"]
         assert complete[-1]["total_games"] == 2, "1 delta-skipped + 1 applied are both processed"
@@ -9924,7 +9928,7 @@ class TestProcessedGamesNumerator:
 
         library.chunk_dispatcher._wait_for_unit_complete = wait_ack_then_timeout
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         complete = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_complete"]
         assert complete[-1]["total_games"] == 3, "1 wholesale-skipped + 1 delta-skipped + 1 committed"
@@ -9952,7 +9956,7 @@ class TestTheShortcutArtworkJobAfterARun:
         library.settings["enabled_collections"] = {}
         library.sync._box.sync_state = SyncState.RUNNING
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         assert library.artwork_job.requests == [True]
 
@@ -9963,7 +9967,7 @@ class TestTheShortcutArtworkJobAfterARun:
         library.sync._box.sync_state = SyncState.RUNNING
         library.sync._box.current_sync_id = "run-fails"
 
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         assert library.artwork_job.requests == [True]
 
@@ -10029,7 +10033,7 @@ class TestAGameSplitAcrossCollections:
         box.discard_preview()
         assert box.try_begin_run(run_id, kind=SyncRunKind.APPLY) is True
         start = len(emit.call_args_list)
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         return [
             (call.args[1]["unit_name"], shortcut["rom_id"], shortcut["name"])
             for call in emit.call_args_list[start:]
@@ -10301,7 +10305,7 @@ class TestAGameACollectionBringsInConverges:
 
         library.chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
         assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         with library.uow as uow:
             for rom_id in also_bound:
                 rom = uow.roms.get(rom_id)
@@ -10327,14 +10331,19 @@ class TestAGameACollectionBringsInConverges:
 
     @staticmethod
     async def _sync(library, fake_romm_api, emit, run_id):
-        """Preview, then apply, then the panel reports; answer the counts, the removals and the walks."""
+        """Preview, then apply as ``start_sync`` admits it, then the panel reports.
+
+        Answers the counts, the removals and the walks.
+        """
         fake_romm_api.call_log.clear()
         summary = (await library.sync.sync_preview())["summary"]
         box = library.sync._box
         box.discard_preview()
         assert box.try_begin_run(run_id, kind=SyncRunKind.APPLY) is True
         start = len(emit.call_args_list)
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(
+            preferred_region=library.settings.get("preferred_region", "auto")
+        )
         removals = _removals_since(emit, start)
         await _the_panel_reports(library, removals)
         walks = sum(1 for name, _args, _kwargs in fake_romm_api.call_log if name == "list_roms_by_collection")
@@ -10554,6 +10563,25 @@ class TestAGameACollectionBringsInConverges:
         assert self._bound(library) == {31: 6031}
 
     @pytest.mark.asyncio
+    async def test_the_deliveries_rank_by_the_region_the_run_was_admitted_with(self, make_library, fake_romm_api, emit):
+        """#2776 D2: Europe at the run's start keeps Golf (Europe) though the setting changes before the deliveries."""
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, faves=[30, 31], main=None)
+        library.settings["preferred_region"] = "Europe"
+        self._list(fake_romm_api, 7, [30])
+        start = len(emit.call_args_list)
+
+        await library.sync.start_sync()
+        library.settings["preferred_region"] = "auto"
+        (run,) = tuple(library.sync._orchestrator._tasks)
+        await asyncio.wait_for(run, 5)
+        removals = _removals_since(emit, start)
+        await _the_panel_reports(library, removals)
+
+        assert [(row["rom_id"], row["kept_rom_id"]) for row in removals] == [(30, 31)]
+        assert self._bound(library) == {31: 6031}
+
+    @pytest.mark.asyncio
     async def test_an_installed_version_no_collection_delivered_keeps_its_shortcut(
         self, make_library, fake_romm_api, emit, tmp_path
     ):
@@ -10632,7 +10660,7 @@ class TestAGameACollectionBringsInConverges:
         monkeypatch.setattr(library.unit_applier, "apply_unit", stop_after_the_unit)
         assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
         start = len(emit.call_args_list)
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
 
         assert _removals_since(emit, start) == []
         assert self._bound(library) == {30: 6030, 31: 6031}
@@ -10736,7 +10764,7 @@ class TestAGameTheUserHidInRomm:
 
         library.chunk_dispatcher._wait_for_unit_complete = bind_what_the_unit_emits
         assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
-        await library.sync._orchestrator._do_sync_per_unit()
+        await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         assert cls._bound(library) == {30: 6030, 40: 6040}
         path = tmp_path / "Tetris.zip"
         path.write_bytes(b"rom")
@@ -10790,7 +10818,7 @@ class TestAGameTheUserHidInRomm:
         try:
             assert box.try_begin_run(run_id, kind=SyncRunKind.APPLY) is True
             start = len(emit.call_args_list)
-            await library.sync._orchestrator._do_sync_per_unit()
+            await library.sync._orchestrator._do_sync_per_unit(preferred_region="auto")
         finally:
             library.unit_applier.apply_unit = apply_unit
         removals = _removals_since(emit, start)

@@ -39,13 +39,13 @@ from domain.sync_diff import (
     group_keys_of,
     rebuilt_rows_filed_as_kept,
     select_stale_removals,
-    without_running_groups,
 )
 from domain.sync_run_kind import SyncRunKind
 from domain.sync_stage import SyncStage
 from domain.sync_state import SyncCancelled
 from lib.background_tasks import BackgroundTasks
 from lib.errors import Refused, classify_error
+from services.library._convergence import leave_running_groups_out
 from services.library._stale_rows import settle_stale_rows
 from services.library._state import SYNC_CANCELLED, SYNC_IN_PROGRESS
 from services.library._unit_roms import collection_membership_key
@@ -85,7 +85,7 @@ class SyncOrchestratorConfig:
     """Frozen wiring bundle handed to ``SyncOrchestrator.__init__``.
 
     Holds runtime infrastructure (loop, logger), the live settings (the
-    preferred region a run without a staged preview reads at its start), the
+    preferred region ``start_sync`` reads as it admits a run), the
     event emitter the
     ``sync_plan`` and ``sync_stale`` events go out through, the Clock/UuidGen
     test seams, the shared :class:`LibrarySyncStateBox`, the
@@ -176,7 +176,8 @@ class SyncOrchestrator:
         if not box.try_begin_run(run_id, kind=SyncRunKind.APPLY):
             raise Refused("sync_in_progress", SYNC_IN_PROGRESS)
         box.sync_last_heartbeat = self._clock.monotonic()
-        self._tasks.spawn(self._do_sync_per_unit(), "library sync run")
+        preferred_region = self._settings.get("preferred_region", AUTO_REGION)
+        self._tasks.spawn(self._do_sync_per_unit(preferred_region=preferred_region), "library sync run")
         return {"success": True, "message": "Sync started"}
 
     def cancel_sync(self, run_id=None):
@@ -233,18 +234,18 @@ class SyncOrchestrator:
         box.discard_preview()
         box.sync_last_heartbeat = self._clock.monotonic()
 
-        self._tasks.spawn(self._do_sync_per_unit(staged_region=staged.preferred_region), "library sync run")
+        self._tasks.spawn(self._do_sync_per_unit(preferred_region=staged.preferred_region), "library sync run")
 
         return {"success": True, "message": "Applying changes"}
 
     # ── Per-unit pipeline ────────────────────────────────────────
 
-    async def _do_sync_per_unit(self, staged_region: str | None = None):
+    async def _do_sync_per_unit(self, *, preferred_region: str):
         """Per-unit sync pipeline (Phase 0 + per-unit dispatch + finalize).
 
-        *staged_region* is the preferred region of the preview the run applies;
-        a run with none reads the setting here, once, and every unit ranks by
-        that value (#2776 D2).
+        *preferred_region* is the one value every unit and every collection
+        delivery of the run ranks by: the setting as the run's admission read
+        it, or the region of the staged preview the run applies (#2776 D2).
 
         Builds a work queue, opens a ``SyncRun`` for the planned counts,
         processes each platform/collection unit to completion (fetch ->
@@ -288,9 +289,7 @@ class SyncOrchestrator:
         # the skipped + committed work as the run proceeds.
         box.run_total_items = None
         box.run_done_items = 0
-        box.run_preferred_region = (
-            staged_region if staged_region is not None else self._settings.get("preferred_region", AUTO_REGION)
-        )
+        box.run_preferred_region = preferred_region
         # Re-arm the gate's measurement latch and stamp the run-start RSS baseline
         # for the last-run memory delta (#1383) — UNCONDITIONALLY, before any chunk is
         # applied, so even a fully-incremental-skip run reports an honest delta.
@@ -594,22 +593,8 @@ class SyncOrchestrator:
         )
         converged = [binding for binding in converged if (binding.rom_id, binding.app_id) in removable]
         if converged:
-            # A platform unit's own reading may be minutes old by now: a group
-            # one of whose shortcuts runs at this point keeps them all (#2645 D6),
-            # and without a reading every group does (#2776 D5).
-            running = await self._running_rom_ids()
-            left = [] if running is None else without_running_groups(converged, running)
-            if len(left) < len(converged):
-                kept_for_now = len(converged) - len(left)
-                if running is None:
-                    self._logger.info(
-                        f"Convergence: Steam's running games could not be read; {kept_for_now} shortcut(s) stay"
-                    )
-                else:
-                    self._logger.info(
-                        f"Convergence: {kept_for_now} shortcut(s) of a running game stay until a later sync"
-                    )
-            converged = left
+            # A platform unit's own reading may be minutes old by now: read again.
+            converged = leave_running_groups_out(converged, await self._running_rom_ids(), self._logger)
         remove = [{"rom_id": row.rom_id, "app_id": row.app_id} for row in stale]
         remove += [binding._asdict() for binding in converged]
         if remove:

@@ -67,7 +67,7 @@ async def _sync_acking(harness, bindings) -> None:
     service = harness.app.services.sync_service
     service._orchestrator._unit_applier._chunk_dispatcher._wait_for_unit_complete = ack
     assert service._box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
-    await service._orchestrator._do_sync_per_unit()
+    await service._orchestrator._do_sync_per_unit(preferred_region="auto")
 
 
 async def _cover_row(harness, rom_id: int, app_id: int):

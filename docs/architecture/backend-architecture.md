@@ -941,10 +941,10 @@ game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app
   DB binding lands on the representative `rom_id`; the reporter is agnostic to the name↔rom mismatch (it binds on
   `rom_id` + the acked appId, and persists each sibling's own RomM name from `pending_all_roms`). `preferred_region` is
   read from settings once per run and threaded into every collapse call site as that value: `sync_preview` reads it and
-  stages it with the preview (`PreviewDelta.preferred_region`), and an apply takes the staged preview's value, or reads
-  the setting at its start where it applies no preview, into `LibrarySyncStateBox.run_preferred_region`, which every
-  platform unit and the collection deliveries rank by ([#2776](https://github.com/danielcopper/romm-tender/issues/2776)
-  D2). A change during a run takes effect on the next.
+  stages it with the preview (`PreviewDelta.preferred_region`); an apply is admitted with one value, the staged
+  preview's (`sync_apply_delta`) or the setting as `start_sync` reads it, which `_do_sync_per_unit` requires and puts
+  into `LibrarySyncStateBox.run_preferred_region`, and every platform unit and the collection deliveries rank by that
+  ([#2776](https://github.com/danielcopper/romm-tender/issues/2776) D2). A change during a run takes effect on the next.
 - **A version gone from RomM stays bound; only the same dump takes its binding**
   ([ADR-0021](../adr/0021-sibling-group-one-shortcut-binding-active-version.md) §2's amendment). A bound sibling that
   vanished from the server emits nothing and keeps its binding, its shortcut, name and launch command, installed or not;
