@@ -53,7 +53,7 @@ CLAIMS = [
     ),
     (
         "CLAUDE.md",
-        re.compile(r"(?<=Requires\sRomM\s>=\s)(\d+\.\d+\.\d+)"),
+        re.compile(r"(?<=RomM\sbelow\s)(\d+\.\d+\.\d+)(?=\sis\srefused)"),
         "claude.md trap note",
     ),
     (

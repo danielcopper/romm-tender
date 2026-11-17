@@ -1,7 +1,8 @@
 # Invariants: The resolver
 
 Who reads the resolver's answer and its vocabulary, where its installations are detected, and the RetroDECK folders
-taken from it. How an entry reads and binds, and the other areas: [the register's index](index.md).
+taken from it; below the entries, [how an answer reads](#reading-an-answer). How an entry reads and binds, and the other
+areas: [the register's index](index.md).
 
 - **The resolver's answer is read only in the adapter that asks for it — `adapters/atlas_catalogue.py`,
   `atlas_firmware.py`, `atlas_launch.py`, `atlas_platforms.py`, `atlas_saves.py`, `emulator_sources.py` and
@@ -111,3 +112,32 @@ taken from it. How an entry reads and binds, and the other areas: [the register'
   Unseen by the tests: a folder joined onto a root under another name, and a caller that puts the question to
   RetroDECK's handle itself. Prompt-only: a new caller that downloads into, removes from or bounds a removal by a
   RetroDECK folder asks `RetroDeckFolders` and raises the refusal it answers with
+
+## Reading an answer
+
+An empty collection in a resolver answer is a statement about provenance, never about need — and Python spells it the
+same as an absence. The verdict on a catalogue entry is `requirements_met`, three-valued: `True`, `False`, `None` for
+"could not be established". It narrows only and is never `True` out of ignorance: with `verify=False` an entry whose
+required files are **present** still answers `None`, because presence is not the question that field asks.
+
+What an empty `requirements` list means is decided by `declaration` and by nothing else: `read` and empty is the only
+pairing that means "this emulator needs no firmware"; `packaged` and empty means a card exists and this query
+established nothing (a card may identify its image by content, so it names no file until the bytes are read);
+`unsupported` means the emulator is installed and the resolver has no source for what it wants. Reading a length where
+the verdict was asked produced a green "needs nothing" over a console that does not boot without an image — twice in one
+hour, the second time with `requirements_met: None` already on screen.
+
+The same shape recurs across the answer: `system_firmware: None` is nothing recorded rather than nothing needed, and
+`core_so: None` is a standalone emulator's entry rather than no entry. Which emulator that is comes from `emulator`, the
+identity field that stands on both kinds and on both the catalogue answer and the firmware one; `label` is presentation
+(one `pcsx2_libretro.so` under two of them), a caveat's `token` is a third vocabulary again, and a caveat's `core` a
+fourth — the libretro short name (`pcsx2`), which equals no identity.
+
+**The answer is entry-shaped**, and `answer.requirements` is a flattening that has already discarded `declaration`,
+`requirements_met`, `caveats`, `unread` and `refused` — so an entry-level question answered from it is answered from
+evidence thrown away before the question was put. Separately, `description` is outside the resolver's contract (the
+packager's prose from a core's `.info`), so it is not a field to render as a row's headline.
+
+Nothing mechanical carries any of this. The vocabulary overlaps Tender's almost exactly — `satisfied`, `required`,
+`present`, `cores` and `description` exist on both sides and name different types — which is what makes a wrong reading
+look like a correct one.

@@ -112,5 +112,5 @@ jobs:
           echo "  2. If genuinely doc-irrelevant: add the 'no-docs-change' label to this PR"
           echo "  3. OR include 'docs: N/A' (with a one-line reason) in the PR description"
           echo ""
-          echo "See CLAUDE.md > Documentation for the full rule."
+          echo "See docs/contributing/development.md > Documentation for the full rule."
           exit 1

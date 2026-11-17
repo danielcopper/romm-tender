@@ -39,6 +39,7 @@ utilities) / `models/` (data shapes). `import-linter` enforces direction. `[CP]`
   bare-param ctors, no mixed ctors.
 - `[ours]` **Debug logging: inject the `DebugLogger` Protocol.** No per-service `_log_debug` that re-reads settings at
   call time, and no reaching for a module-level logger to bypass log-level filtering — a service is handed its logger.
+  Neither this nor the constructor shape above has a mechanical check.
 - `[ours]` **A service refuses by raising, never by returning the failure shape** — `Refused` (`lib/errors.py`), with
   the reason spelled as `.claude/rules/endpoints.md` says, or a `NamedRefused` subclass that declares only
   `reason = "…"`; a domain rule raises `DomainRefused` or a `NamedDomainRefused` subclass (`domain/refusal.py`). Work

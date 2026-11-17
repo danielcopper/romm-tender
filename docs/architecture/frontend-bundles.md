@@ -16,7 +16,11 @@ They are three separate Rollup builds sharing no chunk, so the panel's own modul
 once for each panel bundle.
 
 `dist/` sits at the repository root rather than under `frontend/`, because it is the seam between the two halves: the
-backend serves it as `<code_dir>/dist` and must not reach into the frontend's directory to find it.
+backend serves it as `<code_dir>/dist` (`os.path.join(directories.code_dir, "dist")` in `backend/main.py`) and must not
+reach into the frontend's directory to find it. A host that located its own build output relative to `__file__` would be
+the only part of the backend that knew the repository's layout. The frontend package writes one directory up to put it
+there (`OUT_DIR` in `frontend/rollup.config.js`), `frontend/.size-limit.json`'s paths point up as well, and emptying the
+directory is the `build` script's job (`rm -rf ../dist && rollup -c`) rather than any plugin's.
 
 ### The desktop dev build (dev build only)
 
@@ -553,7 +557,9 @@ list ([Bundles and the start-up check](invariants/startup.md)).
 
 `frontend/src/api/host.ts` is the one module the panel imports for what it gets from its host: `endpoint`,
 `addEventListener`, `removeEventListener`, `definePanel`, `toaster` — beside the socket's word on a stranded panel,
-below.
+below. It replaces `@decky/api`, which is no longer a dependency, so nothing imports that package. `@decky/api`'s
+`routerHook`, Decky Loader's route installer, has no counterpart here: Tender's section reaches Steam's game page
+through a seam of its own ([below](#tenders-section-on-steams-game-page)).
 
 **Three of them are the wire.** `endpoint`, `addEventListener` and `removeEventListener` go through
 `frontend/src/api/hostSocket.ts`, one WebSocket per bundle instance, on the protocol defined once on the other side in
@@ -632,11 +638,12 @@ of over the next row.
 
 The toaster does not reach Decky's loader API when one happens to be present, and what decides that is not purity: it
 was the loader's own, and one that borrowed wherever it found one would behave differently on a machine running Decky
-from one without — the difference this program exists not to depend on. The game-page seam below is the same rule
-applied to the other name the loader used to answer for. Tender's own marker on a notification is deliberately not
-Decky's `decky`, for the same reason read the other way: two programs marking their entries with one name would each
-draw the other's. What Decky Loader does here is read from its own source, `frontend/src/toaster.tsx` on upstream
-`main`.
+from one without — the difference this program exists not to depend on. The reference machine runs the loader
+(`plugin_loader.service` active and enabled, `127.0.0.1:1337` listening), so such borrowing would show up there rather
+than hide. The game-page seam below is the same rule applied to the other name the loader used to answer for. Tender's
+own marker on a notification is deliberately not Decky's `decky`, for the same reason read the other way: two programs
+marking their entries with one name would each draw the other's. What Decky Loader does here is read from its own
+source, `frontend/src/toaster.tsx` on upstream `main`.
 
 ## Tender's section on Steam's game page
 
