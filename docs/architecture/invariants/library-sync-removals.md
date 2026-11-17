@@ -62,22 +62,22 @@ other areas: [the register's index](index.md).
   Beside it, a group holding more than one bound shortcut converges (#2645): on a platform unit the run fetched in full,
   every bound row of such a group but the one `domain/sync_diff.py::converge_bound_groups` keeps is removed on a run
   that was not stopped — never sorted as stale, never over an appId the run bound, and never while Steam lists one of
-  the group's shortcuts as running, read at the platform unit and again before the removal — with the preview counting
-  the same removals unless a game starts or quits between the preview and the removal (#2645 D5, D6), and no platform
-  whose rows still hold such a group is skipped; on a platform the sync leaves off, the run's collection deliveries
-  converge a group they bring in the same way (#2661), once for the run, over the bound rows they deliver and the bound
-  rows of the same stored key a delivered member lists in `sibling_roms`
-  (`domain/sync_diff.py::brought_in_by_delivery`), a row no collection delivered ranked by its stored version fields and
-  the sibling list's default, while the convergence leaves a bound row no delivered member lists to the stale sort, and
-  no collection holding a member of such a group is skipped; a bound version RomM joined to the game after Tender last
-  read it, its stored key still its old game's, is not brought in and goes the stale way (#2661 D5); in a group no
-  listed version holds, a bound row the user hid takes no part in either convergence (#2502 D1), and in a group a listed
-  version holds it ranks as one RomM no longer lists in both (D8). A row whose shortcut either removes keeps its binding
-  until the panel reports the shortcut gone from Steam, the finalize settles the row's stamps whatever its binding by
-  then, and `report_sync_removals` unbinds it only while it still holds the reported appId; a removal never reported is
-  emitted and counted by the preview again while the shortcut is in Steam, and unbound by the next sync's start
-  reconcile where it is gone (#2653 D1). The removed-game cleanup's own proof marks and clears rows too, by its rule in
-  docs/architecture/removed-game-cleanup.md, "Discovery"
+  the group's shortcuts as running or no reading of Steam's running apps can be taken (#2776 D5), read at the platform
+  unit and again before the removal — with the preview counting the same removals unless a game starts or quits between
+  the preview and the removal (#2645 D5, D6), and no platform whose rows still hold such a group is skipped; on a
+  platform the sync leaves off, the run's collection deliveries converge a group they bring in the same way (#2661),
+  once for the run, over the bound rows they deliver and the bound rows of the same stored key a delivered member lists
+  in `sibling_roms` (`domain/sync_diff.py::brought_in_by_delivery`), a row no collection delivered ranked by its stored
+  version fields and the sibling list's default, while the convergence leaves a bound row no delivered member lists to
+  the stale sort, and no collection holding a member of such a group is skipped; a bound version RomM joined to the game
+  after Tender last read it, its stored key still its old game's, is not brought in and goes the stale way (#2661 D5);
+  in a group no listed version holds, a bound row the user hid takes no part in either convergence (#2502 D1), and in a
+  group a listed version holds it ranks as one RomM no longer lists in both (D8). A row whose shortcut either removes
+  keeps its binding until the panel reports the shortcut gone from Steam, the finalize settles the row's stamps whatever
+  its binding by then, and `report_sync_removals` unbinds it only while it still holds the reported appId; a removal
+  never reported is emitted and counted by the preview again while the shortcut is in Steam, and unbound by the next
+  sync's start reconcile where it is gone (#2653 D1). The removed-game cleanup's own proof marks and clears rows too, by
+  its rule in docs/architecture/removed-game-cleanup.md, "Discovery"
 
   `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule (`sort_stale_rows`, `settle_asked_rows`),
   `tests/domain/test_sync_diff.py::TestAHiddenRowInTheStaleSort` for a row the user hid,

@@ -8706,6 +8706,41 @@ class TestAGameWithSeveralShortcutsConverges:
         assert self._bindings(library) == {30: 6030, 31: 6031}
 
     @pytest.mark.asyncio
+    async def test_without_a_reading_of_steams_running_games_the_preview_and_the_apply_remove_nothing(
+        self, make_library, fake_romm_api, emit, tmp_path
+    ):
+        """#2776 D5: no reading could be taken, so the game may be running and keeps both shortcuts."""
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, emit, tmp_path)
+        library.running_games.unread = True
+
+        summary = (await library.sync.sync_preview())["summary"]
+        _sent, removed = await self._apply(library, emit, "run-2")
+
+        assert summary["remove_count"] == 0
+        assert removed == []
+        assert self._bindings(library) == {30: 6030, 31: 6031}
+
+    @pytest.mark.asyncio
+    async def test_a_reading_lost_after_its_unit_applied_keeps_both_shortcuts(
+        self, make_library, fake_romm_api, emit, tmp_path
+    ):
+        """The unit converges with nothing running; the finalize's reading cannot be taken (#2776 D5)."""
+        library = make_library(romm_api=fake_romm_api)
+        await self._two_bound(library, fake_romm_api, emit, tmp_path)
+        running = library.running_games
+
+        def lose_the_reading_after_the_unit(reading):
+            if reading == 2:
+                running.unread = True
+
+        running.on_read = lose_the_reading_after_the_unit
+        _sent, removed = await self._apply(library, emit, "run-2")
+
+        assert removed == []
+        assert self._bindings(library) == {30: 6030, 31: 6031}
+
+    @pytest.mark.asyncio
     async def test_a_game_left_out_while_running_converges_at_the_next_sync_fetched_in_full(
         self, make_library, fake_romm_api, emit, tmp_path
     ):

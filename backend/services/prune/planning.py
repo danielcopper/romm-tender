@@ -91,6 +91,25 @@ class GroupPlannerConfig:
 
 # The result names the group's game beside its message (``results.group_result``).
 GAME_RUNNING_MESSAGE = "This game is running, so it was left as it is. Quit it and scan again to remove it."
+RUNNING_UNKNOWN_MESSAGE = (
+    "Tender could not read which games Steam is running, so this game was left as it is. Scan again to remove it."
+)
+
+
+def running_refusal(rom_id: int, running: frozenset[int] | None) -> tuple[str, str] | None:
+    """The reason and message that leave the group whose shortcut is *rom_id*'s as it is, or ``None`` to go on.
+
+    A group is left where Steam lists its game as running, and where no
+    reading of Steam's running apps could be taken (*running* ``None``), since
+    its game may be running then (#2776 D5).
+    """
+    if running is None:
+        return "running_unknown", RUNNING_UNKNOWN_MESSAGE
+    if rom_id in running:
+        return "game_running", GAME_RUNNING_MESSAGE
+    return None
+
+
 _MULTIPLE_SHORTCUTS_MESSAGE = (
     "This game has more than one shortcut in Steam, so it was left as it is. "
     "Delete either of them in Steam, run a sync, then scan again."
@@ -165,9 +184,10 @@ class GroupPlanner:
         bound_row, unstable = self._admit_group(rows, group_ids)
         if unstable is not None:
             return unstable
-        if bound_row is not None and bound_row.rom_id in await self._running_rom_ids():
+        refusal = None if bound_row is None else running_refusal(bound_row.rom_id, await self._running_rom_ids())
+        if refusal is not None:
             # Its shortcut, files and saves all stay; the next scan offers it again.
-            return self._results.group_result(rows, "skipped", "game_running", GAME_RUNNING_MESSAGE)
+            return self._results.group_result(rows, "skipped", *refusal)
 
         verdicts = await self._liveness.probe_many(group_ids)
         proof = _GroupLiveness.of(group_ids, verdicts)
@@ -296,4 +316,11 @@ class GroupPlanner:
         )
 
 
-__all__ = ["GAME_RUNNING_MESSAGE", "GroupPlan", "GroupPlanner", "GroupPlannerConfig"]
+__all__ = [
+    "GAME_RUNNING_MESSAGE",
+    "RUNNING_UNKNOWN_MESSAGE",
+    "GroupPlan",
+    "GroupPlanner",
+    "GroupPlannerConfig",
+    "running_refusal",
+]

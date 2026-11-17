@@ -44,22 +44,25 @@ class RunningGames:
         self._loop = config.loop
         self._log_debug = config.log_debug
 
-    async def running_rom_ids(self) -> frozenset[int]:
-        """The ROMs whose shortcut Steam lists as running; empty where no reading could be taken. Never raises.
+    async def running_rom_ids(self) -> frozenset[int] | None:
+        """The ROMs whose shortcut Steam lists as running; ``None`` where no reading could be taken. Never raises.
 
-        A reader that raised or did not answer within
-        :data:`READING_TIMEOUT_SECONDS` took no reading, an app Steam listed
-        without an id matches no ROM, and a failed read of the ROMs is logged
-        and answers none.
+        No reading is taken where the host has none (no debugger, the panel
+        not loaded), where the reader raised or did not answer within
+        :data:`READING_TIMEOUT_SECONDS`, or where the read of the ROMs failed;
+        each failure is logged. An app Steam listed without an id matches no
+        ROM. What each reader does without a reading is
+        ``docs/architecture/save-file-sync-architecture.md``'s, "Is the game
+        running".
         """
         try:
             async with asyncio.timeout(READING_TIMEOUT_SECONDS):
                 apps = await self._steam.running_apps()
         except Exception as e:
             self._log_debug(f"Steam's running apps could not be read: {e!r}")
-            return frozenset()
+            return None
         if apps is None:
-            return frozenset()
+            return None
         app_ids = {app.app_id for app in apps if app.app_id is not None}
         if not app_ids:
             return frozenset()
@@ -67,7 +70,7 @@ class RunningGames:
             return await self._loop.run_in_executor(None, self._roms_of, app_ids)
         except Exception as e:
             self._log_debug(f"The ROMs of Steam's running apps could not be read: {e!r}")
-            return frozenset()
+            return None
 
     def _roms_of(self, app_ids: set[int]) -> frozenset[int]:
         with self._uow_factory() as uow:

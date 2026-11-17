@@ -595,11 +595,20 @@ class SyncOrchestrator:
         converged = [binding for binding in converged if (binding.rom_id, binding.app_id) in removable]
         if converged:
             # A platform unit's own reading may be minutes old by now: a group
-            # one of whose shortcuts runs at this point keeps them all (#2645 D6).
-            left = without_running_groups(converged, await self._running_rom_ids())
+            # one of whose shortcuts runs at this point keeps them all (#2645 D6),
+            # and without a reading every group does (#2776 D5).
+            running = await self._running_rom_ids()
+            left = [] if running is None else without_running_groups(converged, running)
             if len(left) < len(converged):
                 kept_for_now = len(converged) - len(left)
-                self._logger.info(f"Convergence: {kept_for_now} shortcut(s) of a running game stay until a later sync")
+                if running is None:
+                    self._logger.info(
+                        f"Convergence: Steam's running games could not be read; {kept_for_now} shortcut(s) stay"
+                    )
+                else:
+                    self._logger.info(
+                        f"Convergence: {kept_for_now} shortcut(s) of a running game stay until a later sync"
+                    )
             converged = left
         remove = [{"rom_id": row.rom_id, "app_id": row.app_id} for row in stale]
         remove += [binding._asdict() for binding in converged]

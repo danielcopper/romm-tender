@@ -477,3 +477,63 @@ class TestNoFollowWhileTheGameRuns:
 
         assert (new / "game42.srm").read_bytes() == b"local progress"
         assert _recorded(svc) == str(new)
+
+
+class TestWithoutAReadingTheSavePathsGoOnAsToday:
+    """#2776 D5: where no reading of Steam's running apps could be taken, the save paths read it as nothing running."""
+
+    @staticmethod
+    def _unread(tmp_path) -> tuple[SaveService, FakeSaveApi, FakeRunningRomIds]:
+        svc, fake, games = _service(tmp_path)
+        games.unread = True
+        return svc, fake, games
+
+    @pytest.mark.asyncio
+    async def test_the_sweep_syncs_the_game_and_names_none(self, tmp_path):
+        svc, fake, games = self._unread(tmp_path)
+        _confirmed_rom(svc, tmp_path, 1, content=None)
+        fake.saves[100] = _server_save(save_id=100, rom_id=1, filename="game1.srm", slot="default")
+
+        result = await svc.sync_all_saves()
+
+        assert isinstance(result, dict)
+        assert (tmp_path / "saves" / "gba" / "game1.srm").exists()
+        assert result["skipped_running"] == []
+        assert games.readings >= 1
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("press", "details"), _presses())
+    async def test_a_press_on_the_game_s_page_is_not_refused(
+        self, tmp_path, press: Callable[[SaveService], Awaitable[Any]], details: dict[str, Any]
+    ):
+        del details
+        svc, fake, games = self._unread(tmp_path)
+        _confirmed_rom(svc, tmp_path, _ROM)
+        fake.saves[100] = _server_save(save_id=100, rom_id=_ROM, filename="game42.srm", slot="default")
+
+        outcome = await _outcome(press(svc))
+
+        assert not isinstance(outcome, GameRunning)
+        assert games.readings >= 1
+
+    @pytest.mark.asyncio
+    async def test_a_platform_s_delete_deletes_the_game_s_saves(self, tmp_path):
+        svc, _fake, _games = self._unread(tmp_path)
+        _confirmed_rom(svc, tmp_path, 1)
+
+        result = await svc.delete_platform_saves("gba")
+
+        assert isinstance(result, dict)
+        assert not (tmp_path / "saves" / "gba" / "game1.srm").exists()
+        assert result["skipped_running"] == []
+
+    @pytest.mark.asyncio
+    async def test_a_moved_save_directory_is_followed(self, tmp_path):
+        svc, _fake, _games = self._unread(tmp_path)
+        old, new = _moved_save_directory(svc, tmp_path)
+
+        await svc.get_save_status(_ROM)
+
+        assert (new / "game42.srm").read_bytes() == b"local progress"
+        assert not (old / "game42.srm").exists()
+        assert _recorded(svc) == str(new)
