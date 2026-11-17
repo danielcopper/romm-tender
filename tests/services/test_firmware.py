@@ -54,7 +54,7 @@ from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
 from domain.retrodeck_folders import GAME_DOWNLOAD, finding_refusal, no_bios_root, switched_off
 from domain.rom import Rom
 from domain.rom_install import RomInstall
-from lib.errors import Refused, RommConnectionError, ServerUnreachable
+from lib.errors import Refused, RommConnectionError, RommPlatformListingUnreadable, ServerUnreachable, classify_error
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
 from services.cores import CoreService, CoreServiceConfig
 from services.firmware import FirmwareService, FirmwareServiceConfig
@@ -6612,6 +6612,33 @@ class TestTheListingMovesOlderEntries:
         fw._listing.get_firmware_list()
 
         assert refiling.listings == []
+
+
+class TestFirmwareThatIsNoList:
+    """A platform whose firmware is no list fails the firmware read as an unreadable listing (#2761 D8)."""
+
+    _LISTING: ClassVar[list[dict[str, Any]]] = [{"id": 1, "slug": "psx", "fs_slug": "ps", "firmware": {"id": 7}}]
+
+    def test_without_a_cache_it_raises_with_the_listing_s_reason(self):
+        api = MagicMock()
+        api.list_platforms.return_value = self._LISTING
+        fw = _make_firmware_service(romm_api=api, uow_factory=FakeUnitOfWorkFactory(FakeUnitOfWork()))
+
+        with pytest.raises(RommPlatformListingUnreadable) as excinfo:
+            fw._listing.get_firmware_list()
+
+        assert classify_error(excinfo.value) == (
+            "platform_listing_unreadable",
+            "RomM's platform list could not be read (/api/platforms): platform ps lists firmware that is no list",
+        )
+
+    def test_with_a_cache_it_answers_the_cache(self):
+        api = MagicMock()
+        api.list_platforms.return_value = self._LISTING
+        fw = _make_firmware_service(romm_api=api, uow_factory=FakeUnitOfWorkFactory(FakeUnitOfWork()))
+        fw._listing._firmware_cache = [{"id": 3, "file_name": "kept.bin"}]
+
+        assert fw._listing.get_firmware_list() == [{"id": 3, "file_name": "kept.bin"}]
 
 
 class TestFirmwareListCache:

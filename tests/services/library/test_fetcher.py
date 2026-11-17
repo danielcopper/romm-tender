@@ -359,7 +359,7 @@ class TestAPlatformUnitIsNamedAsTheTabNamesIt:
             ["gba"],
         )
 
-        assert [(u.id, u.rom_count, u.rom_count_known) for u in units] == [(1, 0, False)]
+        assert [(u.id, u.rom_count, u.planned_count(), u.new_shortcut_count) for u in units] == [(1, None, 0, None)]
 
     @pytest.mark.asyncio
     async def test_a_platform_with_an_unknown_count_still_fetches_its_games(self, make_library, fake_romm_api):
@@ -379,7 +379,7 @@ class TestAPlatformUnitIsNamedAsTheTabNamesIt:
     async def test_a_switched_on_platform_without_an_id_fails_the_listing_rather_than_being_left_out(
         self, make_library, fake_romm_api, monkeypatch
     ):
-        """#2761 D4: left out, a sync would remove its games' shortcuts as for a platform switched off.
+        """#2761 D4: it fails the listing rather than being left out.
 
         The adapter refuses such a listing first, so the entry is read without
         its id here, past that check.

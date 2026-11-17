@@ -62,16 +62,15 @@ def platform_listing_of(answer: object) -> list[dict[str, Any]]:
     :meth:`RommApiAdapter.list_platforms` and the fake RomM, so both read an
     answer alike.
     """
-    unreadable = f"RomM's platform list could not be read ({_PLATFORMS_PATH})"
     if not isinstance(answer, list):
-        raise RommPlatformListingUnreadable(f"{unreadable}: RomM answered with a {type(answer).__name__}, not a list")
+        raise RommPlatformListingUnreadable(f"RomM answered with a {type(answer).__name__}, not a list")
     listing: list[Any] = answer
     no_objects = [item for item in listing if not isinstance(item, dict)]
     if no_objects:
-        raise RommPlatformListingUnreadable(f"{unreadable}: an item is a {type(no_objects[0]).__name__}, not an object")
+        raise RommPlatformListingUnreadable(f"an item is a {type(no_objects[0]).__name__}, not an object")
     folder = folder_without_an_id(listing)
     if folder is not None:
-        raise RommPlatformListingUnreadable(f"{unreadable}: platform {folder} has no usable id")
+        raise RommPlatformListingUnreadable(f"platform {folder} has no usable id")
     return listing
 
 

@@ -93,8 +93,8 @@ def listed_platform_folders(platforms: Iterable[Mapping[str, Any]]) -> frozenset
 def platform_tab_name(names: Mapping[str, str], platform_folder: object, slug: object) -> str:
     """The name the Platforms tab gives the platform in *platform_folder*, given the listing's *names*.
 
-    *names* is :func:`listed_platform_names` of the listing. A folder it does
-    not name — a platform the listing does not name — is named by its
+    *names* is :func:`listed_platform_names` of the listing. A folder it holds
+    no name for — one the listing does not list — is named by its
     ``fs_slug``, as its Steam collection is; without an ``fs_slug`` the slug
     names it, and ``""`` without either. A blank value, or one that is no
     string, counts as none.

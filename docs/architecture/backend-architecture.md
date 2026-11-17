@@ -1457,8 +1457,9 @@ an endpoint that keeps failing blocks the sync only for a user who has switched 
 not synced: a foreign collection the owner scope drops from the queue still needs its kind listed. The platform listing
 is always read. The Library page's `get_collections` reads the same collection listings only to display them: a failed
 standard listing fails it, while a failed smart listing or virtual type is left out and the rest is listed. The platform
-listing's other readers — the Library page's `get_platforms` and `set_all_platforms_sync`, and the connection test —
-answer a RomM error from it, a non-list answer included, with `classify_error`'s failure shape.
+listing's other readers — the Library page's `get_platforms` and `set_all_platforms_sync` — answer a RomM error from it,
+an unreadable listing included, with `classify_error`'s failure shape; the connection test answers every other RomM
+error from it that way and passes an unreadable listing by, as above.
 
 "Force Full Sync" (`clear_sync_cache`) clears every stamp (and every row's `shortcut_applied`), which is the entire
 full-re-fetch + full-re-apply arm — the stamps are the fetcher's sole skip authority. The `sync_runs` history is

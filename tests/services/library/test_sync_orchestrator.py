@@ -5697,13 +5697,14 @@ class TestFailedCollectionListing:
             assert uow.sync_runs.get("run-1") is None
 
 
-class TestPlatformListingThatIsNotAList:
+class TestAnUnreadablePlatformListing:
     """A platform listing Tender cannot read stops the run before it changes anything (#2761 D4, D8).
 
     Read as "no platforms" instead, a run with a collection enabled would still
     complete, and the end-of-run stale removal would remove the shortcut of every
-    game only a platform brings in; read without only the entry it cannot read,
-    that platform's games would go as for a platform switched off.
+    game only a platform brings in. Why an entry it cannot read is not left out
+    instead: docs/architecture/backend-architecture.md, "A listing that fails
+    stops the run".
     """
 
     @pytest.mark.parametrize(

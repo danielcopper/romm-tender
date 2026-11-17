@@ -32,10 +32,10 @@ from tests.services.library._helpers import _fake_wait_set_event, _seed_platform
 
 
 class TestAStampOfAPlatformWithoutACount:
-    """#2761 D5: an unknown ``rom_count`` counts as 0 for the progress alone, never in the completion stamp."""
+    """#2761 D5: an unknown ``rom_count`` reaches the completion stamp as what the fetch returned, never as 0."""
 
     @staticmethod
-    async def _stamp(library, fake_romm_api, *, rom_count: int, rom_count_known: bool):
+    async def _stamp(library, fake_romm_api, *, rom_count: int | None):
         _seed_platform(
             fake_romm_api,
             platform_id=1,
@@ -62,7 +62,6 @@ class TestAStampOfAPlatformWithoutACount:
             slug="n64",
             platform_folder="n64",
             rom_count=rom_count,
-            rom_count_known=rom_count_known,
         )
         await library.unit_applier.apply_unit(
             unit,
@@ -80,7 +79,7 @@ class TestAStampOfAPlatformWithoutACount:
         """Recorded as 0, removed-game discovery would read the platform's fetch as empty."""
         library = make_library(romm_api=fake_romm_api)
 
-        stamp = await self._stamp(library, fake_romm_api, rom_count=0, rom_count_known=False)
+        stamp = await self._stamp(library, fake_romm_api, rom_count=None)
 
         assert stamp.rom_count == 3
 
@@ -88,7 +87,7 @@ class TestAStampOfAPlatformWithoutACount:
     async def test_a_known_count_is_recorded_as_rom_m_gave_it(self, make_library, fake_romm_api):
         library = make_library(romm_api=fake_romm_api)
 
-        stamp = await self._stamp(library, fake_romm_api, rom_count=5, rom_count_known=True)
+        stamp = await self._stamp(library, fake_romm_api, rom_count=5)
 
         assert stamp.rom_count == 5
 

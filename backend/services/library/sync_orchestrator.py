@@ -314,7 +314,7 @@ class SyncOrchestrator:
                 await self._progress.emit_cancelled(SYNC_CANCELLED)
                 raise
             except Exception as e:
-                # RomM answered with a platform list it cannot be read from: a
+                # RomM answered, but its platform list could not be read: a
                 # warning, as every reader of it logs one (#2761 D8).
                 level = logging.WARNING if isinstance(e, RommPlatformListingUnreadable) else logging.ERROR
                 self._logger.log(level, f"Failed to build work queue: {e}")
@@ -323,7 +323,7 @@ class SyncOrchestrator:
                 return
 
             total_units = len(work_queue)
-            total_roms_planned = sum(u.rom_count for u in work_queue)
+            total_roms_planned = sum(u.planned_count() for u in work_queue)
             # Skip-aware estimate total (#1382): predicted-skip units weigh 0,
             # the rest their persisted collapsed count (raw ``rom_count``
             # fallback). Estimate-only — it prices the frontend's seeds and

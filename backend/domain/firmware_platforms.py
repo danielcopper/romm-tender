@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.platform_listing import PlatformEntry, listed_number, platform_entries
+from domain.platform_listing import PlatformEntry, UnreadableFirmware, listed_number, platform_entries
 from domain.platform_names import listed_platform_folders
 
 if TYPE_CHECKING:
@@ -39,15 +39,14 @@ def library_firmware(platforms: Iterable[Mapping[str, Any]]) -> list[dict[str, A
     out: the server lists it while its bytes are gone. So is a file whose
     ``platform_id`` names no platform of the list, or one with no slug or no
     folder, which has no platform to belong to. A platform whose firmware is no
-    list raises ``ValueError``: what it lists cannot be read, and an empty
-    answer would read as a platform that needs none.
+    list raises :class:`~domain.platform_listing.UnreadableFirmware`.
     """
     entries = platform_entries(platforms)
     owners = _owners_by_id(entries)
     rows: list[dict[str, Any]] = []
     for entry in entries:
         if entry.firmware is None:
-            raise ValueError(f"RomM's platform {entry.fs_slug or entry.platform_id} lists firmware that is no list")
+            raise UnreadableFirmware(f"platform {entry.fs_slug or entry.platform_id} lists firmware that is no list")
         for firmware in entry.firmware:
             if firmware.get("missing_from_fs"):
                 continue

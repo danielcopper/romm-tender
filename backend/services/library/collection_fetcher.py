@@ -383,7 +383,7 @@ class CollectionFetcher:
         progress = _WalkProgress(progress_step, progress_total_steps, units_fetched)
         if unit.collection_kind == "smart" and not unit.is_own:
             new_roms, walked_ids = await self._walk_collection(
-                unit, synced_rom_ids, platform_ids=None, expected_count=unit.rom_count, progress=progress
+                unit, synced_rom_ids, platform_ids=None, expected_count=unit.planned_count(), progress=progress
             )
             return new_roms, walked_ids, False, skip.restamp_settles
 

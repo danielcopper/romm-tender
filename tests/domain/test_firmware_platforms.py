@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 
 from domain.firmware_platforms import library_firmware
+from domain.platform_listing import UnreadableFirmware
 
 
 def _platform(platform_id: int, slug: str, fs_slug: str | None = None, *firmware: dict[str, Any]) -> dict[str, Any]:
@@ -103,7 +104,7 @@ class TestLibraryFirmware:
             {"id": 2, "slug": "gba", "firmware": {"id": 7}},
         ]
 
-        with pytest.raises(ValueError, match="firmware that is no list"):
+        with pytest.raises(UnreadableFirmware, match=r"^platform 2 lists firmware that is no list$"):
             library_firmware(platforms)
 
     def test_a_platform_whose_slug_is_only_whitespace_owns_no_file(self):

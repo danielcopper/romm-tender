@@ -1511,18 +1511,18 @@ share a slug are two rows, each named as its Steam collection is
 ([#2452](https://github.com/danielcopper/romm-tender/issues/2452) D1, D2), and one RomM lists without a usable `name` by
 its `fs_slug` ([#2761](https://github.com/danielcopper/romm-tender/issues/2761) D3, D5). Where that read fails, the tab
 shows one line in its place: _"RomM answered, but its platform list could not be read. Check your platforms in RomM and
-open the page again."_ for `platform_listing_unreadable`, a list RomM answered that Tender cannot read (D8), and _"Could
-not read your platforms. Check the connection to RomM and open the page again."_ for every other failure. The rows stand
-in two groups, **Synced** (the toggle is on) above **Available**, each alphabetical: **a dot, the name, the toggle, and
-nothing else**. The dot is the row's whole BIOS signal, through the shared mapping every platform-level BIOS dot renders
-through (`frontend/src/utils/biosColor.ts`: green met, red not met, grey not established or no level, and amber only
-where the resolver's verdict is open because of the disc's region alone; the per-file rows on the platform detail and
-the game page hard-code the same colours, and never use amber for a row). It is drawn on every row, taking exactly the
-helper's grey where there is no level to state: one that came and went shifted every name beside it, and the list is
-meant to be scanned down its left edge — which matters more now that the dot carries the state alone rather than
-reinforcing a number beside it. What the dot means in words is the row's `title`, and it is literally the pane's
-sentence: both come from `biosSummary` (see the BIOS files bullet below), so the number the row used to print arrives
-inside that sentence wherever the state has one.
+open the page again."_ for `platform_listing_unreadable`, an answer to the platform listing that Tender cannot read
+(D8), and _"Could not read your platforms. Check the connection to RomM and open the page again."_ for every other
+failure. The rows stand in two groups, **Synced** (the toggle is on) above **Available**, each alphabetical: **a dot,
+the name, the toggle, and nothing else**. The dot is the row's whole BIOS signal, through the shared mapping every
+platform-level BIOS dot renders through (`frontend/src/utils/biosColor.ts`: green met, red not met, grey not established
+or no level, and amber only where the resolver's verdict is open because of the disc's region alone; the per-file rows
+on the platform detail and the game page hard-code the same colours, and never use amber for a row). It is drawn on
+every row, taking exactly the helper's grey where there is no level to state: one that came and went shifted every name
+beside it, and the list is meant to be scanned down its left edge — which matters more now that the dot carries the
+state alone rather than reinforcing a number beside it. What the dot means in words is the row's `title`, and it is
+literally the pane's sentence: both come from `biosSummary` (see the BIOS files bullet below), so the number the row
+used to print arrives inside that sentence wherever the state has one.
 
 **The row carried the ratio (`3 / 5`, an em dash where nothing is required) until the second device round, and that is
 superseded rather than forgotten.** The first device round asked for it and it was added; using it decided the opposite

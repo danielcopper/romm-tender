@@ -26,6 +26,15 @@ if TYPE_CHECKING:
 _IDENTIFIER_SUFFIXES = ("_id", "_slug")
 
 
+class UnreadableFirmware(Exception):
+    """A listed platform's firmware is no list, so what firmware the library holds cannot be read.
+
+    Read as an empty list it would say the platform needs none (#1693). The
+    firmware read answers it as an unreadable platform listing; a sync never
+    reads the firmware, so it never stops over one.
+    """
+
+
 @dataclass(frozen=True, slots=True)
 class PlatformEntry:
     """What Tender reads off one listed platform; ``None`` where the listing gives no usable value.
@@ -34,7 +43,8 @@ class PlatformEntry:
     ``firmware`` is the entry's list of firmware files as sent: empty where the
     entry sends none, ``None`` where it sends something that is no list, which
     says nothing about the platform's firmware. ``rom_count`` is ``None`` where
-    the count is unknown — not a whole number, or below zero (#2761 D5).
+    the count is unknown (#2761 D5): not a whole number, or below zero, which
+    the one set of checks counts as none (#2761 D7).
     """
 
     fs_slug: str | None = None
@@ -72,10 +82,8 @@ def platform_entries(platforms: Iterable[Mapping[str, Any]]) -> list[PlatformEnt
 def folder_without_an_id(platforms: Iterable[object]) -> str | None:
     """The ``fs_slug`` of the first listed platform with one but no usable ``id``; ``None`` where every one has an id.
 
-    Such an entry makes the whole listing unreadable (#2761 D4): leaving out
-    only that entry would leave a switched-on platform listed but not fetched,
-    and a sync would remove its games' shortcuts as for a platform switched
-    off. An item that is no object has no folder.
+    Such an entry makes the whole listing unreadable (#2761 D4). An item that
+    is no object has no folder.
     """
     return next(
         (

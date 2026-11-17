@@ -324,6 +324,7 @@ const ROMM_READ_FAILURES: Record<RommErrorReason, true> = {
   device_sync_disabled: true,
   rate_limited: true,
   server_error: true,
+  platform_listing_unreadable: true,
 };
 const ROMM_READ_FAILURE_CODES: ReadonlySet<string> = new Set(Object.keys(ROMM_READ_FAILURES));
 

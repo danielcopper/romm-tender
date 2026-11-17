@@ -158,21 +158,16 @@ def _platform_unit(entry: PlatformEntry, names: Mapping[str, str]) -> WorkUnit:
 
     A switched-on platform has an ``fs_slug``, and none of those is listed
     without an id (``RommApiAdapter.list_platforms``); one that is all the same
-    fails the listing rather than being left out, which would remove its games'
-    shortcuts as for a platform switched off (#2761 D4). A ``rom_count`` that is
-    unknown counts as 0, and the unit says so (#2761 D5).
+    fails the listing rather than being left out (#2761 D4).
     """
     if entry.platform_id is None or entry.fs_slug is None:
-        raise RommPlatformListingUnreadable(
-            f"RomM's platform list could not be read: platform {entry.fs_slug or entry.slug} has no usable id or folder"
-        )
+        raise RommPlatformListingUnreadable(f"platform {entry.fs_slug or entry.slug} has no usable id")
     return WorkUnit(
         type="platform",
         id=entry.platform_id,
         name=platform_tab_name(names, entry.fs_slug, entry.slug),
         slug=entry.slug or "",
-        rom_count=entry.rom_count or 0,
-        rom_count_known=entry.rom_count is not None,
+        rom_count=entry.rom_count,
         platform_folder=entry.fs_slug,
     )
 
@@ -717,9 +712,15 @@ class LibraryFetcher:
                     if stamp is not None and all_rows
                     else None
                 )
-                new_shortcuts = new_shortcut_count(
-                    ((rom.sibling_group_key, rom.shortcut_app_id is not None) for rom in all_rows),
-                    unit_rom_count=unit.rom_count,
+                # Without RomM's count the estimate would read short; unknown is
+                # the answer that never does (#2761 D5).
+                new_shortcuts = (
+                    None
+                    if unit.rom_count is None
+                    else new_shortcut_count(
+                        ((rom.sibling_group_key, rom.shortcut_app_id is not None) for rom in all_rows),
+                        unit_rom_count=unit.rom_count,
+                    )
                 )
                 estimates[unit.platform_folder] = _PlanEstimate(predicted, collapsed, bound_count, new_shortcuts)
         return estimates
@@ -965,7 +966,8 @@ class LibraryFetcher:
         unit_roms: list[dict[str, Any]] = []
         offset = 0
         limit = LIST_PAGE_SIZE
-        total_pages = (unit.rom_count + limit - 1) // limit if unit.rom_count else 0
+        planned = unit.planned_count()
+        total_pages = (planned + limit - 1) // limit if planned else 0
         page_num = 0
         while True:
             self._check_cancelling()

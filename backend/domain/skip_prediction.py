@@ -149,6 +149,8 @@ def new_shortcut_count(rows: Iterable[tuple[str | None, bool]], *, unit_rom_coun
     by the entire unfetched remainder, and reading short is the one direction
     this estimate may not err in. A local mirror that is ahead of the server
     (retained rows for dropped rom_ids, ADR-0007) clamps the term at zero.
+    Where the server gave no count (#2761 D5) that term cannot be known, so
+    the platform has no estimate to ask for: it is unknown, never short.
 
     Estimate-only (ADR-0023): the result prices the ``sync_plan`` payload's
     create term and must never feed the actual skip decision.

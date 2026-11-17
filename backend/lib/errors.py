@@ -172,10 +172,16 @@ class RommPlatformListingUnreadable(RommApiError):
     """RomM answered its platform listing, but not in a form Tender can read.
 
     The answer is no list, an item of it is no object, or an entry has a folder
-    (``fs_slug``) but no usable ``id`` (#2761 D4). RomM answered, so this says
-    nothing about it being reachable (#2761 D8). Non-retryable: the same answer
-    comes back.
+    (``fs_slug``) but no usable ``id`` (#2761 D4); on the firmware read, also an
+    entry whose firmware is no list. RomM answered, so it is no sign
+    that RomM cannot be reached (#2761 D8). Non-retryable: the same answer comes
+    back. Raised with the *detail* alone; the message names the listing.
     """
+
+    def __init__(self, detail: str):
+        super().__init__(
+            f"RomM's platform list could not be read (/api/platforms): {detail}", url="/api/platforms", method="GET"
+        )
 
 
 class RommConnectionError(RommApiError):
