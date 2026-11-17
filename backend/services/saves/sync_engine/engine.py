@@ -909,7 +909,7 @@ class SyncEngine:
                 )
 
                 msg = summarize_sync_result(
-                    f"Uploaded {synced} save(s)", synced=synced, errors=errors, conflicts=len(conflicts)
+                    f"Synced {synced} save(s)", synced=synced, errors=errors, conflicts=len(conflicts)
                 )
                 return {
                     "success": len(errors) == 0,

@@ -6,7 +6,7 @@ import pytest
 
 from services.saves._sync_stop import SyncStopped
 from services.saves.sync_engine._gate import GateHolder
-from services.saves.sync_engine._pre_launch import PreLaunchRun, PreLaunchRuns, PreLaunchState
+from services.saves.sync_engine._pre_launch import PreLaunchRun, PreLaunchRuns, PreLaunchState, completed_answer
 
 
 class TestWhatTheLatestCallIsDoing:
@@ -107,3 +107,30 @@ class TestTheWait:
         with pytest.raises(TimeoutError):
             await run.wait(PreLaunchState.WAITING_FOR_SYNC, acquire)
         assert run.stop.stopped_the_sync() is False
+
+
+class TestTheAnswerOfACompletedSync:
+    """The sync before a start words its answer through ``summarize_sync_result`` (#2776)."""
+
+    def test_an_upload_alone_is_not_called_a_download(self):
+        answer = completed_answer(1, 0, [], [])
+
+        assert "Downloaded" not in answer["message"]
+        assert answer["message"] == "Synced 1 save(s)"
+        assert (answer["success"], answer["synced"], answer["uploaded"], answer["downloaded"]) == (True, 1, 1, 0)
+
+    def test_a_sync_where_every_file_failed_leads_with_the_errors_reason(self):
+        answer = completed_answer(0, 0, ["pokemon.srm: Server unreachable", "pokemon.rtc: Server unreachable"], [])
+
+        assert answer["success"] is False
+        assert answer["message"] == "Server unreachable (+1 more)"
+
+    def test_a_partial_sync_keeps_its_count_and_names_the_reason(self):
+        answer = completed_answer(0, 1, ["pokemon.rtc: timeout"], [])
+
+        assert answer["message"] == "Synced 1 save(s), 1 error(s) — timeout"
+
+    def test_conflicts_are_counted(self):
+        conflict = {"type": "newer_in_slot", "rom_id": 42}
+
+        assert completed_answer(0, 0, [], [conflict])["message"] == "Synced 0 save(s), 1 conflict(s)"
