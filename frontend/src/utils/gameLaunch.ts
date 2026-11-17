@@ -428,14 +428,17 @@ export function entryLaunchLine(
 
 /**
  * What went wrong where the page's check of whether the game can start failed
- * itself, as the notification says it (#2195 D32, D36). A timeout's and a
- * transport failure's own detail is for the log, not the sentence; a transport
- * failure is worded by `transportFailureSentence` (#2776 D9).
+ * itself, as the notification says it (#2195 D32, D36). A timeout's own detail
+ * is for the log, not the sentence; a transport failure is worded by
+ * `transportFailureSentence` (#2776 D9), and closes with a period like every
+ * other form here.
  */
 export function startCheckFailureSentence(e: unknown): string {
   const lead = "Tender could not check whether this game can start";
   if (e instanceof TimeoutError) return `${lead}: Tender's backend did not answer in time.`;
-  return transportFailureSentence(lead, e) ?? `${lead}: ${e instanceof Error ? e.message : String(e)}.`;
+  const transport = transportFailureSentence(lead, e);
+  if (transport === lead) return `${lead}.`;
+  return transport ?? `${lead}: ${e instanceof Error ? e.message : String(e)}.`;
 }
 
 /**

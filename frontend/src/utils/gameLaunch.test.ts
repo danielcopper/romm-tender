@@ -590,7 +590,7 @@ describe("startCheckFailureSentence — what went wrong with the page's check (#
   it("names no cause for a transport failure that is no lost connection (#2776 D9)", () => {
     const raised = new HostTransportError("backend_exception", "KeyError: 'rom'");
 
-    expect(startCheckFailureSentence(raised)).toBe("Tender could not check whether this game can start");
+    expect(startCheckFailureSentence(raised)).toBe("Tender could not check whether this game can start.");
   });
 });
 
