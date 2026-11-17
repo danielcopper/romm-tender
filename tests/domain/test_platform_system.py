@@ -92,7 +92,7 @@ class TestPlatformIds:
 
         assert ids.name == "Super Nintendo"
         assert ids.questions() == (("igdb_id", "19"),)
-        assert platform_ids_of({"display_name": "SNES"}).name == "SNES"
+        assert platform_ids_of({"display_name": "SNES"}).name is None
 
     @pytest.mark.parametrize("value", [None, True, "", "abc", "-4", 1.5, [19]])
     def test_a_number_of_the_wrong_kind_counts_as_none(self, value):
@@ -157,6 +157,16 @@ class TestKeptPlatform:
                 },
             )
         }
+
+    def test_a_display_name_without_a_name_names_neither_the_kept_record_nor_its_question(self):
+        """#2564 D2: RomM's display name never names a platform."""
+        kept = kept_platform_of({k: v for k, v in LISTED_GAMECUBE.items() if k != "name"}, "5.4.1")
+
+        assert (kept.name, kept.question_ids().name) == (None, None)
+
+    def test_a_slug_that_is_only_whitespace_is_kept_as_no_slug(self):
+        """#2761 D7."""
+        assert kept_platform_of({**LISTED_GAMECUBE, "slug": "  "}, "5.4.1").slug is None
 
     def test_an_identifier_rom_m_adds_later_is_kept_with_no_change(self):
         kept = kept_platform_of({**LISTED_GAMECUBE, "newdb_id": 77, "newdb_slug": "gcn"}, "5.5.0")

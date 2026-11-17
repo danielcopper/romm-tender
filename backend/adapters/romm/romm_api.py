@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.game_files import file_ids_query
 from domain.hidden_roms import hidden_rom_ids
+from domain.platform_listing import folder_without_an_id
 from lib.errors import (
     PairingCodeInvalidError,
     PairingCodeOwnerDisabledError,
@@ -183,7 +184,18 @@ class RommApiAdapter:
         return self._client.request_once("/api/heartbeat", timeout=self._PROBE_TIMEOUT_SECONDS)
 
     def list_platforms(self) -> list[dict[str, Any]]:
-        return self._request_listing("/api/platforms")
+        """RomM's platform listing, raising :class:`RommApiError` as :meth:`_request_listing` does.
+
+        A platform listed with a folder (``fs_slug``) but no usable ``id``
+        makes the whole listing unreadable, raised the same way
+        (:func:`~domain.platform_listing.folder_without_an_id`).
+        """
+        path = "/api/platforms"
+        platforms = self._request_listing(path)
+        folder = folder_without_an_id(platforms)
+        if folder is not None:
+            raise RommApiError(f"Unexpected response from {path}: platform {folder} has no usable id")
+        return platforms
 
     def get_current_user(self) -> dict[str, Any]:
         return self._client.request("/api/users/me")

@@ -92,6 +92,8 @@ class RommFirmwareApi(Protocol):
         """Fetch every platform with the firmware files RomM holds for it.
 
         Returns /api/platforms, each platform carrying its files as ``firmware``.
+        Raises where a platform listed with an ``fs_slug`` has no usable ``id``,
+        as for an answer that is no list.
         """
         ...
 
@@ -109,7 +111,9 @@ class RommPlatformReader(Protocol):
     def list_platforms(self) -> list[dict[str, Any]]:
         """Fetch all platforms configured on the RomM server.
 
-        Returns a list of platform dicts from /api/platforms.
+        Returns a list of platform dicts from /api/platforms. Raises where a
+        platform listed with an ``fs_slug`` has no usable ``id``, as for an
+        answer that is no list.
         """
         ...
 

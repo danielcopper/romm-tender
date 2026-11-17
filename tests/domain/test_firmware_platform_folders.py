@@ -40,6 +40,10 @@ class TestFoldersBySlug:
 
         assert folders_by_slug(platforms) == {}
 
+    def test_a_slug_that_is_only_whitespace_is_no_slug(self):
+        """#2761 D7."""
+        assert folders_by_slug([_platform(1, "  ", "x")]) == {}
+
 
 class TestListedPlatforms:
     def test_a_platform_listed_without_a_slug_still_counts_its_folder(self):

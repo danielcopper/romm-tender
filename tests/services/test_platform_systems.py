@@ -281,6 +281,21 @@ class TestTheRecordKeyedByFolder:
         assert service.listed_platforms() == frozenset({"ngc"})
 
 
+class TestAPlatformListedWithoutAName:
+    """#2564 D2: a platform listed with a ``display_name`` and no ``name`` is named by neither."""
+
+    def test_its_display_name_names_neither_its_kept_record_nor_its_system(self, service, uow_factory, romm):
+        unnamed = {k: v for k, v in _SNES.items() if k != "name"}
+        romm.platforms = [{**unnamed, "display_name": "SNES Custom"}]
+
+        answer = service.platform_system("snes")
+
+        kept = decode_platform_ids(uow_factory.uow.kv_config.get(PLATFORM_IDS_KEY))
+        assert kept is not None
+        assert kept["snes"].name is None
+        assert answer.platform_name == "snes"
+
+
 class TestAnInstalledGame:
     def test_it_keeps_the_system_its_install_record_holds(self, service, sources, romm):
         install = RomInstall(

@@ -26,6 +26,8 @@ import json
 from collections import Counter
 from typing import TYPE_CHECKING, Any
 
+from domain.platform_listing import listed_text, platform_entries
+
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
@@ -63,7 +65,7 @@ def platform_display_name(raw: str | None, platform_folder: str | None, slug: st
 
 def listed_fs_slug(platform: Mapping[str, Any]) -> str | None:
     """The ``fs_slug`` RomM's listing gives *platform*; ``None`` where it gives none, or a blank one."""
-    return _text(platform.get("fs_slug"))
+    return listed_text(platform.get("fs_slug"))
 
 
 def listed_platform_names(platforms: Iterable[Mapping[str, Any]]) -> dict[str, str]:
@@ -75,9 +77,9 @@ def listed_platform_names(platforms: Iterable[Mapping[str, Any]]) -> dict[str, s
     second ``fs_slug`` appears (#2452 D2).
     """
     named = [
-        (folder, _text(p.get("slug")), name)
-        for p in platforms
-        if (folder := listed_fs_slug(p)) is not None and (name := _text(p.get("name"))) is not None
+        (folder, entry.slug, name)
+        for entry in platform_entries(platforms)
+        if (folder := entry.fs_slug) is not None and (name := entry.name) is not None
     ]
     shared = Counter(name for _folder, _slug, name in named)
     return {
@@ -90,5 +92,13 @@ def listed_platform_folders(platforms: Iterable[Mapping[str, Any]]) -> frozenset
     return frozenset(folder for p in platforms if (folder := listed_fs_slug(p)) is not None)
 
 
-def _text(value: Any) -> str | None:
-    return value if isinstance(value, str) and value.strip() else None
+def platform_tab_name(names: Mapping[str, str], platform_folder: str | None, slug: str | None) -> str:
+    """The name the Platforms tab shows for the platform in *platform_folder*, given the listing's *names*.
+
+    *names* is :func:`listed_platform_names` of the listing; a platform it holds
+    no name for is named by its ``fs_slug``, as its Steam collection is (#2761
+    D3). Without an ``fs_slug`` the slug names it, and ``""`` without either.
+    """
+    if platform_folder is None:
+        return slug or ""
+    return names.get(platform_folder, platform_folder)

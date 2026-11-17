@@ -24,7 +24,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from domain.emulator_sources import ALL_SOURCES_SWITCHED_OFF, NO_SOURCE_DETECTED, ArrangedSource
-from domain.platform_names import listed_fs_slug
+from domain.platform_listing import listed_number, listed_text, platform_entry_of
 from domain.retrodeck_folders import FolderRefused, not_installed, switched_off, unanswered_refusal
 
 if TYPE_CHECKING:
@@ -37,10 +37,6 @@ PLATFORM_IDS_KEY = "platform_ids"
 # they are asked. RomM's other ids have no crosswalk in the resolver and are
 # not asked.
 ID_FIELDS = ("igdb_id", "libretro_slug", "ss_id", "tgdb_id")
-
-# A suffix rather than a list of fields, so that an identifier RomM adds
-# needs no change here.
-_IDENTIFIER_SUFFIXES = ("_id", "_slug")
 
 
 class SystemStatus(StrEnum):
@@ -83,13 +79,13 @@ class PlatformIds:
 
 
 def platform_ids_of(platform: Mapping[str, Any]) -> PlatformIds:
-    """The ids one RomM platform carries; a value of the wrong kind counts as none."""
+    """The ids one RomM platform carries, and its ``name``; a value of the wrong kind counts as none."""
     return PlatformIds(
-        igdb_id=_number(platform.get("igdb_id")),
-        libretro_slug=_text(platform.get("libretro_slug")),
-        ss_id=_number(platform.get("ss_id")),
-        tgdb_id=_number(platform.get("tgdb_id")),
-        name=_listed_name(platform),
+        igdb_id=listed_number(platform.get("igdb_id")),
+        libretro_slug=listed_text(platform.get("libretro_slug")),
+        ss_id=listed_number(platform.get("ss_id")),
+        tgdb_id=listed_number(platform.get("tgdb_id")),
+        name=listed_text(platform.get("name")),
     )
 
 
@@ -117,16 +113,16 @@ class KeptPlatform:
 
 
 def kept_platform_of(platform: Mapping[str, Any], romm_version: str | None) -> KeptPlatform:
-    """What is kept of one RomM platform read with *romm_version*; a named field of the wrong kind counts as none."""
-    identified = platform.get("is_identified")
+    """What is kept of one RomM platform read with *romm_version*, read through :func:`platform_entry_of`."""
+    entry = platform_entry_of(platform)
     return KeptPlatform(
-        slug=_text(platform.get("slug")),
-        fs_slug=listed_fs_slug(platform),
-        platform_id=_number(platform.get("id")),
-        name=_listed_name(platform),
-        is_identified=identified if isinstance(identified, bool) else None,
+        slug=entry.slug,
+        fs_slug=entry.fs_slug,
+        platform_id=entry.platform_id,
+        name=entry.name,
+        is_identified=entry.is_identified,
         romm_version=romm_version,
-        ids={key: value for key, value in platform.items() if key.endswith(_IDENTIFIER_SUFFIXES)},
+        ids=entry.ids,
     )
 
 
@@ -192,9 +188,11 @@ def _decode_entry(key: str, entry: Mapping[str, Any]) -> KeptPlatform:
     ids = entry.get("ids")
     if not isinstance(ids, dict):
         return KeptPlatform(
-            slug=_text(key), name=_text(entry.get("name")), ids={f: entry[f] for f in ID_FIELDS if f in entry}
+            slug=listed_text(key),
+            name=listed_text(entry.get("name")),
+            ids={f: entry[f] for f in ID_FIELDS if f in entry},
         )
-    kept = kept_platform_of(entry, _text(entry.get("romm_version")))
+    kept = kept_platform_of(entry, listed_text(entry.get("romm_version")))
     return KeptPlatform(
         slug=kept.slug,
         fs_slug=kept.fs_slug,
@@ -204,24 +202,6 @@ def _decode_entry(key: str, entry: Mapping[str, Any]) -> KeptPlatform:
         romm_version=kept.romm_version,
         ids=ids,
     )
-
-
-def _number(value: Any) -> int | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str) and value.isascii() and value.isdigit():
-        return int(value)
-    return None
-
-
-def _text(value: Any) -> str | None:
-    return value if isinstance(value, str) and value.strip() else None
-
-
-def _listed_name(platform: Mapping[str, Any]) -> str | None:
-    return _text(platform.get("name")) or _text(platform.get("display_name"))
 
 
 @dataclass(frozen=True, slots=True)

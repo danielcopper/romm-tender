@@ -10,6 +10,7 @@ from domain.platform_names import (
     listed_platform_folders,
     listed_platform_names,
     platform_display_name,
+    platform_tab_name,
 )
 
 
@@ -130,3 +131,19 @@ class TestAGameWithoutAFolderIsNamedBySlug:
 
     def test_a_folder_names_it_by_the_folder_s_cached_name(self):
         assert platform_display_name('{"gc": "Nintendo GameCube (gc)"}', "gc", "ngc") == "Nintendo GameCube (gc)"
+
+
+class TestPlatformTabName:
+    """The name the Platforms tab shows, which the sync names a platform's unit and its ROMs by (#2761 D2, D3)."""
+
+    def test_a_listed_name_names_it(self):
+        names = {"snes-hacks": "Super Nintendo (snes-hacks)"}
+
+        assert platform_tab_name(names, "snes-hacks", "snes") == "Super Nintendo (snes-hacks)"
+
+    def test_a_platform_listed_without_a_name_is_named_by_its_fs_slug(self):
+        assert platform_tab_name({}, "gc", "ngc") == "gc"
+
+    def test_without_an_fs_slug_the_slug_names_it_and_nothing_without_either(self):
+        assert platform_tab_name({"ngc": "Folder Named ngc"}, None, "ngc") == "ngc"
+        assert platform_tab_name({}, None, None) == ""

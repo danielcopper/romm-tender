@@ -21,7 +21,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.platform_names import listed_fs_slug, listed_platform_folders
+from domain.platform_listing import PlatformEntry, listed_number, platform_entries
+from domain.platform_names import listed_platform_folders
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -39,17 +40,17 @@ def library_firmware(platforms: Iterable[Mapping[str, Any]]) -> list[dict[str, A
     ``platform_id`` names no platform of the list, or one with no slug or no
     folder, which has no platform to belong to.
     """
-    listed = list(platforms)
-    slugs = _slugs_by_id(listed)
-    folders = _folders_by_id(listed)
+    entries = platform_entries(platforms)
+    owners = _owners_by_id(entries)
     rows: list[dict[str, Any]] = []
-    for platform in listed:
-        for firmware in platform.get("firmware") or ():
+    for entry in entries:
+        for firmware in entry.firmware:
             if firmware.get("missing_from_fs"):
                 continue
-            platform_id = firmware.get("platform_id")
-            slug, folder = slugs.get(platform_id), folders.get(platform_id)
-            if slug is not None and folder is not None:
+            platform_id = listed_number(firmware.get("platform_id"))
+            owner = owners.get(platform_id) if platform_id is not None else None
+            if owner is not None:
+                folder, slug = owner
                 rows.append({**firmware, "platform_folder": folder, "platform_slug": slug})
     return rows
 
@@ -83,10 +84,9 @@ def listed_platforms(platforms: Iterable[Mapping[str, Any]]) -> ListedPlatforms:
 def folders_by_slug(platforms: Iterable[Mapping[str, Any]]) -> dict[str, frozenset[str]]:
     """Every listed platform's ``fs_slug``, grouped under its slug; a platform without either is left out."""
     grouped: dict[str, set[str]] = {}
-    for platform in platforms:
-        slug, folder = platform.get("slug"), listed_fs_slug(platform)
-        if isinstance(slug, str) and slug and folder is not None:
-            grouped.setdefault(slug, set()).add(folder)
+    for entry in platform_entries(platforms):
+        if entry.slug is not None and entry.fs_slug is not None:
+            grouped.setdefault(entry.slug, set()).add(entry.fs_slug)
     return {slug: frozenset(folders) for slug, folders in grouped.items()}
 
 
@@ -158,17 +158,10 @@ def records_of_platform(
     ]
 
 
-def _slugs_by_id(platforms: list[Mapping[str, Any]]) -> dict[Any, str]:
-    return _by_id(platforms, "slug")
-
-
-def _folders_by_id(platforms: list[Mapping[str, Any]]) -> dict[Any, str]:
-    return _by_id(platforms, "fs_slug")
-
-
-def _by_id(platforms: list[Mapping[str, Any]], key: str) -> dict[Any, str]:
+def _owners_by_id(entries: Iterable[PlatformEntry]) -> dict[int, tuple[str, str]]:
+    """``(fs_slug, slug)`` of every listed platform with both, by its RomM id."""
     return {
-        platform.get("id"): value
-        for platform in platforms
-        if isinstance(value := platform.get(key), str) and value and platform.get("id") is not None
+        entry.platform_id: (entry.fs_slug, entry.slug)
+        for entry in entries
+        if entry.platform_id is not None and entry.fs_slug is not None and entry.slug is not None
     }
