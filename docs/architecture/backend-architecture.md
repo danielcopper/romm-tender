@@ -1021,10 +1021,10 @@ game = at most one **new** Steam shortcut; the sibling row holding `shortcut_app
   apply does, by the listed name, or, for a platform the listing does not name that a kept row, a row left bound or an
   emitted entry is on, the name the `platform_names` cache holds, else the `fs_slug` — an emitted entry and a row left
   bound through `platform_collection_name`, a kept row by the same lookup — never by the `platform_name` an entry
-  carries (#2558 D1) — though a ROM a collection brings, walked or rebuilt from the kept data, now carries its
-  platform's listed name too ([#2761](https://github.com/danielcopper/romm-tender/issues/2761) D6). The preview's
-  per-platform table is named by the same names ([QAM panel — Sync](qam-panel.md#sync)). Force Full Sync leaves the
-  routes in place. The preview asks the same question for the same rows, through the same
+  carries (#2558 D1), even where that is the same name: a ROM a collection brings, walked or rebuilt from the kept data,
+  carries its platform's listed name ([#2761](https://github.com/danielcopper/romm-tender/issues/2761) D6). The
+  preview's per-platform table is named by the same names ([QAM panel — Sync](qam-panel.md#sync)). Force Full Sync
+  leaves the routes in place. The preview asks the same question for the same rows, through the same
   `services/library/_stale_rows.py::settle_stale_rows`, so the removals it counts are the ones the apply makes. Both
   judge a row's game by the group keys of the ROMs the run counts as synced (`domain/sync_diff.py::group_keys_of`): the
   apply reads them off the rows its commits upserted (`do_read_resident_group_keys`), and the preview, which writes
