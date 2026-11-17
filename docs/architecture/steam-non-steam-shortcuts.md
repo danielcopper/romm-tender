@@ -581,8 +581,8 @@ is decided **entirely by the run finalizer's dict key**, which `RunFinalizer._re
   Collections whose keys match still union: two of the same name and kind, and — accepted, since it takes a name
   spelling out another kind's label — a standard collection named `"Foo (Smart)"` with a smart one named `"Foo"`.
 
-`IGDB Collection` keeps its capital C: Steam tells collection names apart without regard to case, and Tender finds an
-existing collection the same way (below), so a change of case alone would not rename a collection that already exists.
+`IGDB Collection` keeps its capital C: a change of case alone does not rename a collection that already exists ("Name
+identity is case-insensitive", below).
 
 The Collections page does not quote the label strings. Besides the kernel, its test and this section's own examples,
 they are spelled in these places, and a label change is a change in each:
@@ -634,6 +634,11 @@ JavaScript compute the chain identically on every code point both assign, and it
 dotless `ı` and `i` (measured: CPython 3.13 / Unicode 15.1 against Node 24 / Unicode 17). For grouping and for the
 create/find, joining more is the safe direction: what loses games is a pair Steam holds as one and Tender keeps apart.
 On the delete matchers, joining more means deleting more.
+
+A change of case alone does not reach a collection Steam already holds: the create/find matches it by its folded name
+and rewrites only its games (`replaceCollectionApps`, `frontend/src/utils/collections.ts`), never its name. Measured
+([#2776](https://github.com/danielcopper/romm-tender/issues/2776)): a collection created as `RomM: [7 up] (<host>)` and
+synced again with only `7 Up` in RomM stays one collection, which Steam stores as `RomM: [7 up] (<host>)`.
 
 Where the fold applies: the run finalizer groups both `romm_collection_app_ids` and `platform_app_ids` by the folded
 key. A merged collection, a RomM collection's or a platform's, is named by its sorted-first spelling, which
