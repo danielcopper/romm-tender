@@ -10,14 +10,9 @@ import { DialogButton } from "@decky/ui";
 import type { LocalSaveFile, LocalSaveFiles } from "../../types";
 import { formatBytes, formatTimestamp } from "../../utils/formatters";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
-import { NO_SAVE_ON_DEVICE } from "../../utils/saveSyncStatement";
+import { NOT_DOWNLOADED_NO_SAVE, NO_SAVE_ON_DEVICE, SAVE_SYNC_OFF } from "../../utils/saveSyncStatement";
 import { infoRow } from "./SaveFileRow";
 import { SaveSyncRefusal } from "./SaveSyncRefusal";
-
-export const SAVE_SYNC_OFF = "Save sync is off.";
-
-/** The line a game that is not downloaded reads under {@link SAVE_SYNC_OFF}. */
-export const NOT_DOWNLOADED_NO_SAVE = "Not downloaded — no save on this device.";
 
 function localSaveRow(file: LocalSaveFile): ReactElement {
   return (

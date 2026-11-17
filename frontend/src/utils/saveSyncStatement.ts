@@ -13,6 +13,12 @@ export const NO_SAVE_YET = "No save yet.";
 /** An empty slot's line where this device was read and RomM could not be asked (D10). */
 export const NO_SAVE_ON_DEVICE = "No save on this device.";
 
+/** The lead sentence when save sync is switched off. */
+export const SAVE_SYNC_OFF = "Save sync is off.";
+
+/** The line a game that is not downloaded reads under {@link SAVE_SYNC_OFF}. */
+export const NOT_DOWNLOADED_NO_SAVE = "Not downloaded — no save on this device.";
+
 /** RetroArch's setting, the usual cause of saves written beside the game file, and the way back (D2). */
 export const CONTENT_DIR_HINT =
   "The usual cause is RetroArch's 'Write Saves to Content Directory' (RetroArch › Settings › Saving); if it is on, turning it off lets save sync work again.";

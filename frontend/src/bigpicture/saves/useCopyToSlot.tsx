@@ -10,53 +10,23 @@
 
 import { useCallback } from "react";
 import { showModal } from "@decky/ui";
-import { showToast } from "../../utils/toast";
-import { copySaveToSlot, debugLog, isEndpointFailure } from "../../api/backend";
-import type { CopySaveToSlotStatus, EndpointFailure, SaveSlotSummary } from "../../types";
+import type { SaveSlotSummary } from "../../types";
 import { showSyncConflictModal } from "../../shared/SyncConflictModal";
 import { detach } from "../../utils/detach";
-import { copyToSlotFeedback } from "../../utils/saveSlotWording";
+import { executeCopySaveToSlot } from "../../utils/saveSlotFlow";
 import { CopyToSlotModal } from "./CopyToSlotModal";
 import type { CopyToSlotHandler } from "./CopyToSlotButton";
-import { announceSaveSync } from "../../utils/saveSyncEvents";
-
-async function handleResult(
-  result: CopySaveToSlotStatus | EndpointFailure,
-  target: string,
-  romId: number,
-): Promise<void> {
-  const feedback = copyToSlotFeedback(result, target);
-  if (feedback === null) return;
-  if (feedback.kind === "conflict") {
-    await showSyncConflictModal(feedback.conflict);
-    return;
-  }
-  showToast(feedback.message);
-  // Only a copy refreshes the slot views: `already_present` copied nothing.
-  if (!isEndpointFailure(result) && (result.status === "ok" || result.status === "upload_failed")) {
-    announceSaveSync(romId);
-  }
-}
 
 /** Returns an opener `openCopyModal(saveId, sourceSlot)` for the copy-to-slot flow. */
 export function useCopyToSlot(romId: number, availableSlots: SaveSlotSummary[]): CopyToSlotHandler {
   return useCallback(
     (saveId: number, sourceSlot: string) => {
-      const runCopy = async (target: string): Promise<void> => {
-        try {
-          const result = await copySaveToSlot(romId, saveId, target);
-          await handleResult(result, target, romId);
-        } catch (e) {
-          detach(debugLog(`useCopyToSlot: copy failed for save ${saveId} into '${target}': ${e}`));
-          showToast("Couldn't copy the save. Check your connection and try again.");
-        }
-      };
       showModal(
         <CopyToSlotModal
           availableSlots={availableSlots}
           sourceSlot={sourceSlot}
           onSubmit={(target: string) => {
-            detach(runCopy(target));
+            detach(executeCopySaveToSlot(romId, saveId, target, showSyncConflictModal));
           }}
         />,
       );

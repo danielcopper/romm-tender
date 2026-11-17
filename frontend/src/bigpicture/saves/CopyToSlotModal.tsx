@@ -10,7 +10,7 @@
 import { useState, FC, ChangeEvent, KeyboardEvent } from "react";
 import { ModalRoot, DialogButton, TextField } from "@decky/ui";
 import type { SaveSlotSummary } from "../../types";
-import { displaySlot } from "../../utils/saveHelpers";
+import { displaySlot, eligibleCopyTargetSlots } from "../../utils/saveHelpers";
 
 export const CopyToSlotModal: FC<{
   availableSlots: SaveSlotSummary[];
@@ -20,12 +20,7 @@ export const CopyToSlotModal: FC<{
 }> = ({ availableSlots, sourceSlot, onSubmit, closeModal }) => {
   const [newName, setNewName] = useState("");
 
-  // Existing named slots eligible as targets: never the source (same-slot copy
-  // == rollback) and never the legacy "" bucket (read-only source only). Dedupe
-  // defensively so a repeated slot can't render two identical rows.
-  const targetSlots = Array.from(
-    new Set(availableSlots.map((s) => s.slot).filter((name) => name !== "" && name !== sourceSlot)),
-  ).sort((a, b) => a.localeCompare(b));
+  const targetSlots = eligibleCopyTargetSlots(availableSlots, sourceSlot);
 
   const pick = (target: string) => {
     const trimmed = target.trim();

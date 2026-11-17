@@ -6,14 +6,12 @@
 
 import { useState, useEffect, useRef, FC, type ReactElement } from "react";
 import { DialogButton } from "@decky/ui";
-import { showToast } from "../../utils/toast";
-import { debugLog, isEndpointFailure, savesListFileVersions, savesRollbackToVersion } from "../../api/backend";
-import type { SaveVersionEntry, ListFileVersionsResult } from "../../types";
+import type { SaveVersionEntry } from "../../types";
 import { showSyncConflictModal } from "../../shared/SyncConflictModal";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { formatBytes, formatTimestamp } from "../../utils/formatters";
 import { formatAttributionSegment, pickLastSyncer } from "../../utils/saveHelpers";
-import { rollbackFeedback } from "../../utils/saveSlotWording";
+import { executeVersionRestore, loadFileVersions } from "../../utils/saveSlotFlow";
 import { renderCopyToSlotButton, type CopyToSlotHandler } from "./CopyToSlotButton";
 import { detach } from "../../utils/detach";
 import { ThrobberLabel } from "../../shared/Throbber";
@@ -54,37 +52,14 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
   const loadVersions = async () => {
     setLoading(true);
     setLoadError(null);
-    try {
-      const result: ListFileVersionsResult = await savesListFileVersions(romId, slot, filename);
-      if (result.status === "ok" || result.status === "multi_file_unsupported") {
-        // multi_file_unsupported carries an empty list — a multi-file slot's
-        // siblings are components, not prior versions (#908). The panel is
-        // hidden for multi-file slots anyway; this is the defensive backstop.
-        setVersions(result.versions);
-      } else if (result.status === "not_found") {
-        // The server answered — blaming the connection here would be a lie (#1570).
-        detach(debugLog(`VersionHistoryPanel: server has no such entry for ${filename}: ${result.message}`));
-        setVersions(null);
-        setLoadError("RomM couldn't find this game's save data.");
-      } else if (result.status === "romm_refused") {
-        setVersions(null);
-        setLoadError(`Couldn't load the versions: ${result.message}`);
-      } else if (result.status === "device_not_registered") {
-        detach(debugLog(`VersionHistoryPanel: device not registered for ${filename}: ${result.message}`));
-        setVersions(null);
-        setLoadError("This device could not be registered with RomM. Tap retry.");
-      } else {
-        detach(debugLog(`VersionHistoryPanel: server unreachable for ${filename}: ${result.message}`));
-        setVersions(null);
-        setLoadError("Couldn't reach RomM. Tap retry.");
-      }
-    } catch (e) {
-      detach(debugLog(`VersionHistoryPanel: failed to load versions for ${filename}: ${e}`));
+    const outcome = await loadFileVersions(romId, slot, filename);
+    if (outcome.ok) {
+      setVersions(outcome.versions);
+    } else {
       setVersions(null);
-      setLoadError("Couldn't reach RomM. Tap retry.");
-    } finally {
-      setLoading(false);
+      setLoadError(outcome.error);
     }
+    setLoading(false);
   };
 
   const handleToggle = async () => {
@@ -118,25 +93,11 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
   const handleRestore = async (version: SaveVersionEntry) => {
     setRestoring(version.id);
     try {
-      const result = await savesRollbackToVersion(romId, slot, version.id);
-      const feedback = rollbackFeedback(result, version.updated_at);
-      if (feedback === null) return;
-      if (feedback.kind === "conflict") {
-        await showSyncConflictModal(feedback.conflict);
-      } else {
-        showToast(feedback.message);
-      }
-      // `put_failed` refreshes too: the local download succeeded and only the
-      // server-side bump did not, so the switch is locally complete — it just
-      // won't reach other devices yet.
-      if (!isEndpointFailure(result) && (result.status === "ok" || result.status === "put_failed")) {
+      if (await executeVersionRestore(romId, slot, version, showSyncConflictModal)) {
         setVersions(null);
         setOpen(false);
         onRestored();
       }
-    } catch (e) {
-      detach(debugLog(`VersionHistoryPanel: restore error for save ${version.id}: ${e}`));
-      showToast("Couldn't confirm the restore.", { subtext: e instanceof Error ? e.message : String(e) });
     } finally {
       setRestoring(null);
     }

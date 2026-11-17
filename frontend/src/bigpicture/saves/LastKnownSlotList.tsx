@@ -12,12 +12,7 @@ import type { ReactElement } from "react";
 import type { LastKnownSlots, SaveSlotSummary } from "../../types";
 import { formatTimestamp } from "../../utils/formatters";
 import { displaySlot } from "../../utils/saveHelpers";
-
-/** The line that says what the list below is. It carries no date on purpose:
- *  nothing on the device records when the slot listing was last refreshed, and
- *  the nearest timestamp (the ROM's last sync check) moves on its own — it
- *  would date these numbers with a moment that is usually much newer. */
-const STALE_NOTE = "Slots as RomM last reported them — counts and times are from that answer, not from now.";
+import { LAST_KNOWN_SLOTS_STALE_NOTE } from "../../utils/saveSlotWording";
 
 function renderSlotRow(slot: SaveSlotSummary, isActive: boolean): ReactElement {
   const badges = [
@@ -60,7 +55,7 @@ export function renderLastKnownSlots(lastKnown: LastKnownSlots): ReactElement {
   const activeKey = lastKnown.activeSlot ?? "";
   return (
     <div key="last-known-slots" data-testid="last-known-slots">
-      <div className="romm-slot-stale-note">{STALE_NOTE}</div>
+      <div className="romm-slot-stale-note">{LAST_KNOWN_SLOTS_STALE_NOTE}</div>
       <div className="romm-slot-stale">
         {lastKnown.slots.map((slot) => renderSlotRow(slot, slot.slot === activeKey))}
       </div>

@@ -5,7 +5,7 @@
  * failure and confirmation sentences are `saveSlotWording.ts`'s.
  */
 
-import type { DeviceSyncInfo, SaveStatus, SyncConflict, SaveSlotSummary } from "../types";
+import type { DeviceSyncInfo, SaveFileStatus, SaveSlotSummary, SaveStatus, SyncConflict } from "../types";
 import { NO_SAVE_YET } from "./saveSyncStatement";
 
 export const MUTED_COLOR = "#8f98a0";
@@ -206,4 +206,34 @@ export function filterSaveSlotsForDisplay(
   activeSlot: string | null | undefined,
 ): SaveSlotSummary[] {
   return slots.filter((s) => activeSlot !== null || s.slot !== "");
+}
+
+/**
+ * Compose the "Last synced" info-row value: "<time> · <attribution> ✓ · <stale hint>".
+ *
+ * The time binds to the last SUCCESS (`f.last_sync_at`), never the attempt time,
+ * and the ✓ renders only for an at-rest file — a failed post-exit sync shows its
+ * old success time with no ✓ (#1334). Appends the server-attribution segment and,
+ * when the server has moved past us, the "newer version" hint.
+ */
+export function buildLastSyncedValue(f: SaveFileStatus, isSynced: boolean): string {
+  const lastSyncer = pickLastSyncer(f.device_syncs);
+  const pieces: string[] = [f.last_sync_at ? formatSaveTimeAgo(f.last_sync_at) || "Never" : "Never"];
+  const attrSegment = formatAttributionSegment(f.uploaded_by_us, lastSyncer?.device_name, isSynced);
+  if (attrSegment !== null) pieces.push(attrSegment);
+  if (f.is_current === false) {
+    pieces.push("Newer version available on server");
+  }
+  return pieces.join(" · ");
+}
+
+/**
+ * Existing named slots eligible as copy targets: never the source (same-slot
+ * copy == rollback) and never the legacy "" bucket (read-only source only).
+ * Deduplicates defensively so a repeated slot can't render two identical rows.
+ */
+export function eligibleCopyTargetSlots(availableSlots: readonly SaveSlotSummary[], sourceSlot: string): string[] {
+  return Array.from(
+    new Set(availableSlots.map((s) => s.slot).filter((name) => name !== "" && name !== sourceSlot)),
+  ).sort((a, b) => a.localeCompare(b));
 }

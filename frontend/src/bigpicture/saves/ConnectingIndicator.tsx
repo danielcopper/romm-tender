@@ -9,6 +9,7 @@
 import { FC } from "react";
 import { useServerRetryProgress } from "../../utils/connectionState";
 import { MUTED_COLOR } from "../../utils/saveHelpers";
+import { connectingToRommText } from "../../utils/saveSlotWording";
 import { Throbber } from "../../shared/Throbber";
 
 interface ConnectingIndicatorProps {
@@ -18,7 +19,7 @@ interface ConnectingIndicatorProps {
 
 export const ConnectingIndicator: FC<ConnectingIndicatorProps> = ({ label = "Connecting to RomM" }) => {
   const progress = useServerRetryProgress();
-  const text = progress ? `${label}… (attempt ${progress.attempt}/${progress.maxAttempts})` : `${label}…`;
+  const text = connectingToRommText(label, progress);
   return (
     <div className="romm-connecting" style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 0" }}>
       <Throbber size="18px" />

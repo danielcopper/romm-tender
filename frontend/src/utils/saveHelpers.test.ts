@@ -1,16 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
+  attributionLabel,
+  buildLastSyncedValue,
   computeSyncSummary,
   displaySlot,
+  eligibleCopyTargetSlots,
+  filterSaveSlotsForDisplay,
+  formatAttributionSegment,
   formatSaveTimeAgo,
   pickLastSyncer,
-  attributionLabel,
-  formatAttributionSegment,
-  statusLabel,
   sortSaveSlots,
-  filterSaveSlotsForDisplay,
+  statusLabel,
 } from "./saveHelpers";
-import type { DeviceSyncInfo, SaveStatus, SyncConflict, SaveSlotSummary } from "../types";
+import type { DeviceSyncInfo, SaveFileStatus, SaveSlotSummary, SaveStatus, SyncConflict } from "../types";
 
 describe("displaySlot", () => {
   it("returns 'Manual archive' for null", () => {
@@ -502,5 +504,54 @@ describe("sortSaveSlots and filterSaveSlotsForDisplay", () => {
     const sorted = sortSaveSlots(slots, "alpha", true);
     const filtered = filterSaveSlotsForDisplay(sorted, "alpha");
     expect(filtered.map((s) => s.slot)).toEqual(["alpha", "beta", ""]);
+  });
+});
+
+describe("buildLastSyncedValue", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2025-06-15T12:00:00Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const makeFile = (overrides: Partial<SaveFileStatus> = {}): SaveFileStatus => ({
+    filename: "save.srm",
+    local_path: null,
+    local_hash: null,
+    local_mtime: null,
+    local_size: null,
+    server_save_id: null,
+    server_file_name: null,
+    server_emulator: null,
+    server_updated_at: null,
+    server_size: null,
+    last_sync_at: null,
+    status: "synced",
+    ...overrides,
+  });
+
+  it("joins relative time, attribution with checkmark when synced, and newer-server hint", () => {
+    const file = makeFile({
+      last_sync_at: "2025-06-15T11:30:00Z",
+      uploaded_by_us: true,
+      is_current: false,
+      device_syncs: [
+        { device_id: "d1", device_name: "deck", is_current: true, last_synced_at: "2025-06-15T11:30:00Z" },
+      ],
+    });
+    expect(buildLastSyncedValue(file, true)).toBe("30m ago · deck (this device) ✓ · Newer version available on server");
+  });
+
+  it("renders Never without checkmark when un-synced with no timestamp", () => {
+    expect(buildLastSyncedValue(makeFile({ last_sync_at: null, status: "upload" }), false)).toBe("Never");
+  });
+});
+
+describe("eligibleCopyTargetSlots", () => {
+  const mk = (slot: string): SaveSlotSummary => ({ slot, source: "server", count: 1, latest_updated_at: null });
+
+  it("excludes source and legacy '', deduplicates, and sorts alphabetically", () => {
+    const slots = [mk("zeta"), mk("backup"), mk(""), mk("alpha"), mk("zeta")];
+    expect(eligibleCopyTargetSlots(slots, "backup")).toEqual(["alpha", "zeta"]);
   });
 });

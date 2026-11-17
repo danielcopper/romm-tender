@@ -9,7 +9,7 @@ import { DialogButton } from "@decky/ui";
 import type { SaveFileStatus, SyncConflict } from "../../types";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { formatBytes, formatTimestamp } from "../../utils/formatters";
-import { formatAttributionSegment, formatSaveTimeAgo, pickLastSyncer, statusLabel } from "../../utils/saveHelpers";
+import { buildLastSyncedValue, formatSaveTimeAgo, statusLabel } from "../../utils/saveHelpers";
 
 // Label column width — keeps values aligned vertically across rows
 const LABEL_WIDTH = "88px";
@@ -28,25 +28,6 @@ export function infoRow(
       <div style={{ color: valueColor, flex: 1, minWidth: 0 }}>{value}</div>
     </div>
   );
-}
-
-/**
- * Compose the "Last synced" info-row value: "<time> · <attribution> ✓ · <stale hint>".
- *
- * The time binds to the last SUCCESS (`f.last_sync_at`), never the attempt time,
- * and the ✓ renders only for an at-rest file — a failed post-exit sync shows its
- * old success time with no ✓ (#1334). Appends the server-attribution segment and,
- * when the server has moved past us, the "newer version" hint.
- */
-function buildLastSyncedValue(f: SaveFileStatus, isSynced: boolean): string {
-  const lastSyncer = pickLastSyncer(f.device_syncs);
-  const pieces: string[] = [f.last_sync_at ? formatSaveTimeAgo(f.last_sync_at) || "Never" : "Never"];
-  const attrSegment = formatAttributionSegment(f.uploaded_by_us, lastSyncer?.device_name, isSynced);
-  if (attrSegment !== null) pieces.push(attrSegment);
-  if (f.is_current === false) {
-    pieces.push("Newer version available on server");
-  }
-  return pieces.join(" · ");
 }
 
 export function renderSaveFileRow(

@@ -1,20 +1,31 @@
 import { describe, it, expect } from "vitest";
 import {
+  COPY_SAVE_ERROR_TOAST,
   CREATE_SLOT_ERROR_MESSAGE,
+  DELETE_LOCAL_SAVES_DESCRIPTION,
+  DELETE_LOCAL_SAVES_ERROR_TOAST,
+  DELETE_LOCAL_SAVES_TITLE,
   DELETE_SLOT_ERROR_MESSAGE,
+  LAST_KNOWN_SLOTS_STALE_NOTE,
+  LEGACY_SLOT_NOTE,
+  RESTORE_CONFIRM_ERROR_TOAST,
   SLOT_DELETE_INFO_ERROR_MESSAGE,
   SWITCH_SLOT_ERROR_MESSAGE,
+  connectingToRommText,
   copyToSlotFeedback,
   createSlotFailureMessage,
-  partialSlotSwitchMessage,
   formatSlotDeleteDescription,
   formatSlotDeleteLines,
+  multiFileSaveHeading,
+  multiFileSaveNote,
+  partialSlotSwitchMessage,
   rollbackFeedback,
   slotDeletedMessage,
   strandedVersionNotice,
   switchSlotFailureMessage,
   unsupportedCopyMessage,
   unsupportedRestoreMessage,
+  versionHistoryLoadError,
 } from "./saveSlotWording";
 import type { EndpointFailure, SlotDeleteInfo, SyncConflict, WireReason } from "../types";
 
@@ -513,5 +524,48 @@ describe("a slot switch whose backup folder can't take backups", () => {
     expect(createSlotFailureMessage("backup_folder_unusable")).toBe(
       "Can't create a slot — the .romm-backup folder can't take backups, nothing was moved",
     );
+  });
+});
+
+describe("shared save-card wording and version-history load errors", () => {
+  it("keeps the manual archive, last-known, multi-file, and delete-local-saves wording", () => {
+    expect(LEGACY_SLOT_NOTE).toBe(
+      "Saves uploaded to RomM without a slot. RomM keeps them as a manual archive and never syncs them between devices.",
+    );
+    expect(LAST_KNOWN_SLOTS_STALE_NOTE).toBe(
+      "Slots as RomM last reported them — counts and times are from that answer, not from now.",
+    );
+    expect(multiFileSaveHeading(3)).toBe("Files in this save (3)");
+    expect(multiFileSaveNote(3)).toBe(
+      "This save spans 3 files. Per-version rollback isn't available for multi-file saves yet.",
+    );
+    expect(RESTORE_CONFIRM_ERROR_TOAST).toBe("Couldn't confirm the restore.");
+    expect(COPY_SAVE_ERROR_TOAST).toBe("Couldn't copy the save. Check your connection and try again.");
+    expect(DELETE_LOCAL_SAVES_TITLE).toBe("Delete Local Saves");
+    expect(DELETE_LOCAL_SAVES_DESCRIPTION).toContain("local save files");
+    expect(DELETE_LOCAL_SAVES_ERROR_TOAST).toBe("Failed to delete saves");
+  });
+
+  it("formats connecting progress lines with and without retry attempt counts", () => {
+    expect(connectingToRommText("Connecting to RomM", null)).toBe("Connecting to RomM…");
+    expect(connectingToRommText("Connecting to RomM", { attempt: 2, maxAttempts: 3 })).toBe(
+      "Connecting to RomM… (attempt 2/3)",
+    );
+  });
+
+  it("maps every version-history load error shape without misattributing 404 or refusals", () => {
+    expect(versionHistoryLoadError({ status: "not_found", message: "HTTP 404" })).toBe(
+      "RomM couldn't find this game's save data.",
+    );
+    expect(versionHistoryLoadError({ status: "romm_refused", message: "rate limited" })).toBe(
+      "Couldn't load the versions: rate limited",
+    );
+    expect(versionHistoryLoadError({ status: "device_not_registered", message: "unregistered" })).toBe(
+      "This device could not be registered with RomM. Tap retry.",
+    );
+    expect(versionHistoryLoadError({ status: "server_unreachable", message: "ECONNREFUSED" })).toBe(
+      "Couldn't reach RomM. Tap retry.",
+    );
+    expect(versionHistoryLoadError(null)).toBe("Couldn't reach RomM. Tap retry.");
   });
 });

@@ -11,7 +11,12 @@ import type { SaveStatus, SyncConflict, SaveSlotSummary, SlotSaveFile } from "..
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { MUTED_COLOR, computeSyncSummary, displaySlot } from "../../utils/saveHelpers";
 import { NO_SAVE_ON_DEVICE } from "../../utils/saveSyncStatement";
-import { formatSlotDeleteDescription } from "../../utils/saveSlotWording";
+import {
+  LEGACY_SLOT_NOTE,
+  formatSlotDeleteDescription,
+  multiFileSaveHeading,
+  multiFileSaveNote,
+} from "../../utils/saveSlotWording";
 import { executeSlotDelete, executeSlotSwitch, loadSlotDeleteInfo } from "../../utils/saveSlotFlow";
 import { renderSaveFileRow } from "./SaveFileRow";
 import { InactiveSlotBody } from "./InactiveSlotBody";
@@ -29,7 +34,7 @@ function renderMultiFileNote(componentFiles: string[]): ReactElement {
   const n = componentFiles.length;
   return (
     <div key="multi-file-note" style={{ marginTop: "6px", marginLeft: "8px" }}>
-      <div style={{ fontSize: "11px", color: "#8f98a0", fontWeight: 600 }}>{`Files in this save (${n})`}</div>
+      <div style={{ fontSize: "11px", color: "#8f98a0", fontWeight: 600 }}>{multiFileSaveHeading(n)}</div>
       {componentFiles.map((fn) => (
         <div
           key={`comp-${fn}`}
@@ -45,7 +50,7 @@ function renderMultiFileNote(componentFiles: string[]): ReactElement {
         </div>
       ))}
       <div style={{ fontSize: "11px", color: MUTED_COLOR, fontStyle: "italic" as const, marginTop: "4px" }}>
-        {`This save spans ${n} files. Per-version rollback isn't available for multi-file saves yet.`}
+        {multiFileSaveNote(n)}
       </div>
     </div>
   );
@@ -321,7 +326,7 @@ export const SlotPanel: FC<SlotPanelProps> = ({
   // --- Read-only note (legacy bucket only, always visible) ---
   const legacyNoteEl = isLegacy ? (
     <div key="legacy-note" className="romm-slot-legacy-note">
-      Saves uploaded to RomM without a slot. RomM keeps them as a manual archive and never syncs them between devices.
+      {LEGACY_SLOT_NOTE}
     </div>
   ) : null;
 

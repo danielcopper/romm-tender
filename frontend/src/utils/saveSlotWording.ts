@@ -13,6 +13,7 @@ import type { SlotSwitchPurpose, StrandedVersion } from "./saveSlotFlow";
 import type {
   CopySaveToSlotStatus,
   EndpointFailure,
+  ListFileVersionsResult,
   RollbackStatus,
   SlotDeleteInfo,
   SyncConflict,
@@ -296,4 +297,61 @@ export function formatSlotDeleteLines(info: SlotDeleteInfo): string[] {
 /** Build the multi-line confirmation description for deleting a slot. */
 export function formatSlotDeleteDescription(info: SlotDeleteInfo): string {
   return [...formatSlotDeleteLines(info), "This cannot be undone."].join("\n\n");
+}
+
+export const LEGACY_SLOT_NOTE =
+  "Saves uploaded to RomM without a slot. RomM keeps them as a manual archive and never syncs them between devices.";
+
+/**
+ * The line that says what the last-known slot list is. It carries no date on
+ * purpose: nothing on the device records when the slot listing was last
+ * refreshed, and the nearest timestamp (the ROM's last sync check) moves on
+ * its own — it would date these numbers with a moment that is usually much
+ * newer.
+ */
+export const LAST_KNOWN_SLOTS_STALE_NOTE =
+  "Slots as RomM last reported them — counts and times are from that answer, not from now.";
+
+export function multiFileSaveHeading(count: number): string {
+  return `Files in this save (${count})`;
+}
+
+export function multiFileSaveNote(count: number): string {
+  return `This save spans ${count} files. Per-version rollback isn't available for multi-file saves yet.`;
+}
+
+/**
+ * Error line shown when loading a file's previous versions fails (`null` when
+ * the call threw). Distinguishes answered server errors from unreachable RomM
+ * (#1570).
+ */
+export function versionHistoryLoadError(
+  result: Exclude<ListFileVersionsResult, { status: "ok" | "multi_file_unsupported" }> | null,
+): string {
+  if (result?.status === "not_found") {
+    // The server answered — blaming the connection here would be a lie (#1570).
+    return "RomM couldn't find this game's save data.";
+  }
+  if (result?.status === "romm_refused") {
+    return `Couldn't load the versions: ${result.message}`;
+  }
+  if (result?.status === "device_not_registered") {
+    return "This device could not be registered with RomM. Tap retry.";
+  }
+  return "Couldn't reach RomM. Tap retry.";
+}
+
+export const RESTORE_CONFIRM_ERROR_TOAST = "Couldn't confirm the restore.";
+
+export const COPY_SAVE_ERROR_TOAST = "Couldn't copy the save. Check your connection and try again.";
+
+export const DELETE_LOCAL_SAVES_TITLE = "Delete Local Saves";
+
+export const DELETE_LOCAL_SAVES_DESCRIPTION =
+  "This will delete local save files for this game. Make sure saves are synced to RomM first — the next sync will re-download them from the server.";
+
+export const DELETE_LOCAL_SAVES_ERROR_TOAST = "Failed to delete saves";
+
+export function connectingToRommText(label: string, progress: { attempt: number; maxAttempts: number } | null): string {
+  return progress ? `${label}… (attempt ${progress.attempt}/${progress.maxAttempts})` : `${label}…`;
 }
