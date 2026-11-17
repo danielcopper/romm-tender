@@ -30,9 +30,10 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from domain.session_budget import post_run_advisory, session_memory_delta
+from domain.sibling_resolution import AUTO_REGION
 from domain.sync_diff import (
     StaleRow,
     group_keys_of,
@@ -83,7 +84,9 @@ _SYNC_INTERRUPTED = "Sync interrupted (Steam UI stopped responding)"
 class SyncOrchestratorConfig:
     """Frozen wiring bundle handed to ``SyncOrchestrator.__init__``.
 
-    Holds runtime infrastructure (loop, logger), the event emitter the
+    Holds runtime infrastructure (loop, logger), the live settings (the
+    preferred region a run without a staged preview reads at its start), the
+    event emitter the
     ``sync_plan`` and ``sync_stale`` events go out through, the Clock/UuidGen
     test seams, the shared :class:`LibrarySyncStateBox`, the
     :class:`LibraryFetcher` peer the orchestrator takes the work queue from and
@@ -107,6 +110,7 @@ class SyncOrchestratorConfig:
 
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
+    settings: dict[str, Any]
     emit: EventEmitter
     clock: Clock
     uuid_gen: UuidGen
@@ -147,6 +151,7 @@ class SyncOrchestrator:
     def __init__(self, *, config: SyncOrchestratorConfig) -> None:
         self._loop = config.loop
         self._logger = config.logger
+        self._settings = config.settings
         self._emit = config.emit
         self._clock = config.clock
         self._uuid_gen = config.uuid_gen
@@ -215,7 +220,8 @@ class SyncOrchestrator:
             raise Refused("stale_preview", "Preview expired, please re-sync")
         # The read drops an over-age snapshot on its way out, so a repeat apply
         # can't pick it up.
-        if box.read_fresh_preview(self._clock.time()) is None:
+        staged = box.read_fresh_preview(self._clock.time())
+        if staged is None:
             raise Refused("stale_preview", "Preview is older than 30 minutes, please re-run sync")
         # Admission guard: a rapid second apply (or an apply landing while a
         # sync is already in flight) must be rejected without consuming the
@@ -227,14 +233,18 @@ class SyncOrchestrator:
         box.discard_preview()
         box.sync_last_heartbeat = self._clock.monotonic()
 
-        self._tasks.spawn(self._do_sync_per_unit(), "library sync run")
+        self._tasks.spawn(self._do_sync_per_unit(staged_region=staged.preferred_region), "library sync run")
 
         return {"success": True, "message": "Applying changes"}
 
     # ── Per-unit pipeline ────────────────────────────────────────
 
-    async def _do_sync_per_unit(self):
+    async def _do_sync_per_unit(self, staged_region: str | None = None):
         """Per-unit sync pipeline (Phase 0 + per-unit dispatch + finalize).
+
+        *staged_region* is the preferred region of the preview the run applies;
+        a run with none reads the setting here, once, and every unit ranks by
+        that value (#2776 D2).
 
         Builds a work queue, opens a ``SyncRun`` for the planned counts,
         processes each platform/collection unit to completion (fetch ->
@@ -278,6 +288,9 @@ class SyncOrchestrator:
         # the skipped + committed work as the run proceeds.
         box.run_total_items = None
         box.run_done_items = 0
+        box.run_preferred_region = (
+            staged_region if staged_region is not None else self._settings.get("preferred_region", AUTO_REGION)
+        )
         # Re-arm the gate's measurement latch and stamp the run-start RSS baseline
         # for the last-run memory delta (#1383) — UNCONDITIONALLY, before any chunk is
         # applied, so even a fully-incremental-skip run reports an honest delta.

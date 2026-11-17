@@ -1024,6 +1024,7 @@ class TestSyncApplyDelta:
             preview_id=preview_id,
             created_at=library.sync._orchestrator._clock.time(),
             answer={"success": True, "preview_id": preview_id},
+            preferred_region="auto",
         )
 
     @pytest.mark.asyncio
@@ -1120,9 +1121,9 @@ class TestSyncApplyDelta:
         assert result["success"] is True
         # Per-unit dispatch was kicked off without any prefetched cache (live fetch).
         do_sync.assert_called_once()
-        # The new signature takes no positional/keyword args.
+        # It carries the preview's region and nothing fetched (#2776 D2).
         assert do_sync.call_args.args == ()
-        assert do_sync.call_args.kwargs == {}
+        assert do_sync.call_args.kwargs == {"staged_region": "auto"}
 
     @pytest.mark.asyncio
     async def test_apply_dispatches_per_unit_task(self, library, emit):
@@ -1158,6 +1159,7 @@ class TestSyncCancelPreview:
             preview_id="some-id",
             created_at=library.sync._orchestrator._clock.time(),
             answer={"success": True, "preview_id": "some-id"},
+            preferred_region="auto",
         )
         result = library.sync.sync_cancel_preview()
         assert library.sync._box.pending_delta is None
@@ -1549,6 +1551,7 @@ class TestRunKindOnTheWire:
             preview_id="p1",
             created_at=library.sync._orchestrator._clock.time(),
             answer={"success": True, "preview_id": "p1"},
+            preferred_region="auto",
         )
 
         assert (await library.sync.sync_apply_delta("p1"))["success"] is True
@@ -1752,6 +1755,7 @@ class TestSyncPreviewErrorHandling:
             preview_id="earlier",
             created_at=library.sync._orchestrator._clock.time(),
             answer={"success": True, "preview_id": "earlier"},
+            preferred_region="auto",
         )
 
     @staticmethod
@@ -3144,6 +3148,75 @@ class TestDoSyncPerUnit:
         assert finalizing == []
 
 
+def _zelda_dumps(first_id: int) -> list[dict[str, Any]]:
+    """One game's Japanese and USA dumps; with no preferred region the USA one ranks first."""
+    return [
+        {"id": first_id, "name": "Zelda (JP)", "igdb_id": 100, "fs_name_no_ext": "zelda_jp", "regions": ["Japan"]},
+        {"id": first_id + 1, "name": "Zelda (USA)", "igdb_id": 100, "fs_name_no_ext": "zelda_usa", "regions": ["USA"]},
+    ]
+
+
+class TestOneRunRanksByOnePreferredRegion:
+    """Every unit of a run ranks its groups by the preferred region read at the run's start (#2776 D2)."""
+
+    def _ack_and_then(self, library, after_first_ack=None):
+        acks = 0
+
+        async def ack_reps(_unit, event):
+            nonlocal acks
+            acks += 1
+            if acks == 1 and after_first_ack is not None:
+                after_first_ack()
+            event.set()
+            return {str(rid): 9000 + rid for rid in library.sync._box.pending_sync}
+
+        library.chunk_dispatcher._wait_for_unit_complete = ack_reps
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+
+    @staticmethod
+    def _shortcuts_by_unit(emit) -> list[list[tuple[int, str]]]:
+        return [
+            [(sd["rom_id"], sd["name"]) for sd in c[0][1]["shortcuts"]]
+            for c in emit.call_args_list
+            if c[0][0] == "sync_apply_unit"
+        ]
+
+    @pytest.mark.asyncio
+    async def test_a_change_between_two_platform_units_waits_for_the_next_run(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
+        _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=_zelda_dumps(10))
+        _seed_platform(fake_romm_api, platform_id=2, name="SNES", slug="snes", roms=_zelda_dumps(20))
+        library.settings["enabled_platforms"] = {"n64": True, "snes": True}
+
+        def change_the_region():
+            library.settings["preferred_region"] = "Japan"
+
+        self._ack_and_then(library, change_the_region)
+        library.sync._box.sync_state = SyncState.RUNNING
+
+        await library.sync._orchestrator._do_sync_per_unit()
+
+        assert library.settings["preferred_region"] == "Japan"
+        assert sorted(self._shortcuts_by_unit(emit)) == [[(11, "Zelda (USA)")], [(21, "Zelda (USA)")]]
+
+    @pytest.mark.asyncio
+    async def test_an_apply_ranks_by_the_region_of_the_preview_it_applies(self, make_library, fake_romm_api, emit):
+        library = make_library(romm_api=fake_romm_api)
+        _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=_zelda_dumps(10))
+        library.settings["enabled_platforms"] = {"n64": True}
+        library.settings["preferred_region"] = "Japan"
+        self._ack_and_then(library)
+
+        preview = await library.sync.sync_preview()
+        assert preview["new_names"] == ["Zelda (JP)"]
+        library.settings["preferred_region"] = "auto"
+        await library.sync.sync_apply_delta(preview["preview_id"])
+        (run,) = tuple(library.sync._orchestrator._tasks)
+        await asyncio.wait_for(run, 5)
+
+        assert self._shortcuts_by_unit(emit) == [[(10, "Zelda (JP)")]]
+
+
 class TestSyncRunLifecycle:
     """The SyncRun record persisted by ``_do_sync_per_unit`` across its outcomes.
 
@@ -3885,6 +3958,7 @@ class TestTheRunIsHeldUntilItEnds:
             preview_id="p1",
             created_at=library.sync._orchestrator._clock.time(),
             answer={"success": True, "preview_id": "p1"},
+            preferred_region="auto",
         )
 
         await library.sync.sync_apply_delta("p1")

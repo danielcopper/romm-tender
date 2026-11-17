@@ -15,7 +15,6 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from domain.shortcut_data import build_shortcuts_data
-from domain.sibling_resolution import AUTO_REGION
 from domain.sync_diff import (
     BIND_ROM_ID_KEY,
     classify_roms,
@@ -54,8 +53,7 @@ if TYPE_CHECKING:
 class UnitApplierConfig:
     """Frozen wiring bundle handed to ``UnitApplier.__init__``.
 
-    Holds the live settings (the preferred region a collapse ranks by), the loop
-    and logger, the launcher path every built shortcut's ``exe`` names, the
+    Holds the loop and logger, the launcher path every built shortcut's ``exe`` names, the
     Clock a platform unit's fetch start is read from, the SQLite Unit-of-Work factory
     (which opens exactly one transaction from this module: the platform stamp's
     DELETE at a unit's apply start), the shared :class:`LibrarySyncStateBox`, the
@@ -70,7 +68,6 @@ class UnitApplierConfig:
     deliveries', leaves a running game out by.
     """
 
-    settings: dict[str, Any]
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
     launcher_exe: str
@@ -88,7 +85,6 @@ class UnitApplierConfig:
 
 class UnitApplier:
     def __init__(self, *, config: UnitApplierConfig) -> None:
-        self._settings = config.settings
         self._loop = config.loop
         self._logger = config.logger
         self._launcher_exe = config.launcher_exe
@@ -151,7 +147,7 @@ class UnitApplier:
             loop=self._loop,
             local_library_reader=self._local_library_reader,
             platform_folders=set(units[0].unwalked_platform_folders),
-            preferred_region=self._settings.get("preferred_region", AUTO_REGION),
+            preferred_region=self._sync_state.run_preferred_region,
             running_rom_ids=self._running_rom_ids,
             logger=self._logger,
             hidden_rom_ids=self._sync_state.run_hidden_rom_ids,
@@ -269,7 +265,7 @@ class UnitApplier:
         followed_keys = self._stamp_unit_group_keys(unit_roms, resident_keys, unlisted, complete_view=complete_view)
         registry = with_followed_keys(registry, followed_keys)
         shortcuts_data = build_shortcuts_data(unit_roms, self._launcher_exe)
-        preferred_region = self._settings.get("preferred_region", AUTO_REGION)
+        preferred_region = box.run_preferred_region
 
         # A group holding more than one bound shortcut converges here in a
         # complete view (#2645); a group the collections bring in has converged

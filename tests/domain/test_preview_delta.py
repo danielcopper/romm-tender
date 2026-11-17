@@ -21,6 +21,7 @@ def _build(**overrides) -> PreviewDelta:
         "preview_id": "preview-abc",
         "created_at": 1_700_000_000.0,
         "answer": {"success": True, "preview_id": "preview-abc"},
+        "preferred_region": "Japan",
     }
     defaults.update(overrides)
     return PreviewDelta(**defaults)
@@ -31,6 +32,7 @@ def test_construction_exposes_all_fields_as_attributes() -> None:
     assert delta.preview_id == "preview-abc"
     assert delta.created_at == 1_700_000_000.0
     assert delta.answer == {"success": True, "preview_id": "preview-abc"}
+    assert delta.preferred_region == "Japan"
 
 
 def test_is_frozen_attribute_rebinding_raises() -> None:
