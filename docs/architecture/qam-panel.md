@@ -1210,7 +1210,9 @@ states the newest completed run's age, and where a newer run did not complete it
 — "cancelled 12m ago", "interrupted 3h ago" — on a second, quieter line. With no completed run ever, that attempt is the
 only line, so the row never reads a bare "Never" after thousands of games synced (#1318). Reporting a run and offering
 to continue it are different questions: an errored run is reported here and is not resumable, which `syncResumeState`
-decides for the button that offers it, on the Sync page.
+decides for the button that offers it, on the Sync page. **Library** states the games bound to a shortcut and the
+platforms those games are on, counted from the same games whatever the platform switches say: a platform switched on
+with no game in Steam adds nothing, one switched off whose shortcuts are still bound counts (#2776 D1).
 
 **The conditional slot** sits under the three rows and is the one status row that can be pressed; pressing it opens the
 Sync page, exactly as the menu's Sync entry does. It is not the only pressable thing in the block — Cancel Sync joins it
