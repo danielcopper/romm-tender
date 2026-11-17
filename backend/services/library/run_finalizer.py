@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.collection_label import steam_collection_key
-from domain.collection_name import fold_collection_name
+from domain.collection_name import fold_collection_name, spelling_by_fold
 from domain.platform_names import PLATFORM_NAMES_KEY, decode_platform_names
 from domain.sync_diff import platform_collection_name
 from domain.sync_stage import SyncStage
@@ -185,8 +185,9 @@ class RunFinalizer:
         create-name and the reconcile ``activeNames`` derived from this one key.
 
         Grouping is **case-insensitive** (keyed by
-        :func:`domain.collection_name.fold_collection_name`, first-seen original
-        casing kept for display): Steam collapses collection names by a
+        :func:`domain.collection_name.fold_collection_name`, and named by the
+        sorted-first spelling :func:`domain.collection_name.spelling_by_fold`
+        answers, as the preview lists it): Steam collapses collection names by a
         case-insensitive identity, so two keys differing only in case ("7 up" vs
         "7 Up") must union or the second Steam create overwrites the first and its
         games are lost (#1569). Under ``by_label`` this merges case variants of
@@ -194,13 +195,13 @@ class RunFinalizer:
         differ).
         """
         naming_mode = self._settings.get("collection_naming_mode", "merge")
-        display_key_by_fold: dict[str, str] = {}
+        keys: set[str] = set()
         app_ids_by_fold: dict[str, list[int]] = {}
         seen_by_fold: dict[str, set[int]] = {}
         for membership in pending_collection_memberships.values():
             key = steam_collection_key(membership.name, membership.kind, membership.virtual_type, naming_mode)
             fold = fold_collection_name(key)
-            display_key_by_fold.setdefault(fold, key)
+            keys.add(key)
             app_ids = app_ids_by_fold.setdefault(fold, [])
             seen = seen_by_fold.setdefault(fold, set())
             for rid in membership.rom_ids:
@@ -208,7 +209,8 @@ class RunFinalizer:
                 if app_id is not None and app_id not in seen:
                     seen.add(app_id)
                     app_ids.append(app_id)
-        return {display_key_by_fold[fold]: app_ids for fold, app_ids in app_ids_by_fold.items() if app_ids}
+        spelling = spelling_by_fold(keys)
+        return {spelling[fold]: app_ids for fold, app_ids in app_ids_by_fold.items() if app_ids}
 
     @staticmethod
     def _member_app_id(

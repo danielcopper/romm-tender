@@ -9,7 +9,25 @@ holds the names both are tested against. No I/O, no state.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
 
 def fold_collection_name(name: str) -> str:
     """Return the key under which *name* is one Steam collection with every name sharing it."""
     return name.lower().upper().lower()
+
+
+def spelling_by_fold(names: Iterable[str]) -> dict[str, str]:
+    """Map each folded name among *names* to the spelling its one Steam collection is named by: the sorted-first.
+
+    The sorted-first spelling depends on the names alone, never on the order
+    they arrive in, so the apply that creates a merged collection and the
+    preview that lists it spell it alike whatever order RomM lists them in.
+    """
+    spelling: dict[str, str] = {}
+    for name in sorted(names):
+        spelling.setdefault(fold_collection_name(name), name)
+    return spelling

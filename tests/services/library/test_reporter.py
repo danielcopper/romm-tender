@@ -2214,7 +2214,8 @@ class TestFinalizePerUnitRun:
         The data-loss guard: Steam collapses "7 up" and "7 Up" onto one
         case-insensitive collection, so the run finalizer must emit a single key with
         BOTH member sets — otherwise the second Steam create overwrites the first
-        and its games are lost. First-seen casing wins for display.
+        and its games are lost. The sorted-first spelling names it, as the
+        preview lists it (#2776 D4).
         """
 
         library.settings["collection_naming_mode"] = "merge"
@@ -2236,8 +2237,8 @@ class TestFinalizePerUnitRun:
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
-        # ONE key (first-seen casing "7 up"), 2 + 5 = 7 apps unioned, neither set dropped.
-        assert payload["romm_collection_app_ids"] == {"7 up": [1001, 1002, 1003, 1004, 1005, 1006, 1007]}
+        # ONE key (sorted-first spelling "7 Up"), 2 + 5 = 7 apps unioned, neither set dropped.
+        assert payload["romm_collection_app_ids"] == {"7 Up": [1001, 1002, 1003, 1004, 1005, 1006, 1007]}
 
     @pytest.mark.asyncio
     async def test_merge_unions_names_joined_only_through_upper_case(self, library, emit):
@@ -2259,7 +2260,7 @@ class TestFinalizePerUnitRun:
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
-        assert payload["romm_collection_app_ids"] == {"\u0131x": [1001, 1002]}
+        assert payload["romm_collection_app_ids"] == {"Ix": [1001, 1002]}
 
     @pytest.mark.asyncio
     async def test_by_label_merges_same_type_case_variants(self, library, emit):
@@ -2281,8 +2282,8 @@ class TestFinalizePerUnitRun:
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
-        # One key ("abc", first-seen casing), both apps unioned.
-        assert payload["romm_collection_app_ids"] == {"abc": [1001, 1002]}
+        # One key ("ABC", the sorted-first spelling), both apps unioned.
+        assert payload["romm_collection_app_ids"] == {"ABC": [1001, 1002]}
 
     @pytest.mark.asyncio
     async def test_by_label_keeps_different_type_case_variants_separate(self, library, emit):

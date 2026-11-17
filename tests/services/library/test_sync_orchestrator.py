@@ -562,6 +562,40 @@ class TestPreviewCollectionDiff:
         assert diff["removed"] == []
 
     @pytest.mark.asyncio
+    async def test_a_merged_collection_is_listed_under_the_name_the_apply_creates(
+        self, make_library, fake_romm_api, emit
+    ):
+        """RomM lists "7 up" before "7 Up": the preview and the apply spell the one collection alike (#2776 D4)."""
+        library = make_library(romm_api=fake_romm_api)
+        _seed_platform(
+            fake_romm_api,
+            platform_id=2,
+            name="GBA",
+            slug="gba",
+            roms=[{"id": 20, "name": "A"}, {"id": 21, "name": "B"}],
+        )
+        _seed_collection(fake_romm_api, collection_id=7, name="7 up", rom_ids=[20])
+        _seed_collection(fake_romm_api, collection_id=8, name="7 Up", rom_ids=[21])
+        library.settings["enabled_platforms"] = {"gba": False}
+        library.settings["enabled_collections"] = {"standard": {"7": True, "8": True}}
+        library.cover_preparer._download_artwork = AsyncMock(return_value={})
+
+        async def ack_reps(_unit, event):
+            event.set()
+            return {str(rid): 9000 + rid for rid in library.sync._box.pending_sync}
+
+        library.chunk_dispatcher._wait_for_unit_complete = ack_reps
+
+        preview = await library.sync.sync_preview()
+        await library.sync.sync_apply_delta(preview["preview_id"])
+        (run,) = tuple(library.sync._orchestrator._tasks)
+        await asyncio.wait_for(run, 5)
+
+        (collections,) = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_collections"]
+        assert preview["summary"]["collection_diff"]["added"] == list(collections["romm_collection_app_ids"])
+        assert list(collections["romm_collection_app_ids"]) == ["7 Up"]
+
+    @pytest.mark.asyncio
     async def test_a_platform_name_whose_case_changed_is_no_platform_collection_change(
         self, make_library, fake_romm_api
     ):

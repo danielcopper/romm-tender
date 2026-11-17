@@ -16,7 +16,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
-from domain.collection_name import fold_collection_name
+from domain.collection_name import spelling_by_fold
 from domain.main_sibling import main_sibling_flag
 from domain.rom_file import has_file_on_romm
 from domain.sibling_resolution import AUTO_REGION, canonical_group_name, fs_name_stem, resolve_group_representative
@@ -1040,8 +1040,8 @@ def compute_collection_diff(
     ``has_changes`` is True if there are any added/removed collections, or if
     there are any current collections at all (covers first-sync case).
     """
-    current = _spelling_by_fold(current_collection_names)
-    previous = _spelling_by_fold(last_synced_collections)
+    current = spelling_by_fold(current_collection_names)
+    previous = spelling_by_fold(last_synced_collections)
     added = sorted(name for fold, name in current.items() if fold not in previous)
     removed = sorted(name for fold, name in previous.items() if fold not in current)
     return {
@@ -1049,14 +1049,6 @@ def compute_collection_diff(
         "added": added,
         "removed": removed,
     }
-
-
-def _spelling_by_fold(names: Iterable[str]) -> dict[str, str]:
-    """Map each folded name to its sorted-first spelling among *names*."""
-    spelling: dict[str, str] = {}
-    for name in sorted(names):
-        spelling.setdefault(fold_collection_name(name), name)
-    return spelling
 
 
 def should_include_in_platform_collection(
@@ -1154,8 +1146,8 @@ def compute_platform_collection_diff(
         if name is not None:
             future_platforms.add(name)
 
-    future = _spelling_by_fold(future_platforms).keys()
-    previous = _spelling_by_fold(last_synced_platforms).keys()
+    future = spelling_by_fold(future_platforms).keys()
+    previous = spelling_by_fold(last_synced_platforms).keys()
     added_count = len(future - previous)
     removed_count = len(previous - future)
     return {
