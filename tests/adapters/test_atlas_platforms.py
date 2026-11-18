@@ -141,7 +141,7 @@ class TestThePairsAsked:
         assert platform_pairs(PlatformKeys("snes")) == (_pair("romm", "snes"),)
 
     def test_the_vendored_table_knows_rom_ms_column(self):
-        """Review F6: a table without RomM's column would read every platform as unmatched, so it fails here."""
+        """A table without RomM's column would read every platform as unmatched, so it fails here."""
         caveats = translate(platform_pairs(PlatformKeys("snes"))).caveats
 
         assert CAVEAT_PLATFORM_SOURCE_UNKNOWN not in {caveat.code for caveat in caveats}

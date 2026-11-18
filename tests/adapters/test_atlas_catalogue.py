@@ -790,7 +790,7 @@ class TestKnownSystem:
         assert _adapter(installation, traces).is_known_system(pairs) is None
 
     def test_pairs_that_name_different_systems_answer_neither_yes_nor_no(self, traces):
-        """Review F4: a contradiction says nothing about what the catalogue holds."""
+        """A contradiction says nothing about what the catalogue holds."""
         conflict = SystemResolution(RESOLUTION_CONFLICT, None, None, translation=translate((("romm", "snes"),)))
         installation = _Installation(placement=RomPlacement(resolution=conflict))
         pairs = (SystemPair("romm", "snes"), SystemPair("folder", "xbox360"))
@@ -824,7 +824,7 @@ class TestASystemThatResolvedToNoOneSystem:
 
         answer = _adapter(installation, traces).get_emulator_options("nintendo64")
 
-        # Review F4: a system the source does not list is said as such, naming it — no failed read.
+        # A system the source does not list is said as such, naming it — no failed read.
         assert (answer["available"], answer["reason"], answer["system"]) == (False, "system_unknown", "nintendo64")
 
     def test_its_extensions_are_the_default_safe_empty_set(self, traces):

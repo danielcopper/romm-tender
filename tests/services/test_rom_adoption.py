@@ -542,7 +542,7 @@ class TestAdopt:
         assert snes in h.paths.download_asked
 
     async def test_a_platform_of_several_systems_adopts_nothing(self, h):
-        """#2225 D8, review T4: a download's folder is one system's, so several systems refuse the adoption."""
+        """#2225 D8: a download's folder is one system's, so several systems refuse the adoption."""
         several = (SystemPair("esde", "snes"), SystemPair("esde", "sfc"))
         h.service._platform_systems = FakePlatformSystems({"snes": several})
         h.seed_rom()

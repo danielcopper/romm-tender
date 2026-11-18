@@ -147,7 +147,7 @@ async def test_a_platform_with_no_switched_on_system_downloads_nothing_and_says_
 
 
 async def test_a_platform_of_several_systems_downloads_nothing_and_names_them(harness):
-    """#2225 D8, review T6: a download lands in one system's folder, so several systems refuse it."""
+    """#2225 D8: a download lands in one system's folder, so several systems refuse it."""
     _seed_server(harness)
     seed_rom(harness, 5, platform_slug=_SLUG, platform_folder=_FOLDER)
     several = (SystemPair("esde", "gba"), SystemPair("esde", "gbah"))
@@ -260,7 +260,7 @@ async def test_two_folders_of_one_slug_each_answer_their_own_system(harness):
 
 
 async def test_a_game_installed_under_a_system_the_source_no_longer_lists_names_it(harness):
-    """Review F4: no emulator list for a recorded system the source does not list, said as such, never a failed read."""
+    """No emulator list for a recorded system the source does not list, said as such, never a failed read."""
     seed_install(harness, 5, system="gbretired", platform_slug="gb")
 
     game_core = await harness.endpoints.get_platform_core_info(5)

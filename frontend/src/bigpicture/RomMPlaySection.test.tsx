@@ -5281,7 +5281,7 @@ describe("RomMPlaySection", () => {
       expect(capturedPlayButton[capturedPlayButton.length - 1]!.emulatorRefusal).toBeNull();
     });
 
-    describe("a platform several of the source's systems answer (#2225 D8; review T5)", () => {
+    describe("a platform several of the source's systems answer (#2225 D8)", () => {
       const SEVERAL = {
         state: "several",
         source: "retrodeck",

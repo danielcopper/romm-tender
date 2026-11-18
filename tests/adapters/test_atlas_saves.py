@@ -1179,7 +1179,7 @@ class TestHowTheQuestionIsPut:
 class TestASystemThatResolvedToNoOneSystem:
     """An entry beside a resolution other than resolved is asked nothing: its system is not established (#2751).
 
-    The resolver was asked and established nothing — not "never asked" (review F5).
+    The resolver was asked and established nothing — not "never asked".
     """
 
     def test_no_save_place_is_asked_of_any_entry(self, traces):

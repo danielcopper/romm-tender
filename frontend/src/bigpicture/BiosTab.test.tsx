@@ -198,7 +198,7 @@ describe("BiosTab", () => {
     );
   });
 
-  it("says on a game page why a download stays in the store for a platform of several systems (review F2)", () => {
+  it("says on a game page why a download stays in the store for a platform of several systems", () => {
     const { container } = render(
       <BiosTabWithState
         biosStatus={{ needs_bios: false, bios_status_unknown: true, store_only: "platform_systems_several" }}

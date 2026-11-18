@@ -646,7 +646,7 @@ class TestTargetPathOccupied:
         ("state", "system"), [(NO_SYSTEM, None), (SEVERAL, (SystemPair("esde", "snes"), SystemPair("esde", "sfc")))]
     )
     async def test_false_where_the_platform_has_no_system_in_retrodeck(self, game_detail, path_probe, state, system):
-        """Review T4: several systems are no one folder to look in either."""
+        """Several systems are no one folder to look in either."""
         platform = platform_answer(state, "snes", system, name="SNES")
         game_detail.service._platform_systems = FakePlatformSystems(answers={"snes": platform})
         folders = game_detail.service._retrodeck_folders

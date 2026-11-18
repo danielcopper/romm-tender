@@ -601,7 +601,7 @@ class TestASystemThatResolvedToNoOneSystem:
 
         assert isinstance(refused, FolderRefused)
         assert refused.reason == "no_rom_folder"
-        # Review C3: several pairs are named by their keys, never by a repr.
+        # Several pairs are named by their keys, never by a repr.
         assert refused.details["system"] == "sms"
 
     def test_a_removal_is_bounded_by_no_folder(self, tree, tmp_path, monkeypatch):

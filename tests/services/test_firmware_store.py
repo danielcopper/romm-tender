@@ -1289,7 +1289,7 @@ class TestOnlyTheStore:
     async def test_a_platform_with_no_system_to_use_says_its_own_reason_never_no_source(
         self, machine, state, system, reason
     ):
-        """Review F2: the source answered; what it answered is why the download is linked nowhere."""
+        """The source answered; what it answered is why the download is linked nowhere."""
         machine.platform_systems.answers["switch"] = platform_answer(state, "switch", system, name="switch")
         machine.romm.add(1, "switch", "prod.keys", b"keys")
 
@@ -1300,7 +1300,7 @@ class TestOnlyTheStore:
         assert entry["store_only"] == reason
 
     async def test_a_platform_of_several_systems_is_linked_nowhere_and_says_so(self, machine):
-        """#2225 D8, review F2: a link lands in one system's place, so several systems take the store only."""
+        """#2225 D8: a link lands in one system's place, so several systems take the store only."""
         _saturn(machine)
         several = (SystemPair("esde", "saturn"), SystemPair("esde", "saturnjp"))
         machine.platform_systems.answers["saturn"] = platform_answer(SEVERAL, "saturn", several, name="saturn")

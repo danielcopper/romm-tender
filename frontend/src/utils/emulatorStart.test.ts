@@ -272,7 +272,7 @@ describe("an entry the resolver gives no complete command for (#2221 D2, D20)", 
     expect(commandRefusalLine(reason)).toBe(`Tender cannot start it yet: ${why}`);
   });
 
-  it("says the source has several systems for the game's platform and names none (review F4)", () => {
+  it("says the source has several systems for the game's platform and names none", () => {
     const several = start({ state: "cannot_start", reason: "systems_several", entry: "Genesis Plus GX" });
     const launch = { platform_name: "Master System" } as GameLaunch;
 
@@ -287,7 +287,7 @@ describe("an entry the resolver gives no complete command for (#2221 D2, D20)", 
     ).toBe("Tender cannot start it yet: RetroDECK has several systems for Master System and names none of them");
   });
 
-  it("says the source does not list the game's system (review F4)", () => {
+  it("says the source does not list the game's system", () => {
     const unknown = start({ state: "cannot_start", reason: "system_unknown", entry: "Gambatte" });
 
     expect(emulatorStartRefusal(unknown, "this game", false)).toBe(

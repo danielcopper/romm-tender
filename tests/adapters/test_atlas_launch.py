@@ -309,7 +309,7 @@ class TestARefusedCommand:
         ],
     )
     def test_a_system_that_resolved_to_no_one_system_gives_no_command_and_says_which(self, status, reason):
-        """#2751, review F4: several systems the resolver names none of, or none here — never "could not be read"."""
+        """#2751: several systems the resolver names none of, or none here — never "could not be read"."""
         several = (
             SystemCandidate(("esde", "mark3"), "declared"),
             SystemCandidate(("esde", "mastersystem"), "declared"),

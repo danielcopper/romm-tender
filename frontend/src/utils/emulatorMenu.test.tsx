@@ -90,7 +90,7 @@ describe("buildEmulatorMenu", () => {
     expect(its[0]!.text).toBe("RetroDECK has not been set up yet, so its emulators are not established.");
   });
 
-  it("names the system a game was installed under that the source no longer lists (review F4)", () => {
+  it("names the system a game was installed under that the source no longer lists", () => {
     const menu = buildEmulatorMenu(
       baseConfig({
         emulators: [],

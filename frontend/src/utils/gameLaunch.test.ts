@@ -704,7 +704,7 @@ describe("a folder holding files the entry takes as games of their own", () => {
   });
 });
 
-describe("a verdict not established always says so first (#2195 D2, D40; review R1)", () => {
+describe("a verdict not established always says so first (#2195 D2, D40)", () => {
   // The shapes of the recorded machines a-file-the-core-does-not-claim-and-the-list-leaves-out-is-attempted,
   // ppsspp-a-folder-that-cannot-be-listed-is-not-established and a-path-the-sandbox-cannot-be-told-about-is-not-established.
   const UNCLAIMED = launch({

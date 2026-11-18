@@ -769,7 +769,7 @@ def unresolved_reason(answer: Any) -> str | None:
     source's systems answer and the resolver names none of them, else
     :data:`~domain.launchability.SYSTEM_UNKNOWN`: the source has no system the
     question names, or the pairs asked with name different ones. The one place
-    that splits the two (review A6).
+    that splits the two.
     """
     status = resolution_status(answer)
     if status == RESOLUTION_RESOLVED:

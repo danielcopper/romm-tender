@@ -181,7 +181,7 @@ describe("storeOnlySentence", () => {
     expect(storeOnlySentence(null, "Ryubing", "Switch")).toBeNull();
   });
 
-  // Review F2: the platform's own reason where the source that answered has no one system for it.
+  // The platform's own reason where the source that answered has no one system for it.
   const RETRODECK = { kind: "retrodeck", starts_games: true };
   const answer = (systems: string[]): PlatformSystemAnswer => ({
     state: "no_system",

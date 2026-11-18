@@ -366,7 +366,7 @@ class TestTheNewStatementsOfALaunch:
         assert result.starts_from == (".z64",)
 
     def test_an_extension_the_core_does_not_claim_is_said_beside_a_verdict_not_established(self, traces):
-        """Vector a-file-the-core-does-not-claim-and-the-list-leaves-out-is-attempted (review R1)."""
+        """Vector a-file-the-core-does-not-claim-and-the-list-leaves-out-is-attempted."""
         result, _ = _ask(
             LaunchabilityAnswer(
                 verdict=VERDICT_UNESTABLISHED,
@@ -384,7 +384,7 @@ class TestTheNewStatementsOfALaunch:
         assert result.statements == (LaunchStatement(FORMAT_UNCLAIMED), LaunchStatement(FRONTEND_WOULD_NOT_LIST))
 
     def test_a_path_the_sandbox_cannot_be_told_about_is_said_beside_a_verdict_not_established(self, traces):
-        """Vector a-path-the-sandbox-cannot-be-told-about-is-not-established (review R1)."""
+        """Vector a-path-the-sandbox-cannot-be-told-about-is-not-established."""
         result, _ = _ask(
             LaunchabilityAnswer(
                 verdict=VERDICT_UNESTABLISHED,

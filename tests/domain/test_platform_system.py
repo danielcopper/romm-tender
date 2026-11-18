@@ -243,7 +243,7 @@ class TestPlatformSystem:
         assert _platform(state, named=(_SNES,)).taken is None
 
     def test_a_download_lands_under_the_one_system_found_as_named_and_as_recorded(self):
-        """Review A3: the one rule downloads and adoption share."""
+        """The one rule downloads and adoption share."""
         assert _platform(FOUND, named=(_SNES,)).download_system(GAME_DOWNLOAD) == (_SNES, "snes")
         assert _platform(FOUND, recorded="c64").download_system(GAME_DOWNLOAD) == ("c64", "c64")
 
@@ -257,7 +257,7 @@ class TestPlatformSystem:
 
     @pytest.mark.parametrize("state", [SWITCHED_OFF, NOT_HERE])
     def test_every_system_a_platform_without_one_to_use_names_is_asked_on_its_own(self, state):
-        """Review A2: never the pairs it was asked with, whatever the count."""
+        """Never the pairs it was asked with, whatever the count."""
         platform = _platform(state, named=(_SNES, _SNESNA), asked=(SystemPair("romm", "snes"),))
 
         assert platform.wanting_systems() == (_SNES, _SNESNA)
