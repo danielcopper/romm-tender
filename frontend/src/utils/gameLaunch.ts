@@ -445,10 +445,13 @@ export function launchNotes(launch: GameLaunch | null, source: AnsweringSource |
   if (launch.state === "not_established") {
     const notes = allSaid(launch, true, source).map((each) => each.note);
     if (saysWhatIsNotEstablished(launch)) return notes;
-    const lead =
-      launch.reason === "systems_several"
-        ? `Whether ${launch.entry} starts this game cannot be established: ${notEstablishedBecause(launch, source)}.`
-        : `Whether ${launch.file} starts cannot be established: ${notEstablishedBecause(launch, source)}.`;
+    // Where the backend states no reason, the sentence says no more than that.
+    let lead = `Whether ${launch.file} starts cannot be established.`;
+    if (launch.reason === "systems_several") {
+      lead = `Whether ${launch.entry} starts this game cannot be established: ${notEstablishedBecause(launch, source)}.`;
+    } else if (launch.reason !== null) {
+      lead = `Whether ${launch.file} starts cannot be established: ${notEstablishedBecause(launch, source)}.`;
+    }
     return [lead, ...notes];
   }
   if (launch.state !== "starts") return [];
@@ -488,7 +491,8 @@ export function entryLaunchLine(
     case "not_established": {
       const lines = allSaid(launch, tenderStarts, source).map((each) => each.line);
       if (saysWhatIsNotEstablished(launch)) return first(lines[0]!, lines.length - 1);
-      return first(`whether it starts cannot be established: ${notEstablishedBecause(launch, source)}`, lines.length);
+      const because = launch.reason === null ? "" : `: ${notEstablishedBecause(launch, source)}`;
+      return first(`whether it starts cannot be established${because}`, lines.length);
     }
     default: {
       const lines = allSaid(launch, tenderStarts, source).map((each) => each.line);

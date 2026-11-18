@@ -722,8 +722,8 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
 - **"No emulator starts this game."** — no emulator is in effect for the game. **Play** is off.
 - **"ES-DE leaves _placeholder_ unfilled in this command."** — the command starts, with a placeholder ES-DE does not
   fill in left as it is written. **Play** stays on.
-- **"Whether Game.sfc starts cannot be established: …"** — the emulator source could not answer, with the reason.
-  **Play** stays on.
+- **"Whether Game.sfc starts cannot be established: …"** — the emulator source could not answer, with the reason; where
+  it gives none, the sentence ends after "established". **Play** stays on.
 - **"Whether _emulator_ starts this game cannot be established: _Source_ has several systems for _platform_ and names
   none of them."** — several systems fit the game's platform, and the emulator source names none of them for the
   question. **Play** stays on.

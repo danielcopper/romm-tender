@@ -126,10 +126,18 @@ describe("each verdict has its own sentence (#2195 D2)", () => {
     ["entry_unknown", "RetroDECK has no emulator named RPCS3 Directory (Standalone)"],
     ["catalogue_unread", "RetroDECK's list of emulators could not be read"],
     ["no_source", "no emulator source is installed and switched on"],
-    [null, "RetroDECK gave no answer"],
   ] as const)("an unestablished verdict for %s names the source as the user knows it (D36)", (reason, words) => {
     expect(launchNote(launch({ state: "not_established", reason }), RETRODECK)).toBe(
       `Whether Game.ps3 starts cannot be established: ${words}.`,
+    );
+  });
+
+  it("an unestablished verdict the backend states no reason for says no more than that", () => {
+    expect(launchNote(launch({ state: "not_established", reason: null }), RETRODECK)).toBe(
+      "Whether Game.ps3 starts cannot be established.",
+    );
+    expect(entryLaunchLine(launch({ state: "not_established", reason: null }), RETRODECK)).toBe(
+      "whether it starts cannot be established",
     );
   });
 
@@ -740,7 +748,7 @@ describe("a verdict not established always says so first (#2195 D2, D40)", () =>
     const notes = launchNotes(UNCLAIMED, RETRODECK);
 
     expect(notes).toHaveLength(3);
-    expect(notes[0]).toMatch(/^Whether Game\.txt starts cannot be established: /);
+    expect(notes[0]).toBe("Whether Game.txt starts cannot be established.");
     expect(notes[1]).toBe(
       "Gambatte does not list .txt among the files it takes, but would be handed the file all the same.",
     );
@@ -764,7 +772,6 @@ describe("a verdict not established always says so first (#2195 D2, D40)", () =>
   it("leads the emulator menu's line too, counting the notes", () => {
     const line = entryLaunchLine(UNCLAIMED, RETRODECK) ?? "";
 
-    expect(line).toMatch(/^whether it starts cannot be established: /);
-    expect(line).toMatch(/ \+2 more$/);
+    expect(line).toMatch(/^whether it starts cannot be established \+2 more$/);
   });
 });
