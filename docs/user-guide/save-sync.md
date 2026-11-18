@@ -100,8 +100,11 @@ them any more, so a sync of that game uploads nothing: it stops as soon as RomM 
 has asked RomM and RomM confirmed it no longer has the game. Your save files stay on this device as they are — nothing
 is moved, deleted or marked as synced.
 
-- **Sync Save Files**, the sync after you quit the game and the check before it starts say: "RomM no longer has this
-  game — its saves stay on this device".
+- **Sync Save Files**, the sync after you quit the game, the check before it starts and a version switch that first
+  syncs the version you leave say: "RomM no longer has this game — its saves stay on this device". The check before a
+  start still asks whether to play anyway.
+- Restoring a save version and **Copy to slot** sync the game first, and say the same after "Couldn't restore the save:"
+  or "Couldn't copy the save:".
 - **Sync All Saves Now** syncs every other game and names it: "_\<game\>_ is no longer on RomM — its saves stay on this
   device". The game is not counted among the games synced, and it is no error.
 

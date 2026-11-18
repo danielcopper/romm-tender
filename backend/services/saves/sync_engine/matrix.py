@@ -320,10 +320,9 @@ class MatrixExecutor:
         :meth:`SaveTransfer.upload_save_file` turns into a ``RommConflictError``. Either way :meth:`_handle_upload_409`
         re-fetches the slot and lets ``resolve_upload_conflict`` decide from
         hashes alone (download the fresh head when local is provably unchanged,
-        else surface a conflict). A 404 that RomM's lookup of the ROM confirms
-        raises :class:`GoneFromRomm`, which ends the ROM's run before any further
-        upload (:meth:`_rom_gone_from_romm`). Any other ``RommApiError``, an
-        unconfirmed 404 included, propagates to the generic handler in
+        else surface a conflict). A 404 :meth:`_rom_gone_from_romm` confirms
+        raises :class:`GoneFromRomm`, which ends the ROM's run. Any other
+        ``RommApiError`` propagates to the generic handler in
         :meth:`_dispatch_sync_action`. Returns the transfer
         direction that was issued (``UPLOAD`` on a clean POST, ``DOWNLOAD`` when
         the backstop downgrades), or ``None`` when nothing transferred.

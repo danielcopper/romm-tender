@@ -15,9 +15,10 @@ MIGRATION_LOCAL_FILES_FAILED = (
 )
 DEVICE_SYNC_DISABLED = "Save sync is disabled for this device on the RomM server"
 SAVE_SYNC_BUSY = "Another save sync is still running"
-# A game's sync whose upload RomM refused with a 404 its own lookup of the ROM
-# confirmed: RomM no longer has the game.
 ROM_GONE_FROM_ROMM = "RomM no longer has this game — its saves stay on this device"
+# Sync All Saves Now's clause naming the games RomM no longer has: one, then several.
+GONE_FROM_ROMM_ONE = "{name} is no longer on RomM — its saves stay on this device"
+GONE_FROM_ROMM_SEVERAL = "{names} are no longer on RomM — their saves stay on this device"
 # A save Tender could otherwise sync sits beside the content file
 # (``SaveAnswer.in_content_directory``; RetroArch's ``savefiles_in_content_dir``
 # is the usual cause), outside what Tender syncs. Neutral phrasing that
