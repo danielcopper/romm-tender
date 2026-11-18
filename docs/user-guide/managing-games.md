@@ -709,9 +709,10 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
   with the emulator in effect, and the reason says what is missing: how ES-DE starts it could not be read, it starts
   through a `.desktop` file, a file its command reads in could not be read, its command names no program, where its
   games are kept could not be established, its command is longer than can be read, which ES-DE build the source ships
-  could not be read, what it needs from RetroDECK's start could not be read or is not known yet, or the folder it starts
-  in could not be placed. Where the emulator's own reading of the game refuses it too, that sentence comes first.
-  **Play** is off; choose another emulator in the emulator menu, whose rows say the same of each emulator.
+  could not be read, what it needs from RetroDECK's start could not be read or is not known yet, the folder it starts in
+  could not be placed, _Source_ has several systems for _platform_ and names none of them, or the source does not list
+  this game's system. Where the emulator's own reading of the game refuses it too, that sentence comes first. **Play**
+  is off; choose another emulator in the emulator menu, whose rows say the same of each emulator.
 - **"Whether _emulator_ is installed could not be established: _cause_."** — the emulator source gives no command for an
   emulator whose installation it cannot establish, so Tender cannot start it. **Play** is off; the emulator menu marks
   the same emulator "installation not established".
@@ -731,6 +732,11 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
 - **"ES-DE would not list track03.bin under this name; it lists files ending in .cdi, .chd, .cue, …"** — whether the
   emulator starts the file is its own answer, but ES-DE's game list would not show the file under its name. **Play**
   stays on.
+- **"Gambatte does not list .txt among the files it takes, but would be handed the file all the same."** — the emulator
+  does not claim that kind of file, and it would get it anyway; it follows the sentence that whether the game starts
+  cannot be established. **Play** stays on.
+- **"Whether _emulator_ can reach _file_ inside _Source_'s sandbox could not be established."** — the game lies where
+  the emulator source's sandbox may not let the emulator see it. **Play** stays on.
 - **"What is inside Game.zip was not read, …"** — the file is an archive the emulator opens, and whether it holds a game
   it starts was not read. **Play** stays on.
 - **"Whether RPCS3 Directory (Standalone) starts this game cannot be established: …"** — nothing is known to stand in

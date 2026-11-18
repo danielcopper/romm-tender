@@ -404,13 +404,16 @@ EmuDeck's on a runtime with no zstd codec, see
 (`catalogue_invalid`), a file ES-DE refuses its whole load on (usually a typo in the user's own `custom_systems`
 overlay); or it carries `not-set-up` (`not_set_up`), a RetroDECK the resolver found by its Flatpak deploy with no
 `retrodeck.json` — not started for this home yet, or its first-run setup left unfinished — which answers every question
-with that finding and an empty enumeration. `source` is the answering source's `{kind, starts_games}`. The platform page
-and the picker say why, from `reason`, rather than show an empty list they cannot distinguish from a system the frontend
-knows no emulator for ([qam-panel.md](qam-panel.md#notices-and-homes)); no entry is in effect, so a start is refused
-(#2221 D20). The overlay entries the resolver gives beside `emulator-catalogue-sealed` are not read as a list — not for
-the emulator list, not for saves and not for the firmware rows and verdicts, whose answer beside a sealed catalogue
-reads as nothing established: an incomplete list would look complete. The one use is a BIOS link: a place such an answer
-states is a place a link may go, and the list never decides that a link is unwanted
+with that finding and an empty enumeration; or the system resolved to no one system — several of the source's systems
+answer and the resolver names none (`platform_systems_several`), or the source does not list it (`system_unknown`, which
+carries the system's name as `system`, so the pages say "_Source_ does not list the system _system_ this game was
+installed under, so its emulators are not established."). `source` is the answering source's `{kind, starts_games}`. The
+platform page and the picker say why, from `reason`, rather than show an empty list they cannot distinguish from a
+system the frontend knows no emulator for ([qam-panel.md](qam-panel.md#notices-and-homes)); no entry is in effect, so a
+start is refused (#2221 D20). The overlay entries the resolver gives beside `emulator-catalogue-sealed` are not read as
+a list — not for the emulator list, not for saves and not for the firmware rows and verdicts, whose answer beside a
+sealed catalogue reads as nothing established: an incomplete list would look complete. The one use is a BIOS link: a
+place such an answer states is a place a link may go, and the list never decides that a link is unwanted
 ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D37, D40). An empty list carrying none of those codes
 is that real "knows none", and `emulator-catalogue-exclusive` is not a refusal at all: a custom `es_systems.xml`
 declaring itself the whole catalogue gives a complete answer, merely a small one. The test is the codes and never an
@@ -473,17 +476,22 @@ game ([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D2, D40, 
 "whether it starts the game is not established: …". An entry that starts it says a file its start goes on without, with
 "can start it, without _file_: …", or what else it is established to do short of the whole start, with "can start it,
 but …". Beside a start or a verdict not established, a file the emulator is judged on but the frontend's scan would not
-list under its name (`frontend-name-unscanned`) gets a note of its own; the resolver judges a file by what the emulator
-starts, and the former "not a launch file" verdict is gone. Where the answer says more than one thing, the line is the
-first with "+_N_ more" (#2698 D8). The same request asks each installed entry's command for the game (`start_verdict`),
-and an entry the resolver gives no complete command for gets no "can start it" under it: its row says "Tender cannot
-start it yet: _reason_", after the file's statements and counted among them
+list under its name (`frontend-name-unscanned`) gets a note of its own, and so does an extension the core does not claim
+though it would be handed the file (`entry-format-unclaimed`: "_.ext_ is not among the files it takes"); a path the
+source's sandbox could not be established to reach (`launch-path-unestablished`) says so in its own words ("whether it
+can reach the file in the sandbox is not established"); the resolver judges a file by what the emulator starts, and the
+former "not a launch file" verdict is gone. Where the answer says more than one thing, the line is the first with "+_N_
+more" (#2698 D8). The same request asks each installed entry's command for the game (`start_verdict`), and an entry the
+resolver gives no complete command for gets no "can start it" under it: its row says "Tender cannot start it yet:
+_reason_", after the file's statements and counted among them
 ([#2221](https://github.com/danielcopper/romm-tender/issues/2221) D20). An entry whose installation could not be
 established says nothing there beyond its row's own note, and where the answering source is one Tender starts no game
 through yet, every row says so in that source's sentence (D21). The menu's answer never moves the pick; a pick of an
 entry that cannot start the game is the user's, and Play is then off with the verdict's sentence — the resolver's
-refusal of the file where it states one, then "Tender cannot start _entry_ yet: _reason_.", or, for an entry whose
-installation could not be established, the sentence a page says under such an emulator
+refusal of the file where it states one, then "Tender cannot start _entry_ yet: _reason_." — for a system that resolved
+to no one system, "_Source_ has several systems for _platform_ and names none of them" (`systems_several`) or "the
+source does not list this game's system" (`system_unknown`), never that the command could not be read — or, for an entry
+whose installation could not be established, the sentence a page says under such an emulator
 (`frontend/src/utils/emulatorStart.ts::startRefusal`). What a game's own entry answers, and what each answer does to a
 start, is [Launch-target validation](backend-architecture.md#launch-target-validation).
 
