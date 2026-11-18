@@ -1154,6 +1154,11 @@ exactly as it was rather than silently flipped to auto, and the Big Picture wind
 back to the geometry and fullscreen state it had."""
 
 
+# The modes that act once and exit rather than hold; scripts/dev_target.sh runs
+# them in the foreground on a target rather than as a unit.
+ONE_SHOT_MODES = ("auto", "off")
+
+
 def _parse_mode(argv: list[str]) -> float | None:
     """Map the single positional arg to a factor, or ``None`` for restore-and-exit."""
     if not argv:
@@ -1162,7 +1167,7 @@ def _parse_mode(argv: list[str]) -> float | None:
     if arg in ("-h", "--help"):
         print(_USAGE)
         raise SystemExit(0)
-    if arg in ("auto", "off"):
+    if arg in ONE_SHOT_MODES:
         return None
     if arg == "deck":
         return _DECK_SCALE

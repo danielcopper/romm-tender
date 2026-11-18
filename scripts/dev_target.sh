@@ -269,8 +269,10 @@ frontend() {
 ui_scale() {
     need_python
     import_session
-    mode="${1:-deck}"
+    [ $# -eq 1 ] || usage
+    mode="$1"
     case "$mode" in
+        # dev_ui_scale.py ONE_SHOT_MODES: they act once and exit, as on the build host.
         auto | off) exec "$PYTHON" "$here/dev_ui_scale.py" "$mode" ;;
     esac
     if is_active "$UI_SCALE_UNIT"; then

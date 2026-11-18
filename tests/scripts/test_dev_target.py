@@ -77,6 +77,20 @@ def _shipped() -> list[str]:
     return line.removeprefix("SHIPPED=(").removesuffix(")").split()
 
 
+def _expand(characters: str) -> str:
+    """A character class's ranges spelled out: ``A-Z`` as every letter in it."""
+    expanded = ""
+    index = 0
+    while index < len(characters):
+        if index + 2 < len(characters) and characters[index + 1] == "-":
+            expanded += "".join(chr(code) for code in range(ord(characters[index]), ord(characters[index + 2]) + 1))
+            index += 3
+        else:
+            expanded += characters[index]
+            index += 1
+    return expanded
+
+
 def _snapshot(root: Path) -> dict[str, bytes | str | None]:
     """Every file and directory under *root*: a file's bytes, a link's target, ``None`` for a directory."""
     tree: dict[str, bytes | str | None] = {}
@@ -149,7 +163,7 @@ class Loop:
     def start_ui_scale(self, *words: str) -> tuple[subprocess.Popen[str], int]:
         """``dev:ui-scale`` started, with its unit's main process, once what the unit prints is being followed."""
         self.world.journal = [*self.world.journal, "HOLDING"]
-        process = self.start("dev:ui-scale", *words)
+        process = self.start("dev:ui-scale", *(words or ("deck",)))
         assert process.stdout is not None
         while "HOLDING" not in process.stdout.readline():
             assert process.poll() is None, process.communicate()
@@ -536,7 +550,7 @@ class TestTheTasksThatStartNothing:
     def test_dev_ui_scale_while_one_runs_is_refused(self, loop: Loop) -> None:
         loop.start_ui_scale()
 
-        again = loop.run("dev:ui-scale")
+        again = loop.run("dev:ui-scale", "deck")
 
         assert again.returncode == 1
         assert "dev:ui-scale already runs on deck" in again.stderr
@@ -798,6 +812,36 @@ class TestTheTargetsHalf:
         steam = next(call for call in commands(loop.world, "systemd-run") if call["argv"][-1:] == ["steam"])
         assert "DISPLAY" not in steam["env"]
         assert steam["env"]["WAYLAND_DISPLAY"] == "wayland-0"
+
+    def test_the_one_shot_modes_it_runs_in_the_foreground_are_dev_ui_scales(self) -> None:
+        spec = importlib.util.spec_from_file_location("dev_ui_scale", _SCRIPTS / "dev_ui_scale.py")
+        assert spec is not None
+        assert spec.loader is not None
+        dev_ui_scale = importlib.util.module_from_spec(spec)
+        sys.modules["dev_ui_scale"] = dev_ui_scale
+        spec.loader.exec_module(dev_ui_scale)
+        script = (_SCRIPTS / "dev_target.sh").read_text(encoding="utf-8")
+
+        assert f"        {' | '.join(dev_ui_scale.ONE_SHOT_MODES)}) exec " in script
+
+    def test_a_word_it_sends_is_one_the_dispatcher_lets_through(self) -> None:
+        """dev_target.py's word rule and the dispatcher's check_words name the same characters."""
+        dispatcher = (_SCRIPTS / "dev_dispatch.sh").read_text(encoding="utf-8")
+        refused = re.search(r"'' \| \*\[!([^\]]+)\]\*\) refuse", dispatcher)
+        assert refused is not None
+        word = re.search(r'_WORD = re\.compile\(r"\[([^\]]+)\]\+"\)', (_SCRIPTS / "dev_target.py").read_text())
+        assert word is not None
+
+        assert refused.group(1) == word.group(1)
+        name_characters = re.findall(r"\[([^\]]+)\]", setup_remote_target._NAME.pattern)[-1]
+        assert set(_expand(name_characters)) <= set(_expand(word.group(1)))
+
+    def test_a_target_name_ssh_could_not_carry_is_refused(self, loop: Loop) -> None:
+        result = loop.run("dev:status", target="de:ck")
+
+        assert result.returncode == 1
+        assert "a target's name is letters, digits" in result.stderr
+        assert commands(loop.world, "mise") == []
 
     def test_the_service_it_stops_is_the_installers_unit(self) -> None:
         script = (_SCRIPTS / "dev_target.sh").read_text(encoding="utf-8")
