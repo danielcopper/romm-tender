@@ -410,7 +410,7 @@ the setup reads with `ssh -G` and never writes. `<name>` is yours to choose — 
    loop's key, it logs in with that key alone first, asking for no password and reading none of your SSH config. It logs
    in through your own `ssh` instead — with whatever access that already has: a password, or a key from your agent or
    your SSH config — when there is no key yet, when the target refuses the key, when the target takes the key but its
-   dispatcher runs no install (gone, or older than the setup request), and when a jump host on the way stops the key's
+   dispatcher runs no install (gone, or older than the setup request), and when a jump host on the way refuses the key's
    login, since your own config may pass it.
 2. **It creates the build host's key for targets** if there is none: `~/.config/romm-tender-dev/id_ed25519`. One key
    serves every target.
@@ -422,13 +422,20 @@ the setup reads with `ssh -G` and never writes. `<name>` is yours to choose — 
    copy the build host sends), and `dispatch.sh` beside them, where no copy reaches it. It rebuilds
    `~/.ssh/authorized_keys` with one line for the key, a comment above it naming the build host and the time, and every
    other line as it was; a rebuilt file that came out short, or without the new line last, is not put in place. A
-   symlinked `authorized_keys` is written through: the file it names is replaced, and the link stays. The install is the
-   script `scripts/dev_target_install.sh`, sent with its values filled in.
+   symlinked `authorized_keys` is written through: the file it names is replaced, and the link stays; a link into a
+   place that cannot be written stops the setup with the line to add there through whatever manages it. The install is
+   the script `scripts/dev_target_install.sh`, sent with its values filled in.
 5. **It writes the target into the dev loop's own SSH config**, `~/.config/romm-tender-dev/ssh_config`: the address,
    port, user and jump host or proxy command the destination resolved to, the dev loop's key and nothing else, and its
-   known-hosts file. Your `~/.ssh/config` serves the setup's own login only; the entry is written to be read with this
-   file alone, and so with the restricted key alone. A jump host is written out as `user@address:port`, since an alias
-   from your config means nothing in this one; a proxy command goes in as `ssh -G` prints it.
+   known-hosts file. Your `~/.ssh/config` serves only the setup's `ssh -G` and its login through your own `ssh`; the
+   entry is written to be read with this file alone, and so with the restricted key alone. A jump host is written out as
+   `user@address:port`, since an alias from your config means nothing in this one; a proxy command goes in as `ssh -G`
+   prints it.
+6. **It checks that the dev loop can reach the target** with that file alone: one more login, through the entry just
+   written and the dev loop's key, which sends an empty setup request and asks for nothing. Only when it gets in does
+   the setup say the target is set up. Otherwise the target is set up all the same, and so is its entry, but the setup
+   ends with what `ssh` said and that the dev loop's config carries none of yours — a jump host your own config lets
+   past, with settings of its own there, is the likely case.
 
 Run again, it changes what changed: one key, one `authorized_keys` line and one config entry, however often it runs.
 That is also how a target is repaired. While the build host's address is the one the line names, the repair needs no
