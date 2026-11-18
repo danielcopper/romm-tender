@@ -218,15 +218,20 @@ class TestAnUnconfirmed404StaysAnError:
     """D1: only the lookup's own 404 proves the ROM is gone; any other outcome leaves the upload's 404 an error."""
 
     @pytest.mark.parametrize(
-        ("lookup", "logged"),
+        ("lookup", "level", "logged"),
         [
-            pytest.param(None, "RomM still has this ROM", id="the lookup answers"),
-            pytest.param(RommApiError("proxy said no"), "proxy said no", id="the lookup proves nothing"),
-            pytest.param(RuntimeError("lookup broke"), "lookup broke", id="the lookup breaks"),
+            pytest.param(None, logging.INFO, "RomM still has this ROM", id="the lookup answers"),
+            pytest.param(
+                RommApiError("proxy said no"),
+                logging.INFO,
+                "RommApiError: proxy said no",
+                id="the lookup proves nothing",
+            ),
+            pytest.param(RuntimeError("lookup broke"), logging.WARNING, "the lookup failed", id="the lookup breaks"),
         ],
     )
     @pytest.mark.asyncio
-    async def test_every_file_is_tried_and_fails_with_its_404(self, tmp_path, caplog, lookup, logged):
+    async def test_every_file_is_tried_and_fails_with_its_404(self, tmp_path, caplog, lookup, level, logged):
         svc, fake = _service(tmp_path)
         _confirmed_rom(svc, tmp_path, 1)
         upload_404 = RommNotFoundError("Rom with id '1' not found")
@@ -256,7 +261,9 @@ class TestAnUnconfirmed404StaysAnError:
         assert _calls(fake, "upload_save", 1) == 2
         # One lookup per run: its verdict holds for the second file's 404 too.
         assert _calls(fake, "get_rom", 1) == 1
-        assert any(r.levelno == logging.INFO and logged in r.getMessage() for r in caplog.records)
+        [record] = [r for r in caplog.records if r.levelno == level and logged in r.getMessage()]
+        # A lookup that broke carries its traceback; one RomM or a proxy answered does not need one.
+        assert (record.exc_info[1] if record.exc_info else None) is (lookup if level == logging.WARNING else None)
 
 
 class TestGoneRoms:
