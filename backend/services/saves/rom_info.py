@@ -13,6 +13,7 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from domain.emulator_choice import starting_entry
 from domain.emulator_sources import RETRODECK
 from domain.retrodeck_folders import FolderRefused
 from domain.save_answer import UNESTABLISHED_NOT_ASKED, unestablished_answer
@@ -21,7 +22,6 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Callable
 
-    from domain.emulator_choice import ResolvedEmulator
     from domain.emulator_commands import EmulatorOption
     from domain.save_answer import SaveAnswer
     from services.protocols import (
@@ -152,7 +152,7 @@ class RomInfoService:
         The entry is resolved even where no question can be put, because the
         label does not depend on a path.
         """
-        entry = _entry(self._active_core.resolve_rom(int(rom_id)))
+        entry = starting_entry(self._active_core.resolve_rom(int(rom_id)))
         answer = self._answer(rom_id, lambda: entry)
         return answer, entry.label if entry is not None else None
 
@@ -287,7 +287,3 @@ class RomInfoService:
             }
             for name in names
         ]
-
-
-def _entry(resolved: ResolvedEmulator | None) -> EmulatorOption | None:
-    return resolved.choice.option if resolved is not None else None
