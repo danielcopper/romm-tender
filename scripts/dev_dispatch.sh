@@ -1,26 +1,25 @@
 #!/bin/sh
-# The forced command of the build host's key on a dev target
-# (docs/contributing/frontend-dev-loop.md, "A remote target"). setup:remote-target
-# installs it as ~/.local/lib/romm-tender-dev/dispatch.sh, beside the running tree
-# and the incoming copy rather than in either, so no copy can replace it. sshd
-# runs it in place of whatever the key's holder asked for and hands that request
-# over in SSH_ORIGINAL_COMMAND, and the request alone decides. Four kinds pass:
+# The forced command of the build host's key on a dev target. setup:remote-target
+# installs it as dispatch.sh beside the running tree (current/) and the incoming
+# copy (incoming/), in neither, so no copy can replace it. sshd runs it in place
+# of whatever the key's holder asked for and hands that request over in
+# SSH_ORIGINAL_COMMAND; the request alone decides. What each kind is for, and
+# why the setup request costs nothing: docs/contributing/frontend-dev-loop.md,
+# "What the key may do on the target". The exact requests that pass:
 #
 #   sh -s
-#       the setup: setup:remote-target run again sends its install script on
-#       stdin, which repairs the target through the key (#2844 D11). It is
-#       spelled as a shell command because the same login reaches a shell
-#       instead when the user's own access gets in first. It puts this script
-#       within the key's reach, which grants nothing the key lacks:
-#       dev_target.sh runs whatever tree the key copied in.
-#   rsync --server <options> . .local/lib/romm-tender-dev/incoming[/]
-#       the copy: rsync receiving into the incoming copy, and nowhere else
+#       the setup's install script on stdin. Spelled as a shell command because
+#       the setup sends the same command line to a login of the user's own,
+#       which reaches a shell.
+#   rsync --server <options> . <incoming>[/]
+#       rsync receiving into the incoming copy, named relative to the home
+#       directory sshd starts a forced command in
 #   scripts/dev_target.sh [word ...]
 #       the incoming copy's scripts/dev_target.sh, with those words
 #   read log
 #   read database
-#       the backend's backend.log, and its database dumped as SQL through
-#       Python's sqlite3, opened read-only
+#       the backend's log, and its database dumped as SQL through Python's
+#       sqlite3, opened read-only
 #
 # Everything else is refused with REFUSED, an empty request (a login) among it.
 #
@@ -33,15 +32,23 @@ set -f
 
 readonly REFUSED=3
 
-ROOT="$HOME/.local/lib/romm-tender-dev"
-# The rsync destination as the client names it: relative to the home directory
-# sshd starts a forced command in.
-INCOMING_ARGUMENT=".local/lib/romm-tender-dev/incoming"
+# Where setup:remote-target put this script: its own directory. sshd starts a
+# forced command by its absolute path, so $0 names it.
+ROOT="${0%/*}"
+INCOMING_ARGUMENT="${ROOT#"$HOME"/}/incoming"
 DEV_TARGET="$ROOT/incoming/scripts/dev_target.sh"
-# The defaults install.sh resolves the installed service's directories to.
-LOG_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/romm-tender/backend.log"
-DATABASE="${XDG_DATA_HOME:-$HOME/.local/share}/romm-tender/romm-tender.db"
-# The interpreter install.sh picks.
+
+# The backend's names (host/logging_setup.py LOG_FILENAME, bootstrap/adapters.py
+# DB_FILENAME, domain/user_data_location.py APP_DIR_NAME), and install.sh's
+# ladder for the directories they lie in.
+APP_DIR="romm-tender"
+LOG_NAME="backend.log"
+DATABASE_NAME="romm-tender.db"
+LOG_FILE="${TENDER_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/$APP_DIR}/$LOG_NAME"
+DATABASE="${TENDER_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/$APP_DIR}/$DATABASE_NAME"
+# install.sh's default interpreter. sshd hands a forced command none of the
+# installer's environment, so TENDER_PYTHON is set here only by a caller that
+# sets it itself.
 PYTHON="${TENDER_PYTHON:-/usr/bin/python3}"
 
 refuse() {
@@ -53,9 +60,10 @@ refuse() {
 
 # rsync's server half, receiving. The letters an option cluster may carry before
 # its `e`: rsync sends the client's short options there, and what follows the
-# `e` is the protocol's capability string, not options. `s` (arguments sent
-# inside the protocol, where this script cannot see the destination), `R`, `b`
-# and `k` (paths outside the plain destination) are among the letters left out.
+# `e` is the protocol's capability string, not options. Among the letters left
+# out are `s`, which sends the arguments inside the protocol where this script
+# cannot see the destination, and `K` (--keep-dirlinks), which has the receiver
+# follow a symlinked directory out of the incoming copy.
 check_rsync() {
     [ "${1:-}" = --server ] || refuse
     shift

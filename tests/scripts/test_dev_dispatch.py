@@ -1,7 +1,9 @@
 """Tests for ``scripts/dev_dispatch.sh`` — the forced command of the dev loop's key on a target.
 
 It decides from ``SSH_ORIGINAL_COMMAND`` alone (#2844 D9), so each case runs
-the real script with ``sh`` under a home of its own, a request in that variable
+the real script with ``sh`` under a home of its own — copied to where
+setup:remote-target installs it, since it finds its directories from its own
+location — with a request in that variable
 and a ``PATH`` of stand-ins (``tests/_remote_target.py``): ``rsync`` records
 what it was started with, and nothing else on the ``PATH`` reaches a real
 remote tool. A request it lets through is checked by what it ran; a refusal by
@@ -11,6 +13,7 @@ its message, its status, and nothing having run.
 from __future__ import annotations
 
 import json
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -27,17 +30,23 @@ _INCOMING = ".local/lib/romm-tender-dev/incoming/"
 _RECEIVE = f"rsync --server -logDtpre.iLsfxCIvu --delete-during . {_INCOMING}"
 
 
-def _run(home: Path, tools: Path, request: str | None, stdin: str = "") -> subprocess.CompletedProcess[str]:
+def _run(
+    home: Path, tools: Path, request: str | None, stdin: str = "", **variables: str
+) -> subprocess.CompletedProcess[str]:
+    installed = home / ".local/lib/romm-tender-dev/dispatch.sh"
+    installed.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(_DISPATCHER, installed)
     env = {
         "HOME": str(home),
         "PATH": fake_path(tools),
         RSYNC_RECORD_VARIABLE: str(tools / "rsync-calls"),
         "TENDER_PYTHON": sys.executable,
+        **variables,
     }
     if request is not None:
         env["SSH_ORIGINAL_COMMAND"] = request
     return subprocess.run(
-        ["sh", str(_DISPATCHER)], cwd="/", input=stdin, capture_output=True, text=True, check=False, env=env
+        ["sh", str(installed)], cwd="/", input=stdin, capture_output=True, text=True, check=False, env=env
     )
 
 
@@ -56,6 +65,21 @@ def _dev_target(home: Path) -> Path:
     return script
 
 
+@pytest.mark.parametrize(
+    "request_text",
+    [
+        f"rsync --server -logDtpre.iLsfxCIvu --delete --partial --numeric-ids . {_INCOMING}",
+        f"rsync --server -rlptgoDcz --delete-after --force --safe-links . {_INCOMING}",
+    ],
+    ids=["delete-partial-numeric-ids", "no-capabilities-delete-after-force-safe-links"],
+)
+def test_the_long_options_a_copy_may_carry_reach_rsync(home: Path, tmp_path: Path, request_text: str) -> None:
+    result = _run(home, tmp_path, request_text)
+
+    assert result.returncode == 0, result.stderr
+    assert _rsync_calls(tmp_path) == [request_text.split()[1:]]
+
+
 @pytest.mark.parametrize("destination", [_INCOMING, _INCOMING.rstrip("/")])
 def test_the_copy_into_the_incoming_tree_reaches_rsync_as_asked(home: Path, tmp_path: Path, destination: str) -> None:
     request = f"rsync --server -logDtpre.iLsfxCIvu --delete-during . {destination}"
@@ -67,7 +91,7 @@ def test_the_copy_into_the_incoming_tree_reaches_rsync_as_asked(home: Path, tmp_
 
 
 def test_the_setup_request_runs_the_script_on_its_stdin_in_the_home(home: Path, tmp_path: Path) -> None:
-    """D11: setup:remote-target run again repairs the target through the key."""
+    """#2844 D11: setup:remote-target run again repairs the target through the key."""
     result = _run(home, tmp_path, "sh -s", stdin='printf "%s|%s" "$PWD" "$#"; printf installed > repaired\n')
 
     assert result.returncode == 0, result.stderr
@@ -100,6 +124,56 @@ def test_read_log_prints_the_backend_log(home: Path, tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert result.stdout == "one line\nanother\n"
+
+
+@pytest.mark.parametrize(
+    ("variables", "folder"),
+    [
+        ({"TENDER_STATE_DIR": "{home}/tender-state"}, "tender-state"),
+        ({"XDG_STATE_HOME": "{home}/xdg-state"}, "xdg-state/romm-tender"),
+        ({"TENDER_STATE_DIR": "{home}/tender-state", "XDG_STATE_HOME": "{home}/xdg-state"}, "tender-state"),
+    ],
+    ids=["tender", "xdg", "tender-before-xdg"],
+)
+def test_read_log_follows_install_sh_s_ladder(
+    home: Path, tmp_path: Path, variables: dict[str, str], folder: str
+) -> None:
+    log = home / folder / "backend.log"
+    log.parent.mkdir(parents=True)
+    log.write_text("from the ladder\n", encoding="utf-8")
+
+    result = _run(home, tmp_path, "read log", **{name: value.format(home=home) for name, value in variables.items()})
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "from the ladder\n"
+
+
+def test_read_database_takes_tender_data_dir_first(home: Path, tmp_path: Path) -> None:
+    database = home / "tender-data" / "romm-tender.db"
+    database.parent.mkdir(parents=True)
+    sqlite3.connect(database).close()
+
+    result = _run(
+        home, tmp_path, "read database", TENDER_DATA_DIR=str(database.parent), XDG_DATA_HOME=str(home / "xdg")
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "BEGIN TRANSACTION;" in result.stdout
+
+
+class TestTheNamesAreTheBackends:
+    """Each name the dispatcher reads by, held to the backend's own."""
+
+    def test_the_log_the_database_and_their_folder(self) -> None:
+        from bootstrap.adapters import DB_FILENAME
+        from domain.user_data_location import APP_DIR_NAME
+        from host.logging_setup import LOG_FILENAME
+
+        script = _DISPATCHER.read_text(encoding="utf-8")
+
+        assert f'APP_DIR="{APP_DIR_NAME}"' in script
+        assert f'LOG_NAME="{LOG_FILENAME}"' in script
+        assert f'DATABASE_NAME="{DB_FILENAME}"' in script
 
 
 def test_read_database_dumps_it_as_sql_and_leaves_it_as_it_was(home: Path, tmp_path: Path) -> None:
