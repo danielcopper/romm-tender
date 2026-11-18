@@ -185,7 +185,6 @@ describe("BiosTab", () => {
           platform_system: {
             state: "no_system",
             source: "retrodeck",
-            system: null,
             systems: [],
             platform: "Commodore VIC-20",
             slug: "vic-20",

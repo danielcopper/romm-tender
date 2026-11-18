@@ -1281,7 +1281,6 @@ describe("Library › Platforms", () => {
           platform_system: {
             state: "found",
             source: "retrodeck",
-            system: "gba",
             systems: ["gba"],
             platform: "GBA",
             slug: "gba",
@@ -1355,7 +1354,6 @@ describe("Library › Platforms", () => {
           platform_system: {
             state: "found",
             source: "retrodeck",
-            system: "gba",
             systems: ["gba"],
             platform: "GBA",
             slug: "gba",
@@ -1380,7 +1378,6 @@ describe("Library › Platforms", () => {
           platform_system: {
             state: "no_system",
             source: "retrodeck",
-            system: null,
             systems: [],
             platform: "Game Boy Advance",
             slug: "gba",
@@ -1416,7 +1413,7 @@ describe("Library › Platforms", () => {
       );
     });
 
-    it("says RomM did not give the platform's ids where it refused them", async () => {
+    it("says RomM did not give its list of platforms where it refused it", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({
           emulators: [],
@@ -1444,7 +1441,6 @@ describe("Library › Platforms", () => {
           platform_system: {
             state: "switched_off",
             source: "retrodeck",
-            system: "gbaoff",
             systems: ["gbaoff"],
             platform: "GBA",
             slug: "gba",

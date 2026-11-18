@@ -17,6 +17,7 @@ import type {
   EmulatorSource,
   EmulatorSourcesListing,
   PlatformSystemAnswer,
+  PlatformSystemReason,
   SourceHealthFinding,
 } from "../types/emulatorSources";
 import type { RommErrorReason } from "../types/reasons";
@@ -227,24 +228,33 @@ export function withFindingSentence<T>(answer: T): T {
   return sentence === null ? answer : { ...answer, message: sentence };
 }
 
-/** The reasons a press is refused with for a platform that has no system to use in its source (#2751 D2). */
-const PLATFORM_SYSTEM_REASONS: ReadonlySet<string> = new Set([
-  "platform_unmatched",
-  "platform_pairs_contradict",
-  "no_platform_system",
-  "platform_system_not_here",
-  "platform_system_off",
-  "platform_systems_several",
-]);
+// The sentence for each reason a platform has no system to use, worded from
+// the platform's answer: a `Record` so that a reason added to
+// {@link PlatformSystemReason} must be worded here.
+const PLATFORM_SYSTEM_SENTENCES: Record<PlatformSystemReason, (answer: PlatformSystemAnswer) => string | null> = {
+  platform_unmatched: (answer) => unmatchedPlatformSentence(answer.platform),
+  platform_pairs_contradict: (answer) =>
+    contradictedPlatformSentence(answer.platform, answer.slug, answer.folder ?? ""),
+  no_platform_system: (answer) => noPlatformSystemSentence(answer.source, answer.platform),
+  platform_system_not_here: (answer) => platformSystemNotHereSentence(answer.source, answer.platform, answer.systems),
+  platform_system_off: (answer) =>
+    answer.systems.length === 0 ? null : platformSystemOffSentence(answer.source, answer.systems.join(", ")),
+  platform_systems_several: (answer) =>
+    severalPlatformSystemsDownloadSentence(answer.source, answer.platform, answer.systems),
+};
 
-function isPlatformSystemRefusal(answer: object): answer is { reason: EmulatorDataReason } & PlatformSystemAnswer {
-  const { reason, source, platform, system, systems, slug, folder } = answer as Record<string, unknown>;
+/** Whether `reason` is one a platform with no system to use answers with. */
+function isPlatformSystemReason(reason: string): reason is PlatformSystemReason {
+  return Object.prototype.hasOwnProperty.call(PLATFORM_SYSTEM_SENTENCES, reason);
+}
+
+function isPlatformSystemRefusal(answer: object): answer is { reason: PlatformSystemReason } & PlatformSystemAnswer {
+  const { reason, source, platform, systems, slug, folder } = answer as Record<string, unknown>;
   return (
     typeof reason === "string" &&
-    PLATFORM_SYSTEM_REASONS.has(reason) &&
+    isPlatformSystemReason(reason) &&
     typeof source === "string" &&
     typeof platform === "string" &&
-    (system === null || typeof system === "string") &&
     Array.isArray(systems) &&
     typeof slug === "string" &&
     (folder === null || typeof folder === "string")
@@ -380,24 +390,8 @@ export function severalPlatformSystemsDownloadSentence(
 
 /** The sentence for a platform with no system to use, or `null` for any other answer. */
 function platformSystemSentence(reason: EmulatorDataReason | null, answer: PlatformSystemAnswer | null): string | null {
-  if (answer === null) return null;
-  const systems = answer.systems;
-  switch (reason) {
-    case "platform_unmatched":
-      return unmatchedPlatformSentence(answer.platform);
-    case "platform_pairs_contradict":
-      return contradictedPlatformSentence(answer.platform, answer.slug, answer.folder ?? "");
-    case "no_platform_system":
-      return noPlatformSystemSentence(answer.source, answer.platform);
-    case "platform_system_not_here":
-      return platformSystemNotHereSentence(answer.source, answer.platform, systems);
-    case "platform_system_off":
-      return systems.length === 0 ? null : platformSystemOffSentence(answer.source, systems.join(", "));
-    case "platform_systems_several":
-      return severalPlatformSystemsDownloadSentence(answer.source, answer.platform, systems);
-    default:
-      return null;
-  }
+  if (answer === null || reason === null || !isPlatformSystemReason(reason)) return null;
+  return PLATFORM_SYSTEM_SENTENCES[reason](answer);
 }
 
 /**

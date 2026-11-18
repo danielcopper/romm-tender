@@ -66,6 +66,10 @@ export type EmulatorDataReason =
   | "catalogue_invalid"
   | "not_set_up"
   | "unavailable"
+  | PlatformSystemReason;
+
+/** Why a platform has no system to use in the source that answered (#2751 D2). */
+export type PlatformSystemReason =
   | "no_platform_system"
   | "platform_system_off"
   | "platform_system_not_here"
@@ -76,14 +80,13 @@ export type EmulatorDataReason =
 /** The system a RomM platform is in the source asked: the one taken, several
  *  none of which is taken, switched-off ones, ones this machine has not set up,
  *  none the source's frontend has, a slug and a folder that name different
- *  systems, or a platform the resolver cannot match (#2751 D2). `system` is the
- *  one system named, `systems` every one the state names, each by its key;
+ *  systems, or a platform the resolver cannot match (#2751 D2). `systems` is
+ *  every one the state names, each by its key;
  *  `platform` is RomM's display name, `slug` RomM's slug for it and `folder`
  *  its folder in RomM, `null` where none is kept. */
 export interface PlatformSystemAnswer {
   state: "found" | "several" | "switched_off" | "not_here" | "no_system" | "unmatched" | "contradicted";
   source: string;
-  system: string | null;
   systems: string[];
   platform: string;
   slug: string;

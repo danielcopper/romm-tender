@@ -282,10 +282,13 @@ export interface PlaceRefusal {
 
 /**
  * Why a download on this page lands in Tender's firmware store and is linked
- * nowhere: the launching emulator is one the resolver does not cover, or no
- * emulator source answers for the platform. `null` where links follow.
+ * nowhere: the launching emulator is one the resolver does not cover, no
+ * emulator source answers for the platform, why the one that would answer was
+ * not asked (RomM's list of platforms, its catalogue), or why the source that
+ * answered has no one system for it — none, several, a switched-off one, one
+ * not set up here. `null` where links follow.
  */
-export type StoreOnly = "unsupported" | "no_source";
+export type StoreOnly = "unsupported" | "no_source" | EmulatorDataReason;
 
 /** What a Delete left in place: a link of Tender's into the store under a
  *  root that could not be read, or a file an older version downloaded that

@@ -387,7 +387,7 @@ describe("emulatorDataReasonSentence", () => {
     }
   });
 
-  it("says RomM cannot be reached where it could not give the platform's ids", () => {
+  it("says RomM cannot be reached where it could not give its list of platforms", () => {
     const sentence = "RomM cannot be reached, so Tender does not know this platform's system yet.";
     expect(emulatorDataReasonSentence("server_unreachable", RETRODECK, null)).toBe(sentence);
     expect(emulatorDataReasonSentence("server_unreachable", null, null)).toBe(sentence);
@@ -400,7 +400,7 @@ describe("emulatorDataReasonSentence", () => {
     "unsupported",
     "unknown",
     "platform_listing_unreadable",
-  ] as const)("says RomM did not give the platform's ids where the read that gives them failed with %s", (reason) => {
+  ] as const)("says RomM did not give its list of platforms where the read of it failed with %s", (reason) => {
     const sentence = "RomM did not give its list of platforms, so Tender does not know this platform's system yet.";
     expect(emulatorDataReasonSentence(reason, RETRODECK, null)).toBe(sentence);
     expect(emulatorDataReasonSentence(reason, null, null)).toBe(sentence);
@@ -423,7 +423,6 @@ describe("each case of a platform with no system to use says which it is (#2751 
   const answer = (state: PlatformSystemAnswer["state"], systems: string[]): PlatformSystemAnswer => ({
     state,
     source: "retrodeck",
-    system: systems.length === 1 ? systems[0]! : null,
     systems,
     platform: "Sega Master System",
     slug: "sms",
@@ -496,11 +495,10 @@ describe("each case of a platform with no system to use says which it is (#2751 
   });
 });
 
-describe("a platform with no switched-on system", () => {
+describe("a platform with no system to use", () => {
   const NO_SYSTEM: PlatformSystemAnswer = {
     state: "no_system",
     source: "retrodeck",
-    system: null,
     systems: [],
     platform: "Commodore VIC-20",
     slug: "vic-20",
@@ -509,7 +507,6 @@ describe("a platform with no switched-on system", () => {
   const SWITCHED_OFF: PlatformSystemAnswer = {
     state: "switched_off",
     source: "emudeck",
-    system: "xbox360",
     systems: ["xbox360"],
     platform: "Xbox 360",
     slug: "xbox360",
@@ -548,7 +545,6 @@ describe("a platform with no switched-on system", () => {
       message: "retrodeck has no system for Commodore VIC-20.",
       source: "retrodeck",
       platform: "Commodore VIC-20",
-      system: null,
       systems: [],
       slug: "vic-20",
       folder: "vic20",
@@ -561,7 +557,6 @@ describe("a platform with no switched-on system", () => {
       withPlatformSystemSentence({
         ...refused,
         reason: "platform_system_off",
-        system: "vic20",
         systems: ["vic20"],
         source: "emudeck",
       }).message,
