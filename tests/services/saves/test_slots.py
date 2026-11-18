@@ -1731,6 +1731,72 @@ class TestWhetherAGamesSavesSync:
         assert result["emulator_label"] is None
 
 
+class _ResolvesAnewEachTime:
+    """An ``ActiveCoreReader`` whose every resolution answers a new entry, so two in one read show as two labels."""
+
+    def __init__(self) -> None:
+        self.resolutions: list[int] = []
+
+    def _resolve(self, rom_id: int) -> ResolvedEmulator:
+        self.resolutions.append(rom_id)
+        return _started_with(f"Entry {len(self.resolutions)}")
+
+    def resolve_rom(self, rom_id: int, *, reading: object = None) -> ResolvedEmulator | None:
+        return self._resolve(rom_id)
+
+    def active_emulator_for_rom(self, rom_id: int, *, reading: object = None) -> EmulatorOption | None:
+        return self._resolve(rom_id).choice.option
+
+    def active_core_for_rom(self, rom_id: int) -> tuple[str | None, str | None]:
+        option = self.active_emulator_for_rom(rom_id)
+        return (None, option.label if option is not None else None)
+
+
+def _resolving_anew(tmp_path) -> tuple[Any, _ResolvesAnewEachTime, FakeSaveLocationReader]:
+    resolver = _ResolvesAnewEachTime()
+    svc, _fake = make_service(tmp_path, active_core=resolver)
+    return svc, resolver, cast("FakeSaveLocationReader", svc._rom_info._save_locations)
+
+
+class TestOneAvailabilityReadResolvesTheEmulatorOnce:
+    """The save answer and the label of one availability read come from one resolution of the game's emulator."""
+
+    @pytest.mark.asyncio
+    async def test_an_installed_game_is_resolved_once(self, tmp_path):
+        svc, resolver, _reader = _resolving_anew(tmp_path)
+        _install_rom(svc, tmp_path)
+
+        await svc.get_save_sync_availability(42)
+
+        assert resolver.resolutions == [42]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("fs_name", ["pokemon.gba", ""], ids=["path-asked", "no-path-to-ask"])
+    async def test_a_game_not_downloaded_is_resolved_once(self, tmp_path, fs_name):
+        svc, resolver, _reader = _resolving_anew(tmp_path)
+        _seed_rom(svc, 42, platform_slug="gba", fs_name=fs_name)
+
+        result = await svc.get_save_sync_availability(42)
+
+        assert resolver.resolutions == [42]
+        # Where no path could be formed nothing is asked, and the label still comes from that one resolution.
+        assert result["emulator_label"] == "Entry 1"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("installed", [True, False], ids=["installed", "not-downloaded"])
+    async def test_the_answer_and_the_label_come_from_the_same_resolution(self, tmp_path, installed):
+        svc, _resolver, reader = _resolving_anew(tmp_path)
+        if installed:
+            _install_rom(svc, tmp_path)
+        else:
+            _seed_rom(svc, 42, platform_slug="gba", fs_name="pokemon.gba")
+
+        result = await svc.get_save_sync_availability(42)
+
+        assert [emulator_label for _system, _path, emulator_label in reader.calls] == ["Entry 1"]
+        assert result["emulator_label"] == "Entry 1"
+
+
 class TestGetSlotSaves:
     """Tests for get_slot_saves — lightweight server save listing by slot."""
 

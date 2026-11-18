@@ -33,7 +33,6 @@ if TYPE_CHECKING:
 
     from domain.live_device_id import LiveDeviceId
     from domain.rom_save_sync_state import RomSaveSyncState
-    from domain.save_answer import SaveAnswer
     from services.protocols import (
         DebugLogger,
         RetryStrategy,
@@ -313,14 +312,15 @@ class SetupWizard:
         nothing about the saves — no path could be formed, or the emulator's
         answer could not be established — so a refusal there is no statement
         that they will not sync. ``emulator_label`` is the label of the entry
-        the game starts with, ``None`` where it has none. One live reading,
-        beside the catalogue question the label takes, so the panel can ask it
-        while it holds RomM as unreachable, where the setup info would wait out
-        the retry ladder. ``short_message`` stands beside a refusal's ``message``
+        the game starts with, ``None`` where it has none, taken from the same
+        resolution of the game's emulator the reading is asked of. One live
+        reading, beside that one resolution, so the panel can ask it while it
+        holds RomM as unreachable, where the setup info would wait out the
+        retry ladder. ``short_message`` stands beside a refusal's ``message``
         for a surface with no room for the sentence.
         """
         rom_id = int(rom_id)
-        answer, label = await self._loop.run_in_executor(None, self._availability_io, rom_id)
+        answer, label = await self._loop.run_in_executor(None, self._rom_info.save_answer_and_start_label, rom_id)
         refusal = sync_refusal(answer)
         base = {
             "available": refusal is None,
@@ -329,9 +329,6 @@ class SetupWizard:
             "emulator_label": label,
         }
         return base if refusal is None else {**base, **refusal, "short_message": save_refusal_label(answer)}
-
-    def _availability_io(self, rom_id: int) -> tuple[SaveAnswer, str | None]:
-        return self._rom_info.save_answer(rom_id), self._rom_info.start_label(rom_id)
 
     async def confirm_slot_choice(
         self,

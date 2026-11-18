@@ -1025,17 +1025,17 @@ answers `recommended_action: "sync_unavailable"` with the refusal's `reason` and
 kind and emulator label where it carries them, so the panel words it as it does a press on the same game — and asks RomM
 nothing: no device registration, no listing. A game that syncs answers by the table above, its local probe reading that
 same answer ([#2153](https://github.com/danielcopper/romm-tender/issues/2153)). `get_save_sync_availability` asks the
-same refusal alone, with no device registration and no save listing, beside one catalogue question for the label below:
-`available`, with those fields where it is false and `short_message`, the same refusal in a few words for a surface with
-no room for the sentence (`save_refusal_label`); `installed`, since a game that is not downloaded is asked about the
-path it would be downloaded to (the save answer's own `content_installed`, `RomInfoService._uninstalled_answer`);
-`established`, false where that reading established nothing — no path could be formed, or the emulator's answer could
-not be established — so a refusal there says nothing of whether the saves would sync; and `emulator_label`, the label of
-the entry the game starts with as the emulator menu shows it (`RomInfoService.start_label`), `None` where the game has
-no entry. It is what the SAVES tab says of a game's saves
-([#2149](https://github.com/danielcopper/romm-tender/issues/2149)), and the setup's question while the panel holds RomM
-as unreachable. One edge asks RomM: the would-be path needs the platform's system, and for a platform whose ids are not
-kept RomM's platform list is read once (`PlatformSystems.platform_system`).
+same refusal alone, with no device registration and no save listing: `available`, with those fields where it is false
+and `short_message`, the same refusal in a few words for a surface with no room for the sentence (`save_refusal_label`);
+`installed`, since a game that is not downloaded is asked about the path it would be downloaded to (the save answer's
+own `content_installed`, `RomInfoService._uninstalled_answer`); `established`, false where that reading established
+nothing — no path could be formed, or the emulator's answer could not be established — so a refusal there says nothing
+of whether the saves would sync; and `emulator_label`, the label of the entry the game starts with as the emulator menu
+shows it, `None` where the game has no entry. The game's emulator is resolved once per read, and both the answer and the
+label come from that one resolution (`RomInfoService.save_answer_and_start_label`). It is what the SAVES tab says of a
+game's saves ([#2149](https://github.com/danielcopper/romm-tender/issues/2149)), and the setup's question while the
+panel holds RomM as unreachable. One edge asks RomM: the would-be path needs the platform's system, and for a platform
+whose ids are not kept RomM's platform list is read once (`PlatformSystems.platform_system`).
 
 ### Where the check happens
 
