@@ -320,7 +320,10 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   // `bios/BiosFiles.tsx`.
   const nothingEstablished = firmware.bios_level === "unknown" && firmware.emulator_read === false;
   // Why a download here lands in Tender's firmware store and is linked nowhere.
-  const storeOnly = storeOnlySentence(firmware.store_only, firmware.active_core_label ?? null, row.name);
+  const storeOnly = storeOnlySentence(firmware.store_only, firmware.active_core_label ?? null, row.name, {
+    source: firmware.emulator_source,
+    platformSystem: firmware.platform_system,
+  });
 
   return (
     <div ref={attachRoot}>

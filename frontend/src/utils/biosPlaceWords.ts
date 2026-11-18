@@ -13,8 +13,15 @@
  * Library, "BIOS files").
  */
 
-import type { BiosFileStatus, BiosKeptLink, StoreOnly } from "../types";
-import { sourceName } from "./emulatorSourceWording";
+import type {
+  AnsweringSource,
+  BiosFileStatus,
+  BiosKeptLink,
+  PlatformSystemAnswer,
+  PlatformSystemReason,
+  StoreOnly,
+} from "../types";
+import { emulatorDataReasonSentence, isPlatformSystemReason, sourceName } from "./emulatorSourceWording";
 
 /** The fields the lines are read off — both surfaces' row shapes carry them. */
 export type PlaceRow = Pick<
@@ -115,19 +122,56 @@ export function libraryRowLines(row: PlaceRow, identification: Identification | 
   return lines;
 }
 
-/** The one sentence above the table where a download lands in the store and is linked nowhere. */
+/** What the store-only line names beside its reason: the source that answered and the platform's system there. */
+export interface StoreOnlyAnswer {
+  source: AnsweringSource | null;
+  platformSystem: PlatformSystemAnswer | null;
+}
+
+const KEPT = "Downloads are kept in Tender's firmware store and linked";
+
+// The store-only line for each reason a platform has no system to use, worded
+// from the platform's answer: a `Record` so that a reason added to
+// {@link PlatformSystemReason} must be worded here.
+const NO_SYSTEM_STORE_ONLY: Record<PlatformSystemReason, (answer: PlatformSystemAnswer) => string> = {
+  no_platform_system: (answer) =>
+    `${sourceName(answer.source)} has no system for ${answer.platform}. ${KEPT} once it has one.`,
+  platform_unmatched: (answer) => `Tender cannot match ${answer.platform} to a system yet. ${KEPT} once it can.`,
+  platform_pairs_contradict: (answer) =>
+    `RomM's slug "${answer.slug}" and folder "${answer.folder ?? ""}" point to different systems. ${KEPT} once they agree.`,
+  platform_system_not_here: (answer) =>
+    `${sourceName(answer.source)} has a system for ${answer.platform} (${answer.systems.join(", ")}), but it is not set up on this machine. ${KEPT} once it is.`,
+  platform_system_off: (answer) =>
+    `System ${answer.systems.join(", ")} is switched off in ${sourceName(answer.source)}. ${KEPT} once it is switched on.`,
+  platform_systems_several: (answer) =>
+    `${sourceName(answer.source)} has several systems for ${answer.platform} (${answer.systems.join(", ")}). ${KEPT} into none of them.`,
+};
+
+/**
+ * The one sentence above the table where a download lands in the store and is linked nowhere, or `null` where it
+ * may be linked: the emulator the resolver does not cover, no emulator source, the platform's own reason where the
+ * source that answered has no one system for it, or — where the source that would answer was not asked — that
+ * reason's own sentence, then that the files are linked once the platform's system is known.
+ */
 export function storeOnlySentence(
   storeOnly: StoreOnly | null | undefined,
   emulator: string | null,
   platform: string,
+  answer: StoreOnlyAnswer = { source: null, platformSystem: null },
 ): string | null {
   if (storeOnly === "unsupported") {
-    return `${emulator ?? "This emulator"} is not supported yet. Downloads are kept in Tender's firmware store and linked once it is.`;
+    return `${emulator ?? "This emulator"} is not supported yet. ${KEPT} once it is.`;
   }
   if (storeOnly === "no_source") {
-    return `No emulator source is set up for ${platform}. Downloads are kept in Tender's firmware store and linked once one is.`;
+    return `No emulator source is set up for ${platform}. ${KEPT} once one is.`;
   }
-  return null;
+  if (storeOnly === null || storeOnly === undefined) return null;
+  if (isPlatformSystemReason(storeOnly)) {
+    return answer.platformSystem === null ? null : NO_SYSTEM_STORE_ONLY[storeOnly](answer.platformSystem);
+  }
+  if (answer.source === null) return null;
+  const why = emulatorDataReasonSentence(storeOnly, answer.source, answer.platformSystem);
+  return `${why} ${KEPT} once the platform's system is known.`;
 }
 
 /**

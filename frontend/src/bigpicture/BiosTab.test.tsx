@@ -198,6 +198,29 @@ describe("BiosTab", () => {
     );
   });
 
+  it("says on a game page why a download stays in the store for a platform of several systems (review F2)", () => {
+    const { container } = render(
+      <BiosTabWithState
+        biosStatus={{ needs_bios: false, bios_status_unknown: true, store_only: "platform_systems_several" }}
+        biosLevel="unknown"
+        coreInfo={{
+          ...coreInfo,
+          platform_system: {
+            state: "several",
+            source: "retrodeck",
+            systems: ["mark3", "mastersystem"],
+            platform: "Master System",
+            slug: "sms",
+            folder: "sms",
+          },
+        }}
+      />,
+    );
+    expect(container.querySelector('[data-testid="bios-store-only"]')?.textContent).toBe(
+      "RetroDECK has several systems for Master System (mark3, mastersystem). Downloads are kept in Tender's firmware store and linked into none of them.",
+    );
+  });
+
   it("puts the reason line between the BIOS heading and the state", () => {
     const { container } = render(
       <BiosTabWithState

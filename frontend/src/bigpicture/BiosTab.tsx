@@ -170,6 +170,7 @@ function buildBiosHeader(
     bios.store_only,
     bios.active_core_label ?? coreInfo?.active_core_label ?? null,
     platformName ?? "this platform",
+    { source: coreInfo?.emulator_source ?? null, platformSystem: coreInfo?.platform_system ?? null },
   );
 
   const biosColor = biosColorForLevel(biosLevel);

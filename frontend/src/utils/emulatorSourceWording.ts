@@ -244,7 +244,7 @@ const PLATFORM_SYSTEM_SENTENCES: Record<PlatformSystemReason, (answer: PlatformS
 };
 
 /** Whether `reason` is one a platform with no system to use answers with. */
-function isPlatformSystemReason(reason: string): reason is PlatformSystemReason {
+export function isPlatformSystemReason(reason: string): reason is PlatformSystemReason {
   return Object.prototype.hasOwnProperty.call(PLATFORM_SYSTEM_SENTENCES, reason);
 }
 
