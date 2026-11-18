@@ -7216,6 +7216,7 @@ class TestThePlatformsSystem:
             "state": "no_system",
             "source": "retrodeck",
             "system": None,
+            "systems": [],
             "platform": "Dreamcast",
         }
 

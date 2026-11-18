@@ -37,7 +37,7 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock
 
 from domain.adoption_rename import RenameCollisions
-from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
+from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem, system_key
 from domain.retrodeck_folders import FolderRefused, no_rom_root
 from domain.rom import Rom
 from domain.rom_adoption import TargetOccupied
@@ -210,11 +210,11 @@ class Harness:
                 install_recorder=self.recorder,
                 m3u_support=lambda system_name: self.m3u_supported,
                 system_extensions=lambda system_name, reading=None: self.system_extensions.get(
-                    system_name, frozenset()
+                    system_key(system_name) or "", frozenset()
                 ),
                 save_locations=self.save_locations,
                 active_core=self.active_core,
-                system_known=lambda system_name: self.known_systems.get(system_name),
+                system_known=lambda system_name: self.known_systems.get(system_key(system_name) or ""),
                 sibling_supersede=lambda: self._supersede,
                 uow_factory=FakeUnitOfWorkFactory(self.uow),
                 loop=loop,

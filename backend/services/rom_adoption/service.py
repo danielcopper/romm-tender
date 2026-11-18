@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.emulator_sources import RETRODECK
 from domain.game_files import download_size_bytes
+from domain.platform_system import system_key
 from domain.refusal import DomainRefused
 from domain.retrodeck_folders import GAME_DOWNLOAD, FolderRefused, folder_of
 from domain.rom_adoption import (
@@ -66,6 +67,7 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Callable
 
+    from domain.platform_system import SystemArgument
     from domain.rom_candidates import Kind
     from services.protocols import (
         ActiveCoreReader,
@@ -390,9 +392,10 @@ class RomAdoptionService:
         :meth:`_remove_under_roms` directly: a candidate under a different name is
         never the thing ``os.replace`` swaps, so leaving it would leave it.
         """
-        system = self._download_system(rom_detail)
-        if isinstance(system, FolderRefused):
-            raise system
+        answer = self._download_system(rom_detail)
+        if isinstance(answer, FolderRefused):
+            raise answer
+        _, system = answer
         if not is_dir and own_file_path:
             if not is_inside_folder(checked_path, self._rom_folder(system)):
                 raise Refused("unsafe_replace_target", _UNSAFE_REPLACE_MESSAGE)
@@ -958,10 +961,15 @@ class RomAdoptionService:
         rom_detail = self._romm_api.get_rom(rom_id)
         return rom_detail, self._resolve_target(rom_detail, candidate_path)
 
-    def _download_system(self, rom_detail: dict[str, Any]) -> str | FolderRefused:
-        """The system a download of this ROM lands under in RetroDECK, or the download's refusal where it has none."""
+    def _download_system(self, rom_detail: dict[str, Any]) -> tuple[SystemArgument, str] | FolderRefused:
+        """The system a download of this ROM lands under in RetroDECK, as its platform's answer names it and as the
+        install record keeps it — or the download's refusal where it has not one."""
         platform = self._platform_systems.platform_system(rom_detail.get("platform_slug", ""), source=RETRODECK)
-        return platform.taken or platform.refusal(GAME_DOWNLOAD)
+        named = platform.one_system
+        recorded = None if named is None else system_key(named)
+        if named is None or recorded is None:
+            return platform.refusal(GAME_DOWNLOAD)
+        return named, recorded
 
     def _resolve_target(self, rom_detail: dict[str, Any], candidate_path=None) -> _Target | FolderRefused:
         """Resolve the path this ROM's content occupies, or why RetroDECK names no folder for it.
@@ -977,10 +985,11 @@ class RomAdoptionService:
         user picked an entry, else whatever sits at the zip's own path, else at
         the folder's. Nothing at either is the file.
         """
-        system = self._download_system(rom_detail)
-        if isinstance(system, FolderRefused):
-            return system
-        folder = self._retrodeck_folders.download_folder(system)
+        answer = self._download_system(rom_detail)
+        if isinstance(answer, FolderRefused):
+            return answer
+        named, system = answer
+        folder = self._retrodeck_folders.download_folder(named)
         if isinstance(folder, FolderRefused):
             return folder
         roms_dir = folder

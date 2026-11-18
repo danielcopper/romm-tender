@@ -50,13 +50,14 @@ from _vendor.atlas import (
     CAVEAT_REDIRECT_OUTRANKED,
     CAVEAT_SAVE_FILES_SHARED_WITH_CORE,
     HEALTH_ISSUE_NOT_SET_UP,
+    RESOLUTION_RESOLVED,
     SavestateAbsence,
     SavestatePlacement,
     Unresolved,
     core_probe_interpreter,
 )
 
-from adapters.atlas_catalogue import catalogue_refused
+from adapters.atlas_catalogue import catalogue_refused, resolution_status
 from adapters.emulator_sources import source_roots
 from domain.emulator_sources import SourceFinding
 from domain.save_answer import (
@@ -76,6 +77,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from adapters.emulator_sources import EmulatorSourcesAdapter
+    from domain.platform_system import SystemArgument
 
 
 # Notes on a save answer that change nothing Tender does (#2644 D2).
@@ -110,7 +112,7 @@ class AtlasSaveLocationAdapter:
         self._log_debug = log_debug
 
     def resolve_save_answer(
-        self, *, system: str, content_path: str, emulator_label: str | None, content_installed: bool
+        self, *, system: SystemArgument, content_path: str, emulator_label: str | None, content_installed: bool
     ) -> SaveAnswer:
         """What *emulator_label* saves for the game at *content_path*, and whether it may be synced.
 
@@ -162,7 +164,7 @@ class AtlasSaveLocationAdapter:
         return refused
 
     def _emulators_answer(
-        self, installation: Any, system: str, content_path: str, emulator_label: str, content_installed: bool
+        self, installation: Any, system: SystemArgument, content_path: str, emulator_label: str, content_installed: bool
     ) -> tuple[SaveAnswer, tuple[SourceFinding, ...]]:
         """The emulator's own answer, and the findings it came with.
 
@@ -207,7 +209,7 @@ class AtlasSaveLocationAdapter:
         return answer, _findings(placement.caveats)
 
     def resolve_savestate_location(
-        self, *, system: str, content_path: str, emulator_label: str | None
+        self, *, system: SystemArgument, content_path: str, emulator_label: str | None
     ) -> SavestateLocation | NoSavestates | None:
         """Where *emulator_label* keeps the savestates for the game at *content_path*.
 
@@ -243,7 +245,7 @@ class AtlasSaveLocationAdapter:
 
     # -- helpers -------------------------------------------------------------
 
-    def _entry(self, system: str, content_path: str, emulator_label: str) -> Any | None:
+    def _entry(self, system: SystemArgument, content_path: str, emulator_label: str) -> Any | None:
         """The answering source's catalogue entry carrying *emulator_label*, or ``None``."""
         reading = self._sources.read()
         installation = reading.answering_installation()
@@ -255,12 +257,17 @@ class AtlasSaveLocationAdapter:
             return None
         return self._labelled(catalogue, system, emulator_label)
 
-    def _catalogue(self, installation: Any, system: str, content_path: str) -> Any | None:
-        """The catalogue answer for *system*, or ``None`` where it could not be asked; a refusal is logged."""
+    def _catalogue(self, installation: Any, system: SystemArgument, content_path: str) -> Any | None:
+        """The catalogue answer for *system*, or ``None`` where it could not be asked or *system* resolved to no one
+        system the source holds; a refusal is logged."""
         answer = self._ask(
             lambda: installation.emulators_for(system, content_path=content_path),
             f"emulators_for({system!r})",
         )
+        status = None if answer is None else resolution_status(answer)
+        if status is not None and status != RESOLUTION_RESOLVED:
+            self._log_debug(f"[saves] {system}: resolved to no one system ({status}); nothing to ask")
+            return None
         if answer is not None and catalogue_refused(answer):
             self._log_debug(
                 f"[saves] {system}: the catalogue was refused "
@@ -268,7 +275,7 @@ class AtlasSaveLocationAdapter:
             )
         return answer
 
-    def _labelled(self, catalogue: Any, system: str, emulator_label: str) -> Any | None:
+    def _labelled(self, catalogue: Any, system: SystemArgument, emulator_label: str) -> Any | None:
         """The catalogue's entry labelled *emulator_label*, or ``None``."""
         entry = next((candidate for candidate in catalogue.entries if candidate.label == emulator_label), None)
         if entry is None:

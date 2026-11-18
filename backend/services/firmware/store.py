@@ -45,6 +45,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
 
     from domain.firmware_places import LinkUpdatePlan, PlaceLook, WantedLink
+    from domain.platform_system import SystemArgument
     from domain.source_roots import SourceRoots
     from services.protocols import (
         Clock,
@@ -306,7 +307,7 @@ class FirmwareStore:
 
     # ── The links ────────────────────────────────────────────
 
-    def do_update_links(self, platform_slug: str, platform_folder: str, system: str | None) -> LinkOutcome:
+    def do_update_links(self, platform_slug: str, platform_folder: str, system: SystemArgument | None) -> LinkOutcome:
         """Bring the links of the platform RomM keeps in *platform_folder* up to date in every enabled source.
 
         Downloads nothing. *platform_slug* is that platform's slug.
@@ -365,7 +366,7 @@ class FirmwareStore:
         self,
         platform_slug: str,
         platform_folder: str,
-        system: str | None,
+        system: SystemArgument | None,
         records: StoreRecords,
         unwanted: Mapping[tuple[str, str], FirmwareLink],
     ) -> frozenset[tuple[str, str]]:
@@ -389,7 +390,7 @@ class FirmwareStore:
         if listed is None:
             return frozenset(unwanted)
         others = sorted((listed | {stored.platform_slug for stored in records.stored}) - {platform_slug})
-        systems: list[str] = []
+        systems: list[SystemArgument] = []
         for other in others:
             answer = self._platform_systems.platform_system(other)
             if answer.state == UNASKED:

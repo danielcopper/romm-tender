@@ -81,6 +81,7 @@ from _vendor.atlas import (
     CAVEAT_EMULATOR_CATALOGUE_SEALED,
     CAVEAT_FIRMWARE_CONFIGURED_IMAGE_MISSING,
     CAVEAT_FIRMWARE_CONFIGURED_IMAGE_NOT_OFFERED,
+    CAVEAT_FIRMWARE_DECLARATION_UNKNOWN,
     CAVEAT_FIRMWARE_DIRECTORY_HOLDS_NO_IMAGE,
     CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT,
     CAVEAT_FIRMWARE_IMAGE_AMBIGUOUS,
@@ -93,6 +94,7 @@ from _vendor.atlas import (
     CAVEAT_FIRMWARE_UNREADABLE,
     CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE,
     REASON_REGION_DECIDED_BY_DISC,
+    RESOLUTION_RESOLVED,
 )
 
 # None of these names is in emu-atlas's ``__all__``, and emu-atlas has not said
@@ -100,6 +102,7 @@ from _vendor.atlas import (
 # start-up.
 from _vendor.atlas.firmware import core_short_name, declared_directory_of, load_hashes
 
+from adapters.atlas_catalogue import resolution_status
 from adapters.atlas_identity import emulator_identity
 from adapters.emulator_sources import source_roots
 from domain.firmware_wants import (
@@ -130,6 +133,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
     from adapters.emulator_sources import DetectedSourcesReading, EmulatorSourcesAdapter
+    from domain.platform_system import SystemArgument
 
 # The declaration state in which an emulator stated what it wants off its own
 # installation — a libretro ``.info`` read from the machine.
@@ -222,7 +226,7 @@ class AtlasPlatformFirmwareAdapter:
         self._log_debug = log_debug
         self._folders = _FolderIdentities()
 
-    def __call__(self, system: str) -> FirmwareCatalogue:
+    def __call__(self, system: SystemArgument) -> FirmwareCatalogue:
         """*system*'s firmware demand in the source that answers for it, or an empty unresolved catalogue."""
         reading = self._sources.read()
         kind = reading.answering_kind
@@ -231,7 +235,7 @@ class AtlasPlatformFirmwareAdapter:
             return _unresolved()
         return self._read(system, kind, installation)
 
-    def every_source(self, system: str) -> SourceCatalogues:
+    def every_source(self, system: SystemArgument) -> SourceCatalogues:
         """*system*'s firmware demand in each enabled source, in the user's order, to place links by.
 
         A source whose reading raised or named no root is named unread. A
@@ -264,7 +268,9 @@ class AtlasPlatformFirmwareAdapter:
             if (installation := reading.installation(source.kind)) is not None
         }
 
-    def _read(self, system: str, kind: str, installation: Any, *, for_links: bool = False) -> FirmwareCatalogue:
+    def _read(
+        self, system: SystemArgument, kind: str, installation: Any, *, for_links: bool = False
+    ) -> FirmwareCatalogue:
         try:
             answer = installation.firmware_for_system(system, verify=True)
             self._log_debug(f"[firmware] {kind} {system}: {_trace(answer)}")
@@ -281,7 +287,7 @@ class AtlasPlatformFirmwareAdapter:
             return _unresolved()
         return catalogue
 
-    def _not_installed(self, system: str, kind: str, installation: Any) -> frozenset[str]:
+    def _not_installed(self, system: SystemArgument, kind: str, installation: Any) -> frozenset[str]:
         """The emulators *installation*'s launch reading states are not installed for *system*.
 
         Empty where that reading could not be asked: an emulator nothing ruled
@@ -387,6 +393,21 @@ def _unresolved() -> FirmwareCatalogue:
     return FirmwareCatalogue(placements=(), unread_emulators=frozenset(), resolved=False)
 
 
+def _established(answer: Any) -> bool:
+    """Whether *answer* states the system's demand at all.
+
+    Not where the system resolved to none or several of the source's systems,
+    nor where it lists no emulator and says what is declared could not be
+    looked up (``firmware-declaration-unknown``): that empty list is a look
+    that found nothing to read, never "nothing needed". Beside emulators the
+    same code speaks only of the empty requirement list; each emulator's own
+    verdict stands.
+    """
+    if resolution_status(answer) != RESOLUTION_RESOLVED:
+        return False
+    return bool(answer.cores) or all(caveat.code != CAVEAT_FIRMWARE_DECLARATION_UNKNOWN for caveat in answer.caveats)
+
+
 def _catalogue(
     answer: Any,
     source: str | None,
@@ -407,7 +428,7 @@ def _catalogue(
     taken away.
     """
     sealed = any(caveat.code == CAVEAT_EMULATOR_CATALOGUE_SEALED for caveat in answer.caveats)
-    if answer.root is None or (sealed and not for_links):
+    if answer.root is None or (sealed and not for_links) or not _established(answer):
         return FirmwareCatalogue(
             placements=(),
             unread_emulators=frozenset(),

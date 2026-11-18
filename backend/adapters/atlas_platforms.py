@@ -1,39 +1,54 @@
 """Which system a RomM platform is in an emulator source — the resolver's answer, asked through the source holder.
 
-The one place Tender puts ``systems_for_platform`` to the resolver, and the
-one that reads its platform vocabularies and statuses: each of RomM's ids is
-asked in the resolver's vocabulary for it, and each match's status is read
-into Tender's :class:`~domain.platform_system.SystemStatus`. Each source is
-asked for itself: the answering source by default, or the source a caller
-names — RetroDECK, for a download that lands in its folders. What the answers
-decide is :func:`domain.platform_system.pick_system`'s.
+The one place Tender puts the platform question to the resolver, and the one
+that reads its platform sources and statuses. A platform is asked about with
+exactly two (source, key) pairs: RomM's slug in RomM's source, and the
+platform's folder in RomM as a bare folder name — the same pairs for every
+source and every question, RomM's ids never among them. Each source is asked
+for itself — the answering source by default, or the source a caller names
+(RetroDECK, for a download that lands in its folders) — and answers in its own
+systems; what it names is forwarded as it named it, and where it names none,
+no other source stands in for it. What the matches come to is
+:func:`domain.platform_system.matched_state`'s.
+
+The platform answer carries no resolution of its own: whether the resolver can
+match the platform at all is the translation's intersection, read here.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from _vendor.atlas import PLATFORM_STATUS_ABSENT, PLATFORM_STATUS_DECLARED, PLATFORM_STATUS_DISABLED
+from _vendor.atlas import (
+    CAVEAT_PLATFORM_EXCLUDED,
+    CAVEAT_PLATFORM_PARTS_UNESTABLISHED,
+    CAVEAT_PLATFORM_SOURCE_UNKNOWN,
+    CAVEAT_PLATFORM_SOURCE_VERSION_DIFFERS,
+    CAVEAT_PLATFORM_UNMAPPED,
+    CAVEAT_PLATFORM_VERSION_UNAPPLIED,
+    FOLDER_SOURCE,
+    INTERSECTION_AGREED,
+    INTERSECTION_CONFLICT,
+    INTERSECTION_UNKNOWN,
+    PLATFORM_STATUS_ABSENT,
+    PLATFORM_STATUS_DECLARED,
+    PLATFORM_STATUS_DISABLED,
+)
 
 from domain.emulator_sources import CATALOGUE_UNAVAILABLE, NO_SOURCE_DETECTED
-from domain.platform_system import UNASKED, IdAnswer, PlatformSystem, SystemMatch, SystemStatus, pick_system
+from domain.platform_system import UNASKED, UNMATCHED, PlatformSystem, SystemPair, SystemStatus, matched_state
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable
 
     from adapters.emulator_sources import EmulatorSourcesAdapter
     from domain.emulator_sources import ArrangedSource, SourcesReading
-    from domain.platform_system import PlatformIds
+    from domain.platform_system import PlatformKeys
 
-
-# The resolver's vocabulary for each field of RomM's platform Tender asks about
-# (``KNOWN_PLATFORM_VOCABULARIES``, whose names it exports only as a tuple).
-_VOCABULARY_OF_FIELD = {
-    "igdb_id": "igdb",
-    "libretro_slug": "libretro",
-    "ss_id": "screenscraper",
-    "tgdb_id": "thegamesdb",
-}
+# RomM's column of the resolver's platform table, keyed by RomM's slug
+# (``atlas/data/SOURCES.md``, pinned at the RomM release it names). The
+# resolver exports the folder source's name, not this one.
+_ROMM_SOURCE = "romm"
 
 _STATUS_OF = {
     PLATFORM_STATUS_DECLARED: SystemStatus.ON,
@@ -41,15 +56,66 @@ _STATUS_OF = {
     PLATFORM_STATUS_ABSENT: SystemStatus.NOT_HERE,
 }
 
+# Where the resolver cannot match the platform: it knows neither pair, or the
+# two name different systems, and it picks neither.
+_UNMATCHED = frozenset({INTERSECTION_UNKNOWN, INTERSECTION_CONFLICT})
+
+# Why an asked pair is one the resolver's platform table does not hold, one
+# code per such pair: a key its source does not have, one the table places on
+# no system on purpose, or a source the table does not carry. Whichever it is,
+# a platform none of whose pairs is held is one Tender cannot match yet
+# (#2751 D2); the code is logged, never worded.
+_PAIR_UNKNOWN_BECAUSE = frozenset({CAVEAT_PLATFORM_UNMAPPED, CAVEAT_PLATFORM_EXCLUDED, CAVEAT_PLATFORM_SOURCE_UNKNOWN})
+
+# Notes beside a platform answer that change nothing Tender reads: a version a
+# bare folder pair cannot apply and one the table does not pin (Tender states
+# no version), and pairs that meet only through different parts of a system,
+# which then answer no match of their own.
+_NOTES = frozenset(
+    {CAVEAT_PLATFORM_VERSION_UNAPPLIED, CAVEAT_PLATFORM_SOURCE_VERSION_DIFFERS, CAVEAT_PLATFORM_PARTS_UNESTABLISHED}
+)
+
 
 class _Unasked(Exception):
-    """A resolver question raised; the platform's system is not established."""
+    """A resolver question raised, or answered in a word Tender does not read; the system is not established."""
+
+
+class UnreadAnswer(Exception):
+    """A platform answer in a word Tender does not read: an intersection status or a match status it does not know."""
+
+
+def read_platform_answer(answer: Any) -> tuple[str, tuple[SystemPair, ...]]:
+    """A platform answer in Tender's words: the state its matches come to, and the systems that state names.
+
+    Where the resolver cannot match the platform — it knows none of the pairs,
+    or they name different systems — the state is
+    :data:`~domain.platform_system.UNMATCHED`, whatever matches it would list.
+    Raises :class:`UnreadAnswer` for a status Tender does not read, which
+    establishes no system rather than reading as none (#2195 D19).
+    """
+    intersection = answer.translation.intersection_status
+    if intersection in _UNMATCHED:
+        return UNMATCHED, ()
+    unread = sorted({match.status for match in answer.matches} - set(_STATUS_OF))
+    if intersection != INTERSECTION_AGREED or unread:
+        raise UnreadAnswer(f"intersection {intersection!r}, match statuses {unread}")
+    return matched_state(
+        (SystemPair(match.system[0], match.system[1]), _STATUS_OF[match.status]) for match in answer.matches
+    )
+
+
+def platform_pairs(keys: PlatformKeys) -> tuple[SystemPair, ...]:
+    """The pairs a platform is asked about with: RomM's slug, and its folder in RomM where one is kept."""
+    pairs = [SystemPair(_ROMM_SOURCE, keys.slug)]
+    if keys.folder is not None:
+        pairs.append(SystemPair(FOLDER_SOURCE, keys.folder))
+    return tuple(pairs)
 
 
 class AtlasPlatformSystemsAdapter:
     """Answers a platform's system in one source from the resolver.
 
-    Implements the ``PlatformSystemsReader`` Protocol structurally.
+    Implements the ``SourcePlatformSystems`` Protocol structurally.
     """
 
     def __init__(self, *, sources: EmulatorSourcesAdapter, log_debug: Callable[[str], None]) -> None:
@@ -58,14 +124,13 @@ class AtlasPlatformSystemsAdapter:
 
     def platform_system(
         self,
-        ids: PlatformIds,
+        keys: PlatformKeys,
         *,
-        platform_slug: str,
         platform_name: str,
         source: str | None = None,
         reading: SourcesReading | None = None,
     ) -> PlatformSystem:
-        """The system *platform_slug* is in *source* — the answering source where it is ``None``.
+        """The system the platform *keys* names is in *source* — the answering source where it is ``None``.
 
         A named source is asked whatever its switch, because the switch is the
         folder's question (``adapters/retrodeck_folders.py``), not the
@@ -76,19 +141,19 @@ class AtlasPlatformSystemsAdapter:
         unasked = self._unasked(reading, source)
         arranged = self._arranged(reading, source)
         if unasked is not None or arranged is None:
-            return PlatformSystem(
-                UNASKED,
-                platform_slug,
-                platform_name,
-                unasked=unasked or reading.no_answer_reason(),
-            )
+            return PlatformSystem(UNASKED, keys.slug, platform_name, unasked=unasked or reading.no_answer_reason())
         installation = next(i for i in reading.installations if i.kind == arranged.kind)
+        pairs = platform_pairs(keys)
         try:
-            pick = pick_system(self._answers(reading, installation, ids), platform_slug)
+            answer = reading.remember(
+                ("systems_for_platforms", installation.kind, pairs), lambda: self._ask(installation, pairs)
+            )
         except _Unasked:
-            return PlatformSystem(UNASKED, platform_slug, platform_name, source=arranged, unasked=CATALOGUE_UNAVAILABLE)
-        self._log_debug(f"[platforms] {platform_slug} in {arranged.kind}: {pick.state} {pick.system}")
-        return PlatformSystem(pick.state, platform_slug, platform_name, system=pick.system, source=arranged)
+            return PlatformSystem(UNASKED, keys.slug, platform_name, source=arranged, unasked=CATALOGUE_UNAVAILABLE)
+        state, named = answer
+        self._log_debug(f"[platforms] {pairs} in {arranged.kind}: {state} {[tuple(n) for n in named]}")
+        system = named[0] if len(named) == 1 else (pairs if len(named) > 1 else None)
+        return PlatformSystem(state, keys.slug, platform_name, system=system, source=arranged, named=named)
 
     def asked_source(
         self, *, source: str | None = None, reading: SourcesReading | None = None
@@ -111,30 +176,22 @@ class AtlasPlatformSystemsAdapter:
             return CATALOGUE_UNAVAILABLE
         return None if any(s.kind == source for s in reading.sources) else NO_SOURCE_DETECTED
 
-    def _answers(self, reading: SourcesReading, installation: Any, ids: PlatformIds) -> Iterator[IdAnswer]:
-        for field, value in ids.questions():
-            vocabulary = _VOCABULARY_OF_FIELD[field]
-            yield reading.remember(
-                ("systems_for_platform", installation.kind, vocabulary, value),
-                lambda vocabulary=vocabulary, value=value: self._ask(installation, vocabulary, value),
-            )
-
-    def _ask(self, installation: Any, vocabulary: str, value: str) -> IdAnswer:
+    def _ask(self, installation: Any, pairs: tuple[SystemPair, ...]) -> tuple[str, tuple[SystemPair, ...]]:
+        """What *installation* answers for *pairs*: the state its matches come to, and the systems it names."""
         try:
-            answer = installation.systems_for_platform(vocabulary, value)
+            answer = installation.systems_for_platforms(pairs)
         except Exception as exc:
             # Deliberately broad, for the reason the holder's own ``_ask`` gives.
-            self._log_debug(f"[platforms] {installation.kind}: resolver failed on {vocabulary} {value}: {exc!r}")
+            self._log_debug(f"[platforms] {installation.kind}: resolver failed on {pairs}: {exc!r}")
             raise _Unasked from exc
-        unread = sorted({match.status for match in answer.matches} - set(_STATUS_OF))
-        if unread:
-            self._log_debug(f"[platforms] {installation.kind}: status {unread[0]!r} unread on {vocabulary} {value}")
-            raise _Unasked
-        return IdAnswer(
-            platforms=tuple(answer.platforms),
-            systems=tuple(answer.systems),
-            matches=tuple(
-                SystemMatch(system=match.system, status=_STATUS_OF[match.status], tags=tuple(match.platforms))
-                for match in answer.matches
-            ),
+        codes = {caveat.code for caveat in answer.caveats}
+        self._log_debug(
+            f"[platforms] {installation.kind}: {pairs} {answer.translation.intersection_status}, unknown pairs "
+            f"because {sorted(codes & _PAIR_UNKNOWN_BECAUSE)}, notes {sorted(codes & _NOTES)}, "
+            f"other caveats {sorted(codes - _PAIR_UNKNOWN_BECAUSE - _NOTES)}"
         )
+        try:
+            return read_platform_answer(answer)
+        except UnreadAnswer as exc:
+            self._log_debug(f"[platforms] {installation.kind}: {exc} unread on {pairs}")
+            raise _Unasked from exc

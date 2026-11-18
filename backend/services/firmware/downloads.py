@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from domain.firmware_wants import FirmwareCatalogue, FirmwarePlacement
-    from domain.platform_system import PlatformSystem
+    from domain.platform_system import PlatformSystem, SystemArgument
     from services.firmware.demand import FirmwareDemand
     from services.firmware.listing import FirmwareListing
     from services.firmware.store import FirmwareStore, LinkOutcome
@@ -175,7 +175,7 @@ class FirmwareDownloader:
         platform_slug: str,
         platform_folder: str,
         rows: list[dict[str, Any]],
-        system: str | None,
+        system: SystemArgument | None,
         *,
         what: str = "firmware files",
     ) -> dict[str, Any]:
@@ -222,7 +222,7 @@ class FirmwareDownloader:
             **links.payload(),
         }
 
-    async def _update(self, platform_slug: str, platform_folder: str, system: str | None) -> LinkOutcome:
+    async def _update(self, platform_slug: str, platform_folder: str, system: SystemArgument | None) -> LinkOutcome:
         outcome = await self._loop.run_in_executor(
             None, self._store.do_update_links, platform_slug, platform_folder, system
         )
@@ -281,7 +281,7 @@ class FirmwareDownloader:
         return await self._loop.run_in_executor(None, self._listing.get_platform_firmware_list, platform_folder)
 
     async def _shown_emulator(
-        self, catalogue: FirmwareCatalogue, system: str | None, platform_folder: str, emulator: str | None
+        self, catalogue: FirmwareCatalogue, system: SystemArgument | None, platform_folder: str, emulator: str | None
     ) -> str | None:
         """The emulator a "Download required" is for: the one the page shows, or the platform's pick.
 
@@ -296,7 +296,7 @@ class FirmwareDownloader:
             raise Refused("emulator_unknown", f"Nothing is known about where {emulator} opens its BIOS files")
         return emulator
 
-    def _platform_emulator_identity(self, system: str, platform_folder: str) -> str | None:
+    def _platform_emulator_identity(self, system: SystemArgument, platform_folder: str) -> str | None:
         """The identity of the platform's resolved emulator, or ``None``.
 
         The same resolution the status surfaces read
@@ -310,7 +310,7 @@ class FirmwareDownloader:
         emulator = resolve_firmware_option(options["options"], pick.label if pick is not None else None)
         return emulator.emulator if emulator is not None else None
 
-    async def platform_system(self, platform_slug: str, rom_id: int | None = None) -> str | None:
+    async def platform_system(self, platform_slug: str, rom_id: int | None = None) -> SystemArgument | None:
         """The system *platform_slug* is in the answering source — or the one *rom_id*'s install record holds.
 
         ``None`` where no source answers for it: a download then lands in the

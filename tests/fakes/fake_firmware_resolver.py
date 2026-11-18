@@ -26,6 +26,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from types import EllipsisType
 
+    from domain.platform_system import SystemArgument
+
 
 # A source that names no root: every place it answers lies under none.
 _NO_ROOTS = SourceRoots(roots=(), findings=())
@@ -114,7 +116,7 @@ class FakeFirmwareResolver:
         # The verdicts a test pinned rather than left to be folded.
         self._pinned_met: set[str] = set()
         self.groups: list[FirmwareGroup] = []
-        self.calls: list[str] = []
+        self.calls: list[SystemArgument] = []
 
     def state_group(
         self,
@@ -364,7 +366,7 @@ class FakeFirmwareResolver:
             return False
         return None if any(verdict is None for verdict in verdicts) else True
 
-    def __call__(self, system: str | None = None) -> FirmwareCatalogue:
+    def __call__(self, system: SystemArgument | None = None) -> FirmwareCatalogue:
         self.calls.append("" if system is None else system)
         placements = tuple(self._read(index, placement) for index, placement in enumerate(self.placements))
         return FirmwareCatalogue(
@@ -378,7 +380,7 @@ class FakeFirmwareResolver:
             roots=self.roots if self.resolved else None,
         )
 
-    def every_source(self, system: str) -> SourceCatalogues:
+    def every_source(self, system: SystemArgument) -> SourceCatalogues:
         """This catalogue and each further source's, a reading that did not happen named by its source instead."""
         resolvers = (self, *self.other_sources)
         catalogues = [(resolver.source, resolver(system)) for resolver in resolvers]

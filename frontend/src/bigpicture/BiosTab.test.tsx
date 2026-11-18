@@ -182,7 +182,13 @@ describe("BiosTab", () => {
           emulators: [],
           emulator_data_available: false,
           emulator_data_reason: "no_platform_system",
-          platform_system: { state: "no_system", source: "retrodeck", system: null, platform: "Commodore VIC-20" },
+          platform_system: {
+            state: "no_system",
+            source: "retrodeck",
+            system: null,
+            systems: [],
+            platform: "Commodore VIC-20",
+          },
         }}
       />,
     );

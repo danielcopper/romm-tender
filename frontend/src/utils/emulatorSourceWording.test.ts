@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { EmulatorSource, PlatformSystemAnswer } from "../types/emulatorSources";
+import type { EmulatorDataReason, EmulatorSource, PlatformSystemAnswer } from "../types/emulatorSources";
 import {
   NO_SOURCE_BANNER,
   SOURCES_READING,
@@ -17,6 +17,10 @@ import {
   startingSourceOffSentence,
   withFindingSentence,
   withPlatformSystemSentence,
+  platformSystemNotHereSentence,
+  platformSystemNotes,
+  severalPlatformSystemsSentence,
+  unmatchedPlatformSentence,
 } from "./emulatorSourceWording";
 
 const REPAIR = " Repair it with RetroDECK's 'Repair RetroDECK Paths'.";
@@ -417,17 +421,81 @@ describe("emulatorDataReasonSentence", () => {
   });
 });
 
+describe("each case of a platform with no system to use says which it is (#2751 D2, #2225 D8)", () => {
+  const answer = (state: PlatformSystemAnswer["state"], systems: string[]): PlatformSystemAnswer => ({
+    state,
+    source: "retrodeck",
+    system: systems.length === 1 ? systems[0]! : null,
+    systems,
+    platform: "Sega Master System",
+  });
+  const cases: [EmulatorDataReason, PlatformSystemAnswer, string][] = [
+    ["platform_unmatched", answer("unmatched", []), unmatchedPlatformSentence("Sega Master System")],
+    ["no_platform_system", answer("no_system", []), noPlatformSystemSentence("retrodeck", "Sega Master System")],
+    [
+      "platform_system_not_here",
+      answer("not_here", ["mastersystem"]),
+      platformSystemNotHereSentence("retrodeck", "Sega Master System", ["mastersystem"]),
+    ],
+    [
+      "platform_system_off",
+      answer("switched_off", ["mastersystem"]),
+      platformSystemOffSentence("retrodeck", "mastersystem"),
+    ],
+    [
+      "platform_systems_several",
+      answer("several", ["mark3", "mastersystem"]),
+      severalPlatformSystemsSentence("retrodeck", "Sega Master System", ["mark3", "mastersystem"]),
+    ],
+  ];
+
+  it.each(cases)("words %s on the page as its own sentence", (reason, platformSystem, sentence) => {
+    expect(emulatorDataReasonSentence(reason, RETRODECK, platformSystem)).toBe(sentence);
+  });
+
+  it.each(cases)("rewords a press refused for %s the way the page says it", (reason, platformSystem, sentence) => {
+    const { state: _state, ...details } = platformSystem;
+    const refused = { success: false, reason, message: "backend's own", ...details };
+
+    expect(withPlatformSystemSentence(refused).message).toBe(sentence);
+  });
+
+  it("gives every case a sentence of its own", () => {
+    expect(new Set(cases.map(([, , sentence]) => sentence)).size).toBe(cases.length);
+  });
+
+  it("never says RomM does not know a platform it cannot match (#2751 D2)", () => {
+    expect(unmatchedPlatformSentence("Sega Master System")).not.toMatch(/RomM/);
+  });
+
+  it("names every switched-off system where several are", () => {
+    expect(emulatorDataReasonSentence("platform_system_off", RETRODECK, answer("switched_off", ["mark3", "sms"]))).toBe(
+      platformSystemOffSentence("retrodeck", "mark3, sms"),
+    );
+  });
+
+  it("says on a game's page why a platform of several systems gets no frontend link, and nothing otherwise", () => {
+    expect(platformSystemNotes(answer("several", ["mark3", "mastersystem"]))).toEqual([
+      severalPlatformSystemsSentence("retrodeck", "Sega Master System", ["mark3", "mastersystem"]),
+    ]);
+    expect(platformSystemNotes(answer("found", ["mastersystem"]))).toEqual([]);
+    expect(platformSystemNotes(null)).toEqual([]);
+  });
+});
+
 describe("a platform with no switched-on system", () => {
   const NO_SYSTEM: PlatformSystemAnswer = {
     state: "no_system",
     source: "retrodeck",
     system: null,
+    systems: [],
     platform: "Commodore VIC-20",
   };
   const SWITCHED_OFF: PlatformSystemAnswer = {
     state: "switched_off",
     source: "emudeck",
     system: "xbox360",
+    systems: ["xbox360"],
     platform: "Xbox 360",
   };
 
@@ -464,14 +532,20 @@ describe("a platform with no switched-on system", () => {
       source: "retrodeck",
       platform: "Commodore VIC-20",
       system: null,
+      systems: [],
     };
     expect(withPlatformSystemSentence(refused)).toEqual({
       ...refused,
       message: "RetroDECK has no system for Commodore VIC-20, so Tender cannot download its games.",
     });
     expect(
-      withPlatformSystemSentence({ ...refused, reason: "platform_system_off", system: "vic20", source: "emudeck" })
-        .message,
+      withPlatformSystemSentence({
+        ...refused,
+        reason: "platform_system_off",
+        system: "vic20",
+        systems: ["vic20"],
+        source: "emudeck",
+      }).message,
     ).toBe("System vic20 is switched off in EmuDeck.");
   });
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
 
 import pytest
 from _romm_platforms import LISTED_GAMECUBE
@@ -12,14 +11,15 @@ from domain.emulator_sources import ALL_SOURCES_SWITCHED_OFF, CATALOGUE_UNAVAILA
 from domain.platform_system import (
     FOUND,
     NO_SYSTEM,
+    NOT_HERE,
+    SEVERAL,
     SWITCHED_OFF,
     UNASKED,
-    IdAnswer,
+    UNMATCHED,
     KeptPlatform,
-    PlatformIds,
+    PlatformKeys,
     PlatformSystem,
-    SystemMatch,
-    SystemPick,
+    SystemPair,
     SystemStatus,
     decode_platform_ids,
     encode_platform_ids,
@@ -27,81 +27,15 @@ from domain.platform_system import (
     kept_folders_of_slug,
     kept_platform_of,
     kept_platforms,
-    pick_system,
-    platform_ids_of,
+    matched_state,
+    system_key,
 )
 from domain.retrodeck_folders import GAME_DOWNLOAD, EveryFolderRefused, FolderRefused
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
 
 RETRODECK = ArrangedSource(kind="retrodeck", enabled=True, starts_games=True)
 
 
-def _on(system: str, *tags: str) -> SystemMatch:
-    return SystemMatch(system=system, status=SystemStatus.ON, tags=tags or (system,))
-
-
-def _off(system: str, *tags: str) -> SystemMatch:
-    return SystemMatch(system=system, status=SystemStatus.OFF, tags=tags or (system,))
-
-
-def _absent(system: str, *tags: str) -> SystemMatch:
-    return SystemMatch(system=system, status=SystemStatus.NOT_HERE, tags=tags or (system,))
-
-
-def _answer(*matches: SystemMatch, platforms: tuple[str, ...] = (), systems: tuple[str, ...] = ()) -> IdAnswer:
-    return IdAnswer(platforms=platforms, systems=systems, matches=matches)
-
-
-_UNMAPPED = _answer()
-
-
-class TestPlatformIds:
-    def test_the_ids_are_asked_in_the_decided_order(self):
-        ids = PlatformIds(igdb_id=19, libretro_slug="Nintendo - SNES", ss_id=4, tgdb_id=6)
-
-        assert ids.questions() == (
-            ("igdb_id", "19"),
-            ("libretro_slug", "Nintendo - SNES"),
-            ("ss_id", "4"),
-            ("tgdb_id", "6"),
-        )
-
-    def test_an_id_rom_m_does_not_hold_is_not_asked(self):
-        assert PlatformIds(ss_id=57).questions() == (("ss_id", "57"),)
-        assert PlatformIds().questions() == ()
-
-    def test_rom_ms_platform_is_read_for_the_four_ids_and_nothing_else(self):
-        platform = {
-            "slug": "snes",
-            "igdb_id": 19,
-            "libretro_slug": "Nintendo - Super Nintendo Entertainment System",
-            "ss_id": "4",
-            "tgdb_id": 6,
-            "moby_id": 15,
-            "ra_id": 3,
-        }
-
-        assert platform_ids_of(platform) == PlatformIds(
-            igdb_id=19, libretro_slug="Nintendo - Super Nintendo Entertainment System", ss_id=4, tgdb_id=6
-        )
-
-    def test_the_listed_name_is_kept_beside_the_ids_never_asked_and_never_the_display_name(self):
-        ids = platform_ids_of({"name": "Super Nintendo", "igdb_id": 19})
-
-        assert ids.name == "Super Nintendo"
-        assert ids.questions() == (("igdb_id", "19"),)
-        assert platform_ids_of({"display_name": "SNES"}).name is None
-
-    @pytest.mark.parametrize("value", [None, True, "", "abc", "-4", 1.5, [19]])
-    def test_a_number_of_the_wrong_kind_counts_as_none(self, value):
-        assert platform_ids_of({"igdb_id": value, "ss_id": value, "tgdb_id": value}) == PlatformIds()
-
-    @pytest.mark.parametrize("value", [None, True, "", "  ", 4, [19]])
-    def test_a_name_of_the_wrong_kind_counts_as_none(self, value):
-        assert platform_ids_of({"libretro_slug": value}) == PlatformIds()
-
+class TestTheKeptValue:
     def test_the_kept_value_reads_back_as_it_was_kept(self):
         kept = {
             "sfc": KeptPlatform(
@@ -158,11 +92,11 @@ class TestKeptPlatform:
             )
         }
 
-    def test_a_display_name_without_a_name_names_neither_the_kept_record_nor_its_question(self):
+    def test_a_display_name_without_a_name_does_not_name_the_kept_record(self):
         """#2564 D2: RomM's display name never names a platform."""
         kept = kept_platform_of({k: v for k, v in LISTED_GAMECUBE.items() if k != "name"}, "5.4.1")
 
-        assert (kept.name, kept.question_ids().name) == (None, None)
+        assert kept.name is None
 
     def test_a_slug_that_is_only_whitespace_is_kept_as_no_slug(self):
         """#2761 D7."""
@@ -192,12 +126,11 @@ class TestKeptPlatform:
         assert found.fs_slug == "gamecube"
         assert kept_by_slug(kept, "gc") is None
 
-    def test_the_question_is_asked_with_the_four_ids_and_the_name_alone(self):
+    def test_the_question_is_asked_with_the_slug_and_the_folder_alone(self):
+        """#2217 D16: RomM's ids are kept, never asked with."""
         kept = kept_platform_of(LISTED_GAMECUBE, "5.4.1")
 
-        assert kept.question_ids() == PlatformIds(
-            igdb_id=21, libretro_slug="Nintendo - GameCube", ss_id=13, tgdb_id=2, name="Nintendo GameCube"
-        )
+        assert kept.keys("ngc") == PlatformKeys("ngc", "gc")
 
     def test_a_record_kept_before_the_folder_was_reads_as_the_slug_it_was_kept_under(self):
         raw = '{"snes": {"igdb_id": 19, "libretro_slug": null, "ss_id": null, "tgdb_id": 6, "name": "Super Nintendo"}}'
@@ -210,157 +143,70 @@ class TestKeptPlatform:
             )
         }
 
-    def test_a_record_kept_before_asks_the_question_it_asked_before(self):
+    def test_a_record_kept_before_the_folder_was_is_asked_with_its_slug_alone(self):
         before = {"igdb_id": 19, "libretro_slug": None, "ss_id": 4, "tgdb_id": 6, "name": "Super Nintendo"}
         [kept] = (decode_platform_ids(json.dumps({"snes": before})) or {}).values()
 
-        assert kept.question_ids() == platform_ids_of(before)
+        assert kept.keys("snes") == PlatformKeys("snes")
 
 
-class TestOneMatch:
-    def test_one_switched_on_system_is_taken_as_it_is(self):
-        assert pick_system([_answer(_on("psx"), platforms=("psx",))], "ps") == SystemPick(FOUND, "psx")
-
-    def test_an_id_that_stands_for_one_system_alone_gives_that_system(self):
-        # ScreenScraper 6 is the CPS1 board, which no platform row can carry.
-        answer = _answer(_on("cps1", "arcade"), systems=("cps1",))
-
-        assert pick_system([answer], "cps1") == SystemPick(FOUND, "cps1")
+_SNES = SystemPair("esde", "snes")
+_SNESNA = SystemPair("esde", "snesna")
+_MARK3 = SystemPair("esde", "mark3")
+_MASTERSYSTEM = SystemPair("esde", "mastersystem")
+_SMS_PAIRS = (SystemPair("romm", "sms"), SystemPair("folder", "sms"))
 
 
-class TestSeveralMatches:
-    def test_the_system_named_like_the_platform_is_taken_not_a_regional_one(self):
-        answer = _answer(_on("sfc", "snes"), _on("snes"), _on("snesna", "snes"), platforms=("snes",))
+class TestMatchedState:
+    """#2751, #2225 D8: what the source's matches come to; Tender picks none of several."""
 
-        pick = pick_system([answer], "snes")
+    def test_one_switched_on_system_is_found(self):
+        assert matched_state([(_SNES, SystemStatus.ON)]) == (FOUND, (_SNES,))
 
-        assert (pick.state, pick.system) == (FOUND, "snes")
+    def test_several_switched_on_systems_are_several_and_none_is_picked(self):
+        matches = [(_MARK3, SystemStatus.ON), (_MASTERSYSTEM, SystemStatus.ON)]
 
-    def test_without_a_system_named_like_the_platform_the_first_in_the_resolvers_order(self):
-        answer = _answer(_on("mark3", "mastersystem"), _on("sms", "mastersystem"), platforms=("mastersystem",))
+        assert matched_state(matches) == (SEVERAL, (_MARK3, _MASTERSYSTEM))
 
-        assert pick_system([answer], "sms").system == "mark3"
+    def test_a_switched_off_or_absent_system_beside_a_switched_on_one_changes_nothing(self):
+        matches = [(_SNES, SystemStatus.ON), (_SNESNA, SystemStatus.OFF), (_MARK3, SystemStatus.NOT_HERE)]
 
-    def test_a_switched_off_system_is_never_taken_beside_a_switched_on_one(self):
-        answer = _answer(_on("sfc", "snes"), _off("snes"), platforms=("snes",))
+        assert matched_state(matches) == (FOUND, (_SNES,))
 
-        assert pick_system([answer], "snes").system == "sfc"
+    def test_with_none_switched_on_every_switched_off_one_is_named(self):
+        matches = [(_SNES, SystemStatus.OFF), (_SNESNA, SystemStatus.OFF), (_MARK3, SystemStatus.NOT_HERE)]
 
+        assert matched_state(matches) == (SWITCHED_OFF, (_SNES, _SNESNA))
 
-class TestTheIdsInTurn:
-    def test_the_first_id_with_a_switched_on_system_decides(self):
-        answers = [_UNMAPPED, _answer(_on("atari800"), platforms=("atari800",))]
+    def test_with_only_systems_this_machine_has_not_set_up_they_are_not_here(self):
+        assert matched_state([(_MARK3, SystemStatus.NOT_HERE)]) == (NOT_HERE, (_MARK3,))
 
-        assert pick_system(answers, "atari8bit").system == "atari800"
-
-    def test_an_id_after_the_deciding_one_is_never_asked(self):
-        asked: list[int] = []
-
-        def answers() -> Iterator[IdAnswer]:
-            for index, answer in enumerate(
-                [_answer(_on("psx"), platforms=("psx",)), _answer(_on("other"), platforms=("other",))]
-            ):
-                asked.append(index)
-                yield answer
-
-        pick_system(answers(), "ps")
-
-        assert asked == [0]
-
-    def test_an_id_giving_only_a_switched_off_system_does_not_decide(self):
-        answers = [_answer(_off("xbox360"), platforms=("xbox360",)), _answer(_on("xbox"), platforms=("xbox",))]
-
-        assert pick_system(answers, "xbox360").system == "xbox"
-
-    def test_an_id_giving_only_absent_systems_matches_nothing(self):
-        answers = [_answer(_absent("n3ds"), platforms=("n3ds",)), _answer(_on("3ds"), platforms=("3ds",))]
-
-        assert pick_system(answers, "3ds").system == "3ds"
+    def test_no_match_at_all_is_no_system(self):
+        assert matched_state([]) == (NO_SYSTEM, ())
 
 
-class TestAnAnswerNamingSeveralPlatforms:
-    """The three shapes measured on the resolver's crosswalk (D10)."""
+class TestSystemKey:
+    def test_a_recorded_name_is_its_own_key(self):
+        assert system_key("snes") == "snes"
 
-    @pytest.mark.parametrize(
-        ("platforms", "matches", "romm_slug", "taken"),
-        [
-            (("famicom", "nes"), (_on("famicom"), _on("nes")), "nes", "nes"),
-            (
-                ("satellaview", "snes", "sufami"),
-                (_on("satellaview"), _on("sfc", "snes"), _on("snes"), _on("sufami")),
-                "snes",
-                "snes",
-            ),
-            (("amiga", "amigacd32"), (_on("amiga"), _on("amigacd32")), "amiga-cd32", "amigacd32"),
-        ],
-        ids=["libretro-nes", "thegamesdb-snes", "libretro-amiga"],
-    )
-    def test_the_platform_equal_to_rom_ms_slug_without_hyphens_is_taken(self, platforms, matches, romm_slug, taken):
-        pick = pick_system([_answer(*matches, platforms=platforms)], romm_slug)
+    def test_a_pair_is_named_by_its_key(self):
+        assert system_key(_SNES) == "snes"
 
-        assert (pick.state, pick.system) == (FOUND, taken)
-
-    def test_where_none_equals_the_slug_the_next_id_is_asked(self):
-        several = _answer(_on("famicom"), _on("nes"), platforms=("famicom", "nes"))
-        one = _answer(_on("nes"), platforms=("nes",))
-
-        assert pick_system([several, one], "nintendo-entertainment-system").system == "nes"
-
-    def test_another_platform_is_never_taken_in_its_place(self):
-        # The slug's platform names no system here, and the answer's other
-        # platforms are passed over rather than taken instead.
-        several = _answer(_on("famicom"), _on("satellaview"), platforms=("famicom", "satellaview"))
-
-        assert pick_system([several], "nintendo-entertainment-system") == SystemPick(NO_SYSTEM)
-
-    def test_a_switched_off_slug_platform_is_named_beside_a_switched_on_other(self):
-        answer = _answer(_off("satellaview"), _on("snes"), _on("sufami"), platforms=("satellaview", "snes", "sufami"))
-
-        assert pick_system([answer], "satellaview") == SystemPick(SWITCHED_OFF, "satellaview")
-
-    def test_a_slug_platform_with_no_system_here_has_no_system(self):
-        answer = _answer(_on("amiga"), platforms=("amiga", "amigacd32"))
-
-        assert pick_system([answer], "amiga-cd32") == SystemPick(NO_SYSTEM)
-
-    def test_rom_ms_slug_is_never_a_system_of_its_own(self):
-        # The slug's platform is there with its only system switched off: that
-        # one is named, and famicom, switched on, is not taken instead.
-        answer = _answer(_on("famicom"), _off("nes"), platforms=("famicom", "nes"))
-
-        assert pick_system([answer], "nes") == SystemPick(SWITCHED_OFF, "nes")
-
-    def test_a_later_id_naming_the_slug_platform_still_decides(self):
-        several = _answer(_on("famicom"), platforms=("famicom", "nes"))
-        later = _answer(_on("nes"), platforms=("famicom", "nes"))
-
-        assert pick_system([several, later], "nes") == SystemPick(FOUND, "nes")
-
-
-class TestNothingSwitchedOn:
-    def test_a_system_only_switched_off_is_named(self):
-        pick = pick_system([_answer(_off("xbox360"), platforms=("xbox360",))], "xbox360")
-
-        assert (pick.state, pick.system) == (SWITCHED_OFF, "xbox360")
-
-    def test_the_first_switched_off_system_is_named(self):
-        answers = [_answer(_off("atarijaguarcd"), platforms=("atarijaguarcd",)), _answer(_off("jaguar"))]
-
-        assert pick_system(answers, "jaguar-cd").system == "atarijaguarcd"
-
-    @pytest.mark.parametrize(
-        "answers",
-        [[], [_UNMAPPED], [_answer(_absent("n3ds"), platforms=("n3ds",))], [_answer(platforms=("vic20",))]],
-        ids=["no-ids", "unmapped", "only-absent", "real-platform-nothing-here"],
-    )
-    def test_no_system_at_all_is_no_system(self, answers):
-        assert pick_system(answers, "vic-20") == SystemPick(NO_SYSTEM)
+    def test_several_pairs_name_no_one_key(self):
+        assert system_key(_SMS_PAIRS) is None
 
 
 def _platform(
-    state: str, *, system: str | None = None, unasked: str | None = None, source: ArrangedSource | None = RETRODECK
+    state: str,
+    *,
+    system: str | SystemPair | tuple[SystemPair, ...] | None = None,
+    unasked: str | None = None,
+    source: ArrangedSource | None = RETRODECK,
+    named: tuple[SystemPair, ...] = (),
 ) -> PlatformSystem:
-    return PlatformSystem(state, "vic-20", "Commodore VIC-20", system=system, source=source, unasked=unasked)
+    return PlatformSystem(
+        state, "vic-20", "Commodore VIC-20", system=system, source=source, unasked=unasked, named=named
+    )
 
 
 class TestPlatformSystem:
@@ -369,18 +215,60 @@ class TestPlatformSystem:
         assert _platform(SWITCHED_OFF, system="xbox360").taken is None
         assert _platform(NO_SYSTEM).taken is None
 
+    def test_a_found_system_is_taken_as_the_answer_named_it(self):
+        """#2217 D16: a later question names the system as the source's answer named it."""
+        found = _platform(FOUND, system=_SNES, named=(_SNES,))
+
+        assert (found.taken, found.one_system) == (_SNES, _SNES)
+
+    def test_several_systems_are_asked_with_the_platforms_pairs_and_land_nowhere(self):
+        """#2225 D8: questions go to the resolver with the pairs, so it answers alike or not at all; no folder."""
+        several = _platform(SEVERAL, system=_SMS_PAIRS, named=(_MARK3, _MASTERSYSTEM))
+
+        assert (several.taken, several.one_system) == (_SMS_PAIRS, None)
+
+    @pytest.mark.parametrize("state", [NO_SYSTEM, UNMATCHED, NOT_HERE, SWITCHED_OFF, UNASKED])
+    def test_a_platform_with_no_system_to_use_takes_none(self, state):
+        assert _platform(state, system=_SNES).taken is None
+
     def test_no_system_refuses_with_the_facts_the_sentence_is_worded_from(self):
         refusal = _platform(NO_SYSTEM).refusal(GAME_DOWNLOAD)
 
         assert isinstance(refusal, FolderRefused)
         assert refusal.reason == "no_platform_system"
-        assert refusal.details == {"source": "retrodeck", "platform": "Commodore VIC-20", "system": None}
+        assert refusal.details == {"source": "retrodeck", "platform": "Commodore VIC-20", "system": None, "systems": []}
 
     def test_a_switched_off_system_refuses_naming_it(self):
         refusal = _platform(SWITCHED_OFF, system="xbox360").refusal(GAME_DOWNLOAD)
 
         assert refusal.reason == "platform_system_off"
-        assert refusal.details == {"source": "retrodeck", "platform": "Commodore VIC-20", "system": "xbox360"}
+        assert refusal.details == {
+            "source": "retrodeck",
+            "platform": "Commodore VIC-20",
+            "system": "xbox360",
+            "systems": ["xbox360"],
+        }
+
+    @pytest.mark.parametrize(
+        ("state", "named", "reason", "system", "systems"),
+        [
+            (UNMATCHED, (), "platform_unmatched", None, []),
+            (NOT_HERE, (_MARK3,), "platform_system_not_here", "mark3", ["mark3"]),
+            (SEVERAL, (_MARK3, _MASTERSYSTEM), "platform_systems_several", None, ["mark3", "mastersystem"]),
+            (SWITCHED_OFF, (_SNES, _SNESNA), "platform_system_off", None, ["snes", "snesna"]),
+        ],
+    )
+    def test_each_case_with_no_system_to_use_refuses_with_its_own_reason(self, state, named, reason, system, systems):
+        """#2751 D2: each case of a platform with no system says which it is."""
+        refusal = _platform(state, named=named).refusal(GAME_DOWNLOAD)
+
+        assert refusal.reason == reason
+        assert refusal.details == {
+            "source": "retrodeck",
+            "platform": "Commodore VIC-20",
+            "system": system,
+            "systems": systems,
+        }
 
     @pytest.mark.parametrize(
         ("unasked", "reason"),
@@ -426,6 +314,8 @@ class TestPlatformSystem:
         [
             (_platform(NO_SYSTEM), "no_platform_system", {"kind": "retrodeck", "starts_games": True}),
             (_platform(SWITCHED_OFF, system="x"), "platform_system_off", {"kind": "retrodeck", "starts_games": True}),
+            (_platform(UNMATCHED), "platform_unmatched", {"kind": "retrodeck", "starts_games": True}),
+            (_platform(NOT_HERE), "platform_system_not_here", {"kind": "retrodeck", "starts_games": True}),
             (_platform(UNASKED, unasked=NO_SOURCE_DETECTED, source=None), "no_source", None),
         ],
     )
@@ -437,6 +327,17 @@ class TestPlatformSystem:
             "state": "switched_off",
             "source": "retrodeck",
             "system": "xbox360",
+            "systems": ["xbox360"],
+            "platform": "Commodore VIC-20",
+        }
+
+    def test_the_pages_read_every_system_of_several_and_none_as_the_one(self):
+        """#2225 D8: the page says why a platform of several systems gets no link, naming them."""
+        assert _platform(SEVERAL, system=_SMS_PAIRS, named=(_MARK3, _MASTERSYSTEM)).payload() == {
+            "state": "several",
+            "source": "retrodeck",
+            "system": None,
+            "systems": ["mark3", "mastersystem"],
             "platform": "Commodore VIC-20",
         }
 

@@ -55,7 +55,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from _atlas_machines import fixture_machine, select
+from _atlas_machines import asked_system, fixture_machine, select, with_projected_resolutions
 from _factories import _make_conflict_rules
 from _vendor import atlas
 from _vendor.atlas.contract import firmware_contract
@@ -75,6 +75,7 @@ from adapters.atlas_firmware import AtlasPlatformFirmwareAdapter
 from adapters.emulator_sources import EmulatorSourcesAdapter
 from domain.bios_status import BIOS_LEVEL_MISSING, BIOS_LEVEL_OK, BIOS_LEVEL_UNKNOWN
 from domain.emulator_sources import SWITCHED_OFF_SETTING
+from domain.platform_system import SystemArgument, SystemPair
 from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.firmware.store import FirmwareStore, FirmwareStoreConfig
 
@@ -97,109 +98,168 @@ KNOWN_MISMATCHES: dict[tuple[str, str, str, str], tuple[str, bool | None]] = {
     (
         "disc-region",
         "beetle-psx-a-chd-extracted-into-a-cache-directory-atlas-cannot-place",
-        "psx",
+        "Sony - PlayStation",
         "mednafen_psx_libretro.so",
     ): ("partial", None),
     (
         "disc-region",
         "beetle-psx-a-chd-whose-codec-this-runtime-lacks-decides-nothing",
-        "psx",
+        "Sony - PlayStation",
         "mednafen_psx_libretro.so",
     ): ("partial", None),
     (
         "disc-region",
         "beetle-psx-a-core-that-cannot-be-queried-leaves-the-archive-s-entry-unknown",
-        "psx",
+        "Sony - PlayStation",
         "mednafen_psx_libretro.so",
     ): ("partial", None),
     (
         "disc-region",
         "beetle-psx-a-cue-extracted-into-a-cache-directory-atlas-cannot-place",
-        "psx",
+        "Sony - PlayStation",
         "mednafen_psx_libretro.so",
     ): ("partial", None),
     (
         "disc-region",
         "beetle-psx-a-cue-extracted-without-its-bin-is-content-it-cannot-open",
-        "psx",
+        "Sony - PlayStation",
         "mednafen_psx_libretro.so",
     ): ("partial", None),
-    ("disc-region", "beetle-psx-a-first-entry-it-cannot-open-decides-nothing", "psx", "mednafen_psx_libretro.so"): (
+    (
+        "disc-region",
+        "beetle-psx-a-first-entry-it-cannot-open-decides-nothing",
+        "Sony - PlayStation",
+        "mednafen_psx_libretro.so",
+    ): (
         "partial",
         None,
     ),
-    ("disc-region", "beetle-psx-a-sector-that-fails-its-checksum-decides-nothing", "psx", "mednafen_psx_libretro.so"): (
+    (
+        "disc-region",
+        "beetle-psx-a-sector-that-fails-its-checksum-decides-nothing",
+        "Sony - PlayStation",
+        "mednafen_psx_libretro.so",
+    ): (
         "partial",
         None,
     ),
-    ("disc-region", "beetle-psx-a-system-cnf-without-a-boot-line-decides-nothing", "psx", "mednafen_psx_libretro.so"): (
+    (
+        "disc-region",
+        "beetle-psx-a-system-cnf-without-a-boot-line-decides-nothing",
+        "Sony - PlayStation",
+        "mednafen_psx_libretro.so",
+    ): (
         "partial",
         None,
     ),
     (
         "disc-region",
         "beetle-psx-an-archive-entry-in-a-folder-is-extracted-into-the-cache-directory",
-        "psx",
+        "Sony - PlayStation",
         "mednafen_psx_libretro.so",
     ): ("partial", None),
     (
         "disc-region",
         "beetle-psx-an-archive-entry-in-a-folder-is-extracted-nowhere",
-        "psx",
+        "Sony - PlayStation",
         "mednafen_psx_libretro.so",
     ): ("partial", None),
-    ("disc-region", "beetle-psx-an-encrypted-pbp-is-a-format-atlas-does-not-read", "psx", "mednafen_psx_libretro.so"): (
+    (
+        "disc-region",
+        "beetle-psx-an-encrypted-pbp-is-a-format-atlas-does-not-read",
+        "Sony - PlayStation",
+        "mednafen_psx_libretro.so",
+    ): (
         "partial",
         None,
     ),
-    ("disc-region", "beetle-psx-does-not-open-a-bare-bin", "psx", "mednafen_psx_libretro.so"): ("partial", None),
-    ("disc-region", "beetle-psx-does-not-open-a-chd-that-names-a-parent", "psx", "mednafen_psx_libretro.so"): (
+    ("disc-region", "beetle-psx-does-not-open-a-bare-bin", "Sony - PlayStation", "mednafen_psx_libretro.so"): (
         "partial",
         None,
     ),
-    ("disc-region", "beetle-psx-keeps-a-playlist-line-s-leading-spaces", "psx", "mednafen_psx_libretro.so"): (
+    (
+        "disc-region",
+        "beetle-psx-does-not-open-a-chd-that-names-a-parent",
+        "Sony - PlayStation",
+        "mednafen_psx_libretro.so",
+    ): (
         "partial",
         None,
     ),
-    ("disc-region", "beetle-psx-loads-the-toc-beside-a-chd", "psx", "mednafen_psx_libretro.so"): ("partial", None),
-    ("disc-region", "beetle-psx-loads-the-toc-beside-a-cue-sheet", "psx", "mednafen_psx_libretro.so"): (
+    (
+        "disc-region",
+        "beetle-psx-keeps-a-playlist-line-s-leading-spaces",
+        "Sony - PlayStation",
+        "mednafen_psx_libretro.so",
+    ): (
         "partial",
         None,
     ),
-    ("disc-region", "beetle-psx-loads-the-toc-named-for-a-playlist", "psx", "mednafen_psx_libretro.so"): (
+    ("disc-region", "beetle-psx-loads-the-toc-beside-a-chd", "Sony - PlayStation", "mednafen_psx_libretro.so"): (
         "partial",
         None,
     ),
-    ("disc-region", "beetle-psx-opens-a-cdzs-chd", "psx", "mednafen_psx_libretro.so"): ("partial", None),
-    ("disc-region", "beetle-psx-reads-a-pbp-duckstation-and-swanstation-refuse", "psx", "mednafen_psx_libretro.so"): (
+    ("disc-region", "beetle-psx-loads-the-toc-beside-a-cue-sheet", "Sony - PlayStation", "mednafen_psx_libretro.so"): (
         "partial",
         None,
     ),
-    ("disc-region", "beetle-psx-reads-only-a-boot-line-under-cdrom-backslash", "psx", "mednafen_psx_libretro.so"): (
+    (
+        "disc-region",
+        "beetle-psx-loads-the-toc-named-for-a-playlist",
+        "Sony - PlayStation",
+        "mednafen_psx_libretro.so",
+    ): (
         "partial",
         None,
     ),
-    ("disc-region", "beetle-psx-reads-the-serial-before-the-licence", "psx", "mednafen_psx_libretro.so"): (
+    ("disc-region", "beetle-psx-opens-a-cdzs-chd", "Sony - PlayStation", "mednafen_psx_libretro.so"): ("partial", None),
+    (
+        "disc-region",
+        "beetle-psx-reads-a-pbp-duckstation-and-swanstation-refuse",
+        "Sony - PlayStation",
+        "mednafen_psx_libretro.so",
+    ): (
         "partial",
         None,
     ),
-    ("disc-region", "beetle-psx-searches-the-licence-for-words", "psx", "mednafen_psx_libretro.so"): ("partial", None),
+    (
+        "disc-region",
+        "beetle-psx-reads-only-a-boot-line-under-cdrom-backslash",
+        "Sony - PlayStation",
+        "mednafen_psx_libretro.so",
+    ): (
+        "partial",
+        None,
+    ),
+    (
+        "disc-region",
+        "beetle-psx-reads-the-serial-before-the-licence",
+        "Sony - PlayStation",
+        "mednafen_psx_libretro.so",
+    ): (
+        "partial",
+        None,
+    ),
+    ("disc-region", "beetle-psx-searches-the-licence-for-words", "Sony - PlayStation", "mednafen_psx_libretro.so"): (
+        "partial",
+        None,
+    ),
     (
         "firmware",
         "firmware-beetle-psx-a-spelling-linked-out-of-the-root-is-followed",
-        "psx",
+        "Sony - PlayStation",
         "mednafen_psx_libretro.so",
     ): ("partial", None),
     (
         "firmware",
         "firmware-beetle-psx-boots-a-region-image-under-a-later-spelling",
-        "psx",
+        "Sony - PlayStation",
         "mednafen_psx_libretro.so",
     ): ("partial", None),
     (
         "firmware",
         "firmware-beetle-psx-with-an-override-that-names-no-file-falls-back-to-the-region-names",
-        "psx",
+        "Sony - PlayStation",
         "mednafen_psx_libretro.so",
     ): ("partial", None),
     (
@@ -213,12 +273,6 @@ KNOWN_MISMATCHES: dict[tuple[str, str, str, str], tuple[str, bool | None]] = {
         "unknown",
         True,
     ),
-    (
-        "firmware",
-        "emudeck-firmware-inventory-the-marker-cross-check-joins-the-sealed-statement",
-        "gb",
-        "gambatte_libretro.so",
-    ): ("unknown", True),
     ("firmware", "emudeck-firmware-the-marker-cross-check-joins-the-sealed-statement", "gb", "gambatte_libretro.so"): (
         "unknown",
         True,
@@ -238,13 +292,13 @@ KNOWN_MISMATCHES: dict[tuple[str, str, str, str], tuple[str, bool | None]] = {
 
 # Firmware vectors whose installation lists no system, so there is no platform
 # question to put to it: core and inventory questions on such a machine.
-VECTORS_WITHOUT_A_SYSTEM = 33
+VECTORS_WITHOUT_A_SYSTEM = 41
 
 # Firmware vectors with a system to ask about whose answers name no emulator.
-VECTORS_WITHOUT_AN_EMULATOR = 5
+VECTORS_WITHOUT_AN_EMULATOR = 16
 
 # (system, emulator) pairs compared over every firmware vector.
-PAIRS_COMPARED = 303
+PAIRS_COMPARED = 344
 
 # Firmware vectors that ask exactly Tender's question, so their recorded answer
 # is the live one's to equal.
@@ -272,13 +326,28 @@ def _target(inp: dict[str, Any]) -> tuple[Any, tuple[str, ...]]:
     return select(installs, inp["firmware_query"].get("installation")), kinds
 
 
-def _systems(inp: dict[str, Any], installation: Any) -> list[str]:
-    """Every system *installation* lists, and the vector's own where it asks about one."""
-    systems = set(installation.systems().systems)
+def _systems(inp: dict[str, Any], installation: Any) -> list[SystemArgument]:
+    """Every system *installation* lists, as the pair it names it by, and the vector's own where it asks about one.
+
+    The vector's own is the system the resolver resolved it to, where it
+    resolved to one, so a system asked by its name and listed by its pair is
+    asked about once.
+    """
+    systems: set[SystemArgument] = {SystemPair(*system) for system in installation.systems().systems}
     query = inp["firmware_query"]
     if query["kind"] == "system":
-        systems.add(query["system"])
-    return sorted(systems)
+        asked = asked_system(query["system"])
+        resolution = installation.firmware_for_system(asked, verify=True).resolution
+        resolved = None if resolution is None else resolution.system
+        systems.add(asked if resolved is None else SystemPair(*resolved))
+    return sorted(systems, key=repr)
+
+
+def _platform(system: SystemArgument) -> str:
+    """The RomM platform a sweep asks the platform page about for *system*: its key, or the first pair's of several."""
+    if isinstance(system, str):
+        return system
+    return system.key if isinstance(system, SystemPair) else system[0].key
 
 
 def _asks_tenders_question(query: dict[str, Any]) -> bool:
@@ -309,7 +378,12 @@ class _LookingFileStore(FakeFirmwareFileStore):
 
 
 def _service(
-    inp: dict[str, Any], answering: str, detected: tuple[str, ...], emulator: str, files: _LookingFileStore
+    inp: dict[str, Any],
+    answering: str,
+    detected: tuple[str, ...],
+    emulator: str,
+    files: _LookingFileStore,
+    system: SystemArgument,
 ) -> FirmwareService:
     """The firmware service over the vector's machine, its answers from *answering*, judging by *emulator*."""
     log = logging.getLogger(__name__)
@@ -324,7 +398,7 @@ def _service(
     romm_api = FakeRommApi()
     uows = FakeUnitOfWorkFactory()
     clock = FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC))
-    platform_systems = FakePlatformSystems()
+    platform_systems = FakePlatformSystems({_platform(system): system})
 
     def no_folder() -> str:
         raise AssertionError("a status read writes nothing into Tender's folder")
@@ -382,13 +456,14 @@ async def _sweep(stem: str, vector: dict[str, Any]) -> _Sweep:
         answer = installation.firmware_for_system(system, verify=True)
         for emulator, verdict in _verdicts(answer).items():
             files = _LookingFileStore()
-            service = _service(inp, installation.kind, detected, emulator, files)
-            platform = (await service.get_platform_firmware_status(system, system))["platform"]
+            service = _service(inp, installation.kind, detected, emulator, files, system)
+            platform = (await service.get_platform_firmware_status(_platform(system), _platform(system)))["platform"]
             assert platform["active_core"] == emulator
             sweep.compared += 1
             sweep.looked_at.extend(files.looked_at)
             if platform["bios_level"] != _LEVEL_OF_VERDICT[verdict]:
-                sweep.mismatches[(stem, vector["name"], system, emulator)] = (platform["bios_level"], verdict)
+                key = (stem, vector["name"], _platform(system), emulator)
+                sweep.mismatches[key] = (platform["bios_level"], verdict)
     return sweep
 
 
@@ -410,8 +485,8 @@ async def test_the_level_is_the_resolvers_verdict(stem: str, vector: dict[str, A
 def test_the_live_answer_is_the_recorded_one(stem: str, vector: dict[str, Any]) -> None:
     inp = vector["input"]
     installation, _ = _target(inp)
-    answer = installation.firmware_for_system(inp["firmware_query"]["system"], verify=True)
-    assert firmware_contract(answer) == vector["expected"]["firmware"]
+    answer = installation.firmware_for_system(asked_system(inp["firmware_query"]["system"]), verify=True)
+    assert with_projected_resolutions(firmware_contract(answer)) == vector["expected"]["firmware"]
 
 
 def test_the_vectors_asking_tenders_question_are_counted() -> None:

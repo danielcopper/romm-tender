@@ -374,9 +374,9 @@ class GameDetailService:
         if not rom.fs_name or not rom.platform_slug:
             return False
         platform = self._platform_systems.platform_system(rom.platform_slug, source=RETRODECK, ask_romm=False)
-        if platform.taken is None:
+        if platform.one_system is None:
             return False
-        folder = self._retrodeck_folders.download_folder(platform.taken)
+        folder = self._retrodeck_folders.download_folder(platform.one_system)
         if isinstance(folder, FolderRefused):
             return False
         try:

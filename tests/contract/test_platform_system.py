@@ -16,10 +16,12 @@ import pytest
 from domain.platform_system import (
     FOUND,
     NO_SYSTEM,
+    NOT_HERE,
     PLATFORM_IDS_KEY,
     SWITCHED_OFF,
+    UNMATCHED,
     KeptPlatform,
-    PlatformIds,
+    PlatformKeys,
     decode_platform_ids,
 )
 from lib.errors import RommAuthError, RommConnectionError
@@ -95,7 +97,12 @@ async def test_the_download_the_emulator_choice_and_the_bios_answer_ask_one_syst
 
 @pytest.mark.parametrize(
     ("state", "system", "reason"),
-    [(NO_SYSTEM, None, "no_platform_system"), (SWITCHED_OFF, "gbaoff", "platform_system_off")],
+    [
+        (NO_SYSTEM, None, "no_platform_system"),
+        (SWITCHED_OFF, "gbaoff", "platform_system_off"),
+        (UNMATCHED, None, "platform_unmatched"),
+        (NOT_HERE, "gbanothere", "platform_system_not_here"),
+    ],
 )
 async def test_a_platform_with_no_switched_on_system_downloads_nothing_and_says_why(harness, state, system, reason):
     _seed_server(harness)
@@ -113,6 +120,7 @@ async def test_a_platform_with_no_switched_on_system_downloads_nothing_and_says_
         "source": "retrodeck",
         "platform": "Game Boy Advance",
         "system": system,
+        "systems": [] if system is None else [system],
     }
     assert not os.path.exists(os.path.join(harness.roms_root, _SLUG))
     with harness.uow_factory() as uow:
@@ -124,6 +132,7 @@ async def test_a_platform_with_no_switched_on_system_downloads_nothing_and_says_
             "state": state,
             "source": "retrodeck",
             "system": system,
+            "systems": [] if system is None else [system],
             "platform": "Game Boy Advance",
         }
 
@@ -135,9 +144,7 @@ async def test_where_no_ids_are_kept_they_are_read_once_from_rom_m_and_kept(harn
     await harness.endpoints.get_system_core_info(_SLUG, _SLUG)
 
     assert sum(1 for name, *_ in harness.romm.call_log if name == "list_platforms") == 1
-    assert [ids for ids, _slug, _source in harness.platform_systems.asked] == [
-        PlatformIds(igdb_id=24, tgdb_id=5, name="Game Boy Advance")
-    ] * 2
+    assert [keys for keys, _source in harness.platform_systems.asked] == [PlatformKeys(_SLUG, "gba")] * 2
     with harness.uow_factory() as uow:
         kept = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY))
     assert kept == {"gba": _KEPT_GBA}

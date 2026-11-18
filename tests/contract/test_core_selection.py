@@ -431,6 +431,7 @@ _NEOGEOCD_ES_SYSTEMS_XML = """\
   <system>
     <name>neogeocd</name>
     <path>%ROMPATH%/neogeocd</path>
+    <extension>.chd .CHD .cue .CUE .7z .7Z .zip .ZIP</extension>
     <command label="FinalBurn Neo">%EMULATOR_RETROARCH% --subsystem neocd -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%\
 </command>
     <command label="NeoCD">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/neocd_libretro.so %ROM%</command>

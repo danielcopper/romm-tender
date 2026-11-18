@@ -115,7 +115,7 @@ _ROOT = "/home/deck/retrodeck/bios"
 # The system every requirement here is filed under. One spelling, because the
 # resolver holds a core's stated system need to the systems its own requirements
 # name, so the two builders below have to agree about it.
-_REQUIREMENT_SYSTEM = "gba"
+_REQUIREMENT_SYSTEM = ("esde", "gba")
 
 
 def _requirement(

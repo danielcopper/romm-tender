@@ -1,0 +1,6599 @@
+{
+ "schema": 1,
+ "spec": "DESIGN.md — Vocabulary; issue #784 D2, D5, D18. Hand judgements applied by the loader over platform_table.json: 'merge' says two generated rows are one system, a map ('source', 'key', 'rows') replaces one key's row set (relation null, narrowMatch or relatedMatch), 'row_of' states a row's kind. Every entry anchors on (source, key) pairs the sources have at their pins, never on a row name, and carries a reason; the loader cites it by its anchors' own citations, and 'citation' holds only the evidence the entry adds beyond them (null when it adds none).",
+ "overrides": [
+  {
+   "source": "batocera",
+   "key": "snes",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "snes"
+    },
+    {
+     "source": "esde",
+     "key": "sfc"
+    },
+    {
+     "source": "esde",
+     "key": "snesna"
+    }
+   ],
+   "relation": null,
+   "reason": "same key and the same system; the two display names differ in wording only; the platform list (snes) reaches the regional systems ES-DE keeps apart, so the key covers all three",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "n64dd"
+   },
+   "into": {
+    "source": "esde",
+    "key": "n64dd"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "fds"
+   },
+   "into": {
+    "source": "esde",
+    "key": "fds"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "dos"
+   },
+   "into": {
+    "source": "esde",
+    "key": "dos"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "fbneo"
+   },
+   "into": {
+    "source": "esde",
+    "key": "fbneo"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "mame"
+   },
+   "into": {
+    "source": "esde",
+    "key": "mame"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "wasm4"
+   },
+   "into": {
+    "source": "esde",
+    "key": "wasm4"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "pokemini"
+   },
+   "into": {
+    "source": "esde",
+    "key": "pokemini"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "mugen"
+   },
+   "into": {
+    "source": "esde",
+    "key": "mugen"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "flash"
+   },
+   "into": {
+    "source": "esde",
+    "key": "flash"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "megaduck"
+   },
+   "into": {
+    "source": "esde",
+    "key": "megaduck"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "j2me"
+   },
+   "into": {
+    "source": "esde",
+    "key": "j2me"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "amiga1200"
+   },
+   "into": {
+    "source": "esde",
+    "key": "amiga1200"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only (Amiga AGA: the A1200 line)",
+   "citation": null
+  },
+  {
+   "source": "knulli",
+   "key": "snes",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "snes"
+    },
+    {
+     "source": "esde",
+     "key": "sfc"
+    },
+    {
+     "source": "esde",
+     "key": "snesna"
+    }
+   ],
+   "relation": null,
+   "reason": "same key and the same system; the two display names differ in wording only; the platform list (snes) reaches the regional systems ES-DE keeps apart, so the key covers all three",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "knulli",
+    "key": "n64dd"
+   },
+   "into": {
+    "source": "esde",
+    "key": "n64dd"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "knulli",
+    "key": "fds"
+   },
+   "into": {
+    "source": "esde",
+    "key": "fds"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "knulli",
+    "key": "dos"
+   },
+   "into": {
+    "source": "esde",
+    "key": "dos"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "knulli",
+    "key": "fbneo"
+   },
+   "into": {
+    "source": "esde",
+    "key": "fbneo"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "knulli",
+    "key": "mame"
+   },
+   "into": {
+    "source": "esde",
+    "key": "mame"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "knulli",
+    "key": "wasm4"
+   },
+   "into": {
+    "source": "esde",
+    "key": "wasm4"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "knulli",
+    "key": "pokemini"
+   },
+   "into": {
+    "source": "esde",
+    "key": "pokemini"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "knulli",
+    "key": "mugen"
+   },
+   "into": {
+    "source": "esde",
+    "key": "mugen"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "knulli",
+    "key": "flash"
+   },
+   "into": {
+    "source": "esde",
+    "key": "flash"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "knulli",
+    "key": "megaduck"
+   },
+   "into": {
+    "source": "esde",
+    "key": "megaduck"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "knulli",
+    "key": "j2me"
+   },
+   "into": {
+    "source": "esde",
+    "key": "j2me"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "knulli",
+    "key": "amiga1200"
+   },
+   "into": {
+    "source": "esde",
+    "key": "amiga1200"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only (Amiga AGA: the A1200 line)",
+   "citation": null
+  },
+  {
+   "source": "batocera",
+   "key": "odyssey2",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "odyssey2"
+    },
+    {
+     "source": "esde",
+     "key": "videopac"
+    }
+   ],
+   "relation": null,
+   "reason": "same key and the same system; the two display names differ in wording only; ES-DE keeps videopac as a second name for the same console (its platform id was dropped as identical to odyssey2), which Batocera folds into this key",
+   "citation": null
+  },
+  {
+   "source": "knulli",
+   "key": "o2em",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "odyssey2"
+    },
+    {
+     "source": "esde",
+     "key": "videopac"
+    }
+   ],
+   "relation": null,
+   "reason": "KNULLI's pre-43 Batocera key for Odyssey2 (renamed o2em→odyssey2 in Batocera 43); ES-DE keeps videopac as a second name for the same console",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "rocknix",
+    "key": "cps1"
+   },
+   "into": {
+    "source": "esde",
+    "key": "cps1"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "rocknix",
+    "key": "cps2"
+   },
+   "into": {
+    "source": "esde",
+    "key": "cps2"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "rocknix",
+    "key": "cps3"
+   },
+   "into": {
+    "source": "esde",
+    "key": "cps3"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "rocknix",
+    "key": "famicom"
+   },
+   "into": {
+    "source": "esde",
+    "key": "famicom"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "rocknix",
+    "key": "gameandwatch"
+   },
+   "into": {
+    "source": "esde",
+    "key": "gameandwatch"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "rocknix",
+    "key": "mame"
+   },
+   "into": {
+    "source": "esde",
+    "key": "mame"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "rocknix",
+    "key": "moto"
+   },
+   "into": {
+    "source": "esde",
+    "key": "moto"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "rocknix",
+    "key": "msx2"
+   },
+   "into": {
+    "source": "esde",
+    "key": "msx2"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "rocknix",
+    "key": "n64dd"
+   },
+   "into": {
+    "source": "esde",
+    "key": "n64dd"
+   },
+   "reason": "same key and the same system; the two display names differ in wording only",
+   "citation": null
+  },
+  {
+   "source": "rocknix",
+   "key": "pc",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "dos"
+    }
+   ],
+   "relation": "relatedMatch",
+   "reason": "ROCKNIX's 'pc' is its DOS system (display name 'DOS', DOSBox cores), not ES-DE's IBM PC system; related, not the same scope",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "3ds"
+   },
+   "into": {
+    "source": "esde",
+    "key": "n3ds"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "amiga500"
+   },
+   "into": {
+    "source": "esde",
+    "key": "amiga"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "amigacdtv"
+   },
+   "into": {
+    "source": "esde",
+    "key": "cdtv"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "astrocade"
+   },
+   "into": {
+    "source": "esde",
+    "key": "astrocde"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "c20"
+   },
+   "into": {
+    "source": "esde",
+    "key": "vic20"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "cdi"
+   },
+   "into": {
+    "source": "esde",
+    "key": "cdimono1"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "cplus4"
+   },
+   "into": {
+    "source": "esde",
+    "key": "plus4"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "dragon64"
+   },
+   "into": {
+    "source": "esde",
+    "key": "dragon32"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "gamecube"
+   },
+   "into": {
+    "source": "esde",
+    "key": "gc"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "jaguar"
+   },
+   "into": {
+    "source": "esde",
+    "key": "atarijaguar"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "jaguarcd"
+   },
+   "into": {
+    "source": "esde",
+    "key": "atarijaguarcd"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "lynx"
+   },
+   "into": {
+    "source": "esde",
+    "key": "atarilynx"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "oricatmos"
+   },
+   "into": {
+    "source": "esde",
+    "key": "oric"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "sg1000"
+   },
+   "into": {
+    "source": "esde",
+    "key": "sg-1000"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "thomson"
+   },
+   "into": {
+    "source": "esde",
+    "key": "moto"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "trs80"
+   },
+   "into": {
+    "source": "esde",
+    "key": "trs-80"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "wswan"
+   },
+   "into": {
+    "source": "esde",
+    "key": "wonderswan"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "wswanc"
+   },
+   "into": {
+    "source": "esde",
+    "key": "wonderswancolor"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "batocera",
+    "key": "xegs"
+   },
+   "into": {
+    "source": "esde",
+    "key": "atarixe"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "knulli",
+    "key": "bbc"
+   },
+   "into": {
+    "source": "esde",
+    "key": "bbcmicro"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "knulli",
+    "key": "iortcw"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "rtcw"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "knulli",
+    "key": "xash3d_fwgs"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "halflife"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "knulli",
+    "key": "msu-md"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "megadrive-msu"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "knulli",
+    "key": "plugnplay"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "tvgames"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "rocknix",
+    "key": "fbn"
+   },
+   "into": {
+    "source": "esde",
+    "key": "fbneo"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "rocknix",
+    "key": "megadrive-japan"
+   },
+   "into": {
+    "source": "esde",
+    "key": "megadrivejp"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "rocknix",
+    "key": "pc-8800"
+   },
+   "into": {
+    "source": "esde",
+    "key": "pc88"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "rocknix",
+    "key": "pc-9800"
+   },
+   "into": {
+    "source": "esde",
+    "key": "pc98"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "rocknix",
+    "key": "pico-8"
+   },
+   "into": {
+    "source": "esde",
+    "key": "pico8"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "rocknix",
+    "key": "segamodel3"
+   },
+   "into": {
+    "source": "esde",
+    "key": "model3"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "rocknix",
+    "key": "snesmsu1"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "snes-msu1"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "rocknix",
+    "key": "st-v"
+   },
+   "into": {
+    "source": "esde",
+    "key": "stv"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "rocknix",
+    "key": "tg16cd"
+   },
+   "into": {
+    "source": "esde",
+    "key": "tg-cd"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "rocknix",
+    "key": "tic-80"
+   },
+   "into": {
+    "source": "esde",
+    "key": "tic80"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "rocknix",
+    "key": "c128"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "c128"
+   },
+   "reason": "renamed key: the same system under another spelling (batocera-retrobat.md §7 rename list, checked against both display names)",
+   "citation": null
+  },
+  {
+   "source": "rocknix",
+   "key": "neocd",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "neogeocd"
+    },
+    {
+     "source": "esde",
+     "key": "neogeocdjp"
+    }
+   ],
+   "relation": null,
+   "reason": "renamed key (batocera-retrobat.md §7): ROCKNIX's Neo Geo CD folder; ROCKNIX has no Japanese key of its own, so it covers both ES-DE systems",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "atom"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "atom"
+   },
+   "reason": "one system: the Batocera display name names the platform RomM's slug stands for",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "bk"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "bk"
+   },
+   "reason": "one system: the Batocera display name names the platform RomM's slug stands for",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "c128"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "c128"
+   },
+   "reason": "one system: the Batocera display name names the platform RomM's slug stands for",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "epoch-cassette-vision"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "cassettevision"
+   },
+   "reason": "one system: the Batocera display name names the platform RomM's slug stands for",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "colour-genie"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "cgenie"
+   },
+   "reason": "one system: the Batocera display name names the platform RomM's slug stands for",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "commander-x16"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "commanderx16"
+   },
+   "reason": "one system: the Batocera display name names the platform RomM's slug stands for",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "enterprise"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "enterprise"
+   },
+   "reason": "one system: the Batocera display name names the platform RomM's slug stands for",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "gp32"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "gp32"
+   },
+   "reason": "one system: the Batocera display name names the platform RomM's slug stands for",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "hikaru"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "hikaru"
+   },
+   "reason": "one system: the Batocera display name names the platform RomM's slug stands for",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "casio-loopy"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "loopy"
+   },
+   "reason": "one system: the Batocera display name names the platform RomM's slug stands for",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "trs-80-mc-10"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "mc10"
+   },
+   "reason": "one system: the Batocera display name names the platform RomM's slug stands for",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "pdp1"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "pdp1"
+   },
+   "reason": "one system: the Batocera display name names the platform RomM's slug stands for",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "casio-pv-2000"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "pv2000"
+   },
+   "reason": "one system: the Batocera display name names the platform RomM's slug stands for",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "sc3000"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "sc3000"
+   },
+   "reason": "one system: the Batocera display name names the platform RomM's slug stands for",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "socrates"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "socrates"
+   },
+   "reason": "one system: the Batocera display name names the platform RomM's slug stands for",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "super-vision-8000"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "sv8000"
+   },
+   "reason": "one system: the Batocera display name names the platform RomM's slug stands for",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "ios"
+   },
+   "into": {
+    "source": "rocknix",
+    "key": "ios"
+   },
+   "reason": "one system: the Batocera display name names the platform RomM's slug stands for",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "advanced-pico-beena"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "beena"
+   },
+   "reason": "one system, verified at both sources: Batocera's display name equals the name RomM's own IGDB record gives the slug",
+   "citation": "romm:backend/adapters/services/igdb.py:295"
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "nec-pc-6000-series"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "pc60"
+   },
+   "reason": "one system, verified at both sources: Batocera's display name equals the name RomM's own IGDB record gives the slug (PC-6000 / NEC PC-6000 Series)",
+   "citation": "romm:backend/adapters/services/igdb.py:1513"
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "sega-pico"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "pico"
+   },
+   "reason": "one system, verified at both sources: Batocera's display name equals the name RomM's own IGDB record gives the slug",
+   "citation": "romm:backend/adapters/services/igdb.py:2216"
+  },
+  {
+   "source": "romm",
+   "key": "sharp-mz-80b20002500",
+   "rows": [
+    {
+     "source": "batocera",
+     "key": "mz2000"
+    },
+    {
+     "source": "batocera",
+     "key": "mz2500"
+    }
+   ],
+   "relation": null,
+   "reason": "RomM's combined slug for the MZ-80B/2000/2500 line covers both Batocera keys (RomM aliases mz2500 to it; mz2000 is the same line)",
+   "citation": null
+  },
+  {
+   "source": "romm-folder",
+   "key": "sharp-mz-80b20002500",
+   "rows": [
+    {
+     "source": "batocera",
+     "key": "mz2000"
+    },
+    {
+     "source": "batocera",
+     "key": "mz2500"
+    }
+   ],
+   "relation": null,
+   "reason": "RomM's combined slug for the MZ-80B/2000/2500 line covers both Batocera keys (RomM aliases mz2500 to it; mz2000 is the same line) — this romm-folder key reaches the table through the slug sharp-mz-80b20002500",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "interton-vc-4000"
+   },
+   "into": {
+    "source": "romm",
+    "key": "vc-4000"
+   },
+   "reason": "a RomM duplicate: two slugs for one console (RomM PR #5359)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "apple-pippin"
+   },
+   "into": {
+    "source": "romm",
+    "key": "pippin"
+   },
+   "reason": "a RomM duplicate: two slugs for one console (RomM PR #5359)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "tandy-vis"
+   },
+   "into": {
+    "source": "romm",
+    "key": "vis"
+   },
+   "reason": "a RomM duplicate: two slugs for one system (RomM PR #5359)",
+   "citation": null
+  },
+  {
+   "source": "romm",
+   "key": "atari8bit",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "atari800"
+    },
+    {
+     "source": "esde",
+     "key": "atarixe"
+    }
+   ],
+   "relation": null,
+   "reason": "RomM's Atari 8-bit family slug covers the two Atari 8-bit computer systems ES-DE keeps apart (Wikidata's Atari 8-bit family item carries IGDB atari8bit and ES-DE's ScreenScraper id for both)",
+   "citation": "wikidata:Q249075"
+  },
+  {
+   "source": "igdb",
+   "key": "65",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "atari800"
+    },
+    {
+     "source": "esde",
+     "key": "atarixe"
+    }
+   ],
+   "relation": null,
+   "reason": "RomM's Atari 8-bit family slug covers the two Atari 8-bit computer systems ES-DE keeps apart (Wikidata's Atari 8-bit family item carries IGDB atari8bit and ES-DE's ScreenScraper id for both) — this igdb key reaches the table through the slug atari8bit",
+   "citation": "romm:backend/utils/platform_slugs.py:55; wikidata:Q249075"
+  },
+  {
+   "source": "igdb",
+   "key": "atari8bit",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "atari800"
+    },
+    {
+     "source": "esde",
+     "key": "atarixe"
+    }
+   ],
+   "relation": null,
+   "reason": "RomM's Atari 8-bit family slug covers the two Atari 8-bit computer systems ES-DE keeps apart (Wikidata's Atari 8-bit family item carries IGDB atari8bit and ES-DE's ScreenScraper id for both) — this igdb key reaches the table through the slug atari8bit",
+   "citation": "romm:backend/utils/platform_slugs.py:55; wikidata:Q249075"
+  },
+  {
+   "source": "romm-folder",
+   "key": "atari8bit",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "atari800"
+    },
+    {
+     "source": "esde",
+     "key": "atarixe"
+    }
+   ],
+   "relation": null,
+   "reason": "RomM's Atari 8-bit family slug covers the two Atari 8-bit computer systems ES-DE keeps apart (Wikidata's Atari 8-bit family item carries IGDB atari8bit and ES-DE's ScreenScraper id for both) — this romm-folder key reaches the table through the slug atari8bit",
+   "citation": "wikidata:Q249075"
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "amiga-cd"
+   },
+   "into": {
+    "source": "esde",
+    "key": "cdtv"
+   },
+   "reason": "RomM's Amiga CD slug is the CDTV, the CD-based Amiga ES-DE names cdtv",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "apple"
+   },
+   "into": {
+    "source": "esde",
+    "key": "apple2"
+   },
+   "reason": "RomM's apple slug is the Apple II family ES-DE names apple2",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "zx-spectrum-next"
+   },
+   "into": {
+    "source": "esde",
+    "key": "zxnext"
+   },
+   "reason": "one system: ES-DE's 'Sinclair ZX Spectrum Next' is RomM's ZX Spectrum Next slug",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "emudeck",
+    "key": "primehacks"
+   },
+   "into": {
+    "source": "retrodeck",
+    "key": "primehack"
+   },
+   "reason": "EmuDeck's PrimeHack folder is RetroDECK's primehack system (the Metroid Prime Trilogy fork of Dolphin)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "emudeck",
+    "key": "cavestory"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "cavestory"
+   },
+   "reason": "one game port: EmuDeck's Cave Story folder (an ES-DE system before v2.2.0) and Batocera's",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "emudeck",
+    "key": "moonlight"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "moonlight"
+   },
+   "reason": "one application: the Moonlight game-streaming client in both catalogues",
+   "citation": null
+  },
+  {
+   "source": "esde-platform",
+   "key": "atomiswave",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "atomiswave"
+    }
+   ],
+   "relation": null,
+   "reason": "a platform id no system carries since ES-DE moved the system's tag to arcade (CHANGELOG v1.2.4); the id names that system",
+   "citation": null
+  },
+  {
+   "source": "esde-platform",
+   "key": "naomi",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "naomi"
+    }
+   ],
+   "relation": null,
+   "reason": "a platform id no system carries since ES-DE moved the system's tag to arcade (CHANGELOG v1.2.4); the id names that system",
+   "citation": null
+  },
+  {
+   "source": "esde-platform",
+   "key": "segapico",
+   "rows": [
+    {
+     "source": "batocera",
+     "key": "pico"
+    }
+   ],
+   "relation": null,
+   "reason": "a platform id no ES-DE system carries; it names the Sega Pico, which Batocera keeps as pico",
+   "citation": null
+  },
+  {
+   "source": "esde-platform",
+   "key": "snes-msu1",
+   "rows": [
+    {
+     "source": "batocera",
+     "key": "snes-msu1"
+    }
+   ],
+   "relation": null,
+   "reason": "a platform id no ES-DE system carries (it 'requires custom system config', CHANGELOG); it names the MSU-1 subset Batocera keeps as snes-msu1",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Amstrad - CPC",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "amstradcpc"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Amstrad - GX4000",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "gx4000"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Apple - II",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "apple2"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Atari - 5200",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "atari5200"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Atari - 7800",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "atari7800"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Atari - Jaguar",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "atarijaguar"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Atari - Jaguar CD",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "atarijaguarcd"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Atomiswave",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "atomiswave"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Bandai - WonderSwan",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "wonderswan"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Bandai - WonderSwan Color",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "wonderswancolor"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Coleco - ColecoVision",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "colecovision"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Commodore - Amiga",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "amiga"
+    },
+    {
+     "source": "esde",
+     "key": "amiga600"
+    },
+    {
+     "source": "esde",
+     "key": "amiga1200"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Commodore - CD32",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "amigacd32"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Commodore - CDTV",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "cdtv"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "DOOM",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "doom"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "DOS",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "dos"
+    },
+    {
+     "source": "esde",
+     "key": "pc"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Emerson - Arcadia 2001",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "arcadia"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Epoch - Super Cassette Vision",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "scv"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Fairchild - Channel F",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "channelf"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Fujitsu - FM Towns",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "fmtowns"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "GCE - Vectrex",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "vectrex"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Handheld Electronic Game",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "gameandwatch"
+    },
+    {
+     "source": "esde",
+     "key": "lcdgames"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Magnavox - Odyssey2",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "odyssey2"
+    },
+    {
+     "source": "esde",
+     "key": "videopac"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Mattel - Intellivision",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "intellivision"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Microsoft - MSX",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "msx"
+    },
+    {
+     "source": "esde",
+     "key": "msx1"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Microsoft - MSX2",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "msx2"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Microsoft - Xbox",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "xbox"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Microsoft - Xbox 360",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "xbox360"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Mobile - J2ME",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "j2me"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "NEC - PC Engine - TurboGrafx 16",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "pcengine"
+    },
+    {
+     "source": "esde",
+     "key": "tg16"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "NEC - PC Engine CD - TurboGrafx-CD",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "pcenginecd"
+    },
+    {
+     "source": "esde",
+     "key": "tg-cd"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Nintendo - Game Boy",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "gb"
+    },
+    {
+     "source": "esde",
+     "key": "sgb"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Nintendo - Game Boy Advance",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "gba"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Nintendo - Game Boy Color",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "gbc"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Nintendo - GameCube",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "gc"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Nintendo - Nintendo 64",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "n64"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Nintendo - Nintendo 64DD",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "n64dd"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Nintendo - Nintendo Entertainment System",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "nes"
+    },
+    {
+     "source": "esde",
+     "key": "famicom"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Nintendo - Satellaview",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "satellaview"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Nintendo - Super Nintendo Entertainment System",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "snes"
+    },
+    {
+     "source": "esde",
+     "key": "sfc"
+    },
+    {
+     "source": "esde",
+     "key": "snesna"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Nintendo - Wii",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "wii"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Quake",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "quake"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "SAM coupe",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "samcoupe"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "SNK - Neo Geo",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "neogeo"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "SNK - Neo Geo CD",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "neogeocd"
+    },
+    {
+     "source": "esde",
+     "key": "neogeocdjp"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "SNK - Neo Geo Pocket",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "ngp"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "SNK - Neo Geo Pocket Color",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "ngpc"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Sega - Dreamcast",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "dreamcast"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Sega - Game Gear",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "gamegear"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Sega - Master System - Mark III",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "mastersystem"
+    },
+    {
+     "source": "esde",
+     "key": "mark3"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Sega - Mega Drive - Genesis",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "genesis"
+    },
+    {
+     "source": "esde",
+     "key": "megadrive"
+    },
+    {
+     "source": "esde",
+     "key": "megadrivejp"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Sega - Mega-CD - Sega CD",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "segacd"
+    },
+    {
+     "source": "esde",
+     "key": "megacd"
+    },
+    {
+     "source": "esde",
+     "key": "megacdjp"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Sega - Model 3",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "model3"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Sega - Naomi",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "naomi"
+    },
+    {
+     "source": "esde",
+     "key": "naomigd"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Sega - Naomi 2",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "naomi2"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Sega - SG-1000",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "sg-1000"
+    },
+    {
+     "source": "esde",
+     "key": "multivision"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Sega - ST-V",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "stv"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Sony - PlayStation 3",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "ps3"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Sony - PlayStation Vita",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "psvita"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Spectravideo - SVI-318 - SVI-328",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "spectravideo"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Watara - Supervision",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "supervision"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Sega - PICO",
+   "rows": [
+    {
+     "source": "batocera",
+     "key": "pico"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Philips - Videopac+",
+   "rows": [
+    {
+     "source": "batocera",
+     "key": "videopacplus"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Interton - VC 4000",
+   "rows": [
+    {
+     "source": "batocera",
+     "key": "vc4000"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Epoch - Cassette Vision",
+   "rows": [
+    {
+     "source": "batocera",
+     "key": "cassettevision"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Enterprise - 128",
+   "rows": [
+    {
+     "source": "batocera",
+     "key": "enterprise"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Commodore - PET",
+   "rows": [
+    {
+     "source": "batocera",
+     "key": "pet"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "BK-0010/BK-0011",
+   "rows": [
+    {
+     "source": "batocera",
+     "key": "bk"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Videoton - TV-Computer",
+   "rows": [
+    {
+     "source": "batocera",
+     "key": "tvc"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "CHIP-8",
+   "rows": [
+    {
+     "source": "rocknix",
+     "key": "chip-8"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Nintendo - Nintendo DSi",
+   "rows": [
+    {
+     "source": "romm",
+     "key": "nintendo-dsi"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Sony - PocketStation",
+   "rows": [
+    {
+     "source": "romm",
+     "key": "pocketstation"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "VM Labs - NUON",
+   "rows": [
+    {
+     "source": "romm",
+     "key": "nuon"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Playdia",
+   "rows": [
+    {
+     "source": "romm",
+     "key": "playdia"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "HyperScan",
+   "rows": [
+    {
+     "source": "romm",
+     "key": "hyperscan"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Elektor - TV Games Computer",
+   "rows": [
+    {
+     "source": "romm",
+     "key": "elektor"
+    }
+   ],
+   "relation": null,
+   "reason": "the database name is this system's: its live core declares it, and the name says so",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Nintendo - Wii (Digital)",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "wii"
+    }
+   ],
+   "relation": "narrowMatch",
+   "reason": "the database covers only part of this system's content (the WiiWare / Virtual Console digital titles)",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Nintendo - Nintendo DS (Download Play)",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "nds"
+    }
+   ],
+   "relation": "narrowMatch",
+   "reason": "the database covers only part of this system's content (DS Download Play titles)",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Nintendo - Nintendo DSi (Digital)",
+   "rows": [
+    {
+     "source": "romm",
+     "key": "nintendo-dsi"
+    }
+   ],
+   "relation": "narrowMatch",
+   "reason": "the database covers only part of this system's content (DSiWare)",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Nintendo - Nintendo DSi Decrypted",
+   "rows": [
+    {
+     "source": "romm",
+     "key": "nintendo-dsi"
+    }
+   ],
+   "relation": "narrowMatch",
+   "reason": "the database covers only part of this system's content (decrypted DSi images)",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Nintendo - Game Boy Advance (e-Cards)",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "gba"
+    }
+   ],
+   "relation": "narrowMatch",
+   "reason": "the database covers only part of this system's content (e-Reader cards)",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "Sinclair - ZX Spectrum +3",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "zxspectrum"
+    }
+   ],
+   "relation": "narrowMatch",
+   "reason": "the database covers only part of this system's content (+3 disk images)",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "MAME",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "arcade"
+    },
+    {
+     "source": "esde",
+     "key": "mame"
+    }
+   ],
+   "relation": "relatedMatch",
+   "reason": "a romset of one emulator release, not a platform: it overlaps the systems whose live cores load it (libretro.md §5)",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "MAME 2000",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "arcade"
+    },
+    {
+     "source": "esde",
+     "key": "cps"
+    },
+    {
+     "source": "esde",
+     "key": "cps1"
+    },
+    {
+     "source": "esde",
+     "key": "cps2"
+    },
+    {
+     "source": "esde",
+     "key": "cps3"
+    },
+    {
+     "source": "esde",
+     "key": "mame"
+    }
+   ],
+   "relation": "relatedMatch",
+   "reason": "a romset of one emulator release, not a platform: it overlaps the systems whose live cores load it (libretro.md §5)",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "MAME 2003",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "arcade"
+    },
+    {
+     "source": "esde",
+     "key": "cps"
+    },
+    {
+     "source": "esde",
+     "key": "cps1"
+    },
+    {
+     "source": "esde",
+     "key": "cps2"
+    },
+    {
+     "source": "esde",
+     "key": "cps3"
+    },
+    {
+     "source": "esde",
+     "key": "mame"
+    }
+   ],
+   "relation": "relatedMatch",
+   "reason": "a romset of one emulator release, not a platform: it overlaps the systems whose live cores load it (libretro.md §5)",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "MAME 2003-Plus",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "arcade"
+    },
+    {
+     "source": "esde",
+     "key": "cps"
+    },
+    {
+     "source": "esde",
+     "key": "cps1"
+    },
+    {
+     "source": "esde",
+     "key": "cps2"
+    },
+    {
+     "source": "esde",
+     "key": "cps3"
+    },
+    {
+     "source": "esde",
+     "key": "mame"
+    }
+   ],
+   "relation": "relatedMatch",
+   "reason": "a romset of one emulator release, not a platform: it overlaps the systems whose live cores load it (libretro.md §5)",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "MAME 2010",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "arcade"
+    },
+    {
+     "source": "esde",
+     "key": "cps"
+    },
+    {
+     "source": "esde",
+     "key": "cps1"
+    },
+    {
+     "source": "esde",
+     "key": "cps2"
+    },
+    {
+     "source": "esde",
+     "key": "cps3"
+    },
+    {
+     "source": "esde",
+     "key": "mame"
+    }
+   ],
+   "relation": "relatedMatch",
+   "reason": "a romset of one emulator release, not a platform: it overlaps the systems whose live cores load it (libretro.md §5)",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "HBMAME",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "arcade"
+    },
+    {
+     "source": "esde",
+     "key": "mame"
+    }
+   ],
+   "relation": "relatedMatch",
+   "reason": "a romset of one emulator release, not a platform: it overlaps the systems whose live cores load it (libretro.md §5)",
+   "citation": null
+  },
+  {
+   "source": "libretro",
+   "key": "FBNeo - Arcade Games",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "arcade"
+    },
+    {
+     "source": "esde",
+     "key": "cps"
+    },
+    {
+     "source": "esde",
+     "key": "cps1"
+    },
+    {
+     "source": "esde",
+     "key": "cps2"
+    },
+    {
+     "source": "esde",
+     "key": "cps3"
+    },
+    {
+     "source": "esde",
+     "key": "fbneo"
+    },
+    {
+     "source": "esde",
+     "key": "mame"
+    },
+    {
+     "source": "esde",
+     "key": "neogeo"
+    }
+   ],
+   "relation": "relatedMatch",
+   "reason": "a romset of one emulator release, not a platform: it overlaps the systems whose live cores load it (libretro.md §5)",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "libretro",
+    "key": "Cave Story"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "cavestory"
+   },
+   "reason": "the database is this game port's, and the same port has this folder",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "libretro",
+    "key": "Cannonball"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "cannonball"
+   },
+   "reason": "the database is this game port's, and the same port has this folder",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "libretro",
+    "key": "MrBoom"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "mrboom"
+   },
+   "reason": "the database is this game port's, and the same port has this folder",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "libretro",
+    "key": "Tomb Raider"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "traider1"
+   },
+   "reason": "the database is this game port's, and the same port has this folder",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "libretro",
+    "key": "Quake II"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "quake2"
+   },
+   "reason": "the database is this game port's, and the same port has this folder",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "libretro",
+    "key": "Quake III"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "quake3"
+   },
+   "reason": "the database is this game port's, and the same port has this folder",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "libretro",
+    "key": "Doom 3"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "doom3"
+   },
+   "reason": "the database is this game port's, and the same port has this folder",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "libretro",
+    "key": "Flashback"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "reminiscence"
+   },
+   "reason": "the database is this game port's, and the same port has this folder",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "libretro",
+    "key": "Rick Dangerous"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "xrick"
+   },
+   "reason": "the database is this game port's, and the same port has this folder",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "libretro",
+    "key": "Tyrian"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "tyrian"
+   },
+   "reason": "the database is this game port's, and the same port has this folder",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "libretro",
+    "key": "Duke Nukem 3D"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "eduke32"
+   },
+   "reason": "the database is this game port's, and the same port has this folder",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "libretro",
+    "key": "Wolfenstein 3D"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "ecwolf"
+   },
+   "reason": "the database is this game port's, and the same port has this folder",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "libretro",
+    "key": "BennuGD"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "bennugd"
+   },
+   "reason": "the database is this game port's, and the same port has this folder",
+   "citation": null
+  },
+  {
+   "merge": {
+    "source": "libretro",
+    "key": "DICE"
+   },
+   "into": {
+    "source": "batocera",
+    "key": "dice"
+   },
+   "reason": "the database is this game port's, and the same port has this folder",
+   "citation": null
+  },
+  {
+   "source": "igdb",
+   "key": "19",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "snes"
+    },
+    {
+     "source": "esde",
+     "key": "snesna"
+    },
+    {
+     "source": "batocera",
+     "key": "snes-msu1"
+    }
+   ],
+   "relation": null,
+   "reason": "RomM's IGDB record 19 (slug snes) is the 'Super Nintendo Entertainment System', the console ES-DE keeps under two systems with one full name, snes and snesna ('Nintendo SNES (Super Nintendo)'); the slug join reached only snes (and the MSU-1 row RomM folds into its snes slug), so the record is placed on both ES-DE systems. The Super Famicom is IGDB's own record 58 (slug sfam), already on ES-DE's sfc",
+   "citation": "romm:backend/adapters/services/igdb.py:2339; romm:backend/adapters/services/igdb.py:2254; es-de:resources/systems/linux/es_systems.xml:2028"
+  },
+  {
+   "source": "igdb",
+   "key": "snes",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "snes"
+    },
+    {
+     "source": "esde",
+     "key": "snesna"
+    },
+    {
+     "source": "batocera",
+     "key": "snes-msu1"
+    }
+   ],
+   "relation": null,
+   "reason": "RomM's IGDB record 19 (slug snes) is the 'Super Nintendo Entertainment System', the console ES-DE keeps under two systems with one full name, snes and snesna ('Nintendo SNES (Super Nintendo)'); the slug join reached only snes (and the MSU-1 row RomM folds into its snes slug), so the record is placed on both ES-DE systems. The Super Famicom is IGDB's own record 58 (slug sfam), already on ES-DE's sfc",
+   "citation": "romm:backend/adapters/services/igdb.py:2339; romm:backend/adapters/services/igdb.py:2254; es-de:resources/systems/linux/es_systems.xml:2028"
+  },
+  {
+   "source": "igdb",
+   "key": "114",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "amigacd32"
+    }
+   ],
+   "relation": null,
+   "reason": "RomM resolves the folder amigacdtv to its amiga-cd32 slug (platform_aliases.py:20), so the ids its lists give that slug reached the CDTV as well; ES-DE's scraper map gives the CDTV its own ScreenScraper id 129 and the CD32 130, so the CD32's ids are placed on the CD32 alone",
+   "citation": "romm:backend/utils/platform_aliases.py:20; es-de:es-app/src/scrapers/ScreenScraper.cpp:62 (amigacd32); es-de:es-app/src/scrapers/ScreenScraper.cpp:63 (cdtv)"
+  },
+  {
+   "source": "igdb",
+   "key": "amiga-cd32",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "amigacd32"
+    }
+   ],
+   "relation": null,
+   "reason": "RomM resolves the folder amigacdtv to its amiga-cd32 slug (platform_aliases.py:20), so the ids its lists give that slug reached the CDTV as well; ES-DE's scraper map gives the CDTV its own ScreenScraper id 129 and the CD32 130, so the CD32's ids are placed on the CD32 alone",
+   "citation": "romm:backend/utils/platform_aliases.py:20; es-de:es-app/src/scrapers/ScreenScraper.cpp:62 (amigacd32); es-de:es-app/src/scrapers/ScreenScraper.cpp:63 (cdtv)"
+  },
+  {
+   "source": "screenscraper",
+   "key": "130",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "amigacd32"
+    }
+   ],
+   "relation": null,
+   "reason": "RomM resolves the folder amigacdtv to its amiga-cd32 slug (platform_aliases.py:20), so the ids its lists give that slug reached the CDTV as well; ES-DE's scraper map gives the CDTV its own ScreenScraper id 129 and the CD32 130, so the CD32's ids are placed on the CD32 alone",
+   "citation": "romm:backend/utils/platform_aliases.py:20; es-de:es-app/src/scrapers/ScreenScraper.cpp:63 (cdtv)"
+  },
+  {
+   "source": "igdb",
+   "key": "22",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "gbc"
+    },
+    {
+     "source": "batocera",
+     "key": "gbc2players"
+    }
+   ],
+   "relation": null,
+   "reason": "RomM resolves the folders sgb and sgb-msu1 to its gbc slug (platform_aliases.py:123-124), so the ids its lists give that slug reached the Super Game Boy as well; ES-DE's scraper map gives the Super Game Boy its own ScreenScraper id 127 and the Game Boy Color 10, so the Game Boy Color's ids are placed on the Game Boy Color and Batocera's two-player Game Boy Color system alone",
+   "citation": "romm:backend/utils/platform_aliases.py:123; romm:backend/utils/platform_aliases.py:124; es-de:es-app/src/scrapers/ScreenScraper.cpp:100 (gbc); es-de:es-app/src/scrapers/ScreenScraper.cpp:101 (sgb)"
+  },
+  {
+   "source": "igdb",
+   "key": "gbc",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "gbc"
+    },
+    {
+     "source": "batocera",
+     "key": "gbc2players"
+    }
+   ],
+   "relation": null,
+   "reason": "RomM resolves the folders sgb and sgb-msu1 to its gbc slug (platform_aliases.py:123-124), so the ids its lists give that slug reached the Super Game Boy as well; ES-DE's scraper map gives the Super Game Boy its own ScreenScraper id 127 and the Game Boy Color 10, so the Game Boy Color's ids are placed on the Game Boy Color and Batocera's two-player Game Boy Color system alone",
+   "citation": "romm:backend/utils/platform_aliases.py:123; romm:backend/utils/platform_aliases.py:124; es-de:es-app/src/scrapers/ScreenScraper.cpp:100 (gbc); es-de:es-app/src/scrapers/ScreenScraper.cpp:101 (sgb)"
+  },
+  {
+   "source": "screenscraper",
+   "key": "10",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "gbc"
+    },
+    {
+     "source": "batocera",
+     "key": "gbc2players"
+    }
+   ],
+   "relation": null,
+   "reason": "RomM resolves the folders sgb and sgb-msu1 to its gbc slug (platform_aliases.py:123-124), so the ids its lists give that slug reached the Super Game Boy as well; ES-DE's scraper map gives the Super Game Boy its own ScreenScraper id 127 and the Game Boy Color 10, so the Game Boy Color's ids are placed on the Game Boy Color and Batocera's two-player Game Boy Color system alone",
+   "citation": "romm:backend/utils/platform_aliases.py:123; romm:backend/utils/platform_aliases.py:124; es-de:es-app/src/scrapers/ScreenScraper.cpp:101 (sgb)"
+  },
+  {
+   "merge": {
+    "source": "romm",
+    "key": "pico"
+   },
+   "into": {
+    "source": "esde",
+    "key": "pico8"
+   },
+   "reason": "RomM's pico slug is PICO-8 in two of its provider tables (ScreenScraper 'Pico-8', ss_handler.py:1799; LaunchBox 'PICO-8', launchbox_handler/platforms.py:142); its MobyGames table names it 'PICO', the Sega Pico (moby_handler.py:957) — that conflict is kept as data here, and the Sega Pico is RomM's sega-pico",
+   "citation": "romm:backend/handler/metadata/ss_handler.py:1799; romm:backend/handler/metadata/launchbox_handler/platforms.py:142; romm:backend/handler/metadata/moby_handler.py:957"
+  },
+  {
+   "source": "screenscraper",
+   "key": "53",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "atomiswave"
+    }
+   ],
+   "relation": null,
+   "reason": "ES-DE's scraper map gives this id to a platform id no ES-DE system carries; it names the same system the platform id does (atomiswave)",
+   "citation": null
+  },
+  {
+   "source": "screenscraper",
+   "key": "56",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "naomi"
+    }
+   ],
+   "relation": null,
+   "reason": "ES-DE's scraper map gives this id to a platform id no ES-DE system carries; it names the same system the platform id does (naomi)",
+   "citation": null
+  },
+  {
+   "source": "screenscraper",
+   "key": "210",
+   "rows": [
+    {
+     "source": "batocera",
+     "key": "snes-msu1"
+    }
+   ],
+   "relation": null,
+   "reason": "ES-DE's scraper map gives this id to a platform id no ES-DE system carries; it names the same system the platform id does (snes-msu1)",
+   "citation": null
+  },
+  {
+   "source": "thegamesdb",
+   "key": "4958",
+   "rows": [
+    {
+     "source": "batocera",
+     "key": "pico"
+    }
+   ],
+   "relation": null,
+   "reason": "ES-DE's scraper map gives this id to a platform id no ES-DE system carries; it names the same system the platform id does (segapico)",
+   "citation": null
+  },
+  {
+   "source": "screenscraper",
+   "key": "43",
+   "rows": [
+    {
+     "source": "esde",
+     "key": "atari800"
+    },
+    {
+     "source": "esde",
+     "key": "atarixe"
+    }
+   ],
+   "relation": null,
+   "reason": "ES-DE maps ScreenScraper 43 to both Atari 8-bit systems and RomM to its atari8bit slug, which covers the same two (see romm/atari8bit)",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "androidapps"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "androidgames"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "windows3x"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "windows9x"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "amazon-alexa"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "amazon-fire-tv"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "android"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Android') states the category 'Operating System'",
+   "citation": "romm:backend/adapters/services/igdb.py:387"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "bada"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "beos"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "blackberry"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('BlackBerry OS') states the category 'Operating System'",
+   "citation": "romm:backend/adapters/services/igdb.py:659"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "brew"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "cpm"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "danger-os"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "doja"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "exen"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "freebox"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "gnex"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "gvm"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "hd-dvd-player"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "a disc or media format games ship on",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "ipad"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "ipod-classic"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "kaios"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "kindle"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "linux"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Linux') states the category 'Operating System'",
+   "citation": "romm:backend/adapters/services/igdb.py:1348"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "maemo"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "meego"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "mobile-custom"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "mophun"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "mre"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "newton"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "os2"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "pebble"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "photocd"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "a disc or media format games ship on",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "roku"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "sk-vm"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "tizen"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "tvos"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "visionos"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('visionOS') states the category 'Operating System'",
+   "citation": "romm:backend/adapters/services/igdb.py:2632"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "watchos"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "webos"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "windows-apps"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "windows-mobile"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Windows Mobile') states the category 'Operating System'",
+   "citation": "romm:backend/adapters/services/igdb.py:2730"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "winphone"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Windows Phone') states the category 'Operating System'",
+   "citation": "romm:backend/adapters/services/igdb.py:2743"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "wipi"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "zune"
+   },
+   "kind": "app-platform",
+   "subset_of": null,
+   "reason": "an operating system or application runtime games are written for",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "consolearcade"
+   },
+   "kind": "arcade-board",
+   "subset_of": null,
+   "reason": "an arcade system board",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "cps"
+   },
+   "kind": "arcade-board",
+   "subset_of": null,
+   "reason": "an arcade system board",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "naomigd"
+   },
+   "kind": "arcade-board",
+   "subset_of": null,
+   "reason": "an arcade system board",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "pcarcade"
+   },
+   "kind": "arcade-board",
+   "subset_of": null,
+   "reason": "an arcade system board",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "type-x"
+   },
+   "kind": "arcade-board",
+   "subset_of": null,
+   "reason": "an arcade system board",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "hyper-neo-geo-64"
+   },
+   "kind": "arcade-board",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Hyper Neo Geo 64') states the category 'Arcade'",
+   "citation": "romm:backend/adapters/services/igdb.py:1208"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "model1"
+   },
+   "kind": "arcade-board",
+   "subset_of": null,
+   "reason": "an arcade system board",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "neogeomvs"
+   },
+   "kind": "arcade-board",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Neo Geo MVS') states the category 'Arcade'",
+   "citation": "romm:backend/adapters/services/igdb.py:1570"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "system-32"
+   },
+   "kind": "arcade-board",
+   "subset_of": null,
+   "reason": "an arcade system board",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "system16"
+   },
+   "kind": "arcade-board",
+   "subset_of": null,
+   "reason": "an arcade system board",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "system32"
+   },
+   "kind": "arcade-board",
+   "subset_of": null,
+   "reason": "an arcade system board",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "taito-x-55"
+   },
+   "kind": "arcade-board",
+   "subset_of": null,
+   "reason": "an arcade system board",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "zinc"
+   },
+   "kind": "arcade-board",
+   "subset_of": null,
+   "reason": "an arcade system board",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "casio-cfx-9850"
+   },
+   "kind": "calculator",
+   "subset_of": null,
+   "reason": "a programmable calculator",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "casio-programmable-calculator"
+   },
+   "kind": "calculator",
+   "subset_of": null,
+   "reason": "a programmable calculator",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "compucorp-programmable-calculator"
+   },
+   "kind": "calculator",
+   "subset_of": null,
+   "reason": "a programmable calculator",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "hp-programmable-calculator"
+   },
+   "kind": "calculator",
+   "subset_of": null,
+   "reason": "a programmable calculator",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "ti-82"
+   },
+   "kind": "calculator",
+   "subset_of": null,
+   "reason": "a programmable calculator",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "ti-83"
+   },
+   "kind": "calculator",
+   "subset_of": null,
+   "reason": "a programmable calculator",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "ti-programmable-calculator"
+   },
+   "kind": "calculator",
+   "subset_of": null,
+   "reason": "a programmable calculator",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "pc"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "tanodragon"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "to8"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "zxnext"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "Commodore - CBM-5x0"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "Commodore - CBM-II"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "Philips - P2000T"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "RVVM"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "06c"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "abc-80"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "alice-3290"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "altair-680"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "altair-8800"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "apple-lisa"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "appleiii"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "aquarius"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "astral-2000"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "ay-3-8500"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('AY-3-8500') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:557"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "ay-3-8610"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('AY-3-8610') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:612"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "bit-90"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "bk-01"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "c16"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Commodore 16') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:708"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "call-a-computer"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Call-A-Computer time-shared mainframe computer system') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:733"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "casio-fp-1000"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "casio-pb-1000"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "cdccyber70"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('CDC Cyber 70') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:757"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "compal-80"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "compucolor-i"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "compucolor-ii"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "donner30"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Donner Model 30') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:841"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "ecd-micromind"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "edsac"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('EDSAC') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:902"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "elektor"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Elektor TV Games Computer') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:914"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "excalibur-64"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "exelvision"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "exidy-sorcerer"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Exidy Sorcerer') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:960"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "fred-cosmac"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "galaksija"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "gt40"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('DEC GT40') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:1160"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "heathkit-h11"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "heathzenith"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "hitachi-s1"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "hp-9800"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "hp2100"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('HP 2100') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:1185"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "hp3000"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('HP 3000') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:1197"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "hrx"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "ibm-5100"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "ideal-computer"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "imlac-pds1"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Imlac PDS-1') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:1231"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "intel-8008"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a processor family RomM lists as a platform: software for a bare machine around it",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "intel-8080"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a processor family RomM lists as a platform: software for a bare machine around it",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "intel-8086"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a processor family RomM lists as a platform: software for a bare machine around it",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "interact-model-one"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "jolt"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "jupiter-ace"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "kim-1"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "laser200"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "legacy-computer"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Legacy Computer') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:1335"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "mainframe"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "matsushitapanasonic-jr"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "memotech-mtx"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "meritum"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "microbee"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "microcomputer"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Microcomputer') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:1422"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "microtan-65"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "mos-technology-6502"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a processor family RomM lists as a platform: software for a bare machine around it",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "motorola-6800"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a processor family RomM lists as a platform: software for a bare machine around it",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "motorola-68k"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a processor family RomM lists as a platform: software for a bare machine around it",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "mtx512"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "nascom"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "newbrain"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "nimrod"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Ferranti Nimrod Computer') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:1634"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "northstar"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "noval-760"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "ohio-scientific"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "orao"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "pc-6001"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "pc-8000"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "pc-booter"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "pc-jr"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "pdp-7"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('PDP-7') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:1855"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "pdp-8"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('PDP-8') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:1867"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "pdp10"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('PDP-10') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:1892"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "pdp11"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('PDP-11') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:1904"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "pegasus"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "philips-vg-5000"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "plato"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('PLATO') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:1929"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "poly-88"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "research-machines-380z"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "scmp"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "sdssigma7"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('SDS Sigma 7') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:2174"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "sharp-mz-2200"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Sharp MZ-2200') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:2273"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "sharp-zaurus"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "signetics-2650"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a processor family RomM lists as a platform: software for a bare machine around it",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "sinclair-ql"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Sinclair QL') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:2296"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "smc-777"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "sol-20"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Sol-20') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:2345"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "sord-m5"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "sri-5001000"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "swtpc-6800"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "tatung-einstein"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Tatung Einstein') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:2454"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "tektronix-4050"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "terminal"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "thomson-to"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "ti-994a"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "tiki-100"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "tim"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "timex-sinclair-2068"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "tomy-tutor-slash-pyuta-slash-grandstand-tutor"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Tomy Tutor / Pyuta / Grandstand Tutor') states the category 'Computer'",
+   "citation": "romm:backend/adapters/services/igdb.py:2500"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "triton"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "trs-80-model-100"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "videobrain"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "wang2200"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "xerox-alto"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "z80"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a processor family RomM lists as a platform: software for a bare machine around it",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "z88"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "zilog-z8000"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a processor family RomM lists as a platform: software for a bare machine around it",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "zx80"
+   },
+   "kind": "computer",
+   "subset_of": null,
+   "reason": "a home or personal computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "virtualboy"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "Batocera and KNULLI state hardware 'console', ROCKNIX states 'portable'; RomM's IGDB record (Virtual Boy, id 87) states the category 'Console', and the system is a tabletop unit, not carried in the hand",
+   "citation": "romm:backend/adapters/services/igdb.py:2621"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "1292-advanced-programmable-video-system"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('1292 Advanced Programmable Video System') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:202"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "action-max"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "a home video game console",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "analogueelectronics"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Analogue electronics') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:374"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "apple-pippin"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Apple Pippin') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:410"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "atari-vcs"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "a home video game console",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "ay-3-8603"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('AY-3-8603') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:568"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "ay-3-8605"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('AY-3-8605') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:579"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "ay-3-8606"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('AY-3-8606') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:590"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "ay-3-8607"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('AY-3-8607') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:601"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "ay-3-8710"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('AY-3-8710') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:623"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "ay-3-8760"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('AY-3-8760') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:634"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "beena"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "a home video game console",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "blu-ray-player"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Blu-ray Player') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:670"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "champion-2711"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "a home video game console",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "clickstart"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "a home video game console",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "cybervision"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "a home video game console",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "daydream"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Daydream') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:805"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "dedicated-console"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "a home video game console",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "dvd-player"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('DVD Player') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:877"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "game-wave"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "a home video game console",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "gamestick"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "a home video game console",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "hyperscan"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('HyperScan') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:1219"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "iircade"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "a home video game console",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "intellivision-amico"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Intellivision Amico') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:1254"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "interton-video-2000"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "a home video game console",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "laseractive"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('LaserActive') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:1289"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "leaptv"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('LeapTV') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:1324"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "nuon"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Nuon') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:1656"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "odyssey"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Magnavox Odyssey') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:1717"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "ouya"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Ouya') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:1764"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "panasonic-m2"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Panasonic M2') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:1798"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "pc-50x-family"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('PC-50X Family') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:1809"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "playdia"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Playdia') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:1952"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "polymega"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Polymega') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:1998"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "ps5"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('PlayStation 5') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:2063"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "rca-studio-ii"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "a home video game console",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "sd-200270290"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "a home video game console",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "segacd32"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Sega CD 32X') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:2199"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "series-x-s"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Xbox Series X/S') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:2236"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "super-nes-cd-rom-system"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Super NES CD-ROM System') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:2393"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "sure-shot-hd"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "a home video game console",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "switch-2"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Nintendo Switch 2') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:2443"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "tele-spiel"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "a home video game console",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "telstar-arcade"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "a home video game console",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "terebikko-slash-see-n-say-video-phone"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Terebikko / See 'n Say Video Phone') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:2465"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "vflash"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "a home video game console",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "vis"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "a home video game console",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "xavixport"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "a home video game console",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "xboxone"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Xbox One') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:2818"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "zeebo"
+   },
+   "kind": "console",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Zeebo') states the category 'Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:2829"
+  },
+  {
+   "row_of": {
+    "source": "emudeck",
+    "key": "genesiswide"
+   },
+   "kind": "content-subset",
+   "subset_of": {
+    "source": "esde",
+    "key": "genesis"
+   },
+   "reason": "a folder for one part of a system's games",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "emudeck",
+    "key": "sneshd"
+   },
+   "kind": "content-subset",
+   "subset_of": {
+    "source": "esde",
+    "key": "snes"
+   },
+   "reason": "a folder for one part of a system's games",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "retrodeck",
+    "key": "primehack"
+   },
+   "kind": "content-subset",
+   "subset_of": {
+    "source": "esde",
+    "key": "wii"
+   },
+   "reason": "the Metroid Prime Trilogy as PrimeHack runs it",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "batocera",
+    "key": "gzdoom"
+   },
+   "kind": "content-subset",
+   "subset_of": {
+    "source": "esde",
+    "key": "doom"
+   },
+   "reason": "a Doom engine's folder: it holds the games ES-DE's doom system holds, but only those its engine runs",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "batocera",
+    "key": "prboom"
+   },
+   "kind": "content-subset",
+   "subset_of": {
+    "source": "esde",
+    "key": "doom"
+   },
+   "reason": "a Doom engine's folder: it holds the games ES-DE's doom system holds, but only those its engine runs",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "emudeck",
+    "key": "mame-mame4all"
+   },
+   "kind": "emulator-set",
+   "subset_of": null,
+   "reason": "a romset of one arcade emulator release, not a machine",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "fba"
+   },
+   "kind": "emulator-set",
+   "subset_of": null,
+   "reason": "a romset of one arcade emulator release, not a machine",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "mame-advmame"
+   },
+   "kind": "emulator-set",
+   "subset_of": null,
+   "reason": "a romset of one arcade emulator release, not a machine",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "mess"
+   },
+   "kind": "emulator-set",
+   "subset_of": null,
+   "reason": "a romset of one emulator release, not a machine: ES-DE's mess is the Multi Emulator Super System, MAME's half for consoles and computers, so its sets span many machines and none of them is an arcade board",
+   "citation": "es-de:resources/systems/linux/es_systems.xml:1245"
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "MAME 2003 (Midway)"
+   },
+   "kind": "emulator-set",
+   "subset_of": null,
+   "reason": "a romset of one arcade emulator release, not a machine",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "MAME 2009"
+   },
+   "kind": "emulator-set",
+   "subset_of": null,
+   "reason": "a romset of one arcade emulator release, not a machine",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "MAME 2015"
+   },
+   "kind": "emulator-set",
+   "subset_of": null,
+   "reason": "a romset of one arcade emulator release, not a machine",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "MAME 2016"
+   },
+   "kind": "emulator-set",
+   "subset_of": null,
+   "reason": "a romset of one arcade emulator release, not a machine",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "emudeck",
+    "key": "stratagus"
+   },
+   "kind": "engine-port",
+   "subset_of": null,
+   "reason": "a game engine, interpreter or game port",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "ags"
+   },
+   "kind": "engine-port",
+   "subset_of": null,
+   "reason": "a game engine, interpreter or game port",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "chailove"
+   },
+   "kind": "engine-port",
+   "subset_of": null,
+   "reason": "a game engine, interpreter or game port",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "ports"
+   },
+   "kind": "engine-port",
+   "subset_of": null,
+   "reason": "Batocera and KNULLI state hardware 'port', ROCKNIX states 'computer'; the folder holds game ports and engine reimplementations, not software for one computer",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "scummvm"
+   },
+   "kind": "engine-port",
+   "subset_of": null,
+   "reason": "Batocera and KNULLI state hardware 'computer' (the machines the games first ran on), ROCKNIX states 'game engine'; the games run through ScummVM's reimplementation of their engines, which the core names 'ScummVM Game Engine' and ES-DE's full name repeats",
+   "citation": "libretro-core-info:scummvm_libretro.info:13"
+  },
+  {
+   "row_of": {
+    "source": "esde-platform",
+    "key": "residualvm"
+   },
+   "kind": "engine-port",
+   "subset_of": null,
+   "reason": "a game engine, interpreter or game port",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "2048"
+   },
+   "kind": "engine-port",
+   "subset_of": null,
+   "reason": "a game engine, interpreter or game port",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "Dinothawr"
+   },
+   "kind": "engine-port",
+   "subset_of": null,
+   "reason": "a game engine, interpreter or game port",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "Jump 'n Bump"
+   },
+   "kind": "engine-port",
+   "subset_of": null,
+   "reason": "a game engine, interpreter or game port",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "Minecraft"
+   },
+   "kind": "engine-port",
+   "subset_of": null,
+   "reason": "a game engine, interpreter or game port",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "ONScripter"
+   },
+   "kind": "engine-port",
+   "subset_of": null,
+   "reason": "a game engine, interpreter or game port",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "PuzzleScript"
+   },
+   "kind": "engine-port",
+   "subset_of": null,
+   "reason": "a game engine, interpreter or game port",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "SyobonAction"
+   },
+   "kind": "engine-port",
+   "subset_of": null,
+   "reason": "a game engine, interpreter or game port",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "glulx"
+   },
+   "kind": "engine-port",
+   "subset_of": null,
+   "reason": "a game engine, interpreter or game port",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "hugo"
+   },
+   "kind": "engine-port",
+   "subset_of": null,
+   "reason": "a game engine, interpreter or game port",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "tads"
+   },
+   "kind": "engine-port",
+   "subset_of": null,
+   "reason": "a game engine, interpreter or game port",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "pico8"
+   },
+   "kind": "fantasy-console",
+   "subset_of": null,
+   "reason": "Batocera and KNULLI state hardware 'console', ROCKNIX states 'game engine'; neither fits: ES-DE's full name calls it a fantasy or virtual console, a machine specification with no hardware of its own",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "tic80"
+   },
+   "kind": "fantasy-console",
+   "subset_of": null,
+   "reason": "Batocera and KNULLI state hardware 'console', ROCKNIX states 'game engine'; neither fits: ES-DE's full name calls it a fantasy computer, a machine specification with no hardware of its own",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "vircon32"
+   },
+   "kind": "fantasy-console",
+   "subset_of": null,
+   "reason": "Batocera and KNULLI state hardware 'console', ROCKNIX states 'game engine'; neither fits: ES-DE's full name calls it a fantasy or virtual console, a machine specification with no hardware of its own",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "wasm4"
+   },
+   "kind": "fantasy-console",
+   "subset_of": null,
+   "reason": "Batocera and KNULLI state hardware 'console', ROCKNIX states 'game engine'; neither fits: ES-DE's full name calls it a fantasy or virtual console, a machine specification with no hardware of its own",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "MicroW8"
+   },
+   "kind": "fantasy-console",
+   "subset_of": null,
+   "reason": "a fantasy console or virtual computer (the core's systemname)",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "VaporSpec"
+   },
+   "kind": "fantasy-console",
+   "subset_of": null,
+   "reason": "a fantasy console or virtual computer (the core's systemname)",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "eternal"
+   },
+   "kind": "fantasy-console",
+   "subset_of": null,
+   "reason": "a fantasy console or virtual computer (the core's systemname)",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "uxn"
+   },
+   "kind": "fantasy-console",
+   "subset_of": null,
+   "reason": "a fantasy console or virtual computer (the core's systemname)",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "BBK"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "a handheld learning device or electronic dictionary (the core's systemname)",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "Dingoo A320"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "a handheld learning device or electronic dictionary (the core's systemname)",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "SPMP8000"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "a handheld learning device or electronic dictionary (the core's systemname)",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "Wenquxing"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "a handheld learning device or electronic dictionary (the core's systemname)",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "libretro",
+    "key": "gam4980"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "a handheld learning device or electronic dictionary (the core's systemname)",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "dedicated-handheld"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "a handheld game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "didj"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "a handheld game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "digiblast"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Digiblast') states the category 'Portable Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:829"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "e-reader-slash-card-e-reader"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('e-Reader / Card-e Reader') states the category 'Portable Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:889"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "evercade"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Evercade') states the category 'Portable Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:949"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "gimini"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "a handheld game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "gizmondo"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Gizmondo') states the category 'Portable Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:1148"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "gp2x"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "a handheld game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "gp2x-wiz"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "a handheld game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "leapfrog-explorer"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "a handheld game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "leapster"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Leapster') states the category 'Portable Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:1301"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "leapster-explorer-slash-leadpad-explorer"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Leapster Explorer/LeadPad Explorer') states the category 'Portable Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:1312"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "microvision"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Microvision') states the category 'Portable Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:1434"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "mobile"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Legacy Mobile Device') states the category 'Portable Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:1447"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "neo-geo-x"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "a handheld game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "new-nintendo-3ds"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('New Nintendo 3DS') states the category 'Portable Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:1596"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "ngage2"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "a handheld game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "nintendo-dsi"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Nintendo DSi') states the category 'Portable Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:1645"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "palmtex"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "a handheld game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "panasonic-jungle"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Panasonic Jungle') states the category 'Portable Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:1787"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "pandora"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "a handheld game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "playdate"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Playdate') states the category 'Portable Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:1941"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "pocket-challenge-v2"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "a handheld game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "pocket-challenge-w"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "a handheld game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "pocketstation"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('PocketStation') states the category 'Portable Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:1975"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "pokitto"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "a handheld game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "r-zone"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('R-Zone') states the category 'Portable Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:2126"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "swancrystal"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('SwanCrystal') states the category 'Portable Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:2417"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "tomahawk-f1"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "a handheld game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "visual-memory-unit-slash-visual-memory-system"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Visual Memory Unit / Visual Memory System') states the category 'Portable Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:2644"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "vmu"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "a handheld game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "zod"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "RomM's IGDB record for the slug ('Tapwave Zodiac') states the category 'Portable Console'",
+   "citation": "romm:backend/adapters/services/igdb.py:2841"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "zodiac"
+   },
+   "kind": "handheld",
+   "subset_of": null,
+   "reason": "a handheld game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "batocera",
+    "key": "flatpak"
+   },
+   "kind": "launcher",
+   "subset_of": null,
+   "reason": "a launcher or application folder, not a game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "emudeck",
+    "key": "generic-applications"
+   },
+   "kind": "launcher",
+   "subset_of": null,
+   "reason": "a launcher or application folder, not a game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "desktop"
+   },
+   "kind": "launcher",
+   "subset_of": null,
+   "reason": "a launcher or application folder, not a game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "epic"
+   },
+   "kind": "launcher",
+   "subset_of": null,
+   "reason": "a launcher or application folder, not a game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "kodi"
+   },
+   "kind": "launcher",
+   "subset_of": null,
+   "reason": "a launcher or application folder, not a game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "esde",
+    "key": "lutris"
+   },
+   "kind": "launcher",
+   "subset_of": null,
+   "reason": "a launcher or application folder, not a game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "retrodeck",
+    "key": "portmaster"
+   },
+   "kind": "launcher",
+   "subset_of": null,
+   "reason": "a launcher or application folder, not a game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "airconsole"
+   },
+   "kind": "service",
+   "subset_of": null,
+   "reason": "a storefront or service, not a game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "vc"
+   },
+   "kind": "service",
+   "subset_of": null,
+   "reason": "a storefront or service, not a game system",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "emudeck",
+    "key": "cloud"
+   },
+   "kind": "streaming",
+   "subset_of": null,
+   "reason": "a game-streaming service or client",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "emudeck",
+    "key": "remoteplay"
+   },
+   "kind": "streaming",
+   "subset_of": null,
+   "reason": "a game-streaming service or client",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "antstream"
+   },
+   "kind": "streaming",
+   "subset_of": null,
+   "reason": "a game-streaming service or client",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "blacknut"
+   },
+   "kind": "streaming",
+   "subset_of": null,
+   "reason": "a game-streaming service or client",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "g-cluster"
+   },
+   "kind": "streaming",
+   "subset_of": null,
+   "reason": "a game-streaming service or client",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "gloud"
+   },
+   "kind": "streaming",
+   "subset_of": null,
+   "reason": "a game-streaming service or client",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "luna"
+   },
+   "kind": "streaming",
+   "subset_of": null,
+   "reason": "a game-streaming service or client",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "onlive-game-system"
+   },
+   "kind": "streaming",
+   "subset_of": null,
+   "reason": "a game-streaming service or client",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "ooparts"
+   },
+   "kind": "streaming",
+   "subset_of": null,
+   "reason": "a game-streaming service or client",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "playstation-now"
+   },
+   "kind": "streaming",
+   "subset_of": null,
+   "reason": "a game-streaming service or client",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "plex-arcade"
+   },
+   "kind": "streaming",
+   "subset_of": null,
+   "reason": "a game-streaming service or client",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "stadia"
+   },
+   "kind": "streaming",
+   "subset_of": null,
+   "reason": "a game-streaming service or client",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "xboxcloudgaming"
+   },
+   "kind": "streaming",
+   "subset_of": null,
+   "reason": "a game-streaming service or client",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "gear-vr"
+   },
+   "kind": "vr",
+   "subset_of": null,
+   "reason": "a virtual-reality headset: RomM's IGDB record files it under the category 'Console', and the table classifies headsets as vr, as it does steam-vr and windows-mixed-reality",
+   "citation": "romm:backend/adapters/services/igdb.py:1123"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "meta-quest-2"
+   },
+   "kind": "vr",
+   "subset_of": null,
+   "reason": "a virtual-reality headset: RomM's IGDB record files it under the category 'Console', and the table classifies headsets as vr, as it does steam-vr and windows-mixed-reality",
+   "citation": "romm:backend/adapters/services/igdb.py:1398"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "meta-quest-3"
+   },
+   "kind": "vr",
+   "subset_of": null,
+   "reason": "a virtual-reality headset: RomM's IGDB record files it under the category 'Console', and the table classifies headsets as vr, as it does steam-vr and windows-mixed-reality",
+   "citation": "romm:backend/adapters/services/igdb.py:1410"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "oculus-go"
+   },
+   "kind": "vr",
+   "subset_of": null,
+   "reason": "a virtual-reality headset: RomM's IGDB record files it under the category 'Console', and the table classifies headsets as vr, as it does steam-vr and windows-mixed-reality",
+   "citation": "romm:backend/adapters/services/igdb.py:1668"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "oculus-quest"
+   },
+   "kind": "vr",
+   "subset_of": null,
+   "reason": "a virtual-reality headset: RomM's IGDB record files it under the category 'Console', and the table classifies headsets as vr, as it does steam-vr and windows-mixed-reality",
+   "citation": "romm:backend/adapters/services/igdb.py:1680"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "oculus-rift"
+   },
+   "kind": "vr",
+   "subset_of": null,
+   "reason": "a virtual-reality headset: RomM's IGDB record files it under the category 'Console', and the table classifies headsets as vr, as it does steam-vr and windows-mixed-reality",
+   "citation": "romm:backend/adapters/services/igdb.py:1692"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "oculus-vr"
+   },
+   "kind": "vr",
+   "subset_of": null,
+   "reason": "a virtual-reality headset: RomM's IGDB record files it under the category 'Console', and the table classifies headsets as vr, as it does steam-vr and windows-mixed-reality",
+   "citation": "romm:backend/adapters/services/igdb.py:1704"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "psvr"
+   },
+   "kind": "vr",
+   "subset_of": null,
+   "reason": "a virtual-reality headset: RomM's IGDB record files it under the category 'Console', and the table classifies headsets as vr, as it does steam-vr and windows-mixed-reality",
+   "citation": "romm:backend/adapters/services/igdb.py:2102"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "psvr2"
+   },
+   "kind": "vr",
+   "subset_of": null,
+   "reason": "a virtual-reality headset: RomM's IGDB record files it under the category 'Console', and the table classifies headsets as vr, as it does steam-vr and windows-mixed-reality",
+   "citation": "romm:backend/adapters/services/igdb.py:2115"
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "steam-vr"
+   },
+   "kind": "vr",
+   "subset_of": null,
+   "reason": "a virtual-reality platform",
+   "citation": null
+  },
+  {
+   "row_of": {
+    "source": "romm",
+    "key": "windows-mixed-reality"
+   },
+   "kind": "vr",
+   "subset_of": null,
+   "reason": "a virtual-reality platform",
+   "citation": null
+  }
+ ]
+}

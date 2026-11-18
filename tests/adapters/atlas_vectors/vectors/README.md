@@ -2,12 +2,13 @@
 
 These files are the normative artifact: a fixture machine goes in, the answers atlas must give come out. They are what a
 **port** is checked against (a reimplementation in another language passes atlas's vectors or it is not a port), and
-what a change to the resolver is measured by. The reference implementation runs them in `tests/test_machine_vectors.py`;
-the shape rules below are enforced independently by `scripts/validate_vectors.py`, which is stdlib-only so a port author
-can run it without importing atlas.
+what a change to the resolver is measured by. The reference implementation runs them in `tests/test_machine_vectors.py`
+and `tests/test_platform_table_vectors.py`; the shape rules below are enforced independently by
+`scripts/validate_vectors.py`, which is stdlib-only so a port author can run it without importing atlas.
 
 The whole idea in one line: **the expected block is the canonical serialization of a real answer, asserted with exact
-equality.** Nothing here is a description of an answer — it is the answer.
+equality.** Nothing here is a description of an answer — it is the answer. The one cut is the platform translation,
+asserted in its projection: the serialization with its citations and pinned versions removed (see below).
 
 ## Layout
 
@@ -15,15 +16,17 @@ equality.** Nothing here is a description of an answer — it is the answer.
 vectors/<family>/*.json
 ```
 
-One family today, `machines`. Every file carries a header and its vectors:
+Two families: `machines`, a whole machine as plain data with the answers atlas must give on it, and `platform-table`,
+pairs in and the platform table's translation out (see _The platform-table family_ below). Every file carries a header
+and its vectors:
 
-| key           | meaning                                                   |
-| ------------- | --------------------------------------------------------- |
-| `family`      | must match the directory (`machines`)                     |
-| `schema`      | the generation of the fixture grammar — **5** (see below) |
-| `spec`        | which document this file's guarantees come from           |
-| `description` | what this file covers                                     |
-| `vectors`     | the vectors themselves                                    |
+| key           | meaning                                                                                               |
+| ------------- | ----------------------------------------------------------------------------------------------------- |
+| `family`      | must match the directory (`machines`, `platform-table`)                                               |
+| `schema`      | the generation of the family's grammar — **5** for `machines` (see below), **1** for `platform-table` |
+| `spec`        | which document this file's guarantees come from                                                       |
+| `description` | what this file covers                                                                                 |
+| `vectors`     | the vectors themselves                                                                                |
 
 A vector is `{name, rationale?, input, expected}`. `name` is unique within its file; `rationale` is prose for the reader
 and part of no contract. Two uniqueness rules matter more than they look:
@@ -84,7 +87,8 @@ it.
 **`symlinks`** — link path → target (absolute, or relative to the link's directory). A target that is in no other list
 is a **dead** link, which is a state the corpus deliberately covers.
 
-**`cores`** — `.so` path → what probing it answers: `{"library_name": …}`, optionally `library_version` and `options`
+**`cores`** — `.so` path → what probing it answers: `{"library_name": …}`, optionally `library_version`,
+`valid_extensions`, the booleans `block_extract` and `need_fullpath`, and `options`
 (`{key: {"default": str|null, "values": [str, …]}}`). The distinction between a core with no `options` key and one whose
 `options` is `{}` is load-bearing: the first says nothing was captured, the second is evidence that the core registers
 none.
@@ -130,20 +134,22 @@ any test. A declared file with no entry here answers **missing**, which the firm
 `firmware-unreadable`, a read that did not happen, so a vector that forgot the key cannot pass a file off as no BIOS.
 
 **`ps3_files`** — the path of a file `files` declares → what RPCS3's boot reads of its bytes:
-`{"magic": …, "iso": …, "category": …}`, where `magic` is the file's first four bytes, one character per byte (latin-1)
-and fewer for a shorter file — `.SFB` for a valid `PS3_DISC.SFB`, `SCE\u0000` for a SELF, `\u007fELF` for an ELF,
-`\u0000PSF` for a PARAM.SFO; `iso` is `null`, or where the file holds `CD001` behind the first volume descriptor's type
-byte, `{"regions": …, "watermark": …, "blocks": …}` — the region count the first sector states (an unsigned 32-bit
-number), the 3k3y mark, `"encrypted"`, `"decrypted"` or `null`, and what the licence and executable blocks inside the
-image say: `"clear"`, `"encrypted"`, `"none"` where no block was read to judge, or `null` (and omitted) where the
-reading does not reach them — an image declaring one region, one whose region count is outside 1 to 127, or one whose
-ISO 9660 tree it does not follow; and `category` is what RPCS3's PARAM.SFO loader keeps for `CATEGORY`, which only a
-file opening with the PARAM.SFO magic can state and only as one of the loader's own categories — omitted or `""` where
-it keeps none, which is what RPCS3 reads from a file it refuses as a PARAM.SFO. `iso` and `category` may be omitted. It
-is modeled at the seam for the reason `ps2_bios_headers` is: the image header sits 32 KiB into a file no fixture should
-carry. The file must not be one declared `unreadable`, and a declared file with no entry here answers **unreadable**, so
-a vector that forgot the key cannot prove a boot nobody modeled; a path with no file at it — nothing, a directory, a
-dead link — answers missing, as it does for RPCS3.
+`{"magic": …, "iso": …, "category": …, "savestate": …}`, where `magic` is the file's first four bytes, one character per
+byte (latin-1) and fewer for a shorter file — `.SFB` for a valid `PS3_DISC.SFB`, `SCE\u0000` for a SELF, `\u007fELF` for
+an ELF, `\u0000PSF` for a PARAM.SFO; `iso` is `null`, or where the file holds `CD001` behind the first volume
+descriptor's type byte, `{"regions": …, "watermark": …, "blocks": …}` — the region count the first sector states (an
+unsigned 32-bit number), the 3k3y mark, `"encrypted"`, `"decrypted"` or `null`, and what the licence and executable
+blocks inside the image say: `"clear"`, `"encrypted"`, `"none"` where no block was read to judge, or `null` (and
+omitted) where the reading does not reach them — an image declaring one region, one whose region count is outside 1 to
+127, or one whose ISO 9660 tree it does not follow; and `category` is what RPCS3's PARAM.SFO loader keeps for
+`CATEGORY`, which only a file opening with the PARAM.SFO magic can state and only as one of the loader's own categories
+— omitted or `""` where it keeps none, which is what RPCS3 reads from a file it refuses as a PARAM.SFO; and `savestate`
+is `true` where the file's first eight bytes are `RPCS3SAV`, the bytes RPCS3 resumes an uncompressed `.SAVESTAT` by, and
+only beside the magic `RPCS`. `iso`, `category` and `savestate` may be omitted. It is modeled at the seam for the reason
+`ps2_bios_headers` is: the image header sits 32 KiB into a file no fixture should carry. The file must not be one
+declared `unreadable`, and a declared file with no entry here answers **unreadable**, so a vector that forgot the key
+cannot prove a boot nobody modeled; a path with no file at it — nothing, a directory, a dead link — answers missing, as
+it does for RPCS3.
 
 **`disc_identities`** — the path of a PlayStation disc image `files` declares (a `.cue`, `.bin`, `.img`, `.iso`, `.chd`
 or `.pbp`) → what reading its first data track yields:
@@ -247,22 +253,35 @@ Each expectation is paired with the input key that asks it. Several may appear i
 | `soft_patch_query`       | `soft_patch_candidates`       | which patch files this content would be patched with        |
 | `catalogue_query`        | `catalogue`                   | which emulators can launch this system                      |
 | `systems_query`          | `systems`                     | which systems does the frontend declare                     |
-| `platform_systems_query` | `systems_for_platform`        | which systems here answer to a public platform id           |
-| `platform_ids_query`     | `platform_ids`                | which public platform ids belong to this system             |
+| `platform_systems_query` | `systems_for_platform`        | which systems here a (source, key) pair names               |
+| `platform_pairs_query`   | `systems_for_platforms`       | which systems here several pairs name together              |
+| `platform_ids_query`     | `platform_ids`                | every source's keys for this system                         |
 | `launchable_query`       | `launchable`                  | does this file launch as this system's content, and why not |
 | `rom_location_query`     | `rom_location`                | where do this system's ROMs live                            |
 | `rom_locations_query`    | `rom_locations`               | where do the ROMs of every listed system live               |
 | `launch_command_query`   | `launch_command`              | the command the frontend would run for this file            |
+| `save_portability_query` | `save_portability`            | whether one entry reads the save another entry wrote        |
 | `roots_query`            | `roots`                       | where each root folder is, and what decided it              |
 | `firmware_query`         | `firmware`                    | `kind` is `core`, `system` or `inventory`                   |
 | `identify_query`         | `identification`              | what is this content, by `md5` / `sha1` / `size`            |
 | `aggregate_query`        | `aggregate`                   | one question put to **every** detected installation         |
+
+Every `system` a query carries — in `catalogue_query`, `launchable_query`, `launch_command_query`,
+`save_portability_query`, `rom_location_query`, `platform_ids_query`, `firmware_query`, the entry families and an
+`emulators_for` aggregate — takes one of three forms (#784 D10, D49): a non-empty string, the installation's own name
+for the system; one pair `[source, key]` or `[source, key, version]`; or a non-empty list of such pairs, asked together.
+Every part of a pair is a non-empty string.
 
 `soft_patch_query` is the one family whose `content_path` is required rather than optional: the content is that
 question's subject — the patch files are named after it — so a vector asking it without one asks about no file at all.
 
 `launch_command_query` carries `system` and an absolute `content_path`, as the question requires, and may name the
 catalogue entry by its `label`; without one the frontend's own choice answers.
+
+`save_portability_query` carries `system` and the two entries it compares by their catalogue labels, `source` (the entry
+that wrote the save) and `target` (the entry that would read it) — two different labels, because the library refuses one
+entry named twice at the call. It may carry `content_path`, `cwd` and `appendconfig`, which are handed to both entries'
+own save questions exactly as the entry families take them.
 
 `rom_location_query` carries `system` and no path: content plays no part in where a system's ROMs live.
 
@@ -279,16 +298,17 @@ with that table, and the answer's `hash_checked` says whether that comparison ra
 disc decides the region of a group the console region selects. An `inventory` query takes none, because it asks about no
 launch.
 
-`launchable_query` carries `system` and `content_path`, both required — a verdict without a file has no extension to
-judge, and one without a system has no accept-list to judge it by — and may name the entry to judge by its `label`, as
+`launchable_query` carries `system` and `content_path`, both required — a verdict without a path has nothing to hand the
+emulator, and one without a system has no entry to judge — and may name the entry to judge by its `label`, as
 `launch_command_query` names its entry; without one the entry that would run is judged.
 
 `savefile_query`, `savestate_query`, `screenshot_query`, `texture_query`, `mod_query` and `soft_patch_query` carry a
 non-empty subset of `content_path` (the content the launch is for), `core_so` (the core's `.so` file name) and
-`installation`. The four entry families — `entry_savefile_query`, `entry_savestate_query`, `entry_texture_query` and
-`entry_mod_query` — ask the same placement of a catalogue entry instead of a core: they carry the `system` whose
-catalogue holds the entry and may carry its `label`, without which the first entry answers, plus `content_path` and
-`installation`; they take no `core_so`.
+`installation`. `savefile_query` may also carry the content's `system`, in any of the three forms above: it keys the
+core's recorded file set, and the placement states what resolving it said. The four entry families —
+`entry_savefile_query`, `entry_savestate_query`, `entry_texture_query` and `entry_mod_query` — ask the same placement of
+a catalogue entry instead of a core: they carry the `system` whose catalogue holds the entry and may carry its `label`,
+without which the first entry answers, plus `content_path` and `installation`; they take no `core_so`.
 
 `catalogue_query` carries `system` and may carry `content_path`: given one, a per-game emulator choice the frontend
 records for that file can decide which entry comes first.
@@ -296,22 +316,25 @@ records for that file can decide which entry comes first.
 `identify_query` states the content by at least one of `md5` and `sha1` (non-empty strings) and `size` (an integer); a
 `size` alone names no identity and is answered with a caveat rather than refused.
 
-`platform_systems_query` carries `vocabulary` and `value`: the vocabulary is one of `igdb`, `libretro`, `screenscraper`
-and `thegamesdb`, a closed set, so any other is refused; the value is the id in that vocabulary as a string, and a
-numeric id is written as its decimal string, never as a JSON number. `platform_ids_query` asks the reverse direction and
-carries `system` alone.
+`platform_systems_query` carries `vocabulary` and `value`: the vocabulary is a source of the platform table, or `folder`
+for a bare folder name — any other string is a legal question, answered `unknown` with `platform-source-unknown`; the
+value is that source's key as a string, and a numeric id is written as its decimal string, never as a JSON number.
+`platform_pairs_query` asks the same question with several pairs and carries `pairs`, each `[source, key]` or
+`[source, key, version]` as the platform-table family's input writes them; its answer has the shape of
+`systems_for_platform`'s, and in both the asked pairs are `translation.pairs`. `platform_ids_query` asks the reverse
+direction and carries `system` alone.
 
 `cwd` — the working folder the launch will use, an absolute path — may ride only the questions whose answer can depend
-on it: `savefile_query`, `entry_savefile_query`, `savestate_query`, `entry_savestate_query`, `firmware_query`, and an
-`aggregate_query` whose `question` is `savefile_location` or `savestate_location`. Another family carrying one, or a
-value that is not absolute, is refused: the first would state an input no answer reflects, the second is one the library
-refuses at the call.
+on it: `savefile_query`, `entry_savefile_query`, `savestate_query`, `entry_savestate_query`, `save_portability_query`,
+`firmware_query`, and an `aggregate_query` whose `question` is `savefile_location` or `savestate_location`. Another
+family carrying one, or a value that is not absolute, is refused: the first would state an input no answer reflects, the
+second is one the library refuses at the call.
 
 `appendconfig` — the files the launch appends to RetroArch's configuration, spelled as RetroArch's own `--appendconfig`
 value: one string, absolute paths joined by `|` — may ride the questions that take `cwd` but `firmware_query`:
-`savefile_query`, `entry_savefile_query`, `savestate_query`, `entry_savestate_query`, and an `aggregate_query` whose
-`question` is `savefile_location` or `savestate_location`. Another family carrying one is refused, and so is a value
-that names no path or a relative one.
+`savefile_query`, `entry_savefile_query`, `savestate_query`, `entry_savestate_query`, `save_portability_query`, and an
+`aggregate_query` whose `question` is `savefile_location` or `savestate_location`. Another family carrying one is
+refused, and so is a value that names no path or a relative one.
 
 Every single-question family may name `installation` (a handle kind) to choose which detected installation answers;
 without it the first one does. `roots_query` must name it, as `retrodeck` or `emudeck`: no other arrangement answers
@@ -347,16 +370,57 @@ installation — the marker, root, saves root, BIOS folder and companion config 
 `catalogue-invalid` on the answers that read the catalogue, while `content-tree-unwired` and the ROM root findings stay
 in `installations[].health` alone. They keep their own codes in both places — nothing wraps them.
 
+Every answer about a system carries `resolution` — `catalogue`, `launchable`, `launch_command`, `save_portability`,
+`rom_location` (and each `rom_locations` placement), `platform_ids`, and `firmware`, where it is `null` unless the
+query's `kind` is `system`, and never `null` elsewhere. It is `{status, system, relation, candidates, translation}`:
+`status` how the resolution ended — `resolved`, `unknown`, `ambiguous` or `conflict`; `system` the `{source, key}` the
+answer is about, set exactly where the status is `resolved`; `relation` the tier that named it (`exactMatch`,
+`broadMatch` or `narrowMatch`), `null` exactly when `system` is; `candidates` the systems the asked pairs named alike —
+one pair can name several — each `{system, status}` and each system once, two or more exactly where the status is
+`ambiguous`; `translation` the platform table's answer for the asked pairs that went through it, in the projection
+below, or `null` where every pair was read live — and then a relation, where there is one, is `exactMatch` and there are
+no candidates, since only the table names those, and a translation whose intersection is a `conflict` names no system.
+Every status but `resolved` stands beside the caveat that states its reason in the answer's own caveats:
+`system-unknown`, `system-ambiguous` or `system-pairs-conflict`. A `savefile_query` that names a `system` answers a
+placement, which carries no `resolution`: the caveats resolving it stated lead the placement's own. Every other field
+that names a system is a `{source, key}` object, a firmware requirement's `system` may instead be `_unknown`, and caveat
+data names a system flat as `source` and `key`, or several as the parallel lists `sources` and `keys`.
+
+The two platform answers carry a `translation`, and so does every `resolution`; both are asserted in the **projection**
+the platform-table family uses: the serialized translation with every key's `citations` and the `source_versions` list
+removed. Everything else stays — the table version, per pair its echo, status and every source's
+`{source, status, keys}` in table order, each key `{key, relation}`, the intersection status and its sources, the
+conflict pairs, the caveats. The citations are held by the loader, which refuses an uncited mapping; the pinned versions
+by the reference suite.
+
 Caveats are `{code, data}` with `data` a flat object of strings. The codes are a closed vocabulary; so are root kinds,
 granularities, file-set states, holes (`needs`), emulator kinds, declaration states, system sources, path kinds and
 firmware needs. `scripts/validate_vectors.py` carries all of them, and the reference suite checks that list against
 atlas's own exports in both directions.
+
+## The platform-table family
+
+`vectors/platform-table/*.json` (family `platform-table`, schema **1**, counted apart from the machines' schema) pins
+the packaged platform table itself, without a machine: a client that vendors the table runs these against its own
+reading of it (#784 D27). A release that moved, added or dropped a mapping of a key these vectors ask shows up here as a
+changed expectation; one of any other key is caught by the projection snapshot, `tests/data/platform_projection.json`,
+which holds every single-key answer in this projection and fails the suite until it is renewed (#784 D33). A vector is
+`{name, rationale?, input, expected}`:
+
+- `input` is `{"pairs": [[source, key] | [source, key, version], …]}` — the pairs `atlas.translate` is asked with, every
+  part a non-empty string;
+- `expected` is the projection above: `table_version`, `pairs` (each echoing the asked `source`, `key` — surrounding
+  whitespace stripped — and `version`, then `status` and, for a known pair, every source in table order with its status
+  `keys` or `none` and its keys as `{key, relation}`), `intersection_status` (`agreed`, `conflict`, `unknown`),
+  `intersection` (every source, exactly when agreed), `conflict` (the known pairs, exactly when there is one) and
+  `caveats`.
 
 ## Running them
 
 ```bash
 python scripts/validate_vectors.py     # shape: does every vector state a legal machine and a legal answer
 python -m pytest tests/test_machine_vectors.py    # conformance: does the resolver answer exactly this
+python -m pytest tests/test_platform_table_vectors.py    # the platform table, pairs in, projection out
 ```
 
 The validator ships beside the corpus and runs on a bare Python — no atlas import, no dependencies, and it finds the

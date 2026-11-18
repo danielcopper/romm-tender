@@ -16,7 +16,8 @@ data. The rule for what serializes:
   ``*provenance`` is where one field's own value came from.
   ``FirmwareRequirement.system_source`` is neither and keeps its name: it is a
   closed vocabulary naming *which rule* assigned the system (an override, the
-  core's ``systemname``, a slug, or nothing), so it is data a client branches
+  core's ``systemname``, the system the core itself is named by, a standalone
+  card, or nothing), so it is data a client branches
   on and it serializes. ``InstallationRoot.provenance`` is the one
   ``provenance`` that serializes, for the same reason: it is not prose but a
   closed vocabulary (:data:`~atlas.installations.ROOT_PROVENANCES`) saying
@@ -40,6 +41,7 @@ from .disc_opens import Opened
 from .distribution_labels import distribution_label
 from .every_installation import InstallationAnswer
 from .firmware import (
+    SystemFiling,
     FirmwareAlternatives,
     FirmwareAnswer,
     FirmwareIdentification,
@@ -60,14 +62,16 @@ from .installations import (
     RomLocationsAnswer,
     RomPlacement,
     RootsAnswer,
+    SavePortabilityAnswer,
     SystemPlatformsAnswer,
     SystemsAnswer,
 )
 from .launch import Launcher
 from .launch_command import LaunchCommand, LauncherScript
-from .platforms import PlatformIdentities
+from .platforms import PlatformSourceKeys, PlatformTranslation, SystemPair, SystemResolution
 from .placement import (
     Caveat,
+    FileGroup,
     ModPlacement,
     SavefilePlacement,
     SavestateAbsence,
@@ -107,6 +111,18 @@ def _caveats_contract(caveats: Sequence[Caveat]) -> list[dict[str, Any]]:
     return [{"code": c.code, "data": data_contract(c.data)} for c in caveats]
 
 
+def _group_contract(group: FileGroup) -> dict[str, Any]:
+    """One file group — the one serialization a group has, in a save answer and in a part of a pair."""
+    return {
+        "dir": group.dir,
+        "files": None if group.files is None else list(group.files),
+        "granularity": group.granularity,
+        "role": group.role,
+        "size_fixed": group.size_fixed,
+        "slots": None if group.slots is None else list(group.slots),
+    }
+
+
 def _placement_core(placement: SavefilePlacement | SavestatePlacement) -> dict[str, Any]:
     """The fields both placement questions answer, in one shape.
 
@@ -125,16 +141,7 @@ def _placement_core(placement: SavefilePlacement | SavestatePlacement) -> dict[s
             "state": placement.file_set.state,
             "files": list(placement.file_set.files),
             "complete": placement.file_set.complete,
-            "groups": [
-                {
-                    "dir": group.dir,
-                    "files": None if group.files is None else list(group.files),
-                    "granularity": group.granularity,
-                    "role": group.role,
-                    "size_fixed": group.size_fixed,
-                }
-                for group in placement.file_set.groups
-            ],
+            "groups": [_group_contract(group) for group in placement.file_set.groups],
         },
         "caveats": _caveats_contract(placement.caveats),
     }
@@ -443,10 +450,45 @@ def _supplied_by_contract(supplied: SuppliedBy | None) -> dict[str, Any] | None:
     }
 
 
+def system_contract(system: SystemPair) -> dict[str, str]:
+    """A system as an answer names it: ``{source, key}``, the shape ``translation.pairs`` has (#784 D47)."""
+    return {"source": system[0], "key": system[1]}
+
+
+def _filing_contract(system: SystemFiling) -> dict[str, str] | str:
+    """A declared file's system: its pair, or the ``_unknown`` sentinel where nothing names it (#784 D49)."""
+    return system if isinstance(system, str) else system_contract(system)
+
+
+def resolution_contract(resolution: SystemResolution | None) -> dict[str, Any] | None:
+    """How the system a question named was resolved (#784 D44, D49) — ``null`` on a question that names none.
+
+    ``status`` says how it ended (D52). ``system`` and ``relation`` are ``null`` together, where the asked pairs
+    named no single system; ``candidates`` lists the systems they named alike,
+    each with its status, where they named several; ``translation`` is the
+    table's answer for the pairs that went through it, in the projection every
+    translation is asserted in, and ``null`` where every pair was read live.
+    """
+    if resolution is None:
+        return None
+    return {
+        "status": resolution.status,
+        "system": None if resolution.system is None else system_contract(resolution.system),
+        "relation": resolution.relation,
+        "candidates": [
+            {"system": system_contract(candidate.system), "status": candidate.status}
+            for candidate in resolution.candidates
+        ],
+        "translation": None
+        if resolution.translation is None
+        else platform_translation_contract(resolution.translation),
+    }
+
+
 def _requirement_contract(requirement: FirmwareRequirement) -> dict[str, Any]:
     return {
         "core_so": requirement.core_so,
-        "system": requirement.system,
+        "system": _filing_contract(requirement.system),
         "system_source": requirement.system_source,
         "need": requirement.need,
         "file_name": requirement.file_name,
@@ -648,7 +690,7 @@ def firmware_contract(answer: FirmwareAnswer) -> dict[str, Any]:
                 "identity": _identity_contract(f.identity),
                 "known_as": list(f.known_as),
                 "description": f.description,
-                "console": f.console,
+                "console": None if f.console is None else system_contract(f.console),
                 "concerns": [
                     {"emulator": c.emulator, "relation": c.relation} for c in f.concerns
                 ],
@@ -656,6 +698,7 @@ def firmware_contract(answer: FirmwareAnswer) -> dict[str, Any]:
             for f in answer.unclaimed
         ],
         "caveats": _caveats_contract(answer.caveats),
+        "resolution": resolution_contract(answer.resolution),
     }
 
 
@@ -713,7 +756,7 @@ def emulator_contract(entry: EmulatorEntry) -> dict[str, Any]:
     thing a client acts on.
     """
     return {
-        "system": entry.system,
+        "system": system_contract(entry.system),
         "label": entry.label,
         "kind": entry.kind,
         "core_so": entry.core_so,
@@ -749,31 +792,34 @@ def catalogue_contract(answer: CatalogueAnswer) -> dict[str, Any]:
     return {
         "entries": [emulator_contract(e) for e in answer.entries],
         "caveats": _caveats_contract(answer.caveats),
+        "resolution": resolution_contract(answer.resolution),
     }
 
 
 def launchable_contract(answer: LaunchabilityAnswer) -> dict[str, Any]:
-    """The stable form of a launchability answer — the verdict, and everything a 'no' needs.
+    """The stable form of a launchability answer — the emulator's verdict, and everything a 'no' needs.
 
-    ``entry`` travels with the two verdicts that have one — ``launchable``,
-    and ``entry-not-accepted``, where the entry *is* the finding — and is
-    ``null`` on the rest: an emulator for a file nothing launches would
-    answer a different question. ``alternatives`` is ``entry-not-accepted``'s
-    remedy alone: the declared entries established to take the file.
-    ``installers`` is ``needs-installation``'s remedy, and ``null`` on every
-    other verdict: each emulator that installs the file, with the system's
-    entry that runs it through the same form as ``entry``, or ``null`` where
-    the system declares none — an empty list says that no emulator RetroDECK
-    or EmuDeck sets up installs it. ``boots`` is ``launchable``'s alone, and
-    only where atlas read the judged entry's own boot of the file: the
-    ``file`` the emulator's loader is handed and the ``disc_root`` it mounts,
-    ``null`` for a game that boots without one. ``opens`` travels with the two
-    verdicts that name an entry, and only where atlas read what the entry's
-    emulator opens through the file: each file in the order it is opened, how
-    it came to be opened, the file that names it or whose name it derives from,
-    and whether it is there. ``accepted`` stays the declared tokens
-    verbatim, the same non-vocabulary the ROM placement's ``extensions``
-    field carries.
+    ``entry`` travels with the three verdicts about the entry that would run —
+    ``launchable``, ``entry-not-accepted``, where the entry *is* the finding,
+    and ``unestablished`` — and is ``null`` on the rest: an emulator for a file
+    nothing launches would answer a different question. ``alternatives`` is
+    ``entry-not-accepted``'s remedy alone: the declared entries established to
+    take the path. ``installers`` is ``needs-installation``'s remedy, and
+    ``null`` on every other verdict: each emulator that installs the file, with
+    the system's entry that runs it through the same form as ``entry``, or
+    ``null`` where the system declares none — an empty list says that no
+    emulator RetroDECK or EmuDeck sets up installs it. ``boots`` rides
+    ``launchable`` and ``unestablished``, and only where atlas read the judged
+    entry's own boot of the path: the ``file`` the emulator's loader is handed
+    and the ``disc_root`` it mounts, ``null`` for a game that boots without
+    one. ``opens`` travels with the three verdicts that name an entry, and only
+    where atlas read what the entry's emulator opens through the file: each
+    file in the order it is opened, how it came to be opened, the file that
+    names it or whose name it derives from, and whether it is there.
+    ``extension`` is the token ES-DE derives from the path, and ``accepted``
+    the declared tokens verbatim — the frontend's list, never weighed in the
+    verdict — the same non-vocabulary the ROM placement's ``extensions`` field
+    carries.
     """
     return {
         "verdict": answer.verdict,
@@ -785,6 +831,7 @@ def launchable_contract(answer: LaunchabilityAnswer) -> dict[str, Any]:
         "boots": None if answer.boots is None else _boot_body(answer.boots),
         "opens": None if answer.opens is None else [_opened_body(opened) for opened in answer.opens],
         "caveats": _caveats_contract(answer.caveats),
+        "resolution": resolution_contract(answer.resolution),
     }
 
 
@@ -823,6 +870,7 @@ def launch_command_contract(answer: LaunchCommandAnswer) -> dict[str, Any]:
         "entry": emulator_contract(answer.entry) if answer.entry is not None else None,
         "command": _launch_command_body(answer.command) if answer.command is not None else None,
         "caveats": _caveats_contract(answer.caveats),
+        "resolution": resolution_contract(answer.resolution),
     }
 
 
@@ -870,30 +918,76 @@ def _launcher_script_body(script: LauncherScript) -> dict[str, Any]:
 def systems_contract(answer: SystemsAnswer) -> dict[str, Any]:
     """The stable form of a systems answer — every system the installation lists, or why none."""
     return {
-        "systems": list(answer.systems),
+        "systems": [system_contract(system) for system in answer.systems],
         "caveats": _caveats_contract(answer.caveats),
     }
 
 
-def platform_systems_contract(answer: PlatformSystemsAnswer) -> dict[str, Any]:
-    """The stable form of a forward platform answer — resolved platforms or system, matches, statuses.
+def _source_keys_contract(answers: Sequence[PlatformSourceKeys]) -> list[dict[str, Any]]:
+    return [
+        {
+            "source": a.source,
+            "status": a.status,
+            "keys": [
+                {"key": k.key, "relation": k.relation, "citations": list(k.citations)}
+                for k in a.keys
+            ],
+        }
+        for a in answers
+    ]
 
-    ``systems`` names the one system an id stands for alone (the per-system
-    table, which wins), ``platforms`` what the crosswalk resolved it to
-    otherwise — never both. Both empty means the id resolved to nothing and
-    the ``platform-unmapped`` caveat says so; an empty ``matches`` under
-    resolved platforms is the different statement that nothing on this
-    machine answers to a real platform. Every match carries its status and
-    where its tags came from — the two fields a consumer branches on.
+
+def platform_translation_contract(translation: PlatformTranslation) -> dict[str, Any]:
+    """The stable form of a platform translation — per pair, the intersection, the versions.
+
+    ``sources`` under each pair and ``intersection`` list every source in table
+    order, each with its status (``keys`` or ``none``) and its keys; every key
+    carries its relation to what was asked and its citations. An ``unknown``
+    pair carries no sources. ``conflict`` names the known pairs that share no
+    system. The table version and the pinned version of every project each
+    source's column is read from ride along (#784 D11, D42).
     """
     return {
-        "vocabulary": answer.vocabulary,
-        "value": answer.value,
-        "platforms": list(answer.platforms),
-        "systems": list(answer.systems),
+        "table_version": translation.table_version,
+        "source_versions": [
+            {"source": v.source, "upstream": v.upstream, "version": v.version} for v in translation.source_versions
+        ],
+        "pairs": [
+            {
+                "source": p.source,
+                "key": p.key,
+                "version": p.version,
+                "status": p.status,
+                "sources": _source_keys_contract(p.sources),
+            }
+            for p in translation.pairs
+        ],
+        "intersection_status": translation.intersection_status,
+        "intersection": _source_keys_contract(translation.intersection),
+        "conflict": [
+            {"source": p.source, "key": p.key, "version": p.version} for p in translation.conflict
+        ],
+        "caveats": _caveats_contract(translation.caveats),
+    }
+
+
+def platform_systems_contract(answer: PlatformSystemsAnswer) -> dict[str, Any]:
+    """The stable form of a forward platform answer — the translation, the matches, their statuses.
+
+    Both forms serialize here, in one shape: one pair (``systems_for_platform``)
+    and several (``systems_for_platforms``). ``translation`` is the table's
+    answer for the asked pairs, and its ``pairs`` name them in the order asked;
+    ``matches`` is this installation's half. An empty ``matches`` under agreed pairs is the statement that
+    nothing on this machine answers to a real system; every unknown pair
+    states the translation's own ``platform-unmapped``, ``platform-excluded``
+    or ``platform-source-unknown``. Every match carries its status and where
+    its tags came from — the two fields a consumer branches on.
+    """
+    return {
+        "translation": platform_translation_contract(answer.translation),
         "matches": [
             {
-                "system": m.system,
+                "system": system_contract(m.system),
                 "status": m.status,
                 "platforms": list(m.platforms),
                 "tags_source": m.tags_source,
@@ -904,33 +998,24 @@ def platform_systems_contract(answer: PlatformSystemsAnswer) -> dict[str, Any]:
     }
 
 
-def _platform_identities_contract(identities: PlatformIdentities) -> dict[str, Any]:
-    return {
-        "platform": identities.platform,
-        "igdb": [{"id": i.id, "slug": i.slug, "name": i.name} for i in identities.igdb],
-        "libretro": list(identities.libretro),
-        "screenscraper": identities.screenscraper,
-        "thegamesdb": identities.thegamesdb,
-    }
-
-
 def system_platforms_contract(answer: SystemPlatformsAnswer) -> dict[str, Any]:
-    """The stable form of a reverse platform answer — the tags and their identities.
+    """The stable form of a reverse platform answer — the tags and the table's translation.
 
-    ``identities`` carries one entry per tag the crosswalk knows; the tags it
-    does not know are stated by the ``platform-unknown`` / ``platform-scraping-ignored``
-    caveats, so tags, identities and caveats always add up. ``status`` and
-    ``tags_source`` qualify the whole answer: whether the system is here, and
-    whether its tags were read off the machine or taken from the vocabulary
-    snapshot.
+    ``translation`` is the table's answer for the system (by its catalogue
+    name, or by its platform tags that each name one system); the tags that
+    name no ES-DE platform id are stated by the ``platform-unknown`` /
+    ``platform-scraping-ignored`` caveats. ``status`` and ``tags_source``
+    qualify the whole answer: whether the system is here, and whether its tags
+    were read off the machine or taken from the vocabulary snapshot.
     """
     return {
-        "system": answer.system,
+        "system": None if answer.system is None else system_contract(answer.system),
         "status": answer.status,
         "tags_source": answer.tags_source,
         "platforms": list(answer.platforms),
-        "identities": [_platform_identities_contract(i) for i in answer.identities],
+        "translation": platform_translation_contract(answer.translation),
         "caveats": _caveats_contract(answer.caveats),
+        "resolution": resolution_contract(answer.resolution),
     }
 
 
@@ -949,6 +1034,7 @@ def rom_placement_contract(placement: RomPlacement) -> dict[str, Any]:
         "physical_dir": placement.physical_dir,
         "extensions": list(placement.extensions),
         "caveats": _caveats_contract(placement.caveats),
+        "resolution": resolution_contract(placement.resolution),
     }
 
 
@@ -963,7 +1049,7 @@ def rom_locations_contract(answer: RomLocationsAnswer) -> dict[str, Any]:
     """
     return {
         "placements": [
-            {"system": entry.system, "placement": rom_placement_contract(entry.placement)}
+            {"system": system_contract(entry.system), "placement": rom_placement_contract(entry.placement)}
             for entry in answer.placements
         ],
         "caveats": _caveats_contract(answer.caveats),
@@ -994,6 +1080,44 @@ def roots_contract(answer: RootsAnswer) -> dict[str, Any]:
             for entry in answer.roots
         ],
         "caveats": _caveats_contract(answer.caveats),
+    }
+
+
+def save_portability_contract(answer: SavePortabilityAnswer) -> dict[str, Any]:
+    """The stable form of a save-portability answer — the pair's verdict, and one verdict per part (#577).
+
+    ``source`` and ``target`` travel in the catalogue entry's own form, ``null``
+    where a label names no entry. Each part names the memory it holds and its
+    ``slot``, and carries both entries' file groups in the form their save
+    answers serialize a group, narrowed to the files that are this part —
+    ``target_group`` is ``null`` where the target's answer states none — and
+    ``region``, the region the memory is kept apart for, ``null`` where it is
+    kept for every region.
+    ``moves`` lists what differs on a ``same-data`` part and is empty on every
+    other; ``conversion`` is the rule a ``convertible`` part's source pins, and
+    ``null`` wherever no plain rule is stated.
+    """
+    return {
+        "verdict": answer.verdict,
+        "source": None if answer.source is None else emulator_contract(answer.source),
+        "target": None if answer.target is None else emulator_contract(answer.target),
+        "parts": [
+            {
+                "memory": part.memory,
+                "slot": part.slot,
+                "region": part.region,
+                "verdict": part.verdict,
+                "source_group": _group_contract(part.source_group),
+                "target_group": None if part.target_group is None else _group_contract(part.target_group),
+                "moves": list(part.moves),
+                "conversion": None
+                if part.conversion is None
+                else {"rule": part.conversion.rule, "length": part.conversion.length},
+            }
+            for part in answer.parts
+        ],
+        "caveats": _caveats_contract(answer.caveats),
+        "resolution": resolution_contract(answer.resolution),
     }
 
 

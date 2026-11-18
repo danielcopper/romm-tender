@@ -38,6 +38,7 @@ from .contract import (
     installation_contract,
     launch_command_contract,
     launchable_contract,
+    save_portability_contract,
     mod_answer_contract,
     platform_systems_contract,
     rom_locations_contract,
@@ -51,7 +52,7 @@ from .contract import (
     systems_contract,
     texture_answer_contract,
 )
-from .platforms import KNOWN_PLATFORM_VOCABULARIES
+from .platforms import FOLDER_SOURCE
 from .detect import detect
 from .every_installation import EveryInstallation
 from .installations import EmuDeck, Installation, RetroDeck
@@ -110,6 +111,10 @@ _QUESTIONS: dict[str, tuple[_Ask, _Serialize]] = {
         lambda target, args: target.systems_for_platform(args.vocabulary, args.value),
         platform_systems_contract,
     ),
+    "systems-for-platforms": (
+        lambda target, args: target.systems_for_platforms(args.pair),
+        platform_systems_contract,
+    ),
     "platform-ids": (
         lambda target, args: target.platform_ids(args.system),
         system_platforms_contract,
@@ -127,6 +132,17 @@ _QUESTIONS: dict[str, tuple[_Ask, _Serialize]] = {
     "launch-command": (
         lambda target, args: target.launch_command(args.system, args.content, label=args.label),
         launch_command_contract,
+    ),
+    "save-portability": (
+        lambda target, args: target.save_portability(
+            args.system,
+            source=args.source,
+            target=args.target,
+            content_path=args.content,
+            cwd=args.cwd,
+            appendconfig=args.appendconfig,
+        ),
+        save_portability_contract,
     ),
     "firmware-for-core": (
         lambda target, args: target.firmware_for_core(
@@ -157,7 +173,6 @@ _QUESTIONS: dict[str, tuple[_Ask, _Serialize]] = {
 _ROOTS_KINDS = (RetroDeck.kind, EmuDeck.kind)
 
 # Help texts shared by every subcommand that takes the same input.
-_SYSTEM_ID_HELP = "system id, e.g. gba"
 _VERIFY_HELP = "hash present files against known dumps"
 _FIRMWARE_CONTENT_HELP = (
     "absolute path of the game the launch is for (an .m3u or a disc image): a group the console region selects "
@@ -179,6 +194,59 @@ def _absolute_argument(value: str) -> str:
     if not os.path.isabs(value):
         raise argparse.ArgumentTypeError(f"must be an absolute path, got {value!r}")
     return value
+
+
+def _pair_argument(value: str) -> tuple[str, ...]:
+    """``SOURCE:KEY`` or ``SOURCE:KEY@VERSION`` as the pair the library takes — anything else is a usage error."""
+    source, colon, rest = value.partition(":")
+    key, at, version = rest.partition("@")
+    if not colon or not source or not key or (at and not version):
+        raise argparse.ArgumentTypeError(f"a pair is SOURCE:KEY or SOURCE:KEY@VERSION, got {value!r}")
+    return (source, key, version) if at else (source, key)
+
+
+# What a subcommand's system takes (#784 D49): the bare name, read live in the
+# installation's own catalogue source, or one or more pairs. Set on each such
+# subcommand; ``True`` where a system must be named.
+_SYSTEM_REQUIRED = "system_required"
+_SYSTEM_NAME_HELP = (
+    "system name in the installation's own catalogue source, e.g. gba on RetroDECK or EmuDeck, "
+    "'Nintendo - Game Boy Advance' on a bare RetroArch"
+)
+_SYSTEM_PAIR_HELP = (
+    "the system as a pair of the platform table instead of a bare name, e.g. romm:snes or "
+    "libretro:'Atari - 2600'@eac3a278; repeat it to ask with several pairs together"
+)
+
+
+def _add_system(question: argparse.ArgumentParser, *, flag: bool = False, required: bool = True) -> None:
+    """A subcommand's system argument: ``SYSTEM`` (or ``--system``) for a bare name, ``--pair`` for pairs.
+
+    A bare name is the short form of a pair in the installation's own
+    catalogue source; ``--pair`` names a system in any source of the platform
+    table, and repeats for several pairs. Giving both is a usage error, and so
+    is giving neither where the question needs a system (:func:`_system_of`).
+    """
+    if flag:
+        question.add_argument("--system", help=_SYSTEM_NAME_HELP)
+    else:
+        question.add_argument("system", nargs="?", help=_SYSTEM_NAME_HELP)
+    question.add_argument(
+        "--pair", action="append", type=_pair_argument, metavar="SOURCE:KEY[@VERSION]", help=_SYSTEM_PAIR_HELP
+    )
+    question.set_defaults(**{_SYSTEM_REQUIRED: required})
+
+
+def _system_of(parser: argparse.ArgumentParser, args: argparse.Namespace) -> object:
+    """The system argument a subcommand was given: the bare name, the pairs, or ``None`` — a usage error otherwise."""
+    pairs = getattr(args, "pair", None)
+    if args.system is not None and pairs:
+        parser.error("name the system once: SYSTEM (or --system) for a bare name, or --pair, not both")
+    if pairs:
+        return list(pairs)
+    if args.system is None and getattr(args, _SYSTEM_REQUIRED):
+        parser.error("this question needs a system: SYSTEM (or --system) for a bare name, or --pair")
+    return args.system
 
 
 def _appendconfig_argument(value: str) -> str:
@@ -253,7 +321,7 @@ def build_parser() -> argparse.ArgumentParser:
         question.add_argument("--content", help="path of the content file being asked about")
         question.add_argument("--core", help="libretro core .so name, e.g. mgba_libretro.so")
         if system:
-            question.add_argument("--system", help="system the content is filed under")
+            _add_system(question, flag=True, required=False)
         if cwd:
             _add_cwd(question)
         if appendconfig:
@@ -300,36 +368,58 @@ def build_parser() -> argparse.ArgumentParser:
     for_platform = commands.add_parser(
         "systems-for-platform",
         parents=[common, selecting],
-        help="which systems here answer to a public platform id",
+        help="which systems here answer to a (source, key) pair of the platform table",
     )
+    # Not a closed choice: a source the table does not hold is a question with
+    # an answer (unknown, platform-source-unknown), as it is for the library. The help
+    # names examples rather than the list, so building the parser reads no table.
     for_platform.add_argument(
         "vocabulary",
-        choices=KNOWN_PLATFORM_VOCABULARIES,
-        help="the public vocabulary the id comes from",
+        help=(
+            "the source the key comes from — a column of the platform table, such as esde, "
+            f"romm or screenscraper, or '{FOLDER_SOURCE}' for a bare folder name"
+        ),
     )
     for_platform.add_argument(
-        "value", help="the id in that vocabulary, e.g. an IGDB slug or numeric id"
+        "value", help="the key in that source, e.g. a RomM slug or a ScreenScraper id"
+    )
+
+    for_platforms = commands.add_parser(
+        "systems-for-platforms",
+        parents=[common, selecting],
+        help="which systems here answer to several (source, key) pairs together, and what they share",
+    )
+    for_platforms.add_argument(
+        "--pair",
+        action="append",
+        required=True,
+        type=_pair_argument,
+        metavar="SOURCE:KEY[@VERSION]",
+        help=(
+            f"one pair, e.g. romm:genesis, {FOLDER_SOURCE}:megadrive or romm:genesis@5.4.1; repeat it for "
+            "every pair. No source or key of the platform table contains ':' or '@', so each splits once"
+        ),
     )
 
     platform_ids = commands.add_parser(
         "platform-ids",
         parents=[common, selecting],
-        help="a system's platform tags and their public identities",
+        help="a system's platform tags and every source's keys for it",
     )
-    platform_ids.add_argument("system", help=_SYSTEM_ID_HELP)
+    _add_system(platform_ids)
 
     emulators = commands.add_parser(
         "emulators-for",
         parents=[common, selecting],
         help="which emulators would launch this system",
     )
-    emulators.add_argument("system", help=_SYSTEM_ID_HELP)
+    _add_system(emulators)
     emulators.add_argument("--content", help="path of the content file being asked about")
 
     rom = commands.add_parser(
         "rom-location", parents=[common, selecting], help="where this system's ROMs are kept"
     )
-    rom.add_argument("system", help=_SYSTEM_ID_HELP)
+    _add_system(rom)
 
     commands.add_parser(
         "rom-locations",
@@ -342,7 +432,7 @@ def build_parser() -> argparse.ArgumentParser:
         parents=[common, selecting],
         help="whether this file launches as this system's content, and why not",
     )
-    launch.add_argument("system", help="system id, e.g. dreamcast")
+    _add_system(launch)
     launch.add_argument("content", help="path of the content file")
     launch.add_argument("--label", help="the catalogue entry's label; default: the entry that would run")
 
@@ -351,11 +441,25 @@ def build_parser() -> argparse.ArgumentParser:
         parents=[common, selecting],
         help="the command the frontend would run for this file, taken apart",
     )
-    command.add_argument("--system", required=True, help=_SYSTEM_ID_HELP)
+    _add_system(command, flag=True)
     command.add_argument(
         "--content", required=True, type=_absolute_argument, help="absolute path of the content file"
     )
     command.add_argument("--label", help="the catalogue entry's label; default: the frontend's own choice")
+
+    portability = commands.add_parser(
+        "save-portability",
+        parents=[common, selecting],
+        help="whether one entry reads the save another entry of the system wrote, part by part",
+    )
+    _add_system(portability)
+    # --source and --target are catalogue labels, not the source of a pair:
+    # --pair names the system, these name the two entries of it.
+    portability.add_argument("--source", required=True, help="the label of the catalogue entry that wrote the save")
+    portability.add_argument("--target", required=True, help="the label of the catalogue entry that would read it")
+    portability.add_argument("--content", help="path of the content file the save is for")
+    _add_cwd(portability)
+    _add_appendconfig(portability)
 
     for_core = commands.add_parser(
         "firmware-for-core",
@@ -372,7 +476,7 @@ def build_parser() -> argparse.ArgumentParser:
         parents=[common, selecting],
         help="which cores run this system, and what each wants",
     )
-    for_system.add_argument("--system", required=True, help=_SYSTEM_ID_HELP)
+    _add_system(for_system, flag=True)
     for_system.add_argument("--verify", action="store_true", help=_VERIFY_HELP)
     for_system.add_argument("--content", type=_absolute_argument, help=_FIRMWARE_CONTENT_HELP)
     _add_cwd(for_system)
@@ -405,7 +509,10 @@ def run(argv: Sequence[str], *, home: str | None = None, machine: Machine | None
     nothing and lets the real machine answer. ``--home`` on the command line
     wins over the *home* argument.
     """
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if hasattr(args, _SYSTEM_REQUIRED):
+        args.system = _system_of(parser, args)
     where = args.home if args.home is not None else home
     installations = detect(where if where is not None else os.path.expanduser("~"), machine)
 

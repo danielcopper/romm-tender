@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from domain.emulator_sources import ArrangedSource, SourceReport, SourcesReading
     from domain.firmware_wants import FirmwareCatalogue, SourceCatalogues
     from domain.launchability import Launchability
-    from domain.platform_system import PlatformIds, PlatformSystem
+    from domain.platform_system import PlatformKeys, PlatformSystem, SystemArgument
     from domain.retrodeck_folders import FolderRefused, MoveRoots
     from domain.rom_install import RomInstall
     from domain.save_answer import SaveAnswer
@@ -32,13 +32,12 @@ if TYPE_CHECKING:
 
 
 class SourcePlatformSystems(Protocol):
-    """Which system a platform is in one emulator source, asked of the resolver with the platform's ids."""
+    """Which system a platform is in one emulator source, asked of the resolver by the platform's slug and folder."""
 
     def platform_system(
         self,
-        ids: PlatformIds,
+        keys: PlatformKeys,
         *,
-        platform_slug: str,
         platform_name: str,
         source: str | None = None,
         reading: SourcesReading | None = None,
@@ -56,7 +55,7 @@ class SourcePlatformSystems(Protocol):
 class PlatformSystems(Protocol):
     """The system a RomM platform is in an emulator source, and the system an installed game keeps.
 
-    A platform's system reads its kept ids and may read RomM's listing and ask
+    A platform's system reads its kept record and may read RomM's listing and ask
     the resolver, so no call is made while a Unit of Work is open or on the
     event loop. An installed game's system comes from its record alone.
     """
@@ -72,9 +71,9 @@ class PlatformSystems(Protocol):
         """The system *platform_slug* is in *source*, the answering source where it is ``None``.
 
         A download names the source it lands in; every other question asks the
-        answering source. Where no ids are kept for the platform they are read
-        from RomM, unless *ask_romm* is false — a caller that must not reach the
-        network then gets the answer for a platform with no ids. A read that
+        answering source. Where nothing is kept for the platform, RomM's listing
+        is read and kept, unless *ask_romm* is false — a caller that must not
+        reach the network then gets the answer for the platform's slug alone. A read that
         fails raises nothing: it answers ``UNASKED`` with the reason and message
         ``classify_error`` gives the failure and the source that would have been
         asked, and keeps nothing.
@@ -91,7 +90,7 @@ class PlatformSystems(Protocol):
         """The slug of every kept platform; ``None`` where no listing was ever kept. Reads nothing from RomM.
 
         Each platform RomM listed at the last sync, and every one kept since —
-        a listing read for a platform with no ids keeps the whole listing.
+        a listing read for a platform with nothing kept keeps the whole listing.
         """
         ...
 
@@ -138,11 +137,11 @@ class FirmwarePlatformResolver(Protocol):
     :class:`FirmwareResolver`.
     """
 
-    def __call__(self, system: str) -> FirmwareCatalogue:
+    def __call__(self, system: SystemArgument, /) -> FirmwareCatalogue:
         """*system*'s demand in the emulator source that answers for it."""
         ...
 
-    def every_source(self, system: str) -> SourceCatalogues:
+    def every_source(self, system: SystemArgument, /) -> SourceCatalogues:
         """*system*'s demand in each enabled source, in the user's order, and the sources that could not be read."""
         ...
 
@@ -184,7 +183,7 @@ class RetroDeckFolders(Protocol):
     detected. Every path is symlink-resolved.
     """
 
-    def download_folder(self, system: str) -> str | FolderRefused: ...
+    def download_folder(self, system: SystemArgument, /) -> str | FolderRefused: ...
 
     def rom_root(self) -> str | FolderRefused: ...
 
@@ -234,12 +233,13 @@ class CoreInfoProvider(Protocol):
     """
 
     def get_active_core(
-        self, system_name: str, *, reading: SourcesReading | None = None
+        self, system: SystemArgument, /, *, reading: SourcesReading | None = None
     ) -> tuple[str | None, str | None]: ...
 
     def get_emulator_options(
         self,
-        system_name: str,
+        system: SystemArgument,
+        /,
         *,
         reading: SourcesReading | None = None,
         content_path: str | None = None,
@@ -251,7 +251,7 @@ class CoreInfoProvider(Protocol):
         ...
 
     def launchability(
-        self, system_name: str, content_path: str, *, label: str, reading: SourcesReading | None = None
+        self, system: SystemArgument, content_path: str, /, *, label: str, reading: SourcesReading | None = None
     ) -> Launchability: ...
 
 
@@ -315,11 +315,11 @@ class SaveLocationReader(Protocol):
     """
 
     def resolve_save_answer(
-        self, *, system: str, content_path: str, emulator_label: str | None, content_installed: bool
+        self, *, system: SystemArgument, content_path: str, emulator_label: str | None, content_installed: bool
     ) -> SaveAnswer: ...
 
     def resolve_savestate_location(
-        self, *, system: str, content_path: str, emulator_label: str | None
+        self, *, system: SystemArgument, content_path: str, emulator_label: str | None
     ) -> SavestateLocation | NoSavestates | None: ...
 
     def installation_detected(self) -> bool: ...
@@ -335,7 +335,7 @@ class SystemM3uSupportFn(Protocol):
     for an unknown system or when ``es_systems.xml`` cannot be found.
     """
 
-    def __call__(self, system_name: str) -> bool: ...
+    def __call__(self, system: SystemArgument, /) -> bool: ...
 
 
 class SystemSupportedExtensionsFn(Protocol):
@@ -352,15 +352,16 @@ class SystemSupportedExtensionsFn(Protocol):
     :class:`CoreInfoProvider`; without one the call takes a fresh reading.
     """
 
-    def __call__(self, system_name: str, *, reading: SourcesReading | None = None) -> frozenset[str]: ...
+    def __call__(self, system: SystemArgument, /, *, reading: SourcesReading | None = None) -> frozenset[str]: ...
 
 
 class SystemKnownFn(Protocol):
-    """Whether ``es_systems.xml`` lists a system at all — the same source as the accept-list.
+    """Whether the frontend's catalogue holds a system at all, as the resolver resolves it.
 
-    ``True`` when the system is listed, ``False`` when the file was read and does
-    not name it, and ``None`` when the file could not be read, which is a
-    different thing from a denial and must not be treated as one.
+    ``True`` when it holds it, ``False`` when the catalogue was read and holds
+    no such system, and ``None`` when the catalogue could not be read or the
+    system resolved to several of its systems, which is a different thing from
+    a denial and must not be treated as one.
 
     The candidate search asks before it searches a system's directory: a
     directory that is not an ES-DE system is not a place a game can live, so a
@@ -370,7 +371,7 @@ class SystemKnownFn(Protocol):
     through for a directory that was never a system.
     """
 
-    def __call__(self, system_name: str) -> bool | None: ...
+    def __call__(self, system: SystemArgument, /) -> bool | None: ...
 
 
 class StartCommandReader(Protocol):
@@ -385,8 +386,9 @@ class StartCommandReader(Protocol):
 
     def start_command(
         self,
-        system: str,
+        system: SystemArgument,
         content_path: str,
+        /,
         *,
         label: str,
         writable: tuple[str, ...] = (),

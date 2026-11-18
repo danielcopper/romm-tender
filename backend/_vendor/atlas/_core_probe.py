@@ -321,6 +321,9 @@ def main(argv: list[str]) -> int:
         # fact; RetroArch reads the same struct field to decide whether an
         # archive is passed through raw (task_content.c:742).
         "block_extract": bool(info.block_extract),
+        # Whether RetroArch hands the core the path rather than the bytes
+        # (task_content.c:744-745), read off the same struct.
+        "need_fullpath": bool(info.need_fullpath),
     }
     # Phase 1: the base line survives even if phase 2 crashes the process.
     print(json.dumps(base), flush=True)

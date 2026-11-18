@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 
     from domain.emulator_commands import EmulatorOption
     from domain.emulator_sources import SourcesReading
+    from domain.platform_system import SystemArgument
     from domain.rom import Rom
     from domain.rom_install import RomInstall
     from services.protocols import (
@@ -137,7 +138,7 @@ class ActiveCoreResolver:
         platform: StoredPick | None,
         options: list[EmulatorOption],
         rom: Rom,
-        system: str,
+        system: SystemArgument,
     ) -> None:
         """Warn for each stored label the precedence passed over because no entry carries it any more."""
         if game is not None and option_for_label(options, game.label) is None:

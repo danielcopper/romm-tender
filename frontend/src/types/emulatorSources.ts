@@ -51,8 +51,11 @@ export type EmulatorSourceDirection = "up" | "down";
 
 /** Why an emulator list could not be given: no source answers (`no_source`,
  *  `switched_off`), the answering source's catalogue was refused, the
- *  platform has no switched-on system there (`no_platform_system`,
- *  `platform_system_off`), or RomM could not be read for the platform's ids
+ *  platform has no system to use there — none matched (`platform_unmatched`),
+ *  none the source's frontend has (`no_platform_system`), one this machine has
+ *  not set up (`platform_system_not_here`), a switched-off one
+ *  (`platform_system_off`), or several the resolver names none of
+ *  (`platform_systems_several`) — or RomM could not be read for the platform
  *  (one of {@link RommErrorReason}, `server_unreachable` while it is offline). */
 export type EmulatorDataReason =
   | RommErrorReason
@@ -63,14 +66,21 @@ export type EmulatorDataReason =
   | "not_set_up"
   | "unavailable"
   | "no_platform_system"
-  | "platform_system_off";
+  | "platform_system_off"
+  | "platform_system_not_here"
+  | "platform_unmatched"
+  | "platform_systems_several";
 
-/** The system a RomM platform is in the source asked: the one taken, the
- *  switched-off one named, or none. `platform` is RomM's display name. */
+/** The system a RomM platform is in the source asked: the one taken, several
+ *  none of which is taken, switched-off ones, ones this machine has not set up,
+ *  none the source's frontend has, or a platform the resolver cannot match
+ *  (#2751 D2). `system` is the one system named, `systems` every one the state
+ *  names, each by its key; `platform` is RomM's display name. */
 export interface PlatformSystemAnswer {
-  state: "found" | "switched_off" | "no_system";
+  state: "found" | "several" | "switched_off" | "not_here" | "no_system" | "unmatched";
   source: string;
   system: string | null;
+  systems: string[];
   platform: string;
 }
 

@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Sequence
 
+    from domain.platform_system import SystemArgument
     from domain.rom_candidates import Kind
     from services.protocols import (
         DebugLogger,
@@ -142,7 +143,7 @@ class CandidateSearch:
         """
         platform_dir = os.path.dirname(checked_path)
         platform = self._platform_systems.platform_system(rom_detail.get("platform_slug", ""), source=RETRODECK)
-        system = platform.taken
+        system = platform.one_system
         if system is None:
             return
         incoming_name = os.path.basename(checked_path)
@@ -212,7 +213,7 @@ class CandidateSearch:
         directory is content no emulator will ever look at.
         """
         platform = self._platform_systems.platform_system(platform_slug, source=RETRODECK, ask_romm=False)
-        system = platform.taken
+        system = platform.one_system
         platform_dir = None if system is None else self._platform_dir(system)
         wanted_name = normalize_rom_name(fs_name)
         if system is None or platform_dir is None or not wanted_name:
@@ -247,7 +248,7 @@ class CandidateSearch:
             f"name={wanted_name or '<empty>'} entries={len(entries)} found={len(found)}"
         )
 
-    def _platform_dir(self, system: str) -> str | None:
+    def _platform_dir(self, system: SystemArgument) -> str | None:
         """The folder *system*'s games live in — the folder a download of one lands in.
 
         The download's own folder, from the same question
@@ -270,7 +271,7 @@ class CandidateSearch:
 
     # ── Shared ──────────────────────────────────────────────────────
 
-    def _searchable_dir(self, system: str) -> bool:
+    def _searchable_dir(self, system: SystemArgument) -> bool:
         """Whether *system*'s directory is a place a game for it can live.
 
         ``es_systems.xml`` is the same source the accept-list comes from, so this
@@ -284,7 +285,7 @@ class CandidateSearch:
         self,
         entries: tuple[EntryT, ...],
         *,
-        system: str,
+        system: SystemArgument,
         wanted: frozenset[str],
         covered: frozenset[str],
     ) -> tuple[EntryT, ...]:
@@ -307,7 +308,7 @@ class CandidateSearch:
         self,
         entries: tuple[LocalEntry, ...],
         *,
-        system: str,
+        system: SystemArgument,
         wanted: frozenset[str],
         covered: frozenset[str],
         served: frozenset[Kind],

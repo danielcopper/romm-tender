@@ -55,11 +55,13 @@ from .installations import (
     LaunchCommandAnswer,
     PlatformSystemsAnswer,
     RomLocationsAnswer,
+    SavePortabilityAnswer,
     RomPlacement,
     SystemPlatformsAnswer,
     SystemsAnswer,
 )
 from .machine import Machine
+from .platforms import SystemArgument
 from .placement import (
     ModPlacement,
     SavefilePlacement,
@@ -142,7 +144,7 @@ class EveryInstallation:
         *,
         content_path: str | None = None,
         core_so: str | None = None,
-        system: str | None = None,
+        system: SystemArgument | None = None,
         cwd: str | None = None,
         appendconfig: Sequence[str] = (),
     ) -> tuple[InstallationAnswer[SavefilePlacement | Unresolved], ...]:
@@ -256,9 +258,9 @@ class EveryInstallation:
     def systems_for_platform(
         self, vocabulary: str, value: str
     ) -> tuple[InstallationAnswer[PlatformSystemsAnswer], ...]:
-        """Which of each installation's systems answer to a public platform id.
+        """Which of each installation's systems answer to a ``(source, key)`` pair.
 
-        The fan-out this question was made for: the same IGDB id lands on a
+        The fan-out this question was made for: the same RomM slug lands on a
         declared system here, a disabled one there and nothing at all on the
         third arrangement — and all three are true, each with its status.
         """
@@ -266,19 +268,26 @@ class EveryInstallation:
             lambda installation: installation.systems_for_platform(vocabulary, value)
         )
 
-    def platform_ids(self, system: str) -> tuple[InstallationAnswer[SystemPlatformsAnswer], ...]:
-        """Each installation's platform tags and public identities for *system*."""
+    def systems_for_platforms(
+        self, pairs: Sequence[Sequence[str | None]]
+    ) -> tuple[InstallationAnswer[PlatformSystemsAnswer], ...]:
+        """Which of each installation's systems answer to several ``(source, key)`` pairs together."""
+        asked = tuple(pairs)  # one frozen copy, so every installation is asked the same pairs
+        return self._ask(lambda installation: installation.systems_for_platforms(asked))
+
+    def platform_ids(self, system: SystemArgument) -> tuple[InstallationAnswer[SystemPlatformsAnswer], ...]:
+        """Each installation's platform tags for *system*, with every source's keys for it."""
         return self._ask(lambda installation: installation.platform_ids(system))
 
     def emulators_for(
-        self, system: str, *, content_path: str | None = None
+        self, system: SystemArgument, *, content_path: str | None = None
     ) -> tuple[InstallationAnswer[CatalogueAnswer], ...]:
         """Which emulators each installation would launch *system* with."""
         return self._ask(
             lambda installation: installation.emulators_for(system, content_path=content_path)
         )
 
-    def rom_location(self, system: str) -> tuple[InstallationAnswer[RomPlacement], ...]:
+    def rom_location(self, system: SystemArgument) -> tuple[InstallationAnswer[RomPlacement], ...]:
         """Where each installation keeps *system*'s ROMs, or why it states nowhere."""
         return self._ask(lambda installation: installation.rom_location(system))
 
@@ -287,13 +296,13 @@ class EveryInstallation:
         return self._ask(lambda installation: installation.rom_locations())
 
     def launchable(
-        self, system: str, content_path: str, *, label: str | None = None
+        self, system: SystemArgument, content_path: str, *, label: str | None = None
     ) -> tuple[InstallationAnswer[LaunchabilityAnswer], ...]:
         """Whether each installation launches this file as *system* content, and why not."""
         return self._ask(lambda installation: installation.launchable(system, content_path, label=label))
 
     def launch_command(
-        self, system: str, content_path: str, *, label: str | None = None
+        self, system: SystemArgument, content_path: str, *, label: str | None = None
     ) -> tuple[InstallationAnswer[LaunchCommandAnswer], ...]:
         """The command each installation's frontend would run for this file, taken apart, or why not.
 
@@ -303,6 +312,33 @@ class EveryInstallation:
         if not os.path.isabs(content_path):
             raise ValueError(f"content_path must be an absolute path, got {content_path!r}")
         return self._ask(lambda installation: installation.launch_command(system, content_path, label=label))
+
+    def save_portability(
+        self,
+        system: SystemArgument,
+        *,
+        source: str,
+        target: str,
+        content_path: str | None = None,
+        cwd: str | None = None,
+        appendconfig: Sequence[str] = (),
+    ) -> tuple[InstallationAnswer[SavePortabilityAnswer], ...]:
+        """Whether each installation's *target* entry reads what its *source* entry wrote.
+
+        ``cwd`` and ``appendconfig`` are checked here as :meth:`savefile_location`
+        checks them, and naming one entry twice raises the way each handle
+        raises it, so a malformed question fails even with no installation to
+        ask.
+        """
+        checked_cwd(cwd)
+        files = checked_appendconfig(appendconfig)
+        if source == target:
+            raise ValueError(f"source and target name the same entry ({source!r}) — a save is not moved to itself")
+        return self._ask(
+            lambda installation: installation.save_portability(
+                system, source=source, target=target, content_path=content_path, cwd=cwd, appendconfig=files
+            )
+        )
 
     def firmware_for_core(
         self,
@@ -329,7 +365,7 @@ class EveryInstallation:
 
     def firmware_for_system(
         self,
-        system: str,
+        system: SystemArgument,
         *,
         verify: bool = False,
         cwd: str | None = None,

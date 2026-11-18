@@ -9,11 +9,16 @@ WARNING).
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 import pytest
 
+from domain.platform_system import system_key
 from domain.rom_install import RomInstall
 from services.disc_launch_resolver import DiscLaunchResolver, DiscLaunchResolverConfig
+
+if TYPE_CHECKING:
+    from domain.platform_system import SystemArgument
 
 
 class FakeFileLister:
@@ -35,9 +40,9 @@ class FakeSystemExtensions:
         self.by_system = by_system if by_system is not None else {}
         self.readings: list[object] = []
 
-    def __call__(self, system_name: str, *, reading: object = None) -> frozenset[str]:
+    def __call__(self, system_name: SystemArgument, *, reading: object = None) -> frozenset[str]:
         self.readings.append(reading)
-        return self.by_system.get(system_name, frozenset())
+        return self.by_system.get(system_key(system_name) or "", frozenset())
 
 
 def _install(*, rom_id: int = 1, file_path: str, rom_dir: str | None, system: str = "psx") -> RomInstall:

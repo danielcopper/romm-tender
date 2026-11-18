@@ -46,10 +46,11 @@ from _vendor.atlas import (
     CAVEAT_LAUNCH_ENVIRONMENT_UNPINNED,
     CAVEAT_LAUNCH_ENVIRONMENT_UNREAD,
     CAVEAT_LAUNCHER_SCRIPT_UNPINNED,
+    RESOLUTION_RESOLVED,
     VARIANT_FLATPAK,
 )
 
-from adapters.atlas_catalogue import installation_word
+from adapters.atlas_catalogue import installation_word, resolution_status
 from domain.start_command import (
     COMMAND_TOO_LONG,
     COMMAND_UNREAD,
@@ -74,6 +75,7 @@ if TYPE_CHECKING:
 
     from adapters.emulator_sources import EmulatorSourcesAdapter
     from domain.emulator_sources import SourcesReading
+    from domain.platform_system import SystemArgument
 
 # Why the resolver gives no command, each in Tender's word; a refusal this map
 # does not hold reads as :data:`COMMAND_UNREAD`. An EmuDeck launcher script no
@@ -115,7 +117,13 @@ _ENV = "env"
 
 
 def _refusal(answer: Any) -> StartRefused:
-    """Why *answer* gives no command: the chosen entry's installation where it cannot start, else the refusal."""
+    """Why *answer* gives no command: the chosen entry's installation where it cannot start, else the refusal.
+
+    A system that resolved to none or several of the source's systems names no
+    entry and no refusal of its own: its command could not be read.
+    """
+    if resolution_status(answer) != RESOLUTION_RESOLVED:
+        return StartRefused(COMMAND_UNREAD)
     entry = answer.entry
     if entry is not None and entry.availability != AVAILABILITY_STARTABLE:
         word = installation_word(entry)
@@ -209,7 +217,7 @@ class AtlasLaunchAdapter:
 
     def start_command(
         self,
-        system: str,
+        system: SystemArgument,
         content_path: str,
         *,
         label: str,

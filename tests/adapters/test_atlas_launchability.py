@@ -1,7 +1,7 @@
 """Whether one game's file starts, read in the catalogue's reading module (#2195 D2, D3, D11, D13).
 
-The first class drives the REAL resolver over a fabricated RetroDECK deploy
-under ``tmp_path``: what is under test is that each verdict the resolver states
+The first class drives the REAL resolver over a RetroDECK the resolver's own
+machine stands in for: what is under test is that each verdict the resolver states
 arrives as its own state, with what that state's sentence names. The second
 builds answers from real atlas value objects for the shapes a seeded tree does
 not reach cheaply.
@@ -66,6 +66,7 @@ from _vendor.atlas import (
     VERDICT_UNKNOWN,
 )
 from _vendor.atlas.installations import Installer, LaunchabilityAnswer
+from _vendor.atlas.machine import FixtureMachine
 from _vendor.atlas.opens_codes import OPENS_FAILURE_CODES
 from _vendor.atlas.placement import Caveat
 
@@ -86,6 +87,7 @@ from domain.launchability import (
     ENTRY_UNKNOWN,
     FORMAT_REFUSED,
     FORMAT_UNESTABLISHED,
+    FRONTEND_WOULD_NOT_LIST,
     GAME_KIND_UNFOLLOWED,
     GAME_LIST_UNREAD,
     GOES_ON_FILE_MISSING,
@@ -100,7 +102,6 @@ from domain.launchability import (
     NEEDS_INSTALLING,
     NO_SOURCE,
     NOT_A_GAME_FILE,
-    NOT_A_LAUNCH_FILE,
     NOT_ESTABLISHED,
     NOT_THIS_EMULATOR,
     NOTHING_TO_START,
@@ -156,16 +157,13 @@ _CATALOGUE = """\
 """
 
 
-def _seed_retrodeck(tmp_path) -> str:
-    home = tmp_path / "home"
-    marker = home / ".var" / "app" / "net.retrodeck.retrodeck" / "config" / "retrodeck" / "retrodeck.json"
-    marker.parent.mkdir(parents=True, exist_ok=True)
-    marker.write_text(json.dumps({"paths": {"rd_home_path": str(home / "retrodeck")}}), encoding="utf-8")
-    deploy = home / ".local" / "share" / "flatpak" / "app" / "net.retrodeck.retrodeck" / "current" / "active" / "files"
-    bundled = deploy / _LINUX_SYSTEMS_SUFFIX
-    bundled.parent.mkdir(parents=True, exist_ok=True)
-    bundled.write_text(_CATALOGUE, encoding="utf-8")
-    return str(home)
+_HOME = "/home/deck"
+_ROMS = f"{_HOME}/retrodeck/roms"
+_DEPLOY = f"{_HOME}/.local/share/flatpak/app/net.retrodeck.retrodeck/current/active"
+
+# RetroDECK's Flatpak reads the host's folders (``filesystems=host``), as the
+# resolver's own recorded RetroDECK machines state it.
+_METADATA = "[Application]\nname=net.retrodeck.retrodeck\n\n[Context]\nfilesystems=host;\n"
 
 
 @pytest.fixture(autouse=True)
@@ -181,91 +179,100 @@ def traces() -> list[str]:
     return []
 
 
-def _real(home: str, traces: list[str]) -> AtlasCatalogueAdapter:
+def _retrodeck(traces: list[str], *content: str, home: str = _HOME) -> AtlasCatalogueAdapter:
+    """The adapter over a RetroDECK the resolver's own machine stands in for, holding each file in *content*.
+
+    A machine rather than a tree under ``tmp_path``: the resolver reads a
+    game's path as RetroDECK's sandbox sees it, and ``tmp_path`` lies under
+    ``/tmp``, which the sandbox keeps as its own, so nothing of a seeded tree
+    would be seen there.
+    """
+    files = {
+        f"{_HOME}/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json": json.dumps(
+            {"paths": {"rd_home_path": f"{_HOME}/retrodeck"}}
+        ),
+        f"{_DEPLOY}/files/{_LINUX_SYSTEMS_SUFFIX}": _CATALOGUE,
+        f"{_DEPLOY}/metadata": _METADATA,
+        **dict.fromkeys(content, ""),
+    }
     return AtlasCatalogueAdapter(
-        sources=EmulatorSourcesAdapter(user_home=home, settings={}, log_debug=traces.append),
+        sources=EmulatorSourcesAdapter(
+            user_home=home, settings={}, log_debug=traces.append, machine=FixtureMachine(files)
+        ),
         log_debug=traces.append,
     )
 
 
-def _roms(tmp_path) -> str:
-    return os.path.join(str(tmp_path), "home", "retrodeck", "roms")
+class TestTheRealResolverOverAMachine:
+    def test_a_ps3_pkg_has_to_be_installed_in_the_emulator_the_resolver_names(self, traces):
+        path = f"{_ROMS}/ps3/Puppeteer/Puppeteer.pkg"
 
-
-class TestTheRealResolverOverARealTree:
-    def test_a_ps3_pkg_has_to_be_installed_in_the_emulator_the_resolver_names(self, tmp_path, traces):
-        adapter = _real(_seed_retrodeck(tmp_path), traces)
-        path = f"{_roms(tmp_path)}/ps3/Puppeteer/Puppeteer.pkg"
-
-        answer = adapter.launchability("ps3", path, label="RPCS3 Directory (Standalone)")
+        answer = _retrodeck(traces, path).launchability("ps3", path, label="RPCS3 Directory (Standalone)")
 
         assert answer.state == NEEDS_INSTALLING
         assert answer.install_in == ("RPCS3 Directory (Standalone)",)
         assert (answer.file, answer.extension) == ("Puppeteer.pkg", ".pkg")
 
-    def test_an_installer_the_system_has_no_entry_for_is_left_out(self, tmp_path, traces):
+    def test_an_installer_the_system_has_no_entry_for_is_left_out(self, traces):
         # The resolver names Azahar and Azahar Plus as installing a .cia, which
         # this system's list does not take; it has an entry for Azahar alone
         # (#2195 D35).
-        adapter = _real(_seed_retrodeck(tmp_path), traces)
+        path = f"{_ROMS}/n3ds/Game.cia"
 
-        answer = adapter.launchability("n3ds", f"{_roms(tmp_path)}/n3ds/Game.cia", label="Azahar (Standalone)")
+        answer = _retrodeck(traces, path).launchability("n3ds", path, label="Azahar (Standalone)")
 
         assert answer.state == NEEDS_INSTALLING
         assert answer.install_in == ("Azahar (Standalone)",)
 
-    def test_a_single_dreamcast_track_is_not_the_file_the_system_starts_from(self, tmp_path, traces):
-        adapter = _real(_seed_retrodeck(tmp_path), traces)
+    def test_a_single_dreamcast_track_is_not_established_and_says_the_frontend_would_not_list_it(self, traces):
+        """#2195 D2 (changed): the file is judged by what the emulator starts; the frontend's list is a note."""
+        path = f"{_ROMS}/dreamcast/Game/track03.bin"
 
-        answer = adapter.launchability("dreamcast", f"{_roms(tmp_path)}/dreamcast/Game/track03.bin", label="Flycast")
+        answer = _retrodeck(traces, path).launchability("dreamcast", path, label="Flycast")
 
-        assert answer.state == NOT_A_LAUNCH_FILE
+        assert answer.state == NOT_ESTABLISHED
+        assert answer.statements == (LaunchStatement(FORMAT_UNESTABLISHED), LaunchStatement(FRONTEND_WOULD_NOT_LIST))
         assert answer.starts_from == (".chd", ".CHD", ".cue", ".CUE", ".gdi", ".GDI")
         assert answer.install_in is None
 
-    def test_a_file_the_system_takes_starts(self, tmp_path, traces):
-        adapter = _real(_seed_retrodeck(tmp_path), traces)
+    def test_a_file_whose_reading_ended_without_a_take_is_not_established_never_starts(self, traces):
+        """#2195 D40 (changed): an entry reading that ended without a take is not established, Play stays on."""
+        path = f"{_ROMS}/gba/Game.gba"
 
-        answer = adapter.launchability("gba", f"{_roms(tmp_path)}/gba/Game.gba", label="mGBA")
+        answer = _retrodeck(traces, path).launchability("gba", path, label="mGBA")
 
-        assert answer.state == STARTS
-        assert answer.entry == "mGBA"
+        assert (answer.state, answer.entry) == (NOT_ESTABLISHED, "mGBA")
+        assert answer.statements == (LaunchStatement(FORMAT_UNESTABLISHED),)
 
-    def test_an_extension_is_compared_case_exactly(self, tmp_path, traces):
+    def test_an_extension_the_frontend_lists_in_another_case_is_noted_case_exactly(self, traces):
         # The system lists ``.gba`` alone, and ES-DE compares exactly (#2195 D3).
-        adapter = _real(_seed_retrodeck(tmp_path), traces)
+        path = f"{_ROMS}/gba/Game.GBA"
 
-        answer = adapter.launchability("gba", f"{_roms(tmp_path)}/gba/Game.GBA", label="mGBA")
+        answer = _retrodeck(traces, path).launchability("gba", path, label="mGBA")
 
-        assert (answer.state, answer.extension) == (NOT_A_LAUNCH_FILE, ".GBA")
+        assert (answer.state, answer.extension) == (NOT_ESTABLISHED, ".GBA")
+        assert LaunchStatement(FRONTEND_WOULD_NOT_LIST) in answer.statements
 
-    def test_a_ps3_folder_the_resolver_cannot_find_starts_with_a_note_saying_so(self, tmp_path, traces):
-        adapter = _real(_seed_retrodeck(tmp_path), traces)
+    def test_a_ps3_folder_the_resolver_cannot_find_is_not_established_and_says_why(self, traces):
+        answer = _retrodeck(traces).launchability("ps3", f"{_ROMS}/ps3/Game.ps3", label="RPCS3 Directory (Standalone)")
 
-        answer = adapter.launchability("ps3", f"{_roms(tmp_path)}/ps3/Game.ps3", label="RPCS3 Directory (Standalone)")
+        assert (answer.state, answer.format_unestablished) == (NOT_ESTABLISHED, False)
+        assert answer.statements == (LaunchStatement(CONTENT_MISSING),)
 
-        # The resolver looks as RetroDECK's sandbox sees the path: a folder
-        # under /tmp, the sandbox's own, cannot be read, and one under /var is
-        # missing — and where tmp_path lies is the machine's choice.
-        assert (answer.state, answer.format_unestablished) == (STARTS, False)
-        assert answer.reason in (CONTENT_MISSING, CONTENT_UNREADABLE)
+    def test_a_label_the_system_does_not_carry_is_not_established_for_that_reason(self, traces):
+        path = f"{_ROMS}/gba/Game.gba"
 
-    def test_a_label_the_system_does_not_carry_is_not_established_for_that_reason(self, tmp_path, traces):
-        adapter = _real(_seed_retrodeck(tmp_path), traces)
-
-        answer = adapter.launchability("gba", f"{_roms(tmp_path)}/gba/Game.gba", label="Snes9x")
+        answer = _retrodeck(traces, path).launchability("gba", path, label="Snes9x")
 
         assert (answer.state, answer.reason) == (NOT_ESTABLISHED, ENTRY_UNKNOWN)
 
-    def test_a_system_the_catalogue_does_not_declare_is_not_established_for_that_reason(self, tmp_path, traces):
-        adapter = _real(_seed_retrodeck(tmp_path), traces)
-
-        answer = adapter.launchability("snes", f"{_roms(tmp_path)}/snes/Game.sfc", label="Snes9x")
+    def test_a_system_the_catalogue_does_not_declare_is_not_established_for_that_reason(self, traces):
+        answer = _retrodeck(traces).launchability("snes", f"{_ROMS}/snes/Game.sfc", label="Snes9x")
 
         assert (answer.state, answer.reason) == (NOT_ESTABLISHED, SYSTEM_UNKNOWN)
 
-    def test_nothing_detected_is_not_established_because_no_source_answers(self, tmp_path, traces):
-        adapter = _real(str(tmp_path / "empty-home"), traces)
+    def test_nothing_detected_is_not_established_because_no_source_answers(self, traces):
+        adapter = _retrodeck(traces, home="/home/nobody")
 
         answer = adapter.launchability("gba", "/roms/gba/Game.gba", label="mGBA")
 
@@ -767,7 +774,9 @@ class TestGenesisPlusGxNotesOnlyWhereTheyHold:
 
         result = _through_tender(inp, traces)
 
-        assert (result.state, result.reason, result.reason_file) == (STARTS, PATH_TOO_LONG_UNCHECKED, "Game.cue")
+        # #2195 D40 (changed): a reading that stops short is not established, and says where it stopped.
+        assert result.state == NOT_ESTABLISHED
+        assert LaunchStatement(PATH_TOO_LONG_UNCHECKED, "Game.cue") in result.statements
 
     def test_a_sheet_path_under_255_bytes_says_nothing(self, traces):
         inp = copy.deepcopy(

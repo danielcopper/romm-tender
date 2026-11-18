@@ -32,6 +32,7 @@ import { DiscSelector } from "./DiscSelector";
 import { VersionPicker } from "./VersionPicker";
 import { VanishedVersionBanner } from "./VanishedVersionBanner";
 import { Muted, SELECTION_ACCENT } from "./layout/pane";
+import { platformSystemNotes } from "../utils/emulatorSourceWording";
 import { activeEmulatorNote, isNotEstablished } from "../utils/emulatorInstallation";
 import { useTriggerHandler } from "./emulatorStepping";
 import { useBumperHandler, usePlayRowRef } from "./tabStepping";
@@ -968,7 +969,11 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   const startNotes =
     stranded || fileMissing || startCheckFailed || emulatorRefusal !== null
       ? []
-      : [...launchNotes(gameLaunch, detail.emulatorSource), ...startRemarkSentences(detail.emulatorStart?.remarks)];
+      : [
+          ...launchNotes(gameLaunch, detail.emulatorSource),
+          ...startRemarkSentences(detail.emulatorStart?.remarks),
+          ...platformSystemNotes(detail.emulatorPlatformSystem),
+        ];
 
   const warningLine = (testId: string, text: string) => (
     <div

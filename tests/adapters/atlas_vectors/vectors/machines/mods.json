@@ -755,7 +755,8 @@
             "code": "standalone-unsupported",
             "data": {
               "label": "MAME (Standalone)",
-              "system": "arcade"
+              "source": "esde",
+              "key": "arcade"
             }
           }
         }
@@ -1073,7 +1074,8 @@
             "code": "standalone-variant-unestablished",
             "data": {
               "label": "DuckStation (Standalone)",
-              "system": "psx",
+              "source": "esde",
+              "key": "psx",
               "variant": "proton"
             }
           }

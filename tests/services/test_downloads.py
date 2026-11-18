@@ -3718,7 +3718,12 @@ class TestAPlatformWithNoSystemDownloadsNothing:
             await downloads.service.start_download(78)
 
         assert refused.value.reason == reason
-        assert refused.value.details == {"source": "retrodeck", "platform": "Xbox 360", "system": system}
+        assert refused.value.details == {
+            "source": "retrodeck",
+            "platform": "Xbox 360",
+            "system": system,
+            "systems": [] if system is None else [system],
+        }
         assert made_dirs == []
         assert 78 not in downloads.queue.entries
         assert 78 not in downloads.state.in_progress

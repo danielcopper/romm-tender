@@ -1277,7 +1277,9 @@ describe("Library › Platforms", () => {
 
     it("keeps every part of that line on one line, so it wraps only between parts", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
-        coreInfo({ platform_system: { state: "found", source: "retrodeck", system: "gba", platform: "GBA" } }),
+        coreInfo({
+          platform_system: { state: "found", source: "retrodeck", system: "gba", systems: ["gba"], platform: "GBA" },
+        }),
       );
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
@@ -1341,7 +1343,9 @@ describe("Library › Platforms", () => {
 
     it("names no system while one is found", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
-        coreInfo({ platform_system: { state: "found", source: "retrodeck", system: "gba", platform: "GBA" } }),
+        coreInfo({
+          platform_system: { state: "found", source: "retrodeck", system: "gba", systems: ["gba"], platform: "GBA" },
+        }),
       );
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
@@ -1357,7 +1361,13 @@ describe("Library › Platforms", () => {
           emulators: [],
           emulator_data_available: false,
           emulator_data_reason: "no_platform_system",
-          platform_system: { state: "no_system", source: "retrodeck", system: null, platform: "Game Boy Advance" },
+          platform_system: {
+            state: "no_system",
+            source: "retrodeck",
+            system: null,
+            systems: [],
+            platform: "Game Boy Advance",
+          },
           active_core_label: null,
         }),
       );
@@ -1413,7 +1423,13 @@ describe("Library › Platforms", () => {
           emulators: [],
           emulator_data_available: false,
           emulator_data_reason: "platform_system_off",
-          platform_system: { state: "switched_off", source: "retrodeck", system: "gbaoff", platform: "GBA" },
+          platform_system: {
+            state: "switched_off",
+            source: "retrodeck",
+            system: "gbaoff",
+            systems: ["gbaoff"],
+            platform: "GBA",
+          },
           active_core_label: null,
         }),
       );

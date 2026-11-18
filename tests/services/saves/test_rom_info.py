@@ -23,12 +23,14 @@ from tests.services.saves._helpers import (
 if TYPE_CHECKING:
     from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 
+    from domain.platform_system import SystemArgument
+
 
 def _fake(svc) -> FakeSaveLocationReader:
     return cast("FakeSaveLocationReader", svc._rom_info._save_locations)
 
 
-def _asked(svc) -> list[tuple[str, str, str | None]]:
+def _asked(svc) -> list[tuple[SystemArgument, str, str | None]]:
     """Every question the save-location seam was put, as the fake recorded them."""
     return cast("FakeSaveLocationReader", svc._rom_info._save_locations).calls
 

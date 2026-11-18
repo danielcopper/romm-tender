@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.disk_space import disk_space_verdict
 from domain.emulator_sources import RETRODECK
+from domain.platform_system import system_key
 from domain.retrodeck_folders import GAME_DOWNLOAD, FolderRefused
 from domain.rom_candidates import DIR, FILE
 from domain.rom_file import NO_FILE_ON_ROMM_MESSAGE, NoFileOnRomm, has_file_on_romm
@@ -263,13 +264,15 @@ class DownloadService:
 
         platform_slug = rom_detail.get("platform_slug", "")
         platform = await self._loop.run_in_executor(None, self._download_platform_io, platform_slug)
-        system = platform.taken
-        if system is None:
+        named = platform.one_system
+        system = None if named is None else system_key(named)
+        if named is None or system is None:
             raise platform.refusal(GAME_DOWNLOAD)
 
         # The folder is taken once, here: a download that started lands where it
-        # started even if RetroDECK is switched off before it ends.
-        folder = self._retrodeck_folders.download_folder(system)
+        # started even if RetroDECK is switched off before it ends. From here on
+        # the game is asked about by the name its install record keeps.
+        folder = self._retrodeck_folders.download_folder(named)
         if isinstance(folder, FolderRefused):
             raise folder
         roms_dir = folder

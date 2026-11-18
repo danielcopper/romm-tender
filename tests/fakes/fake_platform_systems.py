@@ -13,7 +13,10 @@ from domain.emulator_sources import ArrangedSource
 from domain.platform_system import FOUND, PlatformSystem
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from domain.emulator_sources import SourcesReading
+    from domain.platform_system import SystemArgument
     from domain.rom_install import RomInstall
 
 RETRODECK_SOURCE = ArrangedSource(kind="retrodeck", enabled=True, starts_games=True)
@@ -31,9 +34,9 @@ class FakePlatformSystems:
     """
 
     def __init__(
-        self, mapping: dict[str, str] | None = None, *, answers: dict[str, PlatformSystem] | None = None
+        self, mapping: Mapping[str, SystemArgument] | None = None, *, answers: dict[str, PlatformSystem] | None = None
     ) -> None:
-        self.mapping: dict[str, str] = mapping if mapping is not None else {}
+        self.mapping: dict[str, SystemArgument] = dict(mapping) if mapping is not None else {}
         self.answers: dict[str, PlatformSystem] = answers if answers is not None else {}
         self.listed: frozenset[str] | None = frozenset()
         self.kept: dict[str, frozenset[str]] = {}

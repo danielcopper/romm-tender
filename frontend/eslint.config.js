@@ -164,6 +164,8 @@ const RESOLVER_READERS_TODAY = {
 const PANEL_GENERIC_VALUES = {
   background: "a CSS property in a style object",
   disabled: "whether a control takes a press, and whether save sync is switched off",
+  keys: "the keys of an object or a map, JavaScript's own method name",
+  known: "a firmware file Tender identifies by its checksum",
   tag: "a log line's prefix, and the label under a folder tile",
 };
 

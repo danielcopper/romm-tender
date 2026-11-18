@@ -3,16 +3,17 @@
  * state's sentence (#2195 D2). The game page, a refused start — the Play
  * button's and Steam's own — and the emulator menu say them from here.
  *
- * Three states refuse a start: the game has to be installed in an emulator
- * first, the file is not one the system starts from, or the entry does not
- * start it, with the resolver's reason where it states one. The other two let
- * it go ahead: it starts, which says nothing unless the resolver states
- * something beside it — its reading of the file stopped short of something, its
- * format included, the file is an archive whose contents were not read, the
- * start goes on without a file it opens, or the emulator does not read every
- * disc a playlist lists — each said in its own words (#2195 D40, D41; #2698 D7,
- * D8); or whether it starts could not be established, which says so. This is
- * the one home of that rule.
+ * Two states refuse a start: the game has to be installed in an emulator
+ * first, or the entry does not start it, with the resolver's reason where it
+ * states one. The other two let it go ahead: it starts, which says nothing
+ * unless the resolver states something beside it — the file is an archive whose
+ * contents were not read, the start goes on without a file it opens, or the
+ * emulator does not read every disc a playlist lists; or whether it starts could
+ * not be established, which names what could not be — the reading of the file
+ * stopping short, its format included — and never says it can start (#2195 D2,
+ * D40, D41; #2698 D7, D8). Beside any of them stands a name the frontend would
+ * not list the file under. Each is said in its own words; this is the one home
+ * of that rule.
  *
  * Beside them are the notifications for a page whose check of whether the game
  * can start went wrong, and for a start pressed after it that then fails.
@@ -31,11 +32,7 @@ import { sourceName } from "./emulatorSourceWording";
 import { transportFailureSentence } from "./transportFailureWording";
 import { TimeoutError } from "./withTimeout";
 
-const REFUSING: ReadonlySet<GameLaunch["state"]> = new Set([
-  "needs_installing",
-  "not_a_launch_file",
-  "not_this_emulator",
-]);
+const REFUSING: ReadonlySet<GameLaunch["state"]> = new Set(["needs_installing", "not_this_emulator"]);
 
 /**
  * Why the verdict could not be established, worded; the reason is Tender's word
@@ -48,6 +45,9 @@ function notEstablishedBecause(launch: GameLaunch, source: AnsweringSource | nul
   switch (launch.reason) {
     case "system_unknown":
       return `${named} does not list the system ${launch.platform_name}`;
+    // PLACEHOLDER WORDING (#2225 D8): awaits the owner's sentence.
+    case "systems_several":
+      return `${named} has several systems for ${launch.platform_name} and names none of them`;
     case "entry_unknown":
       return `${named} has no emulator named ${launch.entry}`;
     case "catalogue_unread":
@@ -153,6 +153,8 @@ const STOPPED_SHORT_BECAUSE: Record<LaunchStoppedShortReason, (launch: GameLaunc
     `the check stopped at one of its limits at ${file}, so what it opens past that was not checked`,
   path_too_long_unchecked: (_launch, file) =>
     `the path of ${file} is too long for it to read in full, and what it does then was not checked`,
+  // PLACEHOLDER WORDING (#2195 D40): awaits the owner's sentence.
+  folder_route_unread: (launch) => `how ${launch.entry} takes a game installed as a folder was not checked`,
 };
 
 /**
@@ -183,11 +185,40 @@ interface Said {
 
 /**
  * *statement* in its own group's words (#2698 D8), or `null` where Tender words none. `tenderStarts` false drops
- * the menu's "can start it" and keeps the rest of the line.
+ * the menu's "can start it" and keeps the rest of the line. Beside a verdict not established nothing says the
+ * game can start (#2195 D40): a file it would go on without and what else it would do are said as what it would do.
  */
 function said(launch: GameLaunch, statement: LaunchStatement, tenderStarts: boolean): Said | null {
   const file = statement.file ?? launch.file;
   const reason = statement.reason;
+  const established = launch.state !== "not_established";
+  if (!established && reason in GOES_ON_BECAUSE) {
+    const without = `without ${file}: ${GOES_ON_BECAUSE[reason as LaunchGoesOnReason]}`;
+    return {
+      note: `Whether ${launch.entry} starts this game cannot be established; it would go on ${without}.`,
+      line: `whether it starts the game is not established; it would go on ${without}`,
+    };
+  }
+  if (!established && reason in STARTS_WITH_A_NOTE_BECAUSE) {
+    const note = STARTS_WITH_A_NOTE_BECAUSE[reason as LaunchNoteReason](file);
+    return {
+      note: `Whether ${launch.entry} starts this game cannot be established; it ${note}.`,
+      line: `whether it starts the game is not established; it ${note}`,
+    };
+  }
+  // PLACEHOLDER WORDING (#2195 D2, D40): the two notes below await the owner's sentences.
+  if (reason === "frontend_would_not_list") {
+    return {
+      note: `ES-DE would not list ${launch.file} under this name; it lists files ending in ${listedExtensions(launch.starts_from)}.`,
+      line: `ES-DE would not list ${launch.file} under this name`,
+    };
+  }
+  if (reason === "folder_holds_games") {
+    return {
+      note: `${launch.file} holds files ${launch.entry} would take as games of their own: ${file}.`,
+      line: `the folder holds games of their own: ${file}`,
+    };
+  }
   if (reason in STOPPED_SHORT_BECAUSE) {
     const why = STOPPED_SHORT_BECAUSE[reason as LaunchStoppedShortReason](launch, file);
     return {
@@ -352,8 +383,6 @@ export function launchRefusal(launch: GameLaunch | null, canPick: boolean): stri
         ? "This game has to be installed first."
         : `This game has to be installed in ${names.join(" or ")} first.`;
     }
-    case "not_a_launch_file":
-      return `${launch.file} is not the file ${launch.platform_name} starts from; it starts from ${listedExtensions(launch.starts_from)}.`;
     case "not_this_emulator": {
       const refused = refusedBecause(launch);
       const beside = besideARefusal(launch).join("");
@@ -377,6 +406,8 @@ export function launchRefusal(launch: GameLaunch | null, canPick: boolean): stri
 export function launchNotes(launch: GameLaunch | null, source: AnsweringSource | null): string[] {
   if (launch === null) return [];
   if (launch.state === "not_established") {
+    const notes = allSaid(launch, true).map((each) => each.note);
+    if (notes.length > 0) return notes;
     return [`Whether ${launch.file} starts cannot be established: ${notEstablishedBecause(launch, source)}.`];
   }
   if (launch.state !== "starts") return [];
@@ -409,14 +440,15 @@ export function entryLaunchLine(
   switch (launch.state) {
     case "needs_installing":
       return first("cannot start it: the game has to be installed first", 0);
-    case "not_a_launch_file":
-      return first(`${launch.platform_name} does not start from ${launch.extension}`, 0);
     case "not_this_emulator": {
       const more = besideARefusal(launch).length;
       return first(refusedBecause(launch)?.line(launch) ?? `cannot start ${launch.extension} files`, more);
     }
-    case "not_established":
+    case "not_established": {
+      const lines = allSaid(launch, tenderStarts).map((each) => each.line);
+      if (lines.length > 0) return first(lines[0]!, lines.length - 1);
       return first(`whether it starts cannot be established: ${notEstablishedBecause(launch, source)}`, 0);
+    }
     default: {
       const lines = allSaid(launch, tenderStarts).map((each) => each.line);
       if (lines.length > 0) return first(lines[0]!, lines.length - 1);

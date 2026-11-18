@@ -35,7 +35,7 @@ from fakes.system_time import FakeClock
 from adapters.firmware_file import FirmwareFileAdapter
 from domain.bios_file import BiosFile
 from domain.firmware_wants import IDENTITY_ARCHIVE, IDENTITY_FILE, FolderFile
-from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, UNASKED, PlatformSystem
+from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, UNASKED, PlatformSystem, system_key
 from domain.source_roots import SourceRoot, SourceRoots
 from lib.errors import Refused
 from services.firmware import FirmwareService, FirmwareServiceConfig
@@ -43,6 +43,7 @@ from services.firmware.store import FirmwareStore, FirmwareStoreConfig
 
 if TYPE_CHECKING:
     from domain.firmware_store import FirmwareLink
+    from domain.platform_system import SystemArgument
 
 _YABA = "yabasanshiro_libretro.so"
 _KRONOS = "kronos_libretro.so"
@@ -96,12 +97,13 @@ class _LaunchReadingResolver(FakeFirmwareResolver):
     sealed_in: frozenset[str] = frozenset()
     unread_in: frozenset[str] = frozenset()
 
-    def __call__(self, system: str | None = None):
-        missing = self.not_installed_in.get(system or "", self.not_installed)
+    def __call__(self, system: SystemArgument | None = None):
+        key = None if system is None else system_key(system)
+        missing = self.not_installed_in.get(key or "", self.not_installed)
         catalogue = replace(
-            super().__call__(system), not_installed=missing, sealed=self.sealed or system in self.sealed_in
+            super().__call__(system), not_installed=missing, sealed=self.sealed or key in self.sealed_in
         )
-        if system in self.unread_in:
+        if key in self.unread_in:
             return replace(catalogue, placements=(), resolved=False, source=None, roots=None)
         return catalogue
 

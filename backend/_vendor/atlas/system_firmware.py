@@ -48,7 +48,7 @@ finds one this table does not carry.
 **How this reaches an answer.** :mod:`atlas.firmware` reads the table in one
 place (``_stating_system_firmware``) and puts what it says on every core of a
 firmware answer as ``system_firmware``, joining these ``systemname`` keys to
-the system ids an answer speaks through
+the (source, key) pairs an answer names systems by, through
 :func:`atlas.firmware.system_firmware_system`. A core whose system cannot run
 without an image, and which the entry does not excuse, stops reporting
 ``requirements_met`` true while none of the images filed under that system is
@@ -200,8 +200,8 @@ class CoreAlternative:
     ``reason`` carries the evidence rather than a bare exemption: what the core
     offers, and what was seen.
 
-    ``systems`` scopes the excuse to the systems an answer is asked about, as
-    atlas system ids. Empty, the excuse holds on every answer the entry
+    ``systems`` scopes the excuse to the systems an answer is asked about, by
+    their ES-DE names. Empty, the excuse holds on every answer the entry
     reaches, which is the shape the PlayStation's exemption has. Named, it
     holds only on a question about one of those systems, because the
     substitute boots some of the machines one ``systemname`` covers and not
@@ -254,7 +254,7 @@ def _expect_str(value: Any, where: str) -> str:
 def _excused_systems(value: Any, where: str) -> tuple[str, ...]:
     """The systems a scoped excuse holds on: named, each once."""
     if not isinstance(value, list) or not value:
-        raise ValueError(f"{where}: systems must be a non-empty list of system ids, got {value!r}")
+        raise ValueError(f"{where}: systems must be a non-empty list of system names, got {value!r}")
     systems = tuple(_expect_str(system, f"{where}: system") for system in value)
     if len(set(systems)) != len(systems):
         raise ValueError(f"{where}: systems names a system twice, got {value!r}")
@@ -362,13 +362,13 @@ def load_system_firmware(text: str | None = None) -> dict[str, SystemFirmware]:
 
     Keys are libretro ``systemname`` strings verbatim, which is what the
     ``.info`` catalogue groups firmware by and therefore what the tripwire's
-    derivation produces. They are deliberately not atlas's own system ids: one
+    derivation produces. They are deliberately not system names: one
     ``systemname`` can cover two catalogue systems (``Game Boy/Game Boy
     Color``). The answer that reads this table makes that translation at its
     own edge (:func:`atlas.firmware.system_firmware_system`), and it makes it
     through the map an answer's requirements already came through, so a key
-    naming several machines reaches the one id that map rules for it and not
-    its siblings — narrower than the entry rather than wider, because widening
+    naming several machines reaches the one system that map rules for it and
+    not its siblings — narrower than the entry rather than wider, because widening
     would state a verdict about a machine nobody recorded it for.
     """
     if text is None:

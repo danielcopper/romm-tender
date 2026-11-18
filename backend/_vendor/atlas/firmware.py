@@ -137,6 +137,14 @@ from .machine import (
     ReadStatus,
 )
 from . import duckstation, emulator_settings, melonds, qt_ini
+from .platforms import (
+    ESDE_SOURCE,
+    LIBRETRO_SOURCE,
+    SystemNaming,
+    SystemPair,
+    SystemResolution,
+    check_system_pair,
+)
 from .ps2_bios import Ps2BiosHeader
 from .oddities import SO_SUFFIX, SaveMode, load_oddities
 from .standalone_firmware import (
@@ -460,13 +468,6 @@ CAVEAT_FIRMWARE_SUPPLIED_SOURCE_UNREADABLE = "firmware-supplied-source-unreadabl
 CAVEAT_FIRMWARE_INSTALLER_DOWNLOAD = "firmware-installer-download"
 CAVEAT_FIRMWARE_CONTENT_UNIDENTIFIED = "firmware-content-unidentified"
 CAVEAT_SYSTEM_UNKNOWN = "system-unknown"
-# The marked-word code: a requirement's ``system`` is one of atlas's own
-# spellings (:data:`SYSTEMS_WITHOUT_CATALOGUE_ID`) because no ES-DE build
-# declares an id for that machine. The word is exported anyway — refusing to
-# answer would hide real firmware — and this code is what keeps it from being
-# read as a catalogue id. Same form as ``_unknown``: a token no catalogue
-# declares, plus a structured caveat saying why.
-CAVEAT_SYSTEM_NOT_IN_CATALOGUE = "system-not-in-catalogue"
 CAVEAT_SYSTEM_ASSIGNMENT_DERIVED = "system-assignment-derived"
 CAVEAT_CORE_WITHOUT_SYSTEMNAME = "core-without-systemname"
 CAVEAT_SYSTEM_ASSIGNMENT_MAY_HIDE_CORES = "system-assignment-may-hide-cores"
@@ -668,6 +669,23 @@ CAVEAT_FIRMWARE_NAME_SPELLINGS = "firmware-name-spellings"
 # offline generator dropped them implicitly (no core ever matched); a live
 # reader has to say so.
 TEMPLATE_INFO_STEMS = ("00_example_libretro", "puzzlescript_libretro")
+
+
+def system_unknown(system: SystemPair, message: str | None = None) -> Caveat:
+    """``system-unknown`` for *system*: an asked pair that names no system of this installation (#784 D49, D53).
+
+    Every route that states it builds it here, so the code and data are one
+    shape and a question that states the same thing twice states it once
+    (:func:`stated_once` matches on both). *message* is the route's own
+    words; the default is the one a table translation uses.
+    """
+    return Caveat(
+        CAVEAT_SYSTEM_UNKNOWN,
+        message
+        or f"the asked system {spelled(system)} names no system of this installation — the question "
+        "answers for none, which says nothing about what the system needs or holds",
+        {"source": system[0], "key": system[1]},
+    )
 
 
 def _refuse_bad_kind(what: str, kind: object, archive_reason: object) -> None:
@@ -991,20 +1009,24 @@ def load_hashes(text: str | None = None) -> FirmwareHashes:
     return FirmwareHashes(files, data.get("_meta", {}))
 
 
-# Libretro ``systemname`` strings mapped into atlas's one system vocabulary —
-# ES-DE's ids, the same names every other question takes (``atlas.systems``,
-# pinned to RetroDECK 0.10.9b's linux ``es_systems.xml``). World knowledge: the
-# strings are read live from the machine, but what they *mean* is written
-# nowhere on it, so the table is versioned and source-cited like the packaged
-# data files it stands beside. Multiple variants map to one id because
-# libretro's naming changed over the years.
+# Libretro ``systemname`` strings mapped onto the system each one names, as a
+# (source, key) pair of the platform table (#784 D10, D20): ES-DE's name where
+# an ES-DE build names the system, the key of another table source where none
+# does. World knowledge: the strings are read live from the machine, but what
+# they *mean* is written nowhere on it, so the table is versioned and
+# source-cited like the packaged data files it stands beside. Multiple variants
+# map to one system because libretro's naming changed over the years. An
+# installation names a filed system in its own catalogue source
+# (:meth:`atlas.platforms.SystemNaming.named`), so on a bare RetroArch an ES-DE
+# target answers as the libretro database name where the platform table names
+# exactly one; arcade, cps, j2me, macintosh, palm and ports keep their cited
+# ES-DE pair.
 #
-# Two guards hold the table to its target: every value is an ES-DE id or a
-# declared entry of :data:`SYSTEMS_WITHOUT_CATALOGUE_ID`, and the evidence
-# joins recorded for the re-pointed entries are re-run against the deployed
-# ``es_systems.xml`` (tests/test_firmware.py). Citations below name that file
-# by line and the shipped ``.info`` files under the Flatpak's
-# ``retroarch/rd_extras/cores/``.
+# Two guards hold the table to its target: every ES-DE value is an ES-DE name,
+# every other value a key of its source, and the evidence joins recorded for
+# the re-pointed entries are re-run against the deployed ``es_systems.xml``
+# (tests/test_firmware.py). Citations below name that file by line and the
+# shipped ``.info`` files under the Flatpak's ``retroarch/rd_extras/cores/``.
 #
 # One thing this table never claims is a launch: a core's ``.info`` firmware
 # list is display knowledge — at the RetroArch pin (``a79435a``, see
@@ -1012,70 +1034,72 @@ def load_hashes(text: str | None = None) -> FirmwareHashes:
 # surfaces (``menu_displaylist.c:880`` and ``ui_qt.cpp:1238``, of which the
 # Qt-less binary RetroDECK ships reaches only the first), and
 # ``task_content.c``/``runloop.c`` reference none of it — so filing a file
-# under an id says which system's firmware it is, never that some launch
+# under a system says which system's firmware it is, never that some launch
 # checks for it.
-SYSTEMNAME_MAP_VERSION = "2"  # "1" was the unversioned libretro-slug generation
-SYSTEMNAME_MAP_REVIEWED = "2026-08-09"
+# "1" the libretro-slug generation, "2" ES-DE ids with own spellings, "3" (source, key) pairs, cited where no
+# ES-DE build names the system (#784 D20, D45)
+SYSTEMNAME_MAP_VERSION = "3"
+SYSTEMNAME_MAP_REVIEWED = "2026-11-10"
 
-SYSTEMNAME_TO_SLUG: Mapping[str, str] = {
+SYSTEMNAME_TO_SYSTEM: Mapping[str, SystemPair] = {
     # PlayStation
-    "Sony - PlayStation": "psx",
-    "PlayStation": "psx",
-    "Sony PlayStation 2": "ps2",
-    "PSP": "psp",
+    "Sony - PlayStation": ("esde", "psx"),
+    "PlayStation": ("esde", "psx"),
+    "Sony PlayStation 2": ("esde", "ps2"),
+    "PSP": ("esde", "psp"),
     # Sega. es_systems.xml:616 "dreamcast" (Sega Dreamcast) launches
     # flycast_libretro (:620); flycast_gles2 and retrodream carry the same
     # systemname without a catalogue launch under it.
-    "Sega - Dreamcast": "dreamcast",
-    "Sega Dreamcast": "dreamcast",
-    "Sega - Saturn": "saturn",
-    "Saturn": "saturn",
-    "Sega - Mega-CD - Sega CD": "segacd",
+    "Sega - Dreamcast": ("esde", "dreamcast"),
+    "Sega Dreamcast": ("esde", "dreamcast"),
+    "Sega - Saturn": ("esde", "saturn"),
+    "Saturn": ("esde", "saturn"),
+    "Sega - Mega-CD - Sega CD": ("esde", "segacd"),
     # es_systems.xml:1102 "mastersystem" (Sega Master System) launches
     # gearsystem_libretro and smsplus_libretro; emux_sms carries "Sega Master
     # System" too, without a catalogue launch under it. Ruled over "mark3"
     # (:1085), the same hardware's JP id — one id for the hardware, the J
     # BIOS dump included.
-    "Sega - Master System - Mark III": "mastersystem",
-    "Sega Master System": "mastersystem",
-    "Sega 8-bit": "mastersystem",
-    "Sega 8-bit (MS/GG/SG-1000)": "mastersystem",
+    "Sega - Master System - Mark III": ("esde", "mastersystem"),
+    "Sega Master System": ("esde", "mastersystem"),
+    "Sega 8-bit": ("esde", "mastersystem"),
+    "Sega 8-bit (MS/GG/SG-1000)": ("esde", "mastersystem"),
     # es_systems.xml:810 "gamegear" (Sega Game Gear); its command :814
     # launches genesis_plus_gx — the core whose bios.gg the override files
     # here — alongside gearsystem (:816) and smsplus (:817).
-    "Sega - Game Gear": "gamegear",
-    "Sega - Mega Drive - Genesis": "genesis",
-    "Sega Genesis": "genesis",
-    "Sega 8/16-bit (Various)": "genesis",
-    "Sega 8/16-bit + 32X (Various)": "genesis",
+    "Sega - Game Gear": ("esde", "gamegear"),
+    "Sega - Mega Drive - Genesis": ("esde", "genesis"),
+    "Sega Genesis": ("esde", "genesis"),
+    "Sega 8/16-bit (Various)": ("esde", "genesis"),
+    "Sega 8/16-bit + 32X (Various)": ("esde", "genesis"),
     # Nintendo
-    "Nintendo - Game Boy": "gb",
-    "Nintendo - Game Boy Color": "gbc",
-    "Game Boy/Game Boy Color": "gb",
-    "Nintendo - Game Boy Advance": "gba",
-    "Game Boy Advance": "gba",
-    "Game Boy/Game Boy Color/Game Boy Advance": "gba",
-    "Nintendo - Nintendo DS": "nds",
-    "Nintendo DS": "nds",
-    "Nintendo - Famicom Disk System": "fds",
-    "Nintendo - Nintendo Entertainment System": "nes",
-    "Nintendo Entertainment System": "nes",
-    "Nintendo 64": "n64",
-    "Super Nintendo Entertainment System": "snes",
-    "Super Nintendo Entertainment System / Game Boy / Game Boy Color": "snes",
-    "GameCube / Wii": "gc",
+    "Nintendo - Game Boy": ("esde", "gb"),
+    "Nintendo - Game Boy Color": ("esde", "gbc"),
+    "Game Boy/Game Boy Color": ("esde", "gb"),
+    "Nintendo - Game Boy Advance": ("esde", "gba"),
+    "Game Boy Advance": ("esde", "gba"),
+    "Game Boy/Game Boy Color/Game Boy Advance": ("esde", "gba"),
+    "Nintendo - Nintendo DS": ("esde", "nds"),
+    "Nintendo DS": ("esde", "nds"),
+    "Nintendo - Famicom Disk System": ("esde", "fds"),
+    "Nintendo - Nintendo Entertainment System": ("esde", "nes"),
+    "Nintendo Entertainment System": ("esde", "nes"),
+    "Nintendo 64": ("esde", "n64"),
+    "Super Nintendo Entertainment System": ("esde", "snes"),
+    "Super Nintendo Entertainment System / Game Boy / Game Boy Color": ("esde", "snes"),
+    "GameCube / Wii": ("esde", "gc"),
     # Atari. es_systems.xml:301 "atarilynx" (Atari Lynx) launches all three
     # shipped carriers of "Lynx" (handy, holani, mednafen_lynx).
-    "Atari - Lynx": "atarilynx",
-    "Lynx": "atarilynx",
-    "Atari - 5200": "atari5200",
-    "Atari 5200": "atari5200",
-    "Atari - 7800": "atari7800",
-    "Atari 7800": "atari7800",
-    "Atari - 8-bit": "atari800",
-    "Atari 8-bit Family": "atari800",
-    "Atari - ST": "atarist",
-    "Atari ST/STE/TT/Falcon": "atarist",
+    "Atari - Lynx": ("esde", "atarilynx"),
+    "Lynx": ("esde", "atarilynx"),
+    "Atari - 5200": ("esde", "atari5200"),
+    "Atari 5200": ("esde", "atari5200"),
+    "Atari - 7800": ("esde", "atari7800"),
+    "Atari 7800": ("esde", "atari7800"),
+    "Atari - 8-bit": ("esde", "atari800"),
+    "Atari 8-bit Family": ("esde", "atari800"),
+    "Atari - ST": ("esde", "atarist"),
+    "Atari ST/STE/TT/Falcon": ("esde", "atarist"),
     # NEC. Every carrier of these systemnames that declares firmware declares
     # exactly the CD system cards (syscard*.pce, gexpress.pce — the
     # mednafen_pce, mednafen_pce_fast and mednafen_supergrafx .info files;
@@ -1085,111 +1109,96 @@ SYSTEMNAME_TO_SLUG: Mapping[str, str] = {
     # supergrafx launches mednafen_supergrafx (:2071), mednafen_pce (:2072)
     # and geargrafx (:2073); tg16 launches mednafen_pce (:2142),
     # mednafen_pce_fast (:2143) and mednafen_supergrafx (:2144).
-    "NEC - PC Engine - TurboGrafx 16": "pcenginecd",
-    "PC Engine/PCE-CD": "pcenginecd",
-    "PC Engine SuperGrafx": "pcenginecd",
-    "PC Engine/SuperGrafx": "pcenginecd",
-    "PC Engine/SuperGrafx/CD": "pcenginecd",
-    "PC-FX": "pcfx",
-    "PC-98": "pc98",
+    "NEC - PC Engine - TurboGrafx 16": ("esde", "pcenginecd"),
+    "PC Engine/PCE-CD": ("esde", "pcenginecd"),
+    "PC Engine SuperGrafx": ("esde", "pcenginecd"),
+    "PC Engine/SuperGrafx": ("esde", "pcenginecd"),
+    "PC Engine/SuperGrafx/CD": ("esde", "pcenginecd"),
+    "PC-FX": ("esde", "pcfx"),
+    "PC-98": ("esde", "pc98"),
     # SNK
-    "SNK - Neo Geo": "neogeo",
-    "Neo Geo": "neogeo",
-    "SNK Neo Geo CD": "neogeocd",
+    "SNK - Neo Geo": ("esde", "neogeo"),
+    "Neo Geo": ("esde", "neogeo"),
+    "SNK Neo Geo CD": ("esde", "neogeocd"),
     # Commodore
-    "Commodore - Amiga": "amiga",
-    "Amiga": "amiga",
-    "C64": "c64",
-    "C64 SuperCPU": "c64",
-    "C64DTV": "c64",
+    "Commodore - Amiga": ("esde", "amiga"),
+    "Amiga": ("esde", "amiga"),
+    "C64": ("esde", "c64"),
+    "C64 SuperCPU": ("esde", "c64"),
+    "C64DTV": ("esde", "c64"),
     # No ES-DE build declares a c128 id; the catalogue files the C128 under
     # c64 itself — es_systems.xml:354 "c64" launches vice_x128 (:362) — and
     # vice_x128's own database says "Commodore - 64".
-    "C128": "c64",
+    "C128": ("esde", "c64"),
     # NOT the Commodore: ep128emu_core's systemname, and its firmware descs
     # say what it is ("exos21.rom (Enterprise 128 Expandible OS 2.1)", …).
-    # No catalogue id exists — SYSTEMS_WITHOUT_CATALOGUE_ID entry "ep128".
-    "128": "ep128",
+    # No ES-DE build names the Enterprise; libretro does, as the first database
+    # name ep128emu_core_libretro.info declares (:157), placed by the platform
+    # table beside Batocera's enterprise (es_systems.yml:6206).
+    "128": ("libretro", "Enterprise - 128"),
     # Other
-    "Coleco - ColecoVision": "colecovision",
-    "ColecoVision": "colecovision",
-    "ColecoVision/CreatiVision/My Vision": "colecovision",
-    "Microsoft - MSX": "msx",
-    "MSX": "msx",
-    "MSX/SVI/ColecoVision/SG-1000": "msx",
-    "Amstrad - CPC": "amstradcpc",
-    "The 3DO Company - 3DO": "3do",
-    "3DO": "3do",
-    "Magnavox - Odyssey2": "odyssey2",
-    "Magnavox Odyssey2 / Philips Videopac+": "odyssey2",
+    "Coleco - ColecoVision": ("esde", "colecovision"),
+    "ColecoVision": ("esde", "colecovision"),
+    "ColecoVision/CreatiVision/My Vision": ("esde", "colecovision"),
+    "Microsoft - MSX": ("esde", "msx"),
+    "MSX": ("esde", "msx"),
+    "MSX/SVI/ColecoVision/SG-1000": ("esde", "msx"),
+    "Amstrad - CPC": ("esde", "amstradcpc"),
+    "The 3DO Company - 3DO": ("esde", "3do"),
+    "3DO": ("esde", "3do"),
+    "Magnavox - Odyssey2": ("esde", "odyssey2"),
+    "Magnavox Odyssey2 / Philips Videopac+": ("esde", "odyssey2"),
     # es_systems.xml:368 "cdimono1" (Philips CD-i) launches both shipped
     # carriers, same_cdi (:372) and cdi2015 (:373) — whose required file is
     # literally cdimono1.zip.
-    "CD-i": "cdimono1",
-    "CDi": "cdimono1",
-    "Intellivision": "intellivision",
-    "DOS": "dos",
-    "PC-8000 / PC-8800 series": "pc88",
-    "Sharp X1": "x1",
-    "Sharp X68000": "x68000",
-    "Pokemon Mini": "pokemini",
+    "CD-i": ("esde", "cdimono1"),
+    "CDi": ("esde", "cdimono1"),
+    "Intellivision": ("esde", "intellivision"),
+    "DOS": ("esde", "dos"),
+    "PC-8000 / PC-8800 series": ("esde", "pc88"),
+    "Sharp X1": ("esde", "x1"),
+    "Sharp X68000": ("esde", "x68000"),
+    "Pokemon Mini": ("esde", "pokemini"),
     # [D] — the one semantic join: es_systems.xml:1032 "macintosh" (Apple
     # Macintosh) launches standalone MAME macse/macplus, not minivmac, but
     # both sides are the 68k Macintosh line (minivmac_libretro.info requires
     # MacII.ROM). Only plausible id; no launching-core witness.
-    "Mac68k": "macintosh",
-    # Elektronika BK-0010/0011M — no catalogue id exists;
-    # SYSTEMS_WITHOUT_CATALOGUE_ID entry "bk" (bk_libretro.info).
-    "BK-0010/BK-0011(M)": "bk",
+    "Mac68k": ("esde", "macintosh"),
+    # Elektronika BK-0010/0011M — no ES-DE build names it; libretro does, as
+    # the database name bk_libretro.info declares (:6), placed by the platform
+    # table beside Batocera's bk (es_systems.yml:2040).
+    "BK-0010/BK-0011(M)": ("libretro", "BK-0010/BK-0011"),
     # TI-83 calculators (numero_libretro.info: ti83.rom/ti83plus.rom/
-    # ti83se.rom) — no catalogue id exists; ES-DE's "ti99" is the TI-99/4A
-    # home computer, a different machine. SYSTEMS_WITHOUT_CATALOGUE_ID "ti83".
-    "TI83": "ti83",
-    "Super Cassette Vision": "scv",
-    "FreeChaF": "channelf",
-    "Vircon32": "vircon32",
+    # ti83se.rom) — no ES-DE build names them (its "ti99" is the TI-99/4A home
+    # computer, a different machine) and numero declares no database; RomM's
+    # slug ti-83 (platform_slugs.py:403) is the one table key that spells them.
+    "TI83": ("romm", "ti-83"),
+    "Super Cassette Vision": ("esde", "scv"),
+    "FreeChaF": ("esde", "channelf"),
+    "Vircon32": ("esde", "vircon32"),
     # es_systems.xml:1526 "palm" (Palm OS) launches mu_libretro (:1530), the
     # sole shipped carrier.
-    "Palm OS": "palm",
-    "CP System I/II": "cps",
+    "Palm OS": ("esde", "palm"),
+    "CP System I/II": ("esde", "cps"),
     # Multi-system / game engines. es_systems.xml:155 "arcade" launches the
     # carriers of "Arcade (various)" (fbneo, the mame variants, dice) — the
     # umbrella id the catalogue itself files these cores under; per-board
     # refinements are per-file override work.
-    "Arcade (various)": "arcade",
+    "Arcade (various)": ("esde", "arcade"),
     # "Game engine" is scummvm_libretro's systemname and nothing else's;
     # es_systems.xml:1848 "scummvm" launches it (:1852).
-    "Game engine": "scummvm",
+    "Game engine": ("esde", "scummvm"),
     # es_systems.xml:1653 "ports" launches ecwolf_libretro (:1659) — the
     # catalogue's own filing, bucket though it is.
-    "Wolfenstein 3D Game Engine": "ports",
+    "Wolfenstein 3D Game Engine": ("esde", "ports"),
     # "RPG Maker XP/VX/VX Ace Game Engine" is deliberately unmapped: no
-    # shipped .info carries it, so it files mechanically like any other
-    # systemname this table does not know.
-    "J2ME": "j2me",
-    "Java ME": "j2me",
-    "ZX Spectrum (various)": "zxspectrum",
-}
-
-# Systems that are real on the machine and absent from the catalogue: the
-# pinned ES-DE build declares no id for them (guard-tested against the
-# deployed es_systems.xml — nothing there spells them, commented blocks
-# included). atlas answers with its own spelling rather than hiding real
-# firmware, and every answer that uses one carries
-# :data:`CAVEAT_SYSTEM_NOT_IN_CATALOGUE` so the word cannot be read as a
-# catalogue id. Keys are the spellings; values name the machine for the
-# caveat's prose. Same output form as ``_unknown``: a token no catalogue
-# declares, plus a structured caveat saying why — only the fact differs
-# (here the catalogue lacks the word; there the core states no systemname).
-SYSTEMS_WITHOUT_CATALOGUE_ID: Mapping[str, str] = {
-    # bk_libretro.info: systemname "BK-0010/BK-0011(M)", eight bk/*.ROM dumps.
-    "bk": "Elektronika BK-0010/0011M",
-    # numero_libretro.info: ti83.rom / ti83plus.rom / ti83se.rom.
-    "ti83": "Texas Instruments TI-83 calculators",
-    # ep128emu_core_libretro.info: systemname "128", firmware descs
-    # "Enterprise 128 Expandible OS", "Enterprise 64 BASIC", … — the spelling
-    # follows the emulator family's own name (ep128emu).
-    "ep128": "Enterprise 64/128",
+    # shipped .info carries it, so a core that did would leave the naming to
+    # itself, as any systemname this table does not hold does — its own name
+    # where it has exactly one (system_source "core"), otherwise "_unknown"
+    # with system_source "none".
+    "J2ME": ("esde", "j2me"),
+    "Java ME": ("esde", "j2me"),
+    "ZX Spectrum (various)": ("esde", "zxspectrum"),
 }
 
 # Per-file system overrides for multi-system cores. A core covering several
@@ -1711,44 +1720,116 @@ def declared_kind_of(core_stem: str, declared: str) -> DeclaredKind:
     return DECLARED_FILE if declared_directory_of(core_stem, declared) is None else DECLARED_DIRECTORY
 
 
-_NON_SLUG = re.compile(r"[^a-z0-9]+")
-
 # A ``systemname`` that names several machines at once. libretro writes these
 # as a slash list, with or without spaces: "Game Boy/Game Boy Color",
 # "GameCube / Wii", "Atari ST/STE/TT/Falcon" — the slash carries the whole
 # signal, so it is looked for literally; the spacing around it says nothing.
 _SEVERAL_SYSTEMS_SEPARATOR = "/"
 
-SystemSource = Literal["override", "systemname", "slug", "none", "card"]
+SystemSource = Literal["override", "systemname", "core", "none", "card"]
 
-# What a declaration is filed under when its core's ``.info`` states no
-# ``systemname`` at all. A token no ES-DE build declares, so nothing files
-# under it by accident — and a statement about that core rather than about a
-# machine, which is why the routes that ask "which system do these bytes belong
-# to" leave it out.
-_SYSTEM_UNKNOWN = "_unknown"
+# What a declaration is filed under when nothing names its system: its core's
+# ``.info`` states no ``systemname`` at all, or the core is named by no system
+# or by several. A token no source spells, so nothing files under it by
+# accident — and a statement about that core rather than about a machine, which
+# is why the routes that ask "which system do these bytes belong to" leave it
+# out (#784 D49).
+_SYSTEM_UNKNOWN: Literal["_unknown"] = "_unknown"
+
+# A declared file's system: a (source, key) pair, or the sentinel above.
+SystemFiling = SystemPair | Literal["_unknown"]
+# The words a requirement's ``system`` may hold in place of a pair: the sentinel
+# alone (#784 D49).
+SYSTEM_SENTINELS: tuple[Literal["_unknown"], ...] = (_SYSTEM_UNKNOWN,)
 
 SOURCE_OVERRIDE: SystemSource = "override"
 SOURCE_SYSTEMNAME: SystemSource = "systemname"
-SOURCE_SLUG: SystemSource = "slug"
+# The system the core itself is named by, where the systemname map holds no
+# entry for its ``systemname``: its libretro database name, or the pair atlas
+# packages for a core that declares none (#784 D46, D50).
+SOURCE_CORE: SystemSource = "core"
 SOURCE_NONE: SystemSource = "none"
 # The system came from a standalone firmware card's own list — the card
 # declares which catalogue systems it answers for, exactly as the standalone
 # save cards do, so there is no per-file derivation to weigh.
 SOURCE_CARD: SystemSource = "card"
 
-SYSTEM_SOURCES = ("override", "systemname", "slug", "none", "card")
+SYSTEM_SOURCES = ("override", "systemname", "core", "none", "card")
 
 
-def system_decision(file_name: str, systemname: str) -> tuple[str, SystemSource]:
-    """The system a declared file belongs to, *and how it was arrived at*.
+@dataclass(frozen=True, slots=True)
+class PackagedCoreSystem:
+    """The system one core that declares no libretro database name is named by (#784 D46)."""
 
-    Four ways, in order: the per-file override (the only one that knows which
-    machine a dump belongs to), the ``systemname`` map — both speaking ES-DE
-    ids, or a declared own spelling where no id exists — then a mechanical
-    slug of an unmapped ``systemname`` (so every declaration stays reachable
-    by some word), and — when the ``.info`` states no ``systemname`` at all —
-    ``_unknown``.
+    system: SystemPair
+    systemname: str
+    citation: str
+
+
+_CORE_SYSTEMS_SCHEMA = 1
+_PACKAGED_CORE_SYSTEMS: Mapping[str, PackagedCoreSystem] | None = None
+
+
+def packaged_core_systems() -> Mapping[str, PackagedCoreSystem]:
+    """``atlas/data/core_systems.json``: per ``.so`` short name, the cited pair a database-less core is named by."""
+    global _PACKAGED_CORE_SYSTEMS
+    if _PACKAGED_CORE_SYSTEMS is None:
+        raw = json.loads(packaged_text("core_systems.json"))
+        if raw.get("schema") != _CORE_SYSTEMS_SCHEMA:
+            raise ValueError(f"core_systems.json: schema {raw.get('schema')!r}, expected {_CORE_SYSTEMS_SCHEMA}")
+        _PACKAGED_CORE_SYSTEMS = {
+            name: PackagedCoreSystem((entry["source"], entry["key"]), entry["systemname"], entry["citation"])
+            for name, entry in raw["cores"].items()
+        }
+    return _PACKAGED_CORE_SYSTEMS
+
+
+def filing_targets(*, core_systems: bool) -> frozenset[SystemPair]:
+    """Every system a declared file or a core can be filed under before an installation names it.
+
+    The systemname map's targets and the per-file overrides' — and, with
+    *core_systems*, the packaged pairs database-less cores are named by.
+    """
+    targets = {*SYSTEMNAME_TO_SYSTEM.values(), *((ESDE_SOURCE, v) for v in FIRMWARE_SYSTEM_OVERRIDE.values())}
+    if core_systems:
+        targets.update(entry.system for entry in packaged_core_systems().values())
+    return frozenset(targets)
+
+
+_NAMINGS: dict[tuple[tuple[str, ...], bool], SystemNaming] = {}
+
+
+def system_naming(own: tuple[str, ...], *, core_systems: bool = False) -> SystemNaming:
+    """The naming of an installation whose own catalogue sources are *own* (#784 D43, D50).
+
+    Its cited pairs are the filing targets no own key names — the systemname
+    map's targets outside the own sources on every installation, and with
+    *core_systems* (a bare RetroArch) the packaged pairs database-less cores
+    are named by: a fixed set per installation kind, so a client can ask back
+    with any system an answer named (#784 D47).
+    """
+    key = (own, core_systems)
+    if key not in _NAMINGS:
+        bare = SystemNaming(own)
+        _NAMINGS[key] = SystemNaming(
+            own,
+            frozenset(
+                target
+                for target in filing_targets(core_systems=core_systems)
+                if target[0] not in own and bare.named(target) is None
+            ),
+        )
+    return _NAMINGS[key]
+
+
+def system_decision(file_name: str, systemname: str) -> tuple[SystemPair | None, SystemSource]:
+    """The system a declared file is filed under before any installation names it, *and how*.
+
+    Two ways, in order: the per-file override (the only one that knows which
+    machine a dump belongs to, in ES-DE's names) and the ``systemname`` map.
+    ``None`` where neither holds the file — then its core's own name decides
+    (:func:`core_systems`), and ``_unknown`` where the ``.info`` states no
+    ``systemname`` at all.
 
     The *source* is the point. Everything but ``override`` assigns a file by
     what its whole core is called, which is only sound while the core covers one
@@ -1757,17 +1838,77 @@ def system_decision(file_name: str, systemname: str) -> tuple[str, SystemSource]
     """
     override = FIRMWARE_SYSTEM_OVERRIDE.get(file_name)
     if override is not None:
-        return override, SOURCE_OVERRIDE
-    known = SYSTEMNAME_TO_SLUG.get(systemname)
+        return (ESDE_SOURCE, override), SOURCE_OVERRIDE
+    known = SYSTEMNAME_TO_SYSTEM.get(systemname)
     if known is not None:
         return known, SOURCE_SYSTEMNAME
-    slug = _NON_SLUG.sub("-", systemname.lower()).strip("-")
-    return (slug, SOURCE_SLUG) if slug else (_SYSTEM_UNKNOWN, SOURCE_NONE)
+    return None, SOURCE_CORE if systemname else SOURCE_NONE
 
 
-def system_for(file_name: str, systemname: str) -> str:
-    """The system a declared file belongs to, in atlas's vocabulary."""
-    return system_decision(file_name, systemname)[0]
+def core_systems(
+    stem: str, systemname: str, database: tuple[str, ...], naming: SystemNaming
+) -> tuple[SystemPair, ...]:
+    """The systems an installation names one core by (#784 D45, D46, D50).
+
+    A bare RetroArch, whose own source is libretro, names a core by every
+    libretro database name its ``.info`` declares, and a core that declares
+    none by the pair atlas packages for it (:func:`packaged_core_systems`),
+    translated into libretro's key where the table names exactly one.
+    An ES-DE frontend names it by the systemname map's target first; failing
+    that, by its database names or packaged pair, each translated into the own
+    source — a name that reaches no system there, or several, names none
+    (atlas picks none). No core is named by a word atlas formed itself.
+    """
+    packaged = packaged_core_systems().get(core_short_name(stem))
+    declared = tuple((LIBRETRO_SOURCE, name) for name in database) or (
+        (packaged.system,) if packaged is not None else ()
+    )
+    if LIBRETRO_SOURCE not in naming.own:
+        mapped = SYSTEMNAME_TO_SYSTEM.get(systemname)
+        if mapped is not None and (named := naming.named(mapped)) is not None:
+            return (named,)
+    return tuple(dict.fromkeys(named for pair in declared if (named := naming.named(pair)) is not None))
+
+
+def _filing(
+    file_name: str, systemname: str, named: tuple[SystemPair, ...], naming: SystemNaming
+) -> tuple[SystemFiling, SystemSource]:
+    """A declared file's system on one installation, and how it was arrived at.
+
+    The override or the map decides where either holds the file, named in the
+    installation's own source where one key names that system there and kept
+    as the cited pair where none does (a bare RetroArch's arcade); otherwise
+    the core's own name, where it has exactly one (*named*).
+    """
+    decided, source = system_decision(file_name, systemname)
+    if decided is not None:
+        return naming.named(decided) or decided, source
+    if source == SOURCE_CORE and len(named) == 1:
+        return named[0], SOURCE_CORE
+    return _SYSTEM_UNKNOWN, SOURCE_NONE
+
+
+def _check_filing(owner: str, system: object, system_source: SystemSource) -> None:
+    """Refuse a filing that is neither a pair of non-empty strings nor a sentinel, or one at odds with its source.
+
+    The source is one of :data:`SYSTEM_SOURCES`, and ``_unknown`` is the
+    system exactly where nothing names one (``system_source`` ``none``;
+    #784 D49).
+    """
+    if system_source not in SYSTEM_SOURCES:
+        raise ValueError(f"{owner}: system_source must be one of {SYSTEM_SOURCES}, got {system_source!r}")
+    if isinstance(system, str):
+        if system not in SYSTEM_SENTINELS:
+            raise ValueError(
+                f"{owner}: system must be a (source, key) pair or one of {SYSTEM_SENTINELS}, got {system!r}"
+            )
+    else:
+        check_system_pair(owner, system)
+    if (system_source == SOURCE_NONE) != (system == _SYSTEM_UNKNOWN):
+        raise ValueError(
+            f"{owner}: system is {_SYSTEM_UNKNOWN!r} exactly where its source is {SOURCE_NONE!r}, "
+            f"got {system!r} from {system_source!r}"
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1793,9 +1934,14 @@ class FirmwareDeclaration:
     file_name: str
     description: str
     need: FirmwareNeed
-    system: str
+    system: SystemFiling
     system_source: SystemSource
     declared_kind: DeclaredKind
+
+    def __post_init__(self) -> None:
+        if self.need not in FIRMWARE_NEEDS:
+            raise ValueError(f"FirmwareDeclaration: need must be one of {FIRMWARE_NEEDS}, got {self.need!r}")
+        _check_filing("FirmwareDeclaration", self.system, self.system_source)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1808,12 +1954,15 @@ class CoreDeclarations:
     core", which has no :class:`CoreDeclarations` at all.
 
     ``database`` is the ``.info`` field of that name, split on ``|``: the
-    libretro-database names the core covers. It is read purely as a *signal* —
-    it is deliberately not used to assign a system, because it is a different
-    vocabulary (``Sinclair - ZX 81`` where ``systemname`` says ``ZX81``), and on
-    a real installation 88 of 117 single-entry database names are unknown to the
-    ``systemname`` map; leaning on it would mean maintaining a second table of
-    the same size.
+    libretro-database names the core covers. On a bare RetroArch they are the
+    systems the core is named by, libretro being its own catalogue source
+    (#784 D46); an ES-DE frontend names a core by the systemname map first and
+    translates these names through the platform table only where the map holds
+    none (#784 D50). ``system`` is the system the core itself files under — a
+    route that states a requirement the ``.info`` does not declare files it
+    there, ``system_source`` how that system was arrived at (the map, the
+    core's one name, or ``none`` beside ``_unknown``; #784 D54) — and
+    ``systems`` every system the installation lists the core under.
 
     ``info_status`` is the read status of the ``.info`` itself. A core whose
     ``.so`` is on disk but whose ``.info`` is missing, unreadable, or not UTF-8
@@ -1838,9 +1987,13 @@ class CoreDeclarations:
     core_so: str
     stem: str
     systemname: str
-    system: str
+    system: SystemFiling
+    system_source: SystemSource
     firmware: tuple[FirmwareDeclaration, ...]
     database: tuple[str, ...] = ()
+    # The systems the installation names this core by (:func:`core_systems`):
+    # what a catalogue-less listing files it under. Empty where none names it.
+    systems: tuple[SystemPair, ...] = ()
     info_status: ReadStatus = READ_OK
     firmware_count: str = ""
     unread: tuple[str, ...] = ()
@@ -1851,6 +2004,9 @@ class CoreDeclarations:
     # read; a caller labels with the ``.so`` name then, never a guess.
     corename: str = ""
     packaged: bool = False
+
+    def __post_init__(self) -> None:
+        _check_filing("CoreDeclarations", self.system, self.system_source)
 
     @property
     def declared(self) -> bool:
@@ -1867,7 +2023,7 @@ class CoreDeclarations:
         - ``database`` names several systems (mGBA, Genesis Plus GX);
         - ``systemname`` itself names several (``ColecoVision/CreatiVision/My
           Vision``, ``GameCube / Wii``) — the same separator
-          :data:`SYSTEMNAME_TO_SLUG` is already keyed on;
+          :data:`SYSTEMNAME_TO_SYSTEM` is already keyed on;
         - the two disagree where both are mappable: one source contradicting
           the other is exactly a reason not to trust either blindly. No
           shipped core trips this today — vice_x128 was the case (systemname
@@ -1887,8 +2043,8 @@ class CoreDeclarations:
         if _SEVERAL_SYSTEMS_SEPARATOR in self.systemname:
             return True
         if len(self.database) == 1:
-            from_database = SYSTEMNAME_TO_SLUG.get(self.database[0])
-            from_systemname = SYSTEMNAME_TO_SLUG.get(self.systemname)
+            from_database = SYSTEMNAME_TO_SYSTEM.get(self.database[0])
+            from_systemname = SYSTEMNAME_TO_SYSTEM.get(self.systemname)
             if from_database is not None and from_systemname is not None:
                 return from_database != from_systemname
         return False
@@ -1900,7 +2056,7 @@ class _Info:
 
     systemname: str
     database: tuple[str, ...]
-    firmware: tuple[FirmwareDeclaration, ...]
+    slots: tuple[FirmwareSlot, ...]
     firmware_count: str
     unread: tuple[str, ...]
     unread_stating_a_path: tuple[str, ...]
@@ -1912,16 +2068,20 @@ class _Info:
 _UNREADABLE_INFO = _Info("", (), (), "", (), ())
 
 
-def _declaration_of(slot: FirmwareSlot, systemname: str, stem: str) -> FirmwareDeclaration:
-    """One enumerated slot as atlas files it — by the file its path names.
+def _declaration_of(
+    slot: FirmwareSlot, systemname: str, stem: str, named: tuple[SystemPair, ...], naming: SystemNaming
+) -> FirmwareDeclaration:
+    """One enumerated slot as atlas files it — by the file its path names, on one installation.
 
     *stem* is the core the slot belongs to, and it is here for one field:
     whether this core opens the path as a folder is a fact about the core, so
     the same declared string can be a folder for one core and a file for
-    another (:func:`declared_kind_of`).
+    another (:func:`declared_kind_of`). *named* are the systems the
+    installation names the core by, which a file the map and the overrides do
+    not hold is filed under (:func:`_filing`).
     """
     file_name = os.path.basename(slot.path)
-    system, source = system_decision(file_name, systemname)
+    system, source = _filing(file_name, systemname, named, naming)
     return FirmwareDeclaration(
         path=slot.path,
         file_name=file_name,
@@ -1933,15 +2093,15 @@ def _declaration_of(slot: FirmwareSlot, systemname: str, stem: str) -> FirmwareD
     )
 
 
-def _declarations_in(text: str, stem: str) -> _Info:
+def _declarations_in(text: str) -> _Info:
     """Read one ``.info``: its ``systemname``, its ``database``, and its firmware."""
     fields = parse_core_info(text)
     systemname = fields.get("systemname", "")
     enumeration = enumerate_firmware(fields)
     return _Info(
         systemname=systemname,
-        database=tuple(entry for entry in fields.get("database", "").split("|") if entry),
-        firmware=tuple(_declaration_of(slot, systemname, stem) for slot in enumeration.slots),
+        database=tuple(entry for entry in fields.get("database", "").split("|") if entry.strip()),
+        slots=enumeration.slots,
         firmware_count=enumeration.count,
         unread=enumeration.unread,
         unread_stating_a_path=enumeration.unread_stating_a_path,
@@ -1971,7 +2131,7 @@ class CoreEnumeration:
 
 
 def read_core_declarations(
-    machine: Machine, info_dir: str, *, core_dir: str | None = None
+    machine: Machine, info_dir: str, *, core_dir: str | None = None, naming: SystemNaming | None = None
 ) -> CoreEnumeration:
     """Read what every *installed* core declares, live, from its ``.info`` file.
 
@@ -1999,7 +2159,12 @@ def read_core_declarations(
     tell them apart from the list alone — which is what the old "empty means
     nobody looked" reading got wrong in the other direction, treating a
     genuinely empty directory as a failure.
+
+    *naming* is the installation's (:func:`system_naming`): which systems it
+    names each core and each declared file by is its own to say (#784 D43).
+    Without one, ES-DE's names.
     """
+    naming = naming if naming is not None else system_naming((ESDE_SOURCE,))
     directory = info_dir if core_dir is None else core_dir
     suffix = ".info" if core_dir is None else ".so"
     listing = machine.glob(os.path.join(_glob_escape(directory), f"*{suffix}"))
@@ -2011,17 +2176,23 @@ def read_core_declarations(
         result = machine.read_text(os.path.join(info_dir, f"{stem}.info"))
         packaged = packaged_declaration_of(stem) if result.status == READ_MISSING else None
         if packaged is not None:
-            cores.append(_packaged_core_declarations(packaged))
+            cores.append(_packaged_core_declarations(packaged, naming))
             continue
-        info = _UNREADABLE_INFO if result.text is None else _declarations_in(result.text, stem)
+        info = _UNREADABLE_INFO if result.text is None else _declarations_in(result.text)
+        named = core_systems(stem, info.systemname, info.database, naming)
+        system, system_source = _filing("", info.systemname, named, naming)
         cores.append(
             CoreDeclarations(
                 core_so=f"{stem}.so",
                 stem=stem,
                 systemname=info.systemname,
-                system=system_for("", info.systemname),
-                firmware=info.firmware,
+                system=system,
+                system_source=system_source,
+                firmware=tuple(
+                    _declaration_of(slot, info.systemname, stem, named, naming) for slot in info.slots
+                ),
                 database=info.database,
+                systems=named,
                 info_status=result.status,
                 firmware_count=info.firmware_count,
                 unread=info.unread,
@@ -2032,7 +2203,7 @@ def read_core_declarations(
     return CoreEnumeration(tuple(sorted(cores, key=lambda c: c.core_so)), listing.unreadable)
 
 
-def _packaged_core_declarations(entry: PackagedCoreDeclaration) -> CoreDeclarations:
+def _packaged_core_declarations(entry: PackagedCoreDeclaration, naming: SystemNaming) -> CoreDeclarations:
     """A core whose ``.info`` is missing, declared by atlas's packaged entry in its place.
 
     Each packaged slot becomes the slot a ``.info`` would enumerate and is
@@ -2046,12 +2217,16 @@ def _packaged_core_declarations(entry: PackagedCoreDeclaration) -> CoreDeclarati
         FirmwareSlot(index=index, path=slot.path, description=slot.description, optional=slot.need == NEED_OPTIONAL)
         for index, slot in enumerate(entry.firmware)
     )
+    named = core_systems(entry.stem, entry.systemname, (), naming)
+    system, system_source = _filing("", entry.systemname, named, naming)
     return CoreDeclarations(
         core_so=f"{entry.stem}.so",
         stem=entry.stem,
         systemname=entry.systemname,
-        system=system_for("", entry.systemname),
-        firmware=tuple(_declaration_of(slot, entry.systemname, entry.stem) for slot in slots),
+        system=system,
+        system_source=system_source,
+        firmware=tuple(_declaration_of(slot, entry.systemname, entry.stem, named, naming) for slot in slots),
+        systems=named,
         info_status=READ_MISSING,
         packaged=True,
     )
@@ -2124,44 +2299,6 @@ def system_assignment_caveats(core: CoreDeclarations) -> tuple[Caveat, ...]:
                     },
                 )
             )
-    return tuple(caveats)
-
-
-def catalogue_vocabulary_caveats(core: CoreDeclarations) -> tuple[Caveat, ...]:
-    """State it when a core's firmware is filed under a word no catalogue declares.
-
-    A handful of systems exist on the machines atlas supports and in no ES-DE
-    build (:data:`SYSTEMS_WITHOUT_CATALOGUE_ID`). Refusing to answer would
-    hide real firmware, so the answer keeps atlas's own spelling — and this
-    caveat marks every use of one, so a consumer validating identifiers
-    against ``known_systems()`` reads a marked word rather than a membership
-    mistake. One caveat per spelling used, naming the files filed under it.
-    """
-    caveats: list[Caveat] = []
-    filed: dict[str, list[str]] = {}
-    for declaration in core.firmware:
-        if declaration.system in SYSTEMS_WITHOUT_CATALOGUE_ID and declaration.file_name:
-            filed.setdefault(declaration.system, []).append(declaration.file_name)
-    for system in sorted(filed):
-        files = tuple(sorted(set(filed[system])))
-        caveats.append(
-            Caveat(
-                CAVEAT_SYSTEM_NOT_IN_CATALOGUE,
-                f"no ES-DE system id exists for this system "
-                f"({SYSTEMS_WITHOUT_CATALOGUE_ID[system]}); {system!r} is atlas's own spelling — "
-                f"{core.core_so} files under it: {', '.join(files)}",
-                {
-                    "core_so": core.core_so,
-                    "system": system,
-                    "files": files,
-                    # Deliberately not "table_version": the assignment caveats
-                    # cite the override table under that key, and this one
-                    # cites the systemname map — one key per governing table,
-                    # so a consumer reading the number knows what it versions.
-                    "map_version": SYSTEMNAME_MAP_VERSION,
-                },
-            )
-        )
     return tuple(caveats)
 
 
@@ -2281,13 +2418,15 @@ class FirmwareRequirement:
     ``None`` exactly for a card-declared requirement: a standalone emulator
     has no ``.so``, and inventing one would collide with the real namespace.
     """
-    system: str
-    """The system this declared file belongs to, in atlas's own vocabulary — the
-    sentinel ``_unknown`` where the core's ``.info`` states no ``systemname``.
+    system: SystemFiling
+    """The system this declared file belongs to, as a (source, key) pair: the
+    installation's own source where it names the system, a cited pair of another
+    table source where it does not (#784 D47) — or the sentinel ``_unknown``
+    where nothing names the file's system.
     """
     system_source: SystemSource
-    """How that system was arrived at — a per-file override, the core's ``systemname``, a
-    mechanical slug of it, nothing at all, or a standalone card's own list.
+    """How that system was arrived at — a per-file override, the core's ``systemname``, the
+    system the core itself is named by, nothing at all, or a standalone card's own list.
     """
     need: FirmwareNeed
     """What the core asks for — ``required``, or ``optional`` where its declaration marks
@@ -2400,11 +2539,7 @@ class FirmwareRequirement:
             )
         if self.found not in PATH_KINDS:
             raise ValueError(f"FirmwareRequirement: found must be one of {PATH_KINDS}, got {self.found!r}")
-        if self.system_source not in SYSTEM_SOURCES:
-            raise ValueError(
-                f"FirmwareRequirement: system_source must be one of {SYSTEM_SOURCES}, "
-                f"got {self.system_source!r}"
-            )
+        _check_filing("FirmwareRequirement", self.system, self.system_source)
         if self.contents_satisfied is not None and (
             self.found != KIND_DIRECTORY or self.declared_kind != DECLARED_DIRECTORY
         ):
@@ -2969,13 +3104,13 @@ class CoreFirmware:
     evidence level, and for that reason never reaches a client as an evidence
     level at all.
     """
-    system_firmware_needs: tuple[str, ...] = ()
-    """The systems whose recorded need this core is not excused from, as system ids.
+    system_firmware_needs: tuple[SystemPair, ...] = ()
+    """The systems whose recorded need this core is not excused from, as (source, key) pairs.
 
     Which machines the need is about, which is what lets each of them be asked
     over the images filed under it rather than over every image the core
-    declares: :attr:`_system_image_in_place` asks one disjunction per id here,
-    over that id's requirements alone, and every one of them has to be
+    declares: :attr:`_system_image_in_place` asks one disjunction per system
+    here, over that system's requirements alone, and every one of them has to be
     answered. Empty under every other state, because
     nothing else is a need — an excused one is this core's substitute, an open
     question is nobody's answer, and a system established to run without needs
@@ -3040,9 +3175,9 @@ class CoreFirmware:
     the same reason ``unread`` is — the caveats already carry the paths a
     consumer acts on.
     """
-    absent_by_search: tuple[str, ...] = ()
-    """The systems this emulator's own search demonstrated to hold no image for, as system
-    ids — the one place a system reaches :attr:`system_firmware` from somewhere other than
+    absent_by_search: tuple[SystemPair, ...] = ()
+    """The systems this emulator's own search demonstrated to hold no image for, as (source,
+    key) pairs — the one place a system reaches :attr:`system_firmware` from somewhere other than
     :attr:`requirements`.
 
     DuckStation with every region key empty names no file: what it boots is
@@ -3234,7 +3369,7 @@ class CoreFirmware:
             return False
         return None if any(verdict is None for verdict in verdicts) else True
 
-    def _system_image_for(self, system: str) -> bool | None:
+    def _system_image_for(self, system: SystemPair) -> bool | None:
         """Does one needing *system* have an image of its own that is usable? Three-valued.
 
         Its images are a **disjunction**: one of them being usable is what the
@@ -3511,7 +3646,7 @@ class UnclaimedFile:
     DuckStation's it is the row's own description (``SCPH-1001, DTL-H1001 (v2.0
     05-07-95 A)``), which names no file because that emulator names none.
     """
-    console: str | None = None
+    console: SystemPair | None = None
     """Which machine these bytes belong to, and ``None`` wherever that does not follow.
 
     Never inferred from the file name, which is the one thing not to be trusted
@@ -3523,9 +3658,11 @@ class UnclaimedFile:
     without verification, for unknown bytes, and where the only declarations that
     name them state no system of their own (``_unknown``, which is a statement
     about a core rather than a system); and two or more make this ``None`` as
-    well, because a file two machines claim is not a file one of them owns. The
-    vocabulary is the one every other answer speaks — an ES-DE system id, or one
-    of the own spellings atlas publishes where no ES-DE build declares one.
+    well, because a file two machines claim is not a file one of them owns. It
+    is named the way every other answer names a system: a (source, key) pair in
+    the installation's own catalogue source where one names it, a cited pair
+    of another source where none does (#784 D47) — a size class's ES-DE name
+    named so too.
     """
     concerns: tuple[Concern, ...] = ()
     """Which installed emulators these bytes concern, each with the way it is concerned
@@ -3574,6 +3711,10 @@ class FirmwareAnswer:
     caveats: tuple[Caveat, ...]
     """Every degradation of this answer, and on a rootless one the statement of why there
     is no root.
+    """
+    resolution: SystemResolution | None = None
+    """How the system the question named was resolved here (#784 D44) — stated by the question
+    about a system, ``None`` on the questions that name none (a core, the inventory).
     """
 
     def __post_init__(self) -> None:
@@ -3659,6 +3800,11 @@ class FirmwareContext:
     # module-level load so a test can answer a question about a verdict this
     # shipped table does not carry.
     system_firmware: "Mapping[str, SystemFirmware]" = field(default_factory=load_system_firmware)
+    # How the installation names a system (:func:`system_naming`): its own
+    # catalogue sources and the pairs it cites outside them. It decides the
+    # (source, key) pair every requirement and recorded verdict names its
+    # system by (#784 D43, D47). ES-DE's names on a context no handle built.
+    naming: SystemNaming = field(default_factory=lambda: system_naming((ESDE_SOURCE,)))
     # Where RetroArch would read a core option on this installation
     # (:class:`atlas.core_options.CoreOptionsChain`), resolved by the handle
     # out of the same configuration read this context was built from. A core
@@ -3811,7 +3957,8 @@ class Catalogue:
 
     ``hole`` is the third state, between those two: part of the catalogue could
     not be consulted at all — EmuDeck's bundled ``es_systems.xml`` is sealed
-    inside the AppImage — and the caveat here is the caller's statement of that
+    inside the AppImage, or a layer does not parse (#784 D53) — and the caveat
+    here is the caller's statement of that
     fact, stated on every answer this catalogue informs. The entries are still
     real (the readable part declares them), but an **empty** enumeration under
     a hole says nothing about the machine: the declaration may sit in the part
@@ -3835,7 +3982,8 @@ class InventoryCatalogue:
     as they are per system, and for the same reason — one is a look that
     failed, the other a fact about the machine.
 
-    ``by_system`` holds one :class:`Catalogue` per system, and it need only
+    ``by_system`` holds one :class:`Catalogue` per system, keyed by the pair the
+    installation names the system by, and it need only
     hold the systems a packaged card answers for (:func:`carded_systems`);
     everything else in it is never looked at. ``read`` false means the
     catalogue could not be consulted, and then it names no system at all:
@@ -3856,7 +4004,7 @@ class InventoryCatalogue:
     does not: this answer is about none.
     """
 
-    by_system: "Mapping[str, Catalogue]" = field(default_factory=dict)
+    by_system: "Mapping[SystemPair, Catalogue]" = field(default_factory=dict)
     read: bool = True
     hole: Caveat | None = None
     findings: tuple[Caveat, ...] = ()
@@ -5887,12 +6035,12 @@ def _no_requirement(subject: str, data: dict[str, str]) -> Caveat:
 
 
 def _declaration_unknown(subject: str, data: dict[str, str]) -> Caveat:
-    """A read that did not happen — the one thing that may never become a claim."""
+    """A read that did not happen or found nothing to read — the one thing that may never become a claim."""
     return Caveat(
         CAVEAT_FIRMWARE_DECLARATION_UNKNOWN,
         f"whether anything here declares {subject} could not be established — the enumeration this "
-        "answer would derive it from did not happen, or nothing in it could be read; the empty list "
-        "below is a look that failed, never 'nothing needed'",
+        "answer would derive it from did not happen, listed no emulator to read, or nothing in it could "
+        "be read; the empty list below is a look that found nothing to read, never 'nothing needed'",
         data,
     )
 
@@ -6035,7 +6183,6 @@ def _core_caveats(core: CoreDeclarations, refusals: tuple[Caveat, ...]) -> tuple
         *refusals,
         *_unread_declaration_caveats(core),
         *system_assignment_caveats(core),
-        *catalogue_vocabulary_caveats(core),
     )
 
 
@@ -6201,18 +6348,23 @@ def _resolve_cores(
 
 
 def _cores_a_derived_assignment_may_hide(
-    all_cores: tuple[CoreDeclarations, ...], selected: tuple[CoreDeclarations, ...], system: str
+    all_cores: tuple[CoreDeclarations, ...],
+    selected: tuple[CoreDeclarations, ...],
+    system: SystemPair,
+    naming: SystemNaming,
 ) -> tuple[CoreDeclarations, ...]:
-    """Installed cores this system query could not reach *because* of a derived slug.
+    """Installed cores this system query could not reach *because* of a derived assignment.
 
-    Without a frontend catalogue the selection is keyed on the cores' own
-    ``systemname``. A core whose firmware was filed by a system that was derived
-    rather than ruled can therefore sit under the wrong slug — and then it is not
-    selected, so the caveat that would have said so never gets attached either.
+    Without a frontend catalogue the selection is keyed on the systems the
+    cores are named by. A core whose firmware was filed by a system that was
+    derived rather than ruled can therefore sit under the wrong system — and
+    then it is not selected, so the caveat that would have said so never gets
+    attached either.
 
     A candidate has to be one: the core must have a derived assignment **and**
-    its own ``database`` must name the queried system. That is on-machine
-    evidence that this core covers it, so atari800 shows up for ``atari5200``
+    one of its own ``database`` names, named the way the installation names a
+    system, must be the queried system. That is on-machine evidence that this
+    core covers it, so atari800 shows up for ``atari5200``
     (its database names ``Atari - 5200`` while its systemname says ``Atari
     8-bit Family``) while thirty unrelated cores do not. Listing every derived
     core instead would put atari800 and blueMSX under a PlayStation query and
@@ -6223,7 +6375,7 @@ def _cores_a_derived_assignment_may_hide(
         core
         for core in all_cores
         if core.core_so not in chosen
-        and any(SYSTEMNAME_TO_SLUG.get(name) == system for name in core.database)
+        and any(naming.named((LIBRETRO_SOURCE, name)) == system for name in core.database)
         and system_assignment_caveats(core)
     )
 
@@ -6250,36 +6402,55 @@ def _undeclarable_core(
     )
 
 
-def system_firmware_system(systemname: str) -> str:
-    """A ``system_firmware`` table key in the vocabulary an answer speaks.
+def system_firmware_system(systemname: str, naming: SystemNaming | None = None) -> SystemFiling:
+    """A ``system_firmware`` table key as the system an answer's requirements name.
 
     The table is keyed by libretro ``systemname`` verbatim, because that is
     the unit the ``.info`` catalogue groups firmware by and therefore the unit
-    its tripwire derives; an answer speaks atlas's own system ids. The join is
-    the one :func:`system_decision` already makes from a ``systemname``, asked
-    with no file name — a per-file override says which machine one *dump*
-    belongs to, and this key is about the machine itself, so no override
-    applies to it.
+    its tripwire derives; an answer names systems by (source, key) pairs. The
+    join is the one :func:`system_decision` already makes from a
+    ``systemname``, asked with no file name — a per-file override says which
+    machine one *dump* belongs to, and this key is about the machine itself, so
+    no override applies to it — and the installation's *naming* names the
+    target the way it names a requirement's (ES-DE's names without one). A
+    ``systemname`` the map does not hold reaches no system.
 
     Two keys can land on one id (``Sega - Dreamcast`` and ``Sega Dreamcast``
     both answer ``dreamcast``), which is why the lookup below groups rather
     than assuming one entry per id. And a key naming several machines lands on
-    the one id :data:`SYSTEMNAME_TO_SLUG` rules for it — ``Game Boy/Game Boy
-    Color`` answers ``gb`` — so such an entry reaches that id and not its
-    siblings. Narrower than the entry rather than wider, deliberately: widening
-    it would state a recorded verdict about a machine nobody recorded it for.
+    the one system :data:`SYSTEMNAME_TO_SYSTEM` rules for it — ``Game Boy/Game
+    Boy Color`` answers ``gb`` — so such an entry reaches that system and not
+    its siblings. Narrower than the entry rather than wider, deliberately:
+    widening it would state a recorded verdict about a machine nobody recorded
+    it for.
     """
-    return system_for("", systemname)
+    decided, _ = system_decision("", systemname)
+    if decided is None:
+        return _SYSTEM_UNKNOWN
+    naming = naming if naming is not None else system_naming((ESDE_SOURCE,))
+    return naming.named(decided) or decided
 
 
 def _recorded_by_system(
-    recorded: Mapping[str, SystemFirmware],
-) -> dict[str, tuple[SystemFirmware, ...]]:
-    """The packaged table, grouped by the system id an answer's requirements carry."""
-    grouped: dict[str, list[SystemFirmware]] = {}
+    recorded: Mapping[str, SystemFirmware], naming: SystemNaming
+) -> dict[SystemPair, tuple[SystemFirmware, ...]]:
+    """The packaged table, grouped by the system an answer's requirements carry; a key reaching none is left out."""
+    grouped: dict[SystemPair, list[SystemFirmware]] = {}
     for entry in recorded.values():
-        grouped.setdefault(system_firmware_system(entry.system), []).append(entry)
+        system = system_firmware_system(entry.system, naming)
+        if system != _SYSTEM_UNKNOWN:
+            grouped.setdefault(system, []).append(entry)
     return {system: tuple(entries) for system, entries in grouped.items()}
+
+
+def _esde_systems(names: tuple[str, ...], naming: SystemNaming) -> tuple[SystemPair, ...]:
+    """ES-DE system names a packaged table spells, as the systems the installation names them by."""
+    return tuple((naming.named(pair) or pair) for pair in ((ESDE_SOURCE, name) for name in names))
+
+
+def spelled(system: SystemPair) -> str:
+    """A system as a message names it: its key, and the source that spells it."""
+    return f"{system[1]!r} ({system[0]})"
 
 
 def _core_alternative_key(core_so: str | None) -> str | None:
@@ -6297,21 +6468,24 @@ def _core_alternative_key(core_so: str | None) -> str | None:
     return core_so[: -len(SO_SUFFIX)]
 
 
-def _excuses(candidate: CoreAlternative, alternative: str | None, asked: str | None) -> bool:
+def _excuses(
+    candidate: CoreAlternative, alternative: str | None, asked: SystemPair | None, naming: SystemNaming
+) -> bool:
     """Does this exemption excuse the core *alternative* on a question about *asked*?
 
     An exemption with no systems holds on every question; one scoped to
     systems holds only on a question naming one of them, so a question about
     another system, or about none, finds the core unexcused
-    (:attr:`~atlas.system_firmware.CoreAlternative.systems`).
+    (:attr:`~atlas.system_firmware.CoreAlternative.systems`, ES-DE's names,
+    named the way the installation names a requirement's system).
     """
     if candidate.core != alternative:
         return False
-    return not candidate.systems or asked in candidate.systems
+    return not candidate.systems or asked in _esde_systems(candidate.systems, naming)
 
 
 def _substitute_caveats(
-    needs: list[tuple[str, SystemFirmware]], alternative: str | None
+    needs: list[tuple[SystemPair, SystemFirmware]], alternative: str | None, naming: SystemNaming
 ) -> tuple[Caveat, ...]:
     """The substitute a scoped exemption names for this core, on every question.
 
@@ -6333,21 +6507,28 @@ def _substitute_caveats(
     return tuple(
         Caveat(
             CAVEAT_FIRMWARE_CORE_SUBSTITUTE,
-            f"{alternative} starts {', '.join(systems)} on its built-in {substitute} where the "
-            "image it would use is missing — a substitute of limited compatibility: a title it "
-            "cannot run fails at run time, which no file read predicts, so a real image is "
-            "preferred",
-            {"core": alternative, "substitute": substitute, "systems": systems},
+            f"{alternative} starts {', '.join(spelled(system) for system in named)} on its built-in "
+            f"{substitute} where the image it would use is missing — a substitute of limited "
+            "compatibility: a title it cannot run fails at run time, which no file read predicts, "
+            "so a real image is preferred",
+            {
+                "core": alternative,
+                "substitute": substitute,
+                "sources": tuple(source for source, _ in named),
+                "keys": tuple(key for _, key in named),
+            },
         )
         for substitute, systems in stated
+        for named in (_esde_systems(systems, naming),)
     )
 
 
 def _system_firmware_state(
     core: CoreFirmware,
-    recorded: Mapping[str, tuple[SystemFirmware, ...]],
-    asked: str | None = None,
-) -> tuple[CoreSystemFirmware | None, tuple[str, ...], tuple[str, ...], tuple[Caveat, ...]]:
+    recorded: Mapping[SystemPair, tuple[SystemFirmware, ...]],
+    naming: SystemNaming,
+    asked: SystemPair | None = None,
+) -> tuple[CoreSystemFirmware | None, tuple[SystemPair, ...], tuple[SystemPair, ...], tuple[Caveat, ...]]:
     """What the table says about the systems *core* declares firmware for.
 
     Four things, because the state alone does not say *which* system it is
@@ -6378,7 +6559,7 @@ def _system_firmware_state(
 
     The provenance caveat rides only the entries that **state** something,
     never an ``open`` one — one mark per distinct ``(system, level)`` reading,
-    so two entries landing on one system id are two marks where they rest on
+    so two entries landing on one system are two marks where they rest on
     different levels and one where they repeat each other. An open entry's
     whole content is that nobody has established the answer, which is exactly
     what the field value ``open`` already says on this same core; a caveat
@@ -6390,6 +6571,7 @@ def _system_firmware_state(
             option.system
             for entry in core.requirements
             for option in (entry.options if isinstance(entry, FirmwareAlternatives) else (entry,))
+            if not isinstance(option.system, str)
         }
         | set(core.absent_by_search)
     )
@@ -6397,7 +6579,7 @@ def _system_firmware_state(
     if not hits:
         return None, (), (), ()
     # One mark per stated (system, evidence) pair rather than per entry: two
-    # table keys can land on one system id, and where they also rest on the
+    # table keys can land on one system, and where they also rest on the
     # same level the second mark would repeat the first word for word. The
     # de-duplication is here, over these marks alone — the core's own caveat
     # list belongs to that entry and :func:`stated_once` says so of itself.
@@ -6411,16 +6593,16 @@ def _system_firmware_state(
     caveats = tuple(
         Caveat(
             CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE,
-            f"what atlas states about the system {system!r} beside this emulator's own declaration "
-            f"is world knowledge, {evidence} away from this machine and cited "
+            f"what atlas states about the system {spelled(system)} beside this emulator's own "
+            f"declaration is world knowledge, {evidence} away from this machine and cited "
             "in docs/research/system-firmware.md rather than read off it",
-            {"system": system, "evidence": evidence},
+            {"source": system[0], "key": system[1], "evidence": evidence},
         )
         for system, evidence in readings
     )
     alternative = _core_alternative_key(core.core_so)
     needs = [(system, entry) for system, entry in hits if entry.verdict == VERDICT_CANNOT_RUN_WITHOUT]
-    caveats = (*caveats, *_substitute_caveats(needs, alternative))
+    caveats = (*caveats, *_substitute_caveats(needs, alternative, naming))
     # The systems, not the entries: which machine each need is about is what
     # the image the need asks for is filed under, and two table keys landing
     # on one id are one machine asking once.
@@ -6428,7 +6610,7 @@ def _system_firmware_state(
         dict.fromkeys(
             system
             for system, entry in needs
-            if not any(_excuses(candidate, alternative, asked) for candidate in entry.alternatives)
+            if not any(_excuses(candidate, alternative, asked, naming) for candidate in entry.alternatives)
         )
     )
     # The systems a SCOPED exemption excuses on this question, whose rows are
@@ -6443,7 +6625,7 @@ def _system_firmware_state(
             for system, entry in needs
             if system not in unexcused
             and any(
-                candidate.systems and _excuses(candidate, alternative, asked)
+                candidate.systems and _excuses(candidate, alternative, asked, naming)
                 for candidate in entry.alternatives
             )
         )
@@ -6469,7 +6651,7 @@ def _system_firmware_state(
     )
 
 
-def _excused_row(row: FirmwareRequirement, excused: tuple[str, ...]) -> FirmwareRequirement:
+def _excused_row(row: FirmwareRequirement, excused: tuple[SystemPair, ...]) -> FirmwareRequirement:
     """A row filed under a system its core supplies its own substitute for asks for nothing."""
     if row.system in excused and row.need == NEED_REQUIRED:
         return cast(FirmwareRequirement, replace(row, need=NEED_OPTIONAL))
@@ -6477,7 +6659,7 @@ def _excused_row(row: FirmwareRequirement, excused: tuple[str, ...]) -> Firmware
 
 
 def _asked_for_nothing(
-    requirements: tuple[FirmwareRequirement | FirmwareAlternatives, ...], excused: tuple[str, ...]
+    requirements: tuple[FirmwareRequirement | FirmwareAlternatives, ...], excused: tuple[SystemPair, ...]
 ) -> tuple[FirmwareRequirement | FirmwareAlternatives, ...]:
     """The requirements with every row filed under an *excused* system read ``optional``.
 
@@ -6515,7 +6697,8 @@ def _asked_for_nothing(
 def _stating_system_firmware(
     cores: tuple[CoreFirmware, ...],
     recorded: "Mapping[str, SystemFirmware]",
-    asked: str | None = None,
+    naming: SystemNaming,
+    asked: SystemPair | None = None,
 ) -> tuple[CoreFirmware, ...]:
     """Every core with what the packaged tables add to it, and the mark that they did.
 
@@ -6544,7 +6727,7 @@ def _stating_system_firmware(
     read against, so one core's block can answer differently for two systems
     it runs (:func:`_excuses`).
     """
-    table = _recorded_by_system(recorded)
+    table = _recorded_by_system(recorded, naming)
     stated: list[CoreFirmware] = []
     for core in cores:
         located = (
@@ -6552,7 +6735,7 @@ def _stating_system_firmware(
             if core.core_so is None
             else replace(core, locating=locating_of_core(core.core_so))
         )
-        state, needs, excused, caveats = _system_firmware_state(located, table, asked)
+        state, needs, excused, caveats = _system_firmware_state(located, table, naming, asked)
         stated.append(
             located
             if state is None
@@ -6622,6 +6805,7 @@ def firmware_for_core(
                     ),
                 ),
                 context.system_firmware,
+                context.naming,
             ),
             unclaimed=(),
             hash_checked=verify,
@@ -6633,7 +6817,7 @@ def firmware_for_core(
     )
     return FirmwareAnswer(
         root=context.root,
-        cores=_stating_system_firmware(cores, context.system_firmware),
+        cores=_stating_system_firmware(cores, context.system_firmware, context.naming),
         unclaimed=(),
         hash_checked=verify,
         sources=context.sources,
@@ -6642,39 +6826,41 @@ def firmware_for_core(
 
 
 def derived_core_selection(
-    cores: tuple[CoreDeclarations, ...], system: str
+    cores: tuple[CoreDeclarations, ...], system: SystemPair, naming: SystemNaming
 ) -> tuple[tuple[CoreDeclarations, ...], Caveat | None]:
     """The installed cores filed under *system* by their own declarations.
 
     The selection every catalogue-less answer shares — the firmware route and
     the catalogue route (issue #133) alike, one function so the two can never
     derive different lists for one system: a core answers for *system* when
-    the map files the core itself there, or any one of its declared files
-    (the per-file overrides put Flycast under ``naomi``). The second element
-    is the may-hide statement, ``None`` when nothing is at risk: a list keyed
-    on the cores' own ``systemname`` can miss a core whose assignment was
-    derived rather than ruled, and saying which beats an under-inclusive
-    list that reads as complete.
+    the installation names the core itself by it (:attr:`CoreDeclarations.systems`,
+    every database name on a bare RetroArch), files the core there, or files
+    any one of its declared files there (the per-file overrides put Flycast
+    under ``naomi``). The second element is the may-hide statement, ``None``
+    when nothing is at risk: a list keyed on the cores' own declarations can
+    miss a core whose assignment was derived rather than ruled, and saying
+    which beats an under-inclusive list that reads as complete.
     """
     selected = tuple(
         core
         for core in cores
-        if core.system == system or any(d.system == system for d in core.firmware)
+        if system in core.systems or core.system == system or any(d.system == system for d in core.firmware)
     )
-    hidden = _cores_a_derived_assignment_may_hide(cores, selected, system)
+    hidden = _cores_a_derived_assignment_may_hide(cores, selected, system, naming)
     if not hidden:
         return selected, None
     names = tuple(sorted(c.core_so for c in hidden))
     return selected, Caveat(
         CAVEAT_SYSTEM_ASSIGNMENT_MAY_HIDE_CORES,
-        f"this list is keyed on the cores' own systemname, and {len(hidden)} installed core(s) "
-        f"name {system!r} in their database while filing firmware by a system that was derived "
-        f"rather than ruled — an emulator missing from this list is one of these: "
-        f"{', '.join(names)}",
+        f"this list is keyed on the systems the cores' own declarations name, and {len(hidden)} "
+        f"installed core(s) name {spelled(system)} in their database while filing firmware by a "
+        f"system that was derived rather than ruled — an emulator missing from this list is one of "
+        f"these: {', '.join(names)}",
         {
             "count": str(len(hidden)),
             "cores": names,
-            "system": system,
+            "source": system[0],
+            "key": system[1],
             "table_version": FIRMWARE_SYSTEM_OVERRIDE_VERSION,
         },
     )
@@ -6688,21 +6874,37 @@ def derived_core_selection(
 CAVEAT_EMULATOR_LIST_DERIVED = "emulator-list-derived"
 
 
-def derived_enumeration_lead(system: str) -> Caveat:
+def derived_enumeration_lead(system: SystemPair) -> Caveat:
     """The lead caveat framing a list derived from the cores of a catalogue-less arrangement."""
     return Caveat(
         CAVEAT_EMULATOR_CATALOGUE_UNAVAILABLE,
         "this installation ships no emulator catalogue, so the emulators for this system are derived "
-        "from the installed cores' own systemname — the identifier is atlas's one system vocabulary "
-        "either way; what a catalogue would have said about the emulator list is unknown",
-        {"system": system},
+        "from the installed cores' own declarations — what a catalogue would have said about the "
+        "emulator list is unknown",
+        {"source": system[0], "key": system[1]},
+    )
+
+
+def _cited_system_lead(system: SystemPair) -> Caveat:
+    """The lead caveat framing the emulators of a system the installation names by a cited pair (#784 D50).
+
+    No catalogue source of the installation names the system, so no catalogue
+    can enumerate or deny its emulators: they are the installed cores whose
+    own declarations name it, on every arrangement, catalogued or not.
+    """
+    return Caveat(
+        CAVEAT_EMULATOR_LIST_DERIVED,
+        "no catalogue source of this installation names this system, so its emulators are the "
+        "installed cores whose own declarations name it — the order claims no default, and no "
+        "catalogue can enumerate or deny them",
+        {"source": system[0], "key": system[1]},
     )
 
 
 def _derived_enumeration(
     machine: Machine,
     context: FirmwareContext,
-    system: str,
+    system: SystemPair,
     *,
     verify: bool,
     content: "_GameContent | None" = None,
@@ -6713,10 +6915,10 @@ def _derived_enumeration(
     Observation caveats and the may-hide statement ride along. What does
     *not* ride along is the lead caveat framing the list — *why* the
     enumeration is derived differs between the two callers (an arrangement
-    with no catalogue at all, and a word no catalogue can declare), and each
-    states its own reason.
+    with no catalogue at all, and a system no catalogue source of the
+    installation names), and each states its own reason.
     """
-    selected, hidden = derived_core_selection(context.cores, system)
+    selected, hidden = derived_core_selection(context.cores, system, context.naming)
     cores, observation_caveats = _resolve_cores(machine, context, selected, verify=verify, content=content)
     caveats = list(observation_caveats)
     if hidden is not None:
@@ -6727,41 +6929,20 @@ def _derived_enumeration(
 def _cores_by_systemname(
     machine: Machine,
     context: FirmwareContext,
-    system: str,
+    system: SystemPair,
     *,
     verify: bool,
     content: "_GameContent | None" = None,
 ) -> tuple[list[CoreFirmware], list[Caveat]]:
     """The emulators for *system* where no frontend catalogue exists.
 
-    The installed cores' own ``systemname`` is then the only enumeration there
-    is. The identifier is the same vocabulary as everywhere else — ES-DE ids,
-    which the systemname map speaks since its version 2 — but *which emulators
-    carry it* was derived from the cores rather than read from a frontend, and
-    the caveat states that: an enumeration a catalogue would disagree with is
-    a real possibility, an identifier mismatch is not.
+    The installed cores' own declarations are then the only enumeration there
+    is: *which emulators carry the system* was derived from the cores rather
+    than read from a frontend, and the caveat states that — an enumeration a
+    catalogue would disagree with is a real possibility.
     """
     cores, caveats = _derived_enumeration(machine, context, system, verify=verify, content=content)
     return cores, [derived_enumeration_lead(system), *caveats]
-
-
-def _uncatalogued_word_caveat(system: str) -> Caveat:
-    """The answer-level mark on a question asked in one of atlas's own spellings.
-
-    Not :data:`CAVEAT_EMULATOR_CATALOGUE_UNAVAILABLE`, however similar the
-    consequence: that code claims the *machine* ships no catalogue, which is
-    false on a catalogued arrangement. The true fact is about the word — no
-    build declares it, so no catalogue anywhere could enumerate or deny its
-    emulators — and it holds identically on every arrangement, which is what
-    makes the own spellings one vocabulary rather than a per-route dialect.
-    """
-    return Caveat(
-        CAVEAT_SYSTEM_NOT_IN_CATALOGUE,
-        f"no ES-DE system id exists for this system ({SYSTEMS_WITHOUT_CATALOGUE_ID[system]}); "
-        f"{system!r} is atlas's own spelling — no frontend catalogue can enumerate its emulators, "
-        "so this list is derived from the installed cores' own systemname on every arrangement",
-        {"system": system, "map_version": SYSTEMNAME_MAP_VERSION},
-    )
 
 
 def _packaged_provenance_caveat(entry: CatalogueEntry, card: StandaloneFirmwareCard) -> Caveat:
@@ -6779,7 +6960,7 @@ def _packaged_standalone_core(
     machine: Machine,
     entry: CatalogueEntry,
     card: StandaloneFirmwareCard,
-    system: str,
+    system: SystemPair,
     *,
     data_home: str,
     config_home: str,
@@ -6924,7 +7105,7 @@ def _melonds_probe(
     card: StandaloneFirmwareCard,
     declared: StandaloneFirmwareConfigFile,
     config: melonds.MelonConfig,
-    system: str,
+    system: SystemPair,
     *,
     config_home: str,
     flatpak: str | None,
@@ -6995,7 +7176,7 @@ def _melonds_standalone_core(
     machine: Machine,
     entry: CatalogueEntry,
     card: StandaloneFirmwareCard,
-    system: str,
+    system: SystemPair,
     *,
     data_home: str,
     config_home: str,
@@ -7103,7 +7284,7 @@ def _pcsx2_standalone_core(
     machine: Machine,
     entry: CatalogueEntry,
     card: StandaloneFirmwareCard,
-    system: str,
+    system: SystemPair,
     *,
     data_home: str,
     config_home: str,
@@ -7417,7 +7598,7 @@ def _xemu_standalone_core(
     machine: Machine,
     entry: CatalogueEntry,
     card: StandaloneFirmwareCard,
-    system: str,
+    system: SystemPair,
     *,
     data_home: str,
     config_home: str,
@@ -7556,7 +7737,7 @@ def _duckstation_named_image(
     machine: Machine,
     entry: CatalogueEntry,
     *,
-    system: str,
+    system: SystemPair,
     region: str,
     key: str,
     name: str,
@@ -7632,7 +7813,7 @@ def _duckstation_named_images(
     entry: CatalogueEntry,
     card: StandaloneFirmwareCard,
     *,
-    system: str,
+    system: SystemPair,
     search: StandaloneFirmwareSearch,
     read: duckstation.SettingsRead,
     bios_dir: str,
@@ -7927,9 +8108,9 @@ def _duckstation_candidate_listing(
             "token": card.token,
             "readings": listing.readings,
             "images": listing.images,
-            # Not ``regions``: three codes already spell that key as a list of
-            # the regions an answer speaks for, and one key name may not carry
-            # two shapes. This one is a region per image, keyed by its path.
+            # Not ``regions``: other codes spell that key as a list of the
+            # regions an answer speaks for. This one is a region per image,
+            # keyed by its path.
             "image_regions": listing.image_regions,
         },
     )
@@ -8166,7 +8347,7 @@ def _duckstation_standalone_core(
     machine: Machine,
     entry: CatalogueEntry,
     card: StandaloneFirmwareCard,
-    system: str,
+    system: SystemPair,
     *,
     data_home: str,
     config_home: str,
@@ -8400,7 +8581,7 @@ def _duckstation_search(
     entry: CatalogueEntry,
     card: StandaloneFirmwareCard,
     *,
-    system: str,
+    system: SystemPair,
     search: StandaloneFirmwareSearch,
     bios_dir: str,
     regions: tuple[str, ...],
@@ -8546,7 +8727,7 @@ def _found_image(
     pick: BiosPick,
     *,
     core_so: str | None,
-    system: str,
+    system: SystemFiling,
     system_source: SystemSource,
     description: str,
     regions: tuple[str, ...] | None,
@@ -9125,7 +9306,7 @@ def _named_image(
     requirement = FirmwareRequirement(
         core_so=core.core_so,
         system=core.system,
-        system_source=SOURCE_SYSTEMNAME,
+        system_source=core.system_source,
         need=NEED_REQUIRED,
         file_name=os.path.basename(name),
         path=path,
@@ -9187,7 +9368,7 @@ def _region_answer(
         pick,
         core_so=core.core_so,
         system=core.system,
-        system_source=SOURCE_SYSTEMNAME,
+        system_source=core.system_source,
         description="the image this core boots — found by its directory search, named by no option",
         regions=None,
     )
@@ -9760,7 +9941,7 @@ def _spelled_requirement(
     return FirmwareRequirement(
         core_so=core.core_so,
         system=core.system,
-        system_source=SOURCE_SYSTEMNAME,
+        system_source=core.system_source,
         need=NEED_REQUIRED,
         file_name=spelling,
         path=path,
@@ -10344,7 +10525,7 @@ def _carded_standalone_core(
     machine: Machine,
     entry: CatalogueEntry,
     card: StandaloneFirmwareCard,
-    system: str,
+    system: SystemPair,
     *,
     data_home: str,
     config_home: str,
@@ -10416,7 +10597,7 @@ def _standalone_entry_core(
     machine: Machine,
     context: FirmwareContext,
     entry: CatalogueEntry,
-    system: str,
+    system: SystemPair,
     *,
     verify: bool,
     content: "_GameContent | None" = None,
@@ -10452,7 +10633,7 @@ def _standalone_entry_core(
     )
     if (
         card is not None
-        and system in card.systems
+        and system[1] in card.systems
         and data_home is not None
         and config_home is not None
     ):
@@ -10492,7 +10673,7 @@ def _standalone_entry_core(
     )
 
 
-def _foreign_core_caveat(entry: CatalogueEntry, core_file: str, system: str) -> Caveat:
+def _foreign_core_caveat(entry: CatalogueEntry, core_file: str, system: SystemPair) -> Caveat:
     """Why a ``retroarch-foreign-core`` row answers nothing — with the file it names.
 
     The one place this answer words the fact, so the catalogue's own statement
@@ -10503,11 +10684,11 @@ def _foreign_core_caveat(entry: CatalogueEntry, core_file: str, system: str) -> 
         f"{entry.label} hands RetroArch {core_file}, a core file this host cannot load — "
         "its name carries another platform's suffix, so nothing here loads it, there is no "
         "declaration to read, and the empty list means unknown rather than 'needs nothing'",
-        {"core_file": core_file, "label": entry.label, "system": system},
+        {"core_file": core_file, "label": entry.label, "source": system[0], "key": system[1]},
     )
 
 
-def _foreign_core_entry(entry: CatalogueEntry, core_file: str, system: str) -> CoreFirmware:
+def _foreign_core_entry(entry: CatalogueEntry, core_file: str, system: SystemPair) -> CoreFirmware:
     """A row naming a core file this host cannot load: absent, and the caveat says which file.
 
     ``absent`` rather than ``unsupported``: the coverage word is for an
@@ -10533,7 +10714,7 @@ def _catalogue_entry_core(
     context: FirmwareContext,
     entry: CatalogueEntry,
     by_stem: Mapping[str, CoreDeclarations],
-    system: str,
+    system: SystemPair,
     *,
     verify: bool,
     folders: _FolderReads,
@@ -10604,19 +10785,16 @@ def _catalogue_entry_core(
 
 
 def _empty_system_statement(
-    cores: tuple[CoreFirmware, ...], *, enumerated: bool, system: str
+    cores: tuple[CoreFirmware, ...], *, enumerated: bool, system: SystemPair
 ) -> Caveat | None:
     """The answer-level statement a system answer with no requirement carries — if any.
 
-    An identifier that resolved no emulator at all, on an enumeration that did
-    happen, is unknown here (:data:`CAVEAT_SYSTEM_UNKNOWN`) — a different
-    answer from "nobody declares firmware for it", and a different thing for a
-    client to do. A consumer working in RomM slugs that forgets to translate
-    ("dc" for ES-DE's "dreamcast") lands exactly here, and must not read it as
-    "nothing needed". A published own spelling is exempt: the word IS
-    vocabulary, so nothing filing under it is a machine fact, not an
-    identifier mistake — it answers empty through the empty-kind route below,
-    the same shape an id whose emulators declare nothing answers with.
+    The system is one the installation holds: the question resolved it first,
+    and a system it does not hold answers ``system-unknown`` there (#784 D53),
+    never here. A held system with no emulator — one whose catalogue commands
+    are all blank, or one an EmuDeck without ES-DE derives no core for — states
+    :data:`CAVEAT_FIRMWARE_DECLARATION_UNKNOWN`, a look that found nothing to
+    read: with no emulator read, no absence was established (#784 D60).
 
     Otherwise the empty-kind vocabulary decides (:func:`_empty_answer_caveat`),
     with one suppression: a system whose emulators were read and declare
@@ -10624,29 +10802,22 @@ def _empty_system_statement(
     is the answer, exactly as the per-core route gives it, and an answer-level
     line would add nothing while reading as a degradation. What the entries
     cannot say is the other two: that firmware was declared here and never
-    became a requirement, or that nothing could be read at all. And only
-    entries that exist can say anything: an own spelling nothing files under
-    arrives with no cores at all (its ``system-unknown`` deliberately
-    suppressed above), so the established absence is stated here or nowhere.
+    became a requirement, or that nothing could be read at all.
     """
-    if not cores and enumerated and system not in SYSTEMS_WITHOUT_CATALOGUE_ID:
-        return Caveat(
-            CAVEAT_SYSTEM_UNKNOWN,
-            f"no emulator on this machine covers the system {system!r} — nothing was resolved, so this "
-            "empty answer says the identifier is unknown here, not that nothing is needed; check the "
-            "vocabulary before reading it as complete",
-            {"system": system},
-        )
+    subject = f"firmware for system {spelled(system)}"
+    data = {"source": system[0], "key": system[1]}
+    if not cores:
+        return _declaration_unknown(subject, data)
     if any(core.requirements for core in cores):
         return None
     empty = _empty_answer_caveat(
         cores,
         enumerated=enumerated,
         declared=_declared_without_requiring(cores),
-        subject=f"firmware for system {system!r}",
-        data={"system": system},
+        subject=subject,
+        data=data,
     )
-    if empty.code != CAVEAT_NO_FIRMWARE_DECLARATION or not cores:
+    if empty.code != CAVEAT_NO_FIRMWARE_DECLARATION:
         return empty
     return None
 
@@ -10655,23 +10826,22 @@ def firmware_for_system(
     machine: Machine,
     context: FirmwareContext,
     *,
-    system: str,
+    system: SystemPair,
     catalogue: Catalogue | None = None,
     verify: bool = False,
     content_path: str | None = None,
 ) -> FirmwareAnswer:
     """Which emulators can run *system*, and what each of them wants.
 
-    *system* is one vocabulary on every route: ES-DE's system names, the same
-    ids every other question takes (``atlas.systems``), plus the published own
-    spellings (:data:`SYSTEMS_WITHOUT_CATALOGUE_ID`) for the systems no ES-DE
-    build declares. With a frontend *catalogue* (ES-DE, on the installs that
-    ship it) an id's emulator list is the frontend's — including entries whose
-    core is not installed and standalone emulators, both stated as such rather
-    than dropped. Without one the list is derived from the installed cores'
-    own ``systemname`` through the packaged map;
+    *system* is the (source, key) pair the installation names the system by
+    (#784 D47): a key of its own catalogue source, or one of the cited pairs
+    atlas states for it (:attr:`SystemNaming.cited`). With a frontend
+    *catalogue* (ES-DE, on the installs that ship it) a system's emulator list
+    is the frontend's — including entries whose core is not installed and
+    standalone emulators, both stated as such rather than dropped. Without one
+    the list is derived from the installed cores' own declarations;
     :data:`CAVEAT_EMULATOR_CATALOGUE_UNAVAILABLE` states that the
-    *enumeration* is derived — the identifier means the same thing either way.
+    *enumeration* is derived — the system means the same thing either way.
     A catalogue with a ``hole`` answers between the two: its entries are the
     frontend's and the hole is stated on the answer, while an id its readable
     part does not declare answers empty as a look that failed
@@ -10679,20 +10849,17 @@ def firmware_for_system(
     :data:`CAVEAT_SYSTEM_UNKNOWN` — the declaration may sit in the part of the
     catalogue nobody could consult.
 
-    An own spelling is answered identically on **every** arrangement: no
-    catalogue can enumerate or deny a word no build declares, so the cores'
-    own declarations are the only enumeration there is, catalogued or not,
-    and the answer carries :data:`CAVEAT_SYSTEM_NOT_IN_CATALOGUE` — at answer
-    level for the word asked about, and on each core for the files filed
-    under one. An own spelling nothing files under answers **empty, marked
-    and established**: the word is vocabulary, so the emptiness is a machine
-    fact — the mark plus :data:`CAVEAT_NO_FIRMWARE_DECLARATION`, the same
-    established absence an id's declaration-less emulators state per entry,
-    said at answer level here because there is no entry to say it. And
-    :data:`CAVEAT_SYSTEM_UNKNOWN` fires only for words in neither vocabulary.
-    (``_unknown`` is deliberately not such a word: it marks cores that state
-    no systemname at all, a fact about those cores rather than about a
-    system, and it keeps its route-dependent behavior.)
+    A cited system is enumerated from the cores on **every** arrangement: no
+    catalogue source of the installation names it, so no catalogue can
+    enumerate or deny its emulators, and the cores' own declarations are the
+    only enumeration there is. Where a catalogue exists, the answer leads with
+    :data:`CAVEAT_EMULATOR_LIST_DERIVED` naming the system; on a bare RetroArch,
+    which has none, it leads with :data:`CAVEAT_EMULATOR_CATALOGUE_UNAVAILABLE`
+    as every system there does. A cited system is held only where a core it
+    is cited for is installed (#784 D50); one no installed core files under is
+    answered :data:`CAVEAT_SYSTEM_UNKNOWN` by the question that resolves the
+    system, before this is asked. (``_unknown`` names no system: it
+    marks cores whose system nothing names, a fact about those cores.)
 
     Each emulator answers with its **whole** declaration set, every requirement
     carrying its own ``system``: a multi-system core (mGBA declares Game Boy
@@ -10723,16 +10890,17 @@ def firmware_for_system(
         else catalogue.read and (catalogue.hole is None or bool(catalogue.entries))
     )
 
-    if system in SYSTEMS_WITHOUT_CATALOGUE_ID:
-        # A word no build declares is answered from the cores on every
-        # arrangement — a catalogue can neither enumerate nor deny it, so
-        # consulting one would only ever manufacture "unknown identifier"
-        # out of a word this module itself publishes. The cores are the
-        # enumeration here even when a catalogue exists, so whether *they*
-        # were read is what an empty answer hangs on.
+    cited = system in context.naming.cited
+    if cited and catalogue is not None:
+        # A system no catalogue source of the installation names is answered
+        # from the cores on every arrangement — a catalogue can neither
+        # enumerate nor deny it, so consulting one would only ever manufacture
+        # "unknown system" out of a pair this module itself states. The cores
+        # are the enumeration here even when a catalogue exists, so whether
+        # *they* were read is what an empty answer hangs on.
         enumerated = context.cores_read
         resolved, caveats = _derived_enumeration(machine, context, system, verify=verify, content=content)
-        caveats.insert(0, _uncatalogued_word_caveat(system))
+        caveats.insert(0, _cited_system_lead(system))
     elif catalogue is None:
         resolved, caveats = _cores_by_systemname(machine, context, system, verify=verify, content=content)
     elif not catalogue.read:
@@ -10741,7 +10909,7 @@ def firmware_for_system(
                 CAVEAT_EMULATOR_CATALOGUE_UNREADABLE,
                 "the frontend's emulator catalogue could not be read, so which emulators run this system is "
                 "unknown — this answer is empty because atlas could not look, not because nothing is there",
-                {"system": system},
+                {"source": system[0], "key": system[1]},
             )
         )
     else:
@@ -10774,7 +10942,7 @@ def firmware_for_system(
 
     return FirmwareAnswer(
         root=context.root,
-        cores=_stating_system_firmware(tuple(resolved), context.system_firmware, system),
+        cores=_stating_system_firmware(tuple(resolved), context.system_firmware, context.naming, system),
         unclaimed=(),
         hash_checked=verify,
         sources=context.sources,
@@ -10967,7 +11135,7 @@ def _unclaimed_read(
 
 def _declaring_cores(
     context: FirmwareContext, identity: FirmwareIdentity
-) -> tuple[tuple[str, ...], tuple[str, ...]]:
+) -> tuple[tuple[str, ...], tuple[SystemPair, ...]]:
     """Which installed cores declare this content, and which systems they file it under.
 
     A declaration names a path, and what the packaged table pins for that name
@@ -10981,18 +11149,18 @@ def _declaring_cores(
 
     The system is that route's own per-declaration attribution
     (:attr:`FirmwareDeclaration.system`). ``_unknown`` is left out: it marks a
-    core that states no ``systemname`` at all, which is a fact about the core
-    and not a machine the bytes belong to.
+    core whose system nothing names, which is a fact about the core and not a
+    machine the bytes belong to.
     """
     emulators: set[str] = set()
-    systems: set[str] = set()
+    systems: set[SystemPair] = set()
     wanted = identity.md5.lower()
     for core in context.cores:
         declared = [d for d in core.firmware if _pins(context.hashes, d.path) == wanted]
         if not declared:
             continue
         emulators.add(core.core_so)
-        systems.update(d.system for d in declared if d.system != _SYSTEM_UNKNOWN)
+        systems.update(d.system for d in declared if not isinstance(d.system, str))
     return tuple(sorted(emulators)), tuple(sorted(systems))
 
 
@@ -11035,7 +11203,9 @@ def _identified_unclaimed(
         return UnclaimedFile(path=path, identity=None)
     first = readings[0]
     declaring, systems = _declaring_cores(context, first.identity)
-    consoles = {reading.console for reading in readings if reading.console is not None} | set(systems)
+    consoles = set(
+        _esde_systems(tuple(reading.console for reading in readings if reading.console is not None), context.naming)
+    ) | set(systems)
     concerns = {
         Concern(emulator=emulator, relation=RELATION_RECOGNISES)
         for reading in readings
@@ -11277,7 +11447,7 @@ class _CardedEntries:
     enumerated: bool = True
 
 
-def _card_of(entry: CatalogueEntry, system: str) -> StandaloneFirmwareCard | None:
+def _card_of(entry: CatalogueEntry, system: SystemPair) -> StandaloneFirmwareCard | None:
     """The card this catalogue row answers under for *system*, or ``None``.
 
     Four ways to be none of an inventory's business: a libretro row, whose
@@ -11295,7 +11465,7 @@ def _card_of(entry: CatalogueEntry, system: str) -> StandaloneFirmwareCard | Non
     if entry.kind != KIND_STANDALONE:
         return None
     card = lookup_standalone_firmware_card(entry.standalone_token)
-    return card if card is not None and system in card.systems else None
+    return card if card is not None and system[1] in card.systems else None
 
 
 def _carded_entries(
@@ -11486,7 +11656,7 @@ def firmware_inventory(
             caveats.append(statement)
     return FirmwareAnswer(
         root=context.root,
-        cores=_stating_system_firmware(cores, context.system_firmware),
+        cores=_stating_system_firmware(cores, context.system_firmware, context.naming),
         unclaimed=unclaimed,
         hash_checked=verify,
         sources=context.sources,

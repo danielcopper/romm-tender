@@ -65,7 +65,7 @@ if TYPE_CHECKING:
     from domain.emulator_commands import EmulatorOption, LaunchingEmulator
     from domain.firmware_groups import GroupVerdict
     from domain.firmware_wants import FirmwareCatalogue
-    from domain.platform_system import PlatformSystem
+    from domain.platform_system import PlatformSystem, SystemArgument
     from domain.rom_install import RomInstall
     from services.firmware.demand import FirmwareDemand
     from services.firmware.listing import FirmwareListing
@@ -139,7 +139,11 @@ class FirmwareStatusReader:
         return kept
 
     def _platform_rows(
-        self, system: str | None, platform_folder: str, platform_firmware: list[dict[str, Any]], emulator: str | None
+        self,
+        system: SystemArgument | None,
+        platform_folder: str,
+        platform_firmware: list[dict[str, Any]],
+        emulator: str | None,
     ) -> tuple[FirmwareCatalogue, list[BiosFileEntry], dict[str, list[BiosFileEntry]]]:
         """One platform's demand and its whole row set, in one worker hop. Blocking.
 
@@ -657,7 +661,7 @@ def _overview_payload(entry: BiosFileEntry) -> dict[str, Any]:
     }
 
 
-def _store_only(system: str | None, catalogue: FirmwareCatalogue, emulator: str | None) -> str | None:
+def _store_only(system: SystemArgument | None, catalogue: FirmwareCatalogue, emulator: str | None) -> str | None:
     """Why a download here lands in the store and is linked nowhere, or ``None`` where it may be linked.
 
     ``no_source`` where no emulator source answers for the platform;

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from domain.start_command import StartAnswer, StartCommand
+
+if TYPE_CHECKING:
+    from domain.platform_system import SystemArgument
 
 # The command a fake answers for every question nobody stated an answer for.
 DEFAULT_COMMAND = StartCommand(argv=("/usr/bin/emulator", "/roms/game"), folder=None)
@@ -23,8 +26,8 @@ class FakeStartCommands:
     ) -> None:
         self.default = default
         self.answers: dict[str, StartAnswer] = answers if answers is not None else {}
-        self.asked: list[tuple[str, str, str]] = []
+        self.asked: list[tuple[SystemArgument, str, str]] = []
 
-    def start_command(self, system: str, content_path: str, *, label: str, **_asked: Any) -> StartAnswer:
+    def start_command(self, system: SystemArgument, content_path: str, *, label: str, **_asked: Any) -> StartAnswer:
         self.asked.append((system, content_path, label))
         return self.answers.get(label, self.default)

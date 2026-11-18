@@ -213,6 +213,7 @@ class _Catalogue:
     def __init__(self, entries: tuple[_Entry, ...], caveats: tuple[str, ...] = ()) -> None:
         self.entries = entries
         self.caveats = tuple(_caveat(code) for code in caveats)
+        self.resolution = None
 
 
 class _Installation:

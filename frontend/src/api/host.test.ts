@@ -158,6 +158,7 @@ describe("an answer on its way back", () => {
       source: "retrodeck",
       platform: "Commodore VIC-20",
       system: null,
+      systems: [],
     });
 
     const answer = await endpoint<[number], { message: string }>("start_download")(7);

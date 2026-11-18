@@ -3,41 +3,49 @@
 Three parts. The first drives the REAL resolver over a fabricated
 RetroDECK deploy under ``tmp_path``, whose catalogue declares the
 systems and their platform tags, so what is checked is the resolver's own
-answer read through the adapter: the system named like the platform among
-regional ones, a system switched off only in the catalogue's comments, and an
-id nothing maps. The second uses stand-in installations, which is the only way
-to have two sources answer differently for one platform. The third holds the
-adapter's vocabulary and status tables to what the resolver exports.
+answer read through the adapter: the system RomM's slug and folder narrow to,
+twins none of which is picked, a system switched off only in the catalogue's
+comments, one this machine has not set up, one no frontend has, and a platform
+the resolver cannot match. The second uses stand-in installations, which is
+the only way to have two sources answer differently for one platform. The
+third holds the adapter's status table to what the resolver exports.
 """
 
 from __future__ import annotations
 
 import json
 import os
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from _vendor import atlas
 from _vendor.atlas import (
-    KNOWN_PLATFORM_VOCABULARIES,
+    INTERSECTION_AGREED,
     PLATFORM_STATUS_ABSENT,
     PLATFORM_STATUS_DECLARED,
     PLATFORM_STATUS_DISABLED,
+    translate,
 )
 from _vendor.atlas.installations import PlatformSystemMatch, PlatformSystemsAnswer
 
-from adapters.atlas_platforms import _STATUS_OF, _VOCABULARY_OF_FIELD, AtlasPlatformSystemsAdapter
+from adapters.atlas_platforms import _STATUS_OF, AtlasPlatformSystemsAdapter, platform_pairs
 from adapters.emulator_sources import EmulatorSourcesAdapter
 from domain.emulator_sources import CATALOGUE_UNAVAILABLE, NO_SOURCE_DETECTED, SWITCHED_OFF_SETTING
 from domain.platform_system import (
     FOUND,
-    ID_FIELDS,
     NO_SYSTEM,
+    NOT_HERE,
+    SEVERAL,
     SWITCHED_OFF,
     UNASKED,
-    PlatformIds,
+    UNMATCHED,
+    PlatformKeys,
     PlatformSystem,
+    SystemPair,
 )
+
+if TYPE_CHECKING:
+    from _vendor.atlas.platforms import PlatformSystemStatus
 
 _SYSTEMS_SUFFIX = os.path.join(
     "retrodeck", "components", "es-de", "share", "es-de", "resources", "systems", "linux", "es_systems.xml"
@@ -56,14 +64,17 @@ def _system(name: str, platform: str) -> str:
     )
 
 
-# Three systems for one platform, as RetroDECK ships SNES; a system declared
-# only inside an XML comment, beside a different one it must not become; and
-# the CD-i under the name RetroDECK declares for it.
+# Three systems for the SNES, as RetroDECK ships them; the Master System's two
+# twins, which carry one platform tag; a system declared only inside an XML
+# comment, beside a different one it must not become; and the CD-i under the
+# name RetroDECK declares for it.
 _CATALOGUE = (
     "<systemList>\n"
     + _system("sfc", "snes")
     + _system("snes", "snes")
     + _system("snesna", "snes")
+    + _system("mark3", "mastersystem")
+    + _system("mastersystem", "mastersystem")
     + "<!--\n"
     + _system("xbox360", "xbox360")
     + "-->\n"
@@ -107,65 +118,100 @@ def _kind(platform: PlatformSystem) -> str | None:
     return platform.source.kind if platform.source is not None else None
 
 
-def _ask(adapter: AtlasPlatformSystemsAdapter, ids: PlatformIds, slug: str, **kwargs: Any):
-    return adapter.platform_system(ids, platform_slug=slug, platform_name=slug.upper(), **kwargs)
+def _ask(adapter: AtlasPlatformSystemsAdapter, slug: str, folder: str | None, **kwargs: Any) -> PlatformSystem:
+    return adapter.platform_system(PlatformKeys(slug, folder), platform_name=slug.upper(), **kwargs)
+
+
+def _pair(source: str, key: str) -> SystemPair:
+    return SystemPair(source, key)
+
+
+class TestThePairsAsked:
+    """#2217 D16: RomM's slug and the platform's folder in RomM, and nothing else."""
+
+    def test_the_slug_and_the_folder_are_the_two_pairs(self):
+        assert platform_pairs(PlatformKeys("genesis", "megadrivejp")) == (
+            _pair("romm", "genesis"),
+            _pair("folder", "megadrivejp"),
+        )
+
+    def test_a_platform_kept_without_its_folder_is_asked_by_its_slug_alone(self):
+        assert platform_pairs(PlatformKeys("snes")) == (_pair("romm", "snes"),)
 
 
 class TestTheRealResolverOverARealTree:
-    def test_the_system_named_like_the_platform_is_taken_not_a_regional_one(self, tmp_path, traces):
-        platform = _ask(_real(tmp_path, traces), PlatformIds(igdb_id=19), "snes")
+    def test_the_folder_narrows_the_slug_to_one_system_and_it_is_found_as_the_answer_names_it(self, tmp_path, traces):
+        platform = _ask(_real(tmp_path, traces), "snes", "snes")
 
-        assert (platform.state, platform.system, _kind(platform)) == (FOUND, "snes", "retrodeck")
+        assert (platform.state, platform.system, _kind(platform)) == (FOUND, _pair("esde", "snes"), "retrodeck")
+
+    def test_twins_the_pairs_leave_are_several_and_none_is_picked(self, tmp_path, traces):
+        """#2225 D8: Tender picks none of the systems the pairs leave; later questions ask with the pairs."""
+        platform = _ask(_real(tmp_path, traces), "sms", "sms")
+
+        assert platform.state == SEVERAL
+        assert platform.named == (_pair("esde", "mark3"), _pair("esde", "mastersystem"))
+        assert platform.taken == (_pair("romm", "sms"), _pair("folder", "sms"))
+        assert platform.one_system is None
 
     def test_a_system_only_in_the_catalogues_comments_is_switched_off_and_not_corrected(self, tmp_path, traces):
-        # IGDB 12 is the Xbox 360; RetroDECK ships it only commented out, and
-        # the Xbox beside it is a different system and emulator.
-        platform = _ask(_real(tmp_path, traces), PlatformIds(igdb_id=12), "xbox360")
+        # RetroDECK ships the Xbox 360 only commented out, and the Xbox beside
+        # it is a different system and emulator.
+        platform = _ask(_real(tmp_path, traces), "xbox360", "xbox360")
 
-        assert (platform.state, platform.system) == (SWITCHED_OFF, "xbox360")
+        assert (platform.state, platform.named) == (SWITCHED_OFF, (_pair("esde", "xbox360"),))
 
-    def test_an_id_nothing_maps_gives_no_system_rather_than_the_slug(self, tmp_path, traces):
-        platform = _ask(_real(tmp_path, traces), PlatformIds(igdb_id=999_999), "commodore-cdtv")
+    def test_a_system_this_machine_has_not_set_up_is_not_here(self, tmp_path, traces):
+        platform = _ask(_real(tmp_path, traces), "n64", "n64")
 
-        assert (platform.state, platform.system) == (NO_SYSTEM, None)
+        assert (platform.state, platform.named) == (NOT_HERE, (_pair("esde", "n64"),))
+
+    def test_a_platform_no_frontend_has_a_system_for_has_no_system(self, tmp_path, traces):
+        platform = _ask(_real(tmp_path, traces), "altair-8800", "altair-8800")
+
+        assert (platform.state, platform.system, platform.named) == (NO_SYSTEM, None, ())
+
+    def test_a_platform_the_resolver_knows_by_neither_pair_is_unmatched_never_its_slug(self, tmp_path, traces):
+        """#2751 D2: case one, never a system named after RomM's slug."""
+        platform = _ask(_real(tmp_path, traces), "not-a-platform", "not-a-platform")
+
+        assert (platform.state, platform.system) == (UNMATCHED, None)
+
+    def test_a_slug_and_a_folder_that_name_different_systems_are_unmatched(self, tmp_path, traces):
+        platform = _ask(_real(tmp_path, traces), "snes", "xbox360")
+
+        assert (platform.state, platform.system) == (UNMATCHED, None)
 
     def test_the_system_the_catalogue_declares_is_taken_whatever_rom_m_calls_it(self, tmp_path, traces):
-        # IGDB 117 is the CD-i, which RetroDECK declares as cdimono1.
-        platform = _ask(_real(tmp_path, traces), PlatformIds(igdb_id=117), "philips-cd-i")
+        platform = _ask(_real(tmp_path, traces), "philips-cd-i", "cdimono1")
 
-        assert platform.system == "cdimono1"
-
-    def test_a_later_id_is_asked_where_the_earlier_ones_give_nothing(self, tmp_path, traces):
-        ids = PlatformIds(igdb_id=999_999, libretro_slug="Not A Platform", ss_id=4)
-
-        assert _ask(_real(tmp_path, traces), ids, "snes").system == "snes"
-
-    def test_a_platform_with_no_ids_has_no_system(self, tmp_path, traces):
-        assert _ask(_real(tmp_path, traces), PlatformIds(), "snes").state == NO_SYSTEM
+        assert platform.system == _pair("esde", "cdimono1")
 
 
 class _Installation:
-    """A source's handle that answers each ``(vocabulary, value)`` from a table, and counts the questions."""
+    """A source's handle that answers each tuple of pairs from a table, and records the questions."""
 
-    def __init__(self, kind: str, answers: dict[tuple[str, str], PlatformSystemsAnswer | Exception]) -> None:
+    def __init__(self, kind: str, answers: dict[str, PlatformSystemsAnswer | Exception]) -> None:
         self.kind = kind
         self._answers = answers
-        self.asked: list[tuple[str, str]] = []
+        self.asked: list[tuple[tuple[str, ...], ...]] = []
 
-    def systems_for_platform(self, vocabulary: str, value: str) -> PlatformSystemsAnswer:
-        self.asked.append((vocabulary, value))
-        answer = self._answers.get((vocabulary, value), PlatformSystemsAnswer(vocabulary, value))
+    def systems_for_platforms(self, pairs: tuple[tuple[str, str], ...]) -> PlatformSystemsAnswer:
+        self.asked.append(tuple(tuple(pair) for pair in pairs))
+        answer = self._answers.get(pairs[0][1], PlatformSystemsAnswer(translate(pairs)))
         if isinstance(answer, Exception):
             raise answer
         return answer
 
 
-def _matched(vocabulary: str, value: str, system: str, status: str = PLATFORM_STATUS_DECLARED) -> PlatformSystemsAnswer:
+def _matched(
+    slug: str, *systems: tuple[str, str], status: PlatformSystemStatus = PLATFORM_STATUS_DECLARED
+) -> PlatformSystemsAnswer:
+    translation = translate((("romm", slug),))
+    assert translation.intersection_status == INTERSECTION_AGREED
     return PlatformSystemsAnswer(
-        vocabulary,
-        value,
-        (system,),
-        matches=(PlatformSystemMatch(system, status, (system,), "catalogue"),),
+        translation,
+        matches=tuple(PlatformSystemMatch(system, status, (system[1],), "catalogue") for system in systems),
     )
 
 
@@ -181,40 +227,50 @@ def _adapter(installations: list[Any], traces: list[str], settings: dict[str, An
     return AtlasPlatformSystemsAdapter(sources=sources, log_debug=traces.append), sources
 
 
-_IDS = PlatformIds(igdb_id=29)
-
-
 class TestEachSourceIsAskedForItself:
+    """#2217 D17: every source is asked with the same pairs and answers in its own systems."""
+
     def _two(self):
-        retrodeck = _Installation("retrodeck", {("igdb", "29"): _matched("igdb", "29", "genesis")})
-        emudeck = _Installation("emudeck", {("igdb", "29"): _matched("igdb", "29", "megadrive")})
+        retrodeck = _Installation("retrodeck", {"genesis": _matched("genesis", ("esde", "genesis"))})
+        emudeck = _Installation("emudeck", {"genesis": _matched("genesis", ("esde", "megadrive"))})
         return retrodeck, emudeck
 
     def test_the_answering_source_answers_where_none_is_named(self, traces):
         retrodeck, emudeck = self._two()
         adapter, _ = _adapter([retrodeck, emudeck], traces)
 
-        platform = _ask(adapter, _IDS, "genesis")
+        platform = _ask(adapter, "genesis", "genesis")
 
-        assert (platform.system, _kind(platform)) == ("genesis", "retrodeck")
+        assert (platform.system, _kind(platform)) == (_pair("esde", "genesis"), "retrodeck")
         assert emudeck.asked == []
 
-    def test_emu_deck_answers_with_its_own_system(self, traces):
+    def test_emu_deck_answers_with_its_own_system_asked_with_the_same_pairs(self, traces):
         retrodeck, emudeck = self._two()
         adapter, _ = _adapter([retrodeck, emudeck], traces, settings={SWITCHED_OFF_SETTING: ["retrodeck"]})
 
-        platform = _ask(adapter, _IDS, "genesis")
+        platform = _ask(adapter, "genesis", "genesis")
 
-        assert (platform.system, _kind(platform)) == ("megadrive", "emudeck")
+        assert (platform.system, _kind(platform)) == (_pair("esde", "megadrive"), "emudeck")
+        assert emudeck.asked == [(("romm", "genesis"), ("folder", "genesis"))]
         assert retrodeck.asked == []
 
     def test_a_named_source_is_asked_whatever_answers_and_whatever_its_switch(self, traces):
         retrodeck, emudeck = self._two()
         adapter, _ = _adapter([retrodeck, emudeck], traces, settings={SWITCHED_OFF_SETTING: ["retrodeck"]})
 
-        platform = _ask(adapter, _IDS, "genesis", source="retrodeck")
+        platform = _ask(adapter, "genesis", "genesis", source="retrodeck")
 
-        assert (platform.system, _kind(platform)) == ("genesis", "retrodeck")
+        assert (platform.system, _kind(platform)) == (_pair("esde", "genesis"), "retrodeck")
+        assert emudeck.asked == []
+
+    def test_a_source_that_names_no_system_is_not_stood_in_for_by_another(self, traces):
+        retrodeck = _Installation("retrodeck", {"genesis": _matched("genesis")})
+        emudeck = _Installation("emudeck", {"genesis": _matched("genesis", ("esde", "megadrive"))})
+        adapter, _ = _adapter([retrodeck, emudeck], traces)
+
+        platform = _ask(adapter, "genesis", "genesis")
+
+        assert (platform.state, _kind(platform)) == (NO_SYSTEM, "retrodeck")
         assert emudeck.asked == []
 
 
@@ -235,19 +291,19 @@ class TestWhereNoSourceCanBeAsked:
     def test_no_source_detected(self, traces):
         adapter, _ = _adapter([], traces)
 
-        platform = _ask(adapter, _IDS, "genesis")
+        platform = _ask(adapter, "genesis", "genesis")
 
         assert (platform.state, platform.unasked, platform.source) == (UNASKED, NO_SOURCE_DETECTED, None)
 
     def test_every_source_switched_off(self, traces):
         adapter, _ = _adapter([_Installation("retrodeck", {})], traces, settings={SWITCHED_OFF_SETTING: ["retrodeck"]})
 
-        assert _ask(adapter, _IDS, "genesis").unasked == "switched_off"
+        assert _ask(adapter, "genesis", "genesis").unasked == "switched_off"
 
     def test_a_named_source_that_is_not_detected(self, traces):
         adapter, _ = _adapter([_Installation("emudeck", {})], traces)
 
-        platform = _ask(adapter, _IDS, "genesis", source="retrodeck")
+        platform = _ask(adapter, "genesis", "genesis", source="retrodeck")
 
         assert (platform.state, platform.unasked) == (UNASKED, NO_SOURCE_DETECTED)
 
@@ -260,84 +316,77 @@ class TestWhereNoSourceCanBeAsked:
         )
         adapter = AtlasPlatformSystemsAdapter(sources=sources, log_debug=traces.append)
 
-        platform = _ask(adapter, _IDS, "genesis", source="retrodeck")
+        platform = _ask(adapter, "genesis", "genesis", source="retrodeck")
 
         assert (platform.state, platform.unasked) == (UNASKED, CATALOGUE_UNAVAILABLE)
 
     def test_a_question_that_raised_establishes_no_system(self, traces):
-        adapter, _ = _adapter([_Installation("retrodeck", {("igdb", "29"): RuntimeError("boom")})], traces)
+        adapter, _ = _adapter([_Installation("retrodeck", {"genesis": RuntimeError("boom")})], traces)
 
-        platform = _ask(adapter, _IDS, "genesis")
+        platform = _ask(adapter, "genesis", "genesis")
 
         assert (platform.state, platform.unasked, _kind(platform)) == (UNASKED, CATALOGUE_UNAVAILABLE, "retrodeck")
         assert any("resolver failed" in line for line in traces)
 
 
 class TestOneReading:
-    def test_the_same_id_is_asked_once_within_a_reading(self, traces):
-        retrodeck = _Installation("retrodeck", {("igdb", "29"): _matched("igdb", "29", "genesis")})
+    def test_the_same_platform_is_asked_once_within_a_reading(self, traces):
+        retrodeck = _Installation("retrodeck", {"genesis": _matched("genesis", ("esde", "genesis"))})
         adapter, sources = _adapter([retrodeck], traces)
         reading = sources.read()
 
-        _ask(adapter, _IDS, "genesis", reading=reading)
-        _ask(adapter, _IDS, "genesis", reading=reading)
+        _ask(adapter, "genesis", "genesis", reading=reading)
+        _ask(adapter, "genesis", "genesis", reading=reading)
 
-        assert retrodeck.asked == [("igdb", "29")]
+        assert retrodeck.asked == [(("romm", "genesis"), ("folder", "genesis"))]
 
-    def test_an_id_after_the_deciding_one_is_not_asked(self, traces):
-        retrodeck = _Installation("retrodeck", {("igdb", "29"): _matched("igdb", "29", "genesis")})
+    def test_one_question_with_both_pairs_and_no_id_of_rom_ms(self, traces):
+        retrodeck = _Installation("retrodeck", {"genesis": _matched("genesis", ("esde", "genesis"))})
         adapter, _ = _adapter([retrodeck], traces)
 
-        _ask(adapter, PlatformIds(igdb_id=29, ss_id=1, tgdb_id=18), "genesis")
+        _ask(adapter, "genesis", "megadrivejp")
 
-        assert retrodeck.asked == [("igdb", "29")]
-
-    def test_the_four_ids_are_asked_in_the_decided_order(self, traces):
-        retrodeck = _Installation("retrodeck", {("thegamesdb", "18"): _matched("thegamesdb", "18", "genesis")})
-        adapter, _ = _adapter([retrodeck], traces)
-
-        platform = _ask(adapter, PlatformIds(igdb_id=29, libretro_slug="Sega - Mega Drive", ss_id=1, tgdb_id=18), "md")
-
-        assert platform.system == "genesis"
-        assert retrodeck.asked == [
-            ("igdb", "29"),
-            ("libretro", "Sega - Mega Drive"),
-            ("screenscraper", "1"),
-            ("thegamesdb", "18"),
-        ]
+        assert retrodeck.asked == [(("romm", "genesis"), ("folder", "megadrivejp"))]
 
 
-class TestTheResolversVocabulariesAreReadHere:
-    def test_every_id_field_is_asked_in_a_vocabulary_of_the_resolvers_and_each_vocabulary_once(self):
-        assert set(_VOCABULARY_OF_FIELD) == set(ID_FIELDS)
-        assert sorted(_VOCABULARY_OF_FIELD.values()) == sorted(KNOWN_PLATFORM_VOCABULARIES)
-
+class TestTheResolversStatusesAreReadHere:
     def test_every_status_the_resolver_exports_is_read(self):
         stated = {getattr(atlas, name) for name in atlas.__all__ if name.startswith("PLATFORM_STATUS_")}
 
         assert set(_STATUS_OF) == stated
 
     @pytest.mark.parametrize(
-        ("status", "state", "system"),
+        ("status", "state"),
         [
-            (PLATFORM_STATUS_DECLARED, FOUND, "genesis"),
-            (PLATFORM_STATUS_DISABLED, SWITCHED_OFF, "genesis"),
-            (PLATFORM_STATUS_ABSENT, NO_SYSTEM, None),
+            (PLATFORM_STATUS_DECLARED, FOUND),
+            (PLATFORM_STATUS_DISABLED, SWITCHED_OFF),
+            (PLATFORM_STATUS_ABSENT, NOT_HERE),
         ],
     )
-    def test_each_status_decides_as_it_states(self, traces, status, state, system):
-        retrodeck = _Installation("retrodeck", {("igdb", "29"): _matched("igdb", "29", "genesis", status)})
+    def test_each_status_decides_as_it_states(self, traces, status, state):
+        retrodeck = _Installation("retrodeck", {"genesis": _matched("genesis", ("esde", "genesis"), status=status)})
         adapter, _ = _adapter([retrodeck], traces)
 
-        platform = _ask(adapter, _IDS, "genesis")
+        platform = _ask(adapter, "genesis", "genesis")
 
-        assert (platform.state, platform.system) == (state, system)
+        assert (platform.state, platform.named) == (state, (_pair("esde", "genesis"),))
 
     def test_a_status_the_adapter_does_not_read_establishes_no_system(self, traces):
-        retrodeck = _Installation("retrodeck", {("igdb", "29"): _matched("igdb", "29", "genesis", "pending")})
-        adapter, _ = _adapter([retrodeck], traces)
+        unread: Any = (_Unread(("esde", "genesis"), "pending"),)
+        answer = PlatformSystemsAnswer(translate((("romm", "genesis"),)), matches=unread)
+        adapter, _ = _adapter([_Installation("retrodeck", {"genesis": answer})], traces)
 
-        platform = _ask(adapter, _IDS, "genesis")
+        platform = _ask(adapter, "genesis", "genesis")
 
         assert (platform.state, platform.unasked, platform.system) == (UNASKED, CATALOGUE_UNAVAILABLE, None)
         assert any("'pending'" in line for line in traces)
+
+
+class _Unread:
+    """A match whose status no release of the resolver states today; its own type, since the real one refuses it."""
+
+    def __init__(self, system: tuple[str, str], status: str) -> None:
+        self.system = system
+        self.status = status
+        self.platforms = (system[1],)
+        self.tags_source = "catalogue"

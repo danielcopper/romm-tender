@@ -219,7 +219,13 @@ class TestGetPlatformCoreInfo:
             "emulator_data_available": True,
             "emulator_data_reason": None,
             "emulator_source": {"kind": "retrodeck", "starts_games": True},
-            "platform_system": {"state": "found", "source": "retrodeck", "system": "snes", "platform": "snes"},
+            "platform_system": {
+                "state": "found",
+                "source": "retrodeck",
+                "system": "snes",
+                "systems": ["snes"],
+                "platform": "snes",
+            },
             "active_core": "snes9x_libretro.so",
             "active_core_label": "Snes9x",
             "platform_core_label": None,
@@ -370,7 +376,13 @@ class TestGetSystemCoreInfo:
             "emulator_data_available": True,
             "emulator_data_reason": None,
             "emulator_source": {"kind": "retrodeck", "starts_games": True},
-            "platform_system": {"state": "found", "source": "retrodeck", "system": "snes", "platform": "snes"},
+            "platform_system": {
+                "state": "found",
+                "source": "retrodeck",
+                "system": "snes",
+                "systems": ["snes"],
+                "platform": "snes",
+            },
             "active_core_label": "Snes9x",
             "start": {"state": "starts", "reason": None, "entry": "Snes9x"},
             "vanished_pick": None,
@@ -454,6 +466,7 @@ class TestAPlatformWithNoSystem:
             "state": state,
             "source": "retrodeck",
             "system": system,
+            "systems": [] if system is None else [system],
             "platform": "Xbox 360",
         }
         assert core_info.emulator_options_calls == []
@@ -475,6 +488,7 @@ class TestAPlatformWithNoSystem:
             "state": "found",
             "source": "retrodeck",
             "system": "dreamcast",
+            "systems": ["dreamcast"],
             "platform": "dc",
         }
 
