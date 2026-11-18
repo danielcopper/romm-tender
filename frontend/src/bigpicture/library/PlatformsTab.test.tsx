@@ -2681,6 +2681,29 @@ describe("Library › Platforms", () => {
       expect(contentsCells(container)).toContain("—");
     });
 
+    it("says above the BIOS table why downloads stay in the store for a platform of several systems", async () => {
+      mockFirmware([
+        firmwarePlatform({
+          store_only: "platform_systems_several",
+          emulator_source: { kind: "retrodeck", starts_games: true },
+          platform_system: {
+            state: "several",
+            source: "retrodeck",
+            systems: ["gba", "gbah"],
+            platform: "Game Boy Advance",
+            slug: "gba",
+            folder: "gba",
+          },
+        }),
+      ]);
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain(
+        "RetroDECK has several systems for Game Boy Advance (gba, gbah). Downloads are kept in Tender's firmware store and linked into none of them.",
+      );
+    });
+
     it("says no BIOS is chosen for PCSX2 (Standalone) on the answer it really sends", async () => {
       // A packaged card with no rows and an open verdict reads as not read; the
       // resolver's note names why, and the pane says that rather than "nothing".
