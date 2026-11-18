@@ -14,13 +14,16 @@
 #       place and restart Steam into the remembered window, starting no backend
 #   dev_target.sh reset <name> bpm|desktop [display]
 #   dev_target.sh ui-scale <name> [mode]
-#       start dev_ui_scale.py as a user unit and follow what it prints; `auto`
-#       runs once in the foreground instead, as it does on the build host
+#       start dev_ui_scale.py as a user unit and follow what it prints until
+#       the unit stops; `auto` runs once in the foreground instead, as it does
+#       on the build host
 #   dev_target.sh ui-scale-stop <name>
 #   dev_target.sh stop <name>
 #       stop whichever of the dev backend and the installed service holds the
 #       lock, and leave Steam and the service's enablement alone
 #   dev_target.sh status <name>
+#   dev_target.sh running <name> backend|ui-scale
+#       exit 0 while that unit runs, 1 when it does not
 #
 # <name> is the target's name on the build host, for the messages. Everything
 # here needs nothing beyond /usr/bin.
@@ -265,8 +268,22 @@ ui_scale() {
     fi
     since=$(date +%s)
     systemd-run --user --unit="$UI_SCALE_UNIT" --collect --quiet -- "$PYTHON" "$here/dev_ui_scale.py" "$mode"
+    scale=$(main_pid "$UI_SCALE_UNIT")
     printf '%s\n' "$FOLLOWING"
-    exec journalctl --user -u "$UI_SCALE_UNIT" --since "@$since" -o cat --no-pager -f
+    journalctl --user -u "$UI_SCALE_UNIT" --since "@$since" -o cat --no-pager -f &
+    follower=$!
+    # journalctl -f never ends by itself, so the unit's main process is waited
+    # on beside it, and the following ends with it.
+    case "$scale" in
+        '' | 0) ;;
+        *) tail -f --pid="$scale" /dev/null || true ;;
+    esac
+    # A moment for journalctl to show what the unit wrote last.
+    sleep 1
+    kill "$follower" 2>/dev/null || true
+    wait "$follower" 2>/dev/null || true
+    say "dev:ui-scale on $name has stopped; what it wrote last is above."
+    exit 1
 }
 
 # Stopping the unit is what restores: dev_ui_scale.py puts the scale and the
@@ -324,8 +341,22 @@ status() {
     fi
 }
 
+# Exit 0 while the unit runs, 1 when it does not: what the build host asks after
+# a Ctrl-C, before it says what keeps running.
+running() {
+    case "${1:-}" in
+        backend) unit="$DEV_UNIT" ;;
+        ui-scale) unit="$UI_SCALE_UNIT" ;;
+        *) usage ;;
+    esac
+    if is_active "$unit"; then
+        exit 0
+    fi
+    exit 1
+}
+
 usage() {
-    say "usage: dev_target.sh start|frontend|reset|ui-scale|ui-scale-stop|stop|status <name> [word ...]"
+    say "usage: dev_target.sh start|frontend|reset|ui-scale|ui-scale-stop|stop|status|running <name> [word ...]"
     exit 2
 }
 
@@ -344,5 +375,6 @@ case "$verb" in
     ui-scale-stop) ui_scale_stop ;;
     stop) stop ;;
     status) status ;;
+    running) running "$@" ;;
     *) usage ;;
 esac

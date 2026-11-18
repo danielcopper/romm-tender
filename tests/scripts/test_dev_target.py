@@ -18,6 +18,7 @@ the target's home, with its bytes, before and after.
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import os
 import re
@@ -27,7 +28,7 @@ import subprocess
 import sys
 import time
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
@@ -101,6 +102,8 @@ class Loop:
     target_home: Path
     python: str = sys.executable
     """The target's ``TENDER_PYTHON``."""
+    running: list[subprocess.Popen[str]] = field(default_factory=list)
+    """The tasks :meth:`start` started, ended at teardown if they still run."""
 
     def save(self) -> None:
         self.world.save(self.world_file)
@@ -133,7 +136,7 @@ class Loop:
     def start(self, task: str, *words: str) -> subprocess.Popen[str]:
         """The task in a session of its own, as a terminal runs it, so that Ctrl-C reaches its whole group."""
         self.save()
-        return subprocess.Popen(
+        process = subprocess.Popen(
             self.argv(task, *words),
             env=self.env(),
             stdin=subprocess.DEVNULL,
@@ -142,6 +145,24 @@ class Loop:
             text=True,
             start_new_session=True,
         )
+        self.running.append(process)
+        return process
+
+    def start_ui_scale(self, *words: str) -> tuple[subprocess.Popen[str], int]:
+        """``dev:ui-scale`` started, with its unit's main process, once what the unit prints is being followed."""
+        self.world.journal = [*self.world.journal, "HOLDING"]
+        process = self.start("dev:ui-scale", *words)
+        assert process.stdout is not None
+        while "HOLDING" not in process.stdout.readline():
+            assert process.poll() is None, process.communicate()
+        return process, units(self.world)["romm-tender-dev-ui-scale"]["pid"]
+
+    def end_running(self) -> None:
+        for process in self.running:
+            if process.poll() is None:
+                with contextlib.suppress(ProcessLookupError):
+                    os.killpg(process.pid, signal.SIGKILL)
+            process.communicate()
 
     @property
     def root(self) -> Path:
@@ -226,6 +247,7 @@ def loop(home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
     assert setup_remote_target.main(["deck", f"deck@{_ADDRESS}"]) == 0
     built = Loop(world, world_file, path, _checkout(tmp_path / "checkout"), home, target_home)
     yield built
+    built.end_running()
     end_processes(world)
 
 
@@ -303,6 +325,21 @@ class TestStartingABackend:
         assert _alive(backend)
         unit = [call for call in commands(loop.world, "systemd-run") if "--unit=romm-tender-dev" in call["argv"]]
         assert [call["argv"][-2:] for call in unit] == [[sys.executable, str(loop.root / "current/backend/main.py")]]
+
+    def test_ctrl_c_after_the_backend_ended_says_it_no_longer_runs(self, loop: Loop) -> None:
+        process = loop.start("dev:backend")
+        assert process.stdout is not None
+        while "backend started" not in process.stdout.readline():
+            assert process.poll() is None, process.communicate()
+        backend = units(loop.world)["romm-tender-dev"]["pid"]
+        os.kill(backend, signal.SIGKILL)
+        _wait_for(lambda: not _alive(backend))
+
+        os.killpg(process.pid, signal.SIGINT)
+        _, err = process.communicate(timeout=_TIMEOUT)
+
+        assert "keeps running" not in err
+        assert "The backend no longer runs on deck" in err or "the backend on deck has stopped" in err
 
     def test_dev_bpm_restarts_into_big_picture_and_the_choice_is_remembered_on_the_target(self, loop: Loop) -> None:
         loop.world.backend_exits = True
@@ -472,42 +509,60 @@ class TestTheTasksThatStartNothing:
     def test_dev_stop_leaves_dev_ui_scale_running(self, loop: Loop) -> None:
         """#2844 D3."""
         backend = loop.hold_lock("romm-tender-dev")
-        loop.world.follow_holds = False
-        loop.run("dev:ui-scale")
-        scale = units(loop.world)["romm-tender-dev-ui-scale"]["pid"]
+        _, scale = loop.start_ui_scale()
 
         loop.run("dev:stop")
 
         assert not _alive(backend)
         assert _alive(scale)
 
-    def test_dev_ui_scale_runs_as_a_unit_and_stop_ends_it(self, loop: Loop) -> None:
-        loop.world.follow_holds = False
+    def test_dev_ui_scale_runs_as_a_unit_and_stop_ends_it_and_the_following(self, loop: Loop) -> None:
         loop.world.journal = ["Restored: AUTOMATIC scaling (the state captured before this run)."]
+        started, scale = loop.start_ui_scale("1.5")
 
-        started = loop.run("dev:ui-scale", "1.5")
-        scale = units(loop.world)["romm-tender-dev-ui-scale"]["pid"]
         stopped = loop.run("dev:ui-scale", "--stop")
+        _, followed = started.communicate(timeout=_TIMEOUT)
 
-        assert started.returncode == 0, started.stderr
         run = next(
             call for call in commands(loop.world, "systemd-run") if "--unit=romm-tender-dev-ui-scale" in call["argv"]
         )
         assert run["argv"][-3:] == [sys.executable, str(loop.root / "incoming/scripts/dev_ui_scale.py"), "1.5"]
-        assert "`mise run dev:ui-scale --stop --target deck` restores the scale and the window" in started.stderr
+        assert started.returncode == 1
+        assert "dev:ui-scale on deck has stopped" in followed
         assert stopped.returncode == 0, stopped.stderr
         assert not _alive(scale)
         assert "Restored: AUTOMATIC scaling" in stopped.stdout
         assert "stopped dev:ui-scale on deck" in stopped.stdout
 
     def test_dev_ui_scale_while_one_runs_is_refused(self, loop: Loop) -> None:
-        loop.world.follow_holds = False
-        loop.run("dev:ui-scale")
+        loop.start_ui_scale()
 
         again = loop.run("dev:ui-scale")
 
         assert again.returncode == 1
         assert "dev:ui-scale already runs on deck" in again.stderr
+
+    def test_ctrl_c_ends_only_the_following_of_a_dev_ui_scale_that_runs_on(self, loop: Loop) -> None:
+        started, scale = loop.start_ui_scale()
+
+        os.killpg(started.pid, signal.SIGINT)
+        _, err = started.communicate(timeout=_TIMEOUT)
+
+        assert started.returncode == 0, err
+        assert "It keeps running on deck" in err
+        assert "`mise run dev:ui-scale --stop --target deck` restores the scale and the window" in err
+        assert _alive(scale)
+
+    def test_ctrl_c_after_dev_ui_scale_ended_says_it_no_longer_runs(self, loop: Loop) -> None:
+        started, scale = loop.start_ui_scale()
+        os.kill(scale, signal.SIGKILL)
+        _wait_for(lambda: not _alive(scale))
+
+        os.killpg(started.pid, signal.SIGINT)
+        _, err = started.communicate(timeout=_TIMEOUT)
+
+        assert "keeps running" not in err
+        assert "dev:ui-scale no longer runs on deck" in err or "dev:ui-scale on deck has stopped" in err
 
     def test_dev_ui_scale_stop_with_none_running_says_so(self, loop: Loop) -> None:
         result = loop.run("dev:ui-scale", "--stop")
@@ -518,8 +573,7 @@ class TestTheTasksThatStartNothing:
     def test_dev_status_names_the_lock_holder_and_whether_dev_ui_scale_runs(self, loop: Loop) -> None:
         free = loop.run("dev:status")
         loop.hold_lock("romm-tender")
-        loop.world.follow_holds = False
-        loop.run("dev:ui-scale")
+        loop.start_ui_scale()
         held = loop.run("dev:status")
 
         assert free.returncode == 0, free.stderr

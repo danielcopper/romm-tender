@@ -561,7 +561,8 @@ the display and the session bus from it, since a login over `ssh` carries neithe
 **The tasks that start a backend follow its `backend.log` until Ctrl-C.** The log shows from where it stood before the
 start, so a start that fails is seen: when the backend stops, the following ends and shows what the backend wrote to
 stderr since it started — an import that failed before the log was opened among it. Ctrl-C ends only the following,
-since it does not reach the target; the backend keeps running, and the task says so and names `dev:stop`.
+since it does not reach the target. The task then asks the target whether the backend still runs, and says so: when it
+does, the message names `dev:stop`.
 
 **`dev:stop` stops whichever holds the lock on the target**: the dev backend, or the installed service. It leaves Steam
 as it is — the next task that starts a backend restarts it anyway — and leaves the installed service enabled, so it
@@ -576,8 +577,9 @@ any other process it names that process, to be stopped by hand. Without `--targe
 the lock, as above.
 
 **`dev:ui-scale` runs on the target as the user unit `romm-tender-dev-ui-scale`**, and the task follows what it prints
-until Ctrl-C, which ends only the following. `dev:ui-scale --stop --target <name>` stops the unit, which restores the
-scale and the window as Ctrl-C does locally, and shows what it said doing so; `dev:stop` leaves it running. `auto`, the
+until the unit stops, which the task then says, or until Ctrl-C, which ends only the following; the task then asks
+whether the unit still runs, and says so. `dev:ui-scale --stop --target <name>` stops the unit, which restores the scale
+and the window as Ctrl-C does locally, and shows what it said doing so; `dev:stop` leaves it running. `auto`, the
 rescue, runs once and ends, as it does locally.
 
 **`dev:log`** shows the target's `backend.log` once; with `--follow` it shows its end and follows it, by name, so a log

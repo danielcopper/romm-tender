@@ -289,17 +289,45 @@ def run_streaming(command: list[str]) -> Outcome:
     return Outcome(process.returncode, "".join(errors), following, interrupted=False)
 
 
+def still_running(target: Target, unit: str) -> bool | None:
+    """Whether *unit* (``backend`` or ``ui-scale``) runs on the target, or ``None`` where that could not be asked."""
+    result = subprocess.run(
+        [*ssh(target), "--", target.name, DEV_TARGET, "running", target.name, unit],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return {0: True, 1: False}.get(result.returncode)
+
+
 def after_following(task: str, target: Target, *, follow: bool = False) -> str:
+    """What to say once the following has ended here: what still runs there, as the target answers."""
     name = target.name
-    if task == "dev:ui-scale":
-        return (
-            f"tender-dev: stopped following dev:ui-scale. It keeps running on {name}, holding the scale;"
-            f" `mise run dev:ui-scale --stop --target {name}` restores the scale and the window."
-        )
+    unknown = f" Whether it still runs could not be asked; `mise run dev:status --target {name}` says what runs there."
     if task == "dev:log" and follow:
         return f"tender-dev: stopped following the log on {name}."
+    if task == "dev:ui-scale":
+        stopped = "tender-dev: stopped following dev:ui-scale."
+        running = still_running(target, "ui-scale")
+        if running is None:
+            return stopped + unknown
+        if not running:
+            return f"{stopped} dev:ui-scale no longer runs on {name}."
+        return (
+            f"{stopped} It keeps running on {name}, holding the scale;"
+            f" `mise run dev:ui-scale --stop --target {name}` restores the scale and the window."
+        )
+    stopped = "tender-dev: stopped following the log."
+    running = still_running(target, "backend")
+    if running is None:
+        return stopped + unknown
+    if not running:
+        return (
+            f"{stopped} The backend no longer runs on {name}; `mise run dev:log --target {name}` shows what it logged."
+        )
     return (
-        f"tender-dev: stopped following the log. The backend keeps running on {name};"
+        f"{stopped} The backend keeps running on {name};"
         f" `mise run dev:stop --target {name}` stops it, and `mise run dev:log --follow --target {name}`"
         " follows its log again."
     )
