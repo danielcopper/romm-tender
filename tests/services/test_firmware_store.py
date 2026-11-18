@@ -38,6 +38,7 @@ from domain.emulator_sources import ALL_SOURCES_SWITCHED_OFF, NO_SOURCE_DETECTED
 from domain.firmware_wants import IDENTITY_ARCHIVE, IDENTITY_FILE, FolderFile
 from domain.platform_system import (
     CONTRADICTED,
+    FOUND,
     NO_SYSTEM,
     NOT_HERE,
     SEVERAL,
@@ -935,6 +936,25 @@ class TestALinkAnotherPlatformMayStillWant:
 
     async def test_a_listed_platform_without_store_files_that_wants_the_place_keeps_it(self, machine):
         place = await self._unwanted_on_gb(machine)
+
+        await machine.service.update_bios_links("gb", "gb")
+
+        self._stays(machine, place)
+
+    @pytest.mark.parametrize(
+        "system",
+        ["gbc", (SystemPair("esde", "gbc"), SystemPair("esde", "sgb"))],
+        ids=["one system", "several systems"],
+    )
+    async def test_another_folder_of_the_same_slug_that_wants_the_place_keeps_it(self, machine, system):
+        """#2217 D16: a folder sharing the slug may be another system, so it is asked too."""
+        place = await self._unwanted_on_gb(machine)
+        self._gbc_wants_nothing(machine)
+        machine.resolver.not_installed_in = {"gb": frozenset({_YABA})}
+        japan = PlatformKeys("gb", "gbjp")
+        machine.platform_systems.listed = frozenset({PlatformKeys("gb", "gb"), japan})
+        several = isinstance(system, tuple) and not isinstance(system, SystemPair)
+        machine.platform_systems.answers["gbjp"] = platform_answer(SEVERAL if several else FOUND, japan, system)
 
         await machine.service.update_bios_links("gb", "gb")
 

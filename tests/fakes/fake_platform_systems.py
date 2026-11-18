@@ -49,7 +49,7 @@ def platform_answer(
 
 
 class FakePlatformSystems:
-    """A slug in ``answers`` answers that value; one in ``mapping`` that system; any other slug itself.
+    """A folder, else a slug, in ``answers`` answers that value; one in ``mapping`` that system; any other slug itself.
 
     The tests' platforms are mostly spelled like the systems they stand for,
     which is why a slug nothing names answers itself; several pairs answer
@@ -82,8 +82,9 @@ class FakePlatformSystems:
     ) -> PlatformSystem:
         self.calls.append((keys.slug, source))
         self.asked.append(keys)
-        if keys.slug in self.answers:
-            return self.answers[keys.slug]
+        for key in (keys.folder, keys.slug):
+            if key is not None and key in self.answers:
+                return self.answers[key]
         system = self.mapping.get(keys.slug, keys.slug)
         several = isinstance(system, tuple) and not isinstance(system, SystemPair)
         return platform_answer(SEVERAL if several else FOUND, keys, system)
