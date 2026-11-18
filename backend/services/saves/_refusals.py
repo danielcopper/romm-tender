@@ -58,6 +58,6 @@ class GoneFromRomm(NamedRefused):
     reason = "gone_from_romm"
 
 
-def gone_from_romm(**details: Any) -> GoneFromRomm:
-    """The refusal of a sync of a game RomM no longer has, carrying *details*."""
-    return GoneFromRomm(ROM_GONE_FROM_ROMM, **details)
+def gone_from_romm() -> GoneFromRomm:
+    """The refusal of a sync of a game RomM no longer has; it moved nothing."""
+    return GoneFromRomm(ROM_GONE_FROM_ROMM, synced=0)

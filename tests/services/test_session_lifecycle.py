@@ -851,7 +851,7 @@ class TestFinalizeSavesRootMissing:
 class TestFinalizeGoneFromRomm:
     def test_a_game_romm_no_longer_has_toasts_the_sentence(self, event_loop, logger):
         """The sync after a game of one RomM no longer has says so instead of a per-file error (#2837 D3)."""
-        post = FakePostExitSync(side_effect=gone_from_romm(synced=0))
+        post = FakePostExitSync(side_effect=gone_from_romm())
         service = _make_service(
             playtime_recorder=FakePlaytimeRecorder(),
             post_exit_sync=post,

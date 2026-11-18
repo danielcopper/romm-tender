@@ -10,6 +10,7 @@ a clause of its own; nothing local is touched and nothing is recorded.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -187,14 +188,15 @@ class TestAnUnconfirmed404StaysAnError:
     """D1: only the lookup's own 404 proves the ROM is gone; any other outcome leaves the upload's 404 an error."""
 
     @pytest.mark.parametrize(
-        "lookup",
+        ("lookup", "logged"),
         [
-            pytest.param(None, id="the lookup answers"),
-            pytest.param(RommApiError("Not Found"), id="the lookup proves nothing"),
+            pytest.param(None, "RomM still has this ROM", id="the lookup answers"),
+            pytest.param(RommApiError("proxy said no"), "proxy said no", id="the lookup proves nothing"),
+            pytest.param(RuntimeError("lookup broke"), "lookup broke", id="the lookup breaks"),
         ],
     )
     @pytest.mark.asyncio
-    async def test_every_file_is_tried_and_fails_as_before(self, tmp_path, lookup):
+    async def test_every_file_is_tried_and_fails_with_its_404(self, tmp_path, caplog, lookup, logged):
         svc, fake = _service(tmp_path)
         _confirmed_rom(svc, tmp_path, 1)
         upload_404 = RommNotFoundError("Rom with id '1' not found")
@@ -214,13 +216,17 @@ class TestAnUnconfirmed404StaysAnError:
         fake.upload_save = refused_upload  # type: ignore[method-assign]
         fake.get_rom = looked_up  # type: ignore[method-assign]
 
-        result = await svc.sync_rom_saves(1)
+        with caplog.at_level(logging.INFO):
+            result = await svc.sync_rom_saves(1)
 
         reason = classify_error(upload_404)[1]
         assert result["success"] is False
         assert sorted(result["errors"]) == [f"game1.rtc: {reason}", f"game1.srm: {reason}"]
         assert _GONE_MESSAGE not in result["message"]
         assert _calls(fake, "upload_save", 1) == 2
+        # One lookup per run: its verdict holds for the second file's 404 too.
+        assert _calls(fake, "get_rom", 1) == 1
+        assert any(r.levelno == logging.INFO and logged in r.getMessage() for r in caplog.records)
 
 
 class TestGoneRoms:
