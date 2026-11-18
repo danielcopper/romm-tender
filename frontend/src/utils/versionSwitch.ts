@@ -137,10 +137,16 @@ export const isSelectable = (v: VersionInfo): boolean =>
 
 type SyncRomSavesResponse = Awaited<ReturnType<typeof syncRomSaves>>;
 
+/** The refusals of the sync before a switch whose own message says what to do; a retry would not help. */
+const SYNC_REFUSALS_SAID_AS_THEY_ARE: ReadonlySet<SyncRomSavesResponse["reason"]> = new Set([
+  "game_running",
+  "gone_from_romm",
+]);
+
 /** What to toast when syncing saves failed or surfaced conflicts. */
 const syncFailureMessage = (sync: SyncRomSavesResponse): string | null => {
   if (!sync.success) {
-    return sync.reason === "game_running" ? sync.message : "Couldn't sync saves — try again";
+    return SYNC_REFUSALS_SAID_AS_THEY_ARE.has(sync.reason) ? sync.message : "Couldn't sync saves — try again";
   }
   if (sync.conflicts && sync.conflicts.length > 0) {
     return "Resolve save conflicts first";
