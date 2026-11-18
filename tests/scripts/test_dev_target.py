@@ -288,6 +288,9 @@ class TestStartingABackend:
         loop.log.parent.mkdir(parents=True)
         loop.log.write_text("an earlier run's line\n", encoding="utf-8")
         process = loop.start("dev")
+        # dev_steam.sh starts Steam in the background, so its call may land after the backend's — and a Ctrl-C
+        # before it lands would end it.
+        _wait_for(lambda: any(call["argv"][-1:] == ["steam"] for call in commands(loop.world, "systemd-run")))
 
         out, err = _interrupt(process, "backend started")
 
@@ -298,10 +301,8 @@ class TestStartingABackend:
         assert "`mise run dev:stop --target deck` stops it" in err
         backend = units(loop.world)["romm-tender-dev"]["pid"]
         assert _alive(backend)
-        started = commands(loop.world, "systemd-run")
-        assert started[-1]["argv"][-2:] == [sys.executable, str(loop.root / "current/backend/main.py")]
-        assert "--unit=romm-tender-dev" in started[-1]["argv"]
-        assert any(call["argv"][-1:] == ["steam"] for call in started)
+        unit = [call for call in commands(loop.world, "systemd-run") if "--unit=romm-tender-dev" in call["argv"]]
+        assert [call["argv"][-2:] for call in unit] == [[sys.executable, str(loop.root / "current/backend/main.py")]]
 
     def test_dev_bpm_restarts_into_big_picture_and_the_choice_is_remembered_on_the_target(self, loop: Loop) -> None:
         loop.world.backend_exits = True
