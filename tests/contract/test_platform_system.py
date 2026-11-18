@@ -29,7 +29,7 @@ from domain.platform_system import (
 )
 from lib.errors import RommAuthError, RommConnectionError
 
-from ._seed import enable_save_sync, seed_rom
+from ._seed import enable_save_sync, seed_install, seed_rom
 
 pytestmark = pytest.mark.usefixtures("seeded_retrodeck")
 
@@ -257,3 +257,13 @@ async def test_two_folders_of_one_slug_each_answer_their_own_system(harness):
         PlatformKeys("genesis", "megadrive"),
         PlatformKeys("genesis", "megadrivejp"),
     }
+
+
+async def test_a_game_installed_under_a_system_the_source_no_longer_lists_names_it(harness):
+    """Review F4: no emulator list for a recorded system the source does not list, said as such, never a failed read."""
+    seed_install(harness, 5, system="gbretired", platform_slug="gb")
+
+    game_core = await harness.endpoints.get_platform_core_info(5)
+
+    assert game_core["emulator_data_available"] is False
+    assert (game_core["emulator_data_reason"], game_core["emulator_data_system"]) == ("system_unknown", "gbretired")

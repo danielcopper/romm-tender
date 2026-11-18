@@ -36,6 +36,8 @@ from _vendor.atlas import (
     CAVEAT_LAUNCH_ENVIRONMENT_UNREAD,
     CAVEAT_LAUNCHER_SCRIPT_UNPINNED,
     KIND_STANDALONE,
+    RESOLUTION_AMBIGUOUS,
+    RESOLUTION_CONFLICT,
     RESOLUTION_UNKNOWN,
     VARIANT_APPIMAGE,
     VARIANT_FLATPAK,
@@ -44,8 +46,10 @@ from _vendor.atlas import (
     EnvironmentVariable,
     LaunchCommand,
     LaunchProgram,
+    SystemCandidate,
     SystemResolution,
     WorkingFolder,
+    translate,
 )
 from _vendor.atlas.esde import EmulatorSpec
 from _vendor.atlas.installations import EmulatorEntry, LaunchCommandAnswer
@@ -68,6 +72,8 @@ from domain.start_command import (
     NO_PROGRAM,
     PLACEHOLDER_UNFILLED,
     ROM_ROOT_UNKNOWN,
+    SYSTEM_UNKNOWN,
+    SYSTEMS_SEVERAL,
     StartCommand,
     StartNote,
     StartRefused,
@@ -294,14 +300,31 @@ class TestARefusedCommand:
     def test_each_refusal_reads_as_its_reason(self, code, reason):
         assert read_start(_answer(None, _caveat(code))) == StartRefused(reason)
 
-    def test_a_system_that_resolved_to_no_one_system_gives_no_command_and_names_no_entry_s_reason(self):
-        """#2751: several systems the resolver names none of, or none here: no command, whatever the entry says."""
-        answer = replace(
-            _answer(None, entry=_entry(AVAILABILITY_NOT_INSTALLED)),
-            resolution=SystemResolution(RESOLUTION_UNKNOWN, None, None),
+    @pytest.mark.parametrize(
+        ("status", "reason"),
+        [
+            (RESOLUTION_UNKNOWN, SYSTEM_UNKNOWN),
+            (RESOLUTION_CONFLICT, SYSTEM_UNKNOWN),
+            (RESOLUTION_AMBIGUOUS, SYSTEMS_SEVERAL),
+        ],
+    )
+    def test_a_system_that_resolved_to_no_one_system_gives_no_command_and_says_which(self, status, reason):
+        """#2751, review F4: several systems the resolver names none of, or none here — never "could not be read"."""
+        several = (
+            SystemCandidate(("esde", "mark3"), "declared"),
+            SystemCandidate(("esde", "mastersystem"), "declared"),
         )
+        ambiguous = status == RESOLUTION_AMBIGUOUS
+        resolution = SystemResolution(
+            status,
+            None,
+            None,
+            candidates=several if ambiguous else (),
+            translation=translate((("romm", "sms"),)) if ambiguous else None,
+        )
+        answer = replace(_answer(None, entry=_entry(AVAILABILITY_NOT_INSTALLED)), resolution=resolution)
 
-        assert read_start(answer) == StartRefused(COMMAND_UNREAD)
+        assert read_start(answer) == StartRefused(reason)
 
     def test_a_refusal_tender_has_no_word_for_reads_as_a_command_that_could_not_be_read(self):
         assert read_start(_answer(None, _caveat("a-code-of-a-later-release"))) == StartRefused(COMMAND_UNREAD)

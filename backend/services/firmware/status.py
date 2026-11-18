@@ -407,7 +407,8 @@ class FirmwareStatusReader:
         ``emulators`` list is the full classified picker payload and
         ``emulator_data_available`` flags whether the answering emulator source
         gave an emulator list, with ``emulator_data_reason`` and
-        ``emulator_source`` saying why not and which source answered.
+        ``emulator_source`` saying why not and which source answered, and
+        ``emulator_data_system`` the system a ``system_unknown`` reason names.
 
         ``store_only`` says why a download here lands in the store and nowhere
         else (:func:`_store_only`).
@@ -427,6 +428,7 @@ class FirmwareStatusReader:
         plat["emulators"] = options_to_payload(options["options"])
         plat["emulator_data_available"] = options["available"]
         plat["emulator_data_reason"] = options["reason"]
+        plat["emulator_data_system"] = options.get("system")
         plat["emulator_source"] = options["source"]
         plat["platform_system"] = platform.payload()
         catalogue, files, others = await self._loop.run_in_executor(

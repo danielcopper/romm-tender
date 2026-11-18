@@ -42,9 +42,11 @@ from _vendor.atlas import (
     CAVEAT_ENTRY_DIRECTORY_UNREAD,
     CAVEAT_ENTRY_FORMAT_BUILD_DEPENDENT,
     CAVEAT_ENTRY_FORMAT_CONTENT_UNREAD,
+    CAVEAT_ENTRY_FORMAT_UNCLAIMED,
     CAVEAT_ENTRY_FORMAT_UNESTABLISHED,
     CAVEAT_ENTRY_TAKES_NO_DIRECTORY,
     CAVEAT_FRONTEND_NAME_UNSCANNED,
+    CAVEAT_LAUNCH_PATH_UNESTABLISHED,
     CAVEAT_OPENS_BOUND_EXCEEDED,
     CAVEAT_OPENS_CONTENT_UNREAD,
     CAVEAT_OPENS_ENTRY_IGNORED,
@@ -97,6 +99,7 @@ from domain.launchability import (
     FOLDER_HOLDS_GAMES,
     FOLDER_ROUTE_UNREAD,
     FORMAT_REFUSED,
+    FORMAT_UNCLAIMED,
     FORMAT_UNESTABLISHED,
     FRONTEND_WOULD_NOT_LIST,
     GAME_KIND_UNFOLLOWED,
@@ -126,6 +129,7 @@ from domain.launchability import (
     PATH_TOO_LONG_UNCHECKED,
     PLAYLIST_DISCS_PAST_LIMIT,
     PLAYLIST_REFUSED,
+    SANDBOX_PATH_UNESTABLISHED,
     SAVESTATE_UNREAD,
     SHEET_REFUSED,
     STARTS,
@@ -360,6 +364,38 @@ class TestTheNewStatementsOfALaunch:
         assert result.state == STARTS
         assert result.statements == (LaunchStatement(FRONTEND_WOULD_NOT_LIST),)
         assert result.starts_from == (".z64",)
+
+    def test_an_extension_the_core_does_not_claim_is_said_beside_a_verdict_not_established(self, traces):
+        """Vector a-file-the-core-does-not-claim-and-the-list-leaves-out-is-attempted (review R1)."""
+        result, _ = _ask(
+            LaunchabilityAnswer(
+                verdict=VERDICT_UNESTABLISHED,
+                extension=".txt",
+                accepted=(".gb",),
+                caveats=(
+                    _caveat(CAVEAT_ENTRY_FORMAT_UNCLAIMED, entry="Gambatte", extension=".txt"),
+                    _caveat(CAVEAT_FRONTEND_NAME_UNSCANNED, kind="file", names=[".gb"]),
+                ),
+            ),
+            traces,
+        )
+
+        assert result.state == NOT_ESTABLISHED
+        assert result.statements == (LaunchStatement(FORMAT_UNCLAIMED), LaunchStatement(FRONTEND_WOULD_NOT_LIST))
+
+    def test_a_path_the_sandbox_cannot_be_told_about_is_said_beside_a_verdict_not_established(self, traces):
+        """Vector a-path-the-sandbox-cannot-be-told-about-is-not-established (review R1)."""
+        result, _ = _ask(
+            LaunchabilityAnswer(
+                verdict=VERDICT_UNESTABLISHED,
+                extension=".sgb",
+                caveats=(_caveat(CAVEAT_LAUNCH_PATH_UNESTABLISHED, path="/mnt/sd/retrodeck/roms/gb/Game.sgb"),),
+            ),
+            traces,
+        )
+
+        assert result.state == NOT_ESTABLISHED
+        assert result.statements == (LaunchStatement(SANDBOX_PATH_UNESTABLISHED),)
 
     def test_a_folder_route_not_followed_is_not_established(self, traces):
         result, _ = _ask(

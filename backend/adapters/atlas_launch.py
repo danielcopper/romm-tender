@@ -49,7 +49,8 @@ from _vendor.atlas import (
     VARIANT_FLATPAK,
 )
 
-from adapters.atlas_catalogue import installation_word, resolution_trace, resolved
+from adapters.atlas_catalogue import installation_word, resolution_trace, unresolved_reason
+from domain.launchability import SYSTEMS_SEVERAL as LAUNCH_SYSTEMS_SEVERAL
 from domain.start_command import (
     COMMAND_TOO_LONG,
     COMMAND_UNREAD,
@@ -63,6 +64,8 @@ from domain.start_command import (
     NO_PROGRAM,
     PLACEHOLDER_UNFILLED,
     ROM_ROOT_UNKNOWN,
+    SYSTEM_UNKNOWN,
+    SYSTEMS_SEVERAL,
     StartAnswer,
     StartCommand,
     StartNote,
@@ -118,11 +121,13 @@ _ENV = "env"
 def _refusal(answer: Any) -> StartRefused:
     """Why *answer* gives no command: the chosen entry's installation where it cannot start, else the refusal.
 
-    A system that resolved to none or several of the source's systems names no
-    entry and no refusal of its own: its command could not be read.
+    A system that resolved to no one system names no entry and no refusal of
+    its own: the refusal says which — several of the source's systems answer
+    and the resolver names none, or the source does not list it.
     """
-    if not resolved(answer):
-        return StartRefused(COMMAND_UNREAD)
+    unresolved = unresolved_reason(answer)
+    if unresolved is not None:
+        return StartRefused(SYSTEMS_SEVERAL if unresolved == LAUNCH_SYSTEMS_SEVERAL else SYSTEM_UNKNOWN)
     entry = answer.entry
     if entry is not None and entry.availability != AVAILABILITY_STARTABLE:
         word = installation_word(entry)

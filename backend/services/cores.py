@@ -142,8 +142,9 @@ class CoreService:
         indistinguishable), so the flag drives the "follow the system" reset
         item's checkmark. ``emulator_data_available`` is ``False`` where the
         answering emulator source gives no emulator list, so the menu can say so
-        instead of showing an empty list; ``emulator_data_reason`` says why and
-        ``emulator_source`` names the answering source
+        instead of showing an empty list; ``emulator_data_reason`` says why,
+        ``emulator_data_system`` names the system a ``system_unknown`` reason is
+        about (``None`` otherwise), and ``emulator_source`` names the answering source
         (:meth:`adapters.atlas_catalogue.AtlasCatalogueAdapter.get_emulator_options`);
         where the platform has no system to use there, the reason is that case's
         (:meth:`domain.platform_system.PlatformSystem.unavailable_options`). ``platform_system`` is
@@ -171,6 +172,7 @@ class CoreService:
                 "emulators": [],
                 "emulator_data_available": True,
                 "emulator_data_reason": None,
+                "emulator_data_system": None,
                 "emulator_source": None,
                 "platform_system": None,
                 "active_core": None,
@@ -199,6 +201,7 @@ class CoreService:
             "emulators": options_to_payload(options["options"]),
             "emulator_data_available": options["available"],
             "emulator_data_reason": options["reason"],
+            "emulator_data_system": options.get("system"),
             "emulator_source": options["source"],
             "platform_system": platform.payload(),
             "active_core": option.emulator if option is not None else None,
@@ -371,6 +374,7 @@ class CoreService:
             "emulators": options_to_payload(options["options"]),
             "emulator_data_available": options["available"],
             "emulator_data_reason": options["reason"],
+            "emulator_data_system": options.get("system"),
             "emulator_source": options["source"],
             "platform_system": platform.payload(),
             "active_core_label": active_label,

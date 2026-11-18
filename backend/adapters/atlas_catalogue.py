@@ -166,6 +166,7 @@ from domain.launchability import (
     FOLDER_HOLDS_GAMES,
     FOLDER_ROUTE_UNREAD,
     FORMAT_REFUSED,
+    FORMAT_UNCLAIMED,
     FORMAT_UNESTABLISHED,
     FRONTEND_WOULD_NOT_LIST,
     GAME_KIND_UNFOLLOWED,
@@ -194,6 +195,7 @@ from domain.launchability import (
     PATH_TOO_LONG_UNCHECKED,
     PLAYLIST_DISCS_PAST_LIMIT,
     PLAYLIST_REFUSED,
+    SANDBOX_PATH_UNESTABLISHED,
     SAVESTATE_UNREAD,
     SHEET_REFUSED,
     STARTS,
@@ -206,7 +208,7 @@ from domain.launchability import (
     LaunchStatement,
 )
 from domain.launchability import NOT_ESTABLISHED as LAUNCH_NOT_ESTABLISHED
-from domain.platform_system import PlatformRefusal, system_key
+from domain.platform_system import PlatformRefusal, system_key, system_keys
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -402,10 +404,7 @@ _STOPPED_SHORT_BECAUSE = {
     CAVEAT_ENTRY_DIRECTORY_UNREAD: FOLDER_ROUTE_UNREAD,
 }
 
-# Codes a launchability answer carries that change nothing Tender says.
-# ``entry-format-unclaimed`` says the core does not claim the extension, and
-# RetroArch hands it the file all the same; it stands beside a verdict whose
-# own sentence already says the start is not established. A foreign core's
+# Codes a launchability answer carries that change nothing Tender says. A foreign core's
 # refusal (``core-file-foreign``) is the entry-not-accepted verdict it stands
 # beside, worded as that verdict. ``arrangement-version-drifted`` says the
 # installation's version is not the one the reading is pinned to, on every
@@ -415,7 +414,6 @@ _STOPPED_SHORT_BECAUSE = {
 # the file starts.
 _LAUNCH_NOTES_UNWORDED = frozenset(
     {
-        CAVEAT_ENTRY_FORMAT_UNCLAIMED,
         CAVEAT_CORE_FILE_FOREIGN,
         CAVEAT_ARRANGEMENT_VERSION_DRIFTED,
         CAVEAT_ROM_PATH_UNDECLARED,
@@ -424,14 +422,18 @@ _LAUNCH_NOTES_UNWORDED = frozenset(
 
 # Beside a verdict, the format the entry was not established to read (#2195
 # D41), an archive whose contents were not read, a name ES-DE's scan would not
-# list the file under although the emulator is judged on it (#2195 D2), and the
-# files in a folder the entry would take as games of their own, each a
+# list the file under although the emulator is judged on it (#2195 D2), the
+# files in a folder the entry would take as games of their own, an extension
+# the core does not claim though it would be handed the file all the same, and
+# a path the source's sandbox could not be established to reach, each a
 # statement of its own beside the rest (#2698 D8).
 _STARTS_ALSO_SAYS = {
     CAVEAT_ENTRY_FORMAT_UNESTABLISHED: FORMAT_UNESTABLISHED,
     CAVEAT_ARCHIVE_CONTENTS_UNREAD: CONTENTS_UNREAD,
     CAVEAT_FRONTEND_NAME_UNSCANNED: FRONTEND_WOULD_NOT_LIST,
     CAVEAT_ENTRY_DIRECTORY_HOLDS: FOLDER_HOLDS_GAMES,
+    CAVEAT_ENTRY_FORMAT_UNCLAIMED: FORMAT_UNCLAIMED,
+    CAVEAT_LAUNCH_PATH_UNESTABLISHED: SANDBOX_PATH_UNESTABLISHED,
 }
 
 # The codes of the reading of the files a disc file opens. Each sentence names
@@ -449,13 +451,18 @@ _NAMES_A_FILE = frozenset(
 )
 
 
-def _unavailable(reason: str, source: dict[str, Any] | None) -> dict[str, Any]:
+def _unavailable(reason: str, source: dict[str, Any] | None, *, system: str | None = None) -> dict[str, Any]:
     """The picker's "emulator list unavailable" answer, built fresh each call.
 
     A module-level constant would hand every caller the same ``options`` list,
-    which a caller is free to mutate.
+    which a caller is free to mutate. *system* is carried, as ``system``, only
+    with :data:`~domain.launchability.SYSTEM_UNKNOWN`: the name of the system
+    the source no longer lists, which its sentence names.
     """
-    return {"available": False, "options": [], "reason": reason, "source": source}
+    answer: dict[str, Any] = {"available": False, "options": [], "reason": reason, "source": source}
+    if system is not None:
+        answer["system"] = system
+    return answer
 
 
 def _source_payload(reading: SourcesReading) -> dict[str, Any] | None:
@@ -891,9 +898,12 @@ class AtlasCatalogueAdapter:
         if catalogue_refused(answer):
             return _unavailable(catalogue_refusal_reason(answer), payload)
         unresolved = unresolved_reason(answer)
+        if unresolved == SYSTEMS_SEVERAL:
+            return _unavailable(PlatformRefusal.SEVERAL.value, payload)
         if unresolved is not None:
-            reason = PlatformRefusal.SEVERAL.value if unresolved == SYSTEMS_SEVERAL else CATALOGUE_UNAVAILABLE
-            return _unavailable(reason, payload)
+            # The source does not list the system the question names — most
+            # often one a game was installed under — which is no failed read.
+            return _unavailable(SYSTEM_UNKNOWN, payload, system=", ".join(system_keys(system)))
         chosen = _frontend_choice(answer.entries)
         options = [_entry_option(entry, chosen_in_frontend=entry is chosen) for entry in answer.entries]
         return {"available": True, "options": options, "reason": None, "source": payload}

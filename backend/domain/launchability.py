@@ -99,12 +99,16 @@ FOLDER_ROUTE_UNREAD = "folder_route_unread"
 # Said beside a verdict as statements of their own (#2698 D8): whether the
 # entry reads the format was not established (#2195 D41), an archive's contents
 # were not read, the frontend would not list the file under its name though the
-# emulator starts it (#2195 D2), and a folder holds files the entry would take
-# as games of their own.
+# emulator starts it (#2195 D2), a folder holds files the entry would take
+# as games of their own, the entry does not list the extension among the files
+# it takes though it would be handed the file, and whether the entry can reach
+# the file inside the source's sandbox could not be established.
 FORMAT_UNESTABLISHED = "format_unestablished"
 CONTENTS_UNREAD = "contents_unread"
 FRONTEND_WOULD_NOT_LIST = "frontend_would_not_list"
 FOLDER_HOLDS_GAMES = "folder_holds_games"
+FORMAT_UNCLAIMED = "format_unclaimed"
+SANDBOX_PATH_UNESTABLISHED = "sandbox_path_unestablished"
 
 
 @dataclass(frozen=True, slots=True)

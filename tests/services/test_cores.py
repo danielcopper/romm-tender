@@ -217,6 +217,7 @@ class TestGetPlatformCoreInfo:
             "emulators": options_to_payload(core_info.get_emulator_options("snes")["options"]),
             "emulator_data_available": True,
             "emulator_data_reason": None,
+            "emulator_data_system": None,
             "emulator_source": {"kind": "retrodeck", "starts_games": True},
             "platform_system": {
                 "state": "found",
@@ -243,6 +244,7 @@ class TestGetPlatformCoreInfo:
             "emulators": [],
             "emulator_data_available": True,
             "emulator_data_reason": None,
+            "emulator_data_system": None,
             "emulator_source": None,
             "platform_system": None,
             "active_core": None,
@@ -375,6 +377,7 @@ class TestGetSystemCoreInfo:
             "emulators": options_to_payload(core_info.get_emulator_options("snes")["options"]),
             "emulator_data_available": True,
             "emulator_data_reason": None,
+            "emulator_data_system": None,
             "emulator_source": {"kind": "retrodeck", "starts_games": True},
             "platform_system": {
                 "state": "found",
