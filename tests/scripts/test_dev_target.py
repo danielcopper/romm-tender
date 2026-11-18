@@ -700,15 +700,61 @@ class TestTheConnection:
         assert f"no answer from deck at {_ADDRESS} port 22" in result.stderr
         assert "ended while following" not in result.stderr
 
-    def test_a_connection_that_ends_before_the_following_says_the_task_may_have_stopped(self, loop: Loop) -> None:
+    def test_a_connection_a_read_loses_says_only_that_it_ended(self, loop: Loop) -> None:
         loop.world.fail_with = "Timeout, server 192.168.1.20 not responding."
 
         result = loop.run("dev:log")
 
         assert result.returncode == 255
+        assert "tender-dev: the connection to deck ended." in result.stderr
+        assert "no answer" not in result.stderr
+        assert "check Steam" not in result.stderr
+
+    def test_a_drop_after_a_read_answered_is_not_read_as_no_answer(self, loop: Loop) -> None:
+        loop.world.drop_after_line = "tender-dev: no backend runs on deck"
+
+        result = loop.run("dev:status")
+
+        assert result.returncode == 255
+        assert "tender-dev: the connection to deck ended." in result.stderr
+        assert "no answer" not in result.stderr
+        assert "check Steam" not in result.stderr
+
+    def test_a_drop_after_a_task_that_changes_the_target_began_says_it_may_have_stopped(self, loop: Loop) -> None:
+        loop.world.backend_exits = True
+        loop.world.drop_after_line = "Shutting down Steam..."
+
+        result = loop.run("dev:bpm")
+
+        assert result.returncode == 255
         assert "the connection to deck ended; what the task was doing on deck may have stopped part-way" in (
             result.stderr
         )
+        assert "check Steam there" in result.stderr
+        assert "no answer" not in result.stderr
+
+    def test_dev_log_follow_on_an_empty_log_that_drops_is_not_read_as_no_answer(self, loop: Loop) -> None:
+        loop.log.parent.mkdir(parents=True)
+        loop.log.write_text("", encoding="utf-8")
+        loop.world.follow_holds = False
+        loop.world.drop_after_first_line = True
+
+        result = loop.run("dev:log", "--follow")
+
+        assert result.returncode == 255
+        assert "no answer" not in result.stderr
+
+    def test_ctrl_c_on_dev_log_follow_before_its_first_line_stops_the_following(self, loop: Loop) -> None:
+        loop.log.parent.mkdir(parents=True)
+        loop.log.write_text("", encoding="utf-8")
+        process = loop.start("dev:log", "--follow")
+        _wait_for(lambda: bool(commands(loop.world, "tail")))
+
+        os.killpg(process.pid, signal.SIGINT)
+        _, err = process.communicate(timeout=_TIMEOUT)
+
+        assert process.returncode == 0, err
+        assert "stopped following the log on deck" in err
 
     @pytest.mark.parametrize(
         ("task", "follows"),
@@ -836,6 +882,19 @@ class TestADevUnitThatHoldsNoLock:
         assert "stopped romm-tender-dev.service on deck, which held no lock" in result.stdout
         assert not _alive(unit)
 
+    def test_dev_status_with_the_lock_unreadable_says_only_that_it_runs(self, loop: Loop) -> None:
+        loop.run_unit("romm-tender-dev")
+        lock = loop.target_home / ".local/share/romm-tender/backend.lock"
+        lock.parent.mkdir(parents=True)
+        lock.touch()
+        lock.chmod(0)
+
+        result = loop.run("dev:status")
+
+        assert result.returncode == 0, result.stderr
+        assert "romm-tender-dev.service runs on deck." in result.stdout
+        assert "holds no lock" not in result.stdout
+
     def test_dev_status_reports_it(self, loop: Loop) -> None:
         loop.run_unit("romm-tender-dev")
 
@@ -922,6 +981,27 @@ class TestWhatTheScriptsOnTheTargetSay:
         assert result.returncode == 1
         assert "the restore on deck did not land" in result.stderr
 
+    def test_ui_scale_stop_waits_for_a_restore_line_the_journal_hands_on_late(self, loop: Loop) -> None:
+        loop.world.journal = ["Restore done: the scale and the window are as they were before this run."]
+        loop.world.journal_late = True
+        loop.start_ui_scale()
+
+        result = loop.run("dev:ui-scale", "--stop")
+
+        assert result.returncode == 0, result.stderr
+        assert "stopped dev:ui-scale on deck" in result.stdout
+
+    def test_a_stop_that_fails_is_reported_with_the_restore_verdict(self, loop: Loop) -> None:
+        loop.world.journal = ["Restore incomplete: see the lines above."]
+        loop.world.stop_fails = True
+        loop.start_ui_scale()
+
+        result = loop.run("dev:ui-scale", "--stop")
+
+        assert result.returncode == 1
+        assert "the restore on deck did not land" in result.stderr
+        assert "stopping romm-tender-dev-ui-scale.service failed" in result.stderr
+
     def test_a_restore_that_says_nothing_is_not_confirmed(self, loop: Loop) -> None:
         """The unit was ended without its last line — killed after systemd's stop timeout, say."""
         loop.world.journal = ["Restored: AUTOMATIC scaling (the state captured before this run)."]
@@ -930,7 +1010,7 @@ class TestWhatTheScriptsOnTheTargetSay:
         result = loop.run("dev:ui-scale", "--stop")
 
         assert result.returncode == 1
-        assert "its restore is not confirmed" in result.stderr
+        assert "the restore on deck is not confirmed" in result.stderr
 
     def test_the_scripts_on_the_target_name_the_target_in_their_hints(self, loop: Loop) -> None:
         loop.start_ui_scale()
@@ -1201,12 +1281,14 @@ class TestTheTargetsHalf:
         assert "DISPLAY" not in steam["env"]
         assert steam["env"]["WAYLAND_DISPLAY"] == "wayland-0"
 
-    def test_the_one_shot_modes_it_runs_in_the_foreground_are_dev_ui_scales(self) -> None:
+    def test_the_one_shot_modes_it_runs_in_the_foreground_are_dev_ui_scales(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         spec = importlib.util.spec_from_file_location("dev_ui_scale", _SCRIPTS / "dev_ui_scale.py")
         assert spec is not None
         assert spec.loader is not None
         dev_ui_scale = importlib.util.module_from_spec(spec)
-        sys.modules["dev_ui_scale"] = dev_ui_scale
+        monkeypatch.setitem(sys.modules, "dev_ui_scale", dev_ui_scale)
         spec.loader.exec_module(dev_ui_scale)
         script = (_SCRIPTS / "dev_target.sh").read_text(encoding="utf-8")
 
@@ -1231,12 +1313,37 @@ class TestTheTargetsHalf:
         assert "dev:ui-scale needs a mode" in result.stderr
         assert commands(loop.world, "systemd-run") == []
 
-    def test_every_task_but_dev_log_has_its_spec(self) -> None:
+    @pytest.mark.parametrize(
+        ("reads_only", "says"),
+        [
+            (True, "tender-dev: interrupted here."),
+            (False, "tender-dev: interrupted here; what the task was doing on deck may have stopped part-way"),
+        ],
+    )
+    def test_a_task_cut_short_names_steam_only_where_it_changes_the_target(
+        self, monkeypatch: pytest.MonkeyPatch, reads_only: bool, says: str
+    ) -> None:
         spec = importlib.util.spec_from_file_location("dev_target_module", _SCRIPTS / "dev_target.py")
         assert spec is not None
         assert spec.loader is not None
         module = importlib.util.module_from_spec(spec)
-        sys.modules["dev_target_module"] = module
+        monkeypatch.setitem(sys.modules, "dev_target_module", module)
+        spec.loader.exec_module(module)
+        destination = setup_remote_target.Destination("deck", "deck", _ADDRESS, "22", None, None)
+        target = module.Target("deck", Path("/nowhere/ssh_config"), destination)
+
+        said = module.cut_short(target, "interrupted here", reads_only=reads_only)
+
+        assert said.startswith(says)
+        assert ("check Steam" in said) is not reads_only
+        assert {name for name, spec in module.SPECS.items() if spec.reads_only} == {"dev:status"}
+
+    def test_every_task_but_dev_log_has_its_spec(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        spec = importlib.util.spec_from_file_location("dev_target_module", _SCRIPTS / "dev_target.py")
+        assert spec is not None
+        assert spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        monkeypatch.setitem(sys.modules, "dev_target_module", module)
         spec.loader.exec_module(module)
 
         assert set(module.SPECS) == set(module.TASKS) - {"dev:log"}

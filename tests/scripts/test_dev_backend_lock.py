@@ -113,7 +113,7 @@ def test_a_held_lock_whose_holder_the_kernel_does_not_name_leaves_its_descriptio
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    sys.modules["dev_backend_lock"] = module
+    monkeypatch.setitem(sys.modules, "dev_backend_lock", module)
     spec.loader.exec_module(module)
     monkeypatch.setattr(module, "holder_pid", lambda _path: None)
 

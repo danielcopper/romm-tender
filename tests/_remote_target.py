@@ -139,8 +139,8 @@ class World:
     drop_after_first_line: bool = False
     """Drop the connection once the login's command has written its first line to stdout."""
     drop_after_line: str | None = None
-    """Drop the connection once a login's command has written this line to stdout; a login that writes no such
-    line runs as it would."""
+    """Drop the connection once a login's command has written a line starting with this to stdout; a login that
+    writes no such line runs as it would."""
     processes_exit: bool = False
     """A unit's stand-in process ends at once, as a unit that fails at its start."""
     drop_only_without_config: bool = False
@@ -176,9 +176,13 @@ class World:
     manager_unreachable: bool = False
     """``systemctl --user`` cannot reach the user manager: every call fails."""
     main_pid_fails: bool = False
+    """Only ``systemctl --user show -p MainPID`` fails."""
     main_pid_fails_while_running: bool = False
     """``systemctl --user show -p MainPID`` fails for a unit only once it runs — the user manager lost after a start."""
-    """Only ``systemctl --user show -p MainPID`` fails."""
+    stop_fails: bool = False
+    """``systemctl --user stop`` fails and stops nothing."""
+    journal_late: bool = False
+    """``journalctl`` without ``-f`` hands on a restore's last line ("Restore ...") only from its second call."""
     service_python: str | None = None
     """The interpreter the installed service's ``ExecStart`` runs, or ``None`` for no service installed."""
 
@@ -588,11 +592,13 @@ def _ssh(argv: list[str]) -> int:
     session = _start_session(world, command, home=target.home, env=env, capture=True)
     out, err = session.communicate()
     lines = out.splitlines()
-    if world.drop_after_line is not None and world.drop_after_line not in lines:
+    marker = world.drop_after_line
+    matching = [index for index, line in enumerate(lines) if marker is not None and line.startswith(marker)]
+    if marker is not None and not matching:
         sys.stdout.write(out)
         sys.stderr.write(err)
         return session.returncode
-    end = lines.index(world.drop_after_line) + 1 if world.drop_after_line is not None else 1
+    end = matching[0] + 1 if marker is not None else 1
     lines = lines[:end] or [""]
     print("\n".join(lines))
     print("client_loop: send disconnect: Connection reset by peer", file=sys.stderr)
@@ -803,6 +809,9 @@ def _systemctl(argv: list[str]) -> int:
         else:
             print()
         return 0
+    if words[:1] == ["stop"] and world.stop_fails:
+        print(f"Job for {words[1]}.service failed.", file=sys.stderr)
+        return 1
     if words[:1] == ["stop"]:
         for name in words[1:]:
             pid = _unit_pid(world, name)
@@ -938,8 +947,11 @@ def _tail(argv: list[str]) -> int:
 def _journalctl(argv: list[str]) -> int:
     world = _world()
     _record(world, "journalctl", argv)
+    reads = [call for call in commands(world, "journalctl") if "-f" not in call["argv"]]
+    late = world.journal_late and "-f" not in argv and len(reads) < 2
     for line in world.journal:
-        print(line, flush=True)
+        if not (late and line.startswith("Restore ")):
+            print(line, flush=True)
     if "-f" in argv:
         return _follow(None, None, 0, None, world.follow_holds)
     return 0

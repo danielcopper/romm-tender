@@ -100,9 +100,8 @@ need_python() {
     esac
 }
 
-# A login over ssh carries none of the desktop session: the display and the
-# session bus that window placement and dev_ui_scale.py talk to are taken from
-# the user manager, whose units (the backend, Steam) run in them already. Only
+# The display and the session bus are taken from the user manager (why:
+# docs/contributing/frontend-dev-loop.md, "The dev tasks on a target"). Only
 # those names are taken, and only a plain value: show-environment writes one
 # with special characters in $'...' quoting, which no session address needs.
 import_session() {
@@ -159,7 +158,7 @@ main_pid() {
 # Sets holder (none, dev, service, other or unknown), pid, lock, described
 # (dev_backend_lock.py's words for the holder) and dev_running. The kernel
 # names the holder by pid, which is matched against each unit's main process;
-# where it names none, the unit that runs stands in for it.
+# where it names none, the unit that runs stands in for it (unit_runs).
 lock_holder() {
     report=$("$PYTHON" -B "$here/dev_backend_lock.py" --holder) || report=unknown
     state=""
@@ -187,9 +186,9 @@ EOF
                 holder=dev
             elif [ -n "$pid" ] && [ "$pid" = "$service_pid" ]; then
                 holder=service
-            elif [ -z "$pid" ] && [ "$dev_pid" != 0 ]; then
+            elif [ -z "$pid" ] && [ "$dev_running" = yes ]; then
                 holder=dev
-            elif [ -z "$pid" ] && [ "$service_pid" != 0 ]; then
+            elif [ -z "$pid" ] && unit_runs "$SERVICE_UNIT"; then
                 holder=service
             else
                 holder=other
@@ -383,7 +382,8 @@ ui_scale_stop() {
         return 0
     fi
     since=$(date +%s)
-    systemctl --user stop "$UI_SCALE_UNIT"
+    stop_status=0
+    systemctl --user stop "$UI_SCALE_UNIT" || stop_status=$?
     said=""
     for _ in 1 2 3 4 5 6 7 8 9 10; do
         said=$(journalctl --user -u "$UI_SCALE_UNIT" --since "@$since" -o cat --no-pager 2>&1) || true
@@ -393,17 +393,24 @@ ui_scale_stop() {
         sleep 1
     done
     printf '%s\n' "$said"
+    landed=no
     case "$said" in
-        *"Restore done:"*) printf 'tender-dev: stopped dev:ui-scale on %s.\n' "$name" ;;
+        *"Restore done:"*) landed=yes ;;
         *"Restore incomplete:"*)
-            say "stopped dev:ui-scale on $name, but the restore on $name did not land — see what it said above."
-            exit 1
+            say "the restore on $name did not land — see what dev:ui-scale said above."
             ;;
         *)
-            say "stopped dev:ui-scale on $name, but its restore is not confirmed: it said neither that it was done nor that it was not. Check the scale and the window there."
-            exit 1
+            say "the restore on $name is not confirmed: dev:ui-scale said neither that it was done nor that it was not. Check the scale and the window there."
             ;;
     esac
+    if [ "$stop_status" != 0 ]; then
+        say "stopping $UI_SCALE_UNIT.service failed (systemctl ended with $stop_status)."
+        exit 1
+    fi
+    if [ "$landed" = no ]; then
+        exit 1
+    fi
+    printf 'tender-dev: stopped dev:ui-scale on %s.\n' "$name"
 }
 
 stop() {
@@ -456,7 +463,9 @@ status() {
         unknown) printf 'tender-dev: the single-instance lock on %s could not be read (%s).\n' "$name" "${lock:-its place}" ;;
         *) printf 'tender-dev: %s holds the single-instance lock on %s (%s).\n' "$(holder_text)" "$name" "$lock" ;;
     esac
-    if [ "$dev_running" = yes ] && [ "$holder" != dev ]; then
+    if [ "$dev_running" = yes ] && [ "$holder" = unknown ]; then
+        printf 'tender-dev: %s.service runs on %s.\n' "$DEV_UNIT" "$name"
+    elif [ "$dev_running" = yes ] && [ "$holder" != dev ]; then
         printf 'tender-dev: %s.service runs on %s but holds no lock.\n' "$DEV_UNIT" "$name"
     fi
     if unit_runs "$UI_SCALE_UNIT"; then

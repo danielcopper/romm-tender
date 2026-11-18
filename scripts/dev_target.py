@@ -39,6 +39,8 @@ FOLLOWING = "tender-dev-target: following"
 
 # How the dispatcher opens a refusal (scripts/dev_dispatch.sh, refuse).
 DISPATCHER_REFUSED = "tender-dev: refused: "
+# How every line the target's scripts write on stderr opens.
+TARGET_SAYS = "tender-dev"
 
 # The characters the dispatcher lets through in a word for dev_target.sh
 # (scripts/dev_dispatch.sh, check_words).
@@ -73,6 +75,8 @@ class TaskSpec:
     takes_argument: bool = False
     builds: bool = False
     follows: Follows | None = None
+    reads_only: bool = False
+    """Changes nothing on the target: cut short, it left nothing part-way."""
 
 
 SPECS: dict[RemoteTask, TaskSpec] = {
@@ -87,7 +91,7 @@ SPECS: dict[RemoteTask, TaskSpec] = {
     # without one.
     "dev:ui-scale": TaskSpec("ui-scale", takes_argument=True, follows="ui-scale"),
     "dev:stop": TaskSpec("stop"),
-    "dev:status": TaskSpec("status"),
+    "dev:status": TaskSpec("status", reads_only=True),
 }
 
 UI_SCALE_STOP = TaskSpec("ui-scale-stop")
@@ -112,6 +116,8 @@ class Outcome:
     stderr: str
     following: bool
     interrupted: bool
+    answered: bool = False
+    """The far side wrote a line, or the target's scripts one on stderr: the login had got through."""
 
 
 def shipped() -> list[str]:
@@ -253,11 +259,9 @@ def copy(target: Target, *, whole: bool) -> None:
     """Mirror :func:`copied_tree` into the target's incoming copy, beside the running tree.
 
     The filter names the tree from that one list, and ``--delete-excluded``
-    drops from the copy whatever the list no longer names. Compiled modules
-    stay here: the target's Python is not this machine's. A task that builds
-    copies the tree *whole*, and refuses a path the list names that the
-    checkout lacks, as ``scripts/package.sh`` does; the others mirror what
-    there is, so a checkout never built can still stop or ask a target.
+    drops from the copy whatever the list no longer names; *whole* refuses a
+    path it names that the checkout lacks. Which tasks copy which way, and
+    why: docs/contributing/frontend-dev-loop.md, "The dev tasks on a target".
     """
     tree = copied_tree()
     missing = [entry for entry in tree if not (REPO / entry).exists()]
@@ -311,10 +315,13 @@ def run_streaming(command: list[str], *, from_first_line: bool = False) -> Outco
     assert process.stderr is not None
     errors: list[str] = []
     stderr = process.stderr
+    answered = False
 
     def relay_errors() -> None:
+        nonlocal answered
         for line in stderr:
             errors.append(line)
+            answered = answered or line.startswith(TARGET_SAYS)
             sys.stderr.write(line)
             sys.stderr.flush()
 
@@ -323,6 +330,7 @@ def run_streaming(command: list[str], *, from_first_line: bool = False) -> Outco
     following = False
     try:
         for line in process.stdout:
+            answered = True
             if line.rstrip("\n") == FOLLOWING:
                 following = True
                 continue
@@ -338,9 +346,9 @@ def run_streaming(command: list[str], *, from_first_line: bool = False) -> Outco
             process.kill()
             process.wait()
         relay.join(timeout=1)
-        return Outcome(process.returncode, "".join(errors), following, interrupted=True)
+        return Outcome(process.returncode, "".join(errors), following, interrupted=True, answered=answered)
     relay.join()
-    return Outcome(process.returncode, "".join(errors), following, interrupted=False)
+    return Outcome(process.returncode, "".join(errors), following, interrupted=False, answered=answered)
 
 
 def still_running(target: Target, unit: str) -> bool | None:
@@ -411,25 +419,28 @@ def connection_ended(follows: Follows, target: Target) -> str:
             assert_never(unknown)
 
 
-def cut_short(target: Target, why: str) -> str:
-    """For a call that ended before it followed anything: what it was doing there may have stopped part-way.
-
-    ``ssh -T`` gives the far side no terminal: on Ctrl-C, or a connection lost,
-    sshd closes its output, and it stops at its next write.
-    """
+def cut_short(target: Target, why: str, *, reads_only: bool) -> str:
+    """For a call that ended before it followed anything: what it was doing there may have stopped part-way."""
     name = target.name
+    if reads_only:
+        return f"tender-dev: {why}."
     return (
         f"tender-dev: {why}; what the task was doing on {name} may have stopped part-way —"
         f" `mise run dev:status --target {name}` says what holds the lock; check Steam there."
     )
 
 
-def on_target(target: Target, words: list[str], *, follows: Follows | None) -> int:
-    """*words* run on the target with their output passed on; *follows* names what a following there is of."""
-    outcome = run_streaming([*ssh(target), "--", target.name, *words], from_first_line=follows == "log")
-    following = outcome.following or (outcome.interrupted and follows == "log")
+def on_target(target: Target, words: list[str], *, follows: Follows | None, reads_only: bool) -> int:
+    """*words* run on the target with their output passed on; *follows* names what a following there is of.
+
+    What ssh said is read as a failure before the login only while the far
+    side has said nothing: a connection lost after it reads much the same.
+    """
+    from_first_line = follows == "log"
+    outcome = run_streaming([*ssh(target), "--", target.name, *words], from_first_line=from_first_line)
+    following = outcome.following or (outcome.interrupted and from_first_line)
     if outcome.interrupted and not following:
-        print(cut_short(target, "interrupted here"), file=sys.stderr)
+        print(cut_short(target, "interrupted here", reads_only=reads_only), file=sys.stderr)
         return INTERRUPTED
     if follows is not None and (outcome.interrupted or (following and outcome.returncode == 0)):
         print(after_following(follows, target), file=sys.stderr)
@@ -438,10 +449,11 @@ def on_target(target: Target, words: list[str], *, follows: Follows | None) -> i
         print(connection_ended(follows, target), file=sys.stderr)
         return outcome.returncode
     if outcome.returncode != 0:
-        explained = connection_failure(outcome.stderr, target) if outcome.returncode == setup.SSH_FAILED else None
+        lost = outcome.returncode == setup.SSH_FAILED
+        explained = connection_failure(outcome.stderr, target) if lost and not outcome.answered else None
         explained = explained or dispatcher_refusal(outcome.stderr, target)
-        if explained is None and outcome.returncode == setup.SSH_FAILED:
-            explained = cut_short(target, f"the connection to {target.name} ended")
+        if explained is None and lost:
+            explained = cut_short(target, f"the connection to {target.name} ended", reads_only=reads_only)
         if explained is not None:
             print(explained, file=sys.stderr)
     return outcome.returncode
@@ -458,7 +470,9 @@ def run(arguments: argparse.Namespace) -> int:
     task: Task = arguments.task
     if task == "dev:log":
         follow: bool = arguments.follow
-        return on_target(target, ["follow" if follow else "read", "log"], follows="log" if follow else None)
+        return on_target(
+            target, ["follow" if follow else "read", "log"], follows="log" if follow else None, reads_only=True
+        )
     stop: bool = arguments.stop
     argument: str | None = arguments.argument or None
     if task == "dev:ui-scale" and not stop and argument is None:
@@ -470,7 +484,7 @@ def run(arguments: argparse.Namespace) -> int:
     if spec.builds:
         build(target, surface=arguments.surface)
     copy(target, whole=spec.builds)
-    return on_target(target, words, follows=spec.follows)
+    return on_target(target, words, follows=spec.follows, reads_only=spec.reads_only)
 
 
 def main(argv: list[str] | None = None) -> int:

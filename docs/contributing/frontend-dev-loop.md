@@ -591,8 +591,9 @@ the lock, as above.
 until the unit stops, which the task then says, or until Ctrl-C, which ends only the following; the task then asks
 whether the unit still runs, and says so. `dev:ui-scale --stop --target <name>` stops the unit, which restores the scale
 and the window as Ctrl-C does locally, and shows what it said doing so. The task waits for the restore's last line,
-which says whether all of it landed; a restore that did not land, or one that ends without saying, ends the task with 1
-and says so. `dev:stop` leaves it running. `auto`, the rescue, runs once and ends, as it does locally.
+which says whether the scale and the window were put back and read back as they were before; a restore that did not
+land, could not be read back, or ends without saying — or a stop that failed — ends the task with 1 and says so.
+`dev:stop` leaves it running. `auto`, the rescue, runs once and ends, as it does locally.
 
 **`dev:log`** shows the target's `backend.log` once; with `--follow` it shows its end and follows it, by name, so a log
 rotated away or not written yet is picked up. **`dev:status`** says what holds the lock — the dev backend, the installed
@@ -625,7 +626,11 @@ No such target is found before the build; the other three at the first connectio
 
 A Ctrl-C before a task follows anything, or a connection lost then, ends this side, and with it the far side's output:
 `ssh` gives it no terminal, so what the task was doing there stops at its next write, possibly part-way — a Steam
-restart among it. The message says so: `dev:status` says what holds the lock, and Steam there is to be checked by eye.
+restart among it. For a task that changes the target the message says so: `dev:status` says what holds the lock, and
+Steam there is to be checked by eye; `dev:status` and `dev:log` change nothing, and say only that they were interrupted
+or lost the connection. A Ctrl-C during the build or the copy says only `interrupted`: nothing on the target but
+`incoming/` was touched by then. A connection lost after the target answered is never read as a target that did not
+answer.
 
 ## DevTools
 
