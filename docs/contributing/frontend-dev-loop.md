@@ -407,9 +407,11 @@ the setup reads with `ssh -G` and never writes. `<name>` is yours to choose — 
 ### What the setup does
 
 1. **It checks the login before it writes anything**, here or on the target. Where the build host already holds the dev
-   loop's key, it logs in with that key alone first, asking for no password. Only when the target refuses that key — or
-   when there is no key yet — does it log in through your own `ssh`, with whatever access that already has: a password,
-   or a key from your agent or your SSH config.
+   loop's key, it logs in with that key alone first, asking for no password and reading none of your SSH config. It logs
+   in through your own `ssh` instead — with whatever access that already has: a password, or a key from your agent or
+   your SSH config — when there is no key yet, when the target refuses the key, when the target takes the key but its
+   dispatcher runs no install (gone, or older than the setup request), and when a jump host on the way stops the key's
+   login, since your own config may pass it.
 2. **It creates the build host's key for targets** if there is none: `~/.config/romm-tender-dev/id_ed25519`. One key
    serves every target.
 3. **It records the target's host key** in the dev loop's own known-hosts file. At first contact `ssh` shows the
@@ -419,7 +421,8 @@ the setup reads with `ssh -G` and never writes. `<name>` is yours to choose — 
 4. **It installs on the target**, under `~/.local/lib/romm-tender-dev/`: `current/` (the running tree), `incoming/` (the
    copy the build host sends), and `dispatch.sh` beside them, where no copy reaches it. It rebuilds
    `~/.ssh/authorized_keys` with one line for the key, a comment above it naming the build host and the time, and every
-   other line as it was; a rebuilt file that does not come out as exactly that is not put in place. The install is the
+   other line as it was; a rebuilt file that came out short, or without the new line last, is not put in place. A
+   symlinked `authorized_keys` is written through: the file it names is replaced, and the link stays. The install is the
    script `scripts/dev_target_install.sh`, sent with its values filled in.
 5. **It writes the target into the dev loop's own SSH config**, `~/.config/romm-tender-dev/ssh_config`: the address,
    port, user and jump host or proxy command the destination resolved to, the dev loop's key and nothing else, and its
@@ -443,11 +446,10 @@ The `authorized_keys` line restricts the key three ways:
   changes, the target refuses the key — run the setup again.
 - **`command=`** — to the dispatcher, which runs instead of whatever the key asks for and decides from that request
   alone. It lets four kinds through: the setup's install script; `rsync` receiving into `incoming/` and nowhere else;
-  the incoming copy's `scripts/dev_target.sh`; and reads of the backend's log and of its database, dumped as SQL through
-  Python's `sqlite3`, opened read-only. Everything else, a login among it, is refused; the exact requests are in the
-  header of `scripts/dev_dispatch.sh`. The setup request puts the dispatcher itself within the key's reach, which grants
-  nothing the key lacks: `dev_target.sh` already runs whatever tree the key copied in, so `from=` is the bound either
-  way.
+  the incoming copy's `scripts/dev_target.sh`; and reads of the backend's log and of its database. Everything else, a
+  login among it, is refused; the exact requests are in the header of `scripts/dev_dispatch.sh`. The setup request puts
+  the dispatcher itself within the key's reach, which grants nothing the key lacks: `dev_target.sh` already runs
+  whatever tree the key copied in, so `from=` is the bound either way.
 - **`restrict`** — no terminal, no forwarding of any kind.
 
 ### A target you cannot log into yet: `--print`
@@ -481,15 +483,19 @@ Four ways the login can fail end the setup with what to do next, and **nothing c
 | no login accepted               | `--print`, as above — behind a jump host or proxy command, a login of yours on the target    |
 | a host key not the recorded one | another machine may answer at that address; if the target was reinstalled, remove its record |
 
-When the failure is on a jump host on the way — a name this machine cannot resolve, a host key your own files record
-differently — the message names the hop, and the setup leaves your files alone. A host key you decline, or one `ssh`
-cannot ask about without a terminal, ends the setup the same way, as does a login that runs no install at all; the
-message then gives what `ssh` said.
+When `ssh` names a jump host on the way as the one that failed — a name this machine cannot resolve, a host key your own
+files record differently, a login it refused, no server answering — the message names the hop, and the setup leaves your
+files alone; where `ssh` names no host, the message names the target or the hop. A host key you decline, or one `ssh`
+cannot ask about without a terminal, ends the setup the same way. A login that runs no install at all ends it too, and
+there the message gives what `ssh` said; when the target took the dev loop's key and its forced command failed, the
+message says so as well.
 
-A failure once the install has started is the target's, not the login's: the install builds its files first and moves
-them into place last, so whatever stopped it, the setup says it stopped part-way, this machine is unchanged, and running
-it again finishes it. A failure writing this machine's side after the target is set up is named with its file, and
-running the setup again finishes that too.
+A failure once the install has started is the target's, not the login's. Where the install refuses to go on — no address
+it can restrict the key to, or a rebuilt `authorized_keys` that did not come out whole — the setup gives its reason, and
+this machine is unchanged. Anything else that stops it is no fault of the install's own: it builds its files first and
+moves them into place last, so the setup says it stopped part-way, this machine is unchanged, and running it again
+finishes it. A failure writing this machine's side after the target is set up is named with its file, and running the
+setup again finishes that too.
 
 A target whose address changed is set up again with the new one, and needs no password for it: the key still holds,
 because `from=` bounds the build host's address, not the target's.

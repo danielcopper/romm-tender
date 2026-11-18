@@ -32,23 +32,24 @@ set -f
 
 readonly REFUSED=3
 
-# Where setup:remote-target put this script: its own directory. sshd starts a
-# forced command by its absolute path, so $0 names it.
+# Where setup:remote-target put this script: its own directory. The install
+# writes the key's command= with this script's absolute path, so $0 names it.
 ROOT="${0%/*}"
 INCOMING_ARGUMENT="${ROOT#"$HOME"/}/incoming"
 DEV_TARGET="$ROOT/incoming/scripts/dev_target.sh"
 
 # The backend's names (host/logging_setup.py LOG_FILENAME, bootstrap/adapters.py
-# DB_FILENAME, domain/user_data_location.py APP_DIR_NAME), and install.sh's
-# ladder for the directories they lie in.
+# DB_FILENAME, domain/user_data_location.py APP_DIR_NAME), install.sh's ladder
+# for the directories they lie in, and install.sh's default interpreter. sshd
+# hands a forced command none of the installer's environment (the service unit's
+# Environment= lines among it), so the TENDER_* rungs below hold only for a
+# caller that sets them itself; an install into directories of its own is not
+# found here.
 APP_DIR="romm-tender"
 LOG_NAME="backend.log"
 DATABASE_NAME="romm-tender.db"
 LOG_FILE="${TENDER_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/$APP_DIR}/$LOG_NAME"
 DATABASE="${TENDER_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/$APP_DIR}/$DATABASE_NAME"
-# install.sh's default interpreter. sshd hands a forced command none of the
-# installer's environment, so TENDER_PYTHON is set here only by a caller that
-# sets it itself.
 PYTHON="${TENDER_PYTHON:-/usr/bin/python3}"
 
 refuse() {
