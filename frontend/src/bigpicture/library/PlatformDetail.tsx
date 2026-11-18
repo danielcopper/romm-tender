@@ -178,7 +178,7 @@ function coreOffer(core: CoreAnswer, readRefusal: string | undefined): CoreOffer
       core.emulator_data_reason,
       core.emulator_source,
       core.platform_system,
-      core.emulator_data_system ?? null,
+      core.emulator_data_system,
     );
     return { kind: "blocked", reason: absent, notice: absent };
   }
@@ -504,7 +504,7 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
                 emulators: offer.core.emulators,
                 emulatorDataAvailable: offer.core.emulator_data_available,
                 emulatorDataReason: offer.core.emulator_data_reason,
-                emulatorDataSystem: offer.core.emulator_data_system ?? null,
+                emulatorDataSystem: offer.core.emulator_data_system,
                 emulatorSource: offer.core.emulator_source,
                 emulatorPlatformSystem: offer.core.platform_system,
                 activeLabel: offer.core.active_core_label,

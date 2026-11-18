@@ -656,7 +656,7 @@ question names it as the answer named it. Only one switched-on system is taken; 
 Tender picks none, asks every later question with the pairs, and links the games into no frontend folder
 ([#2225](https://github.com/danielcopper/romm-tender/issues/2225) D8). Where there is none, the platform is one Tender
 **cannot match**, one whose slug and folder in RomM **contradict** each other, one the source has **no system** for, one
-whose system is **not set up** on this machine, or one with only a **switched-off** system
+whose system is **not set up** on this machine, or one with none switched on and a **switched-off** one
 ([#2751](https://github.com/danielcopper/romm-tender/issues/2751) D2), and nothing of it is downloaded. An installed
 game keeps the system its install record holds. Rules:
 [core-emulator-selection.md](docs/architecture/core-emulator-selection.md#a-platforms-system). _Avoid_: platform map,

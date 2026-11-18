@@ -35,6 +35,7 @@ from domain.emulator_commands import (
     shipped_default,
 )
 from domain.emulator_pick import game_platform_pick, pick_for, platform_pick_value, source_kind
+from domain.emulator_sources import unlisted_system
 from domain.platform_names import PLATFORM_NAMES_KEY, platform_display_name
 from domain.platform_system import PlatformKeys
 from domain.rom_files import asked_path
@@ -144,7 +145,9 @@ class CoreService:
         answering emulator source gives no emulator list, so the menu can say so
         instead of showing an empty list; ``emulator_data_reason`` says why,
         ``emulator_data_system`` names the system a ``system_unknown`` reason is
-        about (``None`` otherwise), and ``emulator_source`` names the answering source
+        about and whether a game's install record holds it
+        (:func:`domain.emulator_sources.unlisted_system`; ``None`` otherwise), and
+        ``emulator_source`` names the answering source
         (:meth:`adapters.atlas_catalogue.AtlasCatalogueAdapter.get_emulator_options`);
         where the platform has no system to use there, the reason is that case's
         (:meth:`domain.platform_system.PlatformSystem.unavailable_options`). ``platform_system`` is
@@ -201,7 +204,7 @@ class CoreService:
             "emulators": options_to_payload(options["options"]),
             "emulator_data_available": options["available"],
             "emulator_data_reason": options["reason"],
-            "emulator_data_system": options.get("system"),
+            "emulator_data_system": unlisted_system(options, installed=platform.recorded is not None),
             "emulator_source": options["source"],
             "platform_system": platform.payload(),
             "active_core": option.emulator if option is not None else None,
@@ -374,7 +377,7 @@ class CoreService:
             "emulators": options_to_payload(options["options"]),
             "emulator_data_available": options["available"],
             "emulator_data_reason": options["reason"],
-            "emulator_data_system": options.get("system"),
+            "emulator_data_system": unlisted_system(options, installed=platform.recorded is not None),
             "emulator_source": options["source"],
             "platform_system": platform.payload(),
             "active_core_label": active_label,

@@ -181,7 +181,7 @@ function buildBiosHeader(
           coreInfo.emulator_data_reason,
           coreInfo.emulator_source,
           coreInfo.platform_system,
-          coreInfo.emulator_data_system ?? null,
+          coreInfo.emulator_data_system,
         )
       : null;
 

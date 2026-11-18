@@ -266,4 +266,16 @@ async def test_a_game_installed_under_a_system_the_source_no_longer_lists_names_
     game_core = await harness.endpoints.get_platform_core_info(5)
 
     assert game_core["emulator_data_available"] is False
-    assert (game_core["emulator_data_reason"], game_core["emulator_data_system"]) == ("system_unknown", "gbretired")
+    assert game_core["emulator_data_reason"] == "system_unknown"
+    assert game_core["emulator_data_system"] == {"name": "gbretired", "installed": True}
+
+
+async def test_a_platform_page_whose_system_the_source_does_not_list_names_it_as_no_game_s(harness):
+    """The platform page's system is the source's answer, never an install record's."""
+    _seed_server(harness)
+    harness.platform_systems.answers[_SLUG] = (FOUND, SystemPair("esde", "gbaretired"))
+
+    core = await harness.endpoints.get_system_core_info(_SLUG, _FOLDER)
+
+    assert core["emulator_data_reason"] == "system_unknown"
+    assert core["emulator_data_system"] == {"name": "gbaretired", "installed": False}

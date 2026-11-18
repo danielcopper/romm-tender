@@ -709,7 +709,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         emulators: detail.emulators,
         emulatorDataAvailable: detail.emulatorDataAvailable,
         emulatorDataReason: detail.emulatorDataReason,
-        emulatorDataSystem: detail.emulatorDataSystem ?? null,
+        emulatorDataSystem: detail.emulatorDataSystem,
         emulatorSource: detail.emulatorSource,
         emulatorPlatformSystem: detail.emulatorPlatformSystem,
         activeLabel: detail.activeCoreLabel,

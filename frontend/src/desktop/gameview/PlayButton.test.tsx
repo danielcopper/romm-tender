@@ -174,6 +174,7 @@ function detailState(overrides: Partial<GameDetailState> = {}): GameDetailState 
     emulators: [],
     emulatorDataAvailable: true,
     emulatorDataReason: null,
+    emulatorDataSystem: null,
     emulatorSource: null,
     emulatorPlatformSystem: null,
     platformCoreLabel: null,

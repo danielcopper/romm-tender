@@ -18,6 +18,7 @@ import type {
   EmulatorSourcesListing,
   PlatformSystemAnswer,
   PlatformSystemReason,
+  UnlistedSystem,
   SourceHealthFinding,
 } from "../types/emulatorSources";
 import type { RommErrorReason } from "../types/reasons";
@@ -416,7 +417,7 @@ export function emulatorDataReasonSentence(
   reason: EmulatorDataReason | null,
   source: AnsweringSource | null,
   platformSystem: PlatformSystemAnswer | null = null,
-  system: string | null = null,
+  system: UnlistedSystem | null = null,
 ): string {
   if (reason === "switched_off") return "Every emulator source is switched off in Settings › Emulator sources.";
   if (reason === "server_unreachable") return ROMM_UNREACHABLE_SENTENCE;
@@ -425,7 +426,9 @@ export function emulatorDataReasonSentence(
     return "No emulator source was found, so Tender cannot tell which emulators this platform offers.";
   }
   if (reason === "system_unknown" && system !== null) {
-    return `${sourceName(source.kind)} does not list the system ${system} this game was installed under, so its emulators are not established.`;
+    return system.installed
+      ? `${sourceName(source.kind)} does not list the system ${system.name} this game was installed under, so its emulators are not established.`
+      : `${sourceName(source.kind)} does not list the system ${system.name}, so its emulators are not established.`;
   }
   const noSystem = platformSystemSentence(reason, platformSystem);
   if (noSystem !== null) return noSystem;

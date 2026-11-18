@@ -78,13 +78,20 @@ export type PlatformSystemReason =
   | "platform_pairs_contradict"
   | "platform_systems_several";
 
+/** The system an emulator list is not given for because its source does not list it: its keys, and whether a
+ *  game's install record holds it, which the sentence says. */
+export interface UnlistedSystem {
+  name: string;
+  installed: boolean;
+}
+
 /** The system a RomM platform is in the source asked: the one taken, several
  *  none of which is taken, switched-off ones, ones this machine has not set up,
  *  none the source's frontend has, a slug and a folder that name different
  *  systems, or a platform the resolver cannot match (#2751 D2). `systems` is
  *  every one the state names, each by its key;
  *  `platform` is RomM's display name, `slug` RomM's slug for it and `folder`
- *  its folder in RomM, `null` where none is kept. */
+ *  the folder in RomM it was asked with, `null` where it was asked without one. */
 export interface PlatformSystemAnswer {
   state: "found" | "several" | "switched_off" | "not_here" | "no_system" | "unmatched" | "contradicted";
   source: string;

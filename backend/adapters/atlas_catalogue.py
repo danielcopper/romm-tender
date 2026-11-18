@@ -148,6 +148,7 @@ from domain.emulator_sources import (
     CATALOGUE_INVALID,
     CATALOGUE_NOT_SET_UP,
     CATALOGUE_SEALED,
+    CATALOGUE_SYSTEM_UNKNOWN,
     CATALOGUE_UNAVAILABLE,
 )
 from domain.launchability import (
@@ -456,8 +457,8 @@ def _unavailable(reason: str, source: dict[str, Any] | None, *, system: str | No
 
     A module-level constant would hand every caller the same ``options`` list,
     which a caller is free to mutate. *system* is carried, as ``system``, only
-    with :data:`~domain.launchability.SYSTEM_UNKNOWN`: the name of the system
-    the source no longer lists, which its sentence names.
+    with :data:`~domain.emulator_sources.CATALOGUE_SYSTEM_UNKNOWN`: the keys of
+    the system the source does not list, which its sentence names.
     """
     answer: dict[str, Any] = {"available": False, "options": [], "reason": reason, "source": source}
     if system is not None:
@@ -901,9 +902,9 @@ class AtlasCatalogueAdapter:
         if unresolved == SYSTEMS_SEVERAL:
             return _unavailable(PlatformRefusal.SEVERAL.value, payload)
         if unresolved is not None:
-            # The source does not list the system the question names — most
-            # often one a game was installed under — which is no failed read.
-            return _unavailable(SYSTEM_UNKNOWN, payload, system=", ".join(system_keys(system)))
+            # The source does not list the system the question names, which is
+            # no failed read.
+            return _unavailable(CATALOGUE_SYSTEM_UNKNOWN, payload, system=", ".join(system_keys(system)))
         chosen = _frontend_choice(answer.entries)
         options = [_entry_option(entry, chosen_in_frontend=entry is chosen) for entry in answer.entries]
         return {"available": True, "options": options, "reason": None, "source": payload}

@@ -247,6 +247,16 @@ describe("extractCoreInfo", () => {
     expect(result.activeCoreIsDefault).toBe(false);
   });
 
+  it("carries the system the source does not list through to the page", () => {
+    const system = { name: "gbretired", installed: true };
+    const result = extractCoreInfo({
+      ...baseCoreInfo,
+      emulator_data_reason: "system_unknown",
+      emulator_data_system: system,
+    });
+    expect(result.emulatorDataSystem).toEqual(system);
+  });
+
   it("maps has_game_override=true through to hasGameOverride (#211)", () => {
     const result = extractCoreInfo({ ...baseCoreInfo, has_game_override: true });
     expect(result.hasGameOverride).toBe(true);

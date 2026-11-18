@@ -42,6 +42,7 @@ from domain.bios_status import (
 )
 from domain.emulator_commands import options_to_payload, resolve_firmware_option
 from domain.emulator_pick import pick_for, source_kind
+from domain.emulator_sources import unlisted_system
 from domain.firmware_groups import console_regions_of, judge_groups
 from domain.firmware_rows import leaves_its_folder, library_file
 from domain.platform_names import PLATFORM_NAMES_KEY, decode_platform_names
@@ -408,7 +409,8 @@ class FirmwareStatusReader:
         ``emulator_data_available`` flags whether the answering emulator source
         gave an emulator list, with ``emulator_data_reason`` and
         ``emulator_source`` saying why not and which source answered, and
-        ``emulator_data_system`` the system a ``system_unknown`` reason names.
+        ``emulator_data_system`` the system a ``system_unknown`` reason names
+        (:func:`domain.emulator_sources.unlisted_system`).
 
         ``store_only`` says why a download here lands in the store and nowhere
         else (:func:`_store_only`).
@@ -428,7 +430,7 @@ class FirmwareStatusReader:
         plat["emulators"] = options_to_payload(options["options"])
         plat["emulator_data_available"] = options["available"]
         plat["emulator_data_reason"] = options["reason"]
-        plat["emulator_data_system"] = options.get("system")
+        plat["emulator_data_system"] = unlisted_system(options, installed=False)
         plat["emulator_source"] = options["source"]
         plat["platform_system"] = platform.payload()
         catalogue, files, others = await self._loop.run_in_executor(

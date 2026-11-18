@@ -3,7 +3,7 @@
  * file status, and the available-cores selection presented in the UI.
  */
 
-import type { AnsweringSource, EmulatorDataReason, PlatformSystemAnswer } from "./emulatorSources";
+import type { AnsweringSource, EmulatorDataReason, PlatformSystemAnswer, UnlistedSystem } from "./emulatorSources";
 
 /**
  * What the machine answers about one firmware file, in the four values the
@@ -660,7 +660,7 @@ export interface CoreInfo {
   /** Why `emulators` could not be given; `null` while it is available. */
   emulator_data_reason: EmulatorDataReason | null;
   /** The system a `system_unknown` reason is about, which its sentence names; `null` for any other. */
-  emulator_data_system?: string | null;
+  emulator_data_system: UnlistedSystem | null;
   /** The source the answer came from; `null` where no source answers. */
   emulator_source: AnsweringSource | null;
   /** The system the emulator list is about — an installed game's own, otherwise
@@ -710,7 +710,7 @@ export interface SystemCoreInfo {
   emulator_data_available: boolean;
   /** As on {@link CoreInfo}. */
   emulator_data_reason: EmulatorDataReason | null;
-  emulator_data_system?: string | null;
+  emulator_data_system: UnlistedSystem | null;
   emulator_source: AnsweringSource | null;
   /** The platform's system in the answering source, which the page names. */
   platform_system: PlatformSystemAnswer | null;
@@ -749,7 +749,7 @@ export interface FirmwarePlatformExt extends EmulatorAnswer {
   emulators?: EmulatorOption[];
   emulator_data_available?: boolean;
   emulator_data_reason: EmulatorDataReason | null;
-  emulator_data_system?: string | null;
+  emulator_data_system: UnlistedSystem | null;
   emulator_source: AnsweringSource | null;
   platform_system: PlatformSystemAnswer | null;
   // The backend's level — the resolver's verdict for the launching emulator

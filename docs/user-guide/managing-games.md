@@ -378,7 +378,7 @@ platform's page ask the source that answers, which is RetroDECK while it is swit
 system to use, **Download** is refused and the pages say which case holds:
 
 - **"Tender cannot match _platform_ to a system yet, so it cannot download its games."** — neither the platform's slug
-  nor its folder is one Tender's platform table knows.
+  nor its folder is one Tender's emulator knowledge knows.
 - **"RomM's slug "_slug_" and folder "_folder_" point to different systems, so Tender cannot match _platform_ to a
   system."** — the platform's folder in RomM is named after another system than its slug; renaming the folder in RomM
   resolves it.
@@ -394,8 +394,8 @@ for the Master System — Tender picks none of them: until downloads land in Ten
 refused, and the pages say **"_Source_ has several systems for _platform_ (_systems_), so Tender cannot download its
 games yet."** A game of such a platform that starts is linked into no frontend folder, and its page says under **Play**:
 **"_Source_ has several systems for _platform_ (_systems_), and Tender links its games into none of them."** A
-platform's BIOS downloads are not refused: they land in Tender's firmware store and are linked once a source has a
-system for the platform ([Where downloads go](bios-management.md#where-downloads-go)). A game you already installed
+platform's BIOS downloads are not refused: they land in Tender's firmware store and are linked into none of its systems,
+and the BIOS table says so ([Where downloads go](bios-management.md#where-downloads-go)). A game you already installed
 keeps the system it was downloaded under, and the buttons on its **BIOS** tab fetch and link the files for that system.
 
 **A download needs RetroDECK.** **Download** is refused, saying why, while RetroDECK is not installed (**Downloads need

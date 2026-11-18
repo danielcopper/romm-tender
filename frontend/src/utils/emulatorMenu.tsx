@@ -18,7 +18,13 @@
 
 import { useSyncExternalStore, type FC, type ReactNode } from "react";
 import { Menu, MenuItem, MenuSeparator } from "@decky/ui";
-import type { AnsweringSource, EmulatorDataReason, EmulatorOption, PlatformSystemAnswer } from "../types";
+import type {
+  AnsweringSource,
+  EmulatorDataReason,
+  EmulatorOption,
+  PlatformSystemAnswer,
+  UnlistedSystem,
+} from "../types";
 import { emulatorDataReasonSentence } from "./emulatorSourceWording";
 import { entryForLabel } from "./emulatorEntries";
 import { notEstablishedNote } from "./emulatorInstallation";
@@ -42,7 +48,7 @@ export interface EmulatorMenuConfig {
   emulatorDataAvailable: boolean;
   emulatorDataReason: EmulatorDataReason | null;
   /** The system a `system_unknown` reason names. */
-  emulatorDataSystem?: string | null;
+  emulatorDataSystem: UnlistedSystem | null;
   emulatorSource: AnsweringSource | null;
   emulatorPlatformSystem: PlatformSystemAnswer | null;
   /** The active emulator's label — marked with a checkmark, its text drawn in `activeColor`. */
@@ -135,7 +141,7 @@ export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
             config.emulatorDataReason,
             config.emulatorSource,
             config.emulatorPlatformSystem,
-            config.emulatorDataSystem ?? null,
+            config.emulatorDataSystem,
           )}
         </MenuItem>
       </Menu>

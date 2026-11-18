@@ -407,19 +407,22 @@ overlay); or it carries `not-set-up` (`not_set_up`), a RetroDECK the resolver fo
 `retrodeck.json` — not started for this home yet, or its first-run setup left unfinished — which answers every question
 with that finding and an empty enumeration; or the system resolved to no one system — several of the source's systems
 answer and the resolver names none (`platform_systems_several`), or the source does not list it (`system_unknown`, which
-carries the system's name as `system`, so the pages say "_Source_ does not list the system _system_ this game was
-installed under, so its emulators are not established."). `source` is the answering source's `{kind, starts_games}`. The
-platform page and the picker say why, from `reason`, rather than show an empty list they cannot distinguish from a
-system the frontend knows no emulator for ([qam-panel.md](qam-panel.md#notices-and-homes)); no entry is in effect, so a
-start is refused (#2221 D20). The overlay entries the resolver gives beside `emulator-catalogue-sealed` are not read as
-a list — not for the emulator list, not for saves and not for the firmware rows and verdicts, whose answer beside a
-sealed catalogue reads as nothing established: an incomplete list would look complete. The one use is a BIOS link: a
-place such an answer states is a place a link may go, and the list never decides that a link is unwanted
-([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D37, D40). An empty list carrying none of those codes
-is that real "knows none", and `emulator-catalogue-exclusive` is not a refusal at all: a custom `es_systems.xml`
-declaring itself the whole catalogue gives a complete answer, merely a small one. The test is the codes and never an
-empty caveat list — a broken installation states health findings on every answer it gives. `options_to_payload` projects
-the list to the frontend picker shape
+carries the system's keys as `system`; the core and BIOS answers send it as `emulator_data_system`, `{name,
+installed}`,
+`installed` saying whether a game's install record holds it, so a game's page says "_Source_ does not list the system
+_system_ this game was installed under, so its emulators are not established." and a platform's page "_Source_ does not
+list the system _system_, so its emulators are not established."). `source` is the answering source's
+`{kind, starts_games}`. The platform page and the picker say why, from `reason`, rather than show an empty list they
+cannot distinguish from a system the frontend knows no emulator for ([qam-panel.md](qam-panel.md#notices-and-homes)); no
+entry is in effect, so a start is refused (#2221 D20). The overlay entries the resolver gives beside
+`emulator-catalogue-sealed` are not read as a list — not for the emulator list, not for saves and not for the firmware
+rows and verdicts, whose answer beside a sealed catalogue reads as nothing established: an incomplete list would look
+complete. The one use is a BIOS link: a place such an answer states is a place a link may go, and the list never decides
+that a link is unwanted ([#2191](https://github.com/danielcopper/romm-tender/issues/2191) D37, D40). An empty list
+carrying none of those codes is that real "knows none", and `emulator-catalogue-exclusive` is not a refusal at all: a
+custom `es_systems.xml` declaring itself the whole catalogue gives a complete answer, merely a small one. The test is
+the codes and never an empty caveat list — a broken installation states health findings on every answer it gives.
+`options_to_payload` projects the list to the frontend picker shape
 (`{label, kind, core_so, emulator, declared_index, is_default, chosen_in_frontend, reason}`): every entry is clickable
 but one the resolver states not installed, which reads "emulator not installed" (D9, D23, D31); the default and the
 user's ES-DE choice are marked; an entry's `reason` is its not-established note, else `not_installed`. Whether the

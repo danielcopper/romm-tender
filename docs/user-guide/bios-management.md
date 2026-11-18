@@ -329,8 +329,8 @@ holds every platform your RomM server reports with at least one ROM, or whose co
    list that cannot be read yet, or not established for another reason) — a line under the header says so as well, since
    a tooltip needs a mouse. A platform with no system to use in your emulator source says which case holds — Tender
    cannot match it to a system yet, its slug and folder in RomM point to different systems, the source has no system for
-   it, the source has one that is not set up on this machine, its only systems are switched off, or several systems fit
-   it and Tender picks none — naming the source that answers; the sentences are in
+   it, the source has one that is not set up on this machine, none of its systems is switched on and one is switched
+   off, or several systems fit it and Tender picks none — naming the source that answers; the sentences are in
    [Managing Games](managing-games.md#downloading-roms). Where Tender has not learned a platform's system yet and RomM
    cannot be reached to tell it, the line, a game's BIOS tab and its emulator menu say **"RomM cannot be reached, so
    Tender does not know this platform's system yet."**; where RomM answers but does not give it — a failed sign-in, say

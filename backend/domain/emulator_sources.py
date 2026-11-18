@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 from domain.refusal import DomainRefused
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Hashable, Iterable, Sequence
+    from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
 
 RETRODECK = "retrodeck"
 EMUDECK = "emudeck"
@@ -145,20 +145,31 @@ def switched_off_starting_source(sources: Sequence[ArrangedSource]) -> str | Non
 
 
 # Why an emulator list could not be given: no source answers at all (the first
-# two), or the answering source's catalogue was refused — sealed (EmuDeck's,
+# two), the answering source's catalogue was refused — sealed (EmuDeck's,
 # which the resolver cannot read yet), a systems file ES-DE refuses to load, a
 # RetroDECK that is installed but has not been set up yet, or any other reason
-# nobody could read one.
+# nobody could read one — or the source does not list the system asked about.
 NO_SOURCE_DETECTED = "no_source"
 ALL_SOURCES_SWITCHED_OFF = "switched_off"
 CATALOGUE_SEALED = "sealed"
 CATALOGUE_INVALID = "catalogue_invalid"
 CATALOGUE_NOT_SET_UP = "not_set_up"
 CATALOGUE_UNAVAILABLE = "unavailable"
+CATALOGUE_SYSTEM_UNKNOWN = "system_unknown"
 
 # What a source's catalogue is, as the settings row reports it: read, sealed,
 # or unavailable — every other refusal, a broken systems file among them.
 CATALOGUE_READ = "read"
+
+
+def unlisted_system(options: Mapping[str, Any], *, installed: bool) -> dict[str, Any] | None:
+    """The system an emulator list names because its source does not list it, as the pages read it; else ``None``.
+
+    ``name`` is the keys of that system, ``installed`` whether it is the one a
+    game's install record holds, which the sentence says.
+    """
+    system = options.get("system")
+    return None if system is None else {"name": system, "installed": installed}
 
 
 def no_answering_source_reason(sources: Sequence[ArrangedSource]) -> str:

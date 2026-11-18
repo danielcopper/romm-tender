@@ -48,6 +48,7 @@ function baseConfig(overrides: Partial<EmulatorMenuConfig> = {}): EmulatorMenuCo
     emulators: [libretroEmu("mgba_libretro", "mGBA", true), libretroEmu("vbam_libretro", "VBA-M")],
     emulatorDataAvailable: true,
     emulatorDataReason: null,
+    emulatorDataSystem: null,
     emulatorSource: { kind: "retrodeck", starts_games: true },
     emulatorPlatformSystem: null,
     activeLabel: null,
@@ -65,6 +66,7 @@ describe("buildEmulatorMenu", () => {
         emulators: [],
         emulatorDataAvailable: false,
         emulatorDataReason: "sealed",
+        emulatorDataSystem: null,
         emulatorSource: { kind: "emudeck", starts_games: false },
         emulatorPlatformSystem: null,
       }),
@@ -81,6 +83,7 @@ describe("buildEmulatorMenu", () => {
         emulators: [],
         emulatorDataAvailable: false,
         emulatorDataReason: "not_set_up",
+        emulatorDataSystem: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
         emulatorPlatformSystem: null,
       }),
@@ -96,13 +99,29 @@ describe("buildEmulatorMenu", () => {
         emulators: [],
         emulatorDataAvailable: false,
         emulatorDataReason: "system_unknown",
-        emulatorDataSystem: "gbretired",
+        emulatorDataSystem: { name: "gbretired", installed: true },
         emulatorSource: { kind: "retrodeck", starts_games: true },
         emulatorPlatformSystem: null,
       }),
     );
     expect(items(menu)[0]!.text).toBe(
       "RetroDECK does not list the system gbretired this game was installed under, so its emulators are not established.",
+    );
+  });
+
+  it("names the system a platform's source does not list, with no game installed under it", () => {
+    const menu = buildEmulatorMenu(
+      baseConfig({
+        emulators: [],
+        emulatorDataAvailable: false,
+        emulatorDataReason: "system_unknown",
+        emulatorDataSystem: { name: "gbaretired", installed: false },
+        emulatorSource: { kind: "retrodeck", starts_games: true },
+        emulatorPlatformSystem: null,
+      }),
+    );
+    expect(items(menu)[0]!.text).toBe(
+      "RetroDECK does not list the system gbaretired, so its emulators are not established.",
     );
   });
 

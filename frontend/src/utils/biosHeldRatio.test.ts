@@ -20,6 +20,7 @@ describe("biosHeldRatio", () => {
       ratio_server_count: 20,
       ratio_local_count: 1,
       emulator_data_reason: null,
+      emulator_data_system: null,
       emulator_source: { kind: "retrodeck", starts_games: true },
       platform_system: null,
     };
@@ -38,6 +39,7 @@ describe("biosHeldRatio", () => {
       platform_slug: "psx",
       files: [],
       emulator_data_reason: null,
+      emulator_data_system: null,
       emulator_source: { kind: "retrodeck", starts_games: true },
       platform_system: null,
     };
