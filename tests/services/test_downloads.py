@@ -29,7 +29,7 @@ from fakes.system_time import FakeClock
 from adapters.adoption_move import AdoptionMoveAdapter
 from adapters.download_file import DownloadFileAdapter
 from adapters.rom_files import RomFileAdapter
-from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
+from domain.platform_system import NO_SYSTEM, SEVERAL, SWITCHED_OFF, PlatformSystem, SystemPair
 from domain.refusal import DomainRefused
 from domain.retrodeck_folders import GAME_DOWNLOAD, FolderRefused, finding_refusal, switched_off
 from domain.rom import Rom
@@ -3727,6 +3727,41 @@ class TestAPlatformWithNoSystemDownloadsNothing:
         assert made_dirs == []
         assert 78 not in downloads.queue.entries
         assert 78 not in downloads.state.in_progress
+
+    @pytest.mark.asyncio
+    async def test_a_platform_of_several_systems_downloads_into_none_of_them(self, make_downloads):
+        """#2225 D8: Tender picks none of several systems, and a download lands in one system's folder."""
+        pairs = (SystemPair("romm", "sms"), SystemPair("folder", "sms"))
+        named = (SystemPair("esde", "mark3"), SystemPair("esde", "mastersystem"))
+        platform = PlatformSystem(SEVERAL, "sms", "Master System", system=pairs, source=RETRODECK_SOURCE, named=named)
+        downloads = make_downloads(platform_systems=FakePlatformSystems(answers={"sms": platform}))
+        made_dirs: list[str] = []
+        downloads.download_file_store.make_dirs = lambda p: made_dirs.append(p)
+        rom_detail = {
+            "id": 79,
+            "name": "Alex Kidd",
+            "fs_name": "alex.sms",
+            "fs_size_bytes": 1024,
+            "platform_slug": "sms",
+        }
+
+        from unittest.mock import patch
+
+        with (
+            patch.object(downloads.romm_api, "get_rom", return_value=rom_detail),
+            pytest.raises(FolderRefused) as refused,
+        ):
+            await downloads.service.start_download(79)
+
+        assert refused.value.reason == "platform_systems_several"
+        assert refused.value.details == {
+            "source": "retrodeck",
+            "platform": "Master System",
+            "system": None,
+            "systems": ["mark3", "mastersystem"],
+        }
+        assert made_dirs == []
+        assert 79 not in downloads.queue.entries
 
     @pytest.mark.asyncio
     async def test_the_question_is_asked_off_the_loop(self, make_downloads):

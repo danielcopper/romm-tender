@@ -8,6 +8,7 @@ machine through the same reading.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any, cast
 
 import pytest
@@ -35,6 +36,7 @@ from _vendor.atlas import (
     CAVEAT_LAUNCH_ENVIRONMENT_UNREAD,
     CAVEAT_LAUNCHER_SCRIPT_UNPINNED,
     KIND_STANDALONE,
+    RESOLUTION_UNKNOWN,
     VARIANT_APPIMAGE,
     VARIANT_FLATPAK,
     VARIANT_NATIVE,
@@ -42,6 +44,7 @@ from _vendor.atlas import (
     EnvironmentVariable,
     LaunchCommand,
     LaunchProgram,
+    SystemResolution,
     WorkingFolder,
 )
 from _vendor.atlas.esde import EmulatorSpec
@@ -290,6 +293,15 @@ class TestARefusedCommand:
     )
     def test_each_refusal_reads_as_its_reason(self, code, reason):
         assert read_start(_answer(None, _caveat(code))) == StartRefused(reason)
+
+    def test_a_system_that_resolved_to_no_one_system_gives_no_command_and_names_no_entry_s_reason(self):
+        """#2751: several systems answering alike or none here is no command, whatever the entry would say."""
+        answer = replace(
+            _answer(None, entry=_entry(AVAILABILITY_NOT_INSTALLED)),
+            resolution=SystemResolution(RESOLUTION_UNKNOWN, None, None),
+        )
+
+        assert read_start(answer) == StartRefused(COMMAND_UNREAD)
 
     def test_a_refusal_tender_has_no_word_for_reads_as_a_command_that_could_not_be_read(self):
         assert read_start(_answer(None, _caveat("a-code-of-a-later-release"))) == StartRefused(COMMAND_UNREAD)

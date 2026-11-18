@@ -38,10 +38,13 @@ from _vendor.atlas import (
     CAVEAT_BOOT_REGISTRY_UNREAD,
     CAVEAT_BOOT_SAVESTATE_UNREAD,
     CAVEAT_EMULATOR_CATALOGUE_UNREADABLE,
+    CAVEAT_ENTRY_DIRECTORY_HOLDS,
+    CAVEAT_ENTRY_DIRECTORY_UNREAD,
     CAVEAT_ENTRY_FORMAT_BUILD_DEPENDENT,
     CAVEAT_ENTRY_FORMAT_CONTENT_UNREAD,
     CAVEAT_ENTRY_FORMAT_UNESTABLISHED,
     CAVEAT_ENTRY_TAKES_NO_DIRECTORY,
+    CAVEAT_FRONTEND_NAME_UNSCANNED,
     CAVEAT_OPENS_BOUND_EXCEEDED,
     CAVEAT_OPENS_CONTENT_UNREAD,
     CAVEAT_OPENS_ENTRY_IGNORED,
@@ -60,10 +63,16 @@ from _vendor.atlas import (
     EFFECT_STOPS,
     EFFECT_UNESTABLISHED,
     OPENS_EFFECTS,
+    RESOLUTION_AMBIGUOUS,
+    RESOLUTION_UNKNOWN,
     VERDICT_ENTRY_NOT_ACCEPTED,
     VERDICT_LAUNCHABLE,
     VERDICT_NEEDS_INSTALLATION,
+    VERDICT_UNESTABLISHED,
     VERDICT_UNKNOWN,
+    SystemCandidate,
+    SystemResolution,
+    translate,
 )
 from _vendor.atlas.installations import Installer, LaunchabilityAnswer
 from _vendor.atlas.machine import FixtureMachine
@@ -85,6 +94,8 @@ from domain.launchability import (
     EMULATOR_DRIVE_UNKNOWN,
     ENCRYPTION_UNREAD,
     ENTRY_UNKNOWN,
+    FOLDER_HOLDS_GAMES,
+    FOLDER_ROUTE_UNREAD,
     FORMAT_REFUSED,
     FORMAT_UNESTABLISHED,
     FRONTEND_WOULD_NOT_LIST,
@@ -119,6 +130,7 @@ from domain.launchability import (
     SHEET_REFUSED,
     STARTS,
     SYSTEM_UNKNOWN,
+    SYSTEMS_SEVERAL,
     TAKES_NO_FOLDER,
     TRACK_REFUSED,
     VERSION_DEPENDENT,
@@ -316,6 +328,86 @@ def _ask(answer: LaunchabilityAnswer | Exception, traces: list[str], *, label: s
     installation = _Installation(answer)
     result = _stand_in(installation, traces).launchability("n64", "/roms/n64/Game.z64", label=label)
     return result, installation
+
+
+class TestTheNewStatementsOfALaunch:
+    """The resolver's launch statements of emu-atlas 0.35.0, each read into a word of Tender's own (#2195 D2, D40)."""
+
+    def test_an_unestablished_verdict_is_not_established_with_what_stopped_short(self, traces):
+        result, _ = _ask(
+            LaunchabilityAnswer(
+                verdict=VERDICT_UNESTABLISHED,
+                extension=".z64",
+                caveats=(_caveat(CAVEAT_ENTRY_FORMAT_CONTENT_UNREAD),),
+            ),
+            traces,
+        )
+
+        assert (result.state, result.reason) == (NOT_ESTABLISHED, None)
+        assert result.statements == (LaunchStatement(CONTENT_UNCHECKED),)
+
+    def test_a_name_the_frontend_would_not_list_is_said_beside_a_start(self, traces):
+        result, _ = _ask(
+            LaunchabilityAnswer(
+                verdict=VERDICT_LAUNCHABLE,
+                extension=".Z64",
+                accepted=(".z64",),
+                caveats=(_caveat(CAVEAT_FRONTEND_NAME_UNSCANNED, kind="file", names=[".z64"]),),
+            ),
+            traces,
+        )
+
+        assert result.state == STARTS
+        assert result.statements == (LaunchStatement(FRONTEND_WOULD_NOT_LIST),)
+        assert result.starts_from == (".z64",)
+
+    def test_a_folder_route_not_followed_is_not_established(self, traces):
+        result, _ = _ask(
+            LaunchabilityAnswer(
+                verdict=VERDICT_UNESTABLISHED,
+                extension=".z64",
+                caveats=(_caveat(CAVEAT_ENTRY_DIRECTORY_UNREAD, reason="own-loader"),),
+            ),
+            traces,
+        )
+
+        assert result.statements == (LaunchStatement(FOLDER_ROUTE_UNREAD),)
+
+    def test_the_files_a_folder_holds_are_named(self, traces):
+        holds = _caveat(CAVEAT_ENTRY_DIRECTORY_HOLDS, files=["/roms/n64/Game/Game.z64", "/roms/n64/Game/Other.z64"])
+        result, _ = _ask(
+            LaunchabilityAnswer(verdict=VERDICT_ENTRY_NOT_ACCEPTED, extension="", caveats=(holds,)),
+            traces,
+        )
+
+        assert result.statements == (LaunchStatement(FOLDER_HOLDS_GAMES, "Game.z64, Other.z64"),)
+
+    @pytest.mark.parametrize(
+        ("resolution", "reason"),
+        [
+            (SystemResolution(RESOLUTION_UNKNOWN, None, None), SYSTEM_UNKNOWN),
+            (
+                SystemResolution(
+                    RESOLUTION_AMBIGUOUS,
+                    None,
+                    None,
+                    candidates=(
+                        SystemCandidate(("esde", "mark3"), "declared"),
+                        SystemCandidate(("esde", "mastersystem"), "declared"),
+                    ),
+                    translation=translate((("romm", "sms"),)),
+                ),
+                SYSTEMS_SEVERAL,
+            ),
+        ],
+        ids=["unknown", "ambiguous"],
+    )
+    def test_a_system_that_resolved_to_no_one_system_is_not_established_for_that_reason(
+        self, traces, resolution, reason
+    ):
+        result, _ = _ask(LaunchabilityAnswer(verdict=VERDICT_UNKNOWN, extension=".sms", resolution=resolution), traces)
+
+        assert (result.state, result.reason) == (NOT_ESTABLISHED, reason)
 
 
 class TestEachVerdictInTendersWords:

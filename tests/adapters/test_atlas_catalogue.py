@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any, cast
 
 import pytest
@@ -786,6 +787,41 @@ class TestKnownSystem:
         installation = _Installation(placement=RomPlacement(resolution=several))
         pairs = (SystemPair("romm", "sms"), SystemPair("folder", "sms"))
         assert _adapter(installation, traces).is_known_system(pairs) is None
+
+
+class TestASystemThatResolvedToNoOneSystem:
+    """#2751: an emulator list under a resolution other than resolved is no list, never "this frontend knows none"."""
+
+    def test_several_systems_answering_is_unavailable_for_that_reason(self, traces):
+        several = SystemResolution(
+            RESOLUTION_AMBIGUOUS,
+            None,
+            None,
+            candidates=(
+                SystemCandidate(("esde", "mark3"), "declared"),
+                SystemCandidate(("esde", "mastersystem"), "declared"),
+            ),
+            translation=translate((("romm", "sms"),)),
+        )
+        installation = _Installation(catalogue=replace(_answer(), resolution=several))
+        pairs = (SystemPair("romm", "sms"), SystemPair("folder", "sms"))
+
+        answer = _adapter(installation, traces).get_emulator_options(pairs)
+
+        assert (answer["available"], answer["options"], answer["reason"]) == (False, [], "platform_systems_several")
+        assert installation.catalogue_calls == [pairs]
+
+    def test_a_system_the_source_does_not_hold_is_unavailable(self, traces):
+        installation = _Installation(catalogue=replace(_answer(), resolution=_NOT_HELD))
+
+        answer = _adapter(installation, traces).get_emulator_options("nintendo64")
+
+        assert (answer["available"], answer["reason"]) == (False, "unavailable")
+
+    def test_its_extensions_are_the_default_safe_empty_set(self, traces):
+        installation = _Installation(placement=RomPlacement(extensions=(".z64",), resolution=_NOT_HELD))
+
+        assert _adapter(installation, traces).get_supported_extensions("nintendo64") == frozenset()
 
 
 class TestHowLongAnAnswerIsKept:

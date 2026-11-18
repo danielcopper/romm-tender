@@ -29,6 +29,7 @@ from _vendor.atlas import (
     CAVEAT_EMULATOR_CATALOGUE_SEALED,
     CAVEAT_FIRMWARE_CONFIGURED_IMAGE_MISSING,
     CAVEAT_FIRMWARE_CONFIGURED_IMAGE_NOT_OFFERED,
+    CAVEAT_FIRMWARE_DECLARATION_UNKNOWN,
     CAVEAT_FIRMWARE_DIRECTORY_HOLDS_NO_CANDIDATE,
     CAVEAT_FIRMWARE_DIRECTORY_HOLDS_NO_IMAGE,
     CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT,
@@ -42,6 +43,11 @@ from _vendor.atlas import (
     CAVEAT_FIRMWARE_SEARCH_UNVERIFIED,
     CAVEAT_FIRMWARE_UNREADABLE,
     HEALTH_ISSUE_NOT_SET_UP,
+    RESOLUTION_AMBIGUOUS,
+    RESOLUTION_UNKNOWN,
+    SystemCandidate,
+    SystemResolution,
+    translate,
 )
 from _vendor.atlas import IDENTITY_ARCHIVE as ATLAS_IDENTITY_ARCHIVE
 from _vendor.atlas import IDENTITY_FILE as ATLAS_IDENTITY_FILE
@@ -2101,6 +2107,50 @@ class TestPlatformAdapter:
 
         assert catalogue.resolved is False
         assert catalogue.placements == ()
+
+    @pytest.mark.parametrize(
+        "resolution",
+        [
+            SystemResolution(RESOLUTION_UNKNOWN, None, None),
+            SystemResolution(
+                RESOLUTION_AMBIGUOUS,
+                None,
+                None,
+                candidates=(
+                    SystemCandidate(("esde", "mark3"), "declared"),
+                    SystemCandidate(("esde", "mastersystem"), "declared"),
+                ),
+                translation=translate((("romm", "sms"),)),
+            ),
+        ],
+        ids=["unknown", "ambiguous"],
+    )
+    def test_a_system_that_resolved_to_no_one_system_answers_unresolved(
+        self, platform_adapter, monkeypatch, resolution
+    ):
+        """#2751: an empty answer under a resolution other than resolved is not established, never "nothing"."""
+        answer = replace(_answer(), resolution=resolution)
+        _detect(monkeypatch, _detecting(_Installation(answer)))
+
+        catalogue = platform_adapter("sms")
+
+        assert catalogue.resolved is False
+        assert catalogue.placements == ()
+
+    def test_an_answer_listing_no_emulator_whose_declaration_is_unknown_answers_unresolved(
+        self, platform_adapter, monkeypatch
+    ):
+        """A look that found nothing to read is never "nothing needed"."""
+        unknown = Caveat(code=CAVEAT_FIRMWARE_DECLARATION_UNKNOWN, message="nothing could be read")
+        _detect(monkeypatch, _detecting(_Installation(_answer(caveats=(unknown,)))))
+
+        assert platform_adapter("ps2").resolved is False
+
+    def test_beside_emulators_an_unknown_declaration_leaves_each_verdict_standing(self, platform_adapter, monkeypatch):
+        unknown = Caveat(code=CAVEAT_FIRMWARE_DECLARATION_UNKNOWN, message="the requirement list is empty")
+        _detect(monkeypatch, _detecting(_Installation(_answer(_core(), caveats=(unknown,)))))
+
+        assert platform_adapter("ps2").resolved is True
 
 
 class TestWhatTheResolverSaysAboutEachEmulator:
