@@ -26,9 +26,15 @@ A reading that cannot be made at all is reported as such and lets the task
 through: the backend refuses on its own either way, and the only thing lost is
 the early word.
 
+A target's ``scripts/dev_target.sh`` asks with ``--holder`` instead, which
+refuses nothing and answers in three lines — ``free``, ``held`` or
+``unknown``; the holder's pid, or an empty line; the lock's path — so that
+the target can name which of its units holds the lock.
+
 Usage:
     python scripts/dev_backend_lock.py                      # refuse if one holds it
     python scripts/dev_backend_lock.py --require-running    # refuse if none does
+    python scripts/dev_backend_lock.py --holder             # say who holds it
 """
 
 from __future__ import annotations
@@ -145,17 +151,32 @@ def refuse_because_free(path: str) -> None:
     )
 
 
+def report_holder(path: str, held: bool | None) -> None:
+    state = "unknown" if held is None else "held" if held else "free"
+    pid = holder_pid(path) if held else None
+    print(state, "" if pid is None else pid, path, sep="\n")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
+    question = parser.add_mutually_exclusive_group()
+    question.add_argument(
         "--require-running",
         action="store_true",
         help="refuse when NO backend holds the lock, rather than when one does",
+    )
+    question.add_argument(
+        "--holder",
+        action="store_true",
+        help="refuse nothing: print free, held or unknown, the holder's pid (or an empty line) and the lock's path",
     )
     arguments = parser.parse_args()
 
     path = lock_path()
     held = is_held(path)
+    if arguments.holder:
+        report_holder(path, held)
+        return 0
     if held is None:
         print(f"tender: could not read the single-instance lock at {path} — carrying on anyway.", file=sys.stderr)
         return 0

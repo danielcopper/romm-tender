@@ -1,4 +1,4 @@
-"""Stand-ins for ``ssh``, ``ssh-keygen``, ``ip`` and ``rsync``, and the world they answer from.
+"""Stand-ins for the programs the remote dev loop starts on both machines, and the world they answer from.
 
 No test of the remote dev loop runs one of these programs for real: a real
 ``ssh`` reads the developer's ``~/.ssh`` and may open a password dialog on their
@@ -29,7 +29,24 @@ for the parts the setup depends on:
 - a login runs its command with ``sh -c`` in the target's home, with
   ``SSH_CLIENT`` set;
 - a destination behind a ProxyJump fails on its hop when the world says so,
-  with what OpenSSH prints for that failure.
+  with what OpenSSH prints for that failure;
+- a login hands the command it runs the target's home, ``XDG_RUNTIME_DIR``
+  as ``pam_systemd`` sets it, and every ``FAKE_*`` variable, so the stand-ins
+  on the far side find the world too.
+
+``rsync`` as the client asks its ``-e`` remote shell for the server command
+rsync 3.2.7 sends (``server_options`` in its ``options.c``) for the options
+the dev tasks use, and refuses any other option; the ``rsync --server`` that
+command reaches records what it was started with and makes the copy, so a
+copy lands only where the dispatcher let the request through.
+
+On the target, ``systemd-run --unit`` starts a stand-in process as the unit's
+main process — for ``backend/main.py`` one that takes the backend's lock and
+writes a line to its log — and ``systemctl`` answers from the units it
+started or :func:`set_unit` declared; ``stop`` ends the unit's process.
+``tail -F`` and ``journalctl -f`` follow until the process ``--pid`` names
+ends or nothing reads their output any more, or, with
+:attr:`World.follow_holds` false, print once and end.
 
 Every login, password prompt and host key shown is appended to
 :attr:`World.log`, which is how a test tells a run that needed a password from
@@ -39,22 +56,42 @@ identity files it offered in :func:`ssh_calls`.
 
 from __future__ import annotations
 
+import fcntl
+import fnmatch
 import hashlib
 import json
 import os
 import re
+import select
+import shlex
 import shutil
+import signal
 import subprocess
 import sys
+import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Final, Literal, get_args
+from typing import Final, Literal, TypedDict, get_args
 
 WORLD_VARIABLE = "FAKE_REMOTE_WORLD"
 RSYNC_RECORD_VARIABLE = "FAKE_RSYNC_RECORD"
 
 # What the scripts under test call besides the stand-ins.
-SYSTEM_TOOLS = ("sh", "cat", "mkdir", "chmod", "mv", "rm", "grep", "awk", "tail", "readlink")
+SYSTEM_TOOLS = (
+    "sh", "bash", "cat", "mkdir", "chmod", "mv", "rm", "cp", "grep", "awk", "readlink", "wc", "date", "id",
+    "dirname", "seq", "tr",
+)  # fmt: skip
+STAND_INS = (
+    "ssh", "ssh-keygen", "ip", "rsync", "mise", "systemctl", "systemd-run", "pgrep", "journalctl", "tail",
+)  # fmt: skip
+
+# What rsync 3.2.7's client sends its server for ``-a`` (``server_options``).
+RSYNC_ARCHIVE = "-logDtpre.iLsfxCIvu"
+# How long a stand-in that follows or stands in for a process lasts at most,
+# so that a test that fails part-way leaves nothing running for long.
+LIFETIME = 30.0
+# The environment variables each recorded command keeps.
+RECORDED_ENVIRONMENT = ("DISPLAY", "WAYLAND_DISPLAY", "DBUS_SESSION_BUS_ADDRESS", "XAUTHORITY", "PATH")
 
 # What the user's own access to a target is: an agent key it accepts, a
 # password, or nothing it accepts.
@@ -105,6 +142,24 @@ class World:
     ssh_g_fails: bool = False
     fail_with: str | None = None
     """What ssh writes on stderr before it exits 255 at every login, for a failure no pattern knows."""
+    session_environment: list[str] = field(
+        default_factory=lambda: [
+            "DISPLAY=:0",
+            "WAYLAND_DISPLAY=wayland-0",
+            "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus",
+            "PATH=/from/the/user/manager",
+            "LANG=$'odd\\nvalue'",
+        ]
+    )
+    """What ``systemctl --user show-environment`` prints on the target."""
+    steam_running: bool = False
+    build_fails: bool = False
+    backend_exits: bool = False
+    """The stand-in backend exits right after its first log line, as one that fails to start."""
+    follow_holds: bool = True
+    """Whether ``tail -F`` without ``--pid`` and ``journalctl -f`` keep following, or print once and end."""
+    journal: list[str] = field(default_factory=list)
+    """What ``journalctl`` prints."""
 
     def save(self, path: Path) -> None:
         path.write_text(json.dumps(asdict(self)), encoding="utf-8")
@@ -128,7 +183,7 @@ def fake_path(directory: Path) -> str:
     system = directory / "system"
     fakes.mkdir()
     system.mkdir()
-    for program in ("ssh", "ssh-keygen", "ip", "rsync"):
+    for program in STAND_INS:
         wrapper = fakes / program
         wrapper.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{__file__}" {program} "$@"\n', encoding="utf-8")
         wrapper.chmod(0o755)
@@ -146,6 +201,62 @@ def ssh_calls(world: World) -> list[dict[str, list[str]]]:
     if not path.exists():
         return []
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+class Command(TypedDict):
+    program: str
+    argv: list[str]
+    env: dict[str, str]
+    """The variables of :data:`RECORDED_ENVIRONMENT` it was started with."""
+
+
+def commands(world: World, program: str | None = None) -> list[Command]:
+    """What each stand-in on the target, and ``mise`` here, was started with, in order."""
+    path = Path(world.log + ".commands")
+    if not path.exists():
+        return []
+    every = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    return [call for call in every if program is None or call["program"] == program]
+
+
+def units(world: World) -> dict[str, dict[str, int]]:
+    """Each unit a stand-in started or :func:`set_unit` declared, with its main process as ``pid``."""
+    path = Path(world.log + ".units")
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+
+
+def set_unit(world: World, name: str, pid: int) -> None:
+    """Declare *name* a unit whose main process is *pid*, as if the user manager ran it."""
+    every = units(world)
+    every[name] = {"pid": pid}
+    Path(world.log + ".units").write_text(json.dumps(every), encoding="utf-8")
+
+
+def end_processes(world: World) -> None:
+    """End every process a stand-in started, for a test's teardown."""
+    for unit in units(world).values():
+        pid = unit["pid"]
+        if pid > 0 and _alive(pid):
+            os.kill(pid, signal.SIGKILL)
+
+
+def _alive(pid: int) -> bool:
+    """Whether *pid* runs: a zombie, ended and not yet reaped, does not."""
+    try:
+        with open(f"/proc/{pid}/stat", encoding="utf-8") as handle:
+            return handle.read().rsplit(")", 1)[1].split()[0] != "Z"
+    except (OSError, IndexError):
+        return False
+
+
+def _record(world: World, program: str, argv: list[str]) -> None:
+    command = Command(
+        program=program,
+        argv=argv,
+        env={name: os.environ[name] for name in RECORDED_ENVIRONMENT if name in os.environ},
+    )
+    with open(world.log + ".commands", "a", encoding="utf-8") as handle:
+        handle.write(json.dumps(command) + "\n")
 
 
 def log_lines(world: World) -> list[str]:
@@ -413,6 +524,8 @@ def _ssh(argv: list[str]) -> int:
         "HOME": target.home,
         "PATH": os.environ["PATH"],
         "SSH_CLIENT": f"{target.client_address} 50022 22",
+        "XDG_RUNTIME_DIR": os.path.join(target.home, ".run"),
+        **{name: value for name, value in os.environ.items() if name.startswith("FAKE_")},
     }
     if "TENDER_PYTHON" in os.environ:
         env["TENDER_PYTHON"] = os.environ["TENDER_PYTHON"]
@@ -463,13 +576,309 @@ def _ip(argv: list[str]) -> int:
     return 0
 
 
+TRANSFER_VARIABLE = "FAKE_RSYNC_TRANSFER"
+
+
 def _rsync(argv: list[str]) -> int:
-    with open(os.environ[RSYNC_RECORD_VARIABLE], "a", encoding="utf-8") as handle:
-        handle.write(json.dumps(argv) + "\n")
+    if argv[:1] != ["--server"]:
+        return _rsync_client(argv)
+    if RSYNC_RECORD_VARIABLE in os.environ:
+        with open(os.environ[RSYNC_RECORD_VARIABLE], "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(argv) + "\n")
+    if TRANSFER_VARIABLE in os.environ:
+        transfer = json.loads(os.environ[TRANSFER_VARIABLE])
+        _mirror(Path(transfer["source"]), Path(argv[-1]), transfer["rules"], delete_excluded=transfer["excluded"])
     return 0
 
 
-_PROGRAMS = {"ssh": _ssh, "ssh-keygen": _ssh_keygen, "ip": _ip, "rsync": _rsync}
+def _rsync_client(argv: list[str]) -> int:
+    """``rsync [options] <source>/ <host>:<path>``: the server command through ``-e``, the copy by the server."""
+    archive = delete = delete_excluded = False
+    rules: list[list[str]] = []
+    remote_shell: str | None = None
+    paths: list[str] = []
+    words = iter(argv)
+    for word in words:
+        if word == "-a":
+            archive = True
+        elif word == "--delete":
+            delete = True
+        elif word == "--delete-excluded":
+            delete_excluded = True
+        elif word == "-e":
+            remote_shell = next(words)
+        elif word.startswith(("--include=", "--exclude=")):
+            kind, _, pattern = word[2:].partition("=")
+            rules.append([kind, pattern])
+        elif word.startswith("-"):
+            print(f"the rsync stand-in knows no {word}", file=sys.stderr)
+            return 1
+        else:
+            paths.append(word)
+    if not archive or remote_shell is None or len(paths) != 2 or not paths[0].endswith("/"):
+        print(f"the rsync stand-in cannot run: {argv}", file=sys.stderr)
+        return 1
+    host, _, path = paths[1].partition(":")
+    server = ["rsync", "--server", RSYNC_ARCHIVE]
+    if delete_excluded:
+        server.append("--delete-excluded")
+    elif delete:
+        server.append("--delete")
+    transfer = {"source": paths[0], "rules": rules, "excluded": delete_excluded}
+    env = {**os.environ, TRANSFER_VARIABLE: json.dumps(transfer)}
+    ended = subprocess.run([*shlex.split(remote_shell), host, *server, ".", path], env=env, check=False).returncode
+    if ended != 0:
+        print(
+            "rsync: connection unexpectedly closed (0 bytes received so far) [sender]\n"
+            f"rsync error: unexplained error (code {ended}) at io.c(231) [sender=3.2.7]",
+            file=sys.stderr,
+        )
+    return ended
+
+
+def _included(relative: str, is_dir: bool, rules: list[list[str]]) -> bool:
+    """rsync's first matching rule for *relative*: ``/`` anchors at the root, ``*`` stays within a name."""
+    parts = relative.split("/")
+    for kind, raw in rules:
+        if raw.endswith("/") and not is_dir:
+            continue
+        pattern = raw.rstrip("/")
+        if pattern.startswith("/"):
+            wanted = pattern[1:].split("/")
+            hit = len(wanted) == len(parts) and all(map(fnmatch.fnmatchcase, parts, wanted))
+        else:
+            hit = fnmatch.fnmatchcase(parts[-1], pattern)
+        if hit:
+            return kind == "include"
+    return True
+
+
+def _mirror(source: Path, destination: Path, rules: list[list[str]], *, delete_excluded: bool) -> None:
+    sent: set[str] = set()
+    destination.mkdir(parents=True, exist_ok=True)
+    for directory, folders, files in os.walk(source):
+        base = Path(directory).relative_to(source)
+        for folder in list(folders):
+            relative = (base / folder).as_posix()
+            linked = (Path(directory) / folder).is_symlink()
+            if not _included(relative, not linked, rules):
+                folders.remove(folder)
+                continue
+            sent.add(relative)
+            target = destination / relative
+            if linked:
+                folders.remove(folder)
+                _replace(target)
+                target.symlink_to(os.readlink(Path(directory) / folder))
+            elif not target.is_dir() or target.is_symlink():
+                _replace(target)
+                target.mkdir()
+        for name in files:
+            relative = (base / name).as_posix()
+            if not _included(relative, False, rules):
+                continue
+            sent.add(relative)
+            _replace(destination / relative)
+            shutil.copy2(Path(directory) / name, destination / relative, follow_symlinks=False)
+    for directory, folders, files in os.walk(destination, topdown=False):
+        base = Path(directory).relative_to(destination)
+        for name in [*folders, *files]:
+            relative = (base / name).as_posix()
+            path = destination / relative
+            protected = not delete_excluded and not _included(relative, path.is_dir(), rules)
+            if relative not in sent and not protected:
+                _replace(path)
+
+
+def _replace(path: Path) -> None:
+    if path.is_symlink() or path.is_file():
+        path.unlink()
+    elif path.is_dir():
+        shutil.rmtree(path)
+
+
+def _mise(argv: list[str]) -> int:
+    world = _world()
+    _record(world, "mise", argv)
+    if world.build_fails:
+        print("vite: build failed", file=sys.stderr)
+        return 1
+    built = Path.cwd() / "dist" / "index.js"
+    built.parent.mkdir(exist_ok=True)
+    built.write_text("build:desktop\n" if "--surface" in argv else "build:dev\n", encoding="utf-8")
+    return 0
+
+
+def _unit_pid(world: World, name: str) -> int:
+    unit = units(world).get(name)
+    pid = 0 if unit is None else unit["pid"]
+    return pid if pid > 0 and _alive(pid) else 0
+
+
+def _systemctl(argv: list[str]) -> int:
+    world = _world()
+    _record(world, "systemctl", argv)
+    words = [word for word in argv if word not in ("--user", "--quiet")]
+    if words == ["show-environment"]:
+        print("\n".join(world.session_environment))
+        return 0
+    if words[:1] == ["is-active"]:
+        active = _unit_pid(world, words[1]) > 0
+        if "--quiet" not in argv:
+            print("active" if active else "inactive")
+        return 0 if active else 3
+    if words[:1] == ["show"] and "MainPID" in words:
+        print(_unit_pid(world, words[-1]))
+        return 0
+    if words[:1] == ["stop"]:
+        for name in words[1:]:
+            pid = _unit_pid(world, name)
+            if pid:
+                os.kill(pid, signal.SIGTERM)
+                deadline = time.monotonic() + 5
+                while _alive(pid) and time.monotonic() < deadline:
+                    time.sleep(0.02)
+        return 0
+    return 0
+
+
+def _systemd_run(argv: list[str]) -> int:
+    """Records the call; with ``--unit``, starts its stand-in as the unit's main process."""
+    world = _world()
+    _record(world, "systemd-run", argv)
+    options = argv[: argv.index("--")]
+    command = argv[argv.index("--") + 1 :]
+    unit = next((word.split("=", 1)[1] for word in options if word.startswith("--unit=")), None)
+    if unit is None:
+        return 0
+    role = "backend" if command[-1].endswith("backend/main.py") else "process"
+    started = subprocess.Popen(
+        [sys.executable, __file__, role],
+        start_new_session=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    set_unit(world, unit, started.pid)
+    if role == "backend":
+        log = _backend_log()
+        deadline = time.monotonic() + 5
+        while not (log.exists() and log.read_text(encoding="utf-8").endswith("backend started\n")):
+            if time.monotonic() > deadline:
+                raise AssertionError("the stand-in backend never wrote its log")
+            time.sleep(0.02)
+        if world.backend_exits:
+            started.wait()
+    return 0
+
+
+def _backend_log() -> Path:
+    return Path(os.environ["HOME"]) / ".local/state/romm-tender/backend.log"
+
+
+def _backend(_argv: list[str]) -> int:
+    """A backend: it takes the single-instance lock where the backend does, and writes one log line."""
+    world = _world()
+    lock = Path(os.environ["HOME"]) / ".local/share/romm-tender/backend.lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    handle = open(lock, "a")  # noqa: SIM115 — held for the life of the process, as the backend's is
+    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    log = _backend_log()
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with open(log, "a", encoding="utf-8") as written:
+        written.write("backend started\n")
+    if world.backend_exits:
+        return 1
+    return _process([])
+
+
+def _process(_argv: list[str]) -> int:
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    time.sleep(LIFETIME)
+    return 0
+
+
+def _pgrep(argv: list[str]) -> int:
+    world = _world()
+    _record(world, "pgrep", argv)
+    return 0 if world.steam_running else 1
+
+
+def _reader_gone() -> bool:
+    poller = select.poll()
+    poller.register(sys.stdout.fileno(), select.POLLERR)
+    return any(events & (select.POLLERR | select.POLLHUP) for _, events in poller.poll(0))
+
+
+def _follow(path: Path | None, start: int | None, last_lines: int, pid: int | None, holds: bool) -> int:
+    """Write *path* from *start* (a byte), or its last lines, then what is added, until told to end."""
+    deadline = time.monotonic() + LIFETIME
+    position = start
+    while True:
+        alive = pid is None or _alive(pid)
+        if path is not None and path.exists():
+            data = path.read_bytes()
+            if position is None:
+                lines = data.splitlines(keepends=True)
+                position = len(data) - sum(len(line) for line in lines[-last_lines:]) if last_lines else len(data)
+            try:
+                sys.stdout.buffer.write(data[position:])
+                sys.stdout.flush()
+            except BrokenPipeError:
+                return 0
+            position = len(data)
+        if not alive or (pid is None and not holds) or _reader_gone() or time.monotonic() > deadline:
+            return 0
+        time.sleep(0.02)
+
+
+def _tail(argv: list[str]) -> int:
+    if "-F" not in argv:
+        real = shutil.which("tail", path="/usr/bin:/bin")
+        assert real is not None
+        os.execv(real, ["tail", *argv])
+    world = _world()
+    _record(world, "tail", argv)
+    start = None
+    last_lines = 10
+    pid = None
+    words = iter(argv)
+    for word in words:
+        if word == "-c":
+            start = int(next(words).lstrip("+")) - 1
+        elif word == "-n":
+            last_lines = int(next(words))
+        elif word.startswith("--pid="):
+            pid = int(word.split("=", 1)[1])
+    return _follow(Path(argv[-1]), start, last_lines, pid, world.follow_holds)
+
+
+def _journalctl(argv: list[str]) -> int:
+    world = _world()
+    _record(world, "journalctl", argv)
+    for line in world.journal:
+        print(line, flush=True)
+    if "-f" in argv:
+        return _follow(None, None, 0, None, world.follow_holds)
+    return 0
+
+
+_PROGRAMS = {
+    "ssh": _ssh,
+    "ssh-keygen": _ssh_keygen,
+    "ip": _ip,
+    "rsync": _rsync,
+    "mise": _mise,
+    "systemctl": _systemctl,
+    "systemd-run": _systemd_run,
+    "pgrep": _pgrep,
+    "journalctl": _journalctl,
+    "tail": _tail,
+    "backend": _backend,
+    "process": _process,
+}
 
 if __name__ == "__main__":
+    # Ctrl-C ends a stand-in as it ends the program it stands in for: at once, and with no traceback.
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
     sys.exit(_PROGRAMS[sys.argv[1]](sys.argv[2:]))

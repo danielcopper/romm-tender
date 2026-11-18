@@ -393,8 +393,8 @@ failures at any log level, the rest only with Tender's log level at Info or Debu
 ## A remote target
 
 `setup:remote-target` prepares another machine than the one you write code on — a Steam Deck beside a build host, say —
-as a **target** with a name, for the dev tasks' `--target`. The target needs no checkout and no toolchain; it is
-prepared once, from the build host:
+as a **target** with a name, for the dev tasks' `--target` ([below](#the-dev-tasks-on-a-target)). The target needs no
+checkout and no toolchain; it is prepared once, from the build host:
 
 ```bash
 mise run setup:remote-target <name> <destination>           # log in, install, and record the target here
@@ -456,10 +456,10 @@ The `authorized_keys` line restricts the key three ways:
   changes, the target refuses the key — run the setup again.
 - **`command=`** — to the dispatcher, which runs instead of whatever the key asks for and decides from that request
   alone. It lets four kinds through: the setup's install script; `rsync` receiving into `incoming/` and nowhere else;
-  the incoming copy's `scripts/dev_target.sh`; and reads of the backend's log and of its database. Everything else, a
-  login among it, is refused; the exact requests are in the header of `scripts/dev_dispatch.sh`. The setup request puts
-  the dispatcher itself within the key's reach, which grants nothing the key lacks: `dev_target.sh` already runs
-  whatever tree the key copied in, so `from=` is the bound either way.
+  the incoming copy's `scripts/dev_target.sh`; and reads of the backend's log — once, or followed — and of its database.
+  Everything else, a login among it, is refused; the exact requests are in the header of `scripts/dev_dispatch.sh`. The
+  setup request puts the dispatcher itself within the key's reach, which grants nothing the key lacks: `dev_target.sh`
+  already runs whatever tree the key copied in, so `from=` is the bound either way.
 - **`restrict`** — no terminal, no forwarding of any kind.
 
 ### A target you cannot log into yet: `--print`
@@ -515,6 +515,86 @@ this machine's side after the target is set up is named with its file, and runni
 
 A target whose address changed is set up again with the new one, and needs no password for it: the key still holds,
 because `from=` bounds the build host's address, not the target's.
+
+### The dev tasks on a target
+
+Every dev task takes `--target <name>`, a name `setup:remote-target` recorded. What is built is built here; Steam and
+the backend are the target's:
+
+```bash
+mise run dev --target <name> [--surface]                      # build here, restart Steam there, run the backend there
+mise run dev:bpm [display] --target <name> [--surface]        # ...into windowed Big Picture on the target's <display>
+mise run dev:desktop [display] --target <name> [--surface]    # ...into the desktop client
+mise run dev:backend --target <name> [--surface]              # build here, run the backend there, restart nothing
+mise run dev:frontend [display] --target <name> [--surface]   # build here, restart Steam there; its backend loads it
+mise run dev:bpm-reset [display] --target <name>              # only the restart, there
+mise run dev:desktop-reset [display] --target <name>
+mise run dev:ui-scale [mode] --target <name>                  # emulate Game Mode's metrics there
+mise run dev:ui-scale --stop --target <name>                  # ...and put the scale and the window back
+mise run dev:stop --target <name>                             # stop the backend there
+mise run dev:log --target <name> [--follow]                   # its backend.log, once or followed
+mise run dev:status --target <name>                           # who holds the lock there, and whether dev:ui-scale runs
+```
+
+Without `--target`, every task does what the sections above describe and nothing else. With it, the task hands over to
+`scripts/dev_target.py`, which works in this order:
+
+1. **It finds the target** in `~/.config/romm-tender-dev/ssh_config`, and refuses before anything else when there is no
+   such target.
+2. **It builds here**, for the five tasks that build: `build:dev`, or `build:desktop` with `--surface`, source maps
+   kept.
+3. **It copies the tree to the target's `incoming/`**, for every task but `dev:log`: the paths a release ships —
+   `SHIPPED` in `scripts/package.sh`, read from that list — plus `scripts/`, without this machine's compiled modules.
+   The copy is a mirror that `rsync` keeps up to date, so only what changed travels. It lands beside the running tree,
+   `current/`, not over it, and a task that builds nothing leaves `current/` alone.
+4. **It runs the task on the target**, through `scripts/dev_target.sh` from that copy. The tasks that start a backend
+   ask the single-instance lock first and refuse as they do locally — `dev:frontend` the other way round — and only once
+   the answer lets them on does the copy replace `current/`. Then Steam restarts through `scripts/dev_steam.sh`, as it
+   does locally, and the backend starts as the user unit `romm-tender-dev`, on the Python the installed service runs on
+   (`TENDER_PYTHON`, else `/usr/bin/python3`, 3.12 or newer), so it outlives the connection. The display a task names is
+   one of the target's, and the [remembered window](#why-the-window-is-remembered-rather-than-read) is the target's
+   memory file.
+
+On the target everything runs in the user manager's environment: the units do by being units, and the steps between take
+the display and the session bus from it, since a login over `ssh` carries neither. It needs nothing beyond `/usr/bin`.
+
+**The tasks that start a backend follow its `backend.log` until Ctrl-C.** The log shows from where it stood before the
+start, so a start that fails is seen: when the backend stops, the following ends and shows what the backend wrote to
+stderr since it started — an import that failed before the log was opened among it. Ctrl-C ends only the following,
+since it does not reach the target; the backend keeps running, and the task says so and names `dev:stop`.
+
+**`dev:stop` stops whichever holds the lock on the target**: the dev backend, or the installed service. It leaves Steam
+as it is — the next task that starts a backend restarts it anyway — and leaves the installed service enabled, so it
+starts again at the next login; the message names `systemctl --user start romm-tender` to start it now. A lock held by
+any other process is named and left alone. When the installed service holds the lock, a task that starts a backend
+refuses with `mise run dev:stop --target <name>` in its message.
+
+**`dev:ui-scale` runs on the target as the user unit `romm-tender-dev-ui-scale`**, and the task follows what it prints
+until Ctrl-C, which ends only the following. `dev:ui-scale --stop --target <name>` stops the unit, which restores the
+scale and the window as Ctrl-C does locally, and shows what it said doing so; `dev:stop` leaves it running. `auto`, the
+rescue, runs once and ends, as it does locally.
+
+**`dev:log`** shows the target's `backend.log` once; with `--follow` it shows its end and follows it, by name, so a log
+rotated away or not written yet is picked up. **`dev:status`** says what holds the lock — the dev backend, the installed
+service, another process, or nothing — and whether a `dev:ui-scale` runs.
+
+The calls run `ssh` and `rsync` with the dev loop's config alone. The target's leg asks nothing; a jump host on the way
+may ask as your own `ssh` would, about its host key or a key's passphrase, and the task waits for the answer. A target
+whose dispatcher is older than the checkout — one that refuses `dev:log --follow`, say — is brought up to date by
+running `setup:remote-target` again.
+
+#### When a target cannot be used
+
+A task that cannot reach the target says why and what to do, and nothing is done on the target:
+
+| What happened                   | What to do                                                                                     |
+| ------------------------------- | ---------------------------------------------------------------------------------------------- |
+| no such target                  | `mise run setup:remote-target <name> <destination>`                                            |
+| no answer at its address        | it may have a new one: run the setup with it                                                   |
+| a host key not the recorded one | another machine answers there: no connection; reinstalled, remove its record and run the setup |
+| the build host's key refused    | this machine's address may have changed: run the setup again                                   |
+
+No such target is found before the build; the other three at the first connection, the copy, after it.
 
 ## DevTools
 

@@ -20,6 +20,9 @@
 #   read database
 #       the backend's log, and its database dumped as SQL through Python's
 #       sqlite3, opened read-only
+#   follow log
+#       the backend's log followed by name until the connection ends, so that a
+#       log rotated away or not written yet is picked up when it appears
 #
 # Everything else is refused with REFUSED, an empty request (a login) among it.
 #
@@ -55,7 +58,7 @@ PYTHON="${TENDER_PYTHON:-/usr/bin/python3}"
 refuse() {
     printf 'tender-dev: refused: %s\n' "${SSH_ORIGINAL_COMMAND:-(a login)}" >&2
     printf '%s\n' "  This key may only run the setup, copy into the incoming tree, run that tree's" \
-        "  scripts/dev_target.sh, and read the backend's log and database." >&2
+        "  scripts/dev_target.sh, read or follow the backend's log, and read its database." >&2
     exit "$REFUSED"
 }
 
@@ -153,6 +156,10 @@ case "$1" in
             exit 1
         }
         exec sh "$DEV_TARGET" "$@"
+        ;;
+    follow)
+        [ "$*" = "follow log" ] || refuse
+        exec tail -F "$LOG_FILE"
         ;;
     read)
         [ $# -eq 2 ] || refuse
