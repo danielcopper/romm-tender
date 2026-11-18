@@ -703,3 +703,48 @@ describe("a folder holding files the entry takes as games of their own", () => {
     expect(entryLaunchLine(holds, RETRODECK)).toBe("the folder holds games of their own: Game.iso, Other.iso");
   });
 });
+
+describe("a verdict not established always says so first (#2195 D2, D40; review R1)", () => {
+  // The shapes of the recorded machines a-file-the-core-does-not-claim-and-the-list-leaves-out-is-attempted,
+  // ppsspp-a-folder-that-cannot-be-listed-is-not-established and a-path-the-sandbox-cannot-be-told-about-is-not-established.
+  const UNCLAIMED = launch({
+    state: "not_established",
+    entry: "Gambatte",
+    file: "Game.txt",
+    extension: ".txt",
+    starts_from: [".gb", ".gbc", ".sgb", ".zip"],
+    statements: [{ reason: "frontend_would_not_list", file: null }],
+  });
+  const UNLISTED_FOLDER = launch({
+    state: "not_established",
+    entry: "PPSSPP (Standalone)",
+    file: "Game",
+    extension: ".",
+    starts_from: [".iso", ".cso"],
+    statements: [{ reason: "frontend_would_not_list", file: null }],
+  });
+  const UNSEEN = launch({ state: "not_established", entry: "Gambatte", file: "Game.sgb", statements: [] });
+
+  it.each([
+    [UNCLAIMED, "Game.txt"],
+    [UNLISTED_FOLDER, "Game"],
+  ])("leads with the verdict before a note on how the frontend lists %#", (verdict, file) => {
+    const notes = launchNotes(verdict, RETRODECK);
+
+    expect(notes).toHaveLength(2);
+    expect(notes[0]).toMatch(new RegExp(`^Whether ${file} starts cannot be established: `));
+    expect(notes[1]).toMatch(/^ES-DE would not list /);
+  });
+
+  it("says it with nothing else to say", () => {
+    expect(launchNotes(UNSEEN, RETRODECK)).toHaveLength(1);
+    expect(launchNotes(UNSEEN, RETRODECK)[0]).toMatch(/^Whether Game\.sgb starts cannot be established: /);
+  });
+
+  it("leads the emulator menu's line too, counting the note", () => {
+    const line = entryLaunchLine(UNCLAIMED, RETRODECK) ?? "";
+
+    expect(line).toMatch(/^whether it starts cannot be established: /);
+    expect(line).toMatch(/ \+1 more$/);
+  });
+});

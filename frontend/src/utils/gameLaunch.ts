@@ -269,6 +269,21 @@ function statementsOf(launch: GameLaunch): LaunchStatement[] {
   return statements;
 }
 
+// Statements beside a verdict that say nothing about whether the game starts:
+// how the frontend would list the file, and what a folder holds.
+const NOTES_ONLY: ReadonlySet<LaunchStatement["reason"]> = new Set(["frontend_would_not_list", "folder_holds_games"]);
+
+/**
+ * Whether a verdict not established already says, in its own statements, what
+ * could not be established; where it does not, its sentence leads and the notes
+ * follow it (#2195 D2, D40).
+ */
+function saysWhatIsNotEstablished(launch: GameLaunch): boolean {
+  return statementsOf(launch).some(
+    (statement) => !NOTES_ONLY.has(statement.reason) && said(launch, statement, true) !== null,
+  );
+}
+
 /** Every statement beside the verdict that Tender words, in order. */
 function allSaid(launch: GameLaunch, tenderStarts: boolean): Said[] {
   return statementsOf(launch).flatMap((statement) => said(launch, statement, tenderStarts) ?? []);
@@ -404,13 +419,12 @@ export function launchNotes(launch: GameLaunch | null, source: AnsweringSource |
   if (launch === null) return [];
   if (launch.state === "not_established") {
     const notes = allSaid(launch, true).map((each) => each.note);
-    if (notes.length > 0) return notes;
-    if (launch.reason === "systems_several") {
-      return [
-        `Whether ${launch.entry} starts this game cannot be established: ${notEstablishedBecause(launch, source)}.`,
-      ];
-    }
-    return [`Whether ${launch.file} starts cannot be established: ${notEstablishedBecause(launch, source)}.`];
+    if (saysWhatIsNotEstablished(launch)) return notes;
+    const lead =
+      launch.reason === "systems_several"
+        ? `Whether ${launch.entry} starts this game cannot be established: ${notEstablishedBecause(launch, source)}.`
+        : `Whether ${launch.file} starts cannot be established: ${notEstablishedBecause(launch, source)}.`;
+    return [lead, ...notes];
   }
   if (launch.state !== "starts") return [];
   return allSaid(launch, true).map((each) => each.note);
@@ -448,8 +462,8 @@ export function entryLaunchLine(
     }
     case "not_established": {
       const lines = allSaid(launch, tenderStarts).map((each) => each.line);
-      if (lines.length > 0) return first(lines[0]!, lines.length - 1);
-      return first(`whether it starts cannot be established: ${notEstablishedBecause(launch, source)}`, 0);
+      if (saysWhatIsNotEstablished(launch)) return first(lines[0]!, lines.length - 1);
+      return first(`whether it starts cannot be established: ${notEstablishedBecause(launch, source)}`, lines.length);
     }
     default: {
       const lines = allSaid(launch, tenderStarts).map((each) => each.line);

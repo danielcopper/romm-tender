@@ -401,8 +401,9 @@ _STOPPED_SHORT_BECAUSE = {
 }
 
 # Codes a launchability answer carries that change nothing Tender says.
-# ``entry-format-unclaimed`` stands on a verdict that lets the file start:
-# RetroArch hands a direct load to the core whatever it claims. A foreign core's
+# ``entry-format-unclaimed`` says the core does not claim the extension, and
+# RetroArch hands it the file all the same; it stands beside a verdict whose
+# own sentence already says the start is not established. A foreign core's
 # refusal (``core-file-foreign``) is the entry-not-accepted verdict it stands
 # beside, worded as that verdict. ``arrangement-version-drifted`` says the
 # installation's version is not the one the reading is pinned to, on every
