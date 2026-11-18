@@ -241,6 +241,20 @@ run = '''
 exec python3 scripts/dev_ui_scale.py "$usage_mode"
 '''
 
+[tasks."setup:remote-target"]
+description = "Set up another machine as a dev target, or repair it: the dev loop's key, the dispatcher and the key's one authorized_keys line there, its entry in ~/.config/romm-tender-dev/ here (--print: a script to run on a target this machine cannot log into yet)"
+raw = true
+usage = '''
+arg "<name>" help="The target's name, as --target takes it: letters, digits, '.', '_' and '-'."
+arg "<destination>" help="What your own ssh reaches the target as: user@address, or an alias from your SSH config."
+flag "--print" help="Contact nothing: print a script to run on the target, then run the setup again without --print."
+'''
+# `raw` because the one login may ask for a password or a host key on the
+# terminal. `--` so a name or destination is never read as an option.
+run = '''
+exec python scripts/setup_remote_target.py ${usage_print:+--print} -- "$usage_name" "$usage_destination"
+'''
+
 [tasks."dev:bpm"]
 description = "Build the panel, restart Steam into windowed Big Picture on a chosen display (none: placed nowhere), remember that for dev, and run the backend (restarts Steam)"
 raw = true

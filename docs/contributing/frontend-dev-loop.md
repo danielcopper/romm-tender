@@ -390,6 +390,94 @@ To inspect it, open a RomM shortcut in the desktop client's library, and select 
 DevTools (below). What the watcher found and what failed is in the backend's log, on the lines starting `desktop:`: its
 failures at any log level, the rest only with Tender's log level at Info or Debug.
 
+## A remote target
+
+The loop can also run on another machine than the one you write code on: a Steam Deck beside a build host, say. That
+machine needs no checkout and no toolchain; it is set up once, from the build host, as a **target** with a name:
+
+```bash
+mise run setup:remote-target <name> <destination>           # log in once, install, and record the target here
+mise run setup:remote-target <name> <destination> --print   # print a script to run on the target instead
+```
+
+`<destination>` is anything your own `ssh` reaches: `deck@192.168.1.20`, or an alias from your `~/.ssh/config`, which
+the setup reads with `ssh -G` and never writes. `<name>` is yours to choose — letters, digits, `.`, `_` and `-`.
+
+### What the setup does
+
+1. **It checks the login before it writes anything**, here or on the target. It logs in once through your own `ssh`,
+   with whatever access that already has — a password, or a key from your agent or your SSH config — and, once the
+   target is set up, with the dev loop's key as well, offered after your own keys and before a password.
+2. **It creates the build host's key for targets** if there is none: `~/.config/romm-tender-dev/id_ed25519`. One key
+   serves every target.
+3. **It records the target's host key** in the dev loop's own known-hosts file. At first contact `ssh` shows the
+   fingerprint and asks, as it always does — even for a machine your own `~/.ssh/known_hosts` already knows, because
+   that file is not the one the dev loop reads. The record is filed under the target's name (`romm-tender-dev.<name>`)
+   rather than its address, so a target at a new address keeps it.
+4. **It installs on the target**, under `~/.local/lib/romm-tender-dev/`: `current/` (the running tree), `incoming/` (the
+   copy the build host sends), and `dispatch.sh` beside them, where no copy reaches it. Into `~/.ssh/authorized_keys` it
+   writes one line for the key, with a comment above it naming the build host and the time, and every other line there
+   stays as it was.
+5. **It writes the target into the dev loop's own SSH config**, `~/.config/romm-tender-dev/ssh_config`: the address,
+   port, user and jump host the destination resolved to, the dev loop's key and nothing else, and its known-hosts file.
+   Your `~/.ssh/config` serves the setup login only — the dev loop calls `ssh` with its own file alone, and so with the
+   restricted key alone. A jump host is written out as `user@address:port`, since an alias from your config means
+   nothing in this one.
+
+Run again, it changes what changed: one key, one `authorized_keys` line and one config entry, however often it runs.
+That is also how a target is repaired.
+
+### What the key may do on the target
+
+The `authorized_keys` line restricts the key three ways:
+
+- **`from=`** — to the build host's address **as the target sees it**: the one `$SSH_CLIENT` shows in the setup login,
+  which behind a jump host is the jump host's. This is the bound that holds: the key copies a tree in and runs a script
+  out of it, so a copy of the key used from anywhere else would run code on the target. When the build host's address
+  changes, the target refuses the key — run the setup again.
+- **`command=`** — to the dispatcher, which runs instead of whatever the key asks for and decides from that request
+  alone. It lets three kinds through: `rsync` receiving into `incoming/` and nowhere else, the incoming copy's
+  `scripts/dev_target.sh`, and `read log` / `read database` — the backend's `backend.log`, and its database dumped as
+  SQL through Python's `sqlite3`, opened read-only. Everything else, a login among it, is refused. The exact requests
+  are in the header of `scripts/dev_dispatch.sh`.
+- **`restrict`** — no terminal, no forwarding of any kind.
+
+### A target you cannot log into yet: `--print`
+
+A target with no password login and no key of yours on it cannot be logged into, so `--print` contacts nothing and
+prints a script instead:
+
+```bash
+mise run setup:remote-target deck deck@192.168.1.20 --print > setup-deck.sh
+```
+
+Copy it to the target by any means and run it there with `sh setup-deck.sh`. It does the same install, and shows the
+target's host key fingerprints. The address it restricts the key to is the one the build host sends from towards the
+target (`ip route get`), written into the script, and the script says which before it writes anything; if the target
+sees the build host at another address — through NAT, say — give that one instead: `sh setup-deck.sh 10.8.0.6`. Then run
+the setup on the build host again, without `--print`: it logs in with the key, `ssh` shows the fingerprint for you to
+compare with the script's, and the setup records the target and finishes. If the key is refused at that point, the
+message names the address the script used — the likely cause.
+
+`--print` refuses a destination behind a jump host: the target would see the jump host's address, which the build host
+cannot know.
+
+### When the setup refuses
+
+Each way the login can fail ends the setup with what to do next, and **nothing changed, here or on the target**:
+
+| `ssh` reports                   | What to do                                                                                   |
+| ------------------------------- | -------------------------------------------------------------------------------------------- |
+| a name it cannot resolve        | give the target's address, or a name the network resolves                                    |
+| no SSH server answering         | check the address, and that the target runs an SSH server                                    |
+| no login accepted               | `--print`, as above                                                                          |
+| a host key not the recorded one | another machine may answer at that address; if the target was reinstalled, remove its record |
+
+A target whose address changed is set up again with the new one, and needs no password for it: the key still holds,
+because `from=` bounds the build host's address, not the target's. Where none of your own keys gets in, a run with the
+key reaches the dispatcher rather than a shell, so it brings the build host's side up to date and leaves the install on
+the target as it was; to renew that install, use `--print`.
+
 ## DevTools
 
 With `~/.steam/steam/.cef-enable-remote-debugging` present, Steam exposes the CEF DevTools protocol on

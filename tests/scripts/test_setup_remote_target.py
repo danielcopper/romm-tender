@@ -19,6 +19,7 @@ import importlib.util
 import os
 import subprocess
 import sys
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -231,6 +232,21 @@ class TestTheSetupLogin:
         assert lines[:2] == ["ssh-ed25519 AAAAothersKey someone@laptop", "ssh-ed25519 AAAAanotherOne other@desktop"]
         assert lines[3] == _dispatcher_line(remote, _SEEN_FROM)
         assert len(lines) == 4
+
+    def test_an_unrestricted_line_of_the_same_key_goes(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A line that would let the key past the dispatcher, however it got there."""
+        remote.setup(capsys, "deck", f"deck@{_ADDRESS}", "--print")
+        blob = remote.public_key().split()[1]
+        remote.authorized_keys.parent.mkdir()
+        remote.authorized_keys.write_text(f"ssh-ed25519 {blob} copied-by-hand\n", encoding="utf-8")
+        remote.target().own_access = AGENT
+
+        code, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
+
+        assert code == 0, err
+        assert [line for line in remote.key_lines() if blob in line] == [_dispatcher_line(remote, _SEEN_FROM)]
 
 
 class TestRunAgain:
@@ -486,3 +502,31 @@ class TestArguments:
         assert code == 1
         assert "no destination ssh could reach" in err
         assert log_lines(remote.world) == []
+
+
+class TestTheTaskAndTheGuide:
+    _REPO = Path(__file__).resolve().parents[2]
+
+    def test_the_task_hands_its_name_destination_and_print_flag_to_the_script(self) -> None:
+        task = tomllib.loads((self._REPO / "mise.toml").read_text(encoding="utf-8"))["tasks"]["setup:remote-target"]
+
+        assert task["raw"] is True
+        assert 'arg "<name>"' in task["usage"]
+        assert 'arg "<destination>"' in task["usage"]
+        assert 'flag "--print"' in task["usage"]
+        assert (
+            'python scripts/setup_remote_target.py ${usage_print:+--print} -- "$usage_name" "$usage_destination"'
+            in task["run"]
+        )
+
+    def test_the_guide_covers_the_setup_where_the_scripts_point(self) -> None:
+        guide = (self._REPO / "docs/contributing/frontend-dev-loop.md").read_text(encoding="utf-8")
+
+        assert "\n## A remote target\n" in guide
+        section = guide.split("\n## A remote target\n", 1)[1].split("\n## ", 1)[0]
+        assert "mise run setup:remote-target <name> <destination>  " in section
+        assert "mise run setup:remote-target <name> <destination> --print" in section
+        for failure in ("cannot resolve", "no SSH server answering", "no login accepted", "not the recorded one"):
+            assert failure in section
+        for script in ("setup_remote_target.py", "dev_dispatch.sh"):
+            assert '"A remote target"' in (self._REPO / "scripts" / script).read_text(encoding="utf-8")
