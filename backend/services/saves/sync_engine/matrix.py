@@ -117,10 +117,10 @@ class SyncRunOptions:
 
 
 @dataclass
-class RomLookup:
-    """What RomM's lookup of the ROM answered in one run: ``None`` until it is asked, then whether the ROM is gone."""
+class _RomLookup:
+    """RomM's lookup of the ROM in one run: ``None`` until asked, then whether the lookup proved the ROM gone."""
 
-    gone: bool | None = None
+    proven_gone: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -143,7 +143,7 @@ class RomDispatchContext:
     system: str
     core_so: str | None
     stop: SyncStop | None = None
-    lookup: RomLookup = field(default_factory=RomLookup)
+    lookup: _RomLookup = field(default_factory=_RomLookup)
 
 
 class MatrixExecutor:
@@ -379,18 +379,22 @@ class MatrixExecutor:
         or any other error, leaves the upload's 404 an ordinary error. Asked at
         most once per run: the verdict is kept on *ctx*.
         """
-        if ctx.lookup.gone is not None:
-            return ctx.lookup.gone
+        if ctx.lookup.proven_gone is not None:
+            return ctx.lookup.proven_gone
         try:
             self._romm_api.get_rom(ctx.rom_id)
         except RommNotFoundError:
-            ctx.lookup.gone = True
+            ctx.lookup.proven_gone = True
             return True
-        except Exception as e:
-            self._logger.info(f"_rom_gone_from_romm({ctx.rom_id}): the lookup proves nothing, the 404 stays: {e}")
+        except RommApiError as e:
+            self._logger.info(
+                f"_rom_gone_from_romm({ctx.rom_id}): the lookup proves nothing, the 404 stays: {type(e).__name__}: {e}"
+            )
+        except Exception:
+            self._logger.warning(f"_rom_gone_from_romm({ctx.rom_id}): the lookup failed, the 404 stays", exc_info=True)
         else:
             self._logger.info(f"_rom_gone_from_romm({ctx.rom_id}): RomM still has this ROM, the 404 stays")
-        ctx.lookup.gone = False
+        ctx.lookup.proven_gone = False
         return False
 
     def _handle_upload_409(
