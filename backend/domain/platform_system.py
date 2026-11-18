@@ -25,7 +25,14 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
-from domain.emulator_sources import ALL_SOURCES_SWITCHED_OFF, NO_SOURCE_DETECTED, ArrangedSource
+from domain.emulator_sources import (
+    ALL_SOURCES_SWITCHED_OFF,
+    CATALOGUE_INVALID,
+    CATALOGUE_NOT_SET_UP,
+    CATALOGUE_SEALED,
+    NO_SOURCE_DETECTED,
+    ArrangedSource,
+)
 from domain.platform_listing import listed_text, platform_entry_of
 from domain.retrodeck_folders import FolderRefused, not_installed, switched_off, unanswered_refusal
 
@@ -97,6 +104,17 @@ CONTRADICTED: PlatformState = "contradicted"
 # No source was asked: none answers, the one named is not detected, or the
 # question raised. ``PlatformSystem.unasked`` says why.
 UNASKED: PlatformState = "unasked"
+
+
+# A platform no source was asked about because the catalogue of the one that
+# would answer was refused — its systems file is broken, it has not been set up,
+# or it is sealed — refused as that, with the catalogue's reason as ``unasked``,
+# which the panel words as the emulator list does.
+PLATFORM_SYSTEM_UNASKED = "platform_system_unasked"
+
+# The catalogue refusals that stand for themselves; any other one, and a
+# question that raised, leaves the folders not established.
+_CATALOGUE_REFUSED = frozenset({CATALOGUE_INVALID, CATALOGUE_NOT_SET_UP, CATALOGUE_SEALED})
 
 
 class PlatformRefusal(StrEnum):
@@ -431,6 +449,14 @@ class PlatformSystem:
             return not_installed(purpose)
         if self.unasked == ALL_SOURCES_SWITCHED_OFF:
             return switched_off(purpose)
+        if self.unasked in _CATALOGUE_REFUSED and self.source is not None:
+            return FolderRefused(
+                PLATFORM_SYSTEM_UNASKED,
+                f"{self.source.kind}'s catalogue was refused ({self.unasked}), so no system was asked for "
+                f"{self.platform_name}.",
+                source=self.source.kind,
+                unasked=self.unasked,
+            )
         return unanswered_refusal()
 
     def unavailable_options(self) -> dict[str, Any]:

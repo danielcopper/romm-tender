@@ -140,6 +140,7 @@ export type WireReason =
   | "platform_pairs_contradict"
   | "platform_system_not_here"
   | "platform_system_off"
+  | "platform_system_unasked"
   | "platform_systems_several"
   | "platform_unmatched"
   | "pre_launch_sync_stopped"

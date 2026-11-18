@@ -269,9 +269,26 @@ function isPlatformSystemRefusal(answer: object): answer is { reason: PlatformSy
  * answer comes back as it is.
  */
 export function withPlatformSystemSentence<T>(answer: T): T {
-  if (typeof answer !== "object" || answer === null || !isPlatformSystemRefusal(answer)) return answer;
+  if (typeof answer !== "object" || answer === null) return answer;
+  const unasked = unaskedCatalogueSentence(answer);
+  if (unasked !== null) return { ...answer, message: unasked };
+  if (!isPlatformSystemRefusal(answer)) return answer;
   const sentence = platformSystemSentence(answer.reason, { ...answer, state: "no_system" });
   return sentence === null ? answer : { ...answer, message: sentence };
+}
+
+// The catalogue refusals a platform can be refused for before any source is asked about it.
+const UNASKED_CATALOGUE_REASONS: ReadonlySet<string> = new Set(["catalogue_invalid", "not_set_up", "sealed"]);
+
+/**
+ * The sentence for a press refused because the catalogue of the source that would answer was refused, or `null`
+ * for any other answer: the one the platform's emulator list says for that catalogue, so the two agree.
+ */
+function unaskedCatalogueSentence(answer: object): string | null {
+  const { reason, source, unasked } = answer as Record<string, unknown>;
+  if (reason !== "platform_system_unasked" || typeof source !== "string" || typeof unasked !== "string") return null;
+  if (!UNASKED_CATALOGUE_REASONS.has(unasked)) return null;
+  return emulatorDataReasonSentence(unasked as EmulatorDataReason, { kind: source, starts_games: true });
 }
 
 /** Main's notice, and the settings section's line, while no emulator source is detected. */

@@ -258,7 +258,11 @@ translation's intersection, and each matching system's status reads into Tender'
 off (disabled) or not set up on this machine (absent). `domain/platform_system.py::matched_state` says what the matches
 come to. An answer carrying a status the adapter does not read is never taken as absent: the platform's system is then
 not established (`unavailable`), as where the question raised
-([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D19).
+([#2195](https://github.com/danielcopper/romm-tender/issues/2195) D19). An answer whose catalogue was refused is no
+answer about the platform either: the platform is not asked, with the catalogue's reason. A download for it is refused
+with `platform_system_unasked` and that reason — a broken systems file, a RetroDECK not set up, a sealed catalogue — and
+the panel says the sentence the emulator list says for it; any other refusal, and a question that raised, leaves
+RetroDECK's folders not established.
 
 **Which answer is taken.** One switched-on system is **found**, and every later question about the platform's games
 names it by the pair the answer named it with — the emulator list, the launch, the BIOS answer, a save's place and the

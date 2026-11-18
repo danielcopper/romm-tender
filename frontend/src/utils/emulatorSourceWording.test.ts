@@ -471,6 +471,18 @@ describe("each case of a platform with no system to use says which it is (#2751 
 
     expect(withPlatformSystemSentence(refused).message).toBe(sentence);
   });
+  it("words a press refused for a catalogue that was refused as the emulator list does", () => {
+    const refused = {
+      success: false,
+      reason: "platform_system_unasked",
+      message: "retrodeck's catalogue was refused (not_set_up), so no system was asked for Game Boy.",
+      source: "retrodeck",
+      unasked: "not_set_up",
+    };
+    expect(withPlatformSystemSentence(refused).message).toBe(
+      "RetroDECK has not been set up yet, so its emulators are not established.",
+    );
+  });
 
   it("gives every case a sentence of its own", () => {
     expect(new Set(cases.map(([, , sentence]) => sentence)).size).toBe(cases.length);

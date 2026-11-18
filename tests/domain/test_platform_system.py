@@ -8,7 +8,15 @@ from pathlib import Path
 import pytest
 from _romm_platforms import LISTED_GAMECUBE
 
-from domain.emulator_sources import ALL_SOURCES_SWITCHED_OFF, CATALOGUE_UNAVAILABLE, NO_SOURCE_DETECTED, ArrangedSource
+from domain.emulator_sources import (
+    ALL_SOURCES_SWITCHED_OFF,
+    CATALOGUE_INVALID,
+    CATALOGUE_NOT_SET_UP,
+    CATALOGUE_SEALED,
+    CATALOGUE_UNAVAILABLE,
+    NO_SOURCE_DETECTED,
+    ArrangedSource,
+)
 from domain.platform_system import (
     CONTRADICTED,
     FOUND,
@@ -368,6 +376,16 @@ class TestPlatformSystem:
             "source": {"kind": "retrodeck", "starts_games": True},
         }
         assert platform.payload() is None
+
+    @pytest.mark.parametrize("catalogue", [CATALOGUE_INVALID, CATALOGUE_NOT_SET_UP, CATALOGUE_SEALED])
+    def test_a_refused_catalogue_refuses_for_itself_never_for_the_folders(self, catalogue):
+        refusal = _platform(UNASKED, unasked=catalogue).refusal(GAME_DOWNLOAD)
+
+        assert not isinstance(refusal, EveryFolderRefused)
+        assert (refusal.reason, refusal.details) == (
+            "platform_system_unasked",
+            {"source": "retrodeck", "unasked": catalogue},
+        )
 
     def test_a_question_that_raised_refuses_every_folder(self):
         refusal = _platform(UNASKED, unasked=CATALOGUE_UNAVAILABLE).refusal(GAME_DOWNLOAD)
