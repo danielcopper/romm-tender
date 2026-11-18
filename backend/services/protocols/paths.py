@@ -199,12 +199,6 @@ class RetroDeckFolders(Protocol):
     def move_roots(self) -> MoveRoots | FolderRefused | None: ...
 
 
-class CoreResolverFn(Protocol):
-    """Resolve the active RetroArch core for a system."""
-
-    def __call__(self, system_name: str) -> tuple[str | None, str | None]: ...
-
-
 class CoreInfoProvider(Protocol):
     """Emulator resolution for ES-DE configured systems, consumed by services.
 

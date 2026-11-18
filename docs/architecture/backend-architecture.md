@@ -3761,7 +3761,7 @@ package, organised topically (consumers always deep-import `from services.protoc
 - **`determinism`** — `Clock` / `UuidGen` / `Sleeper` test seams.
 - **`persistence`** — `SettingsPersister`.
 - **`paths`** — `RetroDeckFolders`, `PlatformSystems`, `SourcePlatformSystems`, `CoreInfoProvider`, `SaveLocationReader`
-  (a game's save answer and its savestate directory), `CoreResolverFn`, `PlatformCoreReader`.
+  (a game's save answer and its savestate directory), `PlatformCoreReader`.
 - **`infra`** — cross-cutting callable seams: `EventEmitter`, `DebugLogger`, `PathExistsReader`, `ResolvedPathFn`,
   `HostnameReader`, `PendingSyncReader`, `DownloadQueueCleanup`.
 - **`files`** — filesystem seams: `CoverArtFileStore`, `DownloadFileStore`, `FirmwareFileStore`, `MigrationFileStore`,
