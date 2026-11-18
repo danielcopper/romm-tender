@@ -5281,6 +5281,42 @@ describe("RomMPlaySection", () => {
       expect(capturedPlayButton[capturedPlayButton.length - 1]!.emulatorRefusal).toBeNull();
     });
 
+    describe("a platform several of the source's systems answer (#2225 D8; review T5)", () => {
+      const SEVERAL = {
+        state: "several",
+        source: "retrodeck",
+        systems: ["mark3", "mastersystem"],
+        platform: "Master System",
+        slug: "sms",
+        folder: "sms",
+      } as const;
+      const NOTE =
+        "RetroDECK has several systems for Master System (mark3, mastersystem), and Tender links its games into none of them.";
+
+      it("says under the row why the game is linked into no frontend folder", async () => {
+        const { container } = await mountWith({
+          emulatorPlatformSystem: { ...SEVERAL, systems: [...SEVERAL.systems] },
+        });
+
+        const notes = [...container.querySelectorAll<HTMLElement>('.romm-play-section-row [data-testid="start-note"]')];
+        expect(notes.map((note) => note.textContent)).toContain(NOTE);
+      });
+
+      it("where the emulator list could not be given, says so too, with no start to refuse", async () => {
+        const { container } = await mountWith({
+          emulatorPlatformSystem: { ...SEVERAL, systems: [...SEVERAL.systems] },
+          emulatorDataAvailable: false,
+          emulatorDataReason: "platform_systems_several",
+          emulators: [],
+          emulatorStart: null,
+        });
+
+        const notes = [...container.querySelectorAll<HTMLElement>('.romm-play-section-row [data-testid="start-note"]')];
+        expect(notes.map((note) => note.textContent)).toContain(NOTE);
+        expect(container.querySelector('[data-testid="emulator-refusal"]')).toBeNull();
+      });
+    });
+
     it("tells Play while the page's check still runs (#2195 D32)", async () => {
       await mountWith({ startCheck: { state: "checking" } });
       expect(capturedPlayButton[capturedPlayButton.length - 1]!.startChecking).toBe(true);
