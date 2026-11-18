@@ -13,7 +13,7 @@ use-case orchestration live on
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
@@ -116,6 +116,13 @@ class SyncRunOptions:
     autocleanup_limit: int | None = None
 
 
+@dataclass
+class RomLookup:
+    """What RomM's lookup of the ROM answered in one run: ``None`` until it is asked, then whether the ROM is gone."""
+
+    gone: bool | None = None
+
+
 @dataclass(frozen=True)
 class RomDispatchContext:
     """The ROM-level constants threaded through one ROM's sync dispatch.
@@ -124,7 +131,7 @@ class RomDispatchContext:
     ``_dispatch_sync_action`` and its sub-dispatchers, so the remaining
     per-call args stay to the values that actually vary per file (mirrors
     ``DispatchSink`` / ``SyncRunOptions``). ``stop`` is the run's own stop,
-    where it can be stopped.
+    where it can be stopped; ``lookup`` keeps the run's one lookup of the ROM.
     """
 
     rom_id: int
@@ -136,6 +143,7 @@ class RomDispatchContext:
     system: str
     core_so: str | None
     stop: SyncStop | None = None
+    lookup: RomLookup = field(default_factory=RomLookup)
 
 
 class MatrixExecutor:
@@ -358,25 +366,32 @@ class MatrixExecutor:
                 sink=sink,
             )
         except RommNotFoundError as e:
-            if self._rom_gone_from_romm(ctx.rom_id):
+            if self._rom_gone_from_romm(ctx):
                 self._logger.info(f"_dispatch_upload({ctx.rom_id}): RomM no longer has this ROM; no further upload")
-                raise gone_from_romm(synced=0) from e
+                raise gone_from_romm() from e
             raise
 
-    def _rom_gone_from_romm(self, rom_id: int) -> bool:
-        """Whether RomM's own lookup of *rom_id* answers that it has no such ROM.
+    def _rom_gone_from_romm(self, ctx: RomDispatchContext) -> bool:
+        """Whether RomM's own lookup of the run's ROM answers that it has no such ROM.
 
         The proof an upload's 404 needs before it means the ROM is gone
         (``.claude/rules/romm-http.md``, "A 404 is an entity verdict only on
         proof"): only the lookup's :class:`RommNotFoundError` gives it. An answer,
-        or any other error, leaves the upload's 404 an ordinary error.
+        or any other error, leaves the upload's 404 an ordinary error. Asked at
+        most once per run: the verdict is kept on *ctx*.
         """
+        if ctx.lookup.gone is not None:
+            return ctx.lookup.gone
         try:
-            self._romm_api.get_rom(rom_id)
+            self._romm_api.get_rom(ctx.rom_id)
         except RommNotFoundError:
+            ctx.lookup.gone = True
             return True
-        except RommApiError as e:
-            self._log_debug(f"_rom_gone_from_romm({rom_id}): the lookup proves nothing ({type(e).__name__})")
+        except Exception as e:
+            self._logger.info(f"_rom_gone_from_romm({ctx.rom_id}): the lookup proves nothing, the 404 stays: {e}")
+        else:
+            self._logger.info(f"_rom_gone_from_romm({ctx.rom_id}): RomM still has this ROM, the 404 stays")
+        ctx.lookup.gone = False
         return False
 
     def _handle_upload_409(
