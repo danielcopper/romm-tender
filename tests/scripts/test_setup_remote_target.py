@@ -1463,6 +1463,35 @@ class TestOtherFailures:
         assert remote.authorized_keys.read_bytes() == before
 
 
+class TestReadingAnEntryBack:
+    """read_entry gives the dev tasks back what config_entry wrote, the one format both sides use."""
+
+    @pytest.mark.parametrize(
+        ("jump", "command"),
+        [(None, None), ("jumper@203.0.113.5:22022", None), (None, "nc -X connect -x proxy.example:3128 %h %p")],
+        ids=["direct", "jump", "proxy-command"],
+    )
+    def test_what_config_entry_writes_reads_back_as_the_destination(
+        self, tmp_path: Path, jump: str | None, command: str | None
+    ) -> None:
+        destination = setup_remote_target.Destination(
+            text="deck",
+            user="deck",
+            hostname=_ADDRESS,
+            port="2222",
+            proxy_jump=jump,
+            proxy_command=command,
+            jump=jump,
+        )
+        entry = setup_remote_target.config_entry(
+            "deck", destination, key=tmp_path / "id_ed25519", known_hosts=tmp_path / "known_hosts"
+        )
+        text = setup_remote_target.updated_config("", "deck", entry, "# deck: a comment")
+
+        assert setup_remote_target.read_entry(text, "deck") == destination
+        assert setup_remote_target.read_entry(text, "tv") is None
+
+
 class TestArguments:
     @pytest.mark.parametrize("name", ["", "-deck", "my deck", "deck/1", "deck;x"])
     def test_a_name_ssh_could_not_carry_is_refused(

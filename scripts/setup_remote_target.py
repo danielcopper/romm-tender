@@ -309,69 +309,111 @@ def failed_where(stderr: str, *, name: str, destination: Destination) -> Where:
     return "hop" if named else "either"
 
 
+FailureKind = Literal["host key changed", "host key not accepted", "no login", "unresolved", "no server"]
+
+
+@dataclass(frozen=True)
+class SshFailure:
+    """What ended an ``ssh`` before the login, as its stderr says, and on which leg."""
+
+    kind: FailureKind
+    where: Where
+    unresolved: str | None = None
+    """The name ssh could not resolve, for ``unresolved``."""
+    offending: str | None = None
+    """The known-hosts file that records another key, for ``host key changed`` where ssh names one."""
+
+
+def ssh_failure(
+    stderr: str, *, name: str, destination: Destination, known_hosts: tuple[pathlib.Path, ...] = ()
+) -> SshFailure | None:
+    """The failure *stderr* reports, or ``None`` for one no pattern here knows.
+
+    Tested in this order: a changed host key also prints "Host key verification
+    failed", and a refused login can end in "Connection closed". A changed host
+    key is the target's when ssh names no file or one of *known_hosts*, and a
+    hop's otherwise; every other failure is placed by :func:`failed_where`.
+    Each tool words the message itself.
+    """
+    where = failed_where(stderr, name=name, destination=destination)
+    if HOST_KEY_CHANGED.search(stderr):
+        offending = _OFFENDING_FILE.search(stderr)
+        ours = {str(path) for path in known_hosts}
+        if offending is None or offending.group(1) in ours:
+            return SshFailure("host key changed", "target")
+        return SshFailure("host key changed", "hop", offending=offending.group(1))
+    if HOST_KEY_NOT_ACCEPTED.search(stderr):
+        return SshFailure("host key not accepted", where)
+    if NO_LOGIN.search(stderr):
+        return SshFailure("no login", where)
+    unresolved = UNRESOLVED.search(stderr)
+    if unresolved is not None:
+        return SshFailure("unresolved", where, unresolved=unresolved.group(1))
+    if NO_SERVER.search(stderr):
+        return SshFailure("no server", where)
+    return None
+
+
 def classify(
     stderr: str, *, name: str, destination: Destination, known_hosts: pathlib.Path, trial_known_hosts: pathlib.Path
 ) -> str | None:
     """What to tell the user for an ``ssh`` that ended before the login.
 
     ``None`` for the target's refusal of the login, which ``no_login_message``
-    words, and for anything no pattern here knows — a failure that is not
-    ssh's, or one of ssh's worded otherwise. A failure ssh names on a hop is
-    worded as the hop's; one it names on no host, as the target's or the hop's.
+    words, and for anything :func:`ssh_failure` does not know — a failure that
+    is not ssh's, or one of ssh's worded otherwise. A failure ssh names on a hop
+    is worded as the hop's; one it names on no host, as the target's or the hop's.
     """
+    failure = ssh_failure(stderr, name=name, destination=destination, known_hosts=(known_hosts, trial_known_hosts))
+    if failure is None:
+        return None
     host = destination.hostname
-    where = failed_where(stderr, name=name, destination=destination)
     hop = f"the hop {destination.via}"
-    if HOST_KEY_CHANGED.search(stderr):
-        offending = _OFFENDING_FILE.search(stderr)
-        ours = (str(known_hosts), str(trial_known_hosts))
-        if offending is None or offending.group(1) in ours:
-            return (
-                f"tender-dev: the host key at {host} is not the one recorded for {name} — another machine may be"
-                " answering at that address. No connection was made.\n"
-                "  If the target was reinstalled, remove its record and run the setup again:\n"
-                f"    ssh-keygen -R {host_key_alias(name)} -f {known_hosts}"
-            )
+    if failure.kind == "host key changed" and failure.where == "target":
+        return (
+            f"tender-dev: the host key at {host} is not the one recorded for {name} — another machine may be"
+            " answering at that address. No connection was made.\n"
+            "  If the target was reinstalled, remove its record and run the setup again:\n"
+            f"    ssh-keygen -R {host_key_alias(name)} -f {known_hosts}"
+        )
+    if failure.kind == "host key changed":
         return (
             f"tender-dev: a hop on the way to {name} ({destination.via}) has a host key that is not the one"
-            f" {offending.group(1)} records — another machine may be answering there. No connection was made.\n"
+            f" {failure.offending} records — another machine may be answering there. No connection was made.\n"
             "  Check that hop with your own ssh."
         )
-    if HOST_KEY_NOT_ACCEPTED.search(stderr):
-        whose = {"target": f"at {host}", "hop": f"of {hop}", "either": f"of {host} or of {hop}"}[where]
+    if failure.kind == "host key not accepted":
+        whose = {"target": f"at {host}", "hop": f"of {hop}", "either": f"of {host} or of {hop}"}[failure.where]
         return (
             f"tender-dev: the host key {whose} was not accepted, or ssh could not ask about it — it asks on a"
             " terminal. No connection was made."
         )
-    if NO_LOGIN.search(stderr):
-        if where == "hop":
+    if failure.kind == "no login":
+        if failure.where == "hop":
             return f"tender-dev: {hop} accepted no login from this machine.\n  Check that hop with your own ssh."
         return None
-    unresolved = UNRESOLVED.search(stderr)
-    if unresolved is not None and where == "hop":
+    if failure.kind == "unresolved" and failure.where == "hop":
         return (
-            f"tender-dev: this machine cannot resolve {unresolved.group(1)}, a hop on the way to {name}"
+            f"tender-dev: this machine cannot resolve {failure.unresolved}, a hop on the way to {name}"
             f" ({destination.via}).\n"
             "  Check that hop in your SSH config, or give its address."
         )
-    if unresolved is not None:
+    if failure.kind == "unresolved":
         return (
             f"tender-dev: this machine cannot resolve {host}.\n"
             "  Give the target's address instead, or a name the network resolves."
         )
-    if NO_SERVER.search(stderr) and where == "hop":
+    if failure.where == "hop":
         return f"tender-dev: no SSH server answers at {hop}.\n  Check that hop with your own ssh."
-    if NO_SERVER.search(stderr) and where == "either":
+    if failure.where == "either":
         return (
             f"tender-dev: no SSH server answers at {host} port {destination.port}, or at {hop}.\n"
             "  Check the address, that the target runs an SSH server, and that hop."
         )
-    if NO_SERVER.search(stderr):
-        return (
-            f"tender-dev: no SSH server answers at {host} port {destination.port}.\n"
-            "  Check the address, and that the target runs an SSH server."
-        )
-    return None
+    return (
+        f"tender-dev: no SSH server answers at {host} port {destination.port}.\n"
+        "  Check the address, and that the target runs an SSH server."
+    )
 
 
 def is_no_login(stderr: str) -> bool:
@@ -516,6 +558,48 @@ def config_entry(name: str, destination: Destination, *, key: pathlib.Path, know
     return lines
 
 
+def read_entries(text: str) -> dict[str, Destination]:
+    """Each target's entry in *text*, a dev loop SSH config as :func:`config_entry` writes it.
+
+    Read back with the keys ``ssh -G`` prints, lowercased, and the first value
+    of each. Not a reader of SSH configs in general: one ``Host`` name a block,
+    one value a key. A recorded ProxyJump is already resolved, so it stands as
+    :attr:`Destination.jump` as well; an entry with no HostName or User is not
+    one the setup wrote, and is left out.
+    """
+    blocks: dict[str, dict[str, str]] = {}
+    current: dict[str, str] | None = None
+    for line in text.splitlines():
+        words = line.split(maxsplit=1)
+        if not words or words[0].startswith("#"):
+            continue
+        key, value = words[0].lower(), (words[1].strip() if len(words) > 1 else "")
+        if key == "host":
+            current = blocks.setdefault(value, {})
+        elif current is not None:
+            current.setdefault(key, value.strip('"'))
+    entries: dict[str, Destination] = {}
+    for name, block in blocks.items():
+        if _HOSTNAME not in block or _USER not in block:
+            continue
+        jump = block.get(_PROXY_JUMP)
+        entries[name] = Destination(
+            text=name,
+            user=block[_USER],
+            hostname=block[_HOSTNAME],
+            port=block.get(_PORT, "22"),
+            proxy_jump=jump,
+            proxy_command=block.get(_PROXY_COMMAND),
+            jump=jump,
+        )
+    return entries
+
+
+def read_entry(text: str, name: str) -> Destination | None:
+    """*name*'s entry in *text*, as :func:`read_entries` reads it, or ``None``."""
+    return read_entries(text).get(name)
+
+
 def updated_config(current: str, name: str, entry: list[str], comment: str) -> str:
     """*current* with *name*'s entry set to *entry*, and only one entry of that name left.
 
@@ -544,9 +628,14 @@ def entry_comment(name: str, build_host: str, written: str) -> str:
     return f"# {name}: written by setup:remote-target on {build_host}, {written}. Running it again changes it."
 
 
-def check_arguments(name: str, destination: str) -> None:
+def check_name(name: str) -> None:
+    """Refuse a target's name that ssh could not carry as a host, or rsync as one before its ``:``."""
     if not _NAME.fullmatch(name):
         raise SetupError(f"tender-dev: a target's name is letters, digits, '.', '_' and '-' — not {name!r}.")
+
+
+def check_arguments(name: str, destination: str) -> None:
+    check_name(name)
     if not destination or destination.startswith("-"):
         raise SetupError(f"tender-dev: {destination!r} is no destination ssh could reach.")
 
