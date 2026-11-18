@@ -17,6 +17,7 @@ from fakes.fake_running_rom_ids import FakeRunningRomIds
 
 from domain.rom_save_sync_state import RomSaveSyncState
 from lib.errors import Refused, RommApiError, RommNotFoundError, classify_error
+from services.saves import copies, versions
 from services.saves._refusals import GoneFromRomm
 from services.saves.sync_engine._gone_from_romm import GoneRoms
 from tests.services.saves._helpers import (
@@ -45,12 +46,12 @@ def _service(tmp_path, *running: int) -> tuple[SaveService, FakeSaveApi]:
     return svc, fake
 
 
-def _confirmed_rom(svc, tmp_path, rom_id: int) -> None:
-    """ROM *rom_id* on gba, its slot ``default`` confirmed, with two local save files."""
+def _confirmed_rom(svc, tmp_path, rom_id: int, *, exts: tuple[str, ...] = tuple(_LOCAL)) -> None:
+    """ROM *rom_id* on gba, its slot ``default`` confirmed, with a local save file per extension in *exts*."""
     _install_rom(svc, tmp_path, rom_id=rom_id, file_name=f"game{rom_id}.gba")
     _seed_save_state(svc, rom_id, RomSaveSyncState(system="gba", slot_confirmed=True, active_slot="default"))
-    for ext, content in _LOCAL.items():
-        _create_save(tmp_path, rom_name=f"game{rom_id}", content=content, ext=ext)
+    for ext in exts:
+        _create_save(tmp_path, rom_name=f"game{rom_id}", content=_LOCAL[ext], ext=ext)
 
 
 def _local_saves(tmp_path, rom_id: int) -> dict[str, bytes]:
@@ -103,6 +104,40 @@ class TestASingleGamesSync:
 
         assert _local_saves(tmp_path, 1) == {"game1.rtc": b"clock state", "game1.srm": b"battery progress"}
         assert _get_save_state(svc, 1) == before
+
+
+class TestTheWritesThatSyncFirst:
+    """D6: restoring a version and copying to a slot write the save state and pass the refusal on."""
+
+    @pytest.mark.parametrize(
+        ("module", "write"),
+        [
+            pytest.param(versions, lambda svc: svc.rollback_to_version(1, "default", 50), id="restore a version"),
+            pytest.param(copies, lambda svc: svc.copy_save_to_slot(1, 50, "other"), id="copy to a slot"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_the_save_state_is_written_and_the_refusal_passed_on(self, tmp_path, monkeypatch, module, write):
+        svc, fake = _service(tmp_path)
+        # One local file: two would be a multi-file save, which both refuse before their sync.
+        _confirmed_rom(svc, tmp_path, 1, exts=(".srm",))
+        fake.gone_rom_ids.add(1)
+        written: list[int] = []
+        write_save_state = module.write_save_state
+
+        def recorded_write(uow_factory, rom_id, save_state):
+            written.append(rom_id)
+            write_save_state(uow_factory, rom_id, save_state)
+
+        monkeypatch.setattr(module, "write_save_state", recorded_write)
+
+        outcome = await _outcome(write(svc))
+
+        assert isinstance(outcome, GoneFromRomm)
+        assert outcome.message == _GONE_MESSAGE
+        assert written == [1]
+        assert _calls(fake, "upload_save", 1) == 1
+        assert _local_saves(tmp_path, 1) == {"game1.srm": b"battery progress"}
 
 
 class TestSyncAllSavesNow:
