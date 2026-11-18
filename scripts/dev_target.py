@@ -152,6 +152,8 @@ def connection_failure(stderr: str, target: Target) -> str | None:
     """What to tell the user for an ``ssh`` that ended before the login, or ``None`` for anything else.
 
     A failure is the target's unless ssh names a hop as the one that failed.
+    The caller shows what ssh said beside it: the hint is a reading of that
+    text, and can be wrong.
     """
     name = target.name
     destination = target.destination
@@ -164,7 +166,7 @@ def connection_failure(stderr: str, target: Target) -> str | None:
         or setup.NO_SERVER.search(stderr)
     ):
         return (
-            f"tender-dev: a hop on the way to {name} ({destination.via}) failed — ssh said:\n{stderr.rstrip()}\n"
+            f"tender-dev: a hop on the way to {name} ({destination.via}) failed.\n"
             f"  Check that hop with your own ssh.\n{nothing_done}"
         )
     if setup.HOST_KEY_CHANGED.search(stderr):
@@ -198,11 +200,17 @@ def connection_failure(stderr: str, target: Target) -> str | None:
 
 
 def dispatcher_refusal(stderr: str, target: Target) -> str | None:
-    """The hint for a request the target's dispatcher refused: one older than this checkout's."""
+    """The hint for a request the target's dispatcher refused.
+
+    Most likely its dispatcher is older than this checkout's, but a request
+    this machine's rsync spells otherwise is refused too — so the caller shows
+    the refusal itself beside the hint.
+    """
     if DISPATCHER_REFUSED not in stderr:
         return None
     return (
-        f"tender-dev: {target.name}'s dispatcher refused the request, so it is older than this checkout's.\n"
+        f"tender-dev: {target.name}'s dispatcher refused the request; it is most likely older than this"
+        " checkout's.\n"
         f"  Set it up again, which puts the current one in place: {setup_hint(target)}"
     )
 
@@ -242,12 +250,11 @@ def copy(target: Target) -> None:
         raise TargetError("tender-dev: a --target task needs rsync, and this machine has none on its PATH.") from error
     if result.returncode == 0:
         return
+    said = "\n".join(f"    {line}" for line in result.stderr.rstrip().splitlines())
     failure = connection_failure(result.stderr, target) or dispatcher_refusal(result.stderr, target)
-    raise TargetError(
-        failure
-        or f"tender-dev: the copy to {target.name} failed (rsync ended with {result.returncode}):\n"
-        f"{result.stderr.rstrip()}"
-    )
+    if failure is None:
+        failure = f"tender-dev: the copy to {target.name} failed (rsync ended with {result.returncode})."
+    raise TargetError(f"{failure}\n  rsync said:\n{said}")
 
 
 def run_streaming(command: list[str]) -> Outcome:

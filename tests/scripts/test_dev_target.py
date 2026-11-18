@@ -623,7 +623,7 @@ class TestTheLog:
 
         assert result.returncode == 3
         assert "tender-dev: refused: follow log" in result.stderr
-        assert "dispatcher refused the request, so it is older than this checkout's" in result.stderr
+        assert "dispatcher refused the request; it is most likely older than this checkout's" in result.stderr
         assert f"mise run setup:remote-target deck deck@{_ADDRESS}" in result.stderr
 
 
@@ -692,6 +692,7 @@ class TestWhenATargetCannotBeUsed:
 
         assert result.returncode == 1
         assert f"no answer from deck at {_ADDRESS} port 22" in result.stderr
+        assert "ssh: connect to host 192.168.1.20 port 22: Connection refused" in result.stderr
         assert "mise run setup:remote-target deck <new address>" in result.stderr
         assert "Nothing was done on deck." in result.stderr
         assert _snapshot(loop.target_home) == before
@@ -717,6 +718,18 @@ class TestWhenATargetCannotBeUsed:
         assert "deck refused this machine's key" in result.stderr
         assert f"Set it up again: mise run setup:remote-target deck deck@{_ADDRESS}" in result.stderr
         assert _snapshot(loop.target_home) == before
+
+    def test_a_copy_the_dispatcher_refuses_shows_its_refusal_under_the_hint(self, loop: Loop) -> None:
+        dispatcher = loop.root / "dispatch.sh"
+        text = dispatcher.read_text(encoding="utf-8")
+        dispatcher.write_text(text.replace("    rsync)\n", "    no-rsync)\n"), encoding="utf-8")
+
+        result = loop.run("dev:status")
+
+        assert result.returncode == 1
+        assert "most likely older than this checkout's" in result.stderr
+        hint = result.stderr.index("most likely older")
+        assert result.stderr.index("tender-dev: refused: rsync --server", hint) > hint
 
     def test_a_word_the_dispatcher_would_refuse_is_refused_here(self, loop: Loop) -> None:
         result = loop.run("dev:bpm", "dp2;x")
