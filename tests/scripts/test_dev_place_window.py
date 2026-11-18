@@ -28,8 +28,10 @@ def test_the_watcher_left_behind_holds_none_of_the_callers_output(tmp_path: Path
     real_sleep = shutil.which("sleep")
     assert real_sleep is not None
     started = tmp_path / "started"
+    # Bounded as well: a stand-in that starts after this test's directory is gone would never see the release.
     (tools / "sleep").write_text(
-        f'#!/bin/sh\necho "$$ $PPID" >> "{started}"\nwhile [ ! -e "{release}" ]; do "{real_sleep}" 0.05; done\n',
+        f'#!/bin/sh\necho "$$ $PPID" >> "{started}"\n'
+        f'i=0\nwhile [ ! -e "{release}" ] && [ "$i" -lt 200 ]; do "{real_sleep}" 0.05; i=$((i + 1)); done\n',
         encoding="utf-8",
     )
     for name in ("qdbus6", "sleep"):
@@ -54,7 +56,14 @@ def test_the_watcher_left_behind_holds_none_of_the_callers_output(tmp_path: Path
 
 
 def _end(started: Path) -> None:
-    """End the stand-in ``sleep`` and the watcher it runs in, whichever are still there."""
+    """End the stand-in ``sleep`` and the watcher it runs in, once the watcher has started it.
+
+    The watcher runs in the background and may start its ``sleep`` only after
+    the arm has returned, so the test waits for it rather than ending nothing.
+    """
+    deadline = time.monotonic() + 10
+    while not started.exists() and time.monotonic() < deadline:
+        time.sleep(0.02)
     pids = [int(pid) for line in (started.read_text().splitlines() if started.exists() else []) for pid in line.split()]
     for pid in pids:
         with contextlib.suppress(ProcessLookupError):
