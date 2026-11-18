@@ -29,12 +29,15 @@ the early word.
 A target's ``scripts/dev_target.sh`` asks with ``--holder`` instead, which
 refuses nothing and answers in three lines — ``free``, ``held`` or
 ``unknown``; the holder's pid, or an empty line; the lock's path — so that
-the target can name which of its units holds the lock.
+the target can name which of its units holds the lock. ``--log-path`` prints
+where the backend writes ``backend.log``, from the same resolver, for the target
+to follow it.
 
 Usage:
     python scripts/dev_backend_lock.py                      # refuse if one holds it
     python scripts/dev_backend_lock.py --require-running    # refuse if none does
     python scripts/dev_backend_lock.py --holder             # say who holds it
+    python scripts/dev_backend_lock.py --log-path           # say where the backend's log is
 """
 
 from __future__ import annotations
@@ -50,6 +53,7 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "backend"))
 
 from domain.app_directories import resolve_directories  # noqa: E402
+from host.logging_setup import LOG_FILENAME  # noqa: E402
 from host.single_instance import LOCK_FILENAME  # noqa: E402
 
 
@@ -57,6 +61,12 @@ def lock_path() -> str:
     """Where the running backend's lock would lie, for this environment."""
     directories = resolve_directories(os.environ, os.path.expanduser("~"), str(REPO))
     return os.path.join(directories.data_dir, LOCK_FILENAME)
+
+
+def log_path() -> str:
+    """Where the backend writes its log, for this environment."""
+    directories = resolve_directories(os.environ, os.path.expanduser("~"), str(REPO))
+    return os.path.join(directories.state_dir, LOG_FILENAME)
 
 
 def holder_pid(path: str) -> int | None:
@@ -170,7 +180,12 @@ def main() -> int:
         action="store_true",
         help="refuse nothing: print free, held or unknown, the holder's pid (or an empty line) and the lock's path",
     )
+    question.add_argument("--log-path", action="store_true", help="print where the backend writes its log")
     arguments = parser.parse_args()
+
+    if arguments.log_path:
+        print(log_path())
+        return 0
 
     path = lock_path()
     held = is_held(path)

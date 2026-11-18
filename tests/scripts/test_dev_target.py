@@ -670,15 +670,10 @@ class TestTheTargetsHalf:
         assert "DISPLAY" not in steam["env"]
         assert steam["env"]["WAYLAND_DISPLAY"] == "wayland-0"
 
-    def test_the_names_it_reads_by_are_the_backends_and_the_installers(self) -> None:
-        from domain.user_data_location import APP_DIR_NAME
-        from host.logging_setup import LOG_FILENAME
-
+    def test_the_service_it_stops_is_the_installers_unit(self) -> None:
         script = (_SCRIPTS / "dev_target.sh").read_text(encoding="utf-8")
         installer = (_REPO / "install.sh").read_text(encoding="utf-8")
 
-        assert f'APP_DIR="{APP_DIR_NAME}"' in script
-        assert f'LOG_NAME="{LOG_FILENAME}"' in script
         unit = re.search(r'^UNIT_NAME="([^"]+)"$', installer, re.MULTILINE)
         assert unit is not None
         assert f'readonly SERVICE_UNIT="{unit.group(1)}"' in script

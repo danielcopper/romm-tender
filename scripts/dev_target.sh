@@ -39,12 +39,6 @@ readonly SERVICE_UNIT="romm-tender"
 readonly DEV_UNIT="romm-tender-dev"
 readonly UI_SCALE_UNIT="romm-tender-dev-ui-scale"
 
-# The backend's log (host/logging_setup.py LOG_FILENAME, domain/user_data_location.py
-# APP_DIR_NAME) on install.sh's ladder, as the dispatcher reads it.
-APP_DIR="romm-tender"
-LOG_NAME="backend.log"
-LOG_FILE="${TENDER_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/$APP_DIR}/$LOG_NAME"
-
 # install.sh's interpreter rule, so the dev backend runs on what the installed
 # service runs on.
 PYTHON="${TENDER_PYTHON:-/usr/bin/python3}"
@@ -212,9 +206,10 @@ install_tree() {
 # process ends; what the process wrote to stderr — an import that failed
 # before the log was opened among it — is in the unit's journal.
 start_backend() {
+    log_file=$("$PYTHON" -B "$here/dev_backend_lock.py" --log-path)
     offset=0
-    if [ -f "$LOG_FILE" ]; then
-        offset=$(wc -c < "$LOG_FILE")
+    if [ -f "$log_file" ]; then
+        offset=$(wc -c < "$log_file")
     fi
     since=$(date +%s)
     systemd-run --user --unit="$DEV_UNIT" --collect --quiet -- "$PYTHON" "$root/current/backend/main.py"
@@ -224,11 +219,11 @@ start_backend() {
     printf '%s\n' "$FOLLOWING"
     case "$backend" in
         '' | 0)
-            if [ -f "$LOG_FILE" ]; then
-                tail -c "+$((offset + 1))" "$LOG_FILE" || true
+            if [ -f "$log_file" ]; then
+                tail -c "+$((offset + 1))" "$log_file" || true
             fi
             ;;
-        *) tail -c "+$((offset + 1))" -F --pid="$backend" "$LOG_FILE" || true ;;
+        *) tail -c "+$((offset + 1))" -F --pid="$backend" "$log_file" || true ;;
     esac
     say "the backend on $name has stopped. What it wrote to stderr since it started:"
     journalctl --user -u "$DEV_UNIT" --since "@$since" -o cat --no-pager >&2 || true

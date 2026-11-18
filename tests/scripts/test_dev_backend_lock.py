@@ -72,3 +72,28 @@ def test_holder_and_require_running_are_two_questions_not_one(home: Path) -> Non
 
     assert result.returncode == 2
     assert "not allowed with argument" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("variables", "folder"),
+    [
+        ({}, ".local/state/romm-tender"),
+        ({"XDG_STATE_HOME": "{home}/xdg-state"}, "xdg-state/romm-tender"),
+        ({"TENDER_STATE_DIR": "{home}/tender-state", "XDG_STATE_HOME": "{home}/xdg-state"}, "tender-state"),
+    ],
+    ids=["default", "xdg", "tender-before-xdg"],
+)
+def test_log_path_is_where_the_backends_resolver_puts_its_log(
+    home: Path, variables: dict[str, str], folder: str
+) -> None:
+    """dev_target.sh follows the log there rather than restating the ladder in shell."""
+    result = subprocess.run(
+        [sys.executable, str(_SCRIPT), "--log-path"],
+        env={"HOME": str(home), "PATH": os.environ["PATH"], **{k: v.format(home=home) for k, v in variables.items()}},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == f"{home / folder / 'backend.log'}\n"
