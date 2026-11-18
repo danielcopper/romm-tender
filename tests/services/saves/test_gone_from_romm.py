@@ -65,6 +65,11 @@ def _calls(fake: FakeSaveApi, name: str, rom_id: int) -> int:
     return sum(1 for call, args, _kwargs in fake.call_log if call == name and args[0] == rom_id)
 
 
+def _closes(fake: FakeSaveApi) -> list[dict[str, Any]]:
+    """The counts of every negotiate session *fake* was asked to close, in order."""
+    return [kwargs for call, _args, kwargs in fake.call_log if call == "complete_sync_session"]
+
+
 async def _outcome(call: Awaitable[Any]) -> Any:
     """*call*'s answer, or the refusal it raised."""
     try:
@@ -105,6 +110,31 @@ class TestASingleGamesSync:
 
         assert _local_saves(tmp_path, 1) == {"game1.rtc": b"clock state", "game1.srm": b"battery progress"}
         assert _get_save_state(svc, 1) == before
+
+
+class TestTheNegotiateSessions:
+    """The session a run opens with RomM is closed with what moved: nothing for a game RomM no longer has."""
+
+    @pytest.mark.asyncio
+    async def test_a_single_game_s_sync_closes_its_own_session_once_with_nothing_done(self, tmp_path):
+        svc, fake = _service(tmp_path)
+        _confirmed_rom(svc, tmp_path, 1)
+        fake.gone_rom_ids.add(1)
+
+        await _outcome(svc.sync_rom_saves(1))
+
+        assert _closes(fake) == [{"operations_completed": 0, "operations_failed": 0}]
+
+    @pytest.mark.asyncio
+    async def test_the_sweep_s_session_counts_only_the_other_game_s_uploads(self, tmp_path):
+        svc, fake = _service(tmp_path)
+        _confirmed_rom(svc, tmp_path, 1)
+        _confirmed_rom(svc, tmp_path, 2)
+        fake.gone_rom_ids.add(1)
+
+        await svc.sync_all_saves()
+
+        assert _closes(fake) == [{"operations_completed": 2, "operations_failed": 0}]
 
 
 class TestTheWritesThatSyncFirst:
