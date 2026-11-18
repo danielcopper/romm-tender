@@ -87,7 +87,7 @@ const EntryLaunchLine: FC<{
     );
   }
   if (launch === null) return null;
-  const command = startVerdictLine(launch.start_verdict ?? null);
+  const command = startVerdictLine(launch.start_verdict ?? null, { source, platform: launch.platform_name });
   const line = entryLaunchLine(launch, source, command.tenderStarts, command.line);
   return line === null ? null : <div style={{ fontSize: "12px", opacity: 0.7 }}>{line}</div>;
 };

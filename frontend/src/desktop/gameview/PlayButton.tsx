@@ -392,7 +392,7 @@ const PlayButtonControls: FC<PlayButtonProps & { ask: AskDialog }> = ({ appId, a
   const playRefusal =
     startCheckFailed || detail.emulatorStart === null
       ? null
-      : startRefusal(detail.emulatorStart, detail.gameLaunch ?? null, false);
+      : startRefusal(detail.emulatorStart, detail.gameLaunch ?? null, false, detail.emulatorSource);
   const { handlePlayClick, handleResolveConflictClick, handleStopClick, handleUninstallClick, uninstallingRomId } =
     usePlayLaunch({
       appId,

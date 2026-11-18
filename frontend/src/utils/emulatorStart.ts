@@ -8,6 +8,7 @@
 
 import { getPlatformCoreInfo, logError } from "../api/backend";
 import type {
+  AnsweringSource,
   CoreInfo,
   EmulatorOption,
   EmulatorStart,
@@ -48,27 +49,44 @@ export function gameCanPickAnother(emulators: readonly EmulatorOption[], activeL
 }
 
 /**
+ * What a start refusal names beside its reason: the source that answered and the game's platform as its page names
+ * it, `null` where the caller does not know them.
+ */
+export interface StartContext {
+  source: AnsweringSource | null;
+  platform: string | null;
+}
+
+const NO_CONTEXT: StartContext = { source: null, platform: null };
+
+/**
  * Why the resolver gives no complete command for an entry, as the words after "Tender cannot start <entry> yet: ".
  * A reason this map does not hold reads as the command not being read.
  */
-const COMMAND_REFUSED_BECAUSE: Record<Exclude<StartCommandReason, "entry_unknown">, string> = {
-  command_unread: "how ES-DE starts it could not be read",
-  desktop_file: "it starts through a .desktop file",
-  injected_file_unread: "a file its command reads in could not be read",
-  no_program: "its command names no program",
-  rom_root_unknown: "where its games are kept could not be established",
-  command_too_long: "its command is longer than can be read",
-  frontend_build_unread: "which ES-DE build the source ships could not be read",
-  environment_unread: "what it needs from RetroDECK's start could not be read",
-  environment_unknown: "what it needs from RetroDECK's start is not known yet",
-  folder_unplaced: "the folder it starts in could not be placed",
+const COMMAND_REFUSED_BECAUSE: Record<
+  Exclude<StartCommandReason, "entry_unknown">,
+  (context: StartContext) => string
+> = {
+  command_unread: () => "how ES-DE starts it could not be read",
+  desktop_file: () => "it starts through a .desktop file",
+  injected_file_unread: () => "a file its command reads in could not be read",
+  no_program: () => "its command names no program",
+  rom_root_unknown: () => "where its games are kept could not be established",
+  command_too_long: () => "its command is longer than can be read",
+  frontend_build_unread: () => "which ES-DE build the source ships could not be read",
+  environment_unread: () => "what it needs from RetroDECK's start could not be read",
+  environment_unknown: () => "what it needs from RetroDECK's start is not known yet",
+  folder_unplaced: () => "the folder it starts in could not be placed",
+  systems_several: ({ source, platform }) =>
+    `${source === null ? "the emulator source" : sourceName(source.kind)} has several systems for ${platform ?? "this game's platform"} and names none of them`,
+  system_unknown: () => "the source does not list this game's system",
 };
 
 /** The words for a launch-command refusal: its own, else that the command could not be read. */
-function commandRefusedBecause(reason: string): string {
+function commandRefusedBecause(reason: string, context: StartContext): string {
   return reason in COMMAND_REFUSED_BECAUSE
-    ? COMMAND_REFUSED_BECAUSE[reason as keyof typeof COMMAND_REFUSED_BECAUSE]
-    : COMMAND_REFUSED_BECAUSE.command_unread;
+    ? COMMAND_REFUSED_BECAUSE[reason as keyof typeof COMMAND_REFUSED_BECAUSE](context)
+    : COMMAND_REFUSED_BECAUSE.command_unread(context);
 }
 
 /** Whether `reason` is one of the resolver's launch-command refusals rather than the entry's installation. */
@@ -90,26 +108,29 @@ function isEntryStartReason(reason: string | null): boolean {
  * Tender can start the game with it: a refusal for the answering source names that source (#2221 D21), one for the
  * entry's installation says nothing beside the row's own note, any other one says why (#2221 D20).
  */
-export function startVerdictLine(verdict: StartCommandVerdict | null): { tenderStarts: boolean; line: string | null } {
+export function startVerdictLine(
+  verdict: StartCommandVerdict | null,
+  context: StartContext = NO_CONTEXT,
+): { tenderStarts: boolean; line: string | null } {
   if (verdict === null || verdict.starts || verdict.reason === null || verdict.reason === "not_installed") {
     return { tenderStarts: true, line: null };
   }
   if (verdict.reason === SOURCE_STARTS_NO_GAMES)
     return { tenderStarts: false, line: cannotStartSentence(verdict.source ?? "") };
   if (isNotEstablished(verdict.reason)) return { tenderStarts: false, line: null };
-  return { tenderStarts: false, line: commandRefusalLine(verdict.reason) };
+  return { tenderStarts: false, line: commandRefusalLine(verdict.reason, context) };
 }
 
 /** Why the resolver gives no complete command for `entry`, as one sentence (#2221 D2). */
-export function commandRefusalSentence(reason: string, entry: string): string {
+export function commandRefusalSentence(reason: string, entry: string, context: StartContext = NO_CONTEXT): string {
   if (reason === "entry_unknown") return `Your choice '${entry}' no longer exists in its emulator source.`;
-  return `Tender cannot start ${entry} yet: ${commandRefusedBecause(reason)}.`;
+  return `Tender cannot start ${entry} yet: ${commandRefusedBecause(reason, context)}.`;
 }
 
 /** The emulator menu's short line for an entry the resolver gives no complete command for (#2221 D20). */
-export function commandRefusalLine(reason: string): string {
+export function commandRefusalLine(reason: string, context: StartContext = NO_CONTEXT): string {
   if (reason === "entry_unknown") return "no longer exists in its emulator source";
-  return `Tender cannot start it yet: ${commandRefusedBecause(reason)}`;
+  return `Tender cannot start it yet: ${commandRefusedBecause(reason, context)}`;
 }
 
 /** What is said beside a start the resolver's command lets go ahead, one sentence each (#2708 D1). */
@@ -127,20 +148,33 @@ export function startRemarkSentences(remarks: readonly StartRemark[] | undefined
  * `canPick` says the emulator menu offers another entry; only then does the
  * sentence point at it.
  */
-export function emulatorStartRefusal(start: EmulatorStart, subject: string, canPick: boolean): string | null {
+export function emulatorStartRefusal(
+  start: EmulatorStart,
+  subject: string,
+  canPick: boolean,
+  context: StartContext = NO_CONTEXT,
+): string | null {
   const entry = start.entry ?? "The emulator";
-  if (start.state === "cannot_start") return cannotStartRefusal(start, entry, subject, canPick ? CHOOSE_ANOTHER : "");
+  if (start.state === "cannot_start") {
+    return cannotStartRefusal(start, entry, subject, canPick ? CHOOSE_ANOTHER : "", context);
+  }
   if (start.state === "choose") return noDefaultRefusal(start.reason, entry, canPick);
   return null;
 }
 
 /** {@link emulatorStartRefusal} for a `cannot_start` answer, `pointer` ending the sentence where one is said. */
-function cannotStartRefusal(start: EmulatorStart, entry: string, subject: string, pointer: string): string {
+function cannotStartRefusal(
+  start: EmulatorStart,
+  entry: string,
+  subject: string,
+  pointer: string,
+  context: StartContext,
+): string {
   const reason = start.reason;
   if (reason === "not_installed") return `${entry} is not installed, so ${subject} cannot start.${pointer}`;
   if (reason === SOURCE_STARTS_NO_GAMES) return cannotStartSentence(start.source ?? "");
   if (reason !== null && isNotEstablished(reason)) return `${installationSentence(entry, reason)}${pointer}`;
-  if (reason !== null && isCommandReason(reason)) return `${commandRefusalSentence(reason, entry)}${pointer}`;
+  if (reason !== null && isCommandReason(reason)) return `${commandRefusalSentence(reason, entry, context)}${pointer}`;
   return `${entry} cannot start ${subject}.${pointer}`;
 }
 
@@ -205,9 +239,15 @@ export const NO_EMULATOR_STARTS = "No emulator starts this game.";
  * no emulator starts says so. The one composition the game page and a refused
  * start both say.
  */
-export function startRefusal(start: EmulatorStart, launch: GameLaunch | null, canPick: boolean): string | null {
+export function startRefusal(
+  start: EmulatorStart,
+  launch: GameLaunch | null,
+  canPick: boolean,
+  source: AnsweringSource | null = null,
+): string | null {
   if (start.state === "no_entry") return NO_EMULATOR_STARTS;
-  const emulator = emulatorStartRefusal(start, "this game", canPick);
+  const context = { source, platform: launch?.platform_name ?? null };
+  const emulator = emulatorStartRefusal(start, "this game", canPick, context);
   const file = launchRefusal(launch, canPick);
   if (isEntryStartReason(start.reason) && file !== null && emulator !== null) return `${file} ${emulator}`;
   return emulator ?? file;
@@ -221,7 +261,7 @@ export function gameStartRefusal(
   info: CoreInfo,
   canPick = gameCanPickAnother(info.emulators, info.active_core_label),
 ): string | null {
-  return startRefusal(info.start, info.launch ?? null, canPick);
+  return startRefusal(info.start, info.launch ?? null, canPick, info.emulator_source);
 }
 
 /**

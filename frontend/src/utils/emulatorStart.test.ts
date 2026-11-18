@@ -272,6 +272,29 @@ describe("an entry the resolver gives no complete command for (#2221 D2, D20)", 
     expect(commandRefusalLine(reason)).toBe(`Tender cannot start it yet: ${why}`);
   });
 
+  it("says the source has several systems for the game's platform and names none (review F4)", () => {
+    const several = start({ state: "cannot_start", reason: "systems_several", entry: "Genesis Plus GX" });
+    const launch = { platform_name: "Master System" } as GameLaunch;
+
+    expect(startRefusal(several, launch, false, { kind: "retrodeck", starts_games: true })).toBe(
+      "Tender cannot start Genesis Plus GX yet: RetroDECK has several systems for Master System and names none of them.",
+    );
+    expect(
+      commandRefusalLine("systems_several", {
+        source: { kind: "retrodeck", starts_games: true },
+        platform: "Master System",
+      }),
+    ).toBe("Tender cannot start it yet: RetroDECK has several systems for Master System and names none of them");
+  });
+
+  it("says the source does not list the game's system (review F4)", () => {
+    const unknown = start({ state: "cannot_start", reason: "system_unknown", entry: "Gambatte" });
+
+    expect(emulatorStartRefusal(unknown, "this game", false)).toBe(
+      "Tender cannot start Gambatte yet: the source does not list this game's system.",
+    );
+  });
+
   it("says a label the resolver does not know is no longer there", () => {
     expect(
       emulatorStartRefusal(

@@ -965,7 +965,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   const emulatorRefusal =
     stranded || fileMissing || startCheckFailed || detail.emulatorStart === null
       ? null
-      : startRefusal(detail.emulatorStart, gameLaunch, canPick);
+      : startRefusal(detail.emulatorStart, gameLaunch, canPick, detail.emulatorSource);
   const startNotes =
     stranded || fileMissing || startCheckFailed || emulatorRefusal !== null
       ? []

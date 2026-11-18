@@ -441,7 +441,9 @@ export type StartCommandReason =
   | "environment_unread"
   | "environment_unknown"
   | "folder_unplaced"
-  | "entry_unknown";
+  | "entry_unknown"
+  | "systems_several"
+  | "system_unknown";
 
 /**
  * Why the entry's installation could not be established, where the resolver gives no command for that reason —
