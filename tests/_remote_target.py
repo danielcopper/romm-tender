@@ -11,13 +11,15 @@ names. The ``ssh`` stand-in plays both ends of a login the way OpenSSH does,
 for the parts the setup depends on:
 
 - ``ssh -G`` answers from :attr:`World.configs`, or from ``user@host`` itself;
+  a login reads the same, or with ``-F <file>`` that file alone, and an ``-o``
+  option wins over either;
 - a host it has no :class:`Target` for cannot be resolved, and one that is not
   ``serving`` refuses the connection;
 - the host key is checked against ``UserKnownHostsFile`` under
   ``HostKeyAlias``: a different recorded key fails as a changed host key, an
-  unrecorded one is "shown" (logged) and appended, unless the world declines it
-  or ``StrictHostKeyChecking`` — given with ``-o``, else from the destination's
-  ``ssh -G`` answer — is ``yes``;
+  unrecorded one is "shown" (logged) and appended — unless the world declines
+  it, or ``StrictHostKeyChecking`` is ``yes``, or ``BatchMode`` is ``yes``, which
+  leaves ssh no way to ask;
 - authentication runs in OpenSSH's order: the user's agent keys (none with
   ``IdentitiesOnly=yes``), then each ``IdentityFile`` against the target's real
   ``authorized_keys`` — honouring ``from=`` against the address the target sees
@@ -26,11 +28,13 @@ for the parts the setup depends on:
   refused key counts towards the target's ``MaxAuthTries``;
 - a login runs its command with ``sh -c`` in the target's home, with
   ``SSH_CLIENT`` set;
-- a destination behind a ProxyJump fails on its hop when the world says so.
+- a destination behind a ProxyJump fails on its hop when the world says so,
+  with what OpenSSH prints for that failure.
 
 Every login, password prompt and host key shown is appended to
 :attr:`World.log`, which is how a test tells a run that needed a password from
-one that did not; every ``ssh`` call's options go to :func:`ssh_calls`.
+one that did not; every login ``ssh`` is asked for leaves its options and the
+identity files it offered in :func:`ssh_calls`.
 """
 
 from __future__ import annotations
@@ -44,13 +48,13 @@ import subprocess
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Final, Literal
+from typing import Final, Literal, get_args
 
 WORLD_VARIABLE = "FAKE_REMOTE_WORLD"
 RSYNC_RECORD_VARIABLE = "FAKE_RSYNC_RECORD"
 
 # What the scripts under test call besides the stand-ins.
-SYSTEM_TOOLS = ("sh", "cat", "mkdir", "chmod", "mv", "rm", "grep", "awk", "tail")
+SYSTEM_TOOLS = ("sh", "cat", "mkdir", "chmod", "mv", "rm", "grep", "awk", "tail", "readlink")
 
 # What the user's own access to a target is: an agent key it accepts, a
 # password, or nothing it accepts.
@@ -59,7 +63,9 @@ AGENT: Final = "agent"
 PASSWORD: Final = "password"
 NOTHING: Final = "nothing"
 
-HopFailure = Literal["unresolved", "host-key"]
+# How a ProxyJump hop fails: a name this machine cannot resolve, a changed host
+# key, an unrecorded one ssh could not ask about, a refused login, or no server.
+HopFailure = Literal["unresolved", "host-key", "host-key-unknown", "denied", "refused"]
 
 
 @dataclass
@@ -92,6 +98,9 @@ class World:
     hop_failure: HopFailure | None = None
     """How a ProxyJump hop fails, if it does."""
     keygen_fails: bool = False
+    ssh_g_fails: bool = False
+    fail_with: str | None = None
+    """What ssh writes on stderr before it exits 255 at every login, for a failure no pattern knows."""
 
     def save(self, path: Path) -> None:
         path.write_text(json.dumps(asdict(self)), encoding="utf-8")
@@ -100,7 +109,13 @@ class World:
     def load(cls, path: Path) -> World:
         raw = json.loads(path.read_text(encoding="utf-8"))
         raw["targets"] = {host: Target(**target) for host, target in raw["targets"].items()}
-        return cls(**raw)
+        world = cls(**raw)
+        for target in world.targets.values():
+            if target.own_access not in get_args(OwnAccess):
+                raise AssertionError(f"no such own access: {target.own_access!r}")
+        if world.hop_failure is not None and world.hop_failure not in get_args(HopFailure):
+            raise AssertionError(f"no such hop failure: {world.hop_failure!r}")
+        return world
 
 
 def fake_path(directory: Path) -> str:
@@ -121,7 +136,8 @@ def fake_path(directory: Path) -> str:
 
 
 def ssh_calls(world: World) -> list[dict[str, list[str]]]:
-    """The ``-o`` options of every login ``ssh`` was asked for, in order."""
+    """Every login ``ssh`` was asked for, in order: its ``-o`` options, ``-F`` as ``_config``
+    and the identity files it offered as ``_offered``."""
     path = Path(world.log + ".calls")
     if not path.exists():
         return []
@@ -160,6 +176,9 @@ def _resolve(world: World, destination: str) -> dict[str, list[str]]:
 
 def _ssh_g(world: World, argv: list[str]) -> int:
     """``ssh -G [-p port] destination``: a port given here wins over the config's, as in ssh."""
+    if world.ssh_g_fails:
+        print("/home/u/.ssh/config line 3: Bad configuration option: hostnme", file=sys.stderr)
+        return 255
     port = argv[argv.index("-p") + 1] if "-p" in argv else None
     user, _, host = argv[-1].rpartition("@")
     answer = dict(_resolve(world, host))
@@ -174,6 +193,7 @@ def _ssh_g(world: World, argv: list[str]) -> int:
 
 
 def _parse_ssh(argv: list[str]) -> tuple[dict[str, list[str]], str, str]:
+    """The ``-o`` options (and ``-F`` as ``_config``), the destination, and the command."""
     options: dict[str, list[str]] = {}
     index = 0
     while index < len(argv):
@@ -186,6 +206,10 @@ def _parse_ssh(argv: list[str]) -> tuple[dict[str, list[str]], str, str]:
             options.setdefault(key.lower(), []).append(_unquote(value))
             index += 2
             continue
+        if word == "-F":
+            options["_config"] = [argv[index + 1]]
+            index += 2
+            continue
         if word.startswith("-"):
             index += 1
             continue
@@ -193,12 +217,36 @@ def _parse_ssh(argv: list[str]) -> tuple[dict[str, list[str]], str, str]:
     return options, argv[index], " ".join(argv[index + 1 :])
 
 
+def _config_file(path: str, destination: str) -> dict[str, list[str]]:
+    """The settings ``-F <path>`` gives *destination*: its ``Host`` block, keys lowercased."""
+    settings: dict[str, list[str]] = {}
+    matching = False
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        words = line.split(maxsplit=1)
+        if not words or words[0].startswith("#"):
+            continue
+        key = words[0].lower()
+        if key == "host":
+            matching = destination in words[1].split()
+        elif matching:
+            settings.setdefault(key, []).append(_unquote(words[1].strip()))
+    return settings
+
+
+def _setting(options: dict[str, list[str]], config: dict[str, list[str]], name: str, default: str) -> str:
+    """An ``-o`` option, else the config's value, else ssh's default: the first value obtained wins."""
+    for source in (options, config):
+        if source.get(name):
+            return source[name][0]
+    return default
+
+
 def _check_host_key(
     world: World, target: Target, options: dict[str, list[str]], resolved: dict[str, list[str]], host: str
 ) -> bool:
-    alias = options.get("hostkeyalias", [host])[0]
-    strict = options.get("stricthostkeychecking", resolved.get("stricthostkeychecking", ["ask"]))[0]
-    known_hosts = Path(options.get("userknownhostsfile", [str(Path.home() / ".ssh" / "known_hosts")])[0])
+    alias = _setting(options, resolved, "hostkeyalias", host)
+    strict = _setting(options, resolved, "stricthostkeychecking", "ask")
+    known_hosts = Path(os.path.expanduser(_setting(options, resolved, "userknownhostsfile", "~/.ssh/known_hosts")))
     lines = known_hosts.read_text(encoding="utf-8").splitlines() if known_hosts.exists() else []
     for line in lines:
         names, _, key = line.partition(" ")
@@ -215,7 +263,7 @@ def _check_host_key(
                 file=sys.stderr,
             )
             return False
-    if strict == "yes" or _option(options, "batchmode") == "yes":
+    if strict == "yes" or _setting(options, resolved, "batchmode", "no") == "yes":
         print(
             f"No ED25519 host key is known for {alias} and you have requested strict checking.\n"
             "Host key verification failed.",
@@ -258,22 +306,26 @@ def _forced_command(target: Target, identity_files: list[str]) -> str | None:
     return None
 
 
-def _option(options: dict[str, list[str]], name: str) -> str | None:
-    values = options.get(name)
-    return values[0] if values else None
+def _identity_files(options: dict[str, list[str]], config: dict[str, list[str]]) -> list[str]:
+    """The identity files a login offers: ``-o`` ones and the config's, those that exist."""
+    files = [*options.get("identityfile", []), *config.get("identityfile", [])]
+    present = [path for path in files if Path(os.path.expanduser(path) + ".pub").exists()]
+    return list(dict.fromkeys(present))
 
 
-def _authenticate(world: World, target: Target, options: dict[str, list[str]], host: str) -> str | None:
+def _authenticate(
+    world: World, target: Target, options: dict[str, list[str]], config: dict[str, list[str]], host: str
+) -> str | None:
     """``own`` for a login of the user's own, the forced command for one with a key, ``None`` or ``too many``."""
     refused = 0
-    if _option(options, "identitiesonly") != "yes":
+    if _setting(options, config, "identitiesonly", "no") != "yes":
         refused += target.refused_agent_keys
         if refused >= target.max_auth_tries:
             return "too many"
         if target.own_access == AGENT:
             _log(world, f"login {host} own")
             return "own"
-    for identity in options.get("identityfile", []):
+    for identity in _identity_files(options, config):
         forced = _forced_command(target, [identity])
         if forced is not None:
             _log(world, f"login {host} key")
@@ -281,26 +333,37 @@ def _authenticate(world: World, target: Target, options: dict[str, list[str]], h
         refused += 1
         if refused >= target.max_auth_tries:
             return "too many"
-    preferred = _option(options, "preferredauthentications")
-    password_allowed = _option(options, "batchmode") != "yes" and (preferred is None or "password" in preferred)
+    preferred = _setting(options, config, "preferredauthentications", "publickey,password")
+    password_allowed = _setting(options, config, "batchmode", "no") != "yes" and "password" in preferred
     if target.own_access == PASSWORD and password_allowed:
         _log(world, f"password asked {host}")
         _log(world, f"login {host} own")
         return "own"
-    if target.own_access in (AGENT, PASSWORD, NOTHING):
-        return None
-    raise AssertionError(f"no such own access: {target.own_access!r}")
+    return None
+
+
+def _hop_host(proxy_jump: str) -> str:
+    """The first hop's host, out of ``[user@]host[:port]``."""
+    first = proxy_jump.split(",")[0].rpartition("@")[2]
+    return first.rpartition(":")[0] if first.count(":") == 1 else first
 
 
 def _hop_fails(failure: HopFailure, hop: str) -> int:
+    closed = "kex_exchange_identification: Connection closed by remote host\nConnection closed by UNKNOWN port 65535"
     if failure == "unresolved":
-        print(
-            f"ssh: Could not resolve hostname {hop}: Name or service not known\n"
-            "kex_exchange_identification: Connection closed by remote host\n"
-            "Connection closed by UNKNOWN port 65535",
-            file=sys.stderr,
-        )
+        print(f"ssh: Could not resolve hostname {hop}: Name or service not known\n{closed}", file=sys.stderr)
         return 255
+    if failure == "host-key-unknown":
+        print(f"Host key verification failed.\n{closed}", file=sys.stderr)
+        return 255
+    if failure == "denied":
+        print(f"jumper@{hop}: Permission denied (publickey).\n{closed}", file=sys.stderr)
+        return 255
+    if failure == "refused":
+        print(f"ssh: connect to host {hop} port 22: Connection refused\n{closed}", file=sys.stderr)
+        return 255
+    if failure != "host-key":
+        raise AssertionError(f"no such hop failure: {failure!r}")
     known_hosts = Path.home() / ".ssh" / "known_hosts"
     print(
         "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
@@ -320,13 +383,19 @@ def _ssh(argv: list[str]) -> int:
     if argv[:1] == ["-G"]:
         return _ssh_g(world, argv[1:])
     options, destination, command = _parse_ssh(argv)
+    if "_config" in options:
+        resolved = _config_file(options["_config"][0], destination)
+    else:
+        resolved = _resolve(world, destination)
     with open(world.log + ".calls", "a", encoding="utf-8") as calls:
-        calls.write(json.dumps(options) + "\n")
-    resolved = _resolve(world, destination)
+        calls.write(json.dumps({**options, "_offered": _identity_files(options, resolved)}) + "\n")
     if "proxyjump" in resolved and world.hop_failure is not None:
-        return _hop_fails(world.hop_failure, resolved["proxyjump"][0].rpartition("@")[2].partition(":")[0])
+        return _hop_fails(world.hop_failure, _hop_host(resolved["proxyjump"][0]))
+    if world.fail_with is not None:
+        print(world.fail_with, file=sys.stderr)
+        return 255
     host = resolved["hostname"][0]
-    user = resolved["user"][0]
+    user = _setting(options, resolved, "user", "builder")
     target = world.targets.get(host)
     if target is None:
         print(f"ssh: Could not resolve hostname {host}: Name or service not known", file=sys.stderr)
@@ -344,7 +413,7 @@ def _ssh(argv: list[str]) -> int:
     }
     if "TENDER_PYTHON" in os.environ:
         env["TENDER_PYTHON"] = os.environ["TENDER_PYTHON"]
-    login = _authenticate(world, target, options, host)
+    login = _authenticate(world, target, options, resolved, host)
     if login is None:
         print(f"{user}@{host}: Permission denied (publickey,password).", file=sys.stderr)
         return 255

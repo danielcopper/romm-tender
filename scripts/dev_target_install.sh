@@ -14,8 +14,8 @@ set -eu
 umask 077
 # @VALUES@
 printf '%s\n' "${started_marker:?}"
-: "${installed_marker:?}" "${public_key:?}" "${build_host:?}" "${written:?}" "${target_root:?}"
-: "${show_host_keys:?}" "${host_key_dir:?}" "${default_from?}"
+: "${installed_marker:?}" "${stopped_marker:?}" "${public_key:?}" "${build_host:?}" "${written:?}"
+: "${target_root:?}" "${show_host_keys:?}" "${host_key_dir:?}" "${default_from?}"
 
 from_address="${1:-$default_from}"
 if [ -z "$from_address" ]; then
@@ -24,7 +24,7 @@ if [ -z "$from_address" ]; then
 fi
 case "$from_address" in
     '' | *[!0-9A-Fa-f.:]*)
-        printf 'tender-dev-setup: no address to restrict the key to (got "%s").\n' "$from_address" >&2
+        printf '%sno address to restrict the key to (got "%s").\n' "$stopped_marker" "$from_address" >&2
         exit 1
         ;;
 esac
@@ -32,6 +32,11 @@ printf 'tender-dev-setup: the key from %s will be accepted from %s only.\n' "$bu
 
 root="$HOME/$target_root"
 keys="$HOME/.ssh/authorized_keys"
+# A symlinked file (a dotfile manager's) is written through: the new file is
+# built beside the file the link names and replaces that one, and the link stays.
+if [ -L "$keys" ]; then
+    keys=$(readlink -f "$keys")
+fi
 new_dispatcher="$root/.dispatch.sh.new"
 new_keys="$keys.tender-dev.new"
 # Both files are built beside their places first and moved there last, so a
@@ -72,7 +77,7 @@ chmod 600 "$new_keys"
 # other key in it along.
 if [ "$(awk 'END { print NR }' "$new_keys")" -ne $((lines_before - lines_ours + 2)) ] ||
     [ "$(tail -n 1 "$new_keys")" != "$line" ]; then
-    printf 'tender-dev-setup: the new %s did not come out whole, so it was left as it was.\n' "$keys" >&2
+    printf '%sthe new %s did not come out whole, so it was left as it was.\n' "$stopped_marker" "$keys" >&2
     exit 1
 fi
 replace_keys=yes

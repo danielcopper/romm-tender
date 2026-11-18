@@ -99,6 +99,30 @@ def test_the_setup_request_runs_the_script_on_its_stdin_in_the_home(home: Path, 
     assert (home / "repaired").read_text(encoding="utf-8") == "installed"
 
 
+def test_installed_elsewhere_it_takes_its_root_from_where_it_lies(home: Path, tmp_path: Path) -> None:
+    elsewhere = home / "other" / "dispatch.sh"
+    elsewhere.parent.mkdir()
+    shutil.copyfile(_DISPATCHER, elsewhere)
+    env = {"HOME": str(home), "PATH": fake_path(tmp_path), RSYNC_RECORD_VARIABLE: str(tmp_path / "rsync-calls")}
+
+    def dispatch(request: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["sh", str(elsewhere)],
+            cwd="/",
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**env, "SSH_ORIGINAL_COMMAND": request},
+        )
+
+    taken = dispatch("rsync --server -logDtpre.iLsfxCIvu . other/incoming/")
+    refused = dispatch(f"rsync --server -logDtpre.iLsfxCIvu . {_INCOMING}")
+
+    assert taken.returncode == 0, taken.stderr
+    assert refused.returncode == _REFUSED
+    assert _rsync_calls(tmp_path) == [["--server", "-logDtpre.iLsfxCIvu", ".", "other/incoming/"]]
+
+
 def test_dev_target_sh_runs_from_the_incoming_copy_with_its_words(home: Path, tmp_path: Path) -> None:
     _dev_target(home)
 
@@ -224,6 +248,7 @@ def test_a_read_of_something_not_there_says_so(home: Path, tmp_path: Path, reque
         pytest.param(f"rsync --server -logDtpre.iLsfxCIvu {_INCOMING}", id="rsync without its dot"),
         pytest.param(f"rsync --server -logDtprse.iLsfxCIvu . {_INCOMING}", id="rsync with protected arguments"),
         pytest.param(f"rsync --server -logDtprRe.iLsfxCIvu . {_INCOMING}", id="rsync with relative paths"),
+        pytest.param(f"rsync --server -logDtprKe.iLsfxCIvu . {_INCOMING}", id="rsync keeping dirlinks"),
         pytest.param(f"rsync --server -logDtpre.iLs/fxCIvu . {_INCOMING}", id="rsync with a stray character"),
         pytest.param(f"rsync --server -logDtpre.iLsfxCIvu --log-file=/tmp/x . {_INCOMING}", id="rsync logging"),
         pytest.param(f"rsync --server -logDtpre.iLsfxCIvu --backup-dir=/tmp . {_INCOMING}", id="rsync backing up"),

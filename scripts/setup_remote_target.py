@@ -46,10 +46,12 @@ HOST_KEY_DIR = "/etc/ssh"
 
 # The install script's first and last lines on stdout, searched for rather than
 # expected alone: the user's shell may print lines of its own first. Without
-# STARTED the script never ran, and only then did a failure change nothing on
-# the target.
+# STARTED the script never ran, and only then can the setup say that a failure
+# changed nothing on the target. STOPPED opens the line on stderr with which the
+# script refuses to go on, which running the setup again would not change.
 STARTED = "tender-dev-setup: started"
 INSTALLED = "tender-dev-setup: installed from="
+STOPPED = "tender-dev-setup: stopped: "
 
 # What ssh exits with when it fails itself, rather than handing on the remote
 # command's status (ssh(1), EXIT STATUS).
@@ -61,12 +63,21 @@ SSH_FAILED = 255
 _HOST_KEY_CHANGED = re.compile(r"REMOTE HOST IDENTIFICATION HAS CHANGED|Host key for \S+ has changed")
 _OFFENDING_FILE = re.compile(r"Offending \S+ key in (\S+):\d+")
 _HOST_KEY_NOT_ACCEPTED = re.compile(r"Host key verification failed")
-_NO_LOGIN = re.compile(r"Permission denied \(|Too many authentication failures")
 _KEY_REFUSED = re.compile(r"Permission denied \(")
+_NO_LOGIN = re.compile(_KEY_REFUSED.pattern + r"|Too many authentication failures")
 _UNRESOLVED = re.compile(r"Could not resolve hostname ([^:\s]+)")
 _NO_SERVER = re.compile(
     r"Connection refused|Connection timed out|Operation timed out|No route to host|Network is unreachable"
     r"|kex_exchange_identification|Connection closed by|Connection reset"
+)
+
+# Where ssh names the host a failure is about: a refused login as user@host, a
+# connection as "connect to host <host> port", a name and a changed key by it.
+_NAMED_HOSTS = (
+    re.compile(r"\S+@(\S+): Permission denied \("),
+    re.compile(r"connect to host (\S+) port"),
+    _UNRESOLVED,
+    re.compile(r"Host key for (\S+) has changed"),
 )
 
 _NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
@@ -132,12 +143,7 @@ def config_dir() -> pathlib.Path:
 
 
 def host_key_alias(name: str) -> str:
-    """The name a target's host key is recorded under, in place of its address.
-
-    An address can change and the machine behind it stays the same, so the
-    record follows the target's name: a target at a new address keeps its host
-    key, and another machine at a known address is still caught.
-    """
+    """The name the target *name*'s host key is recorded under, whatever its address."""
     return f"romm-tender-dev.{name}"
 
 
@@ -197,11 +203,7 @@ def resolve(text: str, port: str | None = None) -> Destination:
 
 
 def resolve_jump(proxy_jump: str) -> str:
-    """*proxy_jump* with every hop spelled out as ``user@host:port``.
-
-    The dev loop's config is read alone, so an alias from the user's config in
-    a hop would name nothing there.
-    """
+    """*proxy_jump* with every hop spelled out as ``user@host:port``, through ``ssh -G``."""
     hops = []
     for hop in proxy_jump.split(","):
         user, host, port = split_hop(hop)
@@ -268,6 +270,7 @@ def install_script(*, public_key: str, build_host: str, written: str, default_fr
         for name, value in (
             ("started_marker", STARTED),
             ("installed_marker", INSTALLED),
+            ("stopped_marker", STOPPED),
             ("public_key", public_key),
             ("build_host", build_host),
             ("written", written),
@@ -281,17 +284,29 @@ def install_script(*, public_key: str, build_host: str, written: str, default_fr
     return template.replace("# @VALUES@", values, 1).replace("@DISPATCHER@", read_text(DISPATCHER).rstrip("\n"), 1)
 
 
+def failed_where(stderr: str, *, name: str, destination: Destination) -> str:
+    """Whose failure ssh reported: ``target``, ``hop``, or ``either`` where it names no host."""
+    if not destination.via:
+        return "target"
+    named = {match.group(1) for pattern in _NAMED_HOSTS for match in pattern.finditer(stderr)}
+    if named & {destination.hostname, host_key_alias(name), name}:
+        return "target"
+    return "hop" if named else "either"
+
+
 def classify(
     stderr: str, *, name: str, destination: Destination, known_hosts: pathlib.Path, trial_known_hosts: pathlib.Path
 ) -> str | None:
     """What to tell the user for an ``ssh`` that ended before the login.
 
-    ``None`` for a refused login, which ``no_login_message`` words, and for
-    anything that is no failure of ssh's. A failure on a hop is named as the
-    hop's: its host key lies in the user's own files, which the setup leaves
-    alone.
+    ``None`` for the target's refusal of the login, which ``no_login_message``
+    words, and for anything that is no failure of ssh's. A failure ssh names on
+    a hop is worded as the hop's; one it names on no host, as the target's or
+    the hop's.
     """
     host = destination.hostname
+    where = failed_where(stderr, name=name, destination=destination)
+    hop = f"the hop {destination.via}"
     if _HOST_KEY_CHANGED.search(stderr):
         offending = _OFFENDING_FILE.search(stderr)
         ours = (str(known_hosts), str(trial_known_hosts))
@@ -308,11 +323,14 @@ def classify(
             "  Check that hop with your own ssh."
         )
     if _HOST_KEY_NOT_ACCEPTED.search(stderr):
+        whose = {"target": f"at {host}", "hop": f"of {hop}", "either": f"of {host} or of {hop}"}[where]
         return (
-            f"tender-dev: the host key at {host} was not accepted, or ssh could not ask about it — it asks on a"
+            f"tender-dev: the host key {whose} was not accepted, or ssh could not ask about it — it asks on a"
             " terminal. No connection was made."
         )
     if _NO_LOGIN.search(stderr):
+        if where == "hop":
+            return f"tender-dev: {hop} accepted no login from this machine.\n  Check that hop with your own ssh."
         return None
     unresolved = _UNRESOLVED.search(stderr)
     if unresolved is not None and destination.via and unresolved.group(1) != host:
@@ -325,6 +343,13 @@ def classify(
         return (
             f"tender-dev: this machine cannot resolve {host}.\n"
             "  Give the target's address instead, or a name the network resolves."
+        )
+    if _NO_SERVER.search(stderr) and where == "hop":
+        return f"tender-dev: no SSH server answers at {hop}.\n  Check that hop with your own ssh."
+    if _NO_SERVER.search(stderr) and where == "either":
+        return (
+            f"tender-dev: no SSH server answers at {host} port {destination.port}, or at {hop}.\n"
+            "  Check the address, that the target runs an SSH server, and that hop."
         )
     if _NO_SERVER.search(stderr):
         return (
@@ -369,6 +394,9 @@ def failure_message(
 ) -> str:
     """What to tell the user for a setup login that did not end with the install done."""
     ssh_said = result.stderr.rstrip()
+    stopped = next((line[len(STOPPED) :] for line in result.stderr.splitlines() if line.startswith(STOPPED)), None)
+    if stopped is not None:
+        return f"tender-dev: the setup stopped on {name}: {stopped}\n  This machine is unchanged."
     if STARTED in result.stdout.splitlines():
         return (
             f"tender-dev: the setup stopped part-way on {name} (ssh ended with {result.returncode}):\n{ssh_said}\n"
@@ -425,12 +453,12 @@ def write_atomically(path: pathlib.Path, text: str) -> None:
     os.replace(partial, path)
 
 
-def config_entry(name: str, destination: Destination, jump: str | None, directory: pathlib.Path) -> list[str]:
-    """The lines of a target's entry in the dev loop's SSH config, without its comment.
+def config_entry(name: str, destination: Destination, *, key: pathlib.Path, known_hosts: pathlib.Path) -> list[str]:
+    """The lines of a target's entry in a dev loop SSH config, without its comment.
 
-    *jump* is :func:`resolve_jump`'s spelling of the destination's ProxyJump. A
-    ProxyCommand goes in as ``ssh -G`` printed it; a ``%h`` or ``%p`` left in it
-    expands against this entry's HostName and Port when it runs.
+    A ProxyJump goes in resolved (:func:`resolve_jump`); a ProxyCommand as
+    ``ssh -G`` printed it, a ``%h`` or ``%p`` left in it expanding against this
+    entry's HostName and Port when it runs.
     """
     lines = [
         f"Host {name}",
@@ -438,15 +466,15 @@ def config_entry(name: str, destination: Destination, jump: str | None, director
         f"    Port {destination.port}",
         f"    User {destination.user}",
     ]
-    if jump:
-        lines.append(f"    ProxyJump {jump}")
+    if destination.proxy_jump:
+        lines.append(f"    ProxyJump {resolve_jump(destination.proxy_jump)}")
     elif destination.proxy_command:
         lines.append(f"    ProxyCommand {destination.proxy_command}")
     lines += [
         f"    HostKeyAlias {host_key_alias(name)}",
-        f'    IdentityFile "{directory / KEY_NAME}"',
+        f'    IdentityFile "{key}"',
         "    IdentitiesOnly yes",
-        f'    UserKnownHostsFile "{directory / KNOWN_HOSTS_NAME}"',
+        f'    UserKnownHostsFile "{known_hosts}"',
         "    GlobalKnownHostsFile /dev/null",
         "    StrictHostKeyChecking yes",
         "    BatchMode yes",
@@ -529,61 +557,82 @@ def setup_login(
     name: str,
     script: str,
     known_hosts: pathlib.Path,
-    key: pathlib.Path | None,
+    key_config: pathlib.Path | None,
     host_key_recorded: bool,
 ) -> subprocess.CompletedProcess[str]:
-    """One login with *script* on its stdin: with the dev loop's *key* alone, or with the user's own access.
+    """One login with *script* on its stdin: with the dev loop's key alone, or with the user's own access.
 
-    Every login asks about a host key it has not recorded, whatever the user's
-    config says, and opens a connection of its own: one shared through a
-    ControlMaster would skip the host key check that fills *known_hosts*.
+    The key's login reads *key_config* alone, an entry :func:`config_entry`
+    built for the key and *known_hosts*, so nothing of the user's SSH config —
+    another IdentityFile among it — takes part. The user's own login reads the
+    user's config, *known_hosts* given beside it.
 
-    The key's login asks for nothing but that host key — no password, no
-    passphrase — and once the host key is recorded runs in batch mode, so it
-    asks for nothing at all. Before that it cannot: the first login after
-    ``--print`` has to show the fingerprint for the user to compare.
+    Every login asks about a host key it has not recorded, whatever a config
+    says, and opens a connection of its own: one shared through a ControlMaster
+    would skip the host key check that fills *known_hosts*. The key's login
+    asks for nothing but that host key — no password, no passphrase — and once
+    the host key is recorded runs in batch mode, so it asks for nothing at all.
+    Before that it cannot: the first login after ``--print`` has to show the
+    fingerprint for the user to compare.
     """
-    options = [
-        f'UserKnownHostsFile="{known_hosts}"',
-        "GlobalKnownHostsFile=/dev/null",
-        "StrictHostKeyChecking=ask",
-        "HashKnownHosts=no",
-        f"HostKeyAlias={host_key_alias(name)}",
-        "ControlMaster=no",
-        "ControlPath=none",
-    ]
-    if key is None:
-        options.append("BatchMode=no")
-    else:
+    options = ["StrictHostKeyChecking=ask", "HashKnownHosts=no", "ControlMaster=no", "ControlPath=none"]
+    if key_config is None:
+        command = ["ssh", "-T"]
         options += [
-            f'IdentityFile="{key}"',
+            f'UserKnownHostsFile="{known_hosts}"',
+            "GlobalKnownHostsFile=/dev/null",
+            f"HostKeyAlias={host_key_alias(name)}",
+            "BatchMode=no",
+        ]
+        target = destination.text
+    else:
+        command = ["ssh", "-F", str(key_config), "-T"]
+        options += [
             "IdentitiesOnly=yes",
             "PreferredAuthentications=publickey",
             f"BatchMode={'yes' if host_key_recorded else 'no'}",
         ]
-    command = ["ssh", "-T"]
+        target = name
     for option in options:
         command += ["-o", option]
-    command += ["--", destination.text, "sh", "-s"]
+    command += ["--", target, "sh", "-s"]
     return run(command, stdin=script)
 
 
-def is_key_refused(result: subprocess.CompletedProcess[str]) -> bool:
-    return (
-        result.returncode == SSH_FAILED
-        and STARTED not in result.stdout.splitlines()
-        and bool(_KEY_REFUSED.search(result.stderr))
-    )
+def installed_from(result: subprocess.CompletedProcess[str]) -> str | None:
+    """The address the install restricted the key to, once it ran to its end."""
+    return next((line[len(INSTALLED) :] for line in result.stdout.splitlines() if line.startswith(INSTALLED)), None)
+
+
+def hand_over(result: subprocess.CompletedProcess[str], *, name: str, destination: Destination) -> str | None:
+    """Why the key's login gives way to the user's own, or ``None`` when its result stands.
+
+    ``refused`` for the target's refusal of the key; ``forced command`` for a
+    key the target took whose forced command ran no install (a dispatcher gone,
+    or one that refuses the setup request); ``hop`` for a failure on a hop, which
+    the user's own config may pass. Any other failure, and an install that
+    started, stand: the user's own login would meet them too.
+    """
+    if installed_from(result) is not None or STARTED in result.stdout.splitlines():
+        return None
+    if result.returncode != SSH_FAILED:
+        return "forced command"
+    where = failed_where(result.stderr, name=name, destination=destination)
+    if where == "target" and _KEY_REFUSED.search(result.stderr):
+        return "refused"
+    if where == "hop":
+        return "hop"
+    return None
 
 
 def run_setup(name: str, destination_text: str) -> int:
     destination = resolve(destination_text)
-    jump = resolve_jump(destination.proxy_jump) if destination.proxy_jump else None
     directory = config_dir()
     key = existing_key(directory)
     known_hosts = directory / KNOWN_HOSTS_NAME
     build_host = build_host_name()
     written = stamp()
+    final_entry = config_entry(name, destination, key=directory / KEY_NAME, known_hosts=known_hosts)
 
     with tempfile.TemporaryDirectory(prefix="romm-tender-dev-setup-") as scratch_name:
         scratch = pathlib.Path(scratch_name)
@@ -604,35 +653,42 @@ def run_setup(name: str, destination_text: str) -> int:
             public_key=public_key, build_host=build_host, written=written, default_from="", show_host_keys=False
         )
 
-        def log_in(with_key: pathlib.Path | None) -> subprocess.CompletedProcess[str]:
+        def log_in(key_config: pathlib.Path | None) -> subprocess.CompletedProcess[str]:
             return setup_login(
                 destination,
                 name=name,
                 script=script,
                 known_hosts=trial_known_hosts,
-                key=with_key,
+                key_config=key_config,
                 host_key_recorded=host_key_recorded,
             )
 
-        key_refused = False
-        result = log_in(key)
-        if key is not None and is_key_refused(result):
-            key_refused = True
-            result = log_in(None)
+        handed_over = None
+        key_result = None
+        if key is not None:
+            key_config = scratch / SSH_CONFIG_NAME
+            entry = config_entry(name, destination, key=key, known_hosts=trial_known_hosts)
+            key_config.write_text("\n".join(entry) + "\n", encoding="utf-8")
+            key_result = log_in(key_config)
+            handed_over = hand_over(key_result, name=name, destination=destination)
+        result = log_in(None) if key_result is None or handed_over is not None else key_result
 
-        lines = result.stdout.splitlines()
-        installed = next((line[len(INSTALLED) :] for line in lines if line.startswith(INSTALLED)), None)
+        installed = installed_from(result)
         if installed is None:
-            raise SetupError(
-                failure_message(
-                    result,
-                    name=name,
-                    destination=destination,
-                    key_refused=key_refused,
-                    known_hosts=known_hosts,
-                    trial_known_hosts=trial_known_hosts,
-                )
+            message = failure_message(
+                result,
+                name=name,
+                destination=destination,
+                key_refused=handed_over == "refused",
+                known_hosts=known_hosts,
+                trial_known_hosts=trial_known_hosts,
             )
+            if handed_over == "forced command" and key_result is not None:
+                message += (
+                    f"\n  {name} accepted the dev loop's key, but its forced command failed"
+                    f" (ssh ended with {key_result.returncode}):\n{key_result.stderr.rstrip()}"
+                )
+            raise SetupError(message)
 
         try:
             if new_key is not None:
@@ -642,12 +698,7 @@ def run_setup(name: str, destination_text: str) -> int:
                 write_atomically(known_hosts, trial)
             config_path = directory / SSH_CONFIG_NAME
             current = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
-            config = updated_config(
-                current,
-                name,
-                config_entry(name, destination, jump, directory),
-                entry_comment(name, build_host, written),
-            )
+            config = updated_config(current, name, final_entry, entry_comment(name, build_host, written))
             if config != current:
                 write_atomically(config_path, config)
         except (OSError, UnicodeError) as error:
