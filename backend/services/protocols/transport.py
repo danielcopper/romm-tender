@@ -153,9 +153,8 @@ class RommRomLookup(Protocol):
     def get_rom(self, rom_id: int) -> dict[str, Any]:
         """Fetch a single ROM by ID.
 
-        Returns RomM's detail answer from /api/roms/{rom_id}, which adds the
-        user's saves, states, screenshots, notes and collections to what
-        :meth:`RommRomReader.get_rom_simple` answers.
+        Returns RomM's detail answer from /api/roms/{rom_id}: the ROM with the
+        user's saves, states, screenshots, notes and collections.
         """
         ...
 
@@ -548,10 +547,7 @@ class RommLibraryApi(RommPlatformReader, RommRomReader, Protocol):
 
 
 class RommSyncApi(RommSaveApi, RommRomLookup, RommVersion, RommDeviceApi, Protocol):
-    """RomM surface for save-sync — saves cluster + server identity + device registration + the ROM lookup.
-
-    The lookup is what proves an upload's 404 means RomM no longer has the ROM.
-    """
+    """RomM surface for save-sync — saves cluster + server identity + device registration + the ROM lookup."""
 
 
 class RommApi(
