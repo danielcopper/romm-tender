@@ -10,8 +10,8 @@
 #       start the backend as a user unit and follow its backend.log until the
 #       backend stops
 #   dev_target.sh frontend <name> [display]
-#       refuse while no backend holds the lock; otherwise put the copy in place
-#       and restart Steam into the remembered window, starting no backend
+#       refuse unless the dev backend holds the lock; otherwise put the copy in
+#       place and restart Steam into the remembered window, starting no backend
 #   dev_target.sh reset <name> bpm|desktop [display]
 #   dev_target.sh ui-scale <name> [mode]
 #       start dev_ui_scale.py as a user unit and follow what it prints; `auto`
@@ -168,7 +168,9 @@ refuse_if_held() {
     esac
 }
 
-refuse_if_free() {
+# The installed service loads the panel it was installed with, not the copy, so
+# only the dev backend makes a restart worth it.
+refuse_unless_dev() {
     case "$holder" in
         none)
             say "no backend is running on $name — nothing would load the panel into the fresh Steam."
@@ -178,8 +180,19 @@ refuse_if_free() {
                 "Steam has not been restarted, and the running tree is as it was." >&2
             exit 1
             ;;
+        service | other)
+            say "$(holder_text) holds the single-instance lock on $name, and it loads its own panel, not this build."
+            printf '%s\n' "  lock: $lock" >&2
+            if [ "$holder" = service ]; then
+                printf '%s\n' "Stop it with \`mise run dev:stop --target $name\`, then \`mise run dev:backend --target $name\`." >&2
+            else
+                printf '%s\n' "Stop it on $name by hand, then \`mise run dev:backend --target $name\`." >&2
+            fi
+            printf '%s\n' "Steam has not been restarted, and the running tree is as it was." >&2
+            exit 1
+            ;;
         unknown) say "could not read the single-instance lock on $name at ${lock:-its place} — carrying on anyway." ;;
-        *) ;;
+        dev) ;;
     esac
 }
 
@@ -239,7 +252,7 @@ frontend() {
     need_python
     import_session
     lock_holder
-    refuse_if_free
+    refuse_unless_dev
     install_tree
     bash "$here/dev_steam.sh" restart-remembered "$@"
 }

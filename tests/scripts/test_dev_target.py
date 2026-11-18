@@ -379,6 +379,27 @@ class TestStartingABackend:
         assert _steam_calls(loop.world) == []
         assert _alive(service)
 
+    @pytest.mark.parametrize("unit", ["romm-tender", None], ids=["installed-service", "another-process"])
+    def test_dev_frontend_beside_any_backend_but_the_dev_one_is_refused_and_nothing_replaced(
+        self, loop: Loop, unit: str | None
+    ) -> None:
+        """#2846 D3: the installed service loads its own panel, not this build, so dev:frontend needs the dev one."""
+        holder = loop.hold_lock(unit or "some-other-unit")
+        (loop.root / "current/sentinel").write_text("running\n", encoding="utf-8")
+
+        result = loop.run("dev:frontend")
+
+        assert result.returncode == 1
+        stop_then_start = "`mise run dev:stop --target deck`, then `mise run dev:backend --target deck`"
+        if unit is not None:
+            assert "the installed service (romm-tender.service" in result.stderr
+            assert stop_then_start in result.stderr
+        else:
+            assert f"pid {holder}" in result.stderr
+        assert [entry.name for entry in (loop.root / "current").iterdir()] == ["sentinel"]
+        assert _steam_calls(loop.world) == []
+        assert _alive(holder)
+
     def test_dev_frontend_with_no_backend_running_is_refused_and_nothing_replaced(self, loop: Loop) -> None:
         (loop.root / "current/sentinel").write_text("running\n", encoding="utf-8")
 

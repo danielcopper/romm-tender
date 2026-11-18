@@ -548,12 +548,12 @@ Without `--target`, every task does what the sections above describe and nothing
    The copy is a mirror that `rsync` keeps up to date, so only what changed travels. It lands beside the running tree,
    `current/`, not over it, and a task that builds nothing leaves `current/` alone.
 4. **It runs the task on the target**, through `scripts/dev_target.sh` from that copy. The tasks that start a backend
-   ask the single-instance lock first and refuse as they do locally — `dev:frontend` the other way round — and only once
-   the answer lets them on does the copy replace `current/`. Then Steam restarts through `scripts/dev_steam.sh`, as it
-   does locally, and the backend starts as the user unit `romm-tender-dev`, on the Python the installed service runs on
-   (`TENDER_PYTHON`, else `/usr/bin/python3`, 3.12 or newer), so it outlives the connection. The display a task names is
-   one of the target's, and the [remembered window](#why-the-window-is-remembered-rather-than-read) is the target's
-   memory file.
+   ask the single-instance lock first and refuse as they do locally — `dev:frontend` the other way round, and stricter
+   than locally (below) — and only once the answer lets them on does the copy replace `current/`. Then Steam restarts
+   through `scripts/dev_steam.sh`, as it does locally, and the backend starts as the user unit `romm-tender-dev`, on the
+   Python the installed service runs on (`TENDER_PYTHON`, else `/usr/bin/python3`, 3.12 or newer), so it outlives the
+   connection. The display a task names is one of the target's, and the
+   [remembered window](#why-the-window-is-remembered-rather-than-read) is the target's memory file.
 
 On the target everything runs in the user manager's environment: the units do by being units, and the steps between take
 the display and the session bus from it, since a login over `ssh` carries neither. It needs nothing beyond `/usr/bin`.
@@ -568,6 +568,12 @@ as it is — the next task that starts a backend restarts it anyway — and leav
 starts again at the next login; the message names `systemctl --user start romm-tender` to start it now. A lock held by
 any other process is named and left alone. When the installed service holds the lock, a task that starts a backend
 refuses with `mise run dev:stop --target <name>` in its message.
+
+**`dev:frontend --target` needs the dev backend to hold the lock**, not just any backend: on a target the installed
+service is the likely holder, and it loads the panel it was installed with, never the copy. So beside the installed
+service it refuses and names `mise run dev:stop --target <name>`, then `mise run dev:backend --target <name>`; beside
+any other process it names that process, to be stopped by hand. Without `--target` it refuses only when nothing holds
+the lock, as above.
 
 **`dev:ui-scale` runs on the target as the user unit `romm-tender-dev-ui-scale`**, and the task follows what it prints
 until Ctrl-C, which ends only the following. `dev:ui-scale --stop --target <name>` stops the unit, which restores the
