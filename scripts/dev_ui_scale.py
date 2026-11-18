@@ -128,6 +128,20 @@ _TIMEOUT_SEC = 8.0
 
 _STEAM_CONFIG_VDF = os.path.expanduser("~/.local/share/Steam/config/config.vdf")
 
+# Set by scripts/dev_target.sh on a target: the tasks a hint names are then the
+# build host's, with --target, and the run there is stopped by --stop, not Ctrl-C.
+_TARGET = os.environ.get("TENDER_DEV_TARGET", "")
+
+
+def _task(words: str) -> str:
+    """The ``mise run`` line for *words*, with ``--target`` where this runs on a target."""
+    return f"mise run {words}" + (f" --target {_TARGET}" if _TARGET else "")
+
+
+def _stopper() -> str:
+    return f"`{_task('dev:ui-scale --stop')}`" if _TARGET else "Ctrl-C"
+
+
 # Steam re-lays out the views asynchronously after the scale call: measured on-device, the
 # new dpr is live at ~0.25 s but the layout is still mid-flight (a transient 570x480), and
 # settles by ~0.5 s. Measure well past that or the printed numbers are a lie.
@@ -191,7 +205,7 @@ def _list_targets() -> list[dict[str, Any]]:
     except (URLError, OSError, ValueError) as e:
         raise DevUiScaleError(
             f"no CEF debugger on {_DEBUGGER_URL} ({e}). Is Big Picture running? "
-            "Open one with `mise run dev:bpm`. If Steam is up but the endpoint "
+            f"Open one with `{_task('dev:bpm')}`. If Steam is up but the endpoint "
             "is dead, ~/.steam/steam/.cef-enable-remote-debugging is missing (create it and "
             "restart Steam)."
         ) from e
@@ -927,7 +941,7 @@ def _set_scale(factor: float | None) -> None:
     if ws_url is None:
         raise DevUiScaleError(
             f"no {_SHARED_JS_CONTEXT} debug target on {_DEBUGGER_URL}. Is Big Picture running? "
-            "Open one with `mise run dev:bpm`."
+            f"Open one with `{_task('dev:bpm')}`."
         )
     if factor is None:
         expression = "(() => { SteamClient.Window.SetGamepadUIAutoDisplayScale(true); return 'auto'; })()"
@@ -1247,7 +1261,7 @@ def _restore_scale(prior: SteamScaleState | None) -> None:
         print(
             f"\nCOULD NOT RESTORE {target} ({e}).\n"
             "Steam is STILL on the forced scale, and Steam persists it — fix it with:\n"
-            "  mise run dev:ui-scale auto",
+            f"  {_task('dev:ui-scale auto')}",
             file=sys.stderr,
         )
 
@@ -1314,14 +1328,14 @@ def main(argv: list[str]) -> int:
         print("\nMeasured (real, repainted — not a CDP emulation override):")
         verdict = _verify_emulation(factor, window)
         print(
-            f"\nHOLDING — Ctrl-C restores what you were on before this run\n"
+            f"\nHOLDING — {_stopper()} restores what you were on before this run\n"
             f"  scale:  {_describe(prior)}\n"
             f"  window: {prior_window.describe() if prior_window else 'unknown — will be left as-is'}\n"
             "The QuickAccess view is watched while this holds: Steam's scale reaches only the views\n"
             "that are rendered when it is pushed, so a QAM opened later is re-scaled here.\n"
             "WARNING: Steam persists this scale to config.vdf, filed under the display identity\n"
             "printed above. A hard kill (SIGKILL) skips the restore — recover with:\n"
-            "  mise run dev:ui-scale auto"
+            f"  {_task('dev:ui-scale auto')}"
         )
         _hold(factor, window, verified=verdict is not Verdict.PENDING)
     except KeyboardInterrupt:

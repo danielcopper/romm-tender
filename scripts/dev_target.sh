@@ -321,7 +321,8 @@ ui_scale() {
         exit 1
     fi
     since=$(date +%s)
-    systemd-run --user --unit="$UI_SCALE_UNIT" --collect --quiet -- "$PYTHON" "$here/dev_ui_scale.py" "$mode"
+    systemd-run --user --unit="$UI_SCALE_UNIT" --collect --quiet --setenv=TENDER_DEV_TARGET="$name" -- \
+        "$PYTHON" "$here/dev_ui_scale.py" "$mode"
     scale=$(main_pid "$UI_SCALE_UNIT") || manager_unreachable
     printf '%s\n' "$FOLLOWING"
     journalctl --user -u "$UI_SCALE_UNIT" --since "@$since" -o cat --no-pager -f &
@@ -444,6 +445,9 @@ fi
 verb="$1"
 name="$2"
 shift 2
+# dev_steam.sh and dev_ui_scale.py name the target in the tasks their hints give.
+TENDER_DEV_TARGET="$name"
+export TENDER_DEV_TARGET
 case "$verb" in
     start) start "$@" ;;
     frontend) frontend "$@" ;;

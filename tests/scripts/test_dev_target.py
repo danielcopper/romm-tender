@@ -853,6 +853,44 @@ class TestWhatTheScriptsOnTheTargetSay:
         assert result.returncode == 1
         assert "the restore on deck did not land" in result.stderr
 
+    def test_the_scripts_on_the_target_name_the_target_in_their_hints(self, loop: Loop) -> None:
+        loop.start_ui_scale()
+
+        run = next(
+            call for call in commands(loop.world, "systemd-run") if "--unit=romm-tender-dev-ui-scale" in call["argv"]
+        )
+
+        assert "--setenv=TENDER_DEV_TARGET=deck" in run["argv"]
+
+    @pytest.mark.parametrize(("target", "hint"), [("deck", " --target deck"), ("", "")])
+    def test_dev_ui_scales_hints_name_the_target_it_is_given(self, target: str, hint: str) -> None:
+        said = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import sys; sys.path.insert(0, sys.argv[1]); import dev_ui_scale as d;"
+                " print(d._task('dev:ui-scale auto')); print(d._stopper())",
+                str(_SCRIPTS),
+            ],
+            env={"PATH": os.environ["PATH"], "HOME": os.environ["HOME"], "TENDER_DEV_TARGET": target},
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.splitlines()
+
+        assert said[0] == f"mise run dev:ui-scale auto{hint}"
+        assert said[1] == (f"`mise run dev:ui-scale --stop{hint}`" if target else "Ctrl-C")
+
+    def test_dev_steams_hint_names_the_target(self, loop: Loop) -> None:
+        memory = loop.target_home / ".local/state/tender-dev/steam-window"
+        memory.parent.mkdir(parents=True)
+        memory.write_text("window=bpm\ndisplay=dp9\n", encoding="utf-8")
+        loop.world.backend_exits = True
+
+        result = loop.run("dev")
+
+        assert "`mise run dev:bpm <display> --target deck`" in result.stderr
+
 
 class TestTheCopyRefuses:
     def test_a_shipped_entry_missing_here_is_refused_before_the_copy(self, loop: Loop) -> None:
