@@ -662,14 +662,16 @@ tag: one commit that carries its decisions, the version and changelog set by han
 asset built by the release workflow started manually on that branch. The same fix lands on `main` first or alongside,
 and the branch is deleted once the release is out; the tag holds it.
 
-The latest release stays on `main`'s newest version: `install.sh` and the in-app update check both read
-`/releases/latest`, so an emergency release marked latest over a newer release would hand new installs the older line
-and show users of the newer one no update. It is created with `gh release create <tag> --latest=false`, which keeps
-GitHub from marking it latest; if it was marked latest anyway, `gh release edit <main's newest tag> --latest` moves the
-mark back. Its notes link its assets by the tag's download URL, `releases/download/<tag>/<asset>`, never
-`releases/latest/download/`, which follows the mark and leads elsewhere — or nowhere, once the latest release no longer
-carries that asset. Once the release is out, `main`'s `CHANGELOG.md` gets its section, copied from the tag's, in a
-commit on `main`, so `main`'s changelog lists every release.
+The latest release is the highest published version: `install.sh` and the in-app update check both read
+`/releases/latest`, so an emergency release marked latest over a higher version would hand new installs the older line
+and show users of the newer one no update. When a release with a higher version is already published, the emergency
+release is created with `gh release create <tag> --latest=false`, which keeps GitHub from marking it latest; otherwise
+it becomes the latest release as usual, so new installs and the update check reach the fix. When it was marked latest
+over a higher version anyway, `gh release edit <the highest tag> --latest` moves the mark back. Its notes link its
+assets by the tag's download URL, `releases/download/<tag>/<asset>`, never `releases/latest/download/`, which follows
+the mark and leads elsewhere — or nowhere, once the latest release no longer carries that asset. Once the release is
+out, `main`'s `CHANGELOG.md` gets its section, copied from the tag's, in a commit on `main`, so `main`'s changelog lists
+every release.
 
 Two files carry the version, each written by a different mechanism, and both are outputs of the release run that are
 never edited by hand on `main`: `version.txt` at the repository root is the `simple` strategy's own version file, and
