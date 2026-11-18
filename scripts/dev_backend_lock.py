@@ -29,8 +29,8 @@ the early word.
 A target's ``scripts/dev_target.sh`` asks with ``--holder`` instead, which
 refuses nothing and answers in four lines — ``free``, ``held`` or
 ``unknown``; the holder's pid, or an empty line; the lock's path; and the
-holder as :func:`describe_holder` names it, or an empty line — so that the
-target can name which of its units holds the lock. ``--log-path`` prints
+holder as :func:`describe_pid` names it, or an empty line where the kernel
+names no holder — so that the target can name which of its units holds it. ``--log-path`` prints
 where the backend writes ``backend.log``, from the same resolver, for the target
 to follow it.
 
@@ -133,8 +133,10 @@ def is_held(path: str) -> bool | None:
 def describe_holder(path: str) -> str:
     """Which process holds the lock, as far as this machine will say."""
     pid = holder_pid(path)
-    if pid is None:
-        return "not established"
+    return "not established" if pid is None else describe_pid(pid)
+
+
+def describe_pid(pid: int) -> str:
     name = holder_name(pid)
     return f"pid {pid} ({name})" if name is not None else f"pid {pid}"
 
@@ -165,7 +167,7 @@ def refuse_because_free(path: str) -> None:
 def report_holder(path: str, held: bool | None) -> None:
     state = "unknown" if held is None else "held" if held else "free"
     pid = holder_pid(path) if held else None
-    print(state, "" if pid is None else pid, path, describe_holder(path) if held else "", sep="\n")
+    print(state, "" if pid is None else pid, path, "" if pid is None else describe_pid(pid), sep="\n")
 
 
 def main() -> int:
