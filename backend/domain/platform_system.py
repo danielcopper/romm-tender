@@ -30,7 +30,7 @@ from domain.platform_listing import listed_text, platform_entry_of
 from domain.retrodeck_folders import FolderRefused, not_installed, switched_off, unanswered_refusal
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Callable, Iterable, Mapping
 
 # Where the listed platforms are kept in ``kv_config``, beside ``platform_names``.
 PLATFORM_IDS_KEY = "platform_ids"
@@ -112,18 +112,39 @@ class PlatformRefusal(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class _NoSystemToUse:
-    """What a state with no system to use is refused with."""
+    """What a state with no system to use is refused with: its reason, and the fact its message states.
+
+    The fact is worded from the platform's name, the source's kind and the
+    systems shown, for the log and a caller without the panel; the sentences
+    a user reads are the panel's (``frontend/src/utils/emulatorSourceWording.ts``),
+    worded from the refusal's details, and these are no copy of them. The
+    reason is a field annotated with its enum, which is how the reason parity
+    check (``scripts/check_reason_parity.py``) reads a reason passed on.
+    """
 
     platform_refusal: PlatformRefusal
+    fact: Callable[[PlatformSystem, str | None, str], str]
 
 
-_CASE_OF_STATE = {
-    NO_SYSTEM: _NoSystemToUse(PlatformRefusal.NO_SYSTEM),
-    SWITCHED_OFF: _NoSystemToUse(PlatformRefusal.SWITCHED_OFF),
-    NOT_HERE: _NoSystemToUse(PlatformRefusal.NOT_HERE),
-    UNMATCHED: _NoSystemToUse(PlatformRefusal.UNMATCHED),
-    CONTRADICTED: _NoSystemToUse(PlatformRefusal.CONTRADICTED),
-    SEVERAL: _NoSystemToUse(PlatformRefusal.SEVERAL),
+_CASE_OF_STATE: dict[PlatformState, _NoSystemToUse] = {
+    NO_SYSTEM: _NoSystemToUse(
+        PlatformRefusal.NO_SYSTEM, lambda p, kind, _s: f"{kind} has no system for {p.platform_name}."
+    ),
+    SWITCHED_OFF: _NoSystemToUse(
+        PlatformRefusal.SWITCHED_OFF, lambda _p, kind, s: f"System {s} is switched off in {kind}."
+    ),
+    NOT_HERE: _NoSystemToUse(
+        PlatformRefusal.NOT_HERE,
+        lambda p, kind, s: f"{kind} has a system for {p.platform_name} ({s}) that is not set up on this machine.",
+    ),
+    UNMATCHED: _NoSystemToUse(PlatformRefusal.UNMATCHED, lambda p, _kind, _s: f"No system matches {p.platform_name}."),
+    CONTRADICTED: _NoSystemToUse(
+        PlatformRefusal.CONTRADICTED,
+        lambda p, _kind, _s: f'RomM\'s slug "{p.keys.slug}" and folder "{p.keys.folder or ""}" name different systems.',
+    ),
+    SEVERAL: _NoSystemToUse(
+        PlatformRefusal.SEVERAL, lambda p, kind, s: f"{kind} has several systems for {p.platform_name} ({s})."
+    ),
 }
 
 
@@ -349,14 +370,14 @@ class PlatformSystem:
         return self.one_system
 
     @property
-    def no_system_reason(self) -> str | None:
+    def no_system_reason(self) -> PlatformRefusal | None:
         """Why the platform has no one system to use in the source asked; ``None`` where it has one, or none was asked.
 
         Several systems are such a reason too: what lands in one system's folder
         lands in none of them.
         """
         case = _CASE_OF_STATE.get(self.state)
-        return None if case is None else case.platform_refusal.value
+        return None if case is None else case.platform_refusal
 
     def wanting_systems(self) -> tuple[str | SystemPair, ...]:
         """Every system whose emulators may want what the platform's files are linked to, each asked on its own.
@@ -376,16 +397,13 @@ class PlatformSystem:
         found is the platform's refusal.
         """
         system = self.one_system
-        key = None if system is None else system_key(system)
-        if system is None or key is None:
+        if system is None:
             return self.refusal(purpose)
-        return system, key
+        return system, system.key if isinstance(system, SystemPair) else system
 
     def shown(self) -> tuple[str, ...]:
         """The keys the sentences name the platform's systems by."""
-        if self.named:
-            return tuple(system.key for system in self.named)
-        return () if self.recorded is None else (self.recorded,)
+        return tuple(system.key if isinstance(system, SystemPair) else system for system in self.wanting_systems())
 
     def refusal(self, purpose: str) -> FolderRefused:
         """Why a *purpose* download, or anything refused like one, may not go ahead for this platform.
@@ -404,7 +422,7 @@ class PlatformSystem:
                 "slug": self.keys.slug,
                 "folder": self.keys.folder,
             }
-            return FolderRefused(case.platform_refusal.value, _refusal_message(self, kind, shown), **details)
+            return FolderRefused(case.platform_refusal.value, case.fact(self, kind, ", ".join(shown)), **details)
         if self.state != UNASKED:
             raise ValueError(f"a platform with system {self.one_system!r} is not refused")
         if self.unasked is not None and self.unasked_message is not None:
@@ -433,24 +451,3 @@ class PlatformSystem:
             "slug": self.keys.slug,
             "folder": self.keys.folder,
         }
-
-
-def _refusal_message(platform: PlatformSystem, kind: str | None, shown: tuple[str, ...]) -> str:
-    """The fact a refusal for a platform with no system to use carries, for the log and a caller without the panel.
-
-    The sentences a user reads are the panel's (``frontend/src/utils/emulatorSourceWording.ts``),
-    worded from the refusal's details; these are no copy of them.
-    """
-    systems = ", ".join(shown)
-    name = platform.platform_name
-    if platform.state == SWITCHED_OFF:
-        return f"System {systems} is switched off in {kind}."
-    if platform.state == NOT_HERE:
-        return f"{kind} has a system for {name} ({systems}) that is not set up on this machine."
-    if platform.state == UNMATCHED:
-        return f"No system matches {name}."
-    if platform.state == CONTRADICTED:
-        return f'RomM\'s slug "{platform.keys.slug}" and folder "{platform.keys.folder or ""}" name different systems.'
-    if platform.state == SEVERAL:
-        return f"{kind} has several systems for {name} ({systems})."
-    return f"{kind} has no system for {name}."
