@@ -4,13 +4,15 @@ import asyncio
 import hashlib
 import sqlite3
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import Any, Literal, cast
 
 import pytest
+from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.emulator_choice import GAME_PICK, EmulatorChoice, ResolvedEmulator
 from domain.emulator_commands import PROGRAM, EmulatorOption
+from domain.emulator_sources import SourcesReading
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from domain.save_answer import SaveAnswer, saves_root_missing_answer
 from domain.save_backup import BACKUP_DIR_NAME, BACKUP_RETENTION
@@ -51,9 +53,6 @@ from tests.services.saves._helpers import (
     make_parts,
     make_service,
 )
-
-if TYPE_CHECKING:
-    from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 
 
 class TestSaveSlots:
@@ -1731,25 +1730,16 @@ class TestWhetherAGamesSavesSync:
         assert result["emulator_label"] is None
 
 
-class _ResolvesAnewEachTime:
-    """An ``ActiveCoreReader`` whose every resolution answers a new entry, so two in one read show as two labels."""
+class _ResolvesAnewEachTime(FakeActiveCoreResolver):
+    """Answers a new entry on every resolution, so two in one read show as two labels.
 
-    def __init__(self) -> None:
-        self.resolutions: list[int] = []
+    The fake's ``resolve_rom`` answers through ``active_emulator_for_rom``, so
+    ``emulator_calls`` holds one ``rom_id`` per resolution through either.
+    """
 
-    def _resolve(self, rom_id: int) -> ResolvedEmulator:
-        self.resolutions.append(rom_id)
-        return _started_with(f"Entry {len(self.resolutions)}")
-
-    def resolve_rom(self, rom_id: int, *, reading: object = None) -> ResolvedEmulator | None:
-        return self._resolve(rom_id)
-
-    def active_emulator_for_rom(self, rom_id: int, *, reading: object = None) -> EmulatorOption | None:
-        return self._resolve(rom_id).choice.option
-
-    def active_core_for_rom(self, rom_id: int) -> tuple[str | None, str | None]:
-        option = self.active_emulator_for_rom(rom_id)
-        return (None, option.label if option is not None else None)
+    def active_emulator_for_rom(self, rom_id: int, *, reading: SourcesReading | None = None) -> EmulatorOption | None:
+        super().active_emulator_for_rom(rom_id, reading=reading)
+        return EmulatorOption(label=f"Entry {len(self.emulator_calls)}", kind=PROGRAM, core_so=None, emulator="mgba")
 
 
 def _resolving_anew(tmp_path) -> tuple[Any, _ResolvesAnewEachTime, FakeSaveLocationReader]:
@@ -1768,7 +1758,7 @@ class TestOneAvailabilityReadResolvesTheEmulatorOnce:
 
         await svc.get_save_sync_availability(42)
 
-        assert resolver.resolutions == [42]
+        assert resolver.emulator_calls == [42]
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("fs_name", ["pokemon.gba", ""], ids=["path-asked", "no-path-to-ask"])
@@ -1778,7 +1768,7 @@ class TestOneAvailabilityReadResolvesTheEmulatorOnce:
 
         result = await svc.get_save_sync_availability(42)
 
-        assert resolver.resolutions == [42]
+        assert resolver.emulator_calls == [42]
         # Where no path could be formed nothing is asked, and the label still comes from that one resolution.
         assert result["emulator_label"] == "Entry 1"
 
