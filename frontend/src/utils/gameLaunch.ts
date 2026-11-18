@@ -13,9 +13,11 @@
  * not be established, which says so first, with its reason, names what could not
  * be — the reading stopping short among it — and never says it can start
  * (#2195 D2, D40, D41; #2698 D7, D8). Beside a start or a verdict not
- * established stands a name the frontend would not list the file under, after
- * that first sentence. Each is said in its own words; this is the one home of
- * that rule.
+ * established, after that first sentence, stand a name the frontend would not
+ * list the file under, the files a folder holds that the entry would take as
+ * games of their own, an extension the entry does not list though it would be
+ * handed the file, and a path the source's sandbox could not be established to
+ * reach. Each is said in its own words; this is the one home of that rule.
  *
  * Beside them are the notifications for a page whose check of whether the game
  * can start went wrong, and for a start pressed after it that then fails.
@@ -177,6 +179,68 @@ const STARTS_WITH_A_NOTE_BECAUSE: Record<LaunchNoteReason, (file: string) => str
   playlist_discs_past_limit: (file) => `does not read every disc ${file} lists`,
 };
 
+/** The statements said in words of their own rather than in one of the groups above. */
+type OwnStatementReason = Exclude<
+  LaunchStatement["reason"],
+  LaunchStoppedShortReason | LaunchGoesOnReason | LaunchNoteReason
+>;
+
+/**
+ * Each statement said in words of its own, as the page's note and the menu's line say it, and whether it is only a
+ * note: one that says nothing about whether the game starts, so a verdict not established still leads with its own
+ * sentence beside it (#2195 D2, D40). `file` is the file the statement names, else the game's.
+ */
+const OWN_STATEMENTS: Record<
+  OwnStatementReason,
+  { notesOnly: boolean; said: (launch: GameLaunch, file: string, source: AnsweringSource | null) => Said }
+> = {
+  frontend_would_not_list: {
+    notesOnly: true,
+    said: (launch) => ({
+      note: `ES-DE would not list ${launch.file} under this name; it lists files ending in ${listedExtensions(launch.starts_from)}.`,
+      line: `ES-DE would not list ${launch.file} under this name`,
+    }),
+  },
+  folder_holds_games: {
+    notesOnly: true,
+    said: (launch, file) => ({
+      note: `${launch.file} holds files ${launch.entry} would take as games of their own: ${file}.`,
+      line: `the folder holds games of their own: ${file}`,
+    }),
+  },
+  format_unclaimed: {
+    notesOnly: true,
+    said: (launch) => ({
+      note: `${launch.entry} does not list ${launch.extension} among the files it takes, but would be handed the file all the same.`,
+      line: `${launch.extension} is not among the files it takes`,
+    }),
+  },
+  sandbox_path_unestablished: {
+    notesOnly: false,
+    said: (launch, _file, source) => {
+      const named = source === null ? "the emulator source" : sourceName(source.kind);
+      return {
+        note: `Whether ${launch.entry} can reach ${launch.file} inside ${named}'s sandbox could not be established.`,
+        line: "whether it can reach the file in the sandbox is not established",
+      };
+    },
+  },
+  format_unestablished: {
+    notesOnly: false,
+    said: (launch) => ({
+      note: `Whether ${launch.entry} reads ${launch.extension} files is not established.`,
+      line: `whether it reads ${launch.extension} is not established`,
+    }),
+  },
+  contents_unread: {
+    notesOnly: false,
+    said: (launch) => ({
+      note: `What is inside ${launch.file} was not read, so whether ${launch.entry} finds a game in it cannot be established.`,
+      line: `what is inside ${launch.file} was not read`,
+    }),
+  },
+};
+
 /** One statement as the page's note says it and as the emulator menu's line says it. */
 interface Said {
   note: string;
@@ -211,18 +275,6 @@ function said(
       line: `whether it starts the game is not established; it ${note}`,
     };
   }
-  if (reason === "frontend_would_not_list") {
-    return {
-      note: `ES-DE would not list ${launch.file} under this name; it lists files ending in ${listedExtensions(launch.starts_from)}.`,
-      line: `ES-DE would not list ${launch.file} under this name`,
-    };
-  }
-  if (reason === "folder_holds_games") {
-    return {
-      note: `${launch.file} holds files ${launch.entry} would take as games of their own: ${file}.`,
-      line: `the folder holds games of their own: ${file}`,
-    };
-  }
   if (reason in STOPPED_SHORT_BECAUSE) {
     const why = STOPPED_SHORT_BECAUSE[reason as LaunchStoppedShortReason](launch, file);
     return {
@@ -244,31 +296,7 @@ function said(
       line: tenderStarts ? `can start it, but ${note}` : note,
     };
   }
-  if (reason === "format_unclaimed") {
-    return {
-      note: `${launch.entry} does not list ${launch.extension} among the files it takes, but would be handed the file all the same.`,
-      line: `${launch.extension} is not among the files it takes`,
-    };
-  }
-  if (reason === "sandbox_path_unestablished") {
-    const named = source === null ? "the emulator source" : sourceName(source.kind);
-    return {
-      note: `Whether ${launch.entry} can reach ${launch.file} inside ${named}'s sandbox could not be established.`,
-      line: "whether it can reach the file in the sandbox is not established",
-    };
-  }
-  if (reason === "format_unestablished") {
-    return {
-      note: `Whether ${launch.entry} reads ${launch.extension} files is not established.`,
-      line: `whether it reads ${launch.extension} is not established`,
-    };
-  }
-  if (reason === "contents_unread") {
-    return {
-      note: `What is inside ${launch.file} was not read, so whether ${launch.entry} finds a game in it cannot be established.`,
-      line: `what is inside ${launch.file} was not read`,
-    };
-  }
+  if (reason in OWN_STATEMENTS) return OWN_STATEMENTS[reason as OwnStatementReason].said(launch, file, source);
   return null;
 }
 
@@ -289,15 +317,6 @@ function statementsOf(launch: GameLaunch): LaunchStatement[] {
   return statements;
 }
 
-// Statements beside a verdict that say nothing about whether the game starts:
-// how the frontend would list the file, what a folder holds, and an extension
-// the entry does not list though it would be handed the file.
-const NOTES_ONLY: ReadonlySet<LaunchStatement["reason"]> = new Set([
-  "frontend_would_not_list",
-  "folder_holds_games",
-  "format_unclaimed",
-]);
-
 /**
  * Whether a verdict not established already says, in its own statements, what
  * could not be established; where it does not, its sentence leads and the notes
@@ -305,7 +324,9 @@ const NOTES_ONLY: ReadonlySet<LaunchStatement["reason"]> = new Set([
  */
 function saysWhatIsNotEstablished(launch: GameLaunch): boolean {
   return statementsOf(launch).some(
-    (statement) => !NOTES_ONLY.has(statement.reason) && said(launch, statement, true) !== null,
+    (statement) =>
+      !(statement.reason in OWN_STATEMENTS && OWN_STATEMENTS[statement.reason as OwnStatementReason].notesOnly) &&
+      said(launch, statement, true) !== null,
   );
 }
 
@@ -437,8 +458,10 @@ export function launchRefusal(launch: GameLaunch | null, canPick: boolean): stri
  * Everything the page says under Play about a verdict that lets the game start, in order, each in its own group's
  * words and none of them weighed against another (#2698 D8): whether it starts could not be established, what the
  * reading of the file stopped short of, what its start goes on without or what else it is established to do short
- * of the whole start, whether the entry reads its format (#2195 D41), and that the file is an archive whose
- * contents were not read. Empty where there is nothing to say. `source` is the source the answer came from.
+ * of the whole start, whether the entry reads its format (#2195 D41), that the file is an archive whose contents
+ * were not read, a name the frontend would not list it under, the files a folder holds as games of their own, an
+ * extension the entry does not list, and a path the sandbox could not be established to reach. Empty where there is
+ * nothing to say. `source` is the source the answer came from.
  */
 export function launchNotes(launch: GameLaunch | null, source: AnsweringSource | null): string[] {
   if (launch === null) return [];

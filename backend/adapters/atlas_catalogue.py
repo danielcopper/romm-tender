@@ -612,9 +612,13 @@ def _statement(caveat: Any, reason: str) -> LaunchStatement:
 
 
 def _beside_a_refusal(caveat: Any) -> str | None:
-    """What *caveat* says beside a refusal, in Tender's word: a file the emulator would have gone on without, what
-    else it is established to do, or something the resolver could not establish; ``None`` for the stop itself and
-    for anything else."""
+    """What *caveat* says beside a refusal or a verdict not established, in Tender's word; ``None`` for the stop itself
+    and for anything else.
+
+    A file the emulator would have gone on without, what else it is established
+    to do, something the resolver could not establish, or a statement of its own
+    (:data:`_STARTS_ALSO_SAYS`).
+    """
     for effect in (EFFECT_GOES_ON, EFFECT_UNESTABLISHED):
         reason = _open_failure(caveat, effect)
         if reason is not None:
@@ -632,7 +636,9 @@ def _statements(answer: Any, state: str) -> tuple[LaunchStatement, ...]:
     Beside a start, each one Tender words; beside a refusal, whose stop is the
     verdict's reason, and beside a verdict that could not be established, each
     file the emulator would go on without, what else it is established to do,
-    and each thing the resolver could not establish.
+    each thing the resolver could not establish, and each statement of its own
+    (:data:`_STARTS_ALSO_SAYS`: the format, an archive, the frontend's name, a
+    folder's games, an unclaimed extension, the sandbox's path).
     """
     if state in (NOT_THIS_EMULATOR, LAUNCH_NOT_ESTABLISHED):
         return tuple(
