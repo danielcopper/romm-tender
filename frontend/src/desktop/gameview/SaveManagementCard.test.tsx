@@ -313,7 +313,10 @@ describe("SaveManagementCard", () => {
       };
       const { rerender } = render(<SaveManagementCard appId={100} detail={emptyClean} />);
 
-      await waitFor(() => expect(screen.getByText("default")).toBeInTheDocument());
+      await waitFor(() => {
+        expect(screen.getByText("default")).toBeInTheDocument();
+        expect(screen.getByText(/No save yet — mGBA's saves for this game sync with RomM/)).toBeInTheDocument();
+      });
       expect(screen.queryByText(NO_SAVE_ON_DEVICE)).not.toBeInTheDocument();
 
       rerender(
@@ -368,11 +371,13 @@ describe("SaveManagementCard", () => {
     });
 
     it("confirms and executes Delete Local Saves when installed", async () => {
-      vi.mocked(backend.deleteLocalSaves).mockResolvedValue({
-        success: true,
-        deleted_count: 2,
-        message: "Deleted 2 local saves",
-      });
+      let resolveDelete!: (v: Awaited<ReturnType<typeof backend.deleteLocalSaves>>) => void;
+      vi.mocked(backend.deleteLocalSaves).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveDelete = resolve;
+          }),
+      );
 
       render(<SaveManagementCard appId={100} detail={baseDetail} />);
       await waitFor(() => expect(screen.getByText("default")).toBeInTheDocument());
@@ -382,6 +387,16 @@ describe("SaveManagementCard", () => {
 
       fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 
+      expect(await screen.findByRole("button", { name: "Deleting…" })).toBeDisabled();
+
+      await act(async () => {
+        resolveDelete({
+          success: true,
+          deleted_count: 2,
+          message: "Deleted 2 local saves",
+        });
+      });
+
       await waitFor(() => {
         expect(backend.deleteLocalSaves).toHaveBeenCalledWith(42);
         expect(gameDetailStore.noteSaveSyncDisplay).toHaveBeenCalledWith(100, 42, {
@@ -390,6 +405,7 @@ describe("SaveManagementCard", () => {
           last_sync_check_at: null,
         });
         expect(toast.showToast).toHaveBeenCalledWith("Deleted 2 local saves");
+        expect(screen.getByRole("button", { name: "Delete Local Saves" })).not.toBeDisabled();
       });
     });
 
@@ -436,7 +452,7 @@ describe("SaveManagementCard", () => {
           }),
       );
 
-      render(<SaveManagementCard appId={100} detail={baseDetail} />);
+      const { container } = render(<SaveManagementCard appId={100} detail={baseDetail} />);
 
       fireEvent.click(await screen.findByRole("button", { name: /speedrun/ }));
       fireEvent.click(await screen.findByRole("button", { name: "Activate Slot" }));
@@ -456,6 +472,9 @@ describe("SaveManagementCard", () => {
         expect(backend.switchSlot).toHaveBeenCalledWith(42, "speedrun");
         expect(toast.showToast).toHaveBeenCalledWith("Switched to slot 'speedrun'");
         expect(screen.queryByRole("button", { name: "Activate Slot" })).not.toBeInTheDocument();
+        expect(container.querySelector('[data-testid^="desktop-slot-panel-"]')?.getAttribute("data-testid")).toBe(
+          "desktop-slot-panel-speedrun",
+        );
       });
     });
 
@@ -501,12 +520,20 @@ describe("SaveManagementCard", () => {
       expect(await screen.findByRole("dialog", { name: "Delete Slot" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Deleting..." })).toBeDisabled();
 
-      fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+      const delEvents: unknown[] = [];
+      const onDelEvt = (e: Event) => delEvents.push((e as CustomEvent).detail);
+      globalThis.addEventListener("romm_data_changed", onDelEvt);
+      try {
+        fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 
-      await waitFor(() => {
-        expect(backend.deleteSlot).toHaveBeenCalledWith(42, "speedrun");
-        expect(toast.showToast).toHaveBeenCalledWith("Slot 'speedrun' deleted");
-      });
+        await waitFor(() => {
+          expect(backend.deleteSlot).toHaveBeenCalledWith(42, "speedrun");
+          expect(toast.showToast).toHaveBeenCalledWith("Slot 'speedrun' deleted");
+          expect(delEvents).toContainEqual({ type: "save_sync", rom_id: 42 });
+        });
+      } finally {
+        globalThis.removeEventListener("romm_data_changed", onDelEvt);
+      }
     });
 
     it("creates a new slot via '+ New Slot' dialog and keeps dialog open on switch error", async () => {
@@ -519,6 +546,12 @@ describe("SaveManagementCard", () => {
         .mockResolvedValueOnce({
           success: true,
           save_status: mockSaveStatus,
+        })
+        .mockResolvedValueOnce({
+          success: false,
+          reason: "switch_stopped",
+          message: "partial create stop",
+          set_aside: ["foo.srm"],
         });
 
       render(<SaveManagementCard appId={100} detail={baseDetail} />);
@@ -541,6 +574,18 @@ describe("SaveManagementCard", () => {
         expect(backend.switchSlot).toHaveBeenCalledWith(42, "casual");
         expect(toast.showToast).toHaveBeenCalledWith("Switched to slot 'casual'");
         expect(screen.queryByRole("dialog", { name: "New Save Slot" })).not.toBeInTheDocument();
+      });
+
+      // Partial outcome closes dialog and toasts stop message
+      fireEvent.click(screen.getByRole("button", { name: "+ New Slot" }));
+      const partialDialog = await screen.findByRole("dialog", { name: "New Save Slot" });
+      fireEvent.change(within(partialDialog).getByPlaceholderText("Slot Name (e.g. speedrun, casual)"), {
+        target: { value: "partial_slot" },
+      });
+      fireEvent.click(within(partialDialog).getByRole("button", { name: "Create Slot" }));
+      await waitFor(() => {
+        expect(screen.queryByRole("dialog", { name: "New Save Slot" })).not.toBeInTheDocument();
+        expect(toast.showToast).toHaveBeenCalledWith(expect.stringContaining("Already moved there: foo.srm"));
       });
     });
 
@@ -689,6 +734,7 @@ describe("SaveManagementCard", () => {
       const copyButtons = screen.getAllByRole("button", { name: "Copy to slot..." });
       fireEvent.click(copyButtons[1]!);
       const copyDialog = screen.getByRole("dialog", { name: "Copy save to slot" });
+      expect(within(copyDialog).queryByRole("button", { name: "default" })).not.toBeInTheDocument();
       fireEvent.click(within(copyDialog).getByRole("button", { name: "speedrun" }));
       await waitFor(() => expect(backend.copySaveToSlot).toHaveBeenCalledWith(42, 4809, "speedrun"));
 
@@ -1109,16 +1155,29 @@ describe("SaveManagementCard", () => {
       const confirmBtn = await screen.findByRole("button", { name: "Confirm Slot" });
       expect(confirmBtn.style.backgroundColor).toContain("rgba(26, 159, 255, 0.2)");
 
-      vi.mocked(backend.confirmSlotChoice).mockResolvedValueOnce({
-        success: true,
-        needs_conflict_resolution: false,
-        message: "",
-      });
+      let resolveConfirm!: (v: Awaited<ReturnType<typeof backend.confirmSlotChoice>>) => void;
+      vi.mocked(backend.confirmSlotChoice).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveConfirm = resolve;
+          }),
+      );
       const events: unknown[] = [];
       const onEvt = (e: Event) => events.push((e as CustomEvent).detail);
       globalThis.addEventListener("romm_data_changed", onEvt);
       try {
         fireEvent.click(confirmBtn);
+        expect(screen.getAllByRole("button", { name: "Confirming..." })).toHaveLength(2);
+        expect(screen.getAllByRole("button", { name: "Confirming..." })[0]).toBeDisabled();
+
+        await act(async () => {
+          resolveConfirm({
+            success: true,
+            needs_conflict_resolution: false,
+            message: "",
+          });
+        });
+
         await waitFor(() => {
           expect(backend.confirmSlotChoice).toHaveBeenCalledWith(42, "default", false, null, false);
           expect(toast.showToast).toHaveBeenCalledWith("Confirmed save slot 'default'");
@@ -1892,6 +1951,8 @@ describe("SaveManagementCard", () => {
         expect(within(backupLastKnown).getByText("2 saves")).toBeInTheDocument();
         expect(within(backupLastKnown).queryByText(/^Newest save: /)).not.toBeInTheDocument();
         expect(screen.getAllByText("Conflict detected on this file")).toHaveLength(1);
+        expect(screen.getByText("Conflict detected on this file").parentElement?.textContent).toContain("a.srm");
+        expect(screen.getByText("Conflict detected on this file").parentElement?.textContent).not.toContain("b.srm");
         expect(screen.getByText("Checked:")).toBeInTheDocument();
         unslottedView.unmount();
 
