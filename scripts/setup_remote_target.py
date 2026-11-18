@@ -474,9 +474,12 @@ def setup_login(
     key: pathlib.Path | None,
 ) -> subprocess.CompletedProcess[str]:
     """The one login through the user's own ssh, with *script* on its stdin."""
+    # StrictHostKeyChecking=ask, whatever the user's config says: the first
+    # contact with the dev loop's known-hosts file shows the fingerprint and asks.
     options = [
         f'UserKnownHostsFile="{known_hosts}"',
         "GlobalKnownHostsFile=/dev/null",
+        "StrictHostKeyChecking=ask",
         "HashKnownHosts=no",
         f"HostKeyAlias={host_key_alias(name)}",
     ]

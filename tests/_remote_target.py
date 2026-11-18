@@ -15,7 +15,9 @@ for the parts the setup depends on:
   ``serving`` refuses the connection;
 - the host key is checked against ``UserKnownHostsFile`` under
   ``HostKeyAlias``: a different recorded key fails as a changed host key, an
-  unrecorded one is "shown" (logged) and appended, unless the world declines it;
+  unrecorded one is "shown" (logged) and appended, unless the world declines it
+  or ``StrictHostKeyChecking`` — given with ``-o``, else from the destination's
+  ``ssh -G`` answer — is ``yes``;
 - the login tries the user's own access first, then each ``IdentityFile``
   against the target's real ``authorized_keys`` — honouring ``from=`` against
   the address the target sees and running ``command=`` with
@@ -159,8 +161,11 @@ def _parse_ssh(argv: list[str]) -> tuple[dict[str, list[str]], str, str]:
     return options, argv[index], " ".join(argv[index + 1 :])
 
 
-def _check_host_key(world: World, target: Target, options: dict[str, list[str]], host: str) -> bool:
+def _check_host_key(
+    world: World, target: Target, options: dict[str, list[str]], resolved: dict[str, list[str]], host: str
+) -> bool:
     alias = options.get("hostkeyalias", [host])[0]
+    strict = options.get("stricthostkeychecking", resolved.get("stricthostkeychecking", ["ask"]))[0]
     known_hosts = Path(options.get("userknownhostsfile", [str(Path.home() / ".ssh" / "known_hosts")])[0])
     lines = known_hosts.read_text(encoding="utf-8").splitlines() if known_hosts.exists() else []
     for line in lines:
@@ -177,6 +182,13 @@ def _check_host_key(world: World, target: Target, options: dict[str, list[str]],
                 file=sys.stderr,
             )
             return False
+    if strict == "yes":
+        print(
+            f"No ED25519 host key is known for {alias} and you have requested strict checking.\n"
+            "Host key verification failed.",
+            file=sys.stderr,
+        )
+        return False
     _log(world, f"host key shown {alias}")
     if not world.accept_host_key:
         print("Host key verification failed.", file=sys.stderr)
@@ -224,7 +236,7 @@ def _ssh(argv: list[str]) -> int:
     if not target.serving:
         print(f"ssh: connect to host {host} port 22: Connection refused", file=sys.stderr)
         return 255
-    if not _check_host_key(world, target, options, host):
+    if not _check_host_key(world, target, options, resolved, host):
         return 255
 
     env = {

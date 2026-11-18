@@ -212,6 +212,16 @@ class TestTheSetupLogin:
         assert "    HostName 192.168.1.20\n    Port 2222\n    User deck\n" in remote.config()
         assert "    ProxyJump jumper@203.0.113.5:22022\n" in remote.config()
 
+    def test_first_contact_asks_even_where_the_users_config_checks_strictly(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        remote.world.configs = {"deck": {"user": ["deck"], "hostname": [_ADDRESS], "stricthostkeychecking": ["yes"]}}
+
+        code, _, err = remote.setup(capsys, "deck", "deck")
+
+        assert code == 0, err
+        assert log_lines(remote.world)[0] == "host key shown romm-tender-dev.deck"
+
     def test_other_lines_of_authorized_keys_stay_and_an_old_line_of_this_build_host_goes(
         self, remote: Remote, capsys: pytest.CaptureFixture[str]
     ) -> None:
