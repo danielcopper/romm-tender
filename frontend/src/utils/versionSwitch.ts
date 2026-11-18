@@ -137,7 +137,10 @@ export const isSelectable = (v: VersionInfo): boolean =>
 
 type SyncRomSavesResponse = Awaited<ReturnType<typeof syncRomSaves>>;
 
-/** The refusals of the sync before a switch whose own message says what to do; a retry would not help. */
+/**
+ * The refusals of the sync before a switch toasted with their own message, which says why; "try again" would not
+ * help.
+ */
 const SYNC_REFUSALS_SAID_AS_THEY_ARE: ReadonlySet<SyncRomSavesResponse["reason"]> = new Set([
   "game_running",
   "gone_from_romm",
