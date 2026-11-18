@@ -369,6 +369,7 @@ class TestPlatformSystem:
             ),
             (_platform(UNMATCHED), "platform_unmatched", {"kind": "retrodeck", "starts_games": True}),
             (_platform(NOT_HERE), "platform_system_not_here", {"kind": "retrodeck", "starts_games": True}),
+            (_platform(SEVERAL, named=(_MARK3, _MASTERSYSTEM)), "platform_systems_several", _RETRODECK_KIND),
             (_platform(UNASKED, unasked=NO_SOURCE_DETECTED, source=None), "no_source", None),
         ],
     )

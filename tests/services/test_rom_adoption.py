@@ -37,7 +37,7 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock
 
 from domain.adoption_rename import RenameCollisions
-from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformKeys, SystemPair, system_key
+from domain.platform_system import NO_SYSTEM, SEVERAL, SWITCHED_OFF, PlatformKeys, SystemPair, system_key
 from domain.retrodeck_folders import FolderRefused, no_rom_root
 from domain.rom import Rom
 from domain.rom_adoption import TargetOccupied
@@ -540,6 +540,21 @@ class TestAdopt:
         assert install is not None
         assert install.system == "snes"
         assert snes in h.paths.download_asked
+
+    async def test_a_platform_of_several_systems_adopts_nothing(self, h):
+        """#2225 D8, review T4: a download's folder is one system's, so several systems refuse the adoption."""
+        several = (SystemPair("esde", "snes"), SystemPair("esde", "sfc"))
+        h.service._platform_systems = FakePlatformSystems({"snes": several})
+        h.seed_rom()
+        h.stage_detail(_single_file_detail())
+        h.store.files["/roms/snes/Game.sfc"] = b"x" * 10
+
+        with pytest.raises(FolderRefused) as refused:
+            await h.service.adopt_existing_rom(_ROM_ID)
+
+        assert refused.value.reason == "platform_systems_several"
+        assert h.uow.rom_installs.get(_ROM_ID) is None
+        assert h.paths.download_asked == []
 
     async def test_the_rom_is_read_from_rom_m_s_detail_answer(self, h):
         h.seed_rom()
@@ -2096,11 +2111,18 @@ class TestThePlatformsSystemIsAskedOffTheLoop:
 class TestAPlatformWithNoSystem:
     """No system in RetroDECK, so no folder a download would land in to search."""
 
-    @pytest.mark.parametrize("state", [NO_SYSTEM, SWITCHED_OFF])
-    async def test_the_page_finds_no_copy(self, h, state):
+    @pytest.mark.parametrize(
+        ("state", "system"),
+        [
+            (NO_SYSTEM, "snes"),
+            (SWITCHED_OFF, "snes"),
+            (SEVERAL, (SystemPair("esde", "snes"), SystemPair("esde", "sfc"))),
+        ],
+    )
+    async def test_the_page_finds_no_copy(self, h, state, system):
         h.system_extensions = {"snes": frozenset({".sfc"})}
         h.store.files["/roms/snes/Game (U).sfc"] = b"x"
-        platform = platform_answer(state, "snes", "snes", name="SNES")
+        platform = platform_answer(state, "snes", system, name="SNES")
         h.service._search._platform_systems = FakePlatformSystems(answers={"snes": platform})
 
         assert h.service.has_adoption_candidate(PlatformKeys("snes"), "Game (USA).sfc") is False

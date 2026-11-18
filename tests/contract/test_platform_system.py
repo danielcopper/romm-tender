@@ -19,10 +19,12 @@ from domain.platform_system import (
     NO_SYSTEM,
     NOT_HERE,
     PLATFORM_IDS_KEY,
+    SEVERAL,
     SWITCHED_OFF,
     UNMATCHED,
     KeptPlatform,
     PlatformKeys,
+    SystemPair,
     decode_platform_ids,
 )
 from lib.errors import RommAuthError, RommConnectionError
@@ -142,6 +144,29 @@ async def test_a_platform_with_no_switched_on_system_downloads_nothing_and_says_
             "folder": "gba",
             "platform": "Game Boy Advance",
         }
+
+
+async def test_a_platform_of_several_systems_downloads_nothing_and_names_them(harness):
+    """#2225 D8, review T6: a download lands in one system's folder, so several systems refuse it."""
+    _seed_server(harness)
+    seed_rom(harness, 5, platform_slug=_SLUG, platform_folder=_FOLDER)
+    several = (SystemPair("esde", "gba"), SystemPair("esde", "gbah"))
+    harness.platform_systems.answers[_SLUG] = (SEVERAL, several)
+
+    started = await harness.endpoints.start_download(5)
+
+    assert started == {
+        "success": False,
+        "reason": "platform_systems_several",
+        "message": started["message"],
+        "source": "retrodeck",
+        "platform": "Game Boy Advance",
+        "systems": ["gba", "gbah"],
+        "slug": _SLUG,
+        "folder": "gba",
+    }
+    with harness.uow_factory() as uow:
+        assert uow.rom_installs.get(5) is None
 
 
 async def test_where_no_ids_are_kept_they_are_read_once_from_rom_m_and_kept(harness):

@@ -9,7 +9,7 @@ from fakes.fake_platform_systems import FakePlatformSystems, platform_answer
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
-from domain.platform_system import NO_SYSTEM, SWITCHED_OFF
+from domain.platform_system import NO_SYSTEM, SEVERAL, SWITCHED_OFF, SystemPair
 from domain.retrodeck_folders import GAME_DOWNLOAD, switched_off
 from domain.save_answer import SaveAnswer
 from tests.services.saves._helpers import (
@@ -208,12 +208,19 @@ class TestFindSaveFiles:
         assert answer.state == "unestablished"
         assert answer.syncable is False
 
-    @pytest.mark.parametrize("state", [NO_SYSTEM, SWITCHED_OFF])
-    def test_an_uninstalled_rom_whose_platform_has_no_system_asks_nothing(self, tmp_path, state):
+    @pytest.mark.parametrize(
+        ("state", "system"),
+        [
+            (NO_SYSTEM, "amiga"),
+            (SWITCHED_OFF, "amiga"),
+            (SEVERAL, (SystemPair("esde", "amiga"), SystemPair("esde", "amiga600"))),
+        ],
+    )
+    def test_an_uninstalled_rom_whose_platform_has_no_system_asks_nothing(self, tmp_path, state, system):
         svc, _ = make_service(tmp_path)
         _seed_amiga_inside_content(svc)
         _seed_rom(svc, 80, platform_slug="commodore-amiga", fs_name="Turrican.adf")
-        platform = platform_answer(state, "commodore-amiga", "amiga", name="Amiga")
+        platform = platform_answer(state, "commodore-amiga", system, name="Amiga")
         svc._rom_info._platform_systems = FakePlatformSystems(answers={"commodore-amiga": platform})
         folders = svc._rom_info._retrodeck_folders
         asked_folders: list[object] = []
