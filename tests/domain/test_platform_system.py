@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import pytest
 from _romm_platforms import LISTED_GAMECUBE
 
@@ -17,6 +20,7 @@ from domain.platform_system import (
     UNMATCHED,
     KeptPlatform,
     PlatformKeys,
+    PlatformRefusal,
     PlatformState,
     PlatformSystem,
     SystemPair,
@@ -441,3 +445,15 @@ class TestKeptFoldersOfSlug:
 
     def test_nothing_kept_is_no_folder(self):
         assert kept_folders_of_slug(None, "gamecube") == frozenset()
+
+
+class TestThePanelWordsEveryPlatformRefusal:
+    """The panel's ``PlatformSystemReason`` is ``PlatformRefusal``, no more and no less."""
+
+    _TYPES = Path(__file__).resolve().parents[2] / "frontend" / "src" / "types" / "emulatorSources.ts"
+
+    def test_the_two_lists_are_equal(self):
+        source = self._TYPES.read_text(encoding="utf-8")
+        start = source.index("export type PlatformSystemReason =")
+        panel = set(re.findall(r'"(\w+)"', source[start : source.index(";", start)]))
+        assert panel == {refusal.value for refusal in PlatformRefusal}

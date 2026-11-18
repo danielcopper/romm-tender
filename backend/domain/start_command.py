@@ -15,6 +15,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+# The system the start was asked for resolved to no one system: several of the
+# source's systems answer and the resolver names none of them, or the source
+# does not list it — the launch verdict's own words for the same two cases.
+from domain.launchability import SYSTEM_UNKNOWN as SYSTEM_UNKNOWN
+from domain.launchability import SYSTEMS_SEVERAL as SYSTEMS_SEVERAL
+
 # Why the resolver gives no complete command for an entry, in Tender's words.
 # How ES-DE starts it could not be read: shell syntax beyond plain words, an
 # ``env`` option, an entry ES-DE itself refuses, a value a second shell would
@@ -41,11 +47,6 @@ ENVIRONMENT_UNKNOWN = "environment_unknown"
 FOLDER_UNPLACED = "folder_unplaced"
 # The label the start was asked with names no entry of the system.
 ENTRY_UNKNOWN = "entry_unknown"
-# The system the start was asked for resolved to no one system: several of the
-# source's systems answer and the resolver names none of them, or the source
-# does not list it.
-SYSTEMS_SEVERAL = "systems_several"
-SYSTEM_UNKNOWN = "system_unknown"
 # The source that answers the game is one Tender starts no game through yet
 # (#2221 D21), so no command is asked of it.
 SOURCE_STARTS_NO_GAMES = "source_starts_no_games"
