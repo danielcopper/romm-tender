@@ -533,7 +533,9 @@ export interface LaunchStatement {
     | "format_unestablished"
     | "contents_unread"
     | "frontend_would_not_list"
-    | "folder_holds_games";
+    | "folder_holds_games"
+    | "format_unclaimed"
+    | "sandbox_path_unestablished";
   file: string | null;
 }
 

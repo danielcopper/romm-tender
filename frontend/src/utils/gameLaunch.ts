@@ -188,7 +188,12 @@ interface Said {
  * the menu's "can start it" and keeps the rest of the line. Beside a verdict not established nothing says the
  * game can start (#2195 D40): a file it would go on without and what else it would do are said as what it would do.
  */
-function said(launch: GameLaunch, statement: LaunchStatement, tenderStarts: boolean): Said | null {
+function said(
+  launch: GameLaunch,
+  statement: LaunchStatement,
+  tenderStarts: boolean,
+  source: AnsweringSource | null = null,
+): Said | null {
   const file = statement.file ?? launch.file;
   const reason = statement.reason;
   const established = launch.state !== "not_established";
@@ -239,6 +244,19 @@ function said(launch: GameLaunch, statement: LaunchStatement, tenderStarts: bool
       line: tenderStarts ? `can start it, but ${note}` : note,
     };
   }
+  if (reason === "format_unclaimed") {
+    return {
+      note: `${launch.entry} does not list ${launch.extension} among the files it takes, but would be handed the file all the same.`,
+      line: `${launch.extension} is not among the files it takes`,
+    };
+  }
+  if (reason === "sandbox_path_unestablished") {
+    const named = source === null ? "the emulator source" : sourceName(source.kind);
+    return {
+      note: `Whether ${launch.entry} can reach ${launch.file} inside ${named}'s sandbox could not be established.`,
+      line: "whether it can reach the file in the sandbox is not established",
+    };
+  }
   if (reason === "format_unestablished") {
     return {
       note: `Whether ${launch.entry} reads ${launch.extension} files is not established.`,
@@ -272,8 +290,13 @@ function statementsOf(launch: GameLaunch): LaunchStatement[] {
 }
 
 // Statements beside a verdict that say nothing about whether the game starts:
-// how the frontend would list the file, and what a folder holds.
-const NOTES_ONLY: ReadonlySet<LaunchStatement["reason"]> = new Set(["frontend_would_not_list", "folder_holds_games"]);
+// how the frontend would list the file, what a folder holds, and an extension
+// the entry does not list though it would be handed the file.
+const NOTES_ONLY: ReadonlySet<LaunchStatement["reason"]> = new Set([
+  "frontend_would_not_list",
+  "folder_holds_games",
+  "format_unclaimed",
+]);
 
 /**
  * Whether a verdict not established already says, in its own statements, what
@@ -286,9 +309,9 @@ function saysWhatIsNotEstablished(launch: GameLaunch): boolean {
   );
 }
 
-/** Every statement beside the verdict that Tender words, in order. */
-function allSaid(launch: GameLaunch, tenderStarts: boolean): Said[] {
-  return statementsOf(launch).flatMap((statement) => said(launch, statement, tenderStarts) ?? []);
+/** Every statement beside the verdict that Tender words, in order; `source` is the source the answer came from. */
+function allSaid(launch: GameLaunch, tenderStarts: boolean, source: AnsweringSource | null): Said[] {
+  return statementsOf(launch).flatMap((statement) => said(launch, statement, tenderStarts, source) ?? []);
 }
 
 /** The file the refusal's reason is about, named as the sentences name it: its name, else the game's own file. */
@@ -420,7 +443,7 @@ export function launchRefusal(launch: GameLaunch | null, canPick: boolean): stri
 export function launchNotes(launch: GameLaunch | null, source: AnsweringSource | null): string[] {
   if (launch === null) return [];
   if (launch.state === "not_established") {
-    const notes = allSaid(launch, true).map((each) => each.note);
+    const notes = allSaid(launch, true, source).map((each) => each.note);
     if (saysWhatIsNotEstablished(launch)) return notes;
     const lead =
       launch.reason === "systems_several"
@@ -429,7 +452,7 @@ export function launchNotes(launch: GameLaunch | null, source: AnsweringSource |
     return [lead, ...notes];
   }
   if (launch.state !== "starts") return [];
-  return allSaid(launch, true).map((each) => each.note);
+  return allSaid(launch, true, source).map((each) => each.note);
 }
 
 /** The first of {@link launchNotes}, or `null` where there is nothing to say. */
@@ -463,12 +486,12 @@ export function entryLaunchLine(
       return first(refusedBecause(launch)?.line(launch) ?? `cannot start ${launch.extension} files`, more);
     }
     case "not_established": {
-      const lines = allSaid(launch, tenderStarts).map((each) => each.line);
+      const lines = allSaid(launch, tenderStarts, source).map((each) => each.line);
       if (saysWhatIsNotEstablished(launch)) return first(lines[0]!, lines.length - 1);
       return first(`whether it starts cannot be established: ${notEstablishedBecause(launch, source)}`, lines.length);
     }
     default: {
-      const lines = allSaid(launch, tenderStarts).map((each) => each.line);
+      const lines = allSaid(launch, tenderStarts, source).map((each) => each.line);
       if (lines.length > 0) return first(lines[0]!, lines.length - 1);
       if (tenderStarts) return "can start it";
       return commandLine;
