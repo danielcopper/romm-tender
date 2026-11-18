@@ -2,14 +2,18 @@
 
 KWin is a stand-in ``qdbus6`` that answers a script id, and ``sleep`` one that
 waits for the test to let it go, so the self-cleaning watcher the arm leaves
-behind is still there when the test looks. Nothing reaches a real KWin.
+behind is still there when the test looks. The test ends that watcher itself
+before it returns. Nothing reaches a real KWin.
 """
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
+import signal
 import subprocess
+import time
 from pathlib import Path
 
 _SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "dev_place_window.sh"
@@ -23,8 +27,10 @@ def test_the_watcher_left_behind_holds_none_of_the_callers_output(tmp_path: Path
     (tools / "qdbus6").write_text('#!/bin/sh\ncase "$*" in *loadScript*) echo 7 ;; esac\n', encoding="utf-8")
     real_sleep = shutil.which("sleep")
     assert real_sleep is not None
+    started = tmp_path / "started"
     (tools / "sleep").write_text(
-        f'#!/bin/sh\nwhile [ ! -e "{release}" ]; do "{real_sleep}" 0.05; done\n', encoding="utf-8"
+        f'#!/bin/sh\necho "$$ $PPID" >> "{started}"\nwhile [ ! -e "{release}" ]; do "{real_sleep}" 0.05; done\n',
+        encoding="utf-8",
     )
     for name in ("qdbus6", "sleep"):
         (tools / name).chmod(0o755)
@@ -42,5 +48,25 @@ def test_the_watcher_left_behind_holds_none_of_the_callers_output(tmp_path: Path
         process.communicate(timeout=10)
     finally:
         release.touch()
+        _end(started)
 
     assert process.returncode == 0
+
+
+def _end(started: Path) -> None:
+    """End the stand-in ``sleep`` and the watcher it runs in, whichever are still there."""
+    pids = [int(pid) for line in (started.read_text().splitlines() if started.exists() else []) for pid in line.split()]
+    for pid in pids:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(pid, signal.SIGKILL)
+    deadline = time.monotonic() + 5
+    while any(Path(f"/proc/{pid}").exists() and _running(pid) for pid in pids):
+        assert time.monotonic() < deadline, f"still running: {pids}"
+        time.sleep(0.02)
+
+
+def _running(pid: int) -> bool:
+    try:
+        return Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0] != "Z"
+    except (OSError, IndexError):
+        return False
