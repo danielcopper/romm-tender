@@ -24,6 +24,7 @@ from domain.platform_system import (
     decode_platform_ids,
     encode_platform_ids,
     kept_by_slug,
+    kept_entry,
     kept_folders_of_slug,
     kept_platform_of,
     kept_platforms,
@@ -146,6 +147,22 @@ class TestPlatformKeys:
         detail = {"platform_slug": "genesis", "platform_fs_slug": "megadrivejp"}
 
         assert PlatformKeys.of_detail(detail) == PlatformKeys("genesis", "megadrivejp")
+
+    def test_it_is_kept_and_named_under_its_folder_else_its_slug(self):
+        assert (PlatformKeys("genesis", "megadrivejp").kept_as, PlatformKeys("genesis").kept_as) == (
+            "megadrivejp",
+            "genesis",
+        )
+
+    def test_the_record_of_its_folder_is_what_is_kept_for_it_never_another_of_its_slug(self):
+        kept = {
+            "megadrive": KeptPlatform(slug="genesis", fs_slug="megadrive"),
+            "megadrivejp": KeptPlatform(slug="genesis", fs_slug="megadrivejp"),
+        }
+
+        assert kept_entry(kept, PlatformKeys("genesis", "megadrive")) == kept["megadrive"]
+        assert kept_entry(kept, PlatformKeys("genesis", "sega32")) is None
+        assert kept_entry(kept, PlatformKeys("genesis")) == kept["megadrivejp"]
 
     @pytest.mark.parametrize("folder", [None, ""])
     def test_without_a_folder_it_is_asked_with_its_slug_alone(self, folder):

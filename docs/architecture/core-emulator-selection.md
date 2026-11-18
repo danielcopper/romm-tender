@@ -327,18 +327,19 @@ record is found in it by the folder it is asked with, and only one asked by its 
 last listed, of which only the name is read (`domain/platform_system.py::kept_by_slug`). Where none is kept for a
 platform — the first start after an update — `PlatformSystemService` reads the listing once and hands it to the
 refiling, which has it kept beside what was kept (`keep_listing`): an entry for a slug the listing names gives way to
-the listing's. A slug the listing does not name is then kept with nothing but that slug, so it is not read again —
-unless a listed platform's folder bears that same name, which keeps the key and leaves the slug to be read from the
-listing at each ask. Where that read fails, the question answers the reason `classify_error` gives it —
-`server_unreachable` while RomM is offline — as every other read that needs RomM does, and keeps nothing; the next read
-with RomM reachable keeps the record. A game not downloaded then shows the offline state on its page (its save status,
-its BIOS tab reading unknown), and its emulator menu, its BIOS tab and the platform page say **"RomM cannot be reached,
-so Tender does not know this platform's system yet."**; where RomM answered but refused the read for any other reason
-(`auth_failed`, `not_found`, `config_error`, …), they say **"RomM did not give its list of platforms, so Tender does not
-know this platform's system yet."**, and the cause itself shows where Tender's connection state shows it; a downloaded
-game keeps its recorded system and is not affected. The game page's two looks at the disk — whether a download's target
-is already taken, and whether the game is there under another name — must reach no network, so they never read the
-listing: for them a platform with nothing kept is asked by its slug alone.
+the listing's. A platform the listing does not name is then kept with nothing but its slug and the folder it was asked
+with, under that folder (under the slug where it was asked without one), so it is not read again — unless a listed
+platform is already kept under that key, which keeps the key and leaves the platform to be read from the listing at each
+ask. Where that read fails, the question answers the reason `classify_error` gives it — `server_unreachable` while RomM
+is offline — as every other read that needs RomM does, and keeps nothing; the next read with RomM reachable keeps the
+record. A game not downloaded then shows the offline state on its page (its save status, its BIOS tab reading unknown),
+and its emulator menu, its BIOS tab and the platform page say **"RomM cannot be reached, so Tender does not know this
+platform's system yet."**; where RomM answered but refused the read for any other reason (`auth_failed`, `not_found`,
+`config_error`, …), they say **"RomM did not give its list of platforms, so Tender does not know this platform's system
+yet."**, and the cause itself shows where Tender's connection state shows it; a downloaded game keeps its recorded
+system and is not affected. The game page's two looks at the disk — whether a download's target is already taken, and
+whether the game is there under another name — must reach no network, so they never read the listing: for them a
+platform with nothing kept is asked as its caller names it, and named by its folder.
 
 The platform page names the system taken with its source in its header line ([qam-panel.md](qam-panel.md#library)).
 

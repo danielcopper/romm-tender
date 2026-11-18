@@ -2,13 +2,13 @@
 
 Owns the kept platforms — the ``kv_config`` value replaced by every sync's
 listing (``replace_listing``) beside the platform names, keyed by each
-platform's folder in RomM and read here by its slug, kept again from every
-listing the refiling is handed (``keep_listing``) — and
-their one live read from RomM where none is kept for a platform yet. Which
-system a platform is, asked by its slug and the folder kept for it, is asked of
-one source at a time (``SourcePlatformSystems``); an installed game keeps the
-system its install record holds, because only a new download follows the
-resolver's current answer.
+platform's folder in RomM, kept again from every listing the refiling is
+handed (``keep_listing``) — and their one live read from RomM where none is
+kept for a platform yet. Which system a platform is, asked by the slug and the
+folder its caller names, is asked of one source at a time
+(``SourcePlatformSystems``); the kept record gives the platform's name. An
+installed game keeps the system its install record holds, because only a new
+download follows the resolver's current answer.
 
 Every method blocks: it reads the database, and may read RomM and the resolver.
 """
@@ -28,7 +28,7 @@ from domain.platform_system import (
     PlatformSystem,
     decode_platform_ids,
     encode_platform_ids,
-    kept_by_slug,
+    kept_entry,
     kept_folders_of_slug,
     kept_platforms,
 )
@@ -89,11 +89,9 @@ class PlatformSystemService:
     ) -> PlatformSystem:
         """The system the platform *keys* names is in *source*, the answering source where it is ``None``.
 
-        The platform is asked by RomM's slug and the folder *keys* names — the
-        one a game lies in, or the one a page is about — never another folder
-        that shares the slug; without a folder, by the slug alone
-        ([#2217](https://github.com/danielcopper/romm-tender/issues/2217) D16).
-        What is kept for the platform gives its name. Where nothing is kept for
+        The platform is asked by the slug and the folder *keys* names
+        (:class:`~domain.platform_system.PlatformKeys`); what is kept for it
+        gives its name. Where nothing is kept for
         it, RomM's listing is read and kept, and the listing is handed to the
         refiling, so this read may move Tender's older entries; with *ask_romm*
         false nothing is read. A read that fails answers
@@ -114,7 +112,7 @@ class PlatformSystemService:
             return PlatformSystem(
                 UNASKED,
                 keys,
-                keys.folder or keys.slug,
+                keys.kept_as,
                 source=self._source_platform_systems.asked_source(source=source, reading=reading),
                 unasked=reason,
                 unasked_message=message,
@@ -126,7 +124,7 @@ class PlatformSystemService:
     ) -> PlatformSystem:
         """The install record's system for an installed game, else :meth:`platform_system` in the answering source."""
         if install is not None:
-            return PlatformSystem(FOUND, keys, keys.folder or keys.slug, recorded=install.system)
+            return PlatformSystem(FOUND, keys, keys.kept_as, recorded=install.system)
         return self.platform_system(keys, reading=reading)
 
     def listed_platforms(self) -> frozenset[PlatformKeys] | None:
@@ -180,7 +178,7 @@ class PlatformSystemService:
         with self._uow_factory() as uow:
             kept = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY))
             names = decode_platform_names(uow.kv_config.get(PLATFORM_NAMES_KEY))
-        entry = _kept_entry(kept or {}, keys)
+        entry = kept_entry(kept or {}, keys)
         if entry is None and ask_romm:
             entry = self._read_and_keep(keys)
         # The names cache is keyed by fs_slug; an entry kept before it recorded
@@ -200,7 +198,7 @@ class PlatformSystemService:
         platforms = self._romm_api.list_platforms()
         self._refiling.do_refile(platforms)
         listed = kept_platforms(platforms, self._romm_api.get_version())
-        entry = _kept_entry(listed, keys)
+        entry = kept_entry(listed, keys)
         self._log_debug(f"[platforms] no ids kept for {keys.slug}; read {len(listed)} from RomM")
         # The refiling has had the listing kept (keep_listing); what is left is
         # the platform the listing did not name, kept so it is not read again.
@@ -213,17 +211,10 @@ class PlatformSystemService:
 
         It is kept under its folder where one was asked with, else its slug.
         """
-        key = keys.folder or keys.slug
+        key = keys.kept_as
         with self._uow_factory() as uow:
             current = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY)) or {}
             if key in current:
                 return
             current[key] = KeptPlatform(slug=keys.slug, fs_slug=keys.folder)
             uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids(current))
-
-
-def _kept_entry(kept: Mapping[str, KeptPlatform], keys: PlatformKeys) -> KeptPlatform | None:
-    """What is kept for the platform *keys* names: the record of its folder, or — without one — of its slug."""
-    if keys.folder is not None:
-        return kept.get(keys.folder)
-    return kept_by_slug(kept, keys.slug)

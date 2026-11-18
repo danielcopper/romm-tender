@@ -37,7 +37,7 @@ def platform_answer(
     are the systems the answer named, asked with as they are.
     """
     keys = PlatformKeys(keys) if isinstance(keys, str) else keys
-    platform_name = name if name is not None else keys.folder or keys.slug
+    platform_name = name if name is not None else keys.kept_as
     if system is None:
         return PlatformSystem(state, keys, platform_name, source=source, unasked=unasked)
     if isinstance(system, SystemPair):
@@ -95,7 +95,7 @@ class FakePlatformSystems:
             return self.platform_system(keys, reading=reading)
         self.calls.append((keys.slug, None))
         self.asked.append(keys)
-        return PlatformSystem(FOUND, keys, keys.folder or keys.slug, recorded=install.system)
+        return PlatformSystem(FOUND, keys, keys.kept_as, recorded=install.system)
 
     def listed_platforms(self) -> frozenset[PlatformKeys] | None:
         return self.listed

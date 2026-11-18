@@ -395,7 +395,7 @@ class FirmwareStore:
             return frozenset(unwanted)
         stored = {PlatformKeys.of(each.platform_slug, each.platform_folder) for each in records.stored}
         others = sorted(
-            (keys for keys in listed | stored if (keys.folder or keys.slug) != platform_folder),
+            (keys for keys in listed | stored if keys.kept_as != platform_folder),
             key=lambda keys: (keys.slug, keys.folder or ""),
         )
         systems: list[SystemArgument] = []

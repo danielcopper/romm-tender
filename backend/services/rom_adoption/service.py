@@ -352,7 +352,7 @@ class RomAdoptionService:
         try:
             return bool(self._search.name_matches(keys, fs_name))
         except Exception as e:
-            self._logger.warning(f"Adoption candidate probe failed for {keys.folder or keys.slug}/{fs_name}: {e}")
+            self._logger.warning(f"Adoption candidate probe failed for {keys.kept_as}/{fs_name}: {e}")
             return False
 
     def _is_own_install(self, rom_detail: dict[str, Any], checked_path: str) -> bool:

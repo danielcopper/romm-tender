@@ -131,16 +131,23 @@ _CASE_OF_STATE = {
 class PlatformKeys:
     """What a platform is asked about by: RomM's slug for it, and its folder in RomM where one is known.
 
-    The folder is the one a game lies in, or the one a page is about — never
-    another folder that shares the slug, which may be another system (#2217 D16).
+    Which folder that is: ``docs/architecture/core-emulator-selection.md``, "A platform's system".
     """
 
     slug: str
     folder: str | None = None
 
+    @property
+    def kept_as(self) -> str:
+        """What the platform is kept and named under: its folder, else its slug."""
+        return self.folder or self.slug
+
     @classmethod
     def of(cls, slug: str | None, folder: str | None) -> PlatformKeys:
-        """The keys of a platform by *slug* and *folder*, either as a row or RomM gives it; empty is none."""
+        """The keys of a platform by *slug* and *folder*, either as a row or RomM gives it.
+
+        An empty folder is no folder; a missing slug is the empty slug, which no platform has.
+        """
         return cls(slug or "", folder or None)
 
     @classmethod
@@ -195,11 +202,16 @@ def kept_by_slug(kept: Mapping[str, KeptPlatform], slug: str) -> KeptPlatform | 
     """The kept platform whose slug is *slug* — of several, the last kept — or ``None``.
 
     Only a platform asked about by its slug alone is found this way, and only
-    its name is read off it: folders that share a slug name different systems
-    (RomM folds ``megadrive`` and ``megadrivejp`` into ``genesis``), so the
-    folder a question is asked with is always the caller's own (#2217 D16).
+    its name is read off it (:func:`kept_entry`).
     """
     return next((entry for entry in reversed(list(kept.values())) if entry.slug == slug), None)
+
+
+def kept_entry(kept: Mapping[str, KeptPlatform], keys: PlatformKeys) -> KeptPlatform | None:
+    """What is kept for the platform *keys* names: the record of its folder, or — without one — of its slug."""
+    if keys.folder is not None:
+        return kept.get(keys.folder)
+    return kept_by_slug(kept, keys.slug)
 
 
 def kept_folders_of_slug(raw: str | None, slug: str) -> frozenset[str]:

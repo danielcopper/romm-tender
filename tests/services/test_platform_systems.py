@@ -160,6 +160,17 @@ class TestWhereNoneAreKept:
         assert _listing_reads(romm) == 1
         assert sources.asked[-1][0] == PlatformKeys("vic-20", "vic-20")
 
+    def test_a_platform_rom_m_does_not_list_is_kept_under_the_folder_it_was_asked_with(
+        self, service, uow_factory, romm, sources
+    ):
+        service.platform_system(PlatformKeys("vic-20", "vic20"))
+        service.platform_system(PlatformKeys("vic-20", "vic20"))
+
+        assert _listing_reads(romm) == 1
+        kept = decode_platform_ids(uow_factory.uow.kv_config.get(PLATFORM_IDS_KEY)) or {}
+        assert kept["vic20"] == KeptPlatform(slug="vic-20", fs_slug="vic20")
+        assert sources.asked[-1][0] == PlatformKeys("vic-20", "vic20")
+
     def test_a_read_that_cannot_reach_rom_m_answers_unreachable_and_keeps_nothing(
         self, service, uow_factory, romm, sources
     ):

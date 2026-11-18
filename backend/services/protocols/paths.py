@@ -70,13 +70,11 @@ class PlatformSystems(Protocol):
     ) -> PlatformSystem:
         """The system the platform *keys* names is in *source*, the answering source where it is ``None``.
 
-        *keys* carries the folder the game lies in, or the folder the page is
-        about; never another folder of the slug.
-
         A download names the source it lands in; every other question asks the
         answering source. Where nothing is kept for the platform, RomM's listing
         is read and kept, unless *ask_romm* is false — a caller that must not
-        reach the network then gets the platform's own folder as its name. A read that
+        reach the network then gets the name kept for the folder, else the
+        folder or the slug as the name. A read that
         fails raises nothing: it answers ``UNASKED`` with the reason and message
         ``classify_error`` gives the failure and the source that would have been
         asked, and keeps nothing.
@@ -90,7 +88,7 @@ class PlatformSystems(Protocol):
         ...
 
     def listed_platforms(self) -> frozenset[PlatformKeys] | None:
-        """The slug of every kept platform; ``None`` where no listing was ever kept. Reads nothing from RomM.
+        """The slug and folder of every kept platform; ``None`` where no listing was ever kept. Reads nothing from RomM.
 
         Each platform RomM listed at the last sync, and every one kept since —
         a listing read for a platform with nothing kept keeps the whole listing.
