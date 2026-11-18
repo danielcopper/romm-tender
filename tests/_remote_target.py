@@ -95,6 +95,8 @@ class World:
     """What ``ip route get`` names as this machine's source address."""
     drop_after_first_line: bool = False
     """Drop the connection once the login's command has written its first line to stdout."""
+    drop_only_without_config: bool = False
+    """Drop it only for a login not given ``-F`` — the user's own."""
     hop_failure: HopFailure | None = None
     """How a ProxyJump hop fails, if it does."""
     hop_fails_only_with_config: bool = False
@@ -428,7 +430,7 @@ def _ssh(argv: list[str]) -> int:
     if login != "own":
         env["SSH_ORIGINAL_COMMAND"] = command
         command = login
-    if not world.drop_after_first_line:
+    if not world.drop_after_first_line or (world.drop_only_without_config and "_config" in options):
         return subprocess.run(["sh", "-c", command], cwd=target.home, env=env, check=False).returncode
     ran = subprocess.run(["sh", "-c", command], cwd=target.home, env=env, check=False, capture_output=True, text=True)
     print(ran.stdout.splitlines()[0] if ran.stdout else "")

@@ -38,7 +38,12 @@ keys="$HOME/.ssh/authorized_keys"
 # A place that cannot be written stays so however often this runs, so it ends
 # the setup with what to do instead.
 if [ -L "$keys" ]; then
-    if ! resolved=$(readlink -f "$keys") || [ ! -w "${resolved%/*}" ]; then
+    if ! resolved=$(readlink -f "$keys"); then
+        printf '%s%s is a link that cannot be resolved; add this line through whatever manages it: %s\n' \
+            "$stopped_marker" "$keys" "$line" >&2
+        exit 1
+    fi
+    if [ ! -w "${resolved%/*}" ]; then
         printf '%s%s cannot be written; add this line to it through whatever manages it: %s\n' \
             "$stopped_marker" "${resolved%/*}" "$line" >&2
         exit 1

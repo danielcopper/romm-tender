@@ -415,39 +415,41 @@ def failure_message(
 ) -> str:
     """What to tell the user for a setup that did not end with the install done.
 
-    *result* is the last login's; *key_result* the key's login, when it handed
-    over to the user's own for *handed_over*. A key whose forced command failed
-    is told first, then why the user's own login did not install either.
+    *result* is the last login's. *key_result* is the key's login whenever one
+    ran; it is told only when that login handed over for ``forced command``,
+    and then first, before whatever the user's own login did — refused, stopped
+    or stopped part-way — and that login's closing line last.
     """
     ssh_said = result.stderr.rstrip()
     stopped = after_marker(result.stderr, STOPPED)
     if stopped is not None:
-        return f"tender-dev: the setup stopped on {name}: {stopped}\n  This machine is unchanged."
-    if STARTED in result.stdout.splitlines():
-        return (
-            f"tender-dev: the setup stopped part-way on {name} (ssh ended with {result.returncode}):\n{ssh_said}\n"
-            "  This machine is unchanged; run the setup again to finish it."
-        )
-    failure = None
-    if result.returncode == SSH_FAILED:
-        failure = classify(
-            result.stderr,
-            name=name,
-            destination=destination,
-            known_hosts=known_hosts,
-            trial_known_hosts=trial_known_hosts,
-        )
-        if failure is None and is_no_login(result.stderr):
-            failure = no_login_message(destination, key_refused=handed_over == "refused")
-    if failure is None:
-        failure = f"tender-dev: the setup did not start on {name} (ssh ended with {result.returncode}):\n{ssh_said}"
+        failure = f"tender-dev: the setup stopped on {name}: {stopped}"
+        close = "This machine is unchanged."
+    elif STARTED in result.stdout.splitlines():
+        failure = f"tender-dev: the setup stopped part-way on {name} (ssh ended with {result.returncode}):\n{ssh_said}"
+        close = "This machine is unchanged; run the setup again to finish it."
+    else:
+        failure = None
+        if result.returncode == SSH_FAILED:
+            failure = classify(
+                result.stderr,
+                name=name,
+                destination=destination,
+                known_hosts=known_hosts,
+                trial_known_hosts=trial_known_hosts,
+            )
+            if failure is None and is_no_login(result.stderr):
+                failure = no_login_message(destination, key_refused=handed_over == "refused")
+        if failure is None:
+            failure = f"tender-dev: the setup did not start on {name} (ssh ended with {result.returncode}):\n{ssh_said}"
+        close = "Nothing was changed, here or on the target."
     if handed_over == "forced command" and key_result is not None:
         failure = (
             f"tender-dev: {name} accepted the dev loop's key, but its forced command failed"
             f" (ssh ended with {key_result.returncode}):\n{key_result.stderr.rstrip()}\n"
             "  Your own login, tried next, did not install either:\n" + failure
         )
-    return failure + "\n  Nothing was changed, here or on the target."
+    return f"{failure}\n  {close}"
 
 
 def no_login_message(destination: Destination, *, key_refused: bool) -> str:
@@ -642,10 +644,10 @@ def hand_over(result: subprocess.CompletedProcess[str], *, name: str, destinatio
     ``refused`` for the target's refusal of the key; ``forced command`` for a
     key the target took whose forced command ran no install (a dispatcher gone,
     or one that refuses the setup request); ``hop`` for a hop's refusal of the
-    login, which the user's own config may pass (#2845 D2). An install that started
-    stands, and so does every other failure, which the user's own login would
-    mostly meet too; one only the user's config avoids is the check login's to
-    find (:func:`check_login`).
+    login, which the user's own config may pass (#2845 D2). An install that
+    started stands, and so does every other failure: the user's own login is not
+    tried then. Where the user's own login did the install, :func:`check_login`
+    finds what only the user's config gets past (#2845 D3).
     """
     if installed_from(result) is not None or STARTED in result.stdout.splitlines():
         return None
@@ -662,8 +664,9 @@ def hand_over(result: subprocess.CompletedProcess[str], *, name: str, destinatio
 def check_login(name: str, config: pathlib.Path) -> subprocess.CompletedProcess[str]:
     """A login to *name* through the dev loop's own *config* alone, sending an empty setup request.
 
-    The host key is recorded by then, so it runs in batch mode and asks for
-    nothing: it gets in exactly where the dev loop will.
+    It runs in batch mode, so it asks for nothing: the target's host key is
+    recorded by then, and a hop, which has no entry of its own in *config*,
+    fails where it would ask. It gets in exactly where the dev loop will.
     """
     command = ["ssh", "-F", str(config), "-T"]
     for option in ("BatchMode=yes", "ControlMaster=no", "ControlPath=none"):

@@ -1124,6 +1124,39 @@ class TestAKeyWhoseForcedCommandFails:
         assert forced < err.index(f"deck@{_ADDRESS} accepted no login") < err.index("Nothing was changed")
 
 
+class TestAForcedCommandFailureBeforeAnOwnLoginThatStopped:
+    """The forced command's failure is told first, whatever the user's own login then did."""
+
+    def test_an_own_login_whose_install_refused_to_go_on(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str], tmp_path: Path
+    ) -> None:
+        remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
+        with open(remote.authorized_keys, "a", encoding="utf-8") as keys:
+            keys.write("ssh-ed25519 AAAAothersKey someone@laptop\nssh-ed25519 AAAAanotherOne other@desktop\n")
+        (remote.target_home / ".local/lib/romm-tender-dev/dispatch.sh").unlink()
+        _short_awk(tmp_path / "tools" / "fakes" / "awk")
+
+        code, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
+
+        assert code == 1
+        forced = err.index("deck accepted the dev loop's key, but its forced command failed (ssh ended with 127)")
+        assert forced < err.index("the setup stopped on deck: the new") < err.index("This machine is unchanged.")
+        assert "Nothing was changed" not in err
+
+    def test_an_own_login_that_stopped_part_way(self, remote: Remote, capsys: pytest.CaptureFixture[str]) -> None:
+        remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
+        (remote.target_home / ".local/lib/romm-tender-dev/dispatch.sh").unlink()
+        remote.world.drop_after_first_line = True
+        remote.world.drop_only_without_config = True
+
+        code, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
+
+        assert code == 1
+        forced = err.index("deck accepted the dev loop's key, but its forced command failed (ssh ended with 127)")
+        assert forced < err.index("the setup stopped part-way on deck") < err.index("run the setup again to finish it")
+        assert "Nothing was changed" not in err
+
+
 class TestTheKeysLoginReadsNoConfigOfTheUsers:
     def test_it_offers_the_dev_loops_key_and_no_identity_from_the_users_config(
         self, remote: Remote, capsys: pytest.CaptureFixture[str]
@@ -1210,6 +1243,19 @@ class TestASymlinkedAuthorizedKeys:
         assert "add this line to it through whatever manages it" in err
         assert "run the setup again" not in err
         assert managed.read_text(encoding="utf-8") == "ssh-ed25519 AAAAothersKey someone@laptop\n"
+
+    def test_a_link_that_cannot_be_resolved_stops_naming_the_link(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        remote.authorized_keys.parent.mkdir()
+        remote.authorized_keys.symlink_to(remote.target_home / "gone" / "dotfiles" / "authorized_keys")
+
+        code, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
+
+        assert code == 1
+        assert f"the setup stopped on deck: {remote.authorized_keys} is a link that cannot be resolved" in err
+        assert "add this line through whatever manages it" in err
+        assert remote.authorized_keys.is_symlink()
 
 
 class TestTheCheckLogin:
