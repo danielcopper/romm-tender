@@ -8,16 +8,13 @@ machines, and how the dev loop uses it: docs/contributing/frontend-dev-loop.md,
 "A remote target".
 
 Without ``--print`` it logs in once through the user's own ``ssh``, offering the
-dev loop's key last, after the user's own identities and before a password:
-
-- a login of the user's own runs the install script, which installs the
-  dispatcher and the one ``authorized_keys`` line restricting the key to the
-  address ``$SSH_CLIENT`` shows;
-- a login with the dev loop's key reaches the dispatcher, whose refusal of the
-  install says the key works from here — the target is left as it is, and only
-  this machine's side is brought up to date. That is what lets a target with no
-  password login finish after ``--print``, and a target whose address changed
-  be set up again without one.
+dev loop's key last, after the user's own identities and before a password.
+Whichever gets in runs the install script, which installs the dispatcher and
+the one ``authorized_keys`` line restricting the key to the address
+``$SSH_CLIENT`` shows. A login of the user's own runs it in a shell; a login
+with the dev loop's key runs it through the dispatcher's setup request, which
+is what lets a target with no password login finish after ``--print``, and a
+target be repaired — at a changed address too — without a password.
 
 Nothing is written on either machine before the login holds: a key this run
 creates waits in a temporary directory, and the host key ``ssh`` records at
@@ -56,11 +53,6 @@ KNOWN_HOSTS_NAME = "known_hosts"
 # Where the printed script finds the host keys whose fingerprints it shows:
 # OpenSSH's default HostKey paths.
 HOST_KEY_DIR = "/etc/ssh"
-
-# The dispatcher's answer to anything it does not let through
-# (scripts/dev_dispatch.sh, REFUSED).
-DISPATCHER_REFUSED = 3
-DISPATCHER_REFUSAL = "tender-dev: refused:"
 
 # The install script's last line on stdout. Searched for rather than expected
 # alone: a login shell may print its own lines first.
@@ -380,7 +372,11 @@ def write_atomically(path: pathlib.Path, text: str) -> None:
 
 
 def config_entry(name: str, destination: Destination, jump: str | None, directory: pathlib.Path) -> list[str]:
-    """The lines of a target's entry in the dev loop's SSH config, without its comment."""
+    """The lines of a target's entry in the dev loop's SSH config, without its comment.
+
+    A ProxyCommand goes in as ``ssh -G`` printed it; a ``%h`` or ``%p`` left in
+    it expands against this entry's HostName and Port when it runs.
+    """
     lines = [
         f"Host {name}",
         f"    HostName {destination.hostname}",
@@ -389,6 +385,8 @@ def config_entry(name: str, destination: Destination, jump: str | None, director
     ]
     if jump:
         lines.append(f"    ProxyJump {jump}")
+    elif destination.proxy_command:
+        lines.append(f"    ProxyCommand {destination.proxy_command}")
     lines += [
         f"    HostKeyAlias {host_key_alias(name)}",
         f'    IdentityFile "{directory / KEY_NAME}"',
@@ -534,8 +532,7 @@ def run_setup(name: str, destination_text: str) -> int:
         installed = next(
             (line[len(INSTALLED) :] for line in result.stdout.splitlines() if line.startswith(INSTALLED)), None
         )
-        reached_dispatcher = result.returncode == DISPATCHER_REFUSED and DISPATCHER_REFUSAL in result.stderr
-        if installed is None and not reached_dispatcher:
+        if installed is None:
             failure = classify(result.stderr, name=name, destination=destination, known_hosts=known_hosts)
             if failure is None and is_no_login(result.stderr):
                 failure = no_login_message(destination_text, destination, key)
@@ -563,18 +560,11 @@ def run_setup(name: str, destination_text: str) -> int:
     if config != current:
         write_atomically(config_path, config)
 
-    if installed is not None:
-        print(
-            f"tender-dev: {name} is set up. It accepts this machine's key from {installed} only — the address it"
-            " sees this machine at; if that changes, run the setup again.",
-            file=sys.stderr,
-        )
-    else:
-        print(
-            f"tender-dev: {name} accepts this machine's key, and its install there was left as it was; this"
-            f" machine's entry for it is up to date. To install it there afresh, run the setup with --print.",
-            file=sys.stderr,
-        )
+    print(
+        f"tender-dev: {name} is set up. It accepts this machine's key from {installed} only — the address it"
+        " sees this machine at; if that changes, run the setup again.",
+        file=sys.stderr,
+    )
     return 0
 
 

@@ -4,8 +4,15 @@
 # installs it as ~/.local/lib/romm-tender-dev/dispatch.sh, beside the running tree
 # and the incoming copy rather than in either, so no copy can replace it. sshd
 # runs it in place of whatever the key's holder asked for and hands that request
-# over in SSH_ORIGINAL_COMMAND, and the request alone decides. Three kinds pass:
+# over in SSH_ORIGINAL_COMMAND, and the request alone decides. Four kinds pass:
 #
+#   sh -s
+#       the setup: setup:remote-target run again sends its install script on
+#       stdin, which repairs the target through the key (#2844 D11). It is
+#       spelled as a shell command because the same login reaches a shell
+#       instead when the user's own access gets in first. It puts this script
+#       within the key's reach, which grants nothing the key lacks:
+#       dev_target.sh runs whatever tree the key copied in.
 #   rsync --server <options> . .local/lib/romm-tender-dev/incoming[/]
 #       the copy: rsync receiving into the incoming copy, and nowhere else
 #   scripts/dev_target.sh [word ...]
@@ -15,9 +22,7 @@
 #       the backend's backend.log, and its database dumped as SQL through
 #       Python's sqlite3, opened read-only
 #
-# Everything else is refused with REFUSED, an empty request (a login) among it;
-# setup:remote-target reads that refusal as proof that the key logs in and this
-# script answers.
+# Everything else is refused with REFUSED, an empty request (a login) among it.
 #
 # The request is split on blanks with globbing off and never handed to a shell
 # as text: `sh -c "$SSH_ORIGINAL_COMMAND"` would run whatever a `;` or a `$(...)`
@@ -41,8 +46,8 @@ PYTHON="${TENDER_PYTHON:-/usr/bin/python3}"
 
 refuse() {
     printf 'tender-dev: refused: %s\n' "${SSH_ORIGINAL_COMMAND:-(a login)}" >&2
-    printf '%s\n' "  This key may only copy into the incoming tree, run that tree's scripts/dev_target.sh," \
-        "  and read the backend's log and database." >&2
+    printf '%s\n' "  This key may only run the setup, copy into the incoming tree, run that tree's" \
+        "  scripts/dev_target.sh, and read the backend's log and database." >&2
     exit "$REFUSED"
 }
 
@@ -122,6 +127,10 @@ set -- ${SSH_ORIGINAL_COMMAND:-}
 cd "$HOME"
 
 case "$1" in
+    sh)
+        [ "$*" = "sh -s" ] || refuse
+        exec sh -s
+        ;;
     rsync)
         shift
         check_rsync "$@"

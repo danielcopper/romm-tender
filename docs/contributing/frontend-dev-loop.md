@@ -419,13 +419,14 @@ the setup reads with `ssh -G` and never writes. `<name>` is yours to choose — 
    writes one line for the key, with a comment above it naming the build host and the time, and every other line there
    stays as it was.
 5. **It writes the target into the dev loop's own SSH config**, `~/.config/romm-tender-dev/ssh_config`: the address,
-   port, user and jump host the destination resolved to, the dev loop's key and nothing else, and its known-hosts file.
-   Your `~/.ssh/config` serves the setup login only — the dev loop calls `ssh` with its own file alone, and so with the
-   restricted key alone. A jump host is written out as `user@address:port`, since an alias from your config means
-   nothing in this one.
+   port, user and jump host or proxy command the destination resolved to, the dev loop's key and nothing else, and its
+   known-hosts file. Your `~/.ssh/config` serves the setup login only — the dev loop calls `ssh` with its own file
+   alone, and so with the restricted key alone. A jump host is written out as `user@address:port`, since an alias from
+   your config means nothing in this one; a proxy command goes in as `ssh -G` prints it.
 
 Run again, it changes what changed: one key, one `authorized_keys` line and one config entry, however often it runs.
-That is also how a target is repaired.
+That is also how a target is repaired, and it needs no password for it: where none of your own keys gets in, the dev
+loop's key does, and the dispatcher's setup request runs the same install (below).
 
 ### What the key may do on the target
 
@@ -436,10 +437,12 @@ The `authorized_keys` line restricts the key three ways:
   out of it, so a copy of the key used from anywhere else would run code on the target. When the build host's address
   changes, the target refuses the key — run the setup again.
 - **`command=`** — to the dispatcher, which runs instead of whatever the key asks for and decides from that request
-  alone. It lets three kinds through: `rsync` receiving into `incoming/` and nowhere else, the incoming copy's
-  `scripts/dev_target.sh`, and `read log` / `read database` — the backend's `backend.log`, and its database dumped as
-  SQL through Python's `sqlite3`, opened read-only. Everything else, a login among it, is refused. The exact requests
-  are in the header of `scripts/dev_dispatch.sh`.
+  alone. It lets four kinds through: the setup's install script, which the setup sends on stdin; `rsync` receiving into
+  `incoming/` and nowhere else; the incoming copy's `scripts/dev_target.sh`; and `read log` / `read database` — the
+  backend's `backend.log`, and its database dumped as SQL through Python's `sqlite3`, opened read-only. Everything else,
+  a login among it, is refused. The exact requests are in the header of `scripts/dev_dispatch.sh`. The setup request
+  puts the dispatcher itself within the key's reach, which grants nothing the key lacks: `dev_target.sh` already runs
+  whatever tree the key copied in, so `from=` is the bound either way.
 - **`restrict`** — no terminal, no forwarding of any kind.
 
 ### A target you cannot log into yet: `--print`
@@ -456,11 +459,11 @@ target's host key fingerprints. The address it restricts the key to is the one t
 target (`ip route get`), written into the script, and the script says which before it writes anything; if the target
 sees the build host at another address — through NAT, say — give that one instead: `sh setup-deck.sh 10.8.0.6`. Then run
 the setup on the build host again, without `--print`: it logs in with the key, `ssh` shows the fingerprint for you to
-compare with the script's, and the setup records the target and finishes. If the key is refused at that point, the
-message names the address the script used — the likely cause.
+compare with the script's, and the setup installs through the key once more, records the target and finishes. If the key
+is refused at that point, the message names the address the script used — the likely cause.
 
-`--print` refuses a destination behind a jump host: the target would see the jump host's address, which the build host
-cannot know.
+`--print` refuses a destination behind a jump host or a proxy command: the target would see that hop's address, which
+the build host cannot know.
 
 ### When the setup refuses
 
@@ -474,9 +477,7 @@ Each way the login can fail ends the setup with what to do next, and **nothing c
 | a host key not the recorded one | another machine may answer at that address; if the target was reinstalled, remove its record |
 
 A target whose address changed is set up again with the new one, and needs no password for it: the key still holds,
-because `from=` bounds the build host's address, not the target's. Where none of your own keys gets in, a run with the
-key reaches the dispatcher rather than a shell, so it brings the build host's side up to date and leaves the install on
-the target as it was; to renew that install, use `--print`.
+because `from=` bounds the build host's address, not the target's.
 
 ## DevTools
 

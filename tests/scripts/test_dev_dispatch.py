@@ -27,7 +27,7 @@ _INCOMING = ".local/lib/romm-tender-dev/incoming/"
 _RECEIVE = f"rsync --server -logDtpre.iLsfxCIvu --delete-during . {_INCOMING}"
 
 
-def _run(home: Path, tools: Path, request: str | None) -> subprocess.CompletedProcess[str]:
+def _run(home: Path, tools: Path, request: str | None, stdin: str = "") -> subprocess.CompletedProcess[str]:
     env = {
         "HOME": str(home),
         "PATH": fake_path(tools),
@@ -36,7 +36,9 @@ def _run(home: Path, tools: Path, request: str | None) -> subprocess.CompletedPr
     }
     if request is not None:
         env["SSH_ORIGINAL_COMMAND"] = request
-    return subprocess.run(["sh", str(_DISPATCHER)], cwd="/", capture_output=True, text=True, check=False, env=env)
+    return subprocess.run(
+        ["sh", str(_DISPATCHER)], cwd="/", input=stdin, capture_output=True, text=True, check=False, env=env
+    )
 
 
 def _rsync_calls(tools: Path) -> list[list[str]]:
@@ -62,6 +64,15 @@ def test_the_copy_into_the_incoming_tree_reaches_rsync_as_asked(home: Path, tmp_
 
     assert result.returncode == 0, result.stderr
     assert _rsync_calls(tmp_path) == [request.split()[1:]]
+
+
+def test_the_setup_request_runs_the_script_on_its_stdin_in_the_home(home: Path, tmp_path: Path) -> None:
+    """D11: setup:remote-target run again repairs the target through the key."""
+    result = _run(home, tmp_path, "sh -s", stdin='printf "%s|%s" "$PWD" "$#"; printf installed > repaired\n')
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == f"{home}|0"
+    assert (home / "repaired").read_text(encoding="utf-8") == "installed"
 
 
 def test_dev_target_sh_runs_from_the_incoming_copy_with_its_words(home: Path, tmp_path: Path) -> None:
@@ -122,7 +133,11 @@ def test_a_read_of_something_not_there_says_so(home: Path, tmp_path: Path, reque
     [
         pytest.param(None, id="a login"),
         pytest.param("", id="an empty request"),
-        pytest.param("sh -s", id="a shell"),
+        pytest.param("sh", id="a shell"),
+        pytest.param("sh -c touch pwned", id="a shell with a command"),
+        pytest.param("sh -s pwned", id="the setup request with an argument"),
+        pytest.param("bash -s", id="another shell on stdin"),
+        pytest.param("setup", id="setup by name"),
         pytest.param("cat .ssh/authorized_keys", id="another command"),
         pytest.param("rsync --server --sender -logDtpre.iLsfxCIvu . .local/share/romm-tender/", id="rsync sending"),
         pytest.param("rsync -logDtpre.iLsfxCIvu . " + _INCOMING, id="rsync not as a server"),

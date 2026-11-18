@@ -212,6 +212,26 @@ class TestTheSetupLogin:
         assert "    HostName 192.168.1.20\n    Port 2222\n    User deck\n" in remote.config()
         assert "    ProxyJump jumper@203.0.113.5:22022\n" in remote.config()
 
+    def test_a_proxy_command_from_the_users_config_is_written_into_the_entry(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        proxy = "nc -X connect -x proxy.example:3128 %h %p"
+        remote.world.configs = {"deck": {"user": ["deck"], "hostname": [_ADDRESS], "proxycommand": [proxy]}}
+
+        code, _, err = remote.setup(capsys, "deck", "deck")
+
+        assert code == 0, err
+        assert f"    User deck\n    ProxyCommand {proxy}\n    HostKeyAlias" in remote.config()
+
+    def test_print_refuses_a_proxy_command(self, remote: Remote, capsys: pytest.CaptureFixture[str]) -> None:
+        remote.world.configs = {"deck": {"user": ["deck"], "hostname": [_ADDRESS], "proxycommand": ["nc %h %p"]}}
+
+        code, script, err = remote.setup(capsys, "deck", "deck", "--print")
+
+        assert code == 1
+        assert script == ""
+        assert "--print cannot set up a target reached through nc %h %p" in err
+
     def test_first_contact_asks_even_where_the_users_config_checks_strictly(
         self, remote: Remote, capsys: pytest.CaptureFixture[str]
     ) -> None:
@@ -301,6 +321,31 @@ class TestRunAgain:
         assert _ADDRESS not in remote.config()
         assert remote.config().count("Host deck\n") == 1
         assert len(remote.key_lines()) == 2
+
+    def test_a_rerun_repairs_the_target_through_the_key_without_a_password(
+        self, remote: Remote, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """D11: a user whose own login is a password repairs the target with the dev key."""
+        first, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
+        assert first == 0, err
+        root = remote.target_home / ".local/lib/romm-tender-dev"
+        with open(root / "dispatch.sh", "a", encoding="utf-8") as dispatcher:
+            dispatcher.write("# edited on the target\n")
+        (root / "incoming").rmdir()
+        remote.target().client_address = "10.8.0.7"
+        remote.authorized_keys.write_text(
+            remote.authorized_keys.read_text(encoding="utf-8").replace(_SEEN_FROM, "10.8.0.7"), encoding="utf-8"
+        )
+        logged = len(log_lines(remote.world))
+
+        second, _, err = remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
+
+        assert second == 0, err
+        assert log_lines(remote.world)[logged:] == [f"login {_ADDRESS} key"]
+        assert (root / "dispatch.sh").read_text(encoding="utf-8") == _DISPATCHER.read_text(encoding="utf-8")
+        assert (root / "incoming").is_dir()
+        assert remote.key_lines()[1] == _dispatcher_line(remote, "10.8.0.7")
+        assert "is set up" in err
 
     def test_an_unchanged_entry_keeps_its_comment(self, remote: Remote, capsys: pytest.CaptureFixture[str]) -> None:
         remote.setup(capsys, "deck", f"deck@{_ADDRESS}")
