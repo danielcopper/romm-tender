@@ -315,12 +315,26 @@ jobs:
       # set EQUALS its manifest as well as matching it byte for byte.
       - name: Check vendored trees against their manifests
         run: python scripts/check_vendored_trees.py
-      # The two scripts a user runs outside this repository — the installer and
-      # the packager whose tarball it takes. ubuntu-latest ships shellcheck, so
-      # there is nothing to install. The other scripts here are developer
-      # tooling and stay out of scope.
-      - name: Shellcheck the installer and the packager
-        run: shellcheck install.sh scripts/package.sh
+      # shellcheck at the version mise.toml pins (bump both together):
+      # ubuntu-latest's own copy is older, and two versions can disagree on a
+      # rule. The release publishes no checksum file, so the archive's SHA-256
+      # is pinned here; it is the digest GitHub records for that release asset.
+      - name: Install shellcheck 0.11.0
+        run: |
+          archive=shellcheck-v0.11.0.linux.x86_64.tar.xz
+          curl -fsSLo "$RUNNER_TEMP/$archive" \
+            "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/$archive"
+          echo "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198  $RUNNER_TEMP/$archive" \
+            | sha256sum -c -
+          tar -xJf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/shellcheck-v0.11.0" >> "$GITHUB_PATH"
+
+      # Which scripts, and why these: the shellcheck line of the lint task in
+      # mise.toml.
+      - name: Shellcheck the scripts that run outside this repository
+        run: |
+          shellcheck --version | grep -qx 'version: 0.11.0'
+          shellcheck install.sh scripts/package.sh scripts/dev_dispatch.sh scripts/dev_target_install.sh
       # shellcheck has no rule for this one: `exit` inside `$(...)` ends the
       # subshell, so a shell function that answers with a value and aborts on a
       # bad input does neither, and the caller runs on with an empty answer.
