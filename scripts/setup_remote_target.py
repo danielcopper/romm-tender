@@ -25,7 +25,7 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, replace
-from typing import Literal
+from typing import Literal, assert_never
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 DISPATCHER = REPO / "scripts" / "dev_dispatch.sh"
@@ -102,7 +102,11 @@ class SetupError(Exception):
 
 @dataclass(frozen=True)
 class Destination:
-    """What ``ssh -G`` resolved :attr:`text` to."""
+    """Where a target is: what ``ssh -G`` resolved :attr:`text` to, or a target's entry read back.
+
+    :func:`read_entries` builds one from the dev loop's config, where
+    :attr:`text` is the target's name and a ProxyJump is already resolved.
+    """
 
     text: str
     user: str
@@ -111,7 +115,8 @@ class Destination:
     proxy_jump: str | None
     proxy_command: str | None
     jump: str | None = None
-    """:attr:`proxy_jump` with every hop spelled out (:func:`resolve_jump`), once :func:`with_jump` has run."""
+    """:attr:`proxy_jump` with every hop spelled out (:func:`resolve_jump`): once :func:`with_jump` has run, or
+    as the entry :func:`read_entries` read back recorded it."""
 
     @property
     def via(self) -> str | None:
@@ -322,6 +327,8 @@ class SshFailure:
     """The name ssh could not resolve, for ``unresolved``."""
     offending: str | None = None
     """The known-hosts file that records another key, for ``host key changed`` where ssh names one."""
+    key_refused: bool = False
+    """For ``no login``: a key was refused ("Permission denied"), not the login ended for too many tries."""
 
 
 def ssh_failure(
@@ -339,13 +346,13 @@ def ssh_failure(
     if HOST_KEY_CHANGED.search(stderr):
         offending = _OFFENDING_FILE.search(stderr)
         ours = {str(path) for path in known_hosts}
-        if offending is None or offending.group(1) in ours:
+        if offending is None or offending.group(1) in ours or not destination.via:
             return SshFailure("host key changed", "target")
         return SshFailure("host key changed", "hop", offending=offending.group(1))
     if HOST_KEY_NOT_ACCEPTED.search(stderr):
         return SshFailure("host key not accepted", where)
     if NO_LOGIN.search(stderr):
-        return SshFailure("no login", where)
+        return SshFailure("no login", where, key_refused=bool(KEY_REFUSED.search(stderr)))
     unresolved = UNRESOLVED.search(stderr)
     if unresolved is not None:
         return SshFailure("unresolved", where, unresolved=unresolved.group(1))
@@ -369,55 +376,55 @@ def classify(
         return None
     host = destination.hostname
     hop = f"the hop {destination.via}"
-    if failure.kind == "host key changed" and failure.where == "target":
-        return (
-            f"tender-dev: the host key at {host} is not the one recorded for {name} — another machine may be"
-            " answering at that address. No connection was made.\n"
-            "  If the target was reinstalled, remove its record and run the setup again:\n"
-            f"    ssh-keygen -R {host_key_alias(name)} -f {known_hosts}"
-        )
-    if failure.kind == "host key changed":
-        return (
-            f"tender-dev: a hop on the way to {name} ({destination.via}) has a host key that is not the one"
-            f" {failure.offending} records — another machine may be answering there. No connection was made.\n"
-            "  Check that hop with your own ssh."
-        )
-    if failure.kind == "host key not accepted":
-        whose = {"target": f"at {host}", "hop": f"of {hop}", "either": f"of {host} or of {hop}"}[failure.where]
-        return (
-            f"tender-dev: the host key {whose} was not accepted, or ssh could not ask about it — it asks on a"
-            " terminal. No connection was made."
-        )
-    if failure.kind == "no login":
-        if failure.where == "hop":
+    match failure.kind:
+        case "host key changed" if failure.where == "target":
+            return (
+                f"tender-dev: the host key at {host} is not the one recorded for {name} — another machine may be"
+                " answering at that address. No connection was made.\n"
+                "  If the target was reinstalled, remove its record and run the setup again:\n"
+                f"    ssh-keygen -R {host_key_alias(name)} -f {known_hosts}"
+            )
+        case "host key changed":
+            return (
+                f"tender-dev: a hop on the way to {name} ({destination.via}) has a host key that is not the one"
+                f" {failure.offending} records — another machine may be answering there. No connection was made.\n"
+                "  Check that hop with your own ssh."
+            )
+        case "host key not accepted":
+            whose = {"target": f"at {host}", "hop": f"of {hop}", "either": f"of {host} or of {hop}"}[failure.where]
+            return (
+                f"tender-dev: the host key {whose} was not accepted, or ssh could not ask about it — it asks on a"
+                " terminal. No connection was made."
+            )
+        case "no login" if failure.where == "hop":
             return f"tender-dev: {hop} accepted no login from this machine.\n  Check that hop with your own ssh."
-        return None
-    if failure.kind == "unresolved" and failure.where == "hop":
-        return (
-            f"tender-dev: this machine cannot resolve {failure.unresolved}, a hop on the way to {name}"
-            f" ({destination.via}).\n"
-            "  Check that hop in your SSH config, or give its address."
-        )
-    if failure.kind == "unresolved":
-        return (
-            f"tender-dev: this machine cannot resolve {host}.\n"
-            "  Give the target's address instead, or a name the network resolves."
-        )
-    if failure.where == "hop":
-        return f"tender-dev: no SSH server answers at {hop}.\n  Check that hop with your own ssh."
-    if failure.where == "either":
-        return (
-            f"tender-dev: no SSH server answers at {host} port {destination.port}, or at {hop}.\n"
-            "  Check the address, that the target runs an SSH server, and that hop."
-        )
-    return (
-        f"tender-dev: no SSH server answers at {host} port {destination.port}.\n"
-        "  Check the address, and that the target runs an SSH server."
-    )
-
-
-def is_no_login(stderr: str) -> bool:
-    return bool(NO_LOGIN.search(stderr))
+        case "no login":
+            return None
+        case "unresolved" if failure.where == "hop":
+            return (
+                f"tender-dev: this machine cannot resolve {failure.unresolved}, a hop on the way to {name}"
+                f" ({destination.via}).\n"
+                "  Check that hop in your SSH config, or give its address."
+            )
+        case "unresolved":
+            return (
+                f"tender-dev: this machine cannot resolve {host}.\n"
+                "  Give the target's address instead, or a name the network resolves."
+            )
+        case "no server" if failure.where == "hop":
+            return f"tender-dev: no SSH server answers at {hop}.\n  Check that hop with your own ssh."
+        case "no server" if failure.where == "either":
+            return (
+                f"tender-dev: no SSH server answers at {host} port {destination.port}, or at {hop}.\n"
+                "  Check the address, that the target runs an SSH server, and that hop."
+            )
+        case "no server":
+            return (
+                f"tender-dev: no SSH server answers at {host} port {destination.port}.\n"
+                "  Check the address, and that the target runs an SSH server."
+            )
+        case unknown:
+            assert_never(unknown)
 
 
 def route_source(destination: Destination) -> str:
@@ -480,7 +487,8 @@ def failure_message(
                 known_hosts=known_hosts,
                 trial_known_hosts=trial_known_hosts,
             )
-            if failure is None and is_no_login(result.stderr):
+            read = ssh_failure(result.stderr, name=name, destination=destination)
+            if failure is None and read is not None and read.kind == "no login":
                 failure = no_login_message(destination, key_refused=handed_over == "refused")
         if failure is None:
             failure = f"tender-dev: the setup did not start on {name} (ssh ended with {result.returncode}):\n{ssh_said}"
@@ -593,11 +601,6 @@ def read_entries(text: str) -> dict[str, Destination]:
             jump=jump,
         )
     return entries
-
-
-def read_entry(text: str, name: str) -> Destination | None:
-    """*name*'s entry in *text*, as :func:`read_entries` reads it, or ``None``."""
-    return read_entries(text).get(name)
 
 
 def updated_config(current: str, name: str, entry: list[str], comment: str) -> str:
@@ -742,10 +745,12 @@ def hand_over(result: subprocess.CompletedProcess[str], *, name: str, destinatio
         return None
     if result.returncode != SSH_FAILED:
         return "forced command"
-    where = failed_where(result.stderr, name=name, destination=destination)
-    if where == "target" and KEY_REFUSED.search(result.stderr):
+    failure = ssh_failure(result.stderr, name=name, destination=destination)
+    if failure is None or failure.kind != "no login":
+        return None
+    if failure.where == "target" and failure.key_refused:
         return "refused"
-    if where == "hop" and NO_LOGIN.search(result.stderr):
+    if failure.where == "hop":
         return "hop"
     return None
 

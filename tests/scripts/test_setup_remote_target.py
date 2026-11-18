@@ -1015,10 +1015,14 @@ class TestReadingWhatSshSaid:
             trial_known_hosts=Path("/tmp/trial/known_hosts"),
         )
 
+    def _kind(self, stderr: str) -> str | None:
+        failure = setup_remote_target.ssh_failure(stderr, name="deck", destination=self._DESTINATION)
+        return None if failure is None else failure.kind
+
     @pytest.mark.parametrize("case", ["timed out", "no route", "network unreachable", "refused", "kex reset"])
     def test_no_server_answering(self, case: str) -> None:
         assert (self._classify(_STDERR[case]) or "").startswith("tender-dev: no SSH server answers at 192.168.1.20")
-        assert not setup_remote_target.is_no_login(_STDERR[case])
+        assert self._kind(_STDERR[case]) == "no server"
 
     _BEHIND_A_HOP = setup_remote_target.Destination(
         text="deck", user="deck", hostname="192.168.1.20", port="22", proxy_jump="bastion", proxy_command=None
@@ -1060,7 +1064,7 @@ class TestReadingWhatSshSaid:
     @pytest.mark.parametrize("case", ["too many", "denied", "denied then closed"])
     def test_no_login_accepted(self, case: str) -> None:
         assert self._classify(_STDERR[case]) is None
-        assert setup_remote_target.is_no_login(_STDERR[case])
+        assert self._kind(_STDERR[case]) == "no login"
 
 
 _DECK_ENTRY = ["Host deck", "    HostName 192.168.1.20"]
@@ -1464,7 +1468,7 @@ class TestOtherFailures:
 
 
 class TestReadingAnEntryBack:
-    """read_entry gives the dev tasks back what config_entry wrote, the one format both sides use."""
+    """read_entries gives the dev tasks back what config_entry wrote, the one format both sides use."""
 
     @pytest.mark.parametrize(
         ("jump", "command"),
@@ -1488,8 +1492,8 @@ class TestReadingAnEntryBack:
         )
         text = setup_remote_target.updated_config("", "deck", entry, "# deck: a comment")
 
-        assert setup_remote_target.read_entry(text, "deck") == destination
-        assert setup_remote_target.read_entry(text, "tv") is None
+        assert setup_remote_target.read_entries(text).get("deck") == destination
+        assert "tv" not in setup_remote_target.read_entries(text)
 
 
 class TestArguments:
