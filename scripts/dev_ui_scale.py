@@ -138,6 +138,12 @@ def _task(words: str) -> str:
     return f"mise run {words}" + (f" --target {_TARGET}" if _TARGET else "")
 
 
+# The last line of every restore, saying whether all of it landed;
+# scripts/dev_target.sh waits for one of them after it stops the unit.
+RESTORE_DONE = "Restore done: the scale and the window are as they were before this run."
+RESTORE_INCOMPLETE = "Restore incomplete: see the lines above."
+
+
 def _stopper() -> str:
     return f"`{_task('dev:ui-scale --stop')}`" if _TARGET else "Ctrl-C"
 
@@ -682,10 +688,10 @@ def _emulate_deck_window(prior: BpmWindow | None) -> BpmWindow | None:
     return window
 
 
-def _restore_window(prior: BpmWindow | None) -> None:
-    """Put the window back exactly as it was — same geometry, same fullscreen state."""
+def _restore_window(prior: BpmWindow | None) -> bool:
+    """Put the window back exactly as it was — same geometry, same fullscreen state; whether it landed."""
     if prior is None:
-        return
+        return True
     window = _kwin_call("restore", {"frame": prior.frame.as_json(), "fullScreen": prior.fullscreen})
     if window is None:
         print(
@@ -693,13 +699,15 @@ def _restore_window(prior: BpmWindow | None) -> None:
             "It is still at the Deck's 1280x800 — resize or re-fullscreen it by hand.",
             file=sys.stderr,
         )
-        return
+        return False
     print(f"Restored: Big Picture window {window.describe()} (the state captured before this run).")
     if window.fullscreen != prior.fullscreen or (not prior.fullscreen and window.frame != prior.frame):
         print(
             f"WARNING: that is NOT the window state captured before this run ({prior.describe()}).",
             file=sys.stderr,
         )
+        return False
+    return True
 
 
 # ------------------------------------------------------------------------- steam
@@ -1218,9 +1226,10 @@ def _restore(prior: SteamScaleState | None, prior_window: BpmWindow | None) -> N
     is what the docs promise.
     """
     with _signals_held_off():
-        _restore_scale(prior)
-        _restore_window(prior_window)
-        _verify_restore(prior)
+        scale = _restore_scale(prior)
+        window = _restore_window(prior_window)
+        verified = _verify_restore(prior)
+        print(RESTORE_DONE if scale and window and verified else RESTORE_INCOMPLETE, flush=True)
 
 
 @contextmanager
@@ -1234,8 +1243,8 @@ def _signals_held_off() -> Iterator[None]:
             signal.signal(number, handler)
 
 
-def _restore_scale(prior: SteamScaleState | None) -> None:
-    """Put *prior* back — exactly.
+def _restore_scale(prior: SteamScaleState | None) -> bool:
+    """Put *prior* back — exactly; whether that was *prior*, known and put back.
 
     A user who deliberately set a manual UI Scale (an accessibility "Larger text" value,
     say) must get that scale back, not Steam's automatic one — flipping them to auto on
@@ -1250,12 +1259,14 @@ def _restore_scale(prior: SteamScaleState | None) -> None:
                 "If you had a manual UI Scale set, re-set it in Steam (Settings › Display › UI Scale).",
                 file=sys.stderr,
             )
-        elif prior.auto:
+            return False
+        if prior.auto:
             _set_scale(None)
             print("Restored: AUTOMATIC scaling (the state captured before this run).")
         else:
             _set_scale(prior.factor)
             print(f"Restored: MANUAL UI Scale {prior.factor} (the state captured before this run).")
+        return True
     except DevUiScaleError as e:
         target = "automatic scaling" if prior is None or prior.auto else f"manual UI Scale {prior.factor}"
         print(
@@ -1264,10 +1275,11 @@ def _restore_scale(prior: SteamScaleState | None) -> None:
             f"  {_task('dev:ui-scale auto')}",
             file=sys.stderr,
         )
+        return False
 
 
-def _verify_restore(prior: SteamScaleState | None) -> None:
-    """Check the restore actually landed, rather than just claiming it did.
+def _verify_restore(prior: SteamScaleState | None) -> bool:
+    """Check the restore actually landed, rather than just claiming it did; whether it did.
 
     Verified against the live settings store and the live ``devicePixelRatio`` — never
     against ``config.vdf``, whose ``AutoScaleFactor`` is not re-flushed in-session and so
@@ -1279,7 +1291,7 @@ def _verify_restore(prior: SteamScaleState | None) -> None:
     now = "an unreadable state" if live is None else SteamScaleState(live[0], live[1], dpr, "live").describe()
     print(f"Verified: Steam is on {now}, rendering at dpr {'unknown' if dpr is None else dpr}")
     if prior is None:
-        return
+        return False
 
     auto_drifted = live is not None and live[0] != prior.auto
     factor_drifted = live is not None and not prior.auto and live[1] != prior.factor
@@ -1290,6 +1302,8 @@ def _verify_restore(prior: SteamScaleState | None) -> None:
             "The restore did not land — check Steam › Settings › Display › UI Scale.",
             file=sys.stderr,
         )
+        return False
+    return True
 
 
 def main(argv: list[str]) -> int:
