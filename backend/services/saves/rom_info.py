@@ -157,7 +157,6 @@ class RomInfoService:
         return answer, entry.label if entry is not None else None
 
     def _fresh_entry(self, rom_id: int) -> Callable[[], EmulatorOption | None]:
-        """Resolves the entry the ROM starts with afresh each time it is called."""
         return lambda: self._active_core.active_emulator_for_rom(int(rom_id))
 
     def _answer(self, rom_id: int, entry: Callable[[], EmulatorOption | None]) -> SaveAnswer:

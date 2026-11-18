@@ -312,12 +312,10 @@ class SetupWizard:
         nothing about the saves — no path could be formed, or the emulator's
         answer could not be established — so a refusal there is no statement
         that they will not sync. ``emulator_label`` is the label of the entry
-        the game starts with, ``None`` where it has none, taken from the same
-        resolution of the game's emulator the reading is asked of. One live
-        reading, beside that one resolution, so the panel can ask it while it
-        holds RomM as unreachable, where the setup info would wait out the
-        retry ladder. ``short_message`` stands beside a refusal's ``message``
-        for a surface with no room for the sentence.
+        the game starts with, ``None`` where it has none. One live reading, so
+        the panel can ask it while it holds RomM as unreachable, where the setup
+        info would wait out the retry ladder. ``short_message`` stands beside a
+        refusal's ``message`` for a surface with no room for the sentence.
         """
         rom_id = int(rom_id)
         answer, label = await self._loop.run_in_executor(None, self._rom_info.save_answer_and_start_label, rom_id)

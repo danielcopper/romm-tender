@@ -1031,11 +1031,11 @@ and `short_message`, the same refusal in a few words for a surface with no room 
 own `content_installed`, `RomInfoService._uninstalled_answer`); `established`, false where that reading established
 nothing — no path could be formed, or the emulator's answer could not be established — so a refusal there says nothing
 of whether the saves would sync; and `emulator_label`, the label of the entry the game starts with as the emulator menu
-shows it, `None` where the game has no entry. The game's emulator is resolved once per read, and both the answer and the
-label come from that one resolution (`RomInfoService.save_answer_and_start_label`). It is what the SAVES tab says of a
-game's saves ([#2149](https://github.com/danielcopper/romm-tender/issues/2149)), and the setup's question while the
-panel holds RomM as unreachable. One edge asks RomM: the would-be path needs the platform's system, and for a platform
-whose ids are not kept RomM's platform list is read once (`PlatformSystems.platform_system`).
+shows it, `None` where the game has no entry. The game's emulator is resolved once per read: the label comes from that
+resolution, and so does the answer wherever a path can be asked about (`RomInfoService.save_answer_and_start_label`). It
+is what the SAVES tab says of a game's saves ([#2149](https://github.com/danielcopper/romm-tender/issues/2149)), and the
+setup's question while the panel holds RomM as unreachable. One edge asks RomM: the would-be path needs the platform's
+system, and for a platform whose ids are not kept RomM's platform list is read once (`PlatformSystems.platform_system`).
 
 ### Where the check happens
 
