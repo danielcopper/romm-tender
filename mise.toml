@@ -4,6 +4,7 @@ pnpm = "10.29.3" # exact — must match frontend/package.json "packageManager"; 
 python = "3.14"  # why 3.14, and every other copy: docs/contributing/dependency-management.md
 uv = "0.10.2"    # exact — uv creates the venv AND compiles the dependency locks; pin so the local resolver == the lock author
 deno = "2.8"     # minor pin — deno fmt is a formatter; a version jump can reformat Markdown (the CI drift we're killing)
+"aqua:koalaman/shellcheck" = "0.11.0" # exact — CI's lint job installs the same release; bump both together
 
 [env]
 _.python.venv = { path = ".venv", create = true }
@@ -105,10 +106,11 @@ run = [
     "cd backend/native && sha256sum -c libgavel-x86_64-linux.so.sha256",
     "python scripts/check_vendored_trees.py",
     "python scripts/check_generated_tab_icon.py",
-    # The two scripts a user runs outside this repository — the installer and
-    # the packager whose tarball it takes. The rest are developer tooling and
-    # stay out of scope.
-    "shellcheck install.sh scripts/package.sh",
+    # The scripts that run outside this repository — the installer, the
+    # packager whose tarball it takes, and on a dev target the dispatcher and
+    # the install script setup:remote-target sends. The rest are developer
+    # tooling and stay out of scope. CI's shellcheck step runs the same list.
+    "shellcheck install.sh scripts/package.sh scripts/dev_dispatch.sh scripts/dev_target_install.sh",
     "python scripts/check_shell_answer_functions.py",
     "python scripts/check_generated_installer_logo.py",
 ]
@@ -240,6 +242,20 @@ complete "mode" run="printf 'deck\\nsteam\\nauto\\n'"
 # signal path, which is what makes the restore reliable).
 run = '''
 exec python3 scripts/dev_ui_scale.py "$usage_mode"
+'''
+
+[tasks."setup:remote-target"]
+description = "Prepare another machine as a target for the dev tasks' --target, or repair it: the dispatcher and the dev loop's key's one authorized_keys line there, the key and the target's entry in ~/.config/romm-tender-dev/ here (--print: a script to run on a target this machine cannot log into yet)"
+raw = true
+usage = '''
+arg "<name>" help="The name to give the target: letters, digits, '.', '_' and '-'."
+arg "<destination>" help="What your own ssh reaches the target as: user@address, or an alias from your SSH config."
+flag "--print" help="Contact nothing: print a script to run on the target, then run the setup again without --print."
+'''
+# `raw` because a login may ask for a password or about a host key on the
+# terminal. `--` so a name or destination is never read as an option.
+run = '''
+exec python scripts/setup_remote_target.py ${usage_print:+--print} -- "$usage_name" "$usage_destination"
 '''
 
 [tasks."dev:bpm"]
