@@ -66,6 +66,7 @@ export type EmulatorDataReason =
   | "catalogue_invalid"
   | "not_set_up"
   | "unavailable"
+  | "system_unknown"
   | PlatformSystemReason;
 
 /** Why a platform has no system to use in the source that answered (#2751 D2). */

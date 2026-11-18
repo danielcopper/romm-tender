@@ -90,6 +90,22 @@ describe("buildEmulatorMenu", () => {
     expect(its[0]!.text).toBe("RetroDECK has not been set up yet, so its emulators are not established.");
   });
 
+  it("names the system a game was installed under that the source no longer lists (review F4)", () => {
+    const menu = buildEmulatorMenu(
+      baseConfig({
+        emulators: [],
+        emulatorDataAvailable: false,
+        emulatorDataReason: "system_unknown",
+        emulatorDataSystem: "gbretired",
+        emulatorSource: { kind: "retrodeck", starts_games: true },
+        emulatorPlatformSystem: null,
+      }),
+    );
+    expect(items(menu)[0]!.text).toBe(
+      "RetroDECK does not list the system gbretired this game was installed under, so its emulators are not established.",
+    );
+  });
+
   it("says every source is switched off when that is why there is no list", () => {
     const menu = buildEmulatorMenu(
       baseConfig({ emulators: [], emulatorDataAvailable: false, emulatorDataReason: "switched_off" }),

@@ -60,6 +60,7 @@ export interface CoreInfoFields {
   emulatorDataAvailable: boolean;
   /** Why there is no emulator list, and which source answered; see {@link CoreInfo}. */
   emulatorDataReason: EmulatorDataReason | null;
+  emulatorDataSystem?: string | null;
   emulatorSource: AnsweringSource | null;
   emulatorPlatformSystem: PlatformSystemAnswer | null;
   platformCoreLabel: string | null;
@@ -152,6 +153,7 @@ export function extractCoreInfo(coreInfo: CoreInfo): CoreInfoFields {
     emulators,
     emulatorDataAvailable: coreInfo.emulator_data_available,
     emulatorDataReason: coreInfo.emulator_data_reason,
+    emulatorDataSystem: coreInfo.emulator_data_system ?? null,
     emulatorSource: coreInfo.emulator_source,
     emulatorPlatformSystem: coreInfo.platform_system,
     platformCoreLabel: coreInfo.platform_core_label ?? null,

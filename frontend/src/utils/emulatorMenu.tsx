@@ -41,6 +41,8 @@ export interface EmulatorMenuConfig {
    *  says why, from the two fields below, instead of showing an empty list. */
   emulatorDataAvailable: boolean;
   emulatorDataReason: EmulatorDataReason | null;
+  /** The system a `system_unknown` reason names. */
+  emulatorDataSystem?: string | null;
   emulatorSource: AnsweringSource | null;
   emulatorPlatformSystem: PlatformSystemAnswer | null;
   /** The active emulator's label — marked with a checkmark, its text drawn in `activeColor`. */
@@ -129,7 +131,12 @@ export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
     return (
       <Menu label="Emulator">
         <MenuItem key="unavailable" disabled={true}>
-          {emulatorDataReasonSentence(config.emulatorDataReason, config.emulatorSource, config.emulatorPlatformSystem)}
+          {emulatorDataReasonSentence(
+            config.emulatorDataReason,
+            config.emulatorSource,
+            config.emulatorPlatformSystem,
+            config.emulatorDataSystem ?? null,
+          )}
         </MenuItem>
       </Menu>
     );
