@@ -27,9 +27,10 @@ through: the backend refuses on its own either way, and the only thing lost is
 the early word.
 
 A target's ``scripts/dev_target.sh`` asks with ``--holder`` instead, which
-refuses nothing and answers in three lines — ``free``, ``held`` or
-``unknown``; the holder's pid, or an empty line; the lock's path — so that
-the target can name which of its units holds the lock. ``--log-path`` prints
+refuses nothing and answers in four lines — ``free``, ``held`` or
+``unknown``; the holder's pid, or an empty line; the lock's path; and the
+holder as :func:`describe_holder` names it, or an empty line — so that the
+target can name which of its units holds the lock. ``--log-path`` prints
 where the backend writes ``backend.log``, from the same resolver, for the target
 to follow it.
 
@@ -164,7 +165,7 @@ def refuse_because_free(path: str) -> None:
 def report_holder(path: str, held: bool | None) -> None:
     state = "unknown" if held is None else "held" if held else "free"
     pid = holder_pid(path) if held else None
-    print(state, "" if pid is None else pid, path, sep="\n")
+    print(state, "" if pid is None else pid, path, describe_holder(path) if held else "", sep="\n")
 
 
 def main() -> int:
@@ -178,7 +179,8 @@ def main() -> int:
     question.add_argument(
         "--holder",
         action="store_true",
-        help="refuse nothing: print free, held or unknown, the holder's pid (or an empty line) and the lock's path",
+        help="refuse nothing: print free, held or unknown, the holder's pid (or an empty line), the lock's path"
+        " and the holder's description (or an empty line)",
     )
     question.add_argument("--log-path", action="store_true", help="print where the backend writes its log")
     arguments = parser.parse_args()

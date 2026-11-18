@@ -49,12 +49,17 @@ say() {
     printf 'tender-dev: %s\n' "$*" >&2
 }
 
+manager_unreachable() {
+    say "could not ask the user manager on $name (systemctl --user); is a session of this user running there? Nothing was changed."
+    exit 1
+}
+
 # Sets PYTHON to the interpreter the installed service runs on, so the dev
 # backend runs on the same one: the path= field of its ExecStart, which install.sh
 # wrote from TENDER_PYTHON or its default. TENDER_PYTHON itself is not read
 # here: sshd hands a forced command none of the installer's environment.
 need_python() {
-    exec_start=$(systemctl --user show -p ExecStart --value "$SERVICE_UNIT" 2>/dev/null || true)
+    exec_start=$(systemctl --user show -p ExecStart --value "$SERVICE_UNIT" 2>/dev/null) || manager_unreachable
     case "$exec_start" in
         *"path="*)
             PYTHON="${exec_start#*path=}"
@@ -70,10 +75,20 @@ need_python() {
         say "no Python at $PYTHON on $name ($source) — install python3 there."
         exit 1
     fi
-    if ! "$PYTHON" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)'; then
-        say "$PYTHON on $name is older than 3.12, which Tender needs."
-        exit 1
-    fi
+    # Exit 3 is this check's own answer; anything else is the interpreter failing.
+    status=0
+    version=$("$PYTHON" -c 'import sys; print("%d.%d" % sys.version_info[:2]); sys.exit(0 if sys.version_info >= (3, 12) else 3)' 2>&1) || status=$?
+    case "$status" in
+        0) ;;
+        3)
+            say "$PYTHON on $name ($source) is Python $version; Tender needs 3.12 or newer."
+            exit 1
+            ;;
+        *)
+            say "$PYTHON on $name ($source) does not run (exit $status): $version"
+            exit 1
+            ;;
+    esac
 }
 
 # sshd hands this script none of the desktop session: the display and the
@@ -82,7 +97,7 @@ need_python() {
 # those names are taken, and only a plain value: show-environment writes one
 # with special characters in $'...' quoting, which no session address needs.
 import_session() {
-    environment=$(systemctl --user show-environment 2>/dev/null) || return 0
+    environment=$(systemctl --user show-environment 2>/dev/null) || manager_unreachable
     while IFS= read -r line; do
         case "$line" in
             DISPLAY=* | WAYLAND_DISPLAY=* | XAUTHORITY=* | DBUS_SESSION_BUS_ADDRESS=*)
@@ -95,41 +110,55 @@ import_session() {
     done <<EOF
 $environment
 EOF
+    if [ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
+        say "warning: the user manager on $name names no display (DISPLAY, WAYLAND_DISPLAY) — is a desktop session running there? Placing Steam's window and dev:ui-scale need one."
+    fi
 }
 
 is_active() {
     systemctl --user is-active --quiet "$1"
 }
 
+# The unit's main pid, 0 when it runs none; status 1 when the user manager
+# gave no answer — an empty one among them, which is not a 0.
 main_pid() {
-    systemctl --user show -p MainPID --value "$1" 2>/dev/null || true
+    answer=$(systemctl --user show -p MainPID --value "$1" 2>/dev/null) || return 1
+    [ -n "$answer" ] || return 1
+    printf '%s\n' "$answer"
 }
 
-# Sets holder (none, dev, service, other or unknown), pid and lock. The
-# kernel names the holder by pid, which is matched against each unit's main
-# process; where it names none, the unit that runs stands in for it.
+# Sets holder (none, dev, service, other or unknown), pid, lock, described
+# (dev_backend_lock.py's words for the holder) and dev_running. The kernel
+# names the holder by pid, which is matched against each unit's main process;
+# where it names none, the unit that runs stands in for it.
 lock_holder() {
     report=$("$PYTHON" -B "$here/dev_backend_lock.py" --holder) || report=unknown
     state=""
     pid=""
     lock=""
+    described=""
     {
         read -r state || true
         read -r pid || true
         read -r lock || true
+        read -r described || true
     } <<EOF
 $report
 EOF
+    dev_pid=$(main_pid "$DEV_UNIT") || manager_unreachable
+    service_pid=$(main_pid "$SERVICE_UNIT") || manager_unreachable
+    dev_running=no
+    [ "$dev_pid" = 0 ] || dev_running=yes
     case "$state" in
         free) holder=none ;;
         held)
-            if [ -n "$pid" ] && [ "$pid" = "$(main_pid "$DEV_UNIT")" ]; then
+            if [ -n "$pid" ] && [ "$pid" = "$dev_pid" ]; then
                 holder=dev
-            elif [ -n "$pid" ] && [ "$pid" = "$(main_pid "$SERVICE_UNIT")" ]; then
+            elif [ -n "$pid" ] && [ "$pid" = "$service_pid" ]; then
                 holder=service
-            elif [ -z "$pid" ] && is_active "$DEV_UNIT"; then
+            elif [ -z "$pid" ] && [ "$dev_pid" != 0 ]; then
                 holder=dev
-            elif [ -z "$pid" ] && is_active "$SERVICE_UNIT"; then
+            elif [ -z "$pid" ] && [ "$service_pid" != 0 ]; then
                 holder=service
             else
                 holder=other
@@ -143,22 +172,29 @@ holder_text() {
     case "$holder" in
         dev) printf 'the dev backend (%s.service%s)' "$DEV_UNIT" "${pid:+, pid $pid}" ;;
         service) printf 'the installed service (%s.service%s)' "$SERVICE_UNIT" "${pid:+, pid $pid}" ;;
-        *)
-            if [ -n "$pid" ]; then
-                printf 'pid %s (%s)' "$pid" "$(cat "/proc/$pid/comm" 2>/dev/null || printf 'gone')"
-            else
-                printf 'a process this machine does not name'
-            fi
-            ;;
+        *) printf '%s' "${described:-a process this machine does not name}" ;;
     esac
+}
+
+refuse_unreadable() {
+    say "could not read the single-instance lock on $name at ${lock:-its place}, so whether a backend runs is not known."
+    printf '%s\n' "Steam has not been restarted, and the running tree is as it was." >&2
+    exit 1
 }
 
 # Before anything is replaced or restarted: a start that the lock refuses
 # leaves the running tree and Steam as they were.
 refuse_if_held() {
     case "$holder" in
-        none) ;;
-        unknown) say "could not read the single-instance lock on $name at ${lock:-its place} — carrying on anyway." ;;
+        none)
+            if [ "$dev_running" = yes ]; then
+                say "$DEV_UNIT.service runs on $name but holds no lock — a backend that did not start, or one stopping."
+                printf '%s\n' "Stop it with \`mise run dev:stop --target $name\`." \
+                    "Steam has not been restarted, and the running tree is as it was." >&2
+                exit 1
+            fi
+            ;;
+        unknown) refuse_unreadable ;;
         other)
             say "a backend is already running on $name — $(holder_text) holds the single-instance lock, and it is neither the dev backend nor the installed service."
             printf '%s\n' "  lock: $lock" \
@@ -199,14 +235,19 @@ refuse_unless_dev() {
             printf '%s\n' "Steam has not been restarted, and the running tree is as it was." >&2
             exit 1
             ;;
-        unknown) say "could not read the single-instance lock on $name at ${lock:-its place} — carrying on anyway." ;;
+        unknown) refuse_unreadable ;;
         dev) ;;
     esac
 }
 
-# The copy is made whole beside current/ and swapped in by two renames, so a
-# step that fails leaves current/ as it was.
+# The copy is made whole beside current/ and put in its place by two renames.
+# Between them current/ is missing and .current.old holds the only tree, so a
+# run that stopped there is repaired first: .current.old is never removed
+# while it is the only tree.
 install_tree() {
+    if [ ! -e "$root/current" ] && [ -e "$root/.current.old" ]; then
+        mv "$root/.current.old" "$root/current"
+    fi
     rm -rf "$root/.current.new" "$root/.current.old"
     cp -a "$root/incoming" "$root/.current.new"
     if [ -e "$root/current" ]; then
@@ -229,7 +270,7 @@ start_backend() {
     systemd-run --user --unit="$DEV_UNIT" --collect --quiet -- "$PYTHON" "$root/current/backend/main.py"
     printf 'tender-dev: the backend runs on %s as %s.service; its log follows. Ctrl-C ends only the following.\n' \
         "$name" "$DEV_UNIT" >&2
-    backend=$(main_pid "$DEV_UNIT")
+    backend=$(main_pid "$DEV_UNIT") || manager_unreachable
     printf '%s\n' "$FOLLOWING"
     case "$backend" in
         '' | 0)
@@ -281,7 +322,7 @@ ui_scale() {
     fi
     since=$(date +%s)
     systemd-run --user --unit="$UI_SCALE_UNIT" --collect --quiet -- "$PYTHON" "$here/dev_ui_scale.py" "$mode"
-    scale=$(main_pid "$UI_SCALE_UNIT")
+    scale=$(main_pid "$UI_SCALE_UNIT") || manager_unreachable
     printf '%s\n' "$FOLLOWING"
     journalctl --user -u "$UI_SCALE_UNIT" --since "@$since" -o cat --no-pager -f &
     follower=$!
@@ -308,7 +349,15 @@ ui_scale_stop() {
     fi
     since=$(date +%s)
     systemctl --user stop "$UI_SCALE_UNIT"
-    journalctl --user -u "$UI_SCALE_UNIT" --since "@$since" -o cat --no-pager || true
+    said=$(journalctl --user -u "$UI_SCALE_UNIT" --since "@$since" -o cat --no-pager 2>&1) || true
+    printf '%s\n' "$said"
+    # dev_ui_scale.py's words for a restore that failed or did not land.
+    case "$said" in
+        *"COULD NOT RESTORE"* | *"The restore did not land"*)
+            say "stopped dev:ui-scale on $name, but the restore on $name did not land — see what it said above."
+            exit 1
+            ;;
+    esac
     printf 'tender-dev: stopped dev:ui-scale on %s.\n' "$name"
 }
 
@@ -316,7 +365,15 @@ stop() {
     need_python
     lock_holder
     case "$holder" in
-        none) printf 'tender-dev: nothing holds the single-instance lock on %s; nothing was stopped.\n' "$name" ;;
+        none)
+            if [ "$dev_running" = yes ]; then
+                systemctl --user stop "$DEV_UNIT"
+                printf 'tender-dev: stopped %s.service on %s, which held no lock. Steam was left as it is.\n' \
+                    "$DEV_UNIT" "$name"
+            else
+                printf 'tender-dev: nothing holds the single-instance lock on %s; nothing was stopped.\n' "$name"
+            fi
+            ;;
         dev)
             systemctl --user stop "$DEV_UNIT"
             printf 'tender-dev: stopped the dev backend on %s (%s.service). Steam was left as it is.\n' \
@@ -347,6 +404,9 @@ status() {
         unknown) printf 'tender-dev: the single-instance lock on %s could not be read (%s).\n' "$name" "${lock:-its place}" ;;
         *) printf 'tender-dev: %s holds the single-instance lock on %s (%s).\n' "$(holder_text)" "$name" "$lock" ;;
     esac
+    if [ "$dev_running" = yes ] && [ "$holder" != dev ]; then
+        printf 'tender-dev: %s.service runs on %s but holds no lock.\n' "$DEV_UNIT" "$name"
+    fi
     if is_active "$UI_SCALE_UNIT"; then
         printf 'tender-dev: dev:ui-scale runs on %s (%s.service).\n' "$name" "$UI_SCALE_UNIT"
     else

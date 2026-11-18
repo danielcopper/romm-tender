@@ -251,7 +251,14 @@ def copy(target: Target) -> None:
     drops from the copy whatever the list no longer names. Compiled modules
     stay here: the target's Python is not this machine's.
     """
-    rules = ["--exclude=__pycache__", *(f"--include=/{entry}" for entry in copied_tree()), "--exclude=/*"]
+    tree = copied_tree()
+    missing = [entry for entry in tree if not (REPO / entry).exists()]
+    if missing:
+        build_first = " — build it first: mise run build" if missing == ["dist"] else ""
+        raise TargetError(
+            f"tender-dev: {REPO} has no {', '.join(missing)}{build_first}; nothing was copied to {target.name}."
+        )
+    rules = ["--exclude=__pycache__", *(f"--include=/{entry}" for entry in tree), "--exclude=/*"]
     remote_shell = " ".join(shlex.quote(word) for word in ssh(target))
     command = ["rsync", "-a", "--delete", "--delete-excluded", "-e", remote_shell, *rules]
     print(f"tender-dev: copying to {target.name} …", file=sys.stderr, flush=True)
@@ -320,6 +327,7 @@ def run_streaming(command: list[str], *, following: bool = False) -> Outcome:
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait()
+        relay.join(timeout=1)
         return Outcome(process.returncode, "".join(errors), following, interrupted=True)
     relay.join()
     return Outcome(process.returncode, "".join(errors), following, interrupted=False)
@@ -384,8 +392,9 @@ def on_target(target: Target, words: list[str], *, follows: Follows | None, from
     """*words* run on the target with their output passed on; *follows* names what a following there is of."""
     outcome = run_streaming([*ssh(target), "--", target.name, *words], following=from_start)
     if outcome.interrupted and not outcome.following:
+        # ssh -T gives the far side no terminal, so the Ctrl-C reaches only this side.
         print(
-            f"tender-dev: interrupted. What the task started on {target.name} may have stopped part-way;"
+            f"tender-dev: interrupted here. What the task does on {target.name} most likely goes on on {target.name};"
             f" `mise run dev:status --target {target.name}` says what runs there.",
             file=sys.stderr,
         )

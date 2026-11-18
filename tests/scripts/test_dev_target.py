@@ -184,6 +184,16 @@ class Loop:
     def log(self) -> Path:
         return self.target_home / _LOG
 
+    def run_unit(self, unit: str) -> int:
+        """A process on the target as *unit*'s main process, holding no lock."""
+        process = subprocess.Popen(
+            [sys.executable, _remote_target.__file__, "process"],
+            env={**self.env(), "HOME": str(self.target_home)},
+            start_new_session=True,
+        )
+        set_unit(self.world, unit, process.pid)
+        return process.pid
+
     def hold_lock(self, unit: str) -> int:
         """A process holding the backend's lock on the target, as *unit*'s main process."""
         holder = subprocess.Popen(
@@ -235,6 +245,8 @@ def _checkout(path: Path) -> Path:
             shutil.copytree(source, path / entry)
         else:
             shutil.copyfile(source, path / entry)
+    (path / "dist").mkdir()
+    (path / "dist/index.js").write_text("an earlier build\n", encoding="utf-8")
     (path / "frontend").mkdir()
     (path / "frontend/package.json").write_text("{}\n", encoding="utf-8")
     (path / "README.md").write_text("not shipped\n", encoding="utf-8")
@@ -673,6 +685,239 @@ class TestTheConnection:
         assert "the connection to deck ended while following" in result.stderr
 
 
+class TestWhenTheTargetCannotAnswer:
+    """Every question on the target that gets no answer refuses before anything there is touched."""
+
+    def test_a_user_manager_that_cannot_be_reached_is_refused_before_anything_is_touched(self, loop: Loop) -> None:
+        loop.world.manager_unreachable = True
+        (loop.root / "current/sentinel").write_text("running\n", encoding="utf-8")
+
+        result = loop.run("dev")
+
+        assert result.returncode == 1
+        assert "could not ask the user manager on deck" in result.stderr
+        assert [entry.name for entry in (loop.root / "current").iterdir()] == ["sentinel"]
+        assert _steam_calls(loop.world) == []
+
+    def test_a_main_pid_that_cannot_be_asked_is_said_rather_than_read_as_another_holder(self, loop: Loop) -> None:
+        loop.hold_lock("romm-tender")
+        loop.world.main_pid_fails = True
+
+        result = loop.run("dev:status")
+
+        assert result.returncode == 1
+        assert "could not ask the user manager on deck" in result.stderr
+        assert "holds the single-instance lock" not in result.stdout
+
+    def test_no_display_from_the_user_manager_is_warned_about(self, loop: Loop) -> None:
+        loop.world.session_environment = ["DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus"]
+
+        result = loop.run("dev:desktop-reset")
+
+        assert "names no display" in result.stderr
+
+    @pytest.mark.parametrize("task", ["dev", "dev:frontend"])
+    def test_a_lock_that_cannot_be_read_is_refused_and_nothing_replaced(self, loop: Loop, task: str) -> None:
+        lock = loop.target_home / ".local/share/romm-tender/backend.lock"
+        lock.parent.mkdir(parents=True)
+        lock.touch()
+        lock.chmod(0)
+        (loop.root / "current/sentinel").write_text("running\n", encoding="utf-8")
+
+        result = loop.run(task)
+
+        assert result.returncode == 1
+        assert "could not read the single-instance lock on deck" in result.stderr
+        assert [entry.name for entry in (loop.root / "current").iterdir()] == ["sentinel"]
+        assert _steam_calls(loop.world) == []
+
+    def test_a_broken_interpreter_is_named_as_broken_not_as_old(self, loop: Loop, tmp_path: Path) -> None:
+        broken = tmp_path / "python-broken"
+        broken.write_text("#!/bin/sh\necho 'error while loading shared libraries: libpython3.so' >&2\nexit 127\n")
+        broken.chmod(0o755)
+        loop.world.service_python = str(broken)
+
+        result = loop.run("dev:status")
+
+        assert result.returncode == 1
+        assert "older than 3.12" not in result.stderr
+        assert f"{broken} on deck (the installed service's interpreter) does not run" in result.stderr
+        assert "libpython3.so" in result.stderr
+
+
+class TestADevUnitThatHoldsNoLock:
+    """romm-tender-dev running without the lock — a backend that never got it, say."""
+
+    def test_a_start_is_refused(self, loop: Loop) -> None:
+        loop.run_unit("romm-tender-dev")
+        (loop.root / "current/sentinel").write_text("running\n", encoding="utf-8")
+
+        result = loop.run("dev:backend")
+
+        assert result.returncode == 1
+        assert "romm-tender-dev.service runs on deck but holds no lock" in result.stderr
+        assert "mise run dev:stop --target deck" in result.stderr
+        assert [entry.name for entry in (loop.root / "current").iterdir()] == ["sentinel"]
+
+    def test_dev_stop_stops_it(self, loop: Loop) -> None:
+        unit = loop.run_unit("romm-tender-dev")
+
+        result = loop.run("dev:stop")
+
+        assert result.returncode == 0, result.stderr
+        assert "stopped romm-tender-dev.service on deck, which held no lock" in result.stdout
+        assert not _alive(unit)
+
+    def test_dev_status_reports_it(self, loop: Loop) -> None:
+        loop.run_unit("romm-tender-dev")
+
+        result = loop.run("dev:status")
+
+        assert result.returncode == 0, result.stderr
+        assert "romm-tender-dev.service runs on deck but holds no lock" in result.stdout
+
+
+class TestAnotherProcessHoldingTheLock:
+    @pytest.mark.parametrize("task", ["dev", "dev:backend"])
+    def test_a_start_is_refused_and_names_the_process(self, loop: Loop, task: str) -> None:
+        holder = loop.hold_lock("some-other-unit")
+        (loop.root / "current/sentinel").write_text("running\n", encoding="utf-8")
+
+        result = loop.run(task)
+
+        assert result.returncode == 1
+        assert f"pid {holder} (" in result.stderr
+        assert "neither the dev backend nor the installed service" in result.stderr
+        assert [entry.name for entry in (loop.root / "current").iterdir()] == ["sentinel"]
+
+    def test_dev_stop_leaves_it_and_ends_with_1(self, loop: Loop) -> None:
+        holder = loop.hold_lock("some-other-unit")
+
+        result = loop.run("dev:stop")
+
+        assert result.returncode == 1
+        assert f"pid {holder} (" in result.stderr
+        assert _alive(holder)
+        assert not any("stop" in call["argv"] for call in commands(loop.world, "systemctl"))
+
+    def test_dev_status_names_it(self, loop: Loop) -> None:
+        holder = loop.hold_lock("some-other-unit")
+
+        result = loop.run("dev:status")
+
+        assert result.returncode == 0, result.stderr
+        assert f"pid {holder} (" in result.stdout
+
+
+class TestReplacingTheRunningTree:
+    def test_a_half_built_copy_left_behind_is_thrown_away(self, loop: Loop) -> None:
+        loop.world.backend_exits = True
+        (loop.root / ".current.new/left-over").parent.mkdir(parents=True)
+        (loop.root / ".current.new/left-over").write_text("x\n", encoding="utf-8")
+
+        loop.run("dev:backend")
+
+        assert not (loop.root / ".current.new").exists()
+        assert not (loop.root / "current/left-over").exists()
+        assert (loop.root / "current/dist/index.js").read_text(encoding="utf-8") == "build:dev\n"
+
+    def test_a_tree_left_aside_by_a_swap_that_stopped_is_put_back_before_anything_else(self, loop: Loop) -> None:
+        """Between the two renames only .current.old holds the tree; a copy that then fails must not lose it."""
+        (loop.root / "current").rename(loop.root / ".current.old")
+        (loop.root / ".current.old/sentinel").write_text("the only tree\n", encoding="utf-8")
+        loop.world.backend_exits = True
+        (loop.repo / "scripts/unreadable").write_text("x\n", encoding="utf-8")
+        loop.run("dev:status")
+        # A file in incoming/ the target user cannot read, which the next copy leaves as it is (unchanged here),
+        # makes the tree's copy fail.
+        (loop.root / "incoming/scripts/unreadable").chmod(0)
+
+        result = loop.run("dev:backend")
+
+        assert result.returncode != 0
+        assert (loop.root / "current/sentinel").read_text(encoding="utf-8") == "the only tree\n"
+        (loop.root / "incoming/scripts/unreadable").chmod(0o644)
+
+
+class TestWhatTheScriptsOnTheTargetSay:
+    def test_a_restore_that_did_not_land_is_reported_by_ui_scale_stop(self, loop: Loop) -> None:
+        loop.world.journal = [
+            "COULD NOT RESTORE automatic scaling (the debugger did not answer).",
+            "Steam is STILL on the forced scale, and Steam persists it — fix it with:",
+            "  mise run dev:ui-scale auto --target deck",
+        ]
+        loop.start_ui_scale()
+
+        result = loop.run("dev:ui-scale", "--stop")
+
+        assert result.returncode == 1
+        assert "the restore on deck did not land" in result.stderr
+
+
+class TestTheCopyRefuses:
+    def test_a_shipped_entry_missing_here_is_refused_before_the_copy(self, loop: Loop) -> None:
+        shutil.rmtree(loop.repo / "dist")
+        before = _snapshot(loop.target_home)
+
+        result = loop.run("dev:status")
+
+        assert result.returncode == 1
+        assert "has no dist" in result.stderr
+        assert _snapshot(loop.target_home) == before
+
+
+class TestHopsAndDisplays:
+    def test_a_hop_that_fails_is_named_as_the_hop(self, loop: Loop) -> None:
+        config = loop.build_home / ".config/romm-tender-dev/ssh_config"
+        text = config.read_text(encoding="utf-8")
+        config.write_text(text.replace("    User deck\n", "    User deck\n    ProxyJump jumper@203.0.113.5:22\n"))
+        loop.world.hop_failure = "denied"
+        before = _snapshot(loop.target_home)
+
+        result = loop.run("dev:status")
+
+        assert result.returncode == 1
+        assert "a hop on the way to deck (jumper@203.0.113.5:22) failed" in result.stderr
+        assert "jumper@203.0.113.5: Permission denied" in result.stderr
+        assert _snapshot(loop.target_home) == before
+
+    def test_a_display_reaches_the_target(self, loop: Loop) -> None:
+        loop.world.outputs = ["eDP-1", "DP-2"]
+
+        result = loop.run("dev:bpm-reset", "dp2")
+
+        assert result.returncode == 0, result.stderr
+        memory = loop.target_home / ".local/state/tender-dev/steam-window"
+        assert memory.read_text(encoding="utf-8") == "window=bpm\ndisplay=dp2\n"
+
+
+class TestCtrlCBeforeTheFollowing:
+    def test_it_says_the_task_most_likely_goes_on_there(self, loop: Loop) -> None:
+        loop.world.steam_running = True
+        process = loop.start("dev:bpm-reset")
+        _wait_for(lambda: bool(commands(loop.world, "pgrep")))
+
+        os.killpg(process.pid, signal.SIGINT)
+        _, err = process.communicate(timeout=_TIMEOUT)
+
+        assert process.returncode == 130
+        assert "most likely goes on on deck" in err
+        assert "mise run dev:status --target deck" in err
+
+    def test_no_follower_is_left_on_the_target_after_ctrl_c(self, loop: Loop) -> None:
+        process = loop.start("dev:backend")
+        assert process.stdout is not None
+        while "backend started" not in process.stdout.readline():
+            assert process.poll() is None, process.communicate()
+
+        os.killpg(process.pid, signal.SIGINT)
+        process.communicate(timeout=_TIMEOUT)
+
+        followers = [call["pid"] for call in commands(loop.world, "tail")]
+        assert followers
+        _wait_for(lambda: not any(_alive(pid) for pid in followers))
+
+
 class TestWhenATargetCannotBeUsed:
     """Each of the four --target failures says why and what to do, and touches nothing on the target."""
 
@@ -791,7 +1036,7 @@ class TestTheTargetsHalf:
 
     def test_an_interpreter_older_than_3_12_is_refused(self, loop: Loop, tmp_path: Path) -> None:
         old = tmp_path / "python3.11"
-        old.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+        old.write_text("#!/bin/sh\necho 3.11\nexit 3\n", encoding="utf-8")
         old.chmod(0o755)
         loop.world.service_python = str(old)
         (loop.root / "current/sentinel").write_text("running\n", encoding="utf-8")
@@ -799,7 +1044,7 @@ class TestTheTargetsHalf:
         result = loop.run("dev")
 
         assert result.returncode == 1
-        assert f"{old} on deck is older than 3.12" in result.stderr
+        assert f"{old} on deck (the installed service's interpreter) is Python 3.11" in result.stderr
         assert [entry.name for entry in (loop.root / "current").iterdir()] == ["sentinel"]
 
     @pytest.mark.parametrize("value", ["$'odd\\nvalue'", "$':0'"])
@@ -842,6 +1087,14 @@ class TestTheTargetsHalf:
         assert result.returncode == 1
         assert "a target's name is letters, digits" in result.stderr
         assert commands(loop.world, "mise") == []
+
+    def test_the_python_floor_is_the_installers(self) -> None:
+        script = (_SCRIPTS / "dev_target.sh").read_text(encoding="utf-8")
+        installer = (_REPO / "install.sh").read_text(encoding="utf-8")
+        floor = re.search(r"sys\.version_info >= \((\d+), (\d+)\)", installer)
+        assert floor is not None
+
+        assert f"sys.version_info >= ({floor.group(1)}, {floor.group(2)})" in script
 
     def test_the_service_it_stops_is_the_installers_unit(self) -> None:
         script = (_SCRIPTS / "dev_target.sh").read_text(encoding="utf-8")

@@ -58,6 +58,7 @@ identity files it offered in :func:`ssh_calls`.
 
 from __future__ import annotations
 
+import contextlib
 import fcntl
 import fnmatch
 import hashlib
@@ -81,10 +82,11 @@ RSYNC_RECORD_VARIABLE = "FAKE_RSYNC_RECORD"
 # What the scripts under test call besides the stand-ins.
 SYSTEM_TOOLS = (
     "sh", "bash", "cat", "mkdir", "chmod", "mv", "rm", "cp", "grep", "awk", "readlink", "wc", "date", "id",
-    "dirname", "seq", "tr", "sleep",
+    "dirname", "seq", "tr", "sleep", "python3",
 )  # fmt: skip
 STAND_INS = (
     "ssh", "ssh-keygen", "ip", "rsync", "mise", "systemctl", "systemd-run", "pgrep", "journalctl", "tail",
+    "kscreen-doctor",
 )  # fmt: skip
 
 # What rsync 3.2.7's client sends its server for ``-a`` (``server_options``).
@@ -164,6 +166,12 @@ class World:
     """Whether ``tail -F`` without ``--pid`` and ``journalctl -f`` keep following, or print once and end."""
     journal: list[str] = field(default_factory=list)
     """What ``journalctl`` prints."""
+    outputs: list[str] = field(default_factory=list)
+    """The connected, enabled outputs ``kscreen-doctor --json`` lists on the target."""
+    manager_unreachable: bool = False
+    """``systemctl --user`` cannot reach the user manager: every call fails."""
+    main_pid_fails: bool = False
+    """Only ``systemctl --user show -p MainPID`` fails."""
     service_python: str | None = None
     """The interpreter the installed service's ``ExecStart`` runs, or ``None`` for no service installed."""
 
@@ -214,6 +222,7 @@ class Command(TypedDict):
     argv: list[str]
     env: dict[str, str]
     """The variables of :data:`RECORDED_ENVIRONMENT` it was started with."""
+    pid: int
 
 
 def commands(world: World, program: str | None = None) -> list[Command]:
@@ -239,11 +248,28 @@ def set_unit(world: World, name: str, pid: int) -> None:
 
 
 def end_processes(world: World) -> None:
-    """End every process a stand-in started, for a test's teardown."""
+    """End every process a stand-in started, and every login's session on a target, for a test's teardown."""
     for unit in units(world).values():
         pid = unit["pid"]
         if pid > 0 and _alive(pid):
             os.kill(pid, signal.SIGKILL)
+    sessions = Path(world.log + ".sessions")
+    for line in sessions.read_text(encoding="utf-8").splitlines() if sessions.exists() else []:
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(int(line), signal.SIGKILL)
+
+
+def _start_session(
+    world: World, command: str, *, home: str, env: dict[str, str], capture: bool = False
+) -> subprocess.Popen[str]:
+    """*command* run on the target as sshd runs it: in a session of its own, which a Ctrl-C here does not reach."""
+    output = subprocess.PIPE if capture else None
+    started = subprocess.Popen(
+        ["sh", "-c", command], cwd=home, env=env, stdout=output, stderr=output, start_new_session=True, text=True
+    )
+    with open(world.log + ".sessions", "a", encoding="utf-8") as handle:
+        handle.write(f"{started.pid}\n")
+    return started
 
 
 def _alive(pid: int) -> bool:
@@ -258,6 +284,7 @@ def _alive(pid: int) -> bool:
 def _record(world: World, program: str, argv: list[str]) -> None:
     command = Command(
         program=program,
+        pid=os.getpid(),
         argv=argv,
         env={name: os.environ[name] for name in RECORDED_ENVIRONMENT if name in os.environ},
     )
@@ -549,8 +576,10 @@ def _ssh(argv: list[str]) -> int:
         env["SSH_ORIGINAL_COMMAND"] = command
         command = login
     if not world.drop_after_first_line or (world.drop_only_without_config and "_config" in options):
-        return subprocess.run(["sh", "-c", command], cwd=target.home, env=env, check=False).returncode
-    ran = subprocess.run(["sh", "-c", command], cwd=target.home, env=env, check=False, capture_output=True, text=True)
+        return _start_session(world, command, home=target.home, env=env).wait()
+    session = _start_session(world, command, home=target.home, env=env, capture=True)
+    out, _ = session.communicate()
+    ran = subprocess.CompletedProcess(session.args, session.returncode, out, "")
     print(ran.stdout.splitlines()[0] if ran.stdout else "")
     print("client_loop: send disconnect: Connection reset by peer", file=sys.stderr)
     return 255
@@ -683,6 +712,8 @@ def _mirror(source: Path, destination: Path, rules: list[list[str]], *, delete_e
             if not _included(relative, False, rules):
                 continue
             sent.add(relative)
+            if _unchanged(Path(directory) / name, destination / relative):
+                continue
             _replace(destination / relative)
             shutil.copy2(Path(directory) / name, destination / relative, follow_symlinks=False)
     for directory, folders, files in os.walk(destination, topdown=False):
@@ -693,6 +724,14 @@ def _mirror(source: Path, destination: Path, rules: list[list[str]], *, delete_e
             protected = not delete_excluded and not _included(relative, path.is_dir(), rules)
             if relative not in sent and not protected:
                 _replace(path)
+
+
+def _unchanged(source: Path, copy: Path) -> bool:
+    """rsync's quick check: a file of the same size and modification time is not sent again."""
+    if source.is_symlink() or copy.is_symlink() or not copy.is_file():
+        return False
+    mine, theirs = source.stat(), copy.stat()
+    return mine.st_size == theirs.st_size and int(mine.st_mtime) == int(theirs.st_mtime)
 
 
 def _replace(path: Path) -> None:
@@ -724,6 +763,9 @@ def _systemctl(argv: list[str]) -> int:
     world = _world()
     _record(world, "systemctl", argv)
     words = [word for word in argv if word not in ("--user", "--quiet")]
+    if world.manager_unreachable or (world.main_pid_fails and "MainPID" in words):
+        print("Failed to connect to bus: No medium found", file=sys.stderr)
+        return 1
     if words == ["show-environment"]:
         print("\n".join(world.session_environment))
         return 0
@@ -814,6 +856,13 @@ def _process(_argv: list[str]) -> int:
     return 0
 
 
+def _kscreen_doctor(argv: list[str]) -> int:
+    world = _world()
+    _record(world, "kscreen-doctor", argv)
+    print(json.dumps({"outputs": [{"name": name, "connected": True, "enabled": True} for name in world.outputs]}))
+    return 0
+
+
 def _pgrep(argv: list[str]) -> int:
     world = _world()
     _record(world, "pgrep", argv)
@@ -888,6 +937,7 @@ _PROGRAMS = {
     "systemctl": _systemctl,
     "systemd-run": _systemd_run,
     "pgrep": _pgrep,
+    "kscreen-doctor": _kscreen_doctor,
     "journalctl": _journalctl,
     "tail": _tail,
     "backend": _backend,

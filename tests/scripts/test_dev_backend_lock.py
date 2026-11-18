@@ -30,6 +30,10 @@ def _holder(home: Path) -> list[str]:
     return result.stdout.splitlines()
 
 
+def _comm() -> str:
+    return Path(f"/proc/{os.getpid()}/comm").read_text(encoding="utf-8").strip()
+
+
 @pytest.fixture
 def lock(home: Path) -> Path:
     path = home / ".local/share/romm-tender/backend.lock"
@@ -38,27 +42,27 @@ def lock(home: Path) -> Path:
 
 
 def test_no_lock_file_is_free(home: Path, lock: Path) -> None:
-    assert _holder(home) == ["free", "", str(lock)]
+    assert _holder(home) == ["free", "", str(lock), ""]
 
 
 def test_a_lock_nobody_holds_is_free(home: Path, lock: Path) -> None:
     lock.touch()
 
-    assert _holder(home) == ["free", "", str(lock)]
+    assert _holder(home) == ["free", "", str(lock), ""]
 
 
 def test_a_held_lock_names_the_process_that_holds_it(home: Path, lock: Path) -> None:
     with open(lock, "w", encoding="utf-8") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX)
 
-        assert _holder(home) == ["held", str(os.getpid()), str(lock)]
+        assert _holder(home) == ["held", str(os.getpid()), str(lock), f"pid {os.getpid()} ({_comm()})"]
 
 
 def test_a_lock_that_cannot_be_read_is_unknown_and_refuses_nothing(home: Path, lock: Path) -> None:
     lock.touch()
     lock.chmod(0)
 
-    assert _holder(home) == ["unknown", "", str(lock)]
+    assert _holder(home) == ["unknown", "", str(lock), ""]
 
 
 def test_holder_and_require_running_are_two_questions_not_one(home: Path) -> None:
