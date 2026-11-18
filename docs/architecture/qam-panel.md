@@ -988,21 +988,22 @@ code whose finding lacks a fact its sentence needs, reads "Problem with _source_
 gives no emulator list, the platform page, the emulator menu and a game's BIOS tab say why from the answer's `reason` —
 no source detected, every source switched off, a broken ES-DE systems file, a RetroDECK that has not been set up yet,
 EmuDeck's list that cannot be read yet, a platform with no system to use there — one the resolver cannot match
-(`platform_unmatched`), one the source has no system for (`no_platform_system`), one whose system this machine has not
-set up (`platform_system_not_here`), one whose systems are all switched off there (`platform_system_off`), or one
-several of whose systems answer and the resolver names none (`platform_systems_several`), each in a sentence of its own
+(`platform_unmatched`), one whose slug and folder in RomM name different systems (`platform_pairs_contradict`), one the
+source has no system for (`no_platform_system`), one whose system this machine has not set up
+(`platform_system_not_here`), one whose systems are all switched off there (`platform_system_off`), or one several of
+whose systems answer and the resolver names none (`platform_systems_several`), each in a sentence of its own
 ([#2751](https://github.com/danielcopper/romm-tender/issues/2751) D2) — a platform whose system is not known because
 RomM, which lists it, cannot be reached (`server_unreachable`) or refused the read (any other of RomM's failure reasons,
 worded as one), or any other refusal — and never "no emulator". Where the game can start all the same although several
-systems answer its platform, its page says under Play that it is linked into none of them
-([#2225](https://github.com/danielcopper/romm-tender/issues/2225) D8). **_Source_ is switched on in Settings › Emulator
-sources, but Tender cannot start games through it yet.** stands on Main once for every switched-on source Tender cannot
-start games through, whether or not it is the one that answers, and is the one source notice drawn smaller and without
-the warning sign: it states a fact about Tender rather than something wrong. The source's card under Settings › Emulator
-sources says **Tender cannot start games through _source_ yet.**, switched on or off, and a switched-off source says it
-only there. Where such a source answers, the platform page, the emulator menu and a game's BIOS tab keep saying why
-there is no emulator list — today no such source gives one. Showing **Tender cannot start games through _source_ yet.**
-there beside a list such a source does give is #2222's work; no code does it today.
+systems answer its platform, its page says under Play that it is linked into none of them, a sentence of its own beside
+the one a refused download of it says ([#2225](https://github.com/danielcopper/romm-tender/issues/2225) D8). **_Source_
+is switched on in Settings › Emulator sources, but Tender cannot start games through it yet.** stands on Main once for
+every switched-on source Tender cannot start games through, whether or not it is the one that answers, and is the one
+source notice drawn smaller and without the warning sign: it states a fact about Tender rather than something wrong. The
+source's card under Settings › Emulator sources says **Tender cannot start games through _source_ yet.**, switched on or
+off, and a switched-off source says it only there. Where such a source answers, the platform page, the emulator menu and
+a game's BIOS tab keep saying why there is no emulator list — today no such source gives one. Showing **Tender cannot
+start games through _source_ yet.** there beside a list such a source does give is #2222's work; no code does it today.
 
 Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
 migration — are not notices; they replace the page, and neither carries a condition inside it any more: the one that did
@@ -1645,8 +1646,8 @@ it, for the focused platform:
     pinned.
   - **No options at all** — `get_emulator_options` answers `available: true` with an empty list for a system whose
     catalogue entry lists no command. A platform with no system to use in the answering source is not this case: its
-    list is not available, with that case's reason (`platform_unmatched`, `no_platform_system`,
-    `platform_system_not_here`, `platform_system_off`, `platform_systems_several`)
+    list is not available, with that case's reason (`platform_unmatched`, `platform_pairs_contradict`,
+    `no_platform_system`, `platform_system_not_here`, `platform_system_off`, `platform_systems_several`)
     ([core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)). The clause reads `no emulator` in
     **red** and the line says the games will not launch, because they will not.
 

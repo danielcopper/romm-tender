@@ -264,24 +264,37 @@ folder a download lands in. **Tender picks no system of its own**: where the two
 (on RetroDECK with emu-atlas 0.35.0 the Amiga CD32, the Atari 8-bit, MSX, the Master System and the TurboGrafx-16 keep
 two each), the platform has **several**, and every later question is asked with the two pairs, which the resolver
 answers for those systems alike or for none ([#2225](https://github.com/danielcopper/romm-tender/issues/2225) D8). Such
-a game is linked into no frontend folder, since the folder is where the systems differ, and its page says why; a
-download into RetroDECK and an adoption, which land in one system's folder, are refused with the same words. Choosing
-the system for the link is the user's, in a view that comes later.
+a game is linked into no frontend folder, since the folder is where the systems differ, and its page says so under Play:
+**"_Source_ has several systems for _platform_ (_systems_), and Tender links its games into none of them."** A download
+into RetroDECK and an adoption, which land in one system's folder, are refused until downloads land in Tender's own
+library ([#2223](https://github.com/danielcopper/romm-tender/issues/2223),
+[#2738](https://github.com/danielcopper/romm-tender/issues/2738)), and the refusal, the emulator list and the platform's
+pages say **"_Source_ has several systems for _platform_ (_systems_), so Tender cannot download its games yet."**
+(`platform_systems_several`). Choosing the system for the link is the user's, in a view that comes later.
 
-**Where there is none.** A platform with no system to use says which of four cases holds, each in a sentence of its own
-([#2751](https://github.com/danielcopper/romm-tender/issues/2751) D2): the resolver cannot match it — it knows neither
-pair, or the slug and the folder name different systems (`platform_unmatched`) — which is never worded as RomM not
-knowing the platform; the source's frontend has no system for it (`no_platform_system`); it has one, and this machine
-has not set it up (`platform_system_not_here`); or every one it has is switched off in the catalogue's comments
-(`platform_system_off`, **"System _system_ is switched off in _source_."**). Several switched-on systems are the fifth
-reason, `platform_systems_several`. _platform_ there, and wherever else the platform's system names the platform — the
-pages that show the system, and a download's queue entry and every frame and event it sends — is the name the
-`platform_names` cache holds for the `fs_slug` of the platform kept for that slug (for an entry kept before it recorded
-one, for the slug), else the `name` kept with it (below), else the slug itself
-([#2573](https://github.com/danielcopper/romm-tender/issues/2573) D1). The emulator list's reason is then that case's,
-nothing is downloaded, and the platform's BIOS download and an adoption's replace are refused the same way. Every other
-use keeps a state it already has: an uninstalled game's save answer is not established, the search for a copy already on
-disk finds nothing, and the launch is not established.
+**Where there is none.** A platform with no system to use says which of five cases holds, each in a sentence of its own
+([#2751](https://github.com/danielcopper/romm-tender/issues/2751) D2):
+
+- the resolver knows neither pair (`platform_unmatched`): **"Tender cannot match _platform_ to a system yet, so it
+  cannot download its games."** — never worded as RomM not knowing the platform;
+- RomM's slug and the platform's folder name different systems, of which the resolver picks neither
+  (`platform_pairs_contradict`): **"RomM's slug "_slug_" and folder "_folder_" point to different systems, so Tender
+  cannot match _platform_ to a system."** — the user resolves it by the folder's name, so the answer carries both;
+- the source's frontend has no system for it (`no_platform_system`): **"_Source_ has no system for _platform_, so Tender
+  cannot download its games."**;
+- it has one, and this machine has not set it up (`platform_system_not_here`): **"_Source_ has a system for _platform_
+  (_systems_), but it is not set up on this machine, so Tender cannot download its games."**;
+- every one it has is switched off in the catalogue's comments (`platform_system_off`): **"System _system_ is switched
+  off in _source_."**
+
+Several switched-on systems are a reason of their own, `platform_systems_several` (above). _platform_ there, and
+wherever else the platform's system names the platform — the pages that show the system, and a download's queue entry
+and every frame and event it sends — is the name the `platform_names` cache holds for the `fs_slug` of the platform kept
+for that slug (for an entry kept before it recorded one, for the slug), else the `name` kept with it (below), else the
+slug itself ([#2573](https://github.com/danielcopper/romm-tender/issues/2573) D1). The emulator list's reason is then
+that case's, nothing is downloaded, and the platform's BIOS download and an adoption's replace are refused the same way.
+Every other use keeps a state it already has: an uninstalled game's save answer is not established, the search for a
+copy already on disk finds nothing, and the launch is not established.
 
 **Each source is asked for itself.** A download, and every question about where one would land — an uninstalled game's
 save answer, whether the target is taken, the search for a copy already there, an adoption's target — asks
@@ -316,11 +329,11 @@ listing at each ask. Where that read fails, the question answers the reason `cla
 with RomM reachable keeps the record. A game not downloaded then shows the offline state on its page (its save status,
 its BIOS tab reading unknown), and its emulator menu, its BIOS tab and the platform page say **"RomM cannot be reached,
 so Tender does not know this platform's system yet."**; where RomM answered but refused the read for any other reason
-(`auth_failed`, `not_found`, `config_error`, …), they say **"RomM did not give this platform's ids, so Tender does not
-know its system yet."**, and the cause itself shows where Tender's connection state shows it; a downloaded game keeps
-its recorded system and is not affected. The game page's two looks at the disk — whether a download's target is already
-taken, and whether the game is there under another name — must reach no network, so they never read the listing: for
-them a platform with nothing kept is asked by its slug alone.
+(`auth_failed`, `not_found`, `config_error`, …), they say **"RomM did not give its list of platforms, so Tender does not
+know this platform's system yet."**, and the cause itself shows where Tender's connection state shows it; a downloaded
+game keeps its recorded system and is not affected. The game page's two looks at the disk — whether a download's target
+is already taken, and whether the game is there under another name — must reach no network, so they never read the
+listing: for them a platform with nothing kept is asked by its slug alone.
 
 The platform page names the system taken with its source in its header line ([qam-panel.md](qam-panel.md#library)).
 

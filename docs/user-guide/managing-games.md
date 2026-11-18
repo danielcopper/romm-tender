@@ -377,7 +377,10 @@ platform's page ask the source that answers, which is RetroDECK while it is swit
 system to use, **Download** is refused and the pages say which case holds:
 
 - **"Tender cannot match _platform_ to a system yet, so it cannot download its games."** — neither the platform's slug
-  nor its folder is one the emulator source's platform table knows, or the two point at different systems.
+  nor its folder is one the emulator source's platform table knows.
+- **"RomM's slug "_slug_" and folder "_folder_" point to different systems, so Tender cannot match _platform_ to a
+  system."** — the platform's folder in RomM is named after another system than its slug; renaming the folder in RomM
+  resolves it.
 - **"_Source_ has no system for _platform_, so Tender cannot download its games."** — no system of the source's frontend
   is the platform.
 - **"_Source_ has a system for _platform_ (_system_), but it is not set up on this machine, so Tender cannot download
@@ -385,11 +388,13 @@ system to use, **Download** is refused and the pages say which case holds:
 - **"System _system_ is switched off in _source_."** — the platform's only systems are switched off in the source.
 
 Where the platform's slug and folder leave several systems of the source — RetroDECK keeps `mark3` and `mastersystem`
-for the Master System — Tender picks none of them: **Download** is refused, and the pages say **"_Source_ has several
-systems for _platform_ (_systems_), and Tender links its games into none of them."** A platform's BIOS downloads are not
-refused: they land in Tender's firmware store and are linked once a source has a system for the platform
-([Where downloads go](bios-management.md#where-downloads-go)). A game you already installed keeps the system it was
-downloaded under, and the buttons on its **BIOS** tab fetch and link the files for that system.
+for the Master System — Tender picks none of them: until downloads land in Tender's own library, **Download** is
+refused, and the pages say **"_Source_ has several systems for _platform_ (_systems_), so Tender cannot download its
+games yet."** A game of such a platform that starts is linked into no frontend folder, and its page says under **Play**:
+**"_Source_ has several systems for _platform_ (_systems_), and Tender links its games into none of them."** A
+platform's BIOS downloads are not refused: they land in Tender's firmware store and are linked once a source has a
+system for the platform ([Where downloads go](bios-management.md#where-downloads-go)). A game you already installed
+keeps the system it was downloaded under, and the buttons on its **BIOS** tab fetch and link the files for that system.
 
 **A download needs RetroDECK.** **Download** is refused, saying why, while RetroDECK is not installed (**Downloads need
 RetroDECK, which is not installed.**), while it is switched off in **Settings › Emulator sources** (**Downloads need
@@ -716,6 +721,11 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
   fill in left as it is written. **Play** stays on.
 - **"Whether Game.sfc starts cannot be established: …"** — the emulator source could not answer, with the reason.
   **Play** stays on.
+- **"Whether _emulator_ starts this game cannot be established: _Source_ has several systems for _platform_ and names
+  none of them."** — several systems fit the game's platform, and the emulator source names none of them for the
+  question. **Play** stays on.
+- **"Game.ps3 holds files RPCS3 Directory (Standalone) would take as games of their own: _files_."** — a game kept as a
+  folder holds files the emulator would start on their own. **Play** stays on.
 - **"ES-DE would not list track03.bin under this name; it lists files ending in .cdi, .chd, .cue, …"** — whether the
   emulator starts the file is its own answer, but ES-DE's game list would not show the file under its name. **Play**
   stays on.
@@ -724,8 +734,9 @@ and nothing about it is in doubt, nothing is said; otherwise the answer stands u
 - **"Whether RPCS3 Directory (Standalone) starts this game cannot be established: …"** — nothing is known to stand in
   the way, but the answer could not follow the start all the way, and the sentence says where it stopped: the folder was
   not found, whether a disc image is encrypted or its key file fits could not be checked, the emulator's version decides
-  whether it reads that kind of file, or a file a disc game opens could not be checked. Nothing then says the game can
-  start, and a file it would go on without is said as one it would go on without. **Play** stays on.
+  whether it reads that kind of file, a file a disc game opens could not be checked, or how it takes a game installed as
+  a folder was not checked. Nothing then says the game can start: a file it would go on without reads **"Whether
+  _emulator_ starts this game cannot be established; it would go on without _file_: …"**. **Play** stays on.
 - **"Whether _emulator_ reads _.ext_ files is not established."** — nobody has established which files the emulator
   reads. **Play** stays on.
 

@@ -131,7 +131,7 @@ system as a `(source, key)` pair, and Tender forwards that pair to every later q
 a system name of its own; an installed game is asked by the name its install record holds, as §2 keeps it. Where the
 pairs leave several switched-on systems, Tender picks none — the first amendment's choice among several (named like the
 platform, else the first listed) is withdrawn — asks every later question with the pairs, and links nothing. A platform
-with no system names which of four cases holds: the resolver cannot match it, the source's frontend has none, it has one
-this machine has not set up, or only a switched-off one. §2–§4 stand. Not taken: sending the ids where several systems
-remain — measured on 37 RomM platforms with emu-atlas 0.35.0, they narrowed one, and RomM's libretro name for it
-contradicted the other pairs.
+with no system names which of five cases holds: the resolver cannot match it, RomM's slug and folder name different
+systems, the source's frontend has none, it has one this machine has not set up, or only a switched-off one. §2–§4
+stand. Not taken: sending the ids where several systems remain — measured on 37 RomM platforms with emu-atlas 0.35.0,
+they narrowed one, and RomM's libretro name for it contradicted the other pairs.

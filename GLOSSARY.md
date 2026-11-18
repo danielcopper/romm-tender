@@ -654,9 +654,10 @@ name, and never Tender's own table; a platform can be one system in RetroDECK an
 question names it as the answer named it. Only one switched-on system is taken; where the pairs leave **several**,
 Tender picks none, asks every later question with the pairs, and links the games into no frontend folder
 ([#2225](https://github.com/danielcopper/romm-tender/issues/2225) D8). Where there is none, the platform is one Tender
-**cannot match**, one the source has **no system** for, one whose system is **not set up** on this machine, or one with
-only a **switched-off** system ([#2751](https://github.com/danielcopper/romm-tender/issues/2751) D2), and nothing of it
-is downloaded. An installed game keeps the system its install record holds. Rules:
+**cannot match**, one whose slug and folder in RomM **contradict** each other, one the source has **no system** for, one
+whose system is **not set up** on this machine, or one with only a **switched-off** system
+([#2751](https://github.com/danielcopper/romm-tender/issues/2751) D2), and nothing of it is downloaded. An installed
+game keeps the system its install record holds. Rules:
 [core-emulator-selection.md](docs/architecture/core-emulator-selection.md#a-platforms-system). _Avoid_: platform map,
 mapped system — there is no map.
 
